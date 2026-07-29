@@ -21,6 +21,7 @@ import {
   apiRoleUpdate,
 } from '@/api/system';
 import type { MenuNode } from '@/api/types';
+import { menuTitle } from '@/locales/menuI18n';
 
 /** 角色管理:CRUD / 权限分配(菜单树+按钮勾选) / 查看绑定管理员 */
 const userStore = useUserStore();
@@ -106,7 +107,8 @@ const halfCheckedKeys = ref<number[]>([]);
 function toTreeNodes(nodes: MenuNode[]): DataNode[] {
   return nodes.map((node) => ({
     key: node.id,
-    title: node.menu_type === 3 ? `${node.menu_name}(Button)` : node.menu_name,
+    // 菜单名统一走多语言解析,按钮节点附加类型后缀
+    title: node.menu_type === 3 ? `${menuTitle(node)} (${t('system.menu.typeBtn')})` : menuTitle(node),
     children: node.children?.length ? toTreeNodes(node.children) : undefined,
   }));
 }

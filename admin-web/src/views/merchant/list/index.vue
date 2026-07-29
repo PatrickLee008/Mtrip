@@ -279,7 +279,7 @@ async function doClose(): Promise<void> {
   }
   closeSaving.value = true;
   try {
-    const result = await apiMerchantClose(closeTarget.value.id, closeRemark.value);
+    await apiMerchantClose(closeTarget.value.id, closeRemark.value);
     message.success(t('common.delete'));
     closeOpen.value = false;
     await load();

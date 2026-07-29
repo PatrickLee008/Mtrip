@@ -80,7 +80,9 @@ CREATE TABLE IF NOT EXISTS `sys_admin_role` (
 CREATE TABLE IF NOT EXISTS `sys_menu` (
   `id`         BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '主键',
   `parent_id`  BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '父级菜单ID,0=根',
-  `menu_name`  VARCHAR(50)  NOT NULL COMMENT '菜单名称',
+  `menu_name`  VARCHAR(50)  NOT NULL COMMENT '菜单名称(中文)',
+  `menu_name_en` VARCHAR(100) NOT NULL DEFAULT '' COMMENT '菜单英文名称(无 i18n_key 词条时非中文环境的显示名)',
+  `i18n_key`   VARCHAR(100) NOT NULL DEFAULT '' COMMENT '多语言标记(前端词条 key,如 menu.systemAdmin;扩展语言仅需前端补词条)',
   `perm_key`   VARCHAR(100) NOT NULL DEFAULT '' COMMENT '权限标识(唯一key,如 sys:admin:add)',
   `menu_type`  TINYINT      NOT NULL DEFAULT 1 COMMENT '类型:1一级菜单(目录) 2页面菜单 3页面按钮',
   `route_path` VARCHAR(200) NOT NULL DEFAULT '' COMMENT '前端路由地址',

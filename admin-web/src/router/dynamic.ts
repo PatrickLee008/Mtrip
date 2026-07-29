@@ -29,10 +29,11 @@ export function buildRoutes(menus: MenuNode[]): RouteRecordRaw {
           path: node.route_path,
           name: `menu-${node.id}`,
           component: resolveComponent(node.component),
-          // 优先用 i18n key;未知菜单回退到原 menu_name,PageContainer 仍会原样显示
+          // 多语言:title 存词条 key(i18n_key 优先,旧数据用中文名映射兜底);原始中/英文名存 rawTitle/rawTitleEn 供回退
           meta: {
-            title: resolveMenuI18nKey(node.menu_name) || node.menu_name,
+            title: node.i18n_key || resolveMenuI18nKey(node.menu_name) || '',
             rawTitle: node.menu_name,
+            rawTitleEn: node.menu_name_en || '',
             permKey: node.perm_key,
             menuId: node.id,
           },

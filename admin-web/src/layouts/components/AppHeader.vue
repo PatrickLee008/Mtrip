@@ -18,7 +18,7 @@ import { useI18n } from 'vue-i18n';
 import { useAppStore } from '@/stores/app';
 import { useUserStore } from '@/stores/user';
 import { apiUpdatePassword } from '@/api/auth';
-import { SUPPORTED_LOCALES } from '@/locales';
+import { SUPPORTED_LOCALES, type SupportedLocale } from '@/locales';
 import SiteTreeSelect from '@/components/SiteTreeSelect.vue';
 
 const appStore = useAppStore();
@@ -27,6 +27,11 @@ const router = useRouter();
 const { t } = useI18n();
 
 const displayName = computed(() => userStore.profile?.realName || userStore.profile?.username || '-');
+
+/** 语言切换(模板内禁用类型标注/as 断言,回调放 script 具名函数) */
+function onLocaleClick(e: { key: string | number }): void {
+  appStore.setLocale(String(e.key) as SupportedLocale);
+}
 
 function onLogout(): void {
   Modal.confirm({
@@ -111,7 +116,7 @@ async function onSubmitPassword(): Promise<void> {
         <span class="header-action"><GlobalOutlined /></span>
       </a-tooltip>
       <template #overlay>
-        <a-menu :selected-keys="[appStore.locale]" @click="(e: { key: string }) => appStore.setLocale(e.key as 'zh-CN' | 'en-US')">
+        <a-menu :selected-keys="[appStore.locale]" @click="onLocaleClick">
           <a-menu-item v-for="loc in SUPPORTED_LOCALES" :key="loc.key">
             <CheckOutlined v-if="appStore.locale === loc.key" style="margin-right: 6px" />
             <span v-else style="display: inline-block; width: 16px" />

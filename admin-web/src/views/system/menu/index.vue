@@ -8,6 +8,7 @@ import PageContainer from '@/components/PageContainer.vue';
 import StatusTag from '@/components/StatusTag.vue';
 import { apiMenuAdd, apiMenuDelete, apiMenuTree, apiMenuUpdate } from '@/api/system';
 import type { MenuNode } from '@/api/types';
+import { menuTitle } from '@/locales/menuI18n';
 
 /** 菜单权限管理:树形表格 / 新增菜单与按钮 / 编辑 / 删除校验(有子级禁止) */
 const { t } = useI18n();
@@ -16,7 +17,9 @@ const treeData = ref<MenuNode[]>([]);
 const expandedRowKeys = ref<number[]>([]);
 
 const columns = [
-  { title: t('system.menu.name'), dataIndex: 'menu_name', width: 220 },
+  { title: t('system.menu.name'), dataIndex: 'menu_name', width: 200 },
+  { title: t('system.menu.nameEn'), dataIndex: 'menu_name_en', width: 170, ellipsis: true },
+  { title: t('system.menu.i18nKey'), dataIndex: 'i18n_key', width: 180, ellipsis: true },
   { title: t('common.type'), dataIndex: 'menu_type', width: 90 },
   { title: t('system.menu.permKey'), dataIndex: 'perm_key', width: 200 },
   { title: t('system.menu.route'), dataIndex: 'route_path', width: 160 },
@@ -49,7 +52,7 @@ function toParentOptions(nodes: MenuNode[]): TreeSelectProps['treeData'] {
     .filter((node) => node.menu_type !== 3)
     .map((node) => ({
       value: node.id,
-      label: node.menu_name,
+      label: menuTitle(node),
       children: node.children?.length ? toParentOptions(node.children) : undefined,
     }));
 }
@@ -62,6 +65,8 @@ const editingId = ref(0);
 const form = reactive({
   parentId: 0,
   menuName: '',
+  menuNameEn: '',
+  i18nKey: '',
   menuType: 1,
   permKey: '',
   routePath: '',
@@ -77,6 +82,8 @@ function openCreate(parent?: MenuNode): void {
   Object.assign(form, {
     parentId: parent?.id ?? 0,
     menuName: '',
+    menuNameEn: '',
+    i18nKey: '',
     menuType: parent ? (parent.menu_type === 2 ? 3 : 2) : 1,
     permKey: '',
     routePath: '',
@@ -95,6 +102,8 @@ function openEdit(row: MenuNode): void {
   Object.assign(form, {
     parentId: row.parent_id,
     menuName: row.menu_name,
+    menuNameEn: row.menu_name_en ?? '',
+    i18nKey: row.i18n_key ?? '',
     menuType: row.menu_type,
     permKey: row.perm_key,
     routePath: row.route_path,
@@ -160,7 +169,7 @@ onMounted(() => {
         :pagination="false"
         row-key="id"
         size="middle"
-        :scroll="{ x: 1300 }"
+        :scroll="{ x: 1650 }"
       >
         <template #bodyCell="{ column, record }">
           <template v-if="column.dataIndex === 'menu_type'">
@@ -220,6 +229,12 @@ onMounted(() => {
         </a-form-item>
         <a-form-item :label="t('common.name')" required>
           <a-input v-model:value="form.menuName" />
+        </a-form-item>
+        <a-form-item :label="t('system.menu.nameEn')">
+          <a-input v-model:value="form.menuNameEn" :placeholder="t('system.menu.nameEnPlaceholder')" />
+        </a-form-item>
+        <a-form-item v-if="form.menuType !== 3" :label="t('system.menu.i18nKey')">
+          <a-input v-model:value="form.i18nKey" :placeholder="t('system.menu.i18nKeyPlaceholder')" />
         </a-form-item>
         <a-form-item :label="t('system.menu.permKey')">
           <a-input v-model:value="form.permKey" :placeholder="t('system.menu.permKeyPlaceholder')" />

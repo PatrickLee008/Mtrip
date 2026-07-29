@@ -3,8 +3,7 @@ import { useUserStore } from '@/stores/user';
 import { apiMe } from '@/api/auth';
 import { clearAuth } from '@/utils/auth';
 import { installDynamicRoutes } from './dynamic';
-import { i18n } from '@/locales';
-import { resolveMenuI18nKey } from '@/locales/menuI18n';
+import { resolveMenuTitle } from '@/locales/menuI18n';
 
 /**
  * 路由守卫:登录态校验 → 动态路由注入(刷新恢复) → 页面标题
@@ -49,10 +48,12 @@ export function setupRouterGuard(router: Router): void {
   });
 
   router.afterEach((to) => {
-    const raw = (to.meta.title as string) || '';
-    const i18nKey = resolveMenuI18nKey(raw);
-    // 守卫在非 setup 上下文,使用 i18n.global.t
-    const display = i18nKey ? (i18n.global.t(i18nKey) as string) : raw;
+    // 统一解析:meta.title 为词条 key 时翻译;未命中按语言回退 rawTitle/rawTitleEn,纯文本标题原样显示
+    const display = resolveMenuTitle(
+      (to.meta.title as string) || '',
+      (to.meta.rawTitle as string) || '',
+      (to.meta.rawTitleEn as string) || '',
+    );
     document.title = display
       ? `${display} - ${import.meta.env.VITE_APP_TITLE}`
       : (import.meta.env.VITE_APP_TITLE as string);

@@ -129,16 +129,16 @@ async function submitToggle(): Promise<void> {
         </a-form-item>
         <a-form-item :label="t('user.listPage.status')">
           <a-select v-model:value="query.userStatus" allow-clear :placeholder="t('common.all')" style="width: 100px">
-            <a-select-option :value="1">{{ STATUS_MAP.value[1].text }}</a-select-option>
-            <a-select-option :value="2">{{ STATUS_MAP.value[2].text }}</a-select-option>
-            <a-select-option :value="3">{{ STATUS_MAP.value[3].text }}</a-select-option>
+            <a-select-option :value="1">{{ STATUS_MAP[1].text }}</a-select-option>
+            <a-select-option :value="2">{{ STATUS_MAP[2].text }}</a-select-option>
+            <a-select-option :value="3">{{ STATUS_MAP[3].text }}</a-select-option>
           </a-select>
         </a-form-item>
         <a-form-item :label="t('user.listPage.username')">
           <a-select v-model:value="query.realNameStatus" allow-clear :placeholder="t('common.all')" style="width: 110px">
-            <a-select-option :value="0">{{ REAL_NAME_MAP.value[0].text }}</a-select-option>
-            <a-select-option :value="1">{{ REAL_NAME_MAP.value[1].text }}</a-select-option>
-            <a-select-option :value="2">{{ REAL_NAME_MAP.value[2].text }}</a-select-option>
+            <a-select-option :value="0">{{ REAL_NAME_MAP[0].text }}</a-select-option>
+            <a-select-option :value="1">{{ REAL_NAME_MAP[1].text }}</a-select-option>
+            <a-select-option :value="2">{{ REAL_NAME_MAP[2].text }}</a-select-option>
           </a-select>
         </a-form-item>
         <a-form-item :label="t('user.listPage.registerSource')">

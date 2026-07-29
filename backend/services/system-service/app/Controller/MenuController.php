@@ -76,6 +76,8 @@ class MenuController extends AbstractController
 
     private function fill(SysMenu $menu): void
     {
+        $menu->menu_name_en = $this->strInput('menuNameEn', (string) $menu->menu_name_en);
+        $menu->i18n_key = $this->strInput('i18nKey', (string) $menu->i18n_key);
         $menu->route_path = $this->strInput('routePath', (string) $menu->route_path);
         $menu->component = $this->strInput('component', (string) $menu->component);
         $menu->icon = $this->strInput('icon', (string) $menu->icon);

@@ -7,7 +7,7 @@ import { useI18n } from 'vue-i18n';
 import type { MenuNode } from '@/api/types';
 import { useUserStore } from '@/stores/user';
 import { useAppStore } from '@/stores/app';
-import { resolveMenuI18nKey } from '@/locales/menuI18n';
+import { menuTitle } from '@/locales/menuI18n';
 
 const route = useRoute();
 const router = useRouter();
@@ -21,12 +21,6 @@ function renderIcon(name: string) {
   return icon ? () => h(icon) : undefined;
 }
 
-/** 后端菜单名称 → i18n 显示文本 */
-function menuLabel(name: string): string {
-  const key = resolveMenuI18nKey(name);
-  return key ? t(key) : name;
-}
-
 function toItems(nodes: MenuNode[]): ItemType[] {
   return nodes
     .filter((node) => node.menu_type === 1 || node.menu_type === 2)
@@ -34,7 +28,8 @@ function toItems(nodes: MenuNode[]): ItemType[] {
       const children = node.children?.filter((child) => child.menu_type !== 3) ?? [];
       return {
         key: node.route_path || String(node.id),
-        label: menuLabel(node.menu_name),
+        // i18n_key 优先 → 英文名回退 → 中文名(menuTitle 统一解析)
+        label: menuTitle(node),
         icon: node.icon ? renderIcon(node.icon) : undefined,
         children: children.length > 0 ? toItems(children) : undefined,
       } as ItemType;

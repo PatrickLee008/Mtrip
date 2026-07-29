@@ -142,7 +142,7 @@ onMounted(() => {
         <a-tabs v-model:active-key="activeGroup">
           <a-tab-pane v-for="tab in GROUP_TABS" :key="tab.key" :tab="tab.label">
             <a-form :label-col="{ style: { width: '200px' } }" style="max-width: 760px; margin-top: 8px">
-              <a-form-item v-for="row in groups[tab.key] ?? []" :key="row.config_key" :label="row.config_name">
+              <a-form-item v-for="row in groups[tab.key] ?? []" :key="row.config_key" :label="t('config.global.item.' + row.config_key, row.config_name ?? '')">
                 <!-- 布尔:开关 -->
                 <a-switch
                   v-if="row.value_type === 3"
@@ -173,7 +173,7 @@ onMounted(() => {
                 <div class="cfg-meta">
                   <span>{{ t('config.global.configKey') }}:{{ row.config_key }}</span>
                   <span>{{ t('config.global.valueType') }}:{{ VALUE_TYPE_TEXT[row.value_type] ?? row.value_type }}</span>
-                  <span v-if="row.remark">{{ t('common.remark') }}:{{ row.remark }}</span>
+                  <span v-if="row.remark">{{ t('common.remark') }}:{{ t('config.global.item.remark.' + row.config_key, row.remark) }}</span>
                 </div>
               </a-form-item>
             </a-form>
