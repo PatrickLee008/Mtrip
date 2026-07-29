@@ -1,3 +1,6 @@
+-- 强制客户端连接字符集为 utf8mb4,防止容器内 mysql 客户端按 latin1 解析导致中文乱码
+SET NAMES utf8mb4;
+
 -- ============================================================
 -- 系统表 02:审计日志(文档模块4/14,永久留存不可删改)
 -- 库:mtrip_system
@@ -26,7 +29,7 @@ CREATE TABLE IF NOT EXISTS `sys_operation_log` (
   KEY `idx_site_id` (`site_id`),
   KEY `idx_module` (`module`),
   KEY `idx_created_at` (`created_at`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='系统操作日志表(永久留存,禁止手动删改)';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin COMMENT='系统操作日志表(永久留存,禁止手动删改)';
 
 -- 接口调用日志表(移动端 API 全量日志,按月分表模板)
 CREATE TABLE IF NOT EXISTS `sys_api_access_log` (
@@ -52,4 +55,4 @@ CREATE TABLE IF NOT EXISTS `sys_api_access_log` (
   KEY `idx_api_path` (`api_path`),
   KEY `idx_response_code` (`response_code`),
   KEY `idx_created_at` (`created_at`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='接口调用日志表(月分表模板,永久留存,仅定时任务归档)';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin COMMENT='接口调用日志表(月分表模板,永久留存,仅定时任务归档)';

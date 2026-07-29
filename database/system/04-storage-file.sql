@@ -1,3 +1,6 @@
+-- 强制客户端连接字符集为 utf8mb4,防止容器内 mysql 客户端按 latin1 解析导致中文乱码
+SET NAMES utf8mb4;
+
 -- ============================================================
 -- 系统表 04:文件存储 / 文件库(文档模块7)
 -- 库:mtrip_system
@@ -26,7 +29,7 @@ CREATE TABLE IF NOT EXISTS `sys_storage` (
   PRIMARY KEY (`id`),
   KEY `idx_site_id` (`site_id`),
   KEY `idx_driver` (`driver`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='文件存储配置表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin COMMENT='文件存储配置表';
 
 -- 文件库表(全部上传文件)
 CREATE TABLE IF NOT EXISTS `sys_file` (
@@ -49,4 +52,4 @@ CREATE TABLE IF NOT EXISTS `sys_file` (
   KEY `idx_file_type` (`file_type`),
   KEY `idx_biz_type` (`biz_type`),
   KEY `idx_created_at` (`created_at`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='文件库表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin COMMENT='文件库表';

@@ -17,7 +17,7 @@ COPY shared /shared
 COPY services/finance-service /opt/www
 
 RUN composer install --no-dev --no-interaction --optimize-autoloader \
-    && php bin/hyperf.php di:init-proxy || true
+    && (php bin/hyperf.php di:init-proxy || true)
 
 EXPOSE 9506
 

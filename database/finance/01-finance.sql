@@ -1,3 +1,6 @@
+-- 强制客户端连接字符集为 utf8mb4,防止容器内 mysql 客户端按 latin1 解析导致中文乱码
+SET NAMES utf8mb4;
+
 -- ============================================================
 -- 业务表 07:财务(文档 5.2.5 + 业务模块7:结算/提现/税费)
 -- 库:mtrip_business
@@ -32,7 +35,7 @@ CREATE TABLE IF NOT EXISTS `finance_flow` (
   KEY `idx_flow_type` (`flow_type`),
   KEY `idx_biz_type` (`biz_type`),
   KEY `idx_created_at` (`created_at`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='资金流水表(月分表模板 finance_flow_YYYYMM)';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin COMMENT='资金流水表(月分表模板 finance_flow_YYYYMM)';
 
 -- 商户结算单表(按结算周期生成)
 CREATE TABLE IF NOT EXISTS `finance_merchant_settle` (
@@ -61,7 +64,7 @@ CREATE TABLE IF NOT EXISTS `finance_merchant_settle` (
   UNIQUE KEY `uk_merchant_cycle` (`merchant_id`, `settle_cycle`),
   KEY `idx_site_id` (`site_id`),
   KEY `idx_status` (`status`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='商户结算单表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin COMMENT='商户结算单表';
 
 -- 商户提现申请表
 CREATE TABLE IF NOT EXISTS `finance_withdraw` (
@@ -88,7 +91,7 @@ CREATE TABLE IF NOT EXISTS `finance_withdraw` (
   KEY `idx_site_id` (`site_id`),
   KEY `idx_merchant_id` (`merchant_id`),
   KEY `idx_status` (`status`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='商户提现申请表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin COMMENT='商户提现申请表';
 
 -- 税费配置表(按站点/国家差异化)
 CREATE TABLE IF NOT EXISTS `finance_tax_config` (
@@ -106,4 +109,4 @@ CREATE TABLE IF NOT EXISTS `finance_tax_config` (
   PRIMARY KEY (`id`),
   KEY `idx_site_id` (`site_id`),
   KEY `idx_status` (`status`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='税费配置表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin COMMENT='税费配置表';

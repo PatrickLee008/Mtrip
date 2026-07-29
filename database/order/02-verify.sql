@@ -1,3 +1,6 @@
+-- 强制客户端连接字符集为 utf8mb4,防止容器内 mysql 客户端按 latin1 解析导致中文乱码
+SET NAMES utf8mb4;
+
 -- ============================================================
 -- 业务表 06:核销设备与规则(业务模块9)
 -- 库:mtrip_business
@@ -24,7 +27,7 @@ CREATE TABLE IF NOT EXISTS `verify_device` (
   UNIQUE KEY `uk_device_sn` (`device_sn`),
   KEY `idx_site_id` (`site_id`),
   KEY `idx_merchant_id` (`merchant_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='核销设备表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin COMMENT='核销设备表';
 
 -- 核销规则表
 CREATE TABLE IF NOT EXISTS `verify_rule` (
@@ -43,4 +46,4 @@ CREATE TABLE IF NOT EXISTS `verify_rule` (
   `deleted_at`     DATETIME     NULL DEFAULT NULL COMMENT '删除时间(软删)',
   PRIMARY KEY (`id`),
   KEY `idx_site_id` (`site_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='核销规则表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin COMMENT='核销规则表';

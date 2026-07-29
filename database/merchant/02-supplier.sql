@@ -1,3 +1,6 @@
+-- 强制客户端连接字符集为 utf8mb4,防止容器内 mysql 客户端按 latin1 解析导致中文乱码
+SET NAMES utf8mb4;
+
 -- ============================================================
 -- 业务表 02:供应商(业务模块2)
 -- 库:mtrip_business
@@ -33,7 +36,7 @@ CREATE TABLE IF NOT EXISTS `supplier_info` (
   UNIQUE KEY `uk_credit_code` (`credit_code`),
   KEY `idx_site_id` (`site_id`),
   KEY `idx_status` (`status`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='供应商表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin COMMENT='供应商表';
 
 -- 供应商供货商品表
 CREATE TABLE IF NOT EXISTS `supplier_goods` (
@@ -55,7 +58,7 @@ CREATE TABLE IF NOT EXISTS `supplier_goods` (
   KEY `idx_site_id` (`site_id`),
   KEY `idx_supplier_id` (`supplier_id`),
   KEY `idx_goods_id` (`goods_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='供应商供货商品表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin COMMENT='供应商供货商品表';
 
 -- 供应商结算账单表(按月生成)
 CREATE TABLE IF NOT EXISTS `supplier_settle` (
@@ -82,4 +85,4 @@ CREATE TABLE IF NOT EXISTS `supplier_settle` (
   UNIQUE KEY `uk_supplier_month` (`supplier_id`, `settle_month`),
   KEY `idx_site_id` (`site_id`),
   KEY `idx_status` (`status`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='供应商结算账单表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin COMMENT='供应商结算账单表';

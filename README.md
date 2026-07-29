@@ -39,7 +39,7 @@ MTrip/
 cd deploy
 cp .env.example .env
 docker compose up -d --build     # MySQL+Redis+8服务+网关,首次自动建库导种子
-cd ../admin-web && npm install && npm run dev    # http://localhost:5173,接口经网关 8080
+cd ../admin-web && npm install && npm run dev    # http://localhost:5173,接口经网关 8081
 ```
 
 完整步骤(含不用 Docker 的手动方式、移动端启动、常见问题):**[docs/guides/setup/启动开发指南.md](docs/guides/setup/启动开发指南.md)**

@@ -1,3 +1,6 @@
+-- 强制客户端连接字符集为 utf8mb4,防止容器内 mysql 客户端按 latin1 解析导致中文乱码
+SET NAMES utf8mb4;
+
 -- ============================================================
 -- 业务表 04:商品(文档 5.2.3 + 业务模块4:酒店房型/门票票种/分时库存)
 -- 库:mtrip_business
@@ -20,7 +23,7 @@ CREATE TABLE IF NOT EXISTS `goods_category` (
   PRIMARY KEY (`id`),
   KEY `idx_site_id` (`site_id`),
   KEY `idx_parent_id` (`parent_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='商品分类表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin COMMENT='商品分类表';
 
 -- 商品表(严格按文档 5.2.3,酒店与门票共用)
 CREATE TABLE IF NOT EXISTS `goods_info` (
@@ -59,7 +62,7 @@ CREATE TABLE IF NOT EXISTS `goods_info` (
   KEY `idx_goods_type` (`goods_type`),
   KEY `idx_status` (`status`),
   KEY `idx_category_id` (`category_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='商品表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin COMMENT='商品表';
 
 -- 酒店房型表
 CREATE TABLE IF NOT EXISTS `hotel_room_type` (
@@ -83,7 +86,7 @@ CREATE TABLE IF NOT EXISTS `hotel_room_type` (
   PRIMARY KEY (`id`),
   KEY `idx_site_id` (`site_id`),
   KEY `idx_goods_id` (`goods_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='酒店房型表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin COMMENT='酒店房型表';
 
 -- 门票票种表
 CREATE TABLE IF NOT EXISTS `ticket_type` (
@@ -107,7 +110,7 @@ CREATE TABLE IF NOT EXISTS `ticket_type` (
   PRIMARY KEY (`id`),
   KEY `idx_site_id` (`site_id`),
   KEY `idx_goods_id` (`goods_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='门票票种表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin COMMENT='门票票种表';
 
 -- 分时库存价格日历表(房型/票种 × 日期)
 CREATE TABLE IF NOT EXISTS `goods_daily_stock` (
@@ -130,7 +133,7 @@ CREATE TABLE IF NOT EXISTS `goods_daily_stock` (
   KEY `idx_site_id` (`site_id`),
   KEY `idx_goods_id` (`goods_id`),
   KEY `idx_stock_date` (`stock_date`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='分时库存价格日历表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin COMMENT='分时库存价格日历表';
 
 -- 退改规则表
 CREATE TABLE IF NOT EXISTS `goods_refund_rule` (
@@ -148,7 +151,7 @@ CREATE TABLE IF NOT EXISTS `goods_refund_rule` (
   PRIMARY KEY (`id`),
   KEY `idx_site_id` (`site_id`),
   KEY `idx_goods_id` (`goods_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='商品退改规则表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin COMMENT='商品退改规则表';
 
 -- 库存变动流水表
 CREATE TABLE IF NOT EXISTS `goods_stock_log` (
@@ -169,4 +172,4 @@ CREATE TABLE IF NOT EXISTS `goods_stock_log` (
   KEY `idx_sku` (`sku_type`, `sku_id`, `stock_date`),
   KEY `idx_order_id` (`order_id`),
   KEY `idx_created_at` (`created_at`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='库存变动流水表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin COMMENT='库存变动流水表';

@@ -1,3 +1,6 @@
+-- 强制客户端连接字符集为 utf8mb4,防止容器内 mysql 客户端按 latin1 解析导致中文乱码
+SET NAMES utf8mb4;
+
 -- ============================================================
 -- 业务表 05:订单(文档 5.2.2 + 业务模块5:订单/退款/核销)
 -- 库:mtrip_business
@@ -56,7 +59,7 @@ CREATE TABLE IF NOT EXISTS `order_main` (
   KEY `idx_order_status` (`order_status`),
   KEY `idx_created_at` (`created_at`),
   KEY `idx_pay_time` (`pay_time`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='订单主表(月分表模板 order_main_YYYYMM)';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin COMMENT='订单主表(月分表模板 order_main_YYYYMM)';
 
 -- 退款单表
 CREATE TABLE IF NOT EXISTS `order_refund` (
@@ -90,7 +93,7 @@ CREATE TABLE IF NOT EXISTS `order_refund` (
   KEY `idx_order_id` (`order_id`),
   KEY `idx_status` (`status`),
   KEY `idx_created_at` (`created_at`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='退款单表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin COMMENT='退款单表';
 
 -- 核销日志表(永久留存审计,不可删除)
 CREATE TABLE IF NOT EXISTS `order_verify_log` (
@@ -114,4 +117,4 @@ CREATE TABLE IF NOT EXISTS `order_verify_log` (
   KEY `idx_order_id` (`order_id`),
   KEY `idx_device_id` (`device_id`),
   KEY `idx_created_at` (`created_at`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='核销日志表(永久留存,不可删除)';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin COMMENT='核销日志表(永久留存,不可删除)';

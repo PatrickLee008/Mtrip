@@ -1,3 +1,6 @@
+-- 强制客户端连接字符集为 utf8mb4,防止容器内 mysql 客户端按 latin1 解析导致中文乱码
+SET NAMES utf8mb4;
+
 -- ============================================================
 -- 系统表 05:支付渠道 / 国际短信 / 地图配置(文档模块8/9/10)
 -- 库:mtrip_system(密钥类字段一律 AES 加密存储,前端脱敏)
@@ -26,7 +29,7 @@ CREATE TABLE IF NOT EXISTS `sys_pay_channel` (
   PRIMARY KEY (`id`),
   KEY `idx_site_id` (`site_id`),
   KEY `idx_channel_code` (`channel_code`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='支付渠道表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin COMMENT='支付渠道表';
 
 -- 国际短信渠道表(Twilio/MessageBird)
 CREATE TABLE IF NOT EXISTS `sys_sms_channel` (
@@ -47,7 +50,7 @@ CREATE TABLE IF NOT EXISTS `sys_sms_channel` (
   PRIMARY KEY (`id`),
   KEY `idx_site_id` (`site_id`),
   KEY `idx_provider_code` (`provider_code`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='国际短信渠道表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin COMMENT='国际短信渠道表';
 
 -- 短信模板表(依附渠道+站点)
 CREATE TABLE IF NOT EXISTS `sys_sms_template` (
@@ -66,7 +69,7 @@ CREATE TABLE IF NOT EXISTS `sys_sms_template` (
   KEY `idx_site_id` (`site_id`),
   KEY `idx_channel_id` (`channel_id`),
   KEY `idx_template_type` (`template_type`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='短信模板表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin COMMENT='短信模板表';
 
 -- 短信发送日志表
 CREATE TABLE IF NOT EXISTS `sys_sms_log` (
@@ -83,7 +86,7 @@ CREATE TABLE IF NOT EXISTS `sys_sms_log` (
   KEY `idx_site_id` (`site_id`),
   KEY `idx_mobile` (`mobile`),
   KEY `idx_created_at` (`created_at`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='短信发送日志表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin COMMENT='短信发送日志表';
 
 -- 地图服务配置表(Google Maps,分站点)
 CREATE TABLE IF NOT EXISTS `sys_map_config` (
@@ -102,4 +105,4 @@ CREATE TABLE IF NOT EXISTS `sys_map_config` (
   `deleted_at`     DATETIME     NULL DEFAULT NULL COMMENT '删除时间(软删)',
   PRIMARY KEY (`id`),
   KEY `idx_site_id` (`site_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='地图服务配置表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin COMMENT='地图服务配置表';

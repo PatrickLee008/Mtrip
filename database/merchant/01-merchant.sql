@@ -1,3 +1,6 @@
+-- 强制客户端连接字符集为 utf8mb4,防止容器内 mysql 客户端按 latin1 解析导致中文乱码
+SET NAMES utf8mb4;
+
 -- ============================================================
 -- 业务表 01:商户(文档 5.2.1 + 业务模块1)
 -- 库:mtrip_business
@@ -40,7 +43,7 @@ CREATE TABLE IF NOT EXISTS `merchant_info` (
   KEY `idx_site_id` (`site_id`),
   KEY `idx_status` (`status`),
   KEY `idx_created_at` (`created_at`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='商户表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin COMMENT='商户表';
 
 -- 商户结算账户表(支持多账户,账号加密存储)
 CREATE TABLE IF NOT EXISTS `merchant_account` (
@@ -61,7 +64,7 @@ CREATE TABLE IF NOT EXISTS `merchant_account` (
   PRIMARY KEY (`id`),
   KEY `idx_site_id` (`site_id`),
   KEY `idx_merchant_id` (`merchant_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='商户结算账户表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin COMMENT='商户结算账户表';
 
 -- 商户子账号表(商户后台操作员)
 CREATE TABLE IF NOT EXISTS `merchant_admin` (
@@ -83,4 +86,4 @@ CREATE TABLE IF NOT EXISTS `merchant_admin` (
   UNIQUE KEY `uk_username` (`username`),
   KEY `idx_site_id` (`site_id`),
   KEY `idx_merchant_id` (`merchant_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='商户子账号表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin COMMENT='商户子账号表';

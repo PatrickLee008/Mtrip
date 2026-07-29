@@ -1,3 +1,6 @@
+-- 强制客户端连接字符集为 utf8mb4,防止容器内 mysql 客户端按 latin1 解析导致中文乱码
+SET NAMES utf8mb4;
+
 -- ============================================================
 -- 业务表 08:营销活动(业务模块8:优惠券/限时活动/首页推荐/积分)
 -- 库:mtrip_business
@@ -31,7 +34,7 @@ CREATE TABLE IF NOT EXISTS `marketing_coupon` (
   PRIMARY KEY (`id`),
   KEY `idx_site_id` (`site_id`),
   KEY `idx_status` (`status`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='优惠券模板表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin COMMENT='优惠券模板表';
 
 -- 用户领券记录表
 CREATE TABLE IF NOT EXISTS `marketing_coupon_receive` (
@@ -54,7 +57,7 @@ CREATE TABLE IF NOT EXISTS `marketing_coupon_receive` (
   KEY `idx_coupon_id` (`coupon_id`),
   KEY `idx_user_id` (`user_id`),
   KEY `idx_status` (`status`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='用户领券记录表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin COMMENT='用户领券记录表';
 
 -- 限时活动表(秒杀/特价)
 CREATE TABLE IF NOT EXISTS `marketing_activity` (
@@ -75,7 +78,7 @@ CREATE TABLE IF NOT EXISTS `marketing_activity` (
   KEY `idx_site_id` (`site_id`),
   KEY `idx_status` (`status`),
   KEY `idx_start_time` (`start_time`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='限时活动表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin COMMENT='限时活动表';
 
 -- 活动商品关联表
 CREATE TABLE IF NOT EXISTS `marketing_activity_goods` (
@@ -97,7 +100,7 @@ CREATE TABLE IF NOT EXISTS `marketing_activity_goods` (
   UNIQUE KEY `uk_activity_sku` (`activity_id`, `goods_id`, `sku_type`, `sku_id`),
   KEY `idx_site_id` (`site_id`),
   KEY `idx_goods_id` (`goods_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='活动商品关联表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin COMMENT='活动商品关联表';
 
 -- 首页推荐位/Banner 表
 CREATE TABLE IF NOT EXISTS `marketing_banner` (
@@ -118,7 +121,7 @@ CREATE TABLE IF NOT EXISTS `marketing_banner` (
   PRIMARY KEY (`id`),
   KEY `idx_site_id` (`site_id`),
   KEY `idx_position` (`position`, `status`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='首页推荐位Banner表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin COMMENT='首页推荐位Banner表';
 
 -- 积分规则表
 CREATE TABLE IF NOT EXISTS `marketing_points_rule` (
@@ -139,4 +142,4 @@ CREATE TABLE IF NOT EXISTS `marketing_points_rule` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_site_rule` (`site_id`, `rule_key`),
   KEY `idx_status` (`status`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='积分规则表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin COMMENT='积分规则表';

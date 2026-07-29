@@ -1,3 +1,6 @@
+-- 强制客户端连接字符集为 utf8mb4,防止容器内 mysql 客户端按 latin1 解析导致中文乱码
+SET NAMES utf8mb4;
+
 -- ============================================================
 -- 系统表 01:管理员 / 角色 / 菜单(RBAC 权限体系,文档模块1/2/3)
 -- 库:mtrip_system
@@ -28,7 +31,7 @@ CREATE TABLE IF NOT EXISTS `sys_admin` (
   UNIQUE KEY `uk_username` (`username`),
   KEY `idx_site_id` (`site_id`),
   KEY `idx_status` (`status`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='管理员账号表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin COMMENT='管理员账号表';
 
 -- 管理员登录记录表
 CREATE TABLE IF NOT EXISTS `sys_admin_login_log` (
@@ -44,7 +47,7 @@ CREATE TABLE IF NOT EXISTS `sys_admin_login_log` (
   PRIMARY KEY (`id`),
   KEY `idx_admin_id` (`admin_id`),
   KEY `idx_created_at` (`created_at`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='管理员登录记录表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin COMMENT='管理员登录记录表';
 
 -- 角色表
 CREATE TABLE IF NOT EXISTS `sys_role` (
@@ -60,7 +63,7 @@ CREATE TABLE IF NOT EXISTS `sys_role` (
   PRIMARY KEY (`id`),
   KEY `idx_site_id` (`site_id`),
   KEY `idx_status` (`status`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='角色表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin COMMENT='角色表';
 
 -- 账号-角色关联表
 CREATE TABLE IF NOT EXISTS `sys_admin_role` (
@@ -71,7 +74,7 @@ CREATE TABLE IF NOT EXISTS `sys_admin_role` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_admin_role` (`admin_id`, `role_id`),
   KEY `idx_role_id` (`role_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='账号角色关联表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin COMMENT='账号角色关联表';
 
 -- 菜单按钮权限树表
 CREATE TABLE IF NOT EXISTS `sys_menu` (
@@ -92,7 +95,7 @@ CREATE TABLE IF NOT EXISTS `sys_menu` (
   PRIMARY KEY (`id`),
   KEY `idx_parent_id` (`parent_id`),
   KEY `idx_perm_key` (`perm_key`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='菜单按钮权限树表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin COMMENT='菜单按钮权限树表';
 
 -- 角色-菜单权限关联表
 CREATE TABLE IF NOT EXISTS `sys_role_menu` (
@@ -103,4 +106,4 @@ CREATE TABLE IF NOT EXISTS `sys_role_menu` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_role_menu` (`role_id`, `menu_id`),
   KEY `idx_menu_id` (`menu_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='角色菜单权限关联表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin COMMENT='角色菜单权限关联表';

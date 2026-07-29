@@ -1,0 +1,7 @@
+# mysql 客户端字符集:容器内无 UTF-8 locale 时客户端默认 latin1,
+# 导致 /docker-entrypoint-initdb.d 初始化 SQL 中的中文写入乱码
+[client]
+default-character-set = utf8mb4
+
+[mysql]
+default-character-set = utf8mb4

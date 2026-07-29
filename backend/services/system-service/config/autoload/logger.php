@@ -25,4 +25,23 @@ return [
             ],
         ],
     ],
+    // 全量请求日志通道(RequestLogMiddleware,MTRIP_REQUEST_LOG=true 时写入)
+    'request' => [
+        'handler' => [
+            'class' => RotatingFileHandler::class,
+            'constructor' => [
+                'filename' => BASE_PATH . '/runtime/logs/request.log',
+                'maxFiles' => 14,
+                'level' => Level::Info,
+            ],
+        ],
+        'formatter' => [
+            'class' => LineFormatter::class,
+            'constructor' => [
+                'format' => null,
+                'dateFormat' => 'Y-m-d H:i:s',
+                'allowInlineLineBreaks' => true,
+            ],
+        ],
+    ],
 ];

@@ -1,3 +1,6 @@
+-- 强制客户端连接字符集为 utf8mb4,防止容器内 mysql 客户端按 latin1 解析导致中文乱码
+SET NAMES utf8mb4;
+
 -- ============================================================
 -- 系统表 03:全局配置 / 多站点(文档模块5/6)
 -- 库:mtrip_system
@@ -20,7 +23,7 @@ CREATE TABLE IF NOT EXISTS `sys_config` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_config_key` (`config_key`),
   KEY `idx_config_group` (`config_group`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='全局系统配置表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin COMMENT='全局系统配置表';
 
 -- 站点表(树形:国家/区域/城市)
 CREATE TABLE IF NOT EXISTS `sys_site` (
@@ -44,7 +47,7 @@ CREATE TABLE IF NOT EXISTS `sys_site` (
   PRIMARY KEY (`id`),
   KEY `idx_parent_id` (`parent_id`),
   KEY `idx_status` (`status`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='站点表(树形层级)';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin COMMENT='站点表(树形层级)';
 
 -- 站点差异化配置表(每站点独立参数,key-value)
 CREATE TABLE IF NOT EXISTS `sys_site_config` (
@@ -60,4 +63,4 @@ CREATE TABLE IF NOT EXISTS `sys_site_config` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_site_key` (`site_id`, `config_key`),
   KEY `idx_config_group` (`config_group`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='站点差异化配置表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin COMMENT='站点差异化配置表';

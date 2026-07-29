@@ -9,7 +9,7 @@ const RAW_ENV = (process.env.EXPO_PUBLIC_ENV ?? 'development') as AppEnv;
 
 /** 各环境默认网关地址(.env 未配置时兜底) */
 const DEFAULT_BASE_URL: Record<AppEnv, string> = {
-  development: 'http://localhost:8080',
+  development: 'http://localhost:8081',
   staging: 'https://staging-api.mtrip.com',
   production: 'https://api.mtrip.com',
 };

@@ -26,7 +26,7 @@ abstract class BaseModel extends Model
 
     public const UPDATED_AT = 'updated_at';
 
-    protected string $dateFormat = 'Y-m-d H:i:s';
+    protected ?string $dateFormat = 'Y-m-d H:i:s';
 
     /**
      * 带站点隔离的查询构造器:非超管强制 site_id = 自身站点

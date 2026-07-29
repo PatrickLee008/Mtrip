@@ -1,3 +1,6 @@
+-- 强制客户端连接字符集为 utf8mb4,防止容器内 mysql 客户端按 latin1 解析导致中文乱码
+SET NAMES utf8mb4;
+
 -- ============================================================
 -- 系统表 06:客户端密钥 / 接口权限模板(文档模块12/13)
 -- 库:mtrip_system
@@ -21,7 +24,7 @@ CREATE TABLE IF NOT EXISTS `sys_client_perm_template` (
   PRIMARY KEY (`id`),
   KEY `idx_site_id` (`site_id`),
   KEY `idx_status` (`status`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='客户端接口权限模板表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin COMMENT='客户端接口权限模板表';
 
 -- 客户端密钥表(移动端 App/H5 接入鉴权)
 CREATE TABLE IF NOT EXISTS `sys_client` (
@@ -45,4 +48,4 @@ CREATE TABLE IF NOT EXISTS `sys_client` (
   KEY `idx_site_id` (`site_id`),
   KEY `idx_perm_template_id` (`perm_template_id`),
   KEY `idx_status` (`status`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='客户端密钥表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin COMMENT='客户端密钥表';

@@ -1,6 +1,6 @@
 # Mtrip 本地一键联调环境(Windows Docker Desktop 兼容)
 # 用法:cd deploy; Copy-Item .env.example .env; docker compose up -d --build
-# 网关入口:http://localhost:8080(/api/v1/admin/* 与 /api/v1/app/* 统一分发)
+# 网关入口:http://localhost:8081(/api/v1/admin/* 与 /api/v1/app/* 统一分发;8080 易被占用)
 name: mtrip
 
 x-hyperf-common: &hyperf-common
@@ -24,6 +24,8 @@ x-hyperf-common: &hyperf-common
     MTRIP_JWT_TTL: "7200"
     MTRIP_APP_JWT_TTL: "604800"
     MTRIP_AES_KEY: ${MTRIP_AES_KEY:-mtrip-dev-aes-key-change-me}
+    # 全量请求日志开关(排查模式:请求/响应/异常写 request.log,生产保持 false)
+    MTRIP_REQUEST_LOG: ${MTRIP_REQUEST_LOG:-false}
   depends_on:
     mysql:
       condition: service_healthy
@@ -40,12 +42,14 @@ services:
       MYSQL_PASSWORD: ${MYSQL_PASSWORD:-mtrip@2026}
     command:
       - --character-set-server=utf8mb4
-      - --collation-server=utf8mb4_unicode_ci
+      - --collation-server=utf8mb4_bin
       - --default-time-zone=+00:00
     ports:
       - "${MYSQL_HOST_PORT:-3307}:3306"
     volumes:
       - mysql-data:/var/lib/mysql
+      # 客户端字符集(容器内无 UTF-8 locale,mysql 客户端默认 latin1 会导致初始化 SQL 中文乱码)
+      - ./mysql/charset.cnf:/etc/mysql/conf.d/charset.cnf:ro
       # 首次启动自动建库建表+种子(按文件名顺序执行;重建需 docker compose down -v)
       - ../database/init/00-create-databases.sql:/docker-entrypoint-initdb.d/00-create-databases.sql:ro
       - ../database/system/01-admin-role-menu.sql:/docker-entrypoint-initdb.d/10-system-admin-role-menu.sql:ro
@@ -178,7 +182,7 @@ services:
     image: openresty/openresty:1.25.3.1-alpine
     restart: unless-stopped
     ports:
-      - "${GATEWAY_HOST_PORT:-8080}:80"
+      - "${GATEWAY_HOST_PORT:-8081}:80"
     volumes:
       - ./openresty/nginx.conf:/usr/local/openresty/nginx/conf/nginx.conf:ro
       - ./openresty/conf.d:/etc/nginx/conf.d:ro

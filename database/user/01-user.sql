@@ -1,3 +1,6 @@
+-- 强制客户端连接字符集为 utf8mb4,防止容器内 mysql 客户端按 latin1 解析导致中文乱码
+SET NAMES utf8mb4;
+
 -- ============================================================
 -- 业务表 03:C端用户(文档 5.2.4 + 业务模块3)
 -- 库:mtrip_business
@@ -35,7 +38,7 @@ CREATE TABLE IF NOT EXISTS `user_info` (
   KEY `idx_mobile` (`mobile`),
   KEY `idx_user_status` (`user_status`),
   KEY `idx_register_time` (`register_time`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='C端用户表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin COMMENT='C端用户表';
 
 -- 会员等级配置表(多站点独立)
 CREATE TABLE IF NOT EXISTS `user_member_level` (
@@ -53,7 +56,7 @@ CREATE TABLE IF NOT EXISTS `user_member_level` (
   `deleted_at`  DATETIME     NULL DEFAULT NULL COMMENT '删除时间(软删)',
   PRIMARY KEY (`id`),
   KEY `idx_site_id` (`site_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='会员等级配置表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin COMMENT='会员等级配置表';
 
 -- 用户余额变动流水表
 CREATE TABLE IF NOT EXISTS `user_balance_log` (
@@ -72,7 +75,7 @@ CREATE TABLE IF NOT EXISTS `user_balance_log` (
   KEY `idx_site_id` (`site_id`),
   KEY `idx_user_id` (`user_id`),
   KEY `idx_created_at` (`created_at`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='用户余额变动流水表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin COMMENT='用户余额变动流水表';
 
 -- 用户积分变动流水表
 CREATE TABLE IF NOT EXISTS `user_points_log` (
@@ -89,7 +92,7 @@ CREATE TABLE IF NOT EXISTS `user_points_log` (
   KEY `idx_site_id` (`site_id`),
   KEY `idx_user_id` (`user_id`),
   KEY `idx_created_at` (`created_at`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='用户积分变动流水表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin COMMENT='用户积分变动流水表';
 
 -- 用户反馈与投诉表
 CREATE TABLE IF NOT EXISTS `user_feedback` (
@@ -111,7 +114,7 @@ CREATE TABLE IF NOT EXISTS `user_feedback` (
   KEY `idx_site_id` (`site_id`),
   KEY `idx_user_id` (`user_id`),
   KEY `idx_status` (`status`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='用户反馈与投诉表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin COMMENT='用户反馈与投诉表';
 
 -- 用户操作日志表(登录、下单、退款记录)
 CREATE TABLE IF NOT EXISTS `user_action_log` (
@@ -127,4 +130,4 @@ CREATE TABLE IF NOT EXISTS `user_action_log` (
   KEY `idx_site_id` (`site_id`),
   KEY `idx_user_id` (`user_id`),
   KEY `idx_created_at` (`created_at`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='用户操作日志表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin COMMENT='用户操作日志表';

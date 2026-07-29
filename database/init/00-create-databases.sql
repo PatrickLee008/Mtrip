@@ -1,3 +1,6 @@
+-- 强制客户端连接字符集为 utf8mb4,防止容器内 mysql 客户端按 latin1 解析导致中文乱码
+SET NAMES utf8mb4;
+
 -- ============================================================
 -- Mtrip 建库脚本(MySQL 8.0+)
 -- mtrip_system   : 系统域(sys_* 表:管理员/RBAC/站点/配置/客户端/审计日志)
@@ -8,11 +11,11 @@
 
 CREATE DATABASE IF NOT EXISTS `mtrip_system`
   DEFAULT CHARACTER SET utf8mb4
-  DEFAULT COLLATE utf8mb4_unicode_ci;
+  DEFAULT COLLATE utf8mb4_bin;
 
 CREATE DATABASE IF NOT EXISTS `mtrip_business`
   DEFAULT CHARACTER SET utf8mb4
-  DEFAULT COLLATE utf8mb4_unicode_ci;
+  DEFAULT COLLATE utf8mb4_bin;
 
 -- 应用账号(docker-compose 中通过环境变量注入实际密码)
 CREATE USER IF NOT EXISTS 'mtrip'@'%' IDENTIFIED BY 'mtrip@2026';
