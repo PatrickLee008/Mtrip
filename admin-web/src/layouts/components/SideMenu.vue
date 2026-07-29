@@ -44,23 +44,25 @@ const items = computed<ItemType[]>(() => [
 const selectedKeys = ref<string[]>([route.path]);
 const openKeys = ref<string[]>([]);
 
-// 当前路由高亮 + 展开所属一级菜单(手风琴)
+// 当前路由高亮 + 展开所属一级分类
 watch(
   () => route.path,
   (path) => {
     selectedKeys.value = [path];
     const parent = '/' + path.split('/')[1];
     if (!appStore.collapsed && parent !== path) {
-      openKeys.value = [parent];
+      // 非手风琴模式：累加展开
+      if (!openKeys.value.includes(parent)) {
+        openKeys.value.push(parent);
+      }
     }
   },
   { immediate: true },
 );
 
-// 手风琴模式:仅展开一个一级分类
+// 非手风琴模式：累加/移除展开项
 function onOpenChange(keys: (string | number)[]): void {
-  const latest = keys.find((key) => !openKeys.value.includes(String(key)));
-  openKeys.value = latest ? [String(latest)] : [];
+  openKeys.value = keys.map((key) => String(key));
 }
 
 function onClick({ key }: { key: string | number }): void {
