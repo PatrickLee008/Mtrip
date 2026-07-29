@@ -29,6 +29,8 @@ export interface MenuNode {
   icon: string;
   sort: number;
   status: number;
+  /** 页面缓存:1缓存 2不缓存(多页签 keep-alive,仅页面菜单生效) */
+  is_cache: number;
   children?: MenuNode[];
 }
 

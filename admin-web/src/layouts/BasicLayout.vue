@@ -3,11 +3,14 @@ import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useAppStore } from '@/stores/app';
 import { useUserStore } from '@/stores/user';
+import { useTabsStore } from '@/stores/tabs';
 import AppHeader from './components/AppHeader.vue';
 import SideMenu from './components/SideMenu.vue';
+import TabsView from './components/TabsView.vue';
 
 const appStore = useAppStore();
 const userStore = useUserStore();
+const tabsStore = useTabsStore();
 const { t } = useI18n();
 
 const siderWidth = computed(() => (appStore.collapsed ? 64 : 256));
@@ -42,11 +45,18 @@ const roleLabel = computed(() => (userStore.isSuper ? t('app.superAdmin') : t('a
           <template v-else>V1.0</template>
         </div>
       </a-layout-sider>
-      <a-layout-content class="layout-content">
-        <router-view v-slot="{ Component }">
-          <component :is="Component" />
-        </router-view>
-      </a-layout-content>
+      <a-layout class="layout-right">
+        <!-- 页签栏 -->
+        <TabsView />
+        <!-- 内容区域:按页签缓存页面(菜单 is_cache 控制,关页签即释放缓存) -->
+        <a-layout-content class="layout-content">
+          <router-view v-slot="{ Component }">
+            <keep-alive :include="tabsStore.cachedViews">
+              <component :is="Component" />
+            </keep-alive>
+          </router-view>
+        </a-layout-content>
+      </a-layout>
     </a-layout>
   </a-layout>
 </template>
@@ -92,8 +102,15 @@ const roleLabel = computed(() => (userStore.isSuper ? t('app.superAdmin') : t('a
   }
 }
 
+.layout-right {
+  display: flex;
+  flex-direction: column;
+  background: var(--mtrip-bg-page);
+}
+
 .layout-content {
+  flex: 1;
   overflow: auto;
-  height: calc(100vh - 48px);
+  min-height: 0; // 让 flex 子元素可滚动
 }
 </style>

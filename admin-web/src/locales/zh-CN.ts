@@ -628,6 +628,10 @@ export default {
       inputName: '请输入菜单名称',
       nameEnPlaceholder: '词条未命中时非中文环境的回退显示名',
       i18nKeyPlaceholder: '前端词条 key,如 menu.systemAdmin',
+      cache: '页面缓存',
+      cacheOn: '缓存',
+      cacheOff: '不缓存',
+      cacheTip: '切换页签时保留页面状态(查询条件、分页等)',
       permKeyPlaceholder: '如 sys:admin:list(全局唯一)',
       routePlaceholder: '如 /system/admin',
       componentPlaceholder: '如 system/admin/index(映射 src/views/)',
@@ -2234,5 +2238,11 @@ export default {
     verifyLog: {
       title: '核销记录',
     },
+  },
+  tabs: {
+    closeOther: '关闭其他',
+    closeLeft: '关闭左侧',
+    closeRight: '关闭右侧',
+    closeAll: '关闭所有',
   },
 };

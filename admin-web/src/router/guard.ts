@@ -1,5 +1,6 @@
 import type { Router } from 'vue-router';
 import { useUserStore } from '@/stores/user';
+import { useTabsStore } from '@/stores/tabs';
 import { apiMe } from '@/api/auth';
 import { clearAuth } from '@/utils/auth';
 import { installDynamicRoutes } from './dynamic';
@@ -33,6 +34,9 @@ export function setupRouterGuard(router: Router): void {
         const { menus } = await userStore.loadMenus();
         installDynamicRoutes(router, menus);
         userStore.routesLoaded = true;
+        // 恢复页签状态
+        const tabsStore = useTabsStore();
+        tabsStore.restore();
         // 重新进入目标路由(此时动态路由已注册)
         return { ...to, replace: true };
       } catch {
@@ -57,5 +61,19 @@ export function setupRouterGuard(router: Router): void {
     document.title = display
       ? `${display} - ${import.meta.env.VITE_APP_TITLE}`
       : (import.meta.env.VITE_APP_TITLE as string);
+
+    // 自动添加页签（非公开路由）
+    if (!to.meta.public && to.path !== '/' && to.path !== '/login') {
+      const tabsStore = useTabsStore();
+      tabsStore.addTab({
+        key: to.path,
+        title: display || to.path,
+        i18nKey: (to.meta.title as string) || undefined,
+        fullPath: to.fullPath,
+        closable: to.path !== '/dashboard',
+        name: typeof to.name === 'string' ? to.name : undefined,
+        keepAlive: to.meta.keepAlive !== false,
+      });
+    }
   });
 }

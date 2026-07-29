@@ -90,6 +90,7 @@ CREATE TABLE IF NOT EXISTS `sys_menu` (
   `icon`       VARCHAR(50)  NOT NULL DEFAULT '' COMMENT '图标',
   `sort`       INT          NOT NULL DEFAULT 0 COMMENT '排序号(小在前)',
   `status`     TINYINT      NOT NULL DEFAULT 1 COMMENT '状态:1显示 2隐藏',
+  `is_cache`   TINYINT      NOT NULL DEFAULT 1 COMMENT '页面缓存:1缓存 2不缓存(多页签 keep-alive,仅页面菜单生效)',
   `remark`     VARCHAR(255) NOT NULL DEFAULT '' COMMENT '备注',
   `created_at` DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `updated_at` DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',

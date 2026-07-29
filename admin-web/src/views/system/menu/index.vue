@@ -27,6 +27,7 @@ const columns = [
   { title: t('system.menu.icon'), dataIndex: 'icon', width: 150, ellipsis: true },
   { title: t('common.sort'), dataIndex: 'sort', width: 70 },
   { title: t('common.status'), dataIndex: 'status', width: 80 },
+  { title: t('system.menu.cache'), dataIndex: 'is_cache', width: 100 },
   { title: t('common.action'), key: 'action', width: 200, fixed: 'right' as const },
 ];
 
@@ -74,6 +75,7 @@ const form = reactive({
   icon: '',
   sort: 0,
   status: 1,
+  isCache: 1,
   remark: '',
 });
 
@@ -91,6 +93,7 @@ function openCreate(parent?: MenuNode): void {
     icon: '',
     sort: 0,
     status: 1,
+    isCache: 1,
     remark: '',
   });
   parentOptions.value = [{ value: 0, label: t('system.menu.root') }, ...(toParentOptions(treeData.value) ?? [])];
@@ -111,6 +114,7 @@ function openEdit(row: MenuNode): void {
     icon: row.icon,
     sort: row.sort,
     status: row.status,
+    isCache: row.is_cache ?? 1,
     remark: (row as Record<string, any>).remark ?? '',
   });
   parentOptions.value = [{ value: 0, label: t('system.menu.root') }, ...(toParentOptions(treeData.value) ?? [])];
@@ -169,7 +173,7 @@ onMounted(() => {
         :pagination="false"
         row-key="id"
         size="middle"
-        :scroll="{ x: 1650 }"
+        :scroll="{ x: 1750 }"
       >
         <template #bodyCell="{ column, record }">
           <template v-if="column.dataIndex === 'menu_type'">
@@ -180,6 +184,9 @@ onMounted(() => {
           </template>
           <template v-else-if="column.dataIndex === 'status'">
             <StatusTag :value="record.status" :map="{ 1: { text: t('system.menu.show'), color: 'success' }, 2: { text: t('system.menu.hide'), color: 'default' } }" />
+          </template>
+          <template v-else-if="column.dataIndex === 'is_cache'">
+            <StatusTag v-if="record.menu_type === 2" :value="record.is_cache" :map="{ 1: { text: t('system.menu.cacheOn'), color: 'success' }, 2: { text: t('system.menu.cacheOff'), color: 'default' } }" />
           </template>
           <template v-else-if="column.key === 'action'">
             <a-space :size="0" wrap>
@@ -257,6 +264,12 @@ onMounted(() => {
           <a-radio-group v-model:value="form.status">
             <a-radio :value="1">{{ t('system.menu.show') }}</a-radio>
             <a-radio :value="2">{{ t('system.menu.hide') }}</a-radio>
+          </a-radio-group>
+        </a-form-item>
+        <a-form-item v-if="form.menuType === 2" :label="t('system.menu.cache')" :extra="t('system.menu.cacheTip')">
+          <a-radio-group v-model:value="form.isCache">
+            <a-radio :value="1">{{ t('system.menu.cacheOn') }}</a-radio>
+            <a-radio :value="2">{{ t('system.menu.cacheOff') }}</a-radio>
           </a-radio-group>
         </a-form-item>
         <a-form-item :label="t('common.remark')">

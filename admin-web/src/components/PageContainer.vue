@@ -78,6 +78,7 @@ const breadcrumbs = computed<string[]>(() => {
 .page-header {
   padding: 12px 16px;
   background: var(--mtrip-bg-card);
+  border-bottom: 1px solid var(--mtrip-border);
 
   .page-breadcrumb {
     margin-bottom: 4px;
@@ -93,6 +94,7 @@ const breadcrumbs = computed<string[]>(() => {
       font-size: 18px;
       font-weight: 500;
       line-height: 26px;
+      color: var(--mtrip-text-main);
     }
 
     .page-actions {
@@ -104,5 +106,7 @@ const breadcrumbs = computed<string[]>(() => {
 
 .page-body {
   padding: 16px;
+  background: var(--mtrip-bg-page);
+  min-height: calc(100vh - 48px - 72px - 40px); // 减去 header + page-header + tabs-bar
 }
 </style>

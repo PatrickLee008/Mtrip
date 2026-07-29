@@ -84,6 +84,8 @@ class MenuController extends AbstractController
         $menu->sort = $this->intInput('sort', (int) $menu->sort);
         $status = $this->intInput('status', (int) ($menu->status ?? 1));
         $menu->status = in_array($status, [1, 2], true) ? $status : 1;
+        $isCache = $this->intInput('isCache', (int) ($menu->is_cache ?? 1));
+        $menu->is_cache = in_array($isCache, [1, 2], true) ? $isCache : 1;
         $menu->remark = $this->strInput('remark', (string) $menu->remark);
     }
 

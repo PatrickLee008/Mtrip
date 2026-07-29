@@ -631,6 +631,10 @@ export default {
       inputName: 'Please input menu name',
       nameEnPlaceholder: 'Fallback name for non-Chinese locales when the i18n key has no entry',
       i18nKeyPlaceholder: 'Frontend locale key, e.g. menu.systemAdmin',
+      cache: 'Page Cache',
+      cacheOn: 'Cached',
+      cacheOff: 'No Cache',
+      cacheTip: 'Keep page state (filters, pagination) when switching tabs',
       permKeyPlaceholder: 'e.g. sys:admin:list (globally unique)',
       routePlaceholder: 'e.g. /system/admin',
       componentPlaceholder: 'e.g. system/admin/index (maps to src/views/)',
@@ -2262,5 +2266,11 @@ export default {
     verifyLog: {
       title: 'Verify Logs',
     },
+  },
+  tabs: {
+    closeOther: 'Close Others',
+    closeLeft: 'Close Left',
+    closeRight: 'Close Right',
+    closeAll: 'Close All',
   },
 };
