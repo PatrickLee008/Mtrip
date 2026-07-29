@@ -2,7 +2,7 @@
  * 用户接口(user-service /api/v1/app/auth|user/*)
  */
 
-import { get, post } from '@/api/request';
+import { get, post, postEncrypted } from '@/api/request';
 import type { PageData, PageParams } from '@/api/types';
 import type { AuthResult, UserProfile } from '@/types/models';
 
@@ -11,11 +11,12 @@ export function apiRegister(params: {
   password: string;
   nickname?: string;
 }): Promise<AuthResult> {
-  return post<AuthResult>('/api/v1/app/auth/register', params);
+  // 敏感接口:请求体 AES 加密传输
+  return postEncrypted<AuthResult>('/api/v1/app/auth/register', params);
 }
 
 export function apiLogin(params: { mobile: string; password: string }): Promise<AuthResult> {
-  return post<AuthResult>('/api/v1/app/auth/login', params);
+  return postEncrypted<AuthResult>('/api/v1/app/auth/login', params);
 }
 
 export function apiLogout(): Promise<null> {

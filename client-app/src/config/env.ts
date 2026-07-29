@@ -24,3 +24,8 @@ export const API_BASE_URL: string =
   process.env.EXPO_PUBLIC_API_BASE_URL ?? DEFAULT_BASE_URL[ENV];
 
 export const DEFAULT_SITE_ID: number = Number(process.env.EXPO_PUBLIC_DEFAULT_SITE_ID ?? 1);
+
+/** 客户端密钥(管理后台客户端管理下发):app 接口 HMAC 签名与登录/注册 AES 加密 */
+export const CLIENT_ID: string = process.env.EXPO_PUBLIC_CLIENT_ID ?? '';
+
+export const CLIENT_SECRET: string = process.env.EXPO_PUBLIC_CLIENT_SECRET ?? '';

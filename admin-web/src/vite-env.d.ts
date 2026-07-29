@@ -9,6 +9,8 @@ declare module '*.vue' {
 interface ImportMetaEnv {
   readonly VITE_API_BASE: string;
   readonly VITE_APP_TITLE: string;
+  /** 登录传输加密密钥(与后端 MTRIP_ADMIN_AES_KEY 同值,留空则明文) */
+  readonly VITE_LOGIN_AES_KEY?: string;
 }
 
 interface ImportMeta {

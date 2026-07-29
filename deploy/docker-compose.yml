@@ -26,6 +26,13 @@ x-hyperf-common: &hyperf-common
     MTRIP_AES_KEY: ${MTRIP_AES_KEY:-mtrip-dev-aes-key-change-me}
     # 全量请求日志开关(排查模式:请求/响应/异常写 request.log,生产保持 false)
     MTRIP_REQUEST_LOG: ${MTRIP_REQUEST_LOG:-false}
+    # 客户端签名鉴权(app 接口 HMAC-SHA256,生产必须 true;时间窗口秒)
+    MTRIP_CLIENT_SIGN: ${MTRIP_CLIENT_SIGN:-true}
+    MTRIP_SIGN_TTL: ${MTRIP_SIGN_TTL:-3600}
+    # 敏感接口传输加密(登录/注册强制 AES 加密,生产必须 true)
+    MTRIP_PAYLOAD_ENCRYPT: ${MTRIP_PAYLOAD_ENCRYPT:-true}
+    # 管理端登录传输加密密钥(与 admin-web VITE_LOGIN_AES_KEY 同值)
+    MTRIP_ADMIN_AES_KEY: ${MTRIP_ADMIN_AES_KEY:-}
   depends_on:
     mysql:
       condition: service_healthy

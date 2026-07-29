@@ -1,4 +1,5 @@
-import { get, post } from '@/utils/http';
+import { get, post, request } from '@/utils/http';
+import { encryptPayload, LOGIN_AES_KEY } from '@/utils/crypto';
 import type { AdminProfile, MenuNode } from '@/api/types';
 
 export interface LoginResult {
@@ -12,7 +13,16 @@ export interface MenusResult {
 }
 
 export function apiLogin(username: string, password: string): Promise<LoginResult> {
-  return post<LoginResult>('/admin/auth/login', { username, password });
+  // 登录参数 AES 加密传输(VITE_LOGIN_AES_KEY 未配置时回退明文,需后端关闭强制加密)
+  if (!LOGIN_AES_KEY) {
+    return post<LoginResult>('/admin/auth/login', { username, password });
+  }
+  return request<LoginResult>({
+    method: 'POST',
+    url: '/admin/auth/login',
+    data: { payload: encryptPayload({ username, password }, LOGIN_AES_KEY) },
+    headers: { 'X-Encrypted': '1' },
+  });
 }
 
 export function apiLogout(): Promise<null> {

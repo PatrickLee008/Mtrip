@@ -26,25 +26,38 @@ instance.interceptors.request.use((config) => {
   return config;
 });
 
+/** 统一业务错码处理(2xx 与非 2xx 响应共用) */
+function handleBizResult(result: ApiResult): void {
+  // 40101 未登录 / 40102 token过期 → 清理并跳登录(已在登录页则不重复跳转)
+  if (result.code === 40101 || result.code === 40102) {
+    clearAuth();
+    message.warning(result.message || '登录已失效,请重新登录');
+    if (!window.location.pathname.startsWith('/login')) {
+      window.location.href = '/login';
+    }
+  } else if (result.code === 40301 || result.code === 40302) {
+    message.error(result.message || '无操作权限');
+  } else {
+    message.error(result.message || '请求失败');
+  }
+}
+
 instance.interceptors.response.use(
   (response) => {
     const result = response.data as ApiResult;
     if (result.code === 0) {
       return response;
     }
-    // 40101 未登录 / 40102 token过期 → 清理并跳登录
-    if (result.code === 40101 || result.code === 40102) {
-      clearAuth();
-      message.warning(result.message || '登录已失效,请重新登录');
-      window.location.href = '/login';
-    } else if (result.code === 40301 || result.code === 40302) {
-      message.error(result.message || '无操作权限');
-    } else {
-      message.error(result.message || '请求失败');
-    }
+    handleBizResult(result);
     return Promise.reject(new BizError(result.code, result.message));
   },
   (error) => {
+    // 后端异常响应带非 2xx 状态码(如 401/429),业务 code 在 response.data 里
+    const result = error?.response?.data as ApiResult | undefined;
+    if (result && typeof result.code === 'number' && result.code !== 0) {
+      handleBizResult(result);
+      return Promise.reject(new BizError(result.code, result.message));
+    }
     if (!(error instanceof BizError)) {
       message.error(error?.message === 'Network Error' ? '网络异常,请稍后重试' : '服务异常,请稍后重试');
     }

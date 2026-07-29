@@ -17,6 +17,7 @@
     "@react-navigation/native": "^6.1.17",
     "@react-navigation/native-stack": "^6.9.26",
     "axios": "^1.7.2",
+    "crypto-js": "^4.2.0",
     "expo": "~51.0.28",
     "expo-status-bar": "~1.12.1",
     "i18next": "^23.11.5",
@@ -31,6 +32,7 @@
   },
   "devDependencies": {
     "@babel/core": "^7.24.0",
+    "@types/crypto-js": "^4.2.2",
     "@types/react": "~18.2.79",
     "babel-plugin-module-resolver": "^5.0.2",
     "typescript": "~5.3.3"
