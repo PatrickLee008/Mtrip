@@ -61,12 +61,6 @@ const breadcrumbs = computed<string[]>(() => {
         </a-breadcrumb-item>
         <a-breadcrumb-item v-for="crumb in breadcrumbs" :key="crumb">{{ crumb }}</a-breadcrumb-item>
       </a-breadcrumb>
-      <div class="page-title-row">
-        <h2 class="page-title">{{ pageTitle }}</h2>
-        <div class="page-actions">
-          <slot name="extra" />
-        </div>
-      </div>
     </div>
     <div class="page-body">
       <slot />
@@ -81,32 +75,13 @@ const breadcrumbs = computed<string[]>(() => {
   border-bottom: 1px solid var(--mtrip-border);
 
   .page-breadcrumb {
-    margin-bottom: 4px;
-  }
-
-  .page-title-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-
-    .page-title {
-      margin: 0;
-      font-size: 18px;
-      font-weight: 500;
-      line-height: 26px;
-      color: var(--mtrip-text-main);
-    }
-
-    .page-actions {
-      display: flex;
-      gap: 8px;
-    }
+    margin-bottom: 0;
   }
 }
 
 .page-body {
   padding: 16px;
   background: var(--mtrip-bg-page);
-  min-height: calc(100vh - 48px - 72px - 40px); // 减去 header + page-header + tabs-bar
+  min-height: calc(100vh - 48px - 40px - 40px); // 减去 header + tabs-bar + page-header
 }
 </style>

@@ -79,11 +79,15 @@ const roleLabel = computed(() => (userStore.isSuper ? t('app.superAdmin') : t('a
 .layout-sider {
   position: relative;
   overflow: hidden;
+  // 确保侧边栏背景色统一
+  background: #001529 !important;
 
   .sider-menu-wrap {
     height: calc(100% - 36px);
     overflow-y: auto;
     overflow-x: hidden;
+    // 统一内部滚动区域背景色
+    background: #001529;
   }
 
   .sider-footer {
@@ -94,12 +98,18 @@ const roleLabel = computed(() => (userStore.isSuper ? t('app.superAdmin') : t('a
     color: rgba(255, 255, 255, 0.55);
     border-top: 1px solid rgba(255, 255, 255, 0.1);
     white-space: nowrap;
+    background: #001529;
 
     .divider {
       margin: 0 6px;
       opacity: 0.4;
     }
   }
+}
+
+// 修复 Ant Design Menu 在 dark 主题下的背景色
+.layout-sider :deep(.ant-menu.ant-menu-dark) {
+  background: #001529;
 }
 
 .layout-right {
