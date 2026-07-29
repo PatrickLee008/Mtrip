@@ -9,6 +9,7 @@ use Hyperf\Redis\Redis;
 use Mtrip\Shared\Constants\ErrorCode;
 use Mtrip\Shared\Context\ClientContext;
 use Mtrip\Shared\Exception\BusinessException;
+use Mtrip\Shared\Support\ClientSecretResolver;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Psr\Http\Server\MiddlewareInterface;
@@ -17,24 +18,38 @@ use Psr\Http\Server\RequestHandlerInterface;
 /**
  * 移动端客户端签名鉴权中间件(文档模块12/13、9.4 权限双层校验)
  *
+ * 仅对 /api/v1/app/* 路径生效,可全局注册;MTRIP_CLIENT_SIGN=false 时跳过校验(仅限开发调试)
+ *
  * 请求头:
  *   X-Client-Id:  客户端唯一标识
- *   X-Timestamp:  秒级时间戳(±300s 防重放)
+ *   X-Timestamp:  秒级时间戳(窗口 MTRIP_SIGN_TTL 秒,默认 3600,超时拒绝防重放)
  *   X-Nonce:      随机串(Redis 去重防重放)
- *   X-Sign:       HMAC-SHA256(secret, clientId + method + path + timestamp + nonce)
+ *   X-Sign:       HMAC-SHA256(secret, clientId + METHOD + path + timestamp + nonce)
  *
  * 校验顺序:客户端存在/启用/未过期 → IP 白名单 → 时间戳/Nonce 防重放 → 签名 → QPS 限流 → 接口权限模板
  */
 class ClientSignMiddleware implements MiddlewareInterface
 {
-    private const TS_TOLERANCE = 300;
+    /** 签名时间窗口默认值(秒),可由 MTRIP_SIGN_TTL 覆盖 */
+    private const DEFAULT_SIGN_TTL = 3600;
 
-    public function __construct(protected Redis $redis)
+    private bool $enabled;
+
+    private int $signTtl;
+
+    public function __construct(protected Redis $redis, protected ClientSecretResolver $resolver)
     {
+        $this->enabled = (bool) \Hyperf\Support\env('MTRIP_CLIENT_SIGN', true);
+        $this->signTtl = max(60, (int) \Hyperf\Support\env('MTRIP_SIGN_TTL', self::DEFAULT_SIGN_TTL));
     }
 
     public function process(ServerRequestInterface $request, RequestHandlerInterface $handler): ResponseInterface
     {
+        $path = $request->getUri()->getPath();
+        if (! $this->enabled || ! str_starts_with($path, '/api/v1/app/')) {
+            return $handler->handle($request);
+        }
+
         $clientId = $request->getHeaderLine('X-Client-Id');
         $timestamp = $request->getHeaderLine('X-Timestamp');
         $nonce = $request->getHeaderLine('X-Nonce');
@@ -43,11 +58,10 @@ class ClientSignMiddleware implements MiddlewareInterface
             throw new BusinessException(ErrorCode::CLIENT_AUTH_FAIL);
         }
 
-        $client = Db::connection('system')->table('sys_client')->where('client_id', $clientId)->whereNull('deleted_at')->first();
+        $client = $this->resolver->findClient($clientId);
         if (! $client) {
             throw new BusinessException(ErrorCode::CLIENT_AUTH_FAIL);
         }
-        $client = (array) $client;
 
         // 状态与过期校验
         if ((int) $client['status'] !== 1) {
@@ -67,18 +81,17 @@ class ClientSignMiddleware implements MiddlewareInterface
             }
         }
 
-        // 时间戳与 Nonce 防重放
-        if (abs(time() - (int) $timestamp) > self::TS_TOLERANCE) {
-            throw new BusinessException(ErrorCode::CLIENT_AUTH_FAIL, '请求已过期');
+        // 时间戳与 Nonce 防重放(窗口可配置,超过 MTRIP_SIGN_TTL 视为无效请求)
+        if (abs(time() - (int) $timestamp) > $this->signTtl) {
+            throw new BusinessException(ErrorCode::CLIENT_AUTH_FAIL, '请求已过期,请检查设备时间');
         }
         $nonceKey = "mtrip:nonce:{$clientId}:{$nonce}";
-        if (! $this->redis->set($nonceKey, '1', ['nx', 'ex' => self::TS_TOLERANCE])) {
+        if (! $this->redis->set($nonceKey, '1', ['nx', 'ex' => $this->signTtl])) {
             throw new BusinessException(ErrorCode::CLIENT_AUTH_FAIL, '重复请求');
         }
 
-        // 签名校验(secret 由 system-service 写入时 AES 加密,网关侧服务解密后缓存;此处使用明文列 client_secret_plain 的 Redis 缓存或解密)
-        $secret = $this->resolveSecret($client);
-        $path = $request->getUri()->getPath();
+        // 签名校验(明文 secret 由解析器从 Redis 缓存/AES 解密得到)
+        $secret = $this->resolver->plainSecret($client);
         $expected = hash_hmac('sha256', $clientId . strtoupper($request->getMethod()) . $path . $timestamp . $nonce, $secret);
         if (! hash_equals($expected, strtolower($sign))) {
             throw new BusinessException(ErrorCode::CLIENT_AUTH_FAIL, '签名错误');
@@ -108,19 +121,6 @@ class ClientSignMiddleware implements MiddlewareInterface
         ]);
 
         return $handler->handle($request);
-    }
-
-    private function resolveSecret(array $client): string
-    {
-        $cacheKey = 'mtrip:client:secret:' . $client['client_id'];
-        $cached = $this->redis->get($cacheKey);
-        if (is_string($cached) && $cached !== '') {
-            return $cached;
-        }
-        $aesKey = (string) \Hyperf\Support\env('MTRIP_AES_KEY', '');
-        $secret = \Mtrip\Shared\Support\CryptoHelper::decrypt((string) $client['client_secret'], $aesKey);
-        $this->redis->set($cacheKey, $secret, ['ex' => 600]);
-        return $secret;
     }
 
     private function checkApiPermission(int $templateId, string $path): void
