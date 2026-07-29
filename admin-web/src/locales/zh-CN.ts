@@ -85,7 +85,7 @@ export default {
   },
   login: {
     title: '账号登录',
-    subtitle: '对标携程 eBooking · 多站点 SaaS 运营平台',
+    subtitle: '多站点 SaaS 运营平台',
     username: '账号',
     password: '密码',
     remember: '记住账号',
