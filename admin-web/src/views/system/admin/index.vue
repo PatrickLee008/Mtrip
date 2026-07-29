@@ -2,6 +2,7 @@
 import { onMounted, reactive, ref } from 'vue';
 import { message } from 'ant-design-vue';
 import { PlusOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons-vue';
+import { useI18n } from 'vue-i18n';
 import PageContainer from '@/components/PageContainer.vue';
 import StatusTag from '@/components/StatusTag.vue';
 import SiteTreeSelect from '@/components/SiteTreeSelect.vue';
@@ -22,6 +23,7 @@ import {
 /** 管理员管理:列表筛选 / 新增编辑(角色绑定) / 重置密码 / 启停 / 删除 / 登录记录 */
 const userStore = useUserStore();
 const isSuper = userStore.profile?.isSuper === true;
+const { t } = useI18n();
 
 const { loading, list, query, load, search, reset, pagination } = useTable(apiAdminList, {
   username: '',
@@ -31,15 +33,15 @@ const { loading, list, query, load, search, reset, pagination } = useTable(apiAd
 });
 
 const columns = [
-  { title: 'ID', dataIndex: 'id', width: 70 },
-  { title: '登录账号', dataIndex: 'username', width: 130 },
-  { title: '姓名', dataIndex: 'realName', width: 110 },
-  { title: '站点', dataIndex: 'siteId', width: 90 },
-  { title: '手机号', dataIndex: 'mobile', width: 130 },
-  { title: '邮箱', dataIndex: 'email', width: 170, ellipsis: true },
-  { title: '状态', dataIndex: 'status', width: 80 },
-  { title: '最近登录', dataIndex: 'lastLoginAt', width: 160 },
-  { title: '操作', key: 'action', width: 300, fixed: 'right' as const },
+  { title: t('common.id'), dataIndex: 'id', width: 70 },
+  { title: t('system.admin.username'), dataIndex: 'username', width: 130 },
+  { title: t('user.realName'), dataIndex: 'realName', width: 110 },
+  { title: t('common.site'), dataIndex: 'siteId', width: 90 },
+  { title: t('system.admin.mobile'), dataIndex: 'mobile', width: 130 },
+  { title: t('system.admin.email'), dataIndex: 'email', width: 170, ellipsis: true },
+  { title: t('common.status'), dataIndex: 'status', width: 80 },
+  { title: t('system.admin.lastLogin'), dataIndex: 'lastLoginAt', width: 160 },
+  { title: t('common.action'), key: 'action', width: 300, fixed: 'right' as const },
 ];
 
 // ---------- 新增/编辑弹窗 ----------
@@ -82,11 +84,11 @@ async function openEdit(row: TableRow): Promise<void> {
 
 async function saveAdmin(): Promise<void> {
   if (!form.username.trim()) {
-    message.warning('请输入登录账号');
+    message.warning(t('system.admin.inputUsername'));
     return;
   }
   if (editingId.value === 0 && !form.password) {
-    message.warning('请输入初始密码');
+    message.warning(t('system.admin.inputPassword'));
     return;
   }
   modalSaving.value = true;
@@ -105,7 +107,7 @@ async function saveAdmin(): Promise<void> {
     } else {
       await apiAdminUpdate({ ...payload, id: editingId.value });
     }
-    message.success(editingId.value === 0 ? '管理员创建成功' : '管理员更新成功');
+    message.success(editingId.value === 0 ? t('system.admin.createSuccess') : t('system.admin.updateSuccess'));
     modalOpen.value = false;
     void load();
   } finally {
@@ -127,13 +129,13 @@ function openResetPwd(row: TableRow): void {
 
 async function doResetPwd(): Promise<void> {
   if (pwdValue.value.length < 8) {
-    message.warning('密码至少 8 位,须含大小写字母和数字');
+    message.warning(t('system.admin.pwdRule'));
     return;
   }
   pwdSaving.value = true;
   try {
     await apiAdminResetPassword(pwdTarget.value!.id, pwdValue.value);
-    message.success('密码重置成功');
+    message.success(t('system.admin.pwdResetSuccess'));
     pwdOpen.value = false;
   } finally {
     pwdSaving.value = false;
@@ -143,13 +145,13 @@ async function doResetPwd(): Promise<void> {
 // ---------- 启停 / 删除 ----------
 async function toggleStatus(row: TableRow): Promise<void> {
   await apiAdminToggleStatus(row.id);
-  message.success(row.status === 1 ? '已禁用' : '已启用');
+  message.success(row.status === 1 ? t('system.admin.disabled') : t('system.admin.enabled'));
   void load();
 }
 
 async function removeAdmin(row: TableRow): Promise<void> {
   await apiAdminDelete(row.id);
-  message.success('管理员已删除');
+  message.success(t('system.admin.deleted'));
   void load();
 }
 
@@ -159,10 +161,10 @@ const logLoading = ref(false);
 const logList = ref<TableRow[]>([]);
 const logTarget = ref<TableRow | null>(null);
 const logColumns = [
-  { title: '时间', dataIndex: 'created_at', width: 160 },
+  { title: t('system.admin.logTime'), dataIndex: 'created_at', width: 160 },
   { title: 'IP', dataIndex: 'login_ip', width: 130 },
-  { title: '设备/浏览器', dataIndex: 'user_agent', ellipsis: true },
-  { title: '结果', dataIndex: 'status', width: 90 },
+  { title: t('system.admin.device'), dataIndex: 'user_agent', ellipsis: true },
+  { title: t('system.admin.logResult'), dataIndex: 'status', width: 90 },
 ];
 
 async function openLoginLogs(row: TableRow): Promise<void> {
@@ -189,35 +191,35 @@ onMounted(() => {
   <PageContainer>
     <a-card :bordered="false" class="mtrip-card-shadow" style="margin-bottom: 16px">
       <a-form layout="inline">
-        <a-form-item label="登录账号">
-          <a-input v-model:value="query.username" placeholder="模糊搜索" allow-clear style="width: 160px" @press-enter="search" />
+        <a-form-item :label="t('system.admin.username')">
+          <a-input v-model:value="query.username" :placeholder="t('common.pleaseInput')" allow-clear style="width: 160px" @press-enter="search" />
         </a-form-item>
-        <a-form-item label="姓名">
-          <a-input v-model:value="query.realName" placeholder="模糊搜索" allow-clear style="width: 140px" @press-enter="search" />
+        <a-form-item :label="t('user.realName')">
+          <a-input v-model:value="query.realName" :placeholder="t('common.pleaseInput')" allow-clear style="width: 140px" @press-enter="search" />
         </a-form-item>
-        <a-form-item v-if="isSuper" label="站点">
+        <a-form-item v-if="isSuper" :label="t('common.site')">
           <SiteTreeSelect v-model:value="query.siteId" allow-all style="width: 180px" />
         </a-form-item>
-        <a-form-item label="状态">
-          <a-select v-model:value="query.status" allow-clear placeholder="全部" style="width: 110px">
-            <a-select-option :value="1">启用</a-select-option>
-            <a-select-option :value="2">禁用</a-select-option>
+        <a-form-item :label="t('common.status')">
+          <a-select v-model:value="query.status" allow-clear :placeholder="t('common.all')" style="width: 110px">
+            <a-select-option :value="1">{{ t('status.enabled') }}</a-select-option>
+            <a-select-option :value="2">{{ t('status.disabled') }}</a-select-option>
           </a-select>
         </a-form-item>
         <a-form-item>
           <a-space>
-            <a-button type="primary" @click="search"><template #icon><SearchOutlined /></template>查询</a-button>
-            <a-button @click="reset"><template #icon><ReloadOutlined /></template>重置</a-button>
+            <a-button type="primary" @click="search"><template #icon><SearchOutlined /></template>{{ t('common.search') }}</a-button>
+            <a-button @click="reset"><template #icon><ReloadOutlined /></template>{{ t('common.reset') }}</a-button>
           </a-space>
         </a-form-item>
       </a-form>
     </a-card>
 
     <a-card :bordered="false" class="mtrip-card-shadow">
-      <template #title>管理员列表</template>
+      <template #title>{{ t('system.admin.title') }}</template>
       <template #extra>
         <a-button v-perm="'sys:admin:add'" type="primary" @click="openCreate">
-          <template #icon><PlusOutlined /></template>新增管理员
+          <template #icon><PlusOutlined /></template>{{ t('system.admin.add') }}
         </a-button>
       </template>
       <a-table
@@ -232,10 +234,10 @@ onMounted(() => {
         <template #bodyCell="{ column, record }">
           <template v-if="column.dataIndex === 'username'">
             {{ record.username }}
-            <a-tag v-if="record.isSuper" color="gold">超管</a-tag>
+            <a-tag v-if="record.isSuper" color="gold">{{ t('app.superAdmin') }}</a-tag>
           </template>
           <template v-else-if="column.dataIndex === 'siteId'">
-            <a-tag v-if="record.siteId === 0" color="blue">全平台</a-tag>
+            <a-tag v-if="record.siteId === 0" color="blue">{{ t('app.allSites') }}</a-tag>
             <span v-else>{{ record.siteId }}</span>
           </template>
           <template v-else-if="column.dataIndex === 'status'">
@@ -243,20 +245,20 @@ onMounted(() => {
           </template>
           <template v-else-if="column.key === 'action'">
             <a-space :size="0" wrap>
-              <a-button v-perm="'sys:admin:edit'" type="link" size="small" @click="openEdit(record)">编辑</a-button>
-              <a-button v-perm="'sys:admin:reset-pwd'" type="link" size="small" @click="openResetPwd(record)">重置密码</a-button>
+              <a-button v-perm="'sys:admin:edit'" type="link" size="small" @click="openEdit(record)">{{ t('common.edit') }}</a-button>
+              <a-button v-perm="'sys:admin:reset-pwd'" type="link" size="small" @click="openResetPwd(record)">{{ t('system.admin.resetPwd') }}</a-button>
               <a-popconfirm
                 v-if="!record.isSuper"
-                :title="record.status === 1 ? '确认禁用该账号?' : '确认启用该账号?'"
+                :title="record.status === 1 ? t('system.admin.confirmDisable') : t('system.admin.confirmEnable')"
                 @confirm="toggleStatus(record)"
               >
                 <a-button v-perm="'sys:admin:status'" type="link" size="small">
-                  {{ record.status === 1 ? '禁用' : '启用' }}
+                  {{ record.status === 1 ? t('status.disabled') : t('status.enabled') }}
                 </a-button>
               </a-popconfirm>
-              <a-button type="link" size="small" @click="openLoginLogs(record)">登录记录</a-button>
-              <a-popconfirm v-if="!record.isSuper" title="删除后账号不可登录,确认删除?" @confirm="removeAdmin(record)">
-                <a-button v-perm="'sys:admin:delete'" type="link" size="small" danger>删除</a-button>
+              <a-button type="link" size="small" @click="openLoginLogs(record)">{{ t('system.admin.loginLog') }}</a-button>
+              <a-popconfirm v-if="!record.isSuper" :title="t('system.admin.confirmDelete')" @confirm="removeAdmin(record)">
+                <a-button v-perm="'sys:admin:delete'" type="link" size="small" danger>{{ t('common.delete') }}</a-button>
               </a-popconfirm>
             </a-space>
           </template>
@@ -267,55 +269,55 @@ onMounted(() => {
     <!-- 新增/编辑 -->
     <a-modal
       v-model:open="modalOpen"
-      :title="editingId === 0 ? '新增管理员' : '编辑管理员'"
+      :title="editingId === 0 ? t('system.admin.add') : t('system.admin.edit')"
       :confirm-loading="modalSaving"
       width="560px"
       @ok="saveAdmin"
     >
       <a-form :label-col="{ span: 5 }" :wrapper-col="{ span: 18 }" style="margin-top: 16px">
-        <a-form-item label="登录账号" required>
-          <a-input v-model:value="form.username" :disabled="editingId !== 0" placeholder="登录账号,创建后不可修改" />
+        <a-form-item :label="t('system.admin.username')" required>
+          <a-input v-model:value="form.username" :disabled="editingId !== 0" :placeholder="t('system.admin.usernameImmutable')" />
         </a-form-item>
-        <a-form-item v-if="editingId === 0" label="初始密码" required>
-          <a-input-password v-model:value="form.password" placeholder="至少8位,含大小写字母和数字" />
+        <a-form-item v-if="editingId === 0" :label="t('system.admin.initialPwd')" required>
+          <a-input-password v-model:value="form.password" :placeholder="t('system.admin.pwdRule')" />
         </a-form-item>
-        <a-form-item label="姓名">
+        <a-form-item :label="t('user.realName')">
           <a-input v-model:value="form.realName" />
         </a-form-item>
-        <a-form-item v-if="isSuper" label="所属站点">
+        <a-form-item v-if="isSuper" :label="t('common.site')">
           <SiteTreeSelect v-model:value="form.siteId" allow-all />
         </a-form-item>
-        <a-form-item label="角色">
-          <a-select v-model:value="form.roleIds" mode="multiple" placeholder="选择角色" option-filter-prop="label">
+        <a-form-item :label="t('system.admin.role')">
+          <a-select v-model:value="form.roleIds" mode="multiple" :placeholder="t('common.pleaseSelect')" option-filter-prop="label">
             <a-select-option v-for="role in roleOptions" :key="role.id" :value="role.id" :label="role.role_name">
               {{ role.role_name }}
             </a-select-option>
           </a-select>
         </a-form-item>
-        <a-form-item label="手机号">
-          <a-input v-model:value="form.mobile" placeholder="加密存储,列表脱敏显示" />
+        <a-form-item :label="t('system.admin.mobile')">
+          <a-input v-model:value="form.mobile" :placeholder="t('system.admin.mobilePlaceholder')" />
         </a-form-item>
-        <a-form-item label="邮箱">
+        <a-form-item :label="t('system.admin.email')">
           <a-input v-model:value="form.email" />
         </a-form-item>
-        <a-form-item label="备注">
+        <a-form-item :label="t('common.remark')">
           <a-textarea v-model:value="form.remark" :rows="2" />
         </a-form-item>
       </a-form>
     </a-modal>
 
     <!-- 重置密码 -->
-    <a-modal v-model:open="pwdOpen" title="重置密码" :confirm-loading="pwdSaving" width="420px" @ok="doResetPwd">
-      <a-alert type="warning" show-icon message="高危操作:重置后原密码立即失效" style="margin-bottom: 16px" />
+    <a-modal v-model:open="pwdOpen" :title="t('system.admin.resetPwd')" :confirm-loading="pwdSaving" width="420px" @ok="doResetPwd">
+      <a-alert type="warning" show-icon :message="t('system.admin.pwdWarning')" style="margin-bottom: 16px" />
       <a-form layout="vertical">
-        <a-form-item :label="`为「${pwdTarget?.username}」设置新密码`" required>
-          <a-input-password v-model:value="pwdValue" placeholder="至少8位,含大小写字母和数字" />
+        <a-form-item :label="t('system.admin.setPwdFor', { name: pwdTarget?.username })" required>
+          <a-input-password v-model:value="pwdValue" :placeholder="t('system.admin.pwdRule')" />
         </a-form-item>
       </a-form>
     </a-modal>
 
     <!-- 登录记录 -->
-    <a-drawer v-model:open="logOpen" :title="`登录记录 - ${logTarget?.username ?? ''}`" width="640">
+    <a-drawer v-model:open="logOpen" :title="t('system.admin.loginLogTitle', { name: logTarget?.username ?? '' })" width="640">
       <a-table
         :columns="logColumns"
         :data-source="logList"
@@ -326,7 +328,7 @@ onMounted(() => {
       >
         <template #bodyCell="{ column, record }">
           <template v-if="column.dataIndex === 'status'">
-            <StatusTag :value="record.status" :map="{ 1: { text: '成功', color: 'success' }, 2: { text: '失败', color: 'error' } }" />
+            <StatusTag :value="record.status" :map="{ 1: { text: t('status.success'), color: 'success' }, 2: { text: t('status.failed'), color: 'error' } }" />
           </template>
         </template>
       </a-table>

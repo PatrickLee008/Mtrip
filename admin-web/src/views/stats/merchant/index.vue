@@ -1,9 +1,12 @@
 <script setup lang="ts">
+import { computed } from 'vue';
+import { useI18n } from 'vue-i18n';
 import StatsReport from '@/views/stats/components/StatsReport.vue';
 
-/** 商户统计(按钮权限 stats:merchant:*) */
+const { t } = useI18n();
+const title = computed(() => t('stats.merchantPage.title'));
 </script>
 
 <template>
-  <StatsReport dim="merchant" perm-prefix="stats:merchant" title="商户统计" />
+  <StatsReport dim="merchant" perm-prefix="stats:merchant" :title="title" />
 </template>

@@ -1,10 +1,13 @@
 <script setup lang="ts">
-import { reactive, ref } from 'vue';
+import { computed, reactive, ref } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { message } from 'ant-design-vue';
 import { PlusOutlined } from '@ant-design/icons-vue';
 import PageContainer from '@/components/PageContainer.vue';
 import { type TableRow } from '@/composables/useTable';
 import { apiMerchantAccounts, apiMerchantAccountSave, apiMerchantList } from '@/api/merchant';
+
+const { t } = useI18n();
 
 /** 商户账户:按商户查看/维护结算账户(账号加密存储,列表脱敏) */
 const merchantOptions = ref<{ label: string; value: number }[]>([]);
@@ -41,17 +44,17 @@ async function loadAccounts(): Promise<void> {
   }
 }
 
-const columns = [
-  { title: 'ID', dataIndex: 'id', width: 70 },
-  { title: '开户行', dataIndex: 'bank_name' },
-  { title: '户名', dataIndex: 'account_name' },
-  { title: '账号(脱敏)', dataIndex: 'account_no' },
+const columns = computed(() => [
+  { title: t('common.id'), dataIndex: 'id', width: 70 },
+  { title: t('common.name'), dataIndex: 'bank_name' },
+  { title: t('user.realName'), dataIndex: 'account_name' },
+  { title: t('common.masked'), dataIndex: 'account_no' },
   { title: 'SWIFT', dataIndex: 'swift_code', width: 110 },
-  { title: '币种', dataIndex: 'currency', width: 80 },
-  { title: '默认', dataIndex: 'is_default', width: 70 },
-  { title: '备注', dataIndex: 'remark', ellipsis: true },
-  { title: '操作', key: 'action_col', width: 90 },
-];
+  { title: t('common.type'), dataIndex: 'currency', width: 80 },
+  { title: t('common.all'), dataIndex: 'is_default', width: 70 },
+  { title: t('common.remark'), dataIndex: 'remark', ellipsis: true },
+  { title: t('common.action'), key: 'action_col', width: 90 },
+]);
 
 // ---------- 新增/编辑 ----------
 const modalOpen = ref(false);
@@ -69,7 +72,7 @@ const form = reactive({
 
 function openCreate(): void {
   if (!merchantId.value) {
-    message.warning('请先选择商户');
+    message.warning(t('merchant.accountPage.merchant'));
     return;
   }
   editingId.value = 0;
@@ -94,17 +97,17 @@ function openEdit(row: TableRow): void {
 
 async function saveAccount(): Promise<void> {
   if (!form.bankName.trim() || !form.accountName.trim()) {
-    message.warning('请填写开户行与户名');
+    message.warning(t('common.required'));
     return;
   }
   if (!editingId.value && !form.accountNo.trim()) {
-    message.warning('新增账户必须填写账号');
+    message.warning(t('common.required'));
     return;
   }
   modalSaving.value = true;
   try {
     await apiMerchantAccountSave({ merchantId: merchantId.value, id: editingId.value || undefined, ...form });
-    message.success('结算账户已保存');
+    message.success(t('tip.saveSuccess'));
     modalOpen.value = false;
     await loadAccounts();
   } finally {
@@ -117,14 +120,14 @@ async function saveAccount(): Promise<void> {
   <PageContainer>
     <a-card :bordered="false" class="mtrip-card-shadow" style="margin-bottom: 16px">
       <a-form layout="inline">
-        <a-form-item label="选择商户">
+        <a-form-item :label="t('merchant.accountPage.merchant')">
           <a-select
             v-model:value="merchantId"
             show-search
             :filter-option="false"
             :options="merchantOptions"
             :loading="searching"
-            placeholder="输入商户名称搜索"
+            :placeholder="t('common.pleaseInput')"
             style="width: 320px"
             @search="searchMerchant"
             @change="loadAccounts"
@@ -134,59 +137,59 @@ async function saveAccount(): Promise<void> {
     </a-card>
 
     <a-card :bordered="false" class="mtrip-card-shadow">
-      <template #title>结算账户</template>
+      <template #title>{{ t('merchant.accountPage.title') }}</template>
       <template #extra>
         <a-button v-perm="'merchant:account:edit'" type="primary" :disabled="!merchantId" @click="openCreate">
-          <template #icon><PlusOutlined /></template>新增账户
+          <template #icon><PlusOutlined /></template>{{ t('common.add') }}
         </a-button>
       </template>
       <a-table :columns="columns" :data-source="accounts" :loading="loading" row-key="id" size="middle" :pagination="false">
         <template #bodyCell="{ column, record }">
           <template v-if="column.dataIndex === 'is_default'">
-            <a-tag v-if="record.is_default === 1" color="success">默认</a-tag>
+            <a-tag v-if="record.is_default === 1" color="success">{{ t('common.confirm') }}</a-tag>
             <span v-else>-</span>
           </template>
           <template v-else-if="column.key === 'action_col'">
-            <a-button v-perm="'merchant:account:edit'" type="link" size="small" @click="openEdit(record)">编辑</a-button>
+            <a-button v-perm="'merchant:account:edit'" type="link" size="small" @click="openEdit(record)">{{ t('common.edit') }}</a-button>
           </template>
         </template>
       </a-table>
-      <a-empty v-if="!merchantId" description="请先选择商户" style="margin: 40px 0" />
+      <a-empty v-if="!merchantId" :description="t('common.pleaseSelect')" style="margin: 40px 0" />
     </a-card>
 
     <!-- 新增/编辑账户 -->
     <a-modal
       v-model:open="modalOpen"
-      :title="editingId ? '编辑结算账户' : '新增结算账户'"
+      :title="editingId ? t('common.edit') : t('common.add')"
       width="520px"
       :confirm-loading="modalSaving"
       @ok="saveAccount"
     >
       <a-form :label-col="{ style: { width: '90px' } }" style="margin-top: 16px">
-        <a-form-item label="开户行" required>
+        <a-form-item :label="t('common.name')" required>
           <a-input v-model:value="form.bankName" />
         </a-form-item>
-        <a-form-item label="户名" required>
+        <a-form-item :label="t('user.realName')" required>
           <a-input v-model:value="form.accountName" />
         </a-form-item>
-        <a-form-item label="账号" :required="!editingId">
-          <a-input v-model:value="form.accountNo" :placeholder="editingId ? '留空保留原值' : ''" />
+        <a-form-item :label="t('common.code')" :required="!editingId">
+          <a-input v-model:value="form.accountNo" :placeholder="editingId ? t('common.optional') : ''" />
         </a-form-item>
         <a-form-item label="SWIFT">
-          <a-input v-model:value="form.swiftCode" placeholder="国际汇款代码" />
+          <a-input v-model:value="form.swiftCode" :placeholder="t('common.pleaseInput')" />
         </a-form-item>
-        <a-form-item label="币种">
+        <a-form-item :label="t('common.type')">
           <a-select v-model:value="form.currency">
             <a-select-option v-for="code in ['EUR', 'USD', 'GBP', 'CHF', 'CNY']" :key="code" :value="code">{{ code }}</a-select-option>
           </a-select>
         </a-form-item>
-        <a-form-item label="设为默认">
+        <a-form-item :label="t('common.confirm')">
           <a-radio-group v-model:value="form.isDefault">
-            <a-radio :value="0">否</a-radio>
-            <a-radio :value="1">是(互斥,其余账户自动取消默认)</a-radio>
+            <a-radio :value="0">{{ t('common.no') }}</a-radio>
+            <a-radio :value="1">{{ t('common.yes') }}</a-radio>
           </a-radio-group>
         </a-form-item>
-        <a-form-item label="备注">
+        <a-form-item :label="t('common.remark')">
           <a-input v-model:value="form.remark" />
         </a-form-item>
       </a-form>

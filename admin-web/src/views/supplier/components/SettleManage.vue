@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { reactive, ref } from 'vue';
+import { computed, reactive, ref } from 'vue';
 import { message } from 'ant-design-vue';
+import { useI18n } from 'vue-i18n';
 import { ReloadOutlined, SearchOutlined } from '@ant-design/icons-vue';
 import PageContainer from '@/components/PageContainer.vue';
 import SiteTreeSelect from '@/components/SiteTreeSelect.vue';
@@ -20,6 +21,8 @@ import {
  * 供应商对账结算共享组件:供应商菜单(supplier:settle:*)与财务菜单(finance:ssettle:*)复用
  * 结算单状态机:0待审核 →(通过)1已审核(待回款)→(确认回款)2已回款;0 →(驳回)3已驳回
  */
+const { t } = useI18n();
+
 const props = defineProps<{
   /** 按钮权限键前缀:supplier:settle 或 finance:ssettle */
   permPrefix: string;
@@ -28,12 +31,12 @@ const props = defineProps<{
 const userStore = useUserStore();
 const isSuper = userStore.profile?.isSuper === true;
 
-const STATUS_MAP: Record<number, StatusItem> = {
-  0: { text: '待审核', color: 'warning' },
-  1: { text: '待回款', color: 'processing' },
-  2: { text: '已回款', color: 'success' },
-  3: { text: '已驳回', color: 'error' },
-};
+const STATUS_MAP = computed<Record<number, StatusItem>>(() => ({
+  0: { text: t('supplier.settlePage.statusPending'), color: 'warning' },
+  1: { text: t('supplier.settlePage.statusProcessing'), color: 'processing' },
+  2: { text: t('supplier.settlePage.statusCompleted'), color: 'success' },
+  3: { text: t('supplier.settlePage.statusFailed'), color: 'error' },
+}));
 
 const { loading, list, query, load, search, reset, pagination } = useTable(apiSupplierSettleList, {
   settleNo: '',
@@ -43,17 +46,17 @@ const { loading, list, query, load, search, reset, pagination } = useTable(apiSu
   siteId: 0,
 });
 
-const columns = [
-  { title: '账单号', dataIndex: 'settle_no', width: 190 },
-  { title: '供应商', dataIndex: 'supplier_name', width: 180, ellipsis: true },
-  { title: '账期', dataIndex: 'settle_month', width: 100 },
-  { title: '订单数', dataIndex: 'order_count', width: 80 },
-  { title: '结算金额', dataIndex: 'settle_amount', width: 110 },
-  { title: '状态', dataIndex: 'status', width: 90 },
-  { title: '审核时间', dataIndex: 'audit_time', width: 165 },
-  { title: '回款时间', dataIndex: 'pay_time', width: 165 },
-  { title: '操作', key: 'action_col', width: 170, fixed: 'right' as const },
-];
+const columns = computed(() => [
+  { title: t('supplier.settlePage.settleNo'), dataIndex: 'settle_no', width: 190 },
+  { title: t('supplier.settlePage.supplier'), dataIndex: 'supplier_name', width: 180, ellipsis: true },
+  { title: t('supplier.settlePage.period'), dataIndex: 'settle_month', width: 100 },
+  { title: t('supplier.settlePage.orderCount'), dataIndex: 'order_count', width: 80 },
+  { title: t('supplier.settlePage.settleAmount'), dataIndex: 'settle_amount', width: 110 },
+  { title: t('supplier.settlePage.status'), dataIndex: 'status', width: 90 },
+  { title: t('supplier.settlePage.auditTime'), dataIndex: 'audit_time', width: 165 },
+  { title: t('supplier.settlePage.payTime'), dataIndex: 'pay_time', width: 165 },
+  { title: t('common.action'), key: 'action_col', width: 170, fixed: 'right' as const },
+]);
 
 // ---------- 供应商远程搜索 ----------
 const supplierOptions = ref<{ label: string; value: number }[]>([]);
@@ -88,7 +91,7 @@ function openAudit(row: TableRow): void {
 
 async function submitAudit(): Promise<void> {
   if (auditForm.auditStatus === 2 && !auditForm.auditRemark.trim()) {
-    message.warning('驳回必须填写原因');
+    message.warning(t('supplier.settlePage.rejectReasonRequired'));
     return;
   }
   auditSubmitting.value = true;
@@ -98,7 +101,7 @@ async function submitAudit(): Promise<void> {
       auditStatus: auditForm.auditStatus,
       auditRemark: auditForm.auditRemark.trim() || undefined,
     });
-    message.success(auditForm.auditStatus === 1 ? '账单审核通过,待回款' : '账单已驳回');
+    message.success(auditForm.auditStatus === 1 ? t('supplier.settlePage.auditPassSuccess') : t('supplier.settlePage.auditRejectSuccess'));
     auditOpen.value = false;
     void load();
   } finally {
@@ -123,7 +126,7 @@ async function submitPay(): Promise<void> {
   paySubmitting.value = true;
   try {
     await apiSupplierSettleConfirmPay({ id: payForm.id, payVoucher: payForm.payVoucher.trim() });
-    message.success('已确认回款');
+    message.success(t('supplier.settlePage.paySuccess'));
     payOpen.value = false;
     void load();
   } finally {
@@ -136,15 +139,15 @@ async function submitPay(): Promise<void> {
   <PageContainer>
     <a-card :bordered="false" class="mtrip-card-shadow" style="margin-bottom: 16px">
       <a-form layout="inline">
-        <a-form-item label="账单号">
-          <a-input v-model:value="query.settleNo" allow-clear placeholder="精确匹配" style="width: 190px" @press-enter="search" />
+        <a-form-item :label="t('supplier.settlePage.settleNo')">
+          <a-input v-model:value="query.settleNo" allow-clear :placeholder="t('supplier.settlePage.settleNoExactPlaceholder')" style="width: 190px" @press-enter="search" />
         </a-form-item>
-        <a-form-item label="供应商">
+        <a-form-item :label="t('supplier.settlePage.supplier')">
           <a-select
             v-model:value="query.supplierId"
             show-search
             allow-clear
-            placeholder="输入名称搜索"
+            :placeholder="t('supplier.settlePage.searchSupplierPlaceholder')"
             style="width: 200px"
             :filter-option="false"
             :options="supplierOptions"
@@ -152,27 +155,27 @@ async function submitPay(): Promise<void> {
             @search="searchSupplier"
           />
         </a-form-item>
-        <a-form-item label="账期">
+        <a-form-item :label="t('supplier.settlePage.period')">
           <a-date-picker v-model:value="query.settleMonth" picker="month" value-format="YYYY-MM" style="width: 120px" />
         </a-form-item>
-        <a-form-item label="状态">
-          <a-select v-model:value="query.status" allow-clear placeholder="全部" style="width: 100px">
+        <a-form-item :label="t('supplier.settlePage.status')">
+          <a-select v-model:value="query.status" allow-clear :placeholder="t('common.all')" style="width: 100px">
             <a-select-option v-for="(item, key) in STATUS_MAP" :key="key" :value="Number(key)">{{ item.text }}</a-select-option>
           </a-select>
         </a-form-item>
-        <a-form-item v-if="isSuper" label="站点">
+        <a-form-item v-if="isSuper" :label="t('common.site')">
           <SiteTreeSelect v-model:value="query.siteId" allow-all style="width: 160px" />
         </a-form-item>
         <a-form-item>
           <a-space>
-            <a-button type="primary" @click="search"><template #icon><SearchOutlined /></template>查询</a-button>
-            <a-button @click="reset"><template #icon><ReloadOutlined /></template>重置</a-button>
+            <a-button type="primary" @click="search"><template #icon><SearchOutlined /></template>{{ t('common.search') }}</a-button>
+            <a-button @click="reset"><template #icon><ReloadOutlined /></template>{{ t('common.reset') }}</a-button>
           </a-space>
         </a-form-item>
       </a-form>
     </a-card>
 
-    <a-card :bordered="false" class="mtrip-card-shadow" title="结算账单">
+    <a-card :bordered="false" class="mtrip-card-shadow" :title="t('supplier.settlePage.title')">
       <a-table
         :columns="columns"
         :data-source="list"
@@ -187,7 +190,7 @@ async function submitPay(): Promise<void> {
             <span style="font-weight: 600">{{ formatAmount(record.settle_amount) }}</span>
           </template>
           <template v-else-if="column.dataIndex === 'status'">
-            <a-tooltip v-if="record.status === 3 && record.remark" :title="`驳回原因:${record.remark}`">
+            <a-tooltip v-if="record.status === 3 && record.remark" :title="`${t('supplier.settlePage.rejectReason')}:${record.remark}`">
               <span><StatusTag :value="record.status" :map="STATUS_MAP" /></span>
             </a-tooltip>
             <StatusTag v-else :value="record.status" :map="STATUS_MAP" />
@@ -202,14 +205,14 @@ async function submitPay(): Promise<void> {
                 type="link"
                 size="small"
                 @click="openAudit(record)"
-              >确认对账</a-button>
+              >{{ t('supplier.settlePage.confirmAudit') }}</a-button>
               <a-button
                 v-if="record.status === 1"
                 v-perm="`${props.permPrefix}:pay`"
                 type="link"
                 size="small"
                 @click="openPay(record)"
-              >标记打款</a-button>
+              >{{ t('supplier.settlePage.markPay') }}</a-button>
             </a-space>
           </template>
         </template>
@@ -217,34 +220,34 @@ async function submitPay(): Promise<void> {
     </a-card>
 
     <!-- 审核 Modal -->
-    <a-modal v-model:open="auditOpen" title="对账审核" :confirm-loading="auditSubmitting" @ok="submitAudit">
+    <a-modal v-model:open="auditOpen" :title="t('supplier.settlePage.auditTitle')" :confirm-loading="auditSubmitting" @ok="submitAudit">
       <a-form :label-col="{ span: 6 }">
-        <a-form-item label="账单号">{{ auditForm.settleNo }}</a-form-item>
-        <a-form-item label="结算金额">
+        <a-form-item :label="t('supplier.settlePage.settleNo')">{{ auditForm.settleNo }}</a-form-item>
+        <a-form-item :label="t('supplier.settlePage.settleAmount')">
           <span style="color: var(--mtrip-error, #ff4d4f); font-weight: 600">{{ formatAmount(auditForm.settleAmount) }}</span>
         </a-form-item>
-        <a-form-item label="审核结果" required>
+        <a-form-item :label="t('supplier.settlePage.auditResult')" required>
           <a-radio-group v-model:value="auditForm.auditStatus">
-            <a-radio :value="1">通过(待回款)</a-radio>
-            <a-radio :value="2">驳回</a-radio>
+            <a-radio :value="1">{{ t('supplier.settlePage.auditPass') }}</a-radio>
+            <a-radio :value="2">{{ t('supplier.settlePage.auditReject') }}</a-radio>
           </a-radio-group>
         </a-form-item>
-        <a-form-item label="审核意见" :required="auditForm.auditStatus === 2">
-          <a-textarea v-model:value="auditForm.auditRemark" :rows="3" :maxlength="500" placeholder="驳回必填" />
+        <a-form-item :label="t('supplier.settlePage.auditRemark')" :required="auditForm.auditStatus === 2">
+          <a-textarea v-model:value="auditForm.auditRemark" :rows="3" :maxlength="500" :placeholder="t('supplier.settlePage.auditRemarkPlaceholder')" />
         </a-form-item>
       </a-form>
     </a-modal>
 
     <!-- 标记打款 Modal -->
-    <a-modal v-model:open="payOpen" title="确认回款" :confirm-loading="paySubmitting" @ok="submitPay">
-      <a-alert type="warning" show-icon message="确认后账单完结不可撤销,请核实打款已完成" style="margin-bottom: 16px" />
+    <a-modal v-model:open="payOpen" :title="t('supplier.settlePage.payTitle')" :confirm-loading="paySubmitting" @ok="submitPay">
+      <a-alert type="warning" show-icon :message="t('supplier.settlePage.payNotice')" style="margin-bottom: 16px" />
       <a-form :label-col="{ span: 6 }">
-        <a-form-item label="账单号">{{ payForm.settleNo }}</a-form-item>
-        <a-form-item label="结算金额">
+        <a-form-item :label="t('supplier.settlePage.settleNo')">{{ payForm.settleNo }}</a-form-item>
+        <a-form-item :label="t('supplier.settlePage.settleAmount')">
           <span style="color: var(--mtrip-error, #ff4d4f); font-weight: 600">{{ formatAmount(payForm.settleAmount) }}</span>
         </a-form-item>
-        <a-form-item label="打款凭证URL">
-          <a-input v-model:value="payForm.payVoucher" :maxlength="255" placeholder="选填,凭证图片/文件地址" />
+        <a-form-item :label="t('supplier.settlePage.payVoucher')">
+          <a-input v-model:value="payForm.payVoucher" :maxlength="255" :placeholder="t('supplier.settlePage.payVoucherPlaceholder')" />
         </a-form-item>
       </a-form>
     </a-modal>

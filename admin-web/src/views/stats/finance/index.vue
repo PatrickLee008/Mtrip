@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from 'vue';
 import { message } from 'ant-design-vue';
 import { DownloadOutlined, ReloadOutlined } from '@ant-design/icons-vue';
+import { useI18n } from 'vue-i18n';
 import PageContainer from '@/components/PageContainer.vue';
 import SiteTreeSelect from '@/components/SiteTreeSelect.vue';
 import EChart from '@/components/EChart.vue';
@@ -11,6 +12,8 @@ import { formatAmount } from '@/utils/format';
 import type { TableRow } from '@/composables/useTable';
 import type { EChartsCoreOption } from 'echarts/core';
 import { apiFinanceReport, type FinanceReportData } from '@/api/stats';
+
+const { t } = useI18n();
 
 /**
  * 财务报表(文档 6.4.7):按年 12 个月收入/支出/净额 + 业务类型拆分(成功流水口径)
@@ -27,7 +30,7 @@ const yearOptions = computed(() => {
   const current = new Date().getFullYear();
   const options: { label: string; value: number }[] = [];
   for (let y = current; y >= current - 5; y -= 1) {
-    options.push({ label: `${y} 年`, value: y });
+    options.push({ label: String(y), value: y });
   }
   return options;
 });
@@ -50,29 +53,29 @@ const chartOption = computed<EChartsCoreOption>(() => {
   const list = data.value?.list ?? [];
   return {
     tooltip: { trigger: 'axis' },
-    legend: { data: ['收入', '支出', '净额'] },
+    legend: { data: [t('finance.flowPage.typeIncome'), t('finance.flowPage.typeExpense'), t('finance.flowPage.amount')] },
     grid: { left: 70, right: 20, top: 40, bottom: 30 },
-    xAxis: { type: 'category', data: list.map((row) => row.month.slice(5) + '月') },
+    xAxis: { type: 'category', data: list.map((row) => row.month.slice(5)) },
     yAxis: { type: 'value' },
     series: [
-      { name: '收入', type: 'bar', data: list.map((row) => row.income), itemStyle: { color: '#52c41a' } },
-      { name: '支出', type: 'bar', data: list.map((row) => row.expense), itemStyle: { color: '#ff4d4f' } },
-      { name: '净额', type: 'line', smooth: true, data: list.map((row) => row.net), itemStyle: { color: '#1677ff' } },
+      { name: t('finance.flowPage.typeIncome'), type: 'bar', data: list.map((row) => row.income), itemStyle: { color: '#52c41a' } },
+      { name: t('finance.flowPage.typeExpense'), type: 'bar', data: list.map((row) => row.expense), itemStyle: { color: '#ff4d4f' } },
+      { name: t('finance.flowPage.amount'), type: 'line', smooth: true, data: list.map((row) => row.net), itemStyle: { color: '#1677ff' } },
     ],
   };
 });
 
-const columns = [
-  { title: '月份', dataIndex: 'month', width: 100 },
-  { title: '收入', dataIndex: 'income', width: 130 },
-  { title: '支出', dataIndex: 'expense', width: 130 },
-  { title: '净额', dataIndex: 'net', width: 130 },
-  { title: '订单支付', dataIndex: 'orderPay', width: 120 },
-  { title: '订单退款', dataIndex: 'orderRefund', width: 120 },
-  { title: '商户提现', dataIndex: 'withdraw', width: 120 },
-  { title: '供应商回款', dataIndex: 'supplierPay', width: 120 },
-  { title: '手动调账', dataIndex: 'adjust', width: 120 },
-];
+const columns = computed(() => [
+  { title: t('finance.flowPage.time'), dataIndex: 'month', width: 100 },
+  { title: t('finance.flowPage.typeIncome'), dataIndex: 'income', width: 130 },
+  { title: t('finance.flowPage.typeExpense'), dataIndex: 'expense', width: 130 },
+  { title: t('finance.flowPage.amount'), dataIndex: 'net', width: 130 },
+  { title: `${t('finance.flowPage.bizTypeOrder')}${t('order.amount')}`, dataIndex: 'orderPay', width: 120 },
+  { title: `${t('finance.flowPage.bizTypeOrder')}${t('finance.flowPage.bizTypeRefund')}`, dataIndex: 'orderRefund', width: 120 },
+  { title: `${t('merchant.title')}${t('finance.flowPage.bizTypeWithdraw')}`, dataIndex: 'withdraw', width: 120 },
+  { title: `${t('supplier.title')}${t('finance.flowPage.bizTypeSettle')}`, dataIndex: 'supplierPay', width: 120 },
+  { title: t('finance.flowPage.bizTypeAdjust'), dataIndex: 'adjust', width: 120 },
+]);
 
 /** 金额列取值(列 dataIndex 即字段名) */
 function cellAmount(record: TableRow, key: string): string {
@@ -83,15 +86,15 @@ function cellAmount(record: TableRow, key: string): string {
 function exportReport(): void {
   const list = data.value?.list ?? [];
   if (list.length === 0) {
-    message.info('暂无可导出的报表数据');
+    message.info(t('tip.empty'));
     return;
   }
   exportCsv(
-    `财务报表_${year.value}`,
-    columns.map((col) => ({ title: col.title, key: col.dataIndex })),
+    `${t('stats.financePage.title')}_${year.value}`,
+    columns.value.map((col) => ({ title: col.title, key: col.dataIndex })),
     list,
   );
-  message.success(`已导出 ${year.value} 年报表`);
+  message.success(`${t('common.success')} ${year.value} ${t('stats.financePage.title')}`);
 }
 </script>
 
@@ -99,13 +102,13 @@ function exportReport(): void {
   <PageContainer>
     <a-card :bordered="false" class="mtrip-card-shadow" style="margin-bottom: 16px">
       <a-space wrap>
-        <span>年度:</span>
+        <span>{{ t('finance.flowPage.time') }}:</span>
         <a-select v-model:value="year" :options="yearOptions" style="width: 120px" />
         <template v-if="isSuper">
-          <span>站点:</span>
+          <span>{{ t('common.site') }}:</span>
           <SiteTreeSelect v-model:value="siteId" allow-all style="width: 180px" />
         </template>
-        <a-button type="primary" :loading="loading" @click="load"><template #icon><ReloadOutlined /></template>查询</a-button>
+        <a-button type="primary" :loading="loading" @click="load"><template #icon><ReloadOutlined /></template>{{ t('common.search') }}</a-button>
       </a-space>
     </a-card>
 
@@ -113,29 +116,29 @@ function exportReport(): void {
     <a-row :gutter="16" style="margin-bottom: 16px">
       <a-col :xs="8">
         <a-card :bordered="false" class="mtrip-card-shadow" :loading="loading">
-          <a-statistic title="年度总收入" :value="formatAmount(data?.totalIncome ?? 0)" :value-style="{ color: '#52c41a', fontWeight: 600 }" />
+          <a-statistic :title="`${t('finance.flowPage.time')}${t('finance.flowPage.typeIncome')}`" :value="formatAmount(data?.totalIncome ?? 0)" :value-style="{ color: '#52c41a', fontWeight: 600 }" />
         </a-card>
       </a-col>
       <a-col :xs="8">
         <a-card :bordered="false" class="mtrip-card-shadow" :loading="loading">
-          <a-statistic title="年度总支出" :value="formatAmount(data?.totalExpense ?? 0)" :value-style="{ color: '#ff4d4f', fontWeight: 600 }" />
+          <a-statistic :title="`${t('finance.flowPage.time')}${t('finance.flowPage.typeExpense')}`" :value="formatAmount(data?.totalExpense ?? 0)" :value-style="{ color: '#ff4d4f', fontWeight: 600 }" />
         </a-card>
       </a-col>
       <a-col :xs="8">
         <a-card :bordered="false" class="mtrip-card-shadow" :loading="loading">
-          <a-statistic title="年度净额" :value="formatAmount(data?.totalNet ?? 0)" :value-style="{ color: '#1677ff', fontWeight: 600 }" />
+          <a-statistic :title="`${t('finance.flowPage.time')}${t('finance.flowPage.amount')}`" :value="formatAmount(data?.totalNet ?? 0)" :value-style="{ color: '#1677ff', fontWeight: 600 }" />
         </a-card>
       </a-col>
     </a-row>
 
-    <a-card :bordered="false" class="mtrip-card-shadow" title="月度收支趋势" style="margin-bottom: 16px" :loading="loading">
+    <a-card :bordered="false" class="mtrip-card-shadow" :title="t('stats.financePage.incomeExpenseTrend')" style="margin-bottom: 16px" :loading="loading">
       <EChart :option="chartOption" height="320px" />
     </a-card>
 
-    <a-card :bordered="false" class="mtrip-card-shadow" :title="`${data?.year ?? year} 年月度明细`">
+    <a-card :bordered="false" class="mtrip-card-shadow" :title="`${data?.year ?? year} ${t('stats.financePage.incomeExpenseTrend')}`">
       <template #extra>
         <a-button v-perm="'stats:finance:export'" @click="exportReport">
-          <template #icon><DownloadOutlined /></template>导出CSV
+          <template #icon><DownloadOutlined /></template>{{ t('common.export') }}CSV
         </a-button>
       </template>
       <a-table

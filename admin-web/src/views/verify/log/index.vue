@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { message } from 'ant-design-vue';
 import { DownloadOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons-vue';
+import { useI18n } from 'vue-i18n';
 import PageContainer from '@/components/PageContainer.vue';
 import SiteTreeSelect from '@/components/SiteTreeSelect.vue';
 import { useTable, type TableRow } from '@/composables/useTable';
@@ -14,11 +15,20 @@ import { apiVerifyLogs } from '@/api/order';
  * 核销日志(核销管理菜单,只读):与订单菜单的核销记录同接口
  * 撤销核销操作在 订单管理→核销记录 页(perm order:verify:revoke)
  */
+const { t } = useI18n();
+
 const userStore = useUserStore();
 const isSuper = userStore.profile?.isSuper === true;
 
-const VERIFY_TYPE_TEXT: Record<number, string> = { 1: '设备核销', 2: '商户核销', 3: '后台手工' };
-const STATUS_TEXT: Record<number, string> = { 1: '成功', 3: '已撤销' };
+const VERIFY_TYPE_TEXT = computed<Record<number, string>>(() => ({
+  1: t('order.verifyType.qrcode'),
+  2: t('order.verifyType.manual'),
+  3: t('order.verifyType.manual'),
+}));
+const STATUS_TEXT = computed<Record<number, string>>(() => ({
+  1: t('common.success'),
+  3: t('order.verifyLog.revoked'),
+}));
 
 const dateRange = ref<string[]>([]);
 
@@ -41,14 +51,14 @@ onMounted(() => {
 });
 
 const columns = [
-  { title: '订单号', dataIndex: 'order_no', width: 200 },
-  { title: '核销码', dataIndex: 'verify_code', width: 140 },
-  { title: '方式', dataIndex: 'verify_type', width: 100 },
-  { title: '商户ID', dataIndex: 'merchant_id', width: 90 },
-  { title: '操作人', dataIndex: 'operator_name', width: 120, ellipsis: true },
-  { title: '状态', dataIndex: 'status', width: 90 },
-  { title: '撤销原因', dataIndex: 'revoke_reason', ellipsis: true },
-  { title: '核销时间', dataIndex: 'created_at', width: 165 },
+  { title: t('order.orderNo'), dataIndex: 'order_no', width: 200 },
+  { title: t('order.verify.code'), dataIndex: 'verify_code', width: 140 },
+  { title: t('order.verifyLog.verifyType'), dataIndex: 'verify_type', width: 100 },
+  { title: t('order.verifyLog.merchantId', 'Merchant ID'), dataIndex: 'merchant_id', width: 90 },
+  { title: t('order.verifyLog.operator'), dataIndex: 'operator_name', width: 120, ellipsis: true },
+  { title: t('order.status'), dataIndex: 'status', width: 90 },
+  { title: t('order.verifyLog.revokeReason', 'Revoke Reason'), dataIndex: 'revoke_reason', ellipsis: true },
+  { title: t('order.verifyLog.time'), dataIndex: 'created_at', width: 165 },
 ];
 
 // ---------- 商户远程搜索 ----------
@@ -82,24 +92,26 @@ async function exportLogs(): Promise<void> {
       pageSize: 2000,
     });
     if (data.list.length === 0) {
-      message.info('当前筛选条件下没有可导出的日志');
+      message.info(t('order.verifyLog.exportEmpty', 'No logs to export under current filter'));
       return;
     }
+    const verifyTypeMap = VERIFY_TYPE_TEXT.value;
+    const statusMap = STATUS_TEXT.value;
     exportCsv(
-      `核销日志_${new Date().toISOString().slice(0, 10)}`,
+      t('order.verifyLog.exportFilename', `verify_logs_${new Date().toISOString().slice(0, 10)}`),
       [
-        { title: '订单号', key: 'order_no' },
-        { title: '核销码', key: 'verify_code' },
-        { title: '方式', key: 'verify_type', format: (row: TableRow) => VERIFY_TYPE_TEXT[row.verify_type] ?? row.verify_type },
-        { title: '商户ID', key: 'merchant_id' },
-        { title: '操作人', key: 'operator_name' },
-        { title: '状态', key: 'status', format: (row: TableRow) => STATUS_TEXT[row.status] ?? row.status },
-        { title: '撤销原因', key: 'revoke_reason' },
-        { title: '核销时间', key: 'created_at' },
+        { title: t('order.orderNo'), key: 'order_no' },
+        { title: t('order.verify.code'), key: 'verify_code' },
+        { title: t('order.verifyLog.verifyType'), key: 'verify_type', format: (row: TableRow) => verifyTypeMap[row.verify_type] ?? row.verify_type },
+        { title: t('order.verifyLog.merchantId', 'Merchant ID'), key: 'merchant_id' },
+        { title: t('order.verifyLog.operator'), key: 'operator_name' },
+        { title: t('order.status'), key: 'status', format: (row: TableRow) => statusMap[row.status] ?? row.status },
+        { title: t('order.verifyLog.revokeReason', 'Revoke Reason'), key: 'revoke_reason' },
+        { title: t('order.verifyLog.time'), key: 'created_at' },
       ],
       data.list,
     );
-    message.success(`已导出 ${data.list.length} 条日志`);
+    message.success(t('order.verifyLog.exportSuccess', `Exported ${data.list.length} logs`).replace('{count}', String(data.list.length)));
   } finally {
     exporting.value = false;
   }
@@ -110,15 +122,15 @@ async function exportLogs(): Promise<void> {
   <PageContainer>
     <a-card :bordered="false" class="mtrip-card-shadow" style="margin-bottom: 16px">
       <a-form layout="inline">
-        <a-form-item label="订单号">
-          <a-input v-model:value="query.orderNo" allow-clear placeholder="精确匹配" style="width: 200px" @press-enter="search" />
+        <a-form-item :label="t('order.orderNo')">
+          <a-input v-model:value="query.orderNo" allow-clear :placeholder="t('common.pleaseInput', 'Exact match')" style="width: 200px" @press-enter="search" />
         </a-form-item>
-        <a-form-item label="商户">
+        <a-form-item :label="t('merchant.list', 'Merchant')">
           <a-select
             v-model:value="query.merchantId"
             show-search
             allow-clear
-            placeholder="输入名称搜索"
+            :placeholder="t('goods.common.searchMerchantPlaceholder')"
             style="width: 200px"
             :filter-option="false"
             :options="merchantOptions"
@@ -126,36 +138,36 @@ async function exportLogs(): Promise<void> {
             @search="searchMerchant"
           />
         </a-form-item>
-        <a-form-item label="核销方式">
-          <a-select v-model:value="query.verifyType" allow-clear placeholder="全部" style="width: 120px">
+        <a-form-item :label="t('order.verifyLog.verifyType')">
+          <a-select v-model:value="query.verifyType" allow-clear :placeholder="t('common.all')" style="width: 120px">
             <a-select-option v-for="(text, key) in VERIFY_TYPE_TEXT" :key="key" :value="Number(key)">{{ text }}</a-select-option>
           </a-select>
         </a-form-item>
-        <a-form-item label="状态">
-          <a-select v-model:value="query.status" allow-clear placeholder="全部" style="width: 100px">
-            <a-select-option :value="1">成功</a-select-option>
-            <a-select-option :value="3">已撤销</a-select-option>
+        <a-form-item :label="t('order.status')">
+          <a-select v-model:value="query.status" allow-clear :placeholder="t('common.all')" style="width: 100px">
+            <a-select-option :value="1">{{ t('common.success') }}</a-select-option>
+            <a-select-option :value="3">{{ t('order.verifyLog.revoked', 'Revoked') }}</a-select-option>
           </a-select>
         </a-form-item>
-        <a-form-item label="核销日期">
+        <a-form-item :label="t('order.verifyLog.time')">
           <a-range-picker v-model:value="dateRange" value-format="YYYY-MM-DD" style="width: 240px" />
         </a-form-item>
-        <a-form-item v-if="isSuper" label="站点">
+        <a-form-item v-if="isSuper" :label="t('common.site')">
           <SiteTreeSelect v-model:value="query.siteId" allow-all style="width: 160px" />
         </a-form-item>
         <a-form-item>
           <a-space>
-            <a-button type="primary" @click="search"><template #icon><SearchOutlined /></template>查询</a-button>
-            <a-button @click="doReset"><template #icon><ReloadOutlined /></template>重置</a-button>
+            <a-button type="primary" @click="search"><template #icon><SearchOutlined /></template>{{ t('common.search') }}</a-button>
+            <a-button @click="doReset"><template #icon><ReloadOutlined /></template>{{ t('common.reset') }}</a-button>
           </a-space>
         </a-form-item>
       </a-form>
     </a-card>
 
-    <a-card :bordered="false" class="mtrip-card-shadow" title="核销日志">
+    <a-card :bordered="false" class="mtrip-card-shadow" :title="t('order.verifyLog.title')">
       <template #extra>
         <a-button v-perm="'verify:log:export'" :loading="exporting" @click="exportLogs">
-          <template #icon><DownloadOutlined /></template>导出CSV
+          <template #icon><DownloadOutlined /></template>{{ t('common.export') }}CSV
         </a-button>
       </template>
       <a-table

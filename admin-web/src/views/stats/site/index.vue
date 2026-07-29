@@ -1,9 +1,12 @@
 <script setup lang="ts">
+import { computed } from 'vue';
+import { useI18n } from 'vue-i18n';
 import StatsReport from '@/views/stats/components/StatsReport.vue';
 
-/** 站点统计(按钮权限 stats:site:*) */
+const { t } = useI18n();
+const title = computed(() => t('stats.sitePage.title'));
 </script>
 
 <template>
-  <StatsReport dim="site" perm-prefix="stats:site" title="站点统计" />
+  <StatsReport dim="site" perm-prefix="stats:site" :title="title" />
 </template>

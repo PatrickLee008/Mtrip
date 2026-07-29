@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import dayjs, { type Dayjs } from 'dayjs';
 import { DownloadOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons-vue';
+import { useI18n } from 'vue-i18n';
 import PageContainer from '@/components/PageContainer.vue';
 import SiteTreeSelect from '@/components/SiteTreeSelect.vue';
 import { useTable, type TableRow } from '@/composables/useTable';
@@ -12,6 +13,7 @@ import { exportCsv } from '@/utils/export';
 /** 接口调用日志:统计卡片(近7天) + 多条件筛选列表 + 脱敏详情;只读永久留存 */
 const userStore = useUserStore();
 const isSuper = userStore.profile?.isSuper === true;
+const { t } = useI18n();
 
 const { loading, list, query, load, search, reset, pagination } = useTable(apiApiLogList, {
   clientId: '',
@@ -42,20 +44,24 @@ async function loadStats(): Promise<void> {
   }
 }
 
-const CLIENT_TYPE: Record<number, string> = { 1: 'Android', 2: 'iOS', 3: 'H5' };
+const CLIENT_TYPE = computed<Record<number, string>>(() => ({
+  1: t('log.apiPage.clientTypeAndroid'),
+  2: t('log.apiPage.clientTypeIos'),
+  3: t('log.apiPage.clientTypeH5'),
+}));
 
 const columns = [
-  { title: 'ID', dataIndex: 'id', width: 80 },
-  { title: 'ClientId', dataIndex: 'client_id', width: 200, ellipsis: true },
-  { title: '客户端', dataIndex: 'client_name', width: 120 },
-  { title: '类型', dataIndex: 'client_type', width: 90 },
-  { title: '接口路径', dataIndex: 'api_path', ellipsis: true },
-  { title: '方式', dataIndex: 'request_method', width: 70 },
-  { title: '响应码', dataIndex: 'response_code', width: 80 },
-  { title: '耗时(ms)', dataIndex: 'cost_ms', width: 90 },
-  { title: 'IP', dataIndex: 'client_ip', width: 130 },
-  { title: '时间', dataIndex: 'created_at', width: 160 },
-  { title: '操作', key: 'action_col', width: 80, fixed: 'right' as const },
+  { title: t('common.id'), dataIndex: 'id', width: 80 },
+  { title: t('log.apiPage.clientId'), dataIndex: 'client_id', width: 200, ellipsis: true },
+  { title: t('log.apiPage.clientType'), dataIndex: 'client_name', width: 120 },
+  { title: t('common.type'), dataIndex: 'client_type', width: 90 },
+  { title: t('log.apiPage.path'), dataIndex: 'api_path', ellipsis: true },
+  { title: t('log.apiPage.method'), dataIndex: 'request_method', width: 70 },
+  { title: t('log.apiPage.statusCode'), dataIndex: 'response_code', width: 80 },
+  { title: t('log.apiPage.duration'), dataIndex: 'cost_ms', width: 90 },
+  { title: t('log.apiPage.ip'), dataIndex: 'client_ip', width: 130 },
+  { title: t('log.apiPage.time'), dataIndex: 'created_at', width: 160 },
+  { title: t('common.action'), key: 'action_col', width: 80, fixed: 'right' as const },
 ];
 
 // ---------- 详情(入参出参写入时已脱敏) ----------
@@ -65,7 +71,7 @@ const detail = ref<TableRow | null>(null);
 
 function pretty(raw: unknown): string {
   if (raw === null || raw === undefined || raw === '') {
-    return '(无)';
+    return t('oplog.empty');
   }
   try {
     return JSON.stringify(JSON.parse(String(raw)), null, 2);
@@ -85,17 +91,17 @@ async function openDetail(row: TableRow): Promise<void> {
 }
 
 function doExport(): void {
-  exportCsv(`接口调用日志_${dayjs().format('YYYYMMDD_HHmmss')}`, [
-    { title: 'ID', key: 'id' },
-    { title: 'ClientId', key: 'client_id' },
-    { title: '客户端', key: 'client_name' },
-    { title: '类型', key: 'client_type', format: (row) => CLIENT_TYPE[row.client_type as number] ?? row.client_type },
-    { title: '接口路径', key: 'api_path' },
-    { title: '方式', key: 'request_method' },
-    { title: '响应码', key: 'response_code' },
-    { title: '耗时ms', key: 'cost_ms' },
-    { title: 'IP', key: 'client_ip' },
-    { title: '时间', key: 'created_at' },
+  exportCsv(`${t('log.apiPage.title')}_${dayjs().format('YYYYMMDD_HHmmss')}`, [
+    { title: t('common.id'), key: 'id' },
+    { title: t('log.apiPage.clientId'), key: 'client_id' },
+    { title: t('log.apiPage.clientType'), key: 'client_name' },
+    { title: t('common.type'), key: 'client_type', format: (row) => CLIENT_TYPE.value[row.client_type as number] ?? row.client_type },
+    { title: t('log.apiPage.path'), key: 'api_path' },
+    { title: t('log.apiPage.method'), key: 'request_method' },
+    { title: t('log.apiPage.statusCode'), key: 'response_code' },
+    { title: t('log.apiPage.duration'), key: 'cost_ms' },
+    { title: t('log.apiPage.ip'), key: 'client_ip' },
+    { title: t('log.apiPage.time'), key: 'created_at' },
   ], list.value);
 }
 
@@ -112,22 +118,22 @@ onMounted(() => {
       <a-row :gutter="16" style="margin-bottom: 16px">
         <a-col :span="6">
           <a-card :bordered="false" class="mtrip-card-shadow">
-            <a-statistic title="近7天调用总量" :value="stats?.total ?? 0" />
+            <a-statistic :title="t('log.apiPage.statsTotal')" :value="stats?.total ?? 0" />
           </a-card>
         </a-col>
         <a-col :span="6">
           <a-card :bordered="false" class="mtrip-card-shadow">
-            <a-statistic title="近7天异常调用" :value="stats?.failCount ?? 0" :value-style="{ color: 'var(--mtrip-danger)' }" />
+            <a-statistic :title="t('log.apiPage.statsFail')" :value="stats?.failCount ?? 0" :value-style="{ color: 'var(--mtrip-danger)' }" />
           </a-card>
         </a-col>
         <a-col :span="6">
           <a-card :bordered="false" class="mtrip-card-shadow">
-            <a-statistic title="平均耗时(ms)" :value="stats?.avgCostMs ?? 0" :precision="1" />
+            <a-statistic :title="t('log.apiPage.statsAvgDuration')" :value="stats?.avgCostMs ?? 0" :precision="1" />
           </a-card>
         </a-col>
         <a-col :span="6">
           <a-card :bordered="false" class="mtrip-card-shadow" :body-style="{ padding: '12px 16px' }">
-            <div class="top-api-title">调用量 TOP 接口</div>
+            <div class="top-api-title">{{ t('log.apiPage.statsTopApi') }}</div>
             <div v-for="api in (stats?.topApis ?? []).slice(0, 3)" :key="api.api_path" class="top-api-row">
               <span class="path">{{ api.api_path }}</span>
               <span class="cnt">{{ api.cnt }}</span>
@@ -140,35 +146,35 @@ onMounted(() => {
 
     <a-card :bordered="false" class="mtrip-card-shadow" style="margin-bottom: 16px">
       <a-form layout="inline">
-        <a-form-item label="ClientId">
-          <a-input v-model:value="query.clientId" placeholder="精确匹配" allow-clear style="width: 190px" @press-enter="search" />
+        <a-form-item :label="t('log.apiPage.clientId')">
+          <a-input v-model:value="query.clientId" :placeholder="t('log.apiPage.clientIdPlaceholder')" allow-clear style="width: 190px" @press-enter="search" />
         </a-form-item>
-        <a-form-item label="接口路径">
-          <a-input v-model:value="query.apiPath" placeholder="模糊搜索" allow-clear style="width: 180px" @press-enter="search" />
+        <a-form-item :label="t('log.apiPage.path')">
+          <a-input v-model:value="query.apiPath" :placeholder="t('log.apiPage.filter.pathPlaceholder')" allow-clear style="width: 180px" @press-enter="search" />
         </a-form-item>
-        <a-form-item label="响应码">
-          <a-input-number v-model:value="query.responseCode" placeholder="如 500" style="width: 100px" />
+        <a-form-item :label="t('log.apiPage.statusCode')">
+          <a-input-number v-model:value="query.responseCode" :placeholder="t('log.apiPage.statusCode')" style="width: 100px" />
         </a-form-item>
-        <a-form-item v-if="isSuper" label="站点">
+        <a-form-item v-if="isSuper" :label="t('common.site')">
           <SiteTreeSelect v-model:value="query.siteId" allow-all style="width: 160px" />
         </a-form-item>
-        <a-form-item label="时间">
+        <a-form-item :label="t('log.apiPage.time')">
           <a-range-picker v-model:value="dateRange" style="width: 240px" @change="onRangeChange" />
         </a-form-item>
         <a-form-item>
           <a-space>
-            <a-button type="primary" @click="search"><template #icon><SearchOutlined /></template>查询</a-button>
-            <a-button @click="reset"><template #icon><ReloadOutlined /></template>重置</a-button>
+            <a-button type="primary" @click="search"><template #icon><SearchOutlined /></template>{{ t('common.search') }}</a-button>
+            <a-button @click="reset"><template #icon><ReloadOutlined /></template>{{ t('common.reset') }}</a-button>
           </a-space>
         </a-form-item>
       </a-form>
     </a-card>
 
     <a-card :bordered="false" class="mtrip-card-shadow">
-      <template #title>接口调用日志(只读,永久留存)</template>
+      <template #title>{{ t('log.apiPage.title') }}</template>
       <template #extra>
         <a-button v-perm="'log:api:export'" @click="doExport">
-          <template #icon><DownloadOutlined /></template>导出当前页
+          <template #icon><DownloadOutlined /></template>{{ t('oplog.export') }}
         </a-button>
       </template>
       <a-table
@@ -193,29 +199,29 @@ onMounted(() => {
             <span :style="record.cost_ms > 1000 ? 'color: var(--mtrip-danger)' : ''">{{ record.cost_ms }}</span>
           </template>
           <template v-else-if="column.key === 'action_col'">
-            <a-button type="link" size="small" @click="openDetail(record)">详情</a-button>
+            <a-button type="link" size="small" @click="openDetail(record)">{{ t('common.detail') }}</a-button>
           </template>
         </template>
       </a-table>
     </a-card>
 
     <!-- 详情 -->
-    <a-modal v-model:open="detailOpen" title="接口调用详情(敏感字段已脱敏)" width="720px" :footer="null">
+    <a-modal v-model:open="detailOpen" :title="t('log.apiPage.detailModal.title')" width="720px" :footer="null">
       <a-spin :spinning="detailLoading">
         <a-descriptions v-if="detail" :column="2" size="small" bordered style="margin-top: 12px">
-          <a-descriptions-item label="ClientId" :span="2">{{ detail.client_id }}</a-descriptions-item>
-          <a-descriptions-item label="客户端">{{ detail.client_name }}({{ CLIENT_TYPE[detail.client_type] ?? detail.client_type }})</a-descriptions-item>
-          <a-descriptions-item label="站点">{{ detail.site_id === 0 ? '全平台' : detail.site_id }}</a-descriptions-item>
-          <a-descriptions-item label="接口" :span="2">{{ detail.request_method }} {{ detail.api_path }}</a-descriptions-item>
-          <a-descriptions-item label="响应码">{{ detail.response_code }}</a-descriptions-item>
-          <a-descriptions-item label="耗时">{{ detail.cost_ms }} ms</a-descriptions-item>
-          <a-descriptions-item label="IP">{{ detail.client_ip }}</a-descriptions-item>
-          <a-descriptions-item label="时间">{{ detail.created_at }}</a-descriptions-item>
+          <a-descriptions-item :label="t('log.apiPage.clientId')" :span="2">{{ detail.client_id }}</a-descriptions-item>
+          <a-descriptions-item :label="t('log.apiPage.clientType')">{{ detail.client_name }}({{ CLIENT_TYPE[detail.client_type] ?? detail.client_type }})</a-descriptions-item>
+          <a-descriptions-item :label="t('common.site')">{{ detail.site_id === 0 ? t('app.allSites') : detail.site_id }}</a-descriptions-item>
+          <a-descriptions-item :label="t('log.apiPage.path')" :span="2">{{ detail.request_method }} {{ detail.api_path }}</a-descriptions-item>
+          <a-descriptions-item :label="t('log.apiPage.statusCode')">{{ detail.response_code }}</a-descriptions-item>
+          <a-descriptions-item :label="t('log.apiPage.duration')">{{ detail.cost_ms }} ms</a-descriptions-item>
+          <a-descriptions-item :label="t('log.apiPage.ip')">{{ detail.client_ip }}</a-descriptions-item>
+          <a-descriptions-item :label="t('log.apiPage.time')">{{ detail.created_at }}</a-descriptions-item>
         </a-descriptions>
         <template v-if="detail">
-          <div class="io-title">请求参数</div>
+          <div class="io-title">{{ t('log.apiPage.detailModal.sectionParams') }}</div>
           <pre class="io-content">{{ pretty(detail.request_params) }}</pre>
-          <div class="io-title">响应数据</div>
+          <div class="io-title">{{ t('log.apiPage.detailModal.sectionResponse') }}</div>
           <pre class="io-content">{{ pretty(detail.response_body) }}</pre>
         </template>
       </a-spin>

@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { reactive, ref } from 'vue';
+import { computed, reactive, ref } from 'vue';
 import { message } from 'ant-design-vue';
+import { useI18n } from 'vue-i18n';
 import { DownloadOutlined, PlusOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons-vue';
 import PageContainer from '@/components/PageContainer.vue';
 import SiteTreeSelect from '@/components/SiteTreeSelect.vue';
@@ -17,28 +18,29 @@ import { apiFlowAdjust, apiFlowList } from '@/api/finance';
  * 资金流水(文档 6.4.5):流水查询 + 手动调账 + CSV 导出
  * flow_type 1收入 2支出 3转账 4冻结 5解冻;biz_type 5=手动调账
  */
+const { t } = useI18n();
 const userStore = useUserStore();
 const isSuper = userStore.profile?.isSuper === true;
 
-const FLOW_TYPE_MAP: Record<number, StatusItem> = {
-  1: { text: '收入', color: 'success' },
-  2: { text: '支出', color: 'error' },
-  3: { text: '转账', color: 'processing' },
-  4: { text: '冻结', color: 'warning' },
-  5: { text: '解冻', color: 'cyan' },
-};
-const BIZ_TYPE_TEXT: Record<number, string> = {
-  1: '订单支付',
-  2: '订单退款',
-  3: '商户提现',
-  4: '供应商回款',
-  5: '手动调账',
-};
-const FLOW_STATUS_MAP: Record<number, StatusItem> = {
-  1: { text: '成功', color: 'success' },
-  2: { text: '处理中', color: 'processing' },
-  3: { text: '失败', color: 'error' },
-};
+const FLOW_TYPE_MAP = computed<Record<number, StatusItem>>(() => ({
+  1: { text: t('finance.flowPage.typeIncome'), color: 'success' },
+  2: { text: t('finance.flowPage.typeExpense'), color: 'error' },
+  3: { text: t('finance.flowPage.typeTransfer'), color: 'processing' },
+  4: { text: t('finance.flowPage.typeFreeze'), color: 'warning' },
+  5: { text: t('finance.flowPage.typeUnfreeze'), color: 'cyan' },
+}));
+const BIZ_TYPE_TEXT = computed<Record<number, string>>(() => ({
+  1: t('finance.flowPage.bizTypeOrder'),
+  2: t('finance.flowPage.bizTypeRefund'),
+  3: t('finance.flowPage.bizTypeWithdraw'),
+  4: t('finance.flowPage.bizTypeSettle'),
+  5: t('finance.flowPage.bizTypeAdjust'),
+}));
+const FLOW_STATUS_MAP = computed<Record<number, StatusItem>>(() => ({
+  1: { text: t('status.success'), color: 'success' },
+  2: { text: t('status.processing'), color: 'processing' },
+  3: { text: t('status.failed'), color: 'error' },
+}));
 
 const createdRange = ref<string[]>([]);
 
@@ -56,18 +58,18 @@ function doReset(): void {
   reset();
 }
 
-const columns = [
-  { title: '流水号', dataIndex: 'flow_no', width: 190 },
-  { title: '类型', dataIndex: 'flow_type', width: 80 },
-  { title: '业务类型', dataIndex: 'biz_type', width: 100 },
-  { title: '金额', dataIndex: 'amount', width: 110 },
-  { title: '商户ID', dataIndex: 'merchant_id', width: 90 },
-  { title: '订单ID', dataIndex: 'order_id', width: 90 },
-  { title: '第三方流水号', dataIndex: 'trade_no', width: 180, ellipsis: true },
-  { title: '状态', dataIndex: 'flow_status', width: 80 },
-  { title: '备注', dataIndex: 'remark', ellipsis: true },
-  { title: '时间', dataIndex: 'created_at', width: 165 },
-];
+const columns = computed(() => [
+  { title: t('finance.flowPage.flowNo'), dataIndex: 'flow_no', width: 190 },
+  { title: t('finance.flowPage.type'), dataIndex: 'flow_type', width: 80 },
+  { title: t('finance.flowPage.bizType'), dataIndex: 'biz_type', width: 100 },
+  { title: t('finance.flowPage.amount'), dataIndex: 'amount', width: 110 },
+  { title: t('finance.msettlePage.merchant'), dataIndex: 'merchant_id', width: 90 },
+  { title: t('common.id'), dataIndex: 'order_id', width: 90 },
+  { title: t('finance.flowPage.flowNo'), dataIndex: 'trade_no', width: 180, ellipsis: true },
+  { title: t('common.status'), dataIndex: 'flow_status', width: 80 },
+  { title: t('common.remark'), dataIndex: 'remark', ellipsis: true },
+  { title: t('finance.flowPage.time'), dataIndex: 'created_at', width: 165 },
+]);
 
 // ---------- 商户远程搜索 ----------
 const merchantOptions = ref<{ label: string; value: number }[]>([]);
@@ -102,15 +104,15 @@ function openAdjust(): void {
 
 async function submitAdjust(): Promise<void> {
   if (adjustForm.amount <= 0) {
-    message.warning('调账金额须大于0');
+    message.warning(t('finance.flowPage.adjustModal.inputReason'));
     return;
   }
   if (!adjustForm.remark.trim()) {
-    message.warning('请填写调账原因');
+    message.warning(t('finance.flowPage.adjustModal.inputReason'));
     return;
   }
   if (isSuper && adjustForm.siteId <= 0) {
-    message.warning('请选择所属站点');
+    message.warning(t('common.pleaseSelect'));
     return;
   }
   adjustSubmitting.value = true;
@@ -122,7 +124,7 @@ async function submitAdjust(): Promise<void> {
       merchantId: adjustForm.merchantId,
       siteId: isSuper ? adjustForm.siteId : undefined,
     });
-    message.success('调账流水已记录');
+    message.success(t('finance.flowPage.adjustModal.success'));
     adjustOpen.value = false;
     void load();
   } finally {
@@ -144,26 +146,26 @@ async function exportFlows(): Promise<void> {
       pageSize: 2000,
     });
     if (data.list.length === 0) {
-      message.info('当前筛选条件下没有可导出的流水');
+      message.info(t('common.noData'));
       return;
     }
     exportCsv(
-      `资金流水_${new Date().toISOString().slice(0, 10)}`,
+      `${t('finance.flowPage.title')}_${new Date().toISOString().slice(0, 10)}`,
       [
-        { title: '流水号', key: 'flow_no' },
-        { title: '类型', key: 'flow_type', format: (row: TableRow) => FLOW_TYPE_MAP[row.flow_type]?.text ?? row.flow_type },
-        { title: '业务类型', key: 'biz_type', format: (row: TableRow) => BIZ_TYPE_TEXT[row.biz_type] ?? row.biz_type },
-        { title: '金额', key: 'amount' },
-        { title: '商户ID', key: 'merchant_id' },
-        { title: '订单ID', key: 'order_id' },
-        { title: '第三方流水号', key: 'trade_no' },
-        { title: '状态', key: 'flow_status', format: (row: TableRow) => FLOW_STATUS_MAP[row.flow_status]?.text ?? row.flow_status },
-        { title: '备注', key: 'remark' },
-        { title: '时间', key: 'created_at' },
+        { title: t('finance.flowPage.flowNo'), key: 'flow_no' },
+        { title: t('finance.flowPage.type'), key: 'flow_type', format: (row: TableRow) => FLOW_TYPE_MAP.value[row.flow_type]?.text ?? row.flow_type },
+        { title: t('finance.flowPage.bizType'), key: 'biz_type', format: (row: TableRow) => BIZ_TYPE_TEXT.value[row.biz_type] ?? row.biz_type },
+        { title: t('finance.flowPage.amount'), key: 'amount' },
+        { title: t('finance.msettlePage.merchant'), key: 'merchant_id' },
+        { title: t('common.id'), key: 'order_id' },
+        { title: t('finance.flowPage.flowNo'), key: 'trade_no' },
+        { title: t('common.status'), key: 'flow_status', format: (row: TableRow) => FLOW_STATUS_MAP.value[row.flow_status]?.text ?? row.flow_status },
+        { title: t('common.remark'), key: 'remark' },
+        { title: t('finance.flowPage.time'), key: 'created_at' },
       ],
       data.list,
     );
-    message.success(`已导出 ${data.list.length} 条流水`);
+    message.success(`${t('common.export')}: ${data.list.length}`);
   } finally {
     exporting.value = false;
   }
@@ -174,30 +176,30 @@ async function exportFlows(): Promise<void> {
   <PageContainer>
     <a-card :bordered="false" class="mtrip-card-shadow" style="margin-bottom: 16px">
       <a-form layout="inline">
-        <a-form-item label="流水号">
-          <a-input v-model:value="query.flowNo" allow-clear placeholder="精确匹配" style="width: 190px" @press-enter="search" />
+        <a-form-item :label="t('finance.flowPage.flowNo')">
+          <a-input v-model:value="query.flowNo" allow-clear :placeholder="t('common.pleaseInput')" style="width: 190px" @press-enter="search" />
         </a-form-item>
-        <a-form-item label="类型">
-          <a-select v-model:value="query.flowType" allow-clear placeholder="全部" style="width: 90px">
+        <a-form-item :label="t('finance.flowPage.type')">
+          <a-select v-model:value="query.flowType" allow-clear :placeholder="t('common.all')" style="width: 90px">
             <a-select-option v-for="(item, key) in FLOW_TYPE_MAP" :key="key" :value="Number(key)">{{ item.text }}</a-select-option>
           </a-select>
         </a-form-item>
-        <a-form-item label="业务类型">
-          <a-select v-model:value="query.bizType" allow-clear placeholder="全部" style="width: 120px">
+        <a-form-item :label="t('finance.flowPage.bizType')">
+          <a-select v-model:value="query.bizType" allow-clear :placeholder="t('common.all')" style="width: 120px">
             <a-select-option v-for="(text, key) in BIZ_TYPE_TEXT" :key="key" :value="Number(key)">{{ text }}</a-select-option>
           </a-select>
         </a-form-item>
-        <a-form-item label="状态">
-          <a-select v-model:value="query.flowStatus" allow-clear placeholder="全部" style="width: 100px">
+        <a-form-item :label="t('common.status')">
+          <a-select v-model:value="query.flowStatus" allow-clear :placeholder="t('common.all')" style="width: 100px">
             <a-select-option v-for="(item, key) in FLOW_STATUS_MAP" :key="key" :value="Number(key)">{{ item.text }}</a-select-option>
           </a-select>
         </a-form-item>
-        <a-form-item label="商户">
+        <a-form-item :label="t('finance.msettlePage.merchant')">
           <a-select
             v-model:value="query.merchantId"
             show-search
             allow-clear
-            placeholder="输入名称搜索"
+            :placeholder="t('common.pleaseInput')"
             style="width: 180px"
             :filter-option="false"
             :options="merchantOptions"
@@ -205,29 +207,29 @@ async function exportFlows(): Promise<void> {
             @search="searchMerchant"
           />
         </a-form-item>
-        <a-form-item label="日期">
+        <a-form-item :label="t('finance.flowPage.filter.timeRange')">
           <a-range-picker v-model:value="createdRange" value-format="YYYY-MM-DD" style="width: 240px" />
         </a-form-item>
-        <a-form-item v-if="isSuper" label="站点">
+        <a-form-item v-if="isSuper" :label="t('common.site')">
           <SiteTreeSelect v-model:value="query.siteId" allow-all style="width: 160px" />
         </a-form-item>
         <a-form-item>
           <a-space>
-            <a-button type="primary" @click="search"><template #icon><SearchOutlined /></template>查询</a-button>
-            <a-button @click="doReset"><template #icon><ReloadOutlined /></template>重置</a-button>
+            <a-button type="primary" @click="search"><template #icon><SearchOutlined /></template>{{ t('common.search') }}</a-button>
+            <a-button @click="doReset"><template #icon><ReloadOutlined /></template>{{ t('common.reset') }}</a-button>
           </a-space>
         </a-form-item>
       </a-form>
     </a-card>
 
-    <a-card :bordered="false" class="mtrip-card-shadow" title="资金流水">
+    <a-card :bordered="false" class="mtrip-card-shadow" :title="t('finance.flowPage.title')">
       <template #extra>
         <a-space>
           <a-button v-perm="'finance:flow:adjust'" type="primary" @click="openAdjust">
-            <template #icon><PlusOutlined /></template>手动调账
+            <template #icon><PlusOutlined /></template>{{ t('finance.flowPage.actions.adjust') }}
           </a-button>
           <a-button v-perm="'finance:flow:export'" :loading="exporting" @click="exportFlows">
-            <template #icon><DownloadOutlined /></template>导出CSV
+            <template #icon><DownloadOutlined /></template>{{ t('common.export') }}CSV
           </a-button>
         </a-space>
       </template>
@@ -262,24 +264,24 @@ async function exportFlows(): Promise<void> {
     </a-card>
 
     <!-- 手动调账 Modal -->
-    <a-modal v-model:open="adjustOpen" title="手动调账" :confirm-loading="adjustSubmitting" @ok="submitAdjust">
-      <a-alert type="warning" show-icon message="调账将直接生成资金流水且不可删除,请谨慎操作" style="margin-bottom: 16px" />
+    <a-modal v-model:open="adjustOpen" :title="t('finance.flowPage.adjustModal.title')" :confirm-loading="adjustSubmitting" @ok="submitAdjust">
+      <a-alert type="warning" show-icon :message="t('finance.flowPage.adjustModal.notice')" style="margin-bottom: 16px" />
       <a-form :label-col="{ span: 6 }">
-        <a-form-item label="调账方向" required>
+        <a-form-item :label="t('finance.flowPage.adjustModal.type')" required>
           <a-radio-group v-model:value="adjustForm.flowType">
-            <a-radio :value="1">收入</a-radio>
-            <a-radio :value="2">支出</a-radio>
+            <a-radio :value="1">{{ t('finance.flowPage.typeIncome') }}</a-radio>
+            <a-radio :value="2">{{ t('finance.flowPage.typeExpense') }}</a-radio>
           </a-radio-group>
         </a-form-item>
-        <a-form-item label="金额" required>
+        <a-form-item :label="t('finance.flowPage.amount')" required>
           <a-input-number v-model:value="adjustForm.amount" :min="0.01" :precision="2" style="width: 200px" />
         </a-form-item>
-        <a-form-item label="关联商户">
+        <a-form-item :label="t('finance.flowPage.adjustModal.target')">
           <a-select
             v-model:value="adjustForm.merchantId"
             show-search
             allow-clear
-            placeholder="选填,输入名称搜索"
+            :placeholder="t('common.pleaseSelect')"
             style="width: 240px"
             :filter-option="false"
             :options="merchantOptions"
@@ -287,11 +289,11 @@ async function exportFlows(): Promise<void> {
             @search="searchMerchant"
           />
         </a-form-item>
-        <a-form-item v-if="isSuper" label="所属站点" required>
+        <a-form-item v-if="isSuper" :label="t('common.site')" required>
           <SiteTreeSelect v-model:value="adjustForm.siteId" style="width: 240px" />
         </a-form-item>
-        <a-form-item label="调账原因" required>
-          <a-textarea v-model:value="adjustForm.remark" :rows="3" :maxlength="500" placeholder="必填" />
+        <a-form-item :label="t('finance.flowPage.adjustModal.reason')" required>
+          <a-textarea v-model:value="adjustForm.remark" :rows="3" :maxlength="500" :placeholder="t('common.required')" />
         </a-form-item>
       </a-form>
     </a-modal>

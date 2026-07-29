@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue';
+import { computed, onMounted, reactive, ref } from 'vue';
 import { message } from 'ant-design-vue';
 import { PlusOutlined, ReloadOutlined, SearchOutlined, SettingOutlined } from '@ant-design/icons-vue';
+import { useI18n } from 'vue-i18n';
 import PageContainer from '@/components/PageContainer.vue';
 import SiteTreeSelect from '@/components/SiteTreeSelect.vue';
 import StatusTag from '@/components/StatusTag.vue';
@@ -18,11 +19,13 @@ import {
 } from '@/api/config';
 
 /** 站点管理:SaaS 多站点(国家/区域/城市)+ 站点差异化配置 */
-const SITE_TYPE: Record<number, { text: string; color: string }> = {
-  1: { text: '国家站', color: 'blue' },
-  2: { text: '区域站', color: 'purple' },
-  3: { text: '城市站', color: 'green' },
-};
+const { t } = useI18n();
+
+const SITE_TYPE = computed<Record<number, { text: string; color: string }>>(() => ({
+  1: { text: t('config.site.typeCountry'), color: 'blue' },
+  2: { text: t('config.site.typeRegion'), color: 'purple' },
+  3: { text: t('config.site.typeCity'), color: 'green' },
+}));
 
 const { loading, list, query, load, search, reset, pagination } = useTable(apiSiteList, {
   siteName: '',
@@ -30,19 +33,19 @@ const { loading, list, query, load, search, reset, pagination } = useTable(apiSi
   status: undefined,
 });
 
-const columns = [
-  { title: 'ID', dataIndex: 'id', width: 70 },
-  { title: '站点名称', dataIndex: 'site_name', width: 140 },
-  { title: '类型', dataIndex: 'site_type', width: 90 },
-  { title: '域名', dataIndex: 'site_domain', ellipsis: true },
-  { title: '国家码', dataIndex: 'country_code', width: 80 },
-  { title: '时区', dataIndex: 'timezone', width: 130 },
-  { title: '货币', dataIndex: 'currency', width: 70 },
-  { title: '语言', dataIndex: 'language', width: 90 },
-  { title: '状态', dataIndex: 'status', width: 80 },
-  { title: '排序', dataIndex: 'sort', width: 70 },
-  { title: '操作', key: 'action_col', width: 240, fixed: 'right' as const },
-];
+const columns = computed(() => [
+  { title: t('common.id'), dataIndex: 'id', width: 70 },
+  { title: t('config.site.name'), dataIndex: 'site_name', width: 140 },
+  { title: t('config.site.type'), dataIndex: 'site_type', width: 90 },
+  { title: t('config.site.domain'), dataIndex: 'site_domain', ellipsis: true },
+  { title: t('config.site.countryCode'), dataIndex: 'country_code', width: 80 },
+  { title: t('config.site.timezone'), dataIndex: 'timezone', width: 130 },
+  { title: t('config.site.currency'), dataIndex: 'currency', width: 70 },
+  { title: t('config.site.language'), dataIndex: 'language', width: 90 },
+  { title: t('common.status'), dataIndex: 'status', width: 80 },
+  { title: t('common.sort'), dataIndex: 'sort', width: 70 },
+  { title: t('common.action'), key: 'action_col', width: 240, fixed: 'right' as const },
+]);
 
 // ---------- 新增/编辑 ----------
 const modalOpen = ref(false);
@@ -103,17 +106,17 @@ function openEdit(row: TableRow): void {
 
 async function saveSite(): Promise<void> {
   if (!form.siteName.trim()) {
-    message.warning('请输入站点名称');
+    message.warning(t('common.pleaseInput'));
     return;
   }
   modalSaving.value = true;
   try {
     if (editingId.value) {
       await apiSiteUpdate({ id: editingId.value, ...form });
-      message.success('站点已更新');
+      message.success(t('config.site.updated'));
     } else {
       await apiSiteAdd({ ...form });
-      message.success('站点已创建');
+      message.success(t('config.site.created'));
     }
     modalOpen.value = false;
     await load();
@@ -124,24 +127,24 @@ async function saveSite(): Promise<void> {
 
 async function toggleStatus(row: TableRow): Promise<void> {
   const result = await apiSiteToggleStatus(row.id);
-  message.success(result.status === 1 ? '站点已启用' : '站点已停用');
+  message.success(result.status === 1 ? t('config.site.enabled') : t('config.site.disabled'));
   await load();
 }
 
 async function removeSite(row: TableRow): Promise<void> {
   // 后端校验:有下级站点/有绑定管理员时拒绝删除
   await apiSiteDelete(row.id);
-  message.success('站点已删除');
+  message.success(t('config.site.deleted'));
   await load();
 }
 
 // ---------- 差异化配置抽屉(local本地化/page页面/operate运营/push推送) ----------
-const CFG_GROUPS = [
-  { key: 'local', label: '本地化' },
-  { key: 'page', label: '页面' },
-  { key: 'operate', label: '运营' },
-  { key: 'push', label: '推送' },
-];
+const CFG_GROUPS = computed(() => [
+  { key: 'local', label: t('config.site.configLocal') },
+  { key: 'page', label: t('config.site.configPage') },
+  { key: 'operate', label: t('config.site.configOperate') },
+  { key: 'push', label: t('config.site.configPush') },
+]);
 
 const cfgOpen = ref(false);
 const cfgLoading = ref(false);
@@ -185,7 +188,7 @@ async function saveConfigs(): Promise<void> {
   }
   const rows = cfgRows.value.filter((item) => item.key.trim());
   if (rows.some((item) => !/^[a-z][a-z0-9_]*$/i.test(item.key.trim()))) {
-    message.warning('配置键仅允许字母/数字/下划线,且以字母开头');
+    message.warning(t('config.site.configKeyRule'));
     return;
   }
   cfgSaving.value = true;
@@ -194,7 +197,7 @@ async function saveConfigs(): Promise<void> {
       cfgSite.value.id,
       rows.map((item) => ({ group: item.group, key: item.key.trim(), value: item.value, name: item.name })),
     );
-    message.success(`已保存 ${result.saved} 项站点配置`);
+    message.success(t('config.site.configSaved', { count: result.saved }));
     cfgOpen.value = false;
   } finally {
     cfgSaving.value = false;
@@ -210,36 +213,36 @@ onMounted(() => {
   <PageContainer>
     <a-card :bordered="false" class="mtrip-card-shadow" style="margin-bottom: 16px">
       <a-form layout="inline">
-        <a-form-item label="站点名称">
-          <a-input v-model:value="query.siteName" placeholder="模糊搜索" allow-clear style="width: 180px" @press-enter="search" />
+        <a-form-item :label="t('config.site.name')">
+          <a-input v-model:value="query.siteName" :placeholder="t('common.pleaseInput')" allow-clear style="width: 180px" @press-enter="search" />
         </a-form-item>
-        <a-form-item label="类型">
-          <a-select v-model:value="query.siteType" allow-clear placeholder="全部" style="width: 120px">
-            <a-select-option :value="1">国家站</a-select-option>
-            <a-select-option :value="2">区域站</a-select-option>
-            <a-select-option :value="3">城市站</a-select-option>
+        <a-form-item :label="t('config.site.type')">
+          <a-select v-model:value="query.siteType" allow-clear :placeholder="t('common.all')" style="width: 120px">
+            <a-select-option :value="1">{{ t('config.site.typeCountry') }}</a-select-option>
+            <a-select-option :value="2">{{ t('config.site.typeRegion') }}</a-select-option>
+            <a-select-option :value="3">{{ t('config.site.typeCity') }}</a-select-option>
           </a-select>
         </a-form-item>
-        <a-form-item label="状态">
-          <a-select v-model:value="query.status" allow-clear placeholder="全部" style="width: 100px">
-            <a-select-option :value="1">启用</a-select-option>
-            <a-select-option :value="2">停用</a-select-option>
+        <a-form-item :label="t('common.status')">
+          <a-select v-model:value="query.status" allow-clear :placeholder="t('common.all')" style="width: 100px">
+            <a-select-option :value="1">{{ t('status.enabled') }}</a-select-option>
+            <a-select-option :value="2">{{ t('status.disabled') }}</a-select-option>
           </a-select>
         </a-form-item>
         <a-form-item>
           <a-space>
-            <a-button type="primary" @click="search"><template #icon><SearchOutlined /></template>查询</a-button>
-            <a-button @click="reset"><template #icon><ReloadOutlined /></template>重置</a-button>
+            <a-button type="primary" @click="search"><template #icon><SearchOutlined /></template>{{ t('common.search') }}</a-button>
+            <a-button @click="reset"><template #icon><ReloadOutlined /></template>{{ t('common.reset') }}</a-button>
           </a-space>
         </a-form-item>
       </a-form>
     </a-card>
 
     <a-card :bordered="false" class="mtrip-card-shadow">
-      <template #title>站点管理</template>
+      <template #title>{{ t('config.site.title') }}</template>
       <template #extra>
         <a-button v-perm="'config:site:add'" type="primary" @click="openCreate">
-          <template #icon><PlusOutlined /></template>新增站点
+          <template #icon><PlusOutlined /></template>{{ t('config.site.add') }}
         </a-button>
       </template>
       <a-table
@@ -260,20 +263,20 @@ onMounted(() => {
           </template>
           <template v-else-if="column.key === 'action_col'">
             <a-space :size="0">
-              <a-button v-perm="'config:site:edit'" type="link" size="small" @click="openEdit(record)">编辑</a-button>
+              <a-button v-perm="'config:site:edit'" type="link" size="small" @click="openEdit(record)">{{ t('common.edit') }}</a-button>
               <a-button v-perm="'config:site:edit'" type="link" size="small" @click="openConfigs(record)">
-                <SettingOutlined />差异化配置
+                <SettingOutlined />{{ t('config.site.configDiff') }}
               </a-button>
               <a-popconfirm
-                :title="record.status === 1 ? '确认停用该站点?停用后该站点将不可访问' : '确认启用该站点?'"
+                :title="record.status === 1 ? t('config.site.confirmDisable') : t('config.site.confirmEnable')"
                 @confirm="toggleStatus(record)"
               >
                 <a-button v-perm="'config:site:status'" type="link" size="small" :danger="record.status === 1">
-                  {{ record.status === 1 ? '停用' : '启用' }}
+                  {{ record.status === 1 ? t('status.disabled') : t('status.enabled') }}
                 </a-button>
               </a-popconfirm>
-              <a-popconfirm title="确认删除该站点?存在下级站点或绑定管理员时将无法删除" @confirm="removeSite(record)">
-                <a-button v-perm="'config:site:delete'" type="link" size="small" danger>删除</a-button>
+              <a-popconfirm :title="t('config.site.confirmDelete')" @confirm="removeSite(record)">
+                <a-button v-perm="'config:site:delete'" type="link" size="small" danger>{{ t('common.delete') }}</a-button>
               </a-popconfirm>
             </a-space>
           </template>
@@ -284,81 +287,81 @@ onMounted(() => {
     <!-- 新增/编辑 -->
     <a-modal
       v-model:open="modalOpen"
-      :title="editingId ? '编辑站点' : '新增站点'"
+      :title="editingId ? t('config.site.edit') : t('config.site.add')"
       width="640px"
       :confirm-loading="modalSaving"
       @ok="saveSite"
     >
       <a-form :label-col="{ style: { width: '100px' } }" style="margin-top: 16px">
-        <a-divider orientation="left" style="margin-top: 0">基础信息</a-divider>
+        <a-divider orientation="left" style="margin-top: 0">{{ t('config.site.sectionBasic') }}</a-divider>
         <a-row :gutter="12">
           <a-col :span="12">
-            <a-form-item label="上级站点">
-              <SiteTreeSelect v-model:value="form.parentId" allow-all placeholder="全球(根)" />
+            <a-form-item :label="t('config.site.parent')">
+              <SiteTreeSelect v-model:value="form.parentId" allow-all :placeholder="t('config.site.globalRoot')" />
             </a-form-item>
           </a-col>
           <a-col :span="12">
-            <a-form-item label="站点名称" required>
-              <a-input v-model:value="form.siteName" placeholder="如:巴黎" />
+            <a-form-item :label="t('config.site.name')" required>
+              <a-input v-model:value="form.siteName" :placeholder="t('config.site.namePlaceholder')" />
             </a-form-item>
           </a-col>
           <a-col :span="12">
-            <a-form-item label="站点类型" required>
+            <a-form-item :label="t('config.site.type')" required>
               <a-select v-model:value="form.siteType">
-                <a-select-option :value="1">国家站</a-select-option>
-                <a-select-option :value="2">区域站</a-select-option>
-                <a-select-option :value="3">城市站</a-select-option>
+                <a-select-option :value="1">{{ t('config.site.typeCountry') }}</a-select-option>
+                <a-select-option :value="2">{{ t('config.site.typeRegion') }}</a-select-option>
+                <a-select-option :value="3">{{ t('config.site.typeCity') }}</a-select-option>
               </a-select>
             </a-form-item>
           </a-col>
           <a-col :span="12">
-            <a-form-item label="站点域名">
-              <a-input v-model:value="form.siteDomain" placeholder="如 paris.mtrip.com" />
+            <a-form-item :label="t('config.site.domain')">
+              <a-input v-model:value="form.siteDomain" :placeholder="t('config.site.domainPlaceholder')" />
             </a-form-item>
           </a-col>
         </a-row>
-        <a-divider orientation="left">本地化</a-divider>
+        <a-divider orientation="left">{{ t('config.site.sectionLocalization') }}</a-divider>
         <a-row :gutter="12">
           <a-col :span="12">
-            <a-form-item label="国家码">
-              <a-input v-model:value="form.countryCode" placeholder="ISO 3166,如 FR" />
+            <a-form-item :label="t('config.site.countryCode')">
+              <a-input v-model:value="form.countryCode" :placeholder="t('config.site.countryCodePlaceholder')" />
             </a-form-item>
           </a-col>
           <a-col :span="12">
-            <a-form-item label="时区">
-              <a-input v-model:value="form.timezone" placeholder="如 Europe/Paris" />
+            <a-form-item :label="t('config.site.timezone')">
+              <a-input v-model:value="form.timezone" :placeholder="t('config.site.timezonePlaceholder')" />
             </a-form-item>
           </a-col>
           <a-col :span="12">
-            <a-form-item label="货币">
-              <a-input v-model:value="form.currency" placeholder="ISO 4217,如 EUR" />
+            <a-form-item :label="t('config.site.currency')">
+              <a-input v-model:value="form.currency" :placeholder="t('config.site.currencyPlaceholder')" />
             </a-form-item>
           </a-col>
           <a-col :span="12">
-            <a-form-item label="语言">
-              <a-input v-model:value="form.language" placeholder="如 fr-FR" />
+            <a-form-item :label="t('config.site.language')">
+              <a-input v-model:value="form.language" :placeholder="t('config.site.languagePlaceholder')" />
             </a-form-item>
           </a-col>
         </a-row>
-        <a-divider orientation="left">联系人与其他</a-divider>
+        <a-divider orientation="left">{{ t('config.site.sectionContact') }}</a-divider>
         <a-row :gutter="12">
           <a-col :span="12">
-            <a-form-item label="联系人">
+            <a-form-item :label="t('config.site.contactName')">
               <a-input v-model:value="form.contactName" />
             </a-form-item>
           </a-col>
           <a-col :span="12">
-            <a-form-item label="联系邮箱">
+            <a-form-item :label="t('config.site.contactEmail')">
               <a-input v-model:value="form.contactEmail" />
             </a-form-item>
           </a-col>
           <a-col :span="12">
-            <a-form-item label="排序">
+            <a-form-item :label="t('common.sort')">
               <a-input-number v-model:value="form.sort" :min="0" style="width: 100%" />
             </a-form-item>
           </a-col>
           <a-col :span="12">
-            <a-form-item label="备注">
+            <a-form-item :label="t('common.remark')">
               <a-input v-model:value="form.remark" />
             </a-form-item>
           </a-col>
@@ -369,7 +372,7 @@ onMounted(() => {
     <!-- 差异化配置抽屉 -->
     <a-drawer
       v-model:open="cfgOpen"
-      :title="`站点差异化配置 — ${cfgSite?.site_name ?? ''}`"
+      :title="t('config.site.configDiffTitle', { name: cfgSite?.site_name ?? '' })"
       width="680px"
       destroy-on-close
     >
@@ -381,21 +384,21 @@ onMounted(() => {
               :key="cfgRows.indexOf(row)"
               class="cfg-row"
             >
-              <a-input v-model:value="row.key" placeholder="配置键,如 vat_rate" style="width: 180px" />
-              <a-input v-model:value="row.value" placeholder="配置值" style="flex: 1" />
-              <a-input v-model:value="row.name" placeholder="名称说明" style="width: 160px" />
-              <a-button type="text" danger size="small" @click="removeCfgRow(row)">删除</a-button>
+              <a-input v-model:value="row.key" :placeholder="t('config.site.configKeyPlaceholder')" style="width: 180px" />
+              <a-input v-model:value="row.value" :placeholder="t('config.site.configValue')" style="flex: 1" />
+              <a-input v-model:value="row.name" :placeholder="t('config.site.configNamePlaceholder')" style="width: 160px" />
+              <a-button type="text" danger size="small" @click="removeCfgRow(row)">{{ t('common.delete') }}</a-button>
             </div>
             <a-button type="dashed" block style="margin-top: 8px" @click="addCfgRow">
-              <PlusOutlined />添加「{{ group.label }}」配置项
+              <PlusOutlined />{{ t('config.site.addConfig', { group: group.label }) }}
             </a-button>
           </a-tab-pane>
         </a-tabs>
       </a-spin>
       <template #footer>
         <a-space>
-          <a-button @click="cfgOpen = false">取消</a-button>
-          <a-button v-perm="'config:site:edit'" type="primary" :loading="cfgSaving" @click="saveConfigs">保存配置</a-button>
+          <a-button @click="cfgOpen = false">{{ t('common.cancel') }}</a-button>
+          <a-button v-perm="'config:site:edit'" type="primary" :loading="cfgSaving" @click="saveConfigs">{{ t('common.save') }}</a-button>
         </a-space>
       </template>
     </a-drawer>

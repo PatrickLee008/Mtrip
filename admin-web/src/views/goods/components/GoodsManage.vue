@@ -2,6 +2,7 @@
 import { computed, onMounted, reactive, ref } from 'vue';
 import { message } from 'ant-design-vue';
 import { PlusOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons-vue';
+import { useI18n } from 'vue-i18n';
 import PageContainer from '@/components/PageContainer.vue';
 import SiteTreeSelect from '@/components/SiteTreeSelect.vue';
 import StatusTag from '@/components/StatusTag.vue';
@@ -39,18 +40,20 @@ const props = defineProps<{
   skuPerm: string; // goods:hotel:room / goods:ticket:type
 }>();
 
+const { t } = useI18n();
+
 const userStore = useUserStore();
 const isSuper = userStore.profile?.isSuper === true;
 const isHotel = computed(() => props.goodsType === 1);
-const skuLabel = computed(() => (isHotel.value ? '房型' : '票种'));
+const skuLabel = computed(() => (isHotel.value ? t('goods.common.roomType') : t('goods.common.ticketType')));
 
-const STATUS_MAP: Record<number, StatusItem> = {
-  0: { text: '草稿', color: 'default' },
-  1: { text: '待审核', color: 'warning' },
-  2: { text: '审核驳回', color: 'error' },
-  3: { text: '已上架', color: 'success' },
-  4: { text: '已下架', color: 'default' },
-};
+const STATUS_MAP = computed<Record<number, StatusItem>>(() => ({
+  0: { text: t('goods.common.statusDraft'), color: 'default' },
+  1: { text: t('goods.common.statusPending'), color: 'warning' },
+  2: { text: t('goods.common.statusRejected'), color: 'error' },
+  3: { text: t('goods.common.statusOnsale'), color: 'success' },
+  4: { text: t('goods.common.statusOffshelf'), color: 'default' },
+}));
 
 // 分类筛选用级联路径,取末级 id 传后端
 const filterCategory = ref<number[]>();
@@ -70,16 +73,16 @@ function doReset(): void {
 }
 
 const columns = [
-  { title: 'ID', dataIndex: 'id', width: 70 },
-  { title: '商品名称', dataIndex: 'goods_name', width: 220, ellipsis: true },
-  { title: '分类', dataIndex: 'category_name', width: 110, ellipsis: true },
-  { title: '商户', dataIndex: 'merchant_name', width: 140, ellipsis: true },
-  { title: '销量', dataIndex: 'sales_count', width: 80 },
-  { title: '权重', dataIndex: 'sort_weight', width: 70 },
-  { title: '标记', key: 'flags', width: 100 },
-  { title: '状态', dataIndex: 'status', width: 90 },
-  { title: '更新时间', dataIndex: 'updated_at', width: 165 },
-  { title: '操作', key: 'action_col', width: 320, fixed: 'right' as const },
+  { title: t('common.id'), dataIndex: 'id', width: 70 },
+  { title: t('goods.common.goodsName'), dataIndex: 'goods_name', width: 220, ellipsis: true },
+  { title: t('goods.category.name'), dataIndex: 'category_name', width: 110, ellipsis: true },
+  { title: t('goods.audit.merchant'), dataIndex: 'merchant_name', width: 140, ellipsis: true },
+  { title: t('goods.audit.columns.salesCount'), dataIndex: 'sales_count', width: 80 },
+  { title: t('goods.common.weight'), dataIndex: 'sort_weight', width: 70 },
+  { title: t('goods.common.flags'), key: 'flags', width: 100 },
+  { title: t('common.status'), dataIndex: 'status', width: 90 },
+  { title: t('common.updatedAt'), dataIndex: 'updated_at', width: 165 },
+  { title: t('common.action'), key: 'action_col', width: 320, fixed: 'right' as const },
 ];
 
 // ---------- 分类树 / 商户远程搜索 ----------
@@ -133,11 +136,15 @@ async function openDetail(row: TableRow): Promise<void> {
   }
 }
 
-const RULE_TYPE_TEXT: Record<number, string> = { 1: '免费退', 2: '阶梯退', 3: '不可退' };
+const RULE_TYPE_TEXT = computed<Record<number, string>>(() => ({
+  1: t('goods.common.ruleTypeAny'),
+  2: t('goods.common.ruleTypeStep'),
+  3: t('goods.common.ruleTypeNo'),
+}));
 
 function ruleScope(rule: TableRow): string {
   if (Number(rule.sku_type) === 0) {
-    return '商品级';
+    return t('goods.common.ruleLevelGoods');
   }
   const sku = detailSkus.value.find((item) => item.id === rule.sku_id);
   return `${skuLabel.value}#${rule.sku_id} ${sku ? (sku.room_name ?? sku.ticket_name ?? '') : ''}`;
@@ -238,11 +245,11 @@ async function openEdit(row: TableRow): Promise<void> {
 
 async function saveGoods(): Promise<void> {
   if (!form.goodsName.trim()) {
-    message.warning('请输入商品名称');
+    message.warning(t('goods.common.inputGoodsName'));
     return;
   }
   if (!editingId.value && isSuper && !form.siteId) {
-    message.warning('请选择所属站点');
+    message.warning(t('goods.category.selectSite'));
     return;
   }
   const { imagesText, ...rest } = form;
@@ -256,10 +263,10 @@ async function saveGoods(): Promise<void> {
   try {
     if (editingId.value) {
       await apiGoodsUpdate({ id: editingId.value, ...payload });
-      message.success('商品已更新');
+      message.success(t('goods.common.saveSuccess'));
     } else {
       await apiGoodsAdd(payload);
-      message.success('商品已保存为草稿');
+      message.success(t('goods.common.saveDraftSuccess'));
     }
     modalOpen.value = false;
     await load();
@@ -271,19 +278,19 @@ async function saveGoods(): Promise<void> {
 // ---------- 提交审核 / 上下架 / 删除 ----------
 async function submitAudit(row: TableRow): Promise<void> {
   await apiGoodsSubmit(row.id);
-  message.success('已提交审核');
+  message.success(t('goods.common.submitSuccess'));
   await load();
 }
 
 async function toggleStatus(row: TableRow): Promise<void> {
   const result = await apiGoodsToggleStatus(row.id);
-  message.success(result.status === 3 ? '商品已上架' : '商品已下架');
+  message.success(result.status === 3 ? t('goods.common.onshelfSuccess') : t('goods.common.offshelfSuccess'));
   await load();
 }
 
 async function removeGoods(row: TableRow): Promise<void> {
   await apiGoodsDelete(row.id);
-  message.success('商品已删除');
+  message.success(t('goods.common.deleteSuccess'));
   await load();
 }
 
@@ -312,29 +319,37 @@ async function loadSkus(): Promise<void> {
 }
 
 const roomColumns = [
-  { title: 'ID', dataIndex: 'id', width: 60 },
-  { title: '房型', dataIndex: 'room_name', ellipsis: true },
-  { title: '床型', dataIndex: 'bed_type', width: 90 },
-  { title: '人数', dataIndex: 'max_guests', width: 60 },
-  { title: '早餐', dataIndex: 'breakfast', width: 70 },
-  { title: '门市价', dataIndex: 'base_price', width: 90 },
-  { title: '基础库存', dataIndex: 'base_stock', width: 80 },
-  { title: '状态', dataIndex: 'status', width: 70 },
-  { title: '操作', key: 'action_col', width: 110 },
+  { title: t('common.id'), dataIndex: 'id', width: 60 },
+  { title: t('goods.common.roomType'), dataIndex: 'room_name', ellipsis: true },
+  { title: t('goods.common.bedType'), dataIndex: 'bed_type', width: 90 },
+  { title: t('goods.common.maxGuests'), dataIndex: 'max_guests', width: 60 },
+  { title: t('goods.common.breakfast'), dataIndex: 'breakfast', width: 70 },
+  { title: t('goods.common.basePrice'), dataIndex: 'base_price', width: 90 },
+  { title: t('goods.common.baseStock'), dataIndex: 'base_stock', width: 80 },
+  { title: t('common.status'), dataIndex: 'status', width: 70 },
+  { title: t('common.action'), key: 'action_col', width: 110 },
 ];
 const ticketColumns = [
-  { title: 'ID', dataIndex: 'id', width: 60 },
-  { title: '票种', dataIndex: 'ticket_name', ellipsis: true },
-  { title: '类型', dataIndex: 'ticket_kind', width: 80 },
-  { title: '门市价', dataIndex: 'base_price', width: 90 },
-  { title: '基础库存', dataIndex: 'base_stock', width: 80 },
-  { title: '有效天数', dataIndex: 'valid_days', width: 80 },
-  { title: '可核销次数', dataIndex: 'verify_times', width: 90 },
-  { title: '状态', dataIndex: 'status', width: 70 },
-  { title: '操作', key: 'action_col', width: 110 },
+  { title: t('common.id'), dataIndex: 'id', width: 60 },
+  { title: t('goods.common.ticketType'), dataIndex: 'ticket_name', ellipsis: true },
+  { title: t('common.type'), dataIndex: 'ticket_kind', width: 80 },
+  { title: t('goods.common.basePrice'), dataIndex: 'base_price', width: 90 },
+  { title: t('goods.common.baseStock'), dataIndex: 'base_stock', width: 80 },
+  { title: t('goods.common.validDays'), dataIndex: 'valid_days', width: 80 },
+  { title: t('goods.common.verifyTimes'), dataIndex: 'verify_times', width: 90 },
+  { title: t('common.status'), dataIndex: 'status', width: 70 },
+  { title: t('common.action'), key: 'action_col', width: 110 },
 ];
-const BREAKFAST_TEXT: Record<number, string> = { 0: '无早', 1: '单早', 2: '双早' };
-const TICKET_KIND_TEXT: Record<number, string> = { 1: '普通票', 2: '分时票', 3: '联票' };
+const BREAKFAST_TEXT = computed<Record<number, string>>(() => ({
+  0: t('goods.common.breakfast0'),
+  1: t('goods.common.breakfast1'),
+  2: t('goods.common.breakfast2'),
+}));
+const TICKET_KIND_TEXT = computed<Record<number, string>>(() => ({
+  1: t('goods.common.ticketKind1'),
+  2: t('goods.common.ticketKind2'),
+  3: t('goods.common.ticketKind3'),
+}));
 
 const skuModalOpen = ref(false);
 const skuSaving = ref(false);
@@ -406,7 +421,7 @@ async function saveSku(): Promise<void> {
     return;
   }
   if (!skuForm.name.trim()) {
-    message.warning(`请输入${skuLabel.value}名称`);
+    message.warning(t('goods.common.inputSkuName', { skuLabel: skuLabel.value }));
     return;
   }
   const base = {
@@ -431,7 +446,7 @@ async function saveSku(): Promise<void> {
     } else {
       const timeSlots = skuForm.timeSlotsText.split('\n').map((line) => line.trim()).filter((line) => line !== '');
       if (skuForm.ticketKind === 2 && timeSlots.length === 0) {
-        message.warning('分时票必须配置时段(每行一个,如 09:00-11:00)');
+        message.warning(t('goods.common.warningTicketSlots'));
         return;
       }
       await apiTicketSave({
@@ -445,7 +460,7 @@ async function saveSku(): Promise<void> {
         timeSlots,
       });
     }
-    message.success(`${skuLabel.value}已保存`);
+    message.success(t('goods.common.skuSaveSuccess', { skuLabel: skuLabel.value }));
     skuModalOpen.value = false;
     await loadSkus();
   } finally {
@@ -462,7 +477,7 @@ async function removeSku(row: TableRow): Promise<void> {
   } else {
     await apiTicketDelete(skuGoods.value.id, row.id);
   }
-  message.success(`${skuLabel.value}已删除`);
+  message.success(t('goods.common.skuDeleteSuccess', { skuLabel: skuLabel.value }));
   await loadSkus();
 }
 
@@ -504,7 +519,7 @@ async function saveRule(): Promise<void> {
     return;
   }
   if (ruleForm.ruleType === 2 && ruleForm.steps.length === 0) {
-    message.warning('阶梯退款至少配置一档');
+    message.warning(t('goods.common.warningNoRuleStep'));
     return;
   }
   ruleSaving.value = true;
@@ -517,7 +532,7 @@ async function saveRule(): Promise<void> {
       rules: ruleForm.ruleType === 2 ? ruleForm.steps : undefined,
       remark: ruleForm.remark,
     });
-    message.success('退改规则已保存');
+    message.success(t('goods.common.ruleSaveSuccess'));
     ruleList.value = await apiRefundRuleList(ruleGoods.value.id);
   } finally {
     ruleSaving.value = false;
@@ -534,20 +549,20 @@ onMounted(() => {
   <PageContainer>
     <a-card :bordered="false" class="mtrip-card-shadow" style="margin-bottom: 16px">
       <a-form layout="inline">
-        <a-form-item label="商品名称">
-          <a-input v-model:value="query.goodsName" allow-clear placeholder="模糊搜索" style="width: 180px" @press-enter="search" />
+        <a-form-item :label="t('goods.common.goodsName')">
+          <a-input v-model:value="query.goodsName" allow-clear :placeholder="t('goods.common.searchPlaceholder')" style="width: 180px" @press-enter="search" />
         </a-form-item>
-        <a-form-item label="分类">
+        <a-form-item :label="t('goods.category.name')">
           <a-cascader
             v-model:value="filterCategory"
             :options="categoryOptions"
             change-on-select
             allow-clear
-            placeholder="全部"
+            :placeholder="t('common.all')"
             style="width: 180px"
           />
         </a-form-item>
-        <a-form-item label="商户">
+        <a-form-item :label="t('goods.audit.merchant')">
           <a-select
             v-model:value="query.merchantId"
             show-search
@@ -555,37 +570,37 @@ onMounted(() => {
             :filter-option="false"
             :options="merchantOptions"
             :loading="merchantSearching"
-            placeholder="输入名称搜索"
+            :placeholder="t('goods.common.searchMerchantPlaceholder')"
             style="width: 180px"
             @search="searchMerchant"
           />
         </a-form-item>
-        <a-form-item label="状态">
-          <a-select v-model:value="query.status" allow-clear placeholder="全部" style="width: 110px">
-            <a-select-option :value="0">草稿</a-select-option>
-            <a-select-option :value="1">待审核</a-select-option>
-            <a-select-option :value="2">审核驳回</a-select-option>
-            <a-select-option :value="3">已上架</a-select-option>
-            <a-select-option :value="4">已下架</a-select-option>
+        <a-form-item :label="t('common.status')">
+          <a-select v-model:value="query.status" allow-clear :placeholder="t('common.all')" style="width: 110px">
+            <a-select-option :value="0">{{ t('goods.common.statusDraft') }}</a-select-option>
+            <a-select-option :value="1">{{ t('goods.common.statusPending') }}</a-select-option>
+            <a-select-option :value="2">{{ t('goods.common.statusRejected') }}</a-select-option>
+            <a-select-option :value="3">{{ t('goods.common.statusOnsale') }}</a-select-option>
+            <a-select-option :value="4">{{ t('goods.common.statusOffshelf') }}</a-select-option>
           </a-select>
         </a-form-item>
-        <a-form-item v-if="isSuper" label="站点">
+        <a-form-item v-if="isSuper" :label="t('common.site')">
           <SiteTreeSelect v-model:value="query.siteId" allow-all style="width: 160px" />
         </a-form-item>
         <a-form-item>
           <a-space>
-            <a-button type="primary" @click="search"><template #icon><SearchOutlined /></template>查询</a-button>
-            <a-button @click="doReset"><template #icon><ReloadOutlined /></template>重置</a-button>
+            <a-button type="primary" @click="search"><template #icon><SearchOutlined /></template>{{ t('common.search') }}</a-button>
+            <a-button @click="doReset"><template #icon><ReloadOutlined /></template>{{ t('common.reset') }}</a-button>
           </a-space>
         </a-form-item>
       </a-form>
     </a-card>
 
     <a-card :bordered="false" class="mtrip-card-shadow">
-      <template #title>{{ isHotel ? '酒店商品' : '门票商品' }}</template>
+      <template #title>{{ isHotel ? t('goods.common.titleHotel') : t('goods.common.titleTicket') }}</template>
       <template #extra>
         <a-button v-perm="permPrefix + ':add'" type="primary" @click="openCreate">
-          <template #icon><PlusOutlined /></template>新增商品
+          <template #icon><PlusOutlined /></template>{{ t('goods.common.addGoods') }}
         </a-button>
       </template>
       <a-table
@@ -605,50 +620,50 @@ onMounted(() => {
             </a-space>
           </template>
           <template v-else-if="column.key === 'flags'">
-            <a-tag v-if="record.is_recommend === 1" color="blue">推荐</a-tag>
-            <a-tag v-if="record.is_hot === 1" color="red">热门</a-tag>
+            <a-tag v-if="record.is_recommend === 1" color="blue">{{ t('goods.common.flagRecommend') }}</a-tag>
+            <a-tag v-if="record.is_hot === 1" color="red">{{ t('goods.common.flagHot') }}</a-tag>
           </template>
           <template v-else-if="column.dataIndex === 'status'">
-            <a-tooltip v-if="record.status === 2 && record.audit_remark" :title="`驳回原因:${record.audit_remark}`">
+            <a-tooltip v-if="record.status === 2 && record.audit_remark" :title="t('goods.common.auditRejectReasonTemplate', { reason: record.audit_remark })">
               <span><StatusTag :value="record.status" :map="STATUS_MAP" /></span>
             </a-tooltip>
             <StatusTag v-else :value="record.status" :map="STATUS_MAP" />
           </template>
           <template v-else-if="column.key === 'action_col'">
             <a-space :size="0">
-              <a-button type="link" size="small" @click="openDetail(record)">详情</a-button>
+              <a-button type="link" size="small" @click="openDetail(record)">{{ t('common.detail') }}</a-button>
               <a-button
                 v-if="record.status !== 1 && record.status !== 3"
                 v-perm="permPrefix + ':edit'"
                 type="link"
                 size="small"
                 @click="openEdit(record)"
-              >编辑</a-button>
+              >{{ t('common.edit') }}</a-button>
               <a-button v-perm="skuPerm" type="link" size="small" @click="openSku(record)">{{ skuLabel }}</a-button>
-              <a-button v-perm="permPrefix + ':edit'" type="link" size="small" @click="openRule(record)">退改</a-button>
+              <a-button v-perm="permPrefix + ':edit'" type="link" size="small" @click="openRule(record)">{{ t('goods.common.refund') }}</a-button>
               <a-popconfirm
                 v-if="record.status === 0 || record.status === 2"
-                title="确认提交审核?"
+                :title="t('goods.common.confirmSubmitAudit')"
                 @confirm="submitAudit(record)"
               >
-                <a-button v-perm="permPrefix + ':edit'" type="link" size="small" style="color: var(--mtrip-warning, #faad14)">提审</a-button>
+                <a-button v-perm="permPrefix + ':edit'" type="link" size="small" style="color: var(--mtrip-warning, #faad14)">{{ t('goods.common.submitAudit') }}</a-button>
               </a-popconfirm>
               <a-popconfirm
                 v-if="record.status === 3 || record.status === 4"
-                :title="record.status === 3 ? '确认下架该商品?' : '确认重新上架?'"
+                :title="record.status === 3 ? t('goods.common.confirmOffshelf') : t('goods.common.confirmOnshelf')"
                 @confirm="toggleStatus(record)"
               >
                 <a-button v-perm="permPrefix + ':edit'" type="link" size="small" :danger="record.status === 3">
-                  {{ record.status === 3 ? '下架' : '上架' }}
+                  {{ record.status === 3 ? t('goods.common.offshelf') : t('goods.common.onshelf') }}
                 </a-button>
               </a-popconfirm>
               <a-popconfirm
                 v-if="record.status !== 3"
-                title="确认删除该商品?删除后不可恢复(存在进行中订单将被拒绝)"
+                :title="t('goods.common.confirmDeleteGoods')"
                 :ok-button-props="{ danger: true }"
                 @confirm="removeGoods(record)"
               >
-                <a-button v-perm="permPrefix + ':delete'" type="link" size="small" danger>删除</a-button>
+                <a-button v-perm="permPrefix + ':delete'" type="link" size="small" danger>{{ t('common.delete') }}</a-button>
               </a-popconfirm>
             </a-space>
           </template>
@@ -657,29 +672,29 @@ onMounted(() => {
     </a-card>
 
     <!-- 详情抽屉 -->
-    <a-drawer v-model:open="drawerOpen" title="商品详情" width="760">
+    <a-drawer v-model:open="drawerOpen" :title="t('goods.common.goodsDetail')" width="760">
       <a-spin :spinning="detailLoading">
         <template v-if="detail">
           <a-descriptions :column="2" size="small" bordered>
-            <a-descriptions-item label="商品名称" :span="2">{{ detail.goods_name }}</a-descriptions-item>
-            <a-descriptions-item label="状态"><StatusTag :value="detail.status" :map="STATUS_MAP" /></a-descriptions-item>
-            <a-descriptions-item label="销量">{{ detail.sales_count }}</a-descriptions-item>
-            <a-descriptions-item v-if="isHotel" label="星级">{{ detail.star_level }} 星</a-descriptions-item>
-            <a-descriptions-item v-else label="营业时间">{{ detail.open_time }} ~ {{ detail.close_time }}</a-descriptions-item>
-            <a-descriptions-item label="排序权重">{{ detail.sort_weight }}</a-descriptions-item>
-            <a-descriptions-item label="地址" :span="2">{{ detail.address || '-' }}</a-descriptions-item>
-            <a-descriptions-item label="简介" :span="2">{{ detail.goods_brief || '-' }}</a-descriptions-item>
-            <a-descriptions-item v-if="detail.audit_remark" label="审核意见" :span="2">{{ detail.audit_remark }}</a-descriptions-item>
+            <a-descriptions-item :label="t('goods.common.goodsName')" :span="2">{{ detail.goods_name }}</a-descriptions-item>
+            <a-descriptions-item :label="t('common.status')"><StatusTag :value="detail.status" :map="STATUS_MAP" /></a-descriptions-item>
+            <a-descriptions-item :label="t('goods.audit.columns.salesCount')">{{ detail.sales_count }}</a-descriptions-item>
+            <a-descriptions-item v-if="isHotel" :label="t('goods.common.starLevel')">{{ detail.star_level }} {{ t('goods.common.starUnit') }}</a-descriptions-item>
+            <a-descriptions-item v-else :label="t('goods.common.businessHours')">{{ detail.open_time }} ~ {{ detail.close_time }}</a-descriptions-item>
+            <a-descriptions-item :label="t('goods.common.weight')">{{ detail.sort_weight }}</a-descriptions-item>
+            <a-descriptions-item :label="t('common.address')" :span="2">{{ detail.address || '-' }}</a-descriptions-item>
+            <a-descriptions-item :label="t('goods.common.brief')" :span="2">{{ detail.goods_brief || '-' }}</a-descriptions-item>
+            <a-descriptions-item v-if="detail.audit_remark" :label="t('goods.common.auditOpinion')" :span="2">{{ detail.audit_remark }}</a-descriptions-item>
           </a-descriptions>
           <template v-if="Array.isArray(detail.images) && detail.images.length">
-            <a-divider orientation="left">图集</a-divider>
+            <a-divider orientation="left">{{ t('goods.common.images') }}</a-divider>
             <a-image-preview-group>
               <a-space wrap>
                 <a-image v-for="(img, idx) in detail.images" :key="idx" :src="img" :width="88" :height="66" style="object-fit: cover; border-radius: 4px" />
               </a-space>
             </a-image-preview-group>
           </template>
-          <a-divider orientation="left">{{ skuLabel }}({{ detailSkus.length }})</a-divider>
+          <a-divider orientation="left">{{ t('goods.common.breadcrumbSkuList', { skuLabel: skuLabel, count: detailSkus.length }) }}</a-divider>
           <a-table
             :columns="isHotel ? roomColumns.slice(0, 8) : ticketColumns.slice(0, 8)"
             :data-source="detailSkus"
@@ -692,17 +707,17 @@ onMounted(() => {
               <template v-else-if="column.dataIndex === 'ticket_kind'">{{ TICKET_KIND_TEXT[record.ticket_kind] ?? '-' }}</template>
               <template v-else-if="column.dataIndex === 'base_price'">{{ formatAmount(record.base_price) }}</template>
               <template v-else-if="column.dataIndex === 'status'">
-                <a-tag :color="record.status === 1 ? 'success' : 'default'">{{ record.status === 1 ? '在售' : '停售' }}</a-tag>
+                <a-tag :color="record.status === 1 ? 'success' : 'default'">{{ record.status === 1 ? t('goods.common.onSale') : t('goods.common.offSale') }}</a-tag>
               </template>
             </template>
           </a-table>
-          <a-divider orientation="left">退改规则({{ detailRules.length }})</a-divider>
+          <a-divider orientation="left">{{ t('goods.common.breadcrumbRuleList', { count: detailRules.length }) }}</a-divider>
           <a-table
             :columns="[
-              { title: '适用', key: 'scope' },
-              { title: '类型', dataIndex: 'rule_type', width: 90 },
-              { title: '阶梯', key: 'steps' },
-              { title: '备注', dataIndex: 'remark', ellipsis: true },
+              { title: t('goods.common.ruleColumnScope'), key: 'scope' },
+              { title: t('common.type'), dataIndex: 'rule_type', width: 90 },
+              { title: t('goods.common.ruleColumnSteps'), key: 'steps' },
+              { title: t('goods.common.ruleColumnRemark'), dataIndex: 'remark', ellipsis: true },
             ]"
             :data-source="detailRules"
             row-key="id"
@@ -714,7 +729,7 @@ onMounted(() => {
               <template v-else-if="column.dataIndex === 'rule_type'">{{ RULE_TYPE_TEXT[record.rule_type] ?? '-' }}</template>
               <template v-else-if="column.key === 'steps'">
                 <template v-if="Array.isArray(record.rules)">
-                  <div v-for="(step, idx) in record.rules" :key="idx">提前 {{ step.hours_before }}h 退 {{ step.refund_rate }}%</div>
+                  <div v-for="(step, idx) in record.rules" :key="idx">{{ t('goods.common.stepRefundText', { hours: step.hours_before, percent: step.refund_rate }) }}</div>
                 </template>
                 <span v-else>-</span>
               </template>
@@ -727,19 +742,19 @@ onMounted(() => {
     <!-- 新增/编辑商品 -->
     <a-modal
       v-model:open="modalOpen"
-      :title="editingId ? '编辑商品' : '新增商品(保存为草稿)'"
+      :title="editingId ? t('goods.common.editGoods') : t('goods.common.modalAddGoods')"
       width="680px"
       :confirm-loading="modalSaving"
       @ok="saveGoods"
     >
       <a-form :label-col="{ style: { width: '90px' } }" style="margin-top: 16px">
-        <a-form-item label="商品名称" required>
+        <a-form-item :label="t('goods.common.goodsName')" required>
           <a-input v-model:value="form.goodsName" :maxlength="100" />
         </a-form-item>
-        <a-form-item v-if="isSuper && !editingId" label="所属站点" required>
+        <a-form-item v-if="isSuper && !editingId" :label="t('common.site')" required>
           <SiteTreeSelect v-model:value="form.siteId" style="width: 100%" />
         </a-form-item>
-        <a-form-item label="所属商户">
+        <a-form-item :label="t('goods.audit.merchant')">
           <a-select
             v-model:value="form.merchantId"
             show-search
@@ -747,55 +762,55 @@ onMounted(() => {
             :filter-option="false"
             :options="merchantOptions"
             :loading="merchantSearching"
-            placeholder="输入商户名称搜索"
+            :placeholder="t('goods.common.searchMerchantPlaceholder')"
             @search="searchMerchant"
           />
         </a-form-item>
-        <a-form-item label="分类">
-          <a-cascader v-model:value="formCategory" :options="categoryOptions" change-on-select placeholder="选择分类" />
+        <a-form-item :label="t('goods.category.name')">
+          <a-cascader v-model:value="formCategory" :options="categoryOptions" change-on-select :placeholder="t('goods.common.selectCategory')" />
         </a-form-item>
-        <a-form-item label="封面图">
-          <a-input v-model:value="form.coverImage" placeholder="图片 URL" />
+        <a-form-item :label="t('goods.common.coverImage')">
+          <a-input v-model:value="form.coverImage" :placeholder="t('goods.common.imagePlaceholder')" />
         </a-form-item>
-        <a-form-item label="图集">
-          <a-textarea v-model:value="form.imagesText" :rows="3" placeholder="每行一个图片 URL" />
+        <a-form-item :label="t('goods.common.images')">
+          <a-textarea v-model:value="form.imagesText" :rows="3" :placeholder="t('goods.common.imagesPlaceholder')" />
         </a-form-item>
-        <a-form-item label="地址">
+        <a-form-item :label="t('common.address')">
           <a-input v-model:value="form.address" />
         </a-form-item>
-        <a-form-item v-if="isHotel" label="星级">
+        <a-form-item v-if="isHotel" :label="t('goods.common.starLevel')">
           <a-rate v-model:value="form.starLevel" :count="5" />
         </a-form-item>
-        <a-form-item v-else label="营业时间">
+        <a-form-item v-else :label="t('goods.common.businessHours')">
           <a-space>
-            <a-input v-model:value="form.openTime" placeholder="09:00" style="width: 120px" />
+            <a-input v-model:value="form.openTime" :placeholder="t('goods.common.openTimePlaceholder')" style="width: 120px" />
             <span>~</span>
-            <a-input v-model:value="form.closeTime" placeholder="18:00" style="width: 120px" />
+            <a-input v-model:value="form.closeTime" :placeholder="t('goods.common.closeTimePlaceholder')" style="width: 120px" />
           </a-space>
         </a-form-item>
-        <a-form-item label="简介">
+        <a-form-item :label="t('goods.common.brief')">
           <a-textarea v-model:value="form.goodsBrief" :rows="2" :maxlength="500" />
         </a-form-item>
-        <a-form-item label="详情">
-          <a-textarea v-model:value="form.goodsDetail" :rows="4" placeholder="图文详情(支持富文本 HTML)" />
+        <a-form-item :label="t('goods.common.detailField')">
+          <a-textarea v-model:value="form.goodsDetail" :rows="4" :placeholder="t('goods.common.detailPlaceholder')" />
         </a-form-item>
-        <a-form-item label="运营设置">
+        <a-form-item :label="t('goods.common.operations')">
           <a-space size="large">
-            <a-input-number v-model:value="form.sortWeight" :min="0" :max="9999" addon-before="权重" style="width: 160px" />
-            <a-checkbox :checked="form.isRecommend === 1" @change="form.isRecommend = form.isRecommend === 1 ? 0 : 1">推荐</a-checkbox>
-            <a-checkbox :checked="form.isHot === 1" @change="form.isHot = form.isHot === 1 ? 0 : 1">热门</a-checkbox>
+            <a-input-number v-model:value="form.sortWeight" :min="0" :max="9999" :addon-before="t('goods.common.weight')" style="width: 160px" />
+            <a-checkbox :checked="form.isRecommend === 1" @change="form.isRecommend = form.isRecommend === 1 ? 0 : 1">{{ t('goods.common.flagRecommend') }}</a-checkbox>
+            <a-checkbox :checked="form.isHot === 1" @change="form.isHot = form.isHot === 1 ? 0 : 1">{{ t('goods.common.flagHot') }}</a-checkbox>
           </a-space>
         </a-form-item>
       </a-form>
     </a-modal>
 
     <!-- SKU 管理抽屉 -->
-    <a-drawer v-model:open="skuOpen" :title="`${skuLabel}管理 - ${skuGoods?.goods_name ?? ''}`" width="820">
+    <a-drawer v-model:open="skuOpen" :title="t('goods.common.drawerSkuManageTitle', { skuLabel: skuLabel, name: skuGoods?.goods_name ?? '' })" width="820">
       <a-space style="margin-bottom: 12px">
         <a-button v-perm="skuPerm" type="primary" @click="openSkuCreate">
-          <template #icon><PlusOutlined /></template>新增{{ skuLabel }}
+          <template #icon><PlusOutlined /></template>{{ t('goods.common.addSku', { skuLabel: skuLabel }) }}
         </a-button>
-        <a-button @click="loadSkus"><template #icon><ReloadOutlined /></template>刷新</a-button>
+        <a-button @click="loadSkus"><template #icon><ReloadOutlined /></template>{{ t('common.refresh') }}</a-button>
       </a-space>
       <a-table
         :columns="isHotel ? roomColumns : ticketColumns"
@@ -810,12 +825,12 @@ onMounted(() => {
           <template v-else-if="column.dataIndex === 'ticket_kind'">{{ TICKET_KIND_TEXT[record.ticket_kind] ?? '-' }}</template>
           <template v-else-if="column.dataIndex === 'base_price'">{{ formatAmount(record.base_price) }}</template>
           <template v-else-if="column.dataIndex === 'status'">
-            <a-tag :color="record.status === 1 ? 'success' : 'default'">{{ record.status === 1 ? '在售' : '停售' }}</a-tag>
+            <a-tag :color="record.status === 1 ? 'success' : 'default'">{{ record.status === 1 ? t('goods.common.onSale') : t('goods.common.offSale') }}</a-tag>
           </template>
           <template v-else-if="column.key === 'action_col'">
-            <a-button v-perm="skuPerm" type="link" size="small" @click="openSkuEdit(record)">编辑</a-button>
-            <a-popconfirm title="确认删除?存在进行中订单将被拒绝" :ok-button-props="{ danger: true }" @confirm="removeSku(record)">
-              <a-button v-perm="skuPerm" type="link" size="small" danger>删除</a-button>
+            <a-button v-perm="skuPerm" type="link" size="small" @click="openSkuEdit(record)">{{ t('common.edit') }}</a-button>
+            <a-popconfirm :title="t('goods.common.confirmDeleteSku')" :ok-button-props="{ danger: true }" @confirm="removeSku(record)">
+              <a-button v-perm="skuPerm" type="link" size="small" danger>{{ t('common.delete') }}</a-button>
             </a-popconfirm>
           </template>
         </template>
@@ -825,84 +840,84 @@ onMounted(() => {
     <!-- SKU 新增/编辑 -->
     <a-modal
       v-model:open="skuModalOpen"
-      :title="`${skuEditingId ? '编辑' : '新增'}${skuLabel}`"
+      :title="`${skuEditingId ? t('common.edit') : t('common.add')}${skuLabel}`"
       width="560px"
       :confirm-loading="skuSaving"
       @ok="saveSku"
     >
       <a-form :label-col="{ style: { width: '100px' } }" style="margin-top: 16px">
-        <a-form-item :label="`${skuLabel}名称`" required>
+        <a-form-item :label="`${skuLabel}${t('common.name')}`" required>
           <a-input v-model:value="skuForm.name" :maxlength="100" />
         </a-form-item>
         <template v-if="isHotel">
-          <a-form-item label="床型">
-            <a-input v-model:value="skuForm.bedType" placeholder="如 大床 1.8m / 双床 1.2m×2" />
+          <a-form-item :label="t('goods.common.bedType')">
+            <a-input v-model:value="skuForm.bedType" :placeholder="t('goods.common.bedTypePlaceholder')" />
           </a-form-item>
-          <a-form-item label="面积">
-            <a-input v-model:value="skuForm.area" placeholder="如 32㎡" style="width: 160px" />
+          <a-form-item :label="t('goods.common.area')">
+            <a-input v-model:value="skuForm.area" :placeholder="t('goods.common.areaPlaceholder')" style="width: 160px" />
           </a-form-item>
-          <a-form-item label="入住人数">
+          <a-form-item :label="t('goods.common.maxGuests')">
             <a-input-number v-model:value="skuForm.maxGuests" :min="1" :max="10" />
           </a-form-item>
-          <a-form-item label="早餐">
+          <a-form-item :label="t('goods.common.breakfast')">
             <a-radio-group v-model:value="skuForm.breakfast">
-              <a-radio :value="0">无早</a-radio>
-              <a-radio :value="1">单早</a-radio>
-              <a-radio :value="2">双早</a-radio>
+              <a-radio :value="0">{{ t('goods.common.breakfast0') }}</a-radio>
+              <a-radio :value="1">{{ t('goods.common.breakfast1') }}</a-radio>
+              <a-radio :value="2">{{ t('goods.common.breakfast2') }}</a-radio>
             </a-radio-group>
           </a-form-item>
         </template>
         <template v-else>
-          <a-form-item label="票种类型">
+          <a-form-item :label="t('goods.common.ticketType')">
             <a-radio-group v-model:value="skuForm.ticketKind">
-              <a-radio :value="1">普通票</a-radio>
-              <a-radio :value="2">分时票</a-radio>
-              <a-radio :value="3">联票</a-radio>
+              <a-radio :value="1">{{ t('goods.common.ticketKind1') }}</a-radio>
+              <a-radio :value="2">{{ t('goods.common.ticketKind2') }}</a-radio>
+              <a-radio :value="3">{{ t('goods.common.ticketKind3') }}</a-radio>
             </a-radio-group>
           </a-form-item>
-          <a-form-item v-if="skuForm.ticketKind === 2" label="分时时段" required>
-            <a-textarea v-model:value="skuForm.timeSlotsText" :rows="3" placeholder="每行一个时段,如 09:00-11:00" />
+          <a-form-item v-if="skuForm.ticketKind === 2" :label="t('goods.common.timeSlots')" required>
+            <a-textarea v-model:value="skuForm.timeSlotsText" :rows="3" :placeholder="t('goods.common.timeSlotsPlaceholder')" />
           </a-form-item>
-          <a-form-item label="有效天数">
-            <a-input-number v-model:value="skuForm.validDays" :min="1" :max="365" addon-after="天" />
+          <a-form-item :label="t('goods.common.validDays')">
+            <a-input-number v-model:value="skuForm.validDays" :min="1" :max="365" :addon-after="t('goods.common.daysUnit')" />
           </a-form-item>
-          <a-form-item label="预订限制">
+          <a-form-item :label="t('common.sort')">
             <a-space>
-              <a-input-number v-model:value="skuForm.bookLimit" :min="0" addon-before="单人限购" placeholder="0 不限" style="width: 170px" />
-              <a-input-number v-model:value="skuForm.advanceHours" :min="0" addon-before="提前预订" addon-after="小时" style="width: 200px" />
+              <a-input-number v-model:value="skuForm.bookLimit" :min="0" :addon-before="t('goods.common.bookLimitAddonBefore')" :placeholder="t('goods.common.bookLimitPlaceholder')" style="width: 170px" />
+              <a-input-number v-model:value="skuForm.advanceHours" :min="0" :addon-before="t('goods.common.advanceHoursAddonBefore')" :addon-after="t('goods.common.hoursUnit')" style="width: 200px" />
             </a-space>
           </a-form-item>
-          <a-form-item label="可核销次数">
+          <a-form-item :label="t('goods.common.verifyTimes')">
             <a-input-number v-model:value="skuForm.verifyTimes" :min="1" :max="99" />
           </a-form-item>
         </template>
-        <a-form-item label="门市价" required>
+        <a-form-item :label="t('goods.common.basePrice')" required>
           <a-input-number v-model:value="skuForm.basePrice" :min="0" :precision="2" style="width: 160px" />
         </a-form-item>
-        <a-form-item label="基础库存" required>
+        <a-form-item :label="t('goods.common.baseStock')" required>
           <a-input-number v-model:value="skuForm.baseStock" :min="0" style="width: 160px" />
-          <div class="form-tip">未单独设置日历的日期按基础库存售卖</div>
+          <div class="form-tip">{{ t('goods.common.baseStockTip') }}</div>
         </a-form-item>
-        <a-form-item label="排序">
+        <a-form-item :label="t('common.sort')">
           <a-input-number v-model:value="skuForm.sort" :min="0" />
         </a-form-item>
-        <a-form-item label="状态">
+        <a-form-item :label="t('common.status')">
           <a-radio-group v-model:value="skuForm.status">
-            <a-radio :value="1">在售</a-radio>
-            <a-radio :value="2">停售</a-radio>
+            <a-radio :value="1">{{ t('goods.common.onSale') }}</a-radio>
+            <a-radio :value="2">{{ t('goods.common.offSale') }}</a-radio>
           </a-radio-group>
         </a-form-item>
       </a-form>
     </a-modal>
 
     <!-- 退改规则抽屉 -->
-    <a-drawer v-model:open="ruleOpen" :title="`退改规则 - ${ruleGoods?.goods_name ?? ''}`" width="640">
+    <a-drawer v-model:open="ruleOpen" :title="t('goods.common.drawerRuleManageTitle', { name: ruleGoods?.goods_name ?? '' })" width="640">
       <a-spin :spinning="ruleLoading">
         <a-table
           :columns="[
-            { title: '适用', key: 'scope' },
-            { title: '类型', dataIndex: 'rule_type', width: 90 },
-            { title: '阶梯', key: 'steps' },
+            { title: t('goods.common.ruleColumnScope'), key: 'scope' },
+            { title: t('common.type'), dataIndex: 'rule_type', width: 90 },
+            { title: t('goods.common.ruleColumnSteps'), key: 'steps' },
           ]"
           :data-source="ruleList"
           row-key="id"
@@ -912,50 +927,50 @@ onMounted(() => {
         >
           <template #bodyCell="{ column, record }">
             <template v-if="column.key === 'scope'">
-              {{ Number(record.sku_type) === 0 ? '商品级' : `${skuLabel}#${record.sku_id}` }}
+              {{ Number(record.sku_type) === 0 ? t('goods.common.ruleLevelGoods') : `${skuLabel}#${record.sku_id}` }}
             </template>
             <template v-else-if="column.dataIndex === 'rule_type'">{{ RULE_TYPE_TEXT[record.rule_type] ?? '-' }}</template>
             <template v-else-if="column.key === 'steps'">
               <template v-if="Array.isArray(record.rules)">
-                <div v-for="(step, idx) in record.rules" :key="idx">提前 {{ step.hours_before }}h 退 {{ step.refund_rate }}%</div>
+                <div v-for="(step, idx) in record.rules" :key="idx">{{ t('goods.common.stepRefundText', { hours: step.hours_before, percent: step.refund_rate }) }}</div>
               </template>
               <span v-else>-</span>
             </template>
           </template>
         </a-table>
 
-        <a-divider orientation="left">新增 / 覆盖规则</a-divider>
+        <a-divider orientation="left">{{ t('goods.common.breadcrumbAddRule') }}</a-divider>
         <a-form :label-col="{ style: { width: '90px' } }">
-          <a-form-item label="适用范围">
+          <a-form-item :label="t('goods.common.ruleScope')">
             <a-select v-model:value="ruleForm.skuScope" style="width: 100%">
-              <a-select-option :value="0">商品级(全部 SKU 默认)</a-select-option>
+              <a-select-option :value="0">{{ t('goods.common.ruleScopeAll') }}</a-select-option>
               <a-select-option v-for="sku in ruleSkus" :key="sku.id" :value="sku.id">
                 {{ skuLabel }}#{{ sku.id }} {{ sku.room_name ?? sku.ticket_name }}
               </a-select-option>
             </a-select>
           </a-form-item>
-          <a-form-item label="规则类型">
+          <a-form-item :label="t('goods.common.ruleType')">
             <a-radio-group v-model:value="ruleForm.ruleType">
-              <a-radio :value="1">免费退</a-radio>
-              <a-radio :value="2">阶梯退</a-radio>
-              <a-radio :value="3">不可退</a-radio>
+              <a-radio :value="1">{{ t('goods.common.ruleTypeAny') }}</a-radio>
+              <a-radio :value="2">{{ t('goods.common.ruleTypeStep') }}</a-radio>
+              <a-radio :value="3">{{ t('goods.common.ruleTypeNo') }}</a-radio>
             </a-radio-group>
           </a-form-item>
-          <a-form-item v-if="ruleForm.ruleType === 2" label="退款阶梯">
+          <a-form-item v-if="ruleForm.ruleType === 2" :label="t('goods.common.ruleSteps')">
             <div v-for="(step, idx) in ruleForm.steps" :key="idx" style="margin-bottom: 8px">
               <a-space>
-                <a-input-number v-model:value="step.hoursBefore" :min="0" addon-before="提前" addon-after="小时" style="width: 180px" />
-                <a-input-number v-model:value="step.refundRate" :min="0" :max="100" addon-before="退" addon-after="%" style="width: 160px" />
-                <a-button type="link" danger size="small" @click="ruleForm.steps.splice(idx, 1)">删除</a-button>
+                <a-input-number v-model:value="step.hoursBefore" :min="0" :addon-before="t('goods.common.advanceHoursAddonBefore')" :addon-after="t('goods.common.hoursUnit')" style="width: 180px" />
+                <a-input-number v-model:value="step.refundRate" :min="0" :max="100" addon-before="%" addon-after="%" style="width: 160px" />
+                <a-button type="link" danger size="small" @click="ruleForm.steps.splice(idx, 1)">{{ t('goods.common.deleteStep') }}</a-button>
               </a-space>
             </div>
-            <a-button type="dashed" size="small" @click="addStep"><PlusOutlined />添加阶梯</a-button>
+            <a-button type="dashed" size="small" @click="addStep"><PlusOutlined />{{ t('goods.common.addStep') }}</a-button>
           </a-form-item>
-          <a-form-item label="备注">
+          <a-form-item :label="t('common.remark')">
             <a-input v-model:value="ruleForm.remark" :maxlength="500" />
           </a-form-item>
           <a-form-item :wrapper-col="{ offset: 4 }">
-            <a-button v-perm="permPrefix + ':edit'" type="primary" :loading="ruleSaving" @click="saveRule">保存规则</a-button>
+            <a-button v-perm="permPrefix + ':edit'" type="primary" :loading="ruleSaving" @click="saveRule">{{ t('goods.common.saveRule') }}</a-button>
           </a-form-item>
         </a-form>
       </a-spin>

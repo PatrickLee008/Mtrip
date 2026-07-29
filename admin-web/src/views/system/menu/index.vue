@@ -3,39 +3,40 @@ import { onMounted, reactive, ref } from 'vue';
 import { message } from 'ant-design-vue';
 import type { TreeSelectProps } from 'ant-design-vue';
 import { PlusOutlined, ReloadOutlined } from '@ant-design/icons-vue';
+import { useI18n } from 'vue-i18n';
 import PageContainer from '@/components/PageContainer.vue';
 import StatusTag from '@/components/StatusTag.vue';
 import { apiMenuAdd, apiMenuDelete, apiMenuTree, apiMenuUpdate } from '@/api/system';
 import type { MenuNode } from '@/api/types';
 
 /** 菜单权限管理:树形表格 / 新增菜单与按钮 / 编辑 / 删除校验(有子级禁止) */
+const { t } = useI18n();
 const loading = ref(false);
 const treeData = ref<MenuNode[]>([]);
 const expandedRowKeys = ref<number[]>([]);
 
 const columns = [
-  { title: '菜单名称', dataIndex: 'menu_name', width: 220 },
-  { title: '类型', dataIndex: 'menu_type', width: 90 },
-  { title: '权限标识', dataIndex: 'perm_key', width: 200 },
-  { title: '路由地址', dataIndex: 'route_path', width: 160 },
-  { title: '组件路径', dataIndex: 'component', width: 200, ellipsis: true },
-  { title: '图标', dataIndex: 'icon', width: 150, ellipsis: true },
-  { title: '排序', dataIndex: 'sort', width: 70 },
-  { title: '状态', dataIndex: 'status', width: 80 },
-  { title: '操作', key: 'action', width: 200, fixed: 'right' as const },
+  { title: t('system.menu.name'), dataIndex: 'menu_name', width: 220 },
+  { title: t('common.type'), dataIndex: 'menu_type', width: 90 },
+  { title: t('system.menu.permKey'), dataIndex: 'perm_key', width: 200 },
+  { title: t('system.menu.route'), dataIndex: 'route_path', width: 160 },
+  { title: t('system.menu.component'), dataIndex: 'component', width: 200, ellipsis: true },
+  { title: t('system.menu.icon'), dataIndex: 'icon', width: 150, ellipsis: true },
+  { title: t('common.sort'), dataIndex: 'sort', width: 70 },
+  { title: t('common.status'), dataIndex: 'status', width: 80 },
+  { title: t('common.action'), key: 'action', width: 200, fixed: 'right' as const },
 ];
 
 const TYPE_MAP: Record<number, { text: string; color: string }> = {
-  1: { text: '目录', color: 'blue' },
-  2: { text: '页面', color: 'green' },
-  3: { text: '按钮', color: 'orange' },
+  1: { text: t('system.menu.typeDir'), color: 'blue' },
+  2: { text: t('system.menu.typePage'), color: 'green' },
+  3: { text: t('system.menu.typeBtn'), color: 'orange' },
 };
 
 async function load(): Promise<void> {
   loading.value = true;
   try {
     treeData.value = await apiMenuTree();
-    // 默认展开一级目录
     expandedRowKeys.value = treeData.value.map((node) => node.id);
   } finally {
     loading.value = false;
@@ -55,7 +56,6 @@ function toParentOptions(nodes: MenuNode[]): TreeSelectProps['treeData'] {
 
 const parentOptions = ref<TreeSelectProps['treeData']>([]);
 
-// ---------- 新增/编辑 ----------
 const modalOpen = ref(false);
 const modalSaving = ref(false);
 const editingId = ref(0);
@@ -86,7 +86,7 @@ function openCreate(parent?: MenuNode): void {
     status: 1,
     remark: '',
   });
-  parentOptions.value = [{ value: 0, label: '根(一级目录)' }, ...(toParentOptions(treeData.value) ?? [])];
+  parentOptions.value = [{ value: 0, label: t('system.menu.root') }, ...(toParentOptions(treeData.value) ?? [])];
   modalOpen.value = true;
 }
 
@@ -104,13 +104,13 @@ function openEdit(row: MenuNode): void {
     status: row.status,
     remark: (row as Record<string, any>).remark ?? '',
   });
-  parentOptions.value = [{ value: 0, label: '根(一级目录)' }, ...(toParentOptions(treeData.value) ?? [])];
+  parentOptions.value = [{ value: 0, label: t('system.menu.root') }, ...(toParentOptions(treeData.value) ?? [])];
   modalOpen.value = true;
 }
 
 async function saveMenu(): Promise<void> {
   if (!form.menuName.trim()) {
-    message.warning('请输入菜单名称');
+    message.warning(t('system.menu.inputName'));
     return;
   }
   modalSaving.value = true;
@@ -121,7 +121,7 @@ async function saveMenu(): Promise<void> {
     } else {
       await apiMenuUpdate({ ...payload, id: editingId.value });
     }
-    message.success(editingId.value === 0 ? '菜单创建成功' : '菜单更新成功');
+    message.success(editingId.value === 0 ? t('system.menu.createSuccess') : t('system.menu.updateSuccess'));
     modalOpen.value = false;
     void load();
   } finally {
@@ -131,7 +131,7 @@ async function saveMenu(): Promise<void> {
 
 async function removeMenu(row: MenuNode): Promise<void> {
   await apiMenuDelete(row.id);
-  message.success('菜单已删除');
+  message.success(t('system.menu.deleted'));
   void load();
 }
 
@@ -143,12 +143,12 @@ onMounted(() => {
 <template>
   <PageContainer>
     <a-card :bordered="false" class="mtrip-card-shadow">
-      <template #title>菜单权限树</template>
+      <template #title>{{ t('system.menu.title') }}</template>
       <template #extra>
         <a-space>
-          <a-button @click="load"><template #icon><ReloadOutlined /></template>刷新</a-button>
+          <a-button @click="load"><template #icon><ReloadOutlined /></template>{{ t('common.refresh') }}</a-button>
           <a-button v-perm="'sys:menu:add'" type="primary" @click="openCreate()">
-            <template #icon><PlusOutlined /></template>新增一级目录
+            <template #icon><PlusOutlined /></template>{{ t('system.menu.addRoot') }}
           </a-button>
         </a-space>
       </template>
@@ -170,7 +170,7 @@ onMounted(() => {
             <a-typography-text v-if="record.perm_key" code>{{ record.perm_key }}</a-typography-text>
           </template>
           <template v-else-if="column.dataIndex === 'status'">
-            <StatusTag :value="record.status" :map="{ 1: { text: '显示', color: 'success' }, 2: { text: '隐藏', color: 'default' } }" />
+            <StatusTag :value="record.status" :map="{ 1: { text: t('system.menu.show'), color: 'success' }, 2: { text: t('system.menu.hide'), color: 'default' } }" />
           </template>
           <template v-else-if="column.key === 'action'">
             <a-space :size="0" wrap>
@@ -181,11 +181,11 @@ onMounted(() => {
                 size="small"
                 @click="openCreate(record)"
               >
-                新增子级
+                {{ t('system.menu.addChild') }}
               </a-button>
-              <a-button v-perm="'sys:menu:edit'" type="link" size="small" @click="openEdit(record)">编辑</a-button>
-              <a-popconfirm title="确认删除?存在子级时将被拒绝" @confirm="removeMenu(record)">
-                <a-button v-perm="'sys:menu:delete'" type="link" size="small" danger>删除</a-button>
+              <a-button v-perm="'sys:menu:edit'" type="link" size="small" @click="openEdit(record)">{{ t('common.edit') }}</a-button>
+              <a-popconfirm :title="t('system.menu.confirmDelete')" @confirm="removeMenu(record)">
+                <a-button v-perm="'sys:menu:delete'" type="link" size="small" danger>{{ t('common.delete') }}</a-button>
               </a-popconfirm>
             </a-space>
           </template>
@@ -193,16 +193,15 @@ onMounted(() => {
       </a-table>
     </a-card>
 
-    <!-- 新增/编辑 -->
     <a-modal
       v-model:open="modalOpen"
-      :title="editingId === 0 ? '新增菜单/按钮' : '编辑菜单/按钮'"
+      :title="editingId === 0 ? t('system.menu.add') : t('system.menu.edit')"
       :confirm-loading="modalSaving"
       width="560px"
       @ok="saveMenu"
     >
       <a-form :label-col="{ span: 5 }" :wrapper-col="{ span: 18 }" style="margin-top: 16px">
-        <a-form-item label="父级菜单">
+        <a-form-item :label="t('system.menu.parent')">
           <a-tree-select
             v-model:value="form.parentId"
             :tree-data="parentOptions"
@@ -212,40 +211,40 @@ onMounted(() => {
             :disabled="editingId !== 0"
           />
         </a-form-item>
-        <a-form-item label="类型" required>
+        <a-form-item :label="t('common.type')" required>
           <a-radio-group v-model:value="form.menuType" :disabled="editingId !== 0">
-            <a-radio :value="1">目录</a-radio>
-            <a-radio :value="2">页面</a-radio>
-            <a-radio :value="3">按钮</a-radio>
+            <a-radio :value="1">{{ t('system.menu.typeDir') }}</a-radio>
+            <a-radio :value="2">{{ t('system.menu.typePage') }}</a-radio>
+            <a-radio :value="3">{{ t('system.menu.typeBtn') }}</a-radio>
           </a-radio-group>
         </a-form-item>
-        <a-form-item label="名称" required>
+        <a-form-item :label="t('common.name')" required>
           <a-input v-model:value="form.menuName" />
         </a-form-item>
-        <a-form-item label="权限标识">
-          <a-input v-model:value="form.permKey" placeholder="如 sys:admin:list(全局唯一)" />
+        <a-form-item :label="t('system.menu.permKey')">
+          <a-input v-model:value="form.permKey" :placeholder="t('system.menu.permKeyPlaceholder')" />
         </a-form-item>
         <template v-if="form.menuType !== 3">
-          <a-form-item label="路由地址">
-            <a-input v-model:value="form.routePath" placeholder="如 /system/admin" />
+          <a-form-item :label="t('system.menu.route')">
+            <a-input v-model:value="form.routePath" :placeholder="t('system.menu.routePlaceholder')" />
           </a-form-item>
-          <a-form-item v-if="form.menuType === 2" label="组件路径">
-            <a-input v-model:value="form.component" placeholder="如 system/admin/index(映射 src/views/)" />
+          <a-form-item v-if="form.menuType === 2" :label="t('system.menu.component')">
+            <a-input v-model:value="form.component" :placeholder="t('system.menu.componentPlaceholder')" />
           </a-form-item>
-          <a-form-item v-if="form.menuType === 1" label="图标">
-            <a-input v-model:value="form.icon" placeholder="@ant-design/icons-vue 组件名,如 SettingOutlined" />
+          <a-form-item v-if="form.menuType === 1" :label="t('system.menu.icon')">
+            <a-input v-model:value="form.icon" :placeholder="t('system.menu.iconPlaceholder')" />
           </a-form-item>
         </template>
-        <a-form-item label="排序">
+        <a-form-item :label="t('common.sort')">
           <a-input-number v-model:value="form.sort" :min="0" style="width: 120px" />
         </a-form-item>
-        <a-form-item label="状态">
+        <a-form-item :label="t('common.status')">
           <a-radio-group v-model:value="form.status">
-            <a-radio :value="1">显示</a-radio>
-            <a-radio :value="2">隐藏</a-radio>
+            <a-radio :value="1">{{ t('system.menu.show') }}</a-radio>
+            <a-radio :value="2">{{ t('system.menu.hide') }}</a-radio>
           </a-radio-group>
         </a-form-item>
-        <a-form-item label="备注">
+        <a-form-item :label="t('common.remark')">
           <a-textarea v-model:value="form.remark" :rows="2" />
         </a-form-item>
       </a-form>

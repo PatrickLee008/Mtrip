@@ -12,11 +12,13 @@ import {
   UserOutlined,
   LockOutlined,
   LogoutOutlined,
+  CheckOutlined,
 } from '@ant-design/icons-vue';
 import { useI18n } from 'vue-i18n';
 import { useAppStore } from '@/stores/app';
 import { useUserStore } from '@/stores/user';
 import { apiUpdatePassword } from '@/api/auth';
+import { SUPPORTED_LOCALES } from '@/locales';
 import SiteTreeSelect from '@/components/SiteTreeSelect.vue';
 
 const appStore = useAppStore();
@@ -25,10 +27,6 @@ const router = useRouter();
 const { t } = useI18n();
 
 const displayName = computed(() => userStore.profile?.realName || userStore.profile?.username || '-');
-
-function onSwitchLocale(): void {
-  appStore.setLocale(appStore.locale === 'zh-CN' ? 'en-US' : 'zh-CN');
-}
 
 function onLogout(): void {
   Modal.confirm({
@@ -59,7 +57,7 @@ async function onSubmitPassword(): Promise<void> {
   pwdLoading.value = true;
   try {
     await apiUpdatePassword(oldPassword, newPassword);
-    message.success(t('common.confirm'));
+    message.success(t('tip.saveSuccess'));
     pwdOpen.value = false;
     pwdForm.value = { oldPassword: '', newPassword: '', confirmPassword: '' };
   } finally {
@@ -107,10 +105,21 @@ async function onSubmitPassword(): Promise<void> {
       </span>
     </a-tooltip>
 
-    <!-- 语言切换 -->
-    <a-tooltip :title="appStore.locale === 'zh-CN' ? 'English' : '中文'">
-      <span class="header-action" @click="onSwitchLocale"><GlobalOutlined /></span>
-    </a-tooltip>
+    <!-- 语言切换(下拉,支持英文/中文切换) -->
+    <a-dropdown :trigger="['click']">
+      <a-tooltip :title="t('app.language')">
+        <span class="header-action"><GlobalOutlined /></span>
+      </a-tooltip>
+      <template #overlay>
+        <a-menu :selected-keys="[appStore.locale]" @click="(e: { key: string }) => appStore.setLocale(e.key as 'zh-CN' | 'en-US')">
+          <a-menu-item v-for="loc in SUPPORTED_LOCALES" :key="loc.key">
+            <CheckOutlined v-if="appStore.locale === loc.key" style="margin-right: 6px" />
+            <span v-else style="display: inline-block; width: 16px" />
+            {{ loc.label }}
+          </a-menu-item>
+        </a-menu>
+      </template>
+    </a-dropdown>
 
     <!-- 个人账号区 -->
     <a-dropdown>

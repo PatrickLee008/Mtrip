@@ -2,6 +2,7 @@
 import { computed, reactive, ref } from 'vue';
 import { message } from 'ant-design-vue';
 import { DownloadOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons-vue';
+import { useI18n } from 'vue-i18n';
 import PageContainer from '@/components/PageContainer.vue';
 import SiteTreeSelect from '@/components/SiteTreeSelect.vue';
 import StatusTag from '@/components/StatusTag.vue';
@@ -29,30 +30,45 @@ const props = defineProps<{
   permPrefix: string; // order:all / order:hotel / order:ticket
 }>();
 
+const { t } = useI18n();
+
 const userStore = useUserStore();
 const isSuper = userStore.profile?.isSuper === true;
 
-const STATUS_MAP: Record<number, StatusItem> = {
-  0: { text: '待支付', color: 'warning' },
-  1: { text: '已支付', color: 'processing' },
-  2: { text: '已核销', color: 'cyan' },
-  3: { text: '已完成', color: 'success' },
-  4: { text: '已取消', color: 'default' },
-  5: { text: '退款中', color: 'orange' },
-  6: { text: '已退款', color: 'purple' },
-  7: { text: '已过期', color: 'default' },
-};
-const REFUND_STATUS_MAP: Record<number, StatusItem> = {
-  0: { text: '待商户审核', color: 'warning' },
-  1: { text: '待平台审核', color: 'orange' },
-  2: { text: '退款中', color: 'processing' },
-  3: { text: '已退款', color: 'success' },
-  4: { text: '已驳回', color: 'error' },
-  5: { text: '已撤销', color: 'default' },
-};
-const ORDER_TYPE_TEXT: Record<number, string> = { 1: '酒店', 2: '门票' };
-const PAY_METHOD_TEXT: Record<number, string> = { 0: '未支付', 1: 'Stripe', 2: 'PayPal', 3: '余额', 4: '模拟支付' };
-const VERIFY_TYPE_TEXT: Record<number, string> = { 1: '设备核销', 2: '商户核销', 3: '后台手工' };
+const STATUS_MAP = computed<Record<number, StatusItem>>(() => ({
+  0: { text: t('order.orderStatus.pending'), color: 'warning' },
+  1: { text: t('order.orderStatus.paid'), color: 'processing' },
+  2: { text: t('order.orderStatus.verified'), color: 'cyan' },
+  3: { text: t('order.orderStatus.done'), color: 'success' },
+  4: { text: t('order.orderStatus.cancelled'), color: 'default' },
+  5: { text: t('order.orderStatus.refunding'), color: 'orange' },
+  6: { text: t('order.orderStatus.refunded'), color: 'purple' },
+  7: { text: t('order.orderStatus.expired'), color: 'default' },
+}));
+const REFUND_STATUS_MAP = computed<Record<number, StatusItem>>(() => ({
+  0: { text: t('order.refundStatus.applying', 'Pending Merchant Review'), color: 'warning' },
+  1: { text: t('order.refundStatus.applying', 'Pending Platform Review'), color: 'orange' },
+  2: { text: t('order.refundStatus.applying'), color: 'processing' },
+  3: { text: t('order.refundStatus.completed'), color: 'success' },
+  4: { text: t('order.refundStatus.rejected'), color: 'error' },
+  5: { text: t('common.none', 'Revoked'), color: 'default' },
+}));
+const ORDER_TYPE_TEXT = computed<Record<number, string>>(() => ({
+  1: t('goods.common.typeHotel'),
+  2: t('goods.common.typeTicket'),
+}));
+const PAY_METHOD_TEXT = computed<Record<number, string>>(() => ({
+  0: t('common.none', 'Unpaid'),
+  1: t('order.payMethod.stripe'),
+  2: t('order.payMethod.paypal'),
+  3: t('order.payMethod.balance'),
+  4: t('order.payMethod.other', 'Mock Pay'),
+}));
+const VERIFY_TYPE_TEXT = computed<Record<number, string>>(() => ({
+  1: t('order.verifyType.qrcode', 'Device Verify'),
+  2: t('order.verifyType.manual', 'Merchant Verify'),
+  3: t('order.verifyType.manual', 'Admin Manual'),
+}));
 
 // 下单日期区间(string[] 绑 range-picker,fetcher 拆 startDate/endDate)
 const createdRange = ref<string[]>([]);
@@ -73,18 +89,18 @@ function doReset(): void {
 }
 
 const columns = [
-  { title: '订单号', dataIndex: 'order_no', width: 200 },
-  ...(props.orderType === 0 ? [{ title: '类型', dataIndex: 'order_type', width: 70 }] : []),
-  { title: '商品', dataIndex: 'goods_name', width: 200, ellipsis: true },
-  { title: '规格', dataIndex: 'sku_name', width: 120, ellipsis: true },
-  { title: '数量', dataIndex: 'quantity', width: 60 },
-  { title: '实付', dataIndex: 'pay_amount', width: 100 },
-  { title: '联系人', dataIndex: 'contact_name', width: 100, ellipsis: true },
-  { title: '手机号', dataIndex: 'contact_phone', width: 120 },
-  { title: '使用日期', dataIndex: 'use_date', width: 105 },
-  { title: '状态', dataIndex: 'order_status', width: 90 },
-  { title: '下单时间', dataIndex: 'created_at', width: 165 },
-  { title: '操作', key: 'action_col', width: 200, fixed: 'right' as const },
+  { title: t('order.orderNo'), dataIndex: 'order_no', width: 200 },
+  ...(props.orderType === 0 ? [{ title: t('order.goodsType'), dataIndex: 'order_type', width: 70 }] : []),
+  { title: t('order.goods'), dataIndex: 'goods_name', width: 200, ellipsis: true },
+  { title: t('goods.common.sku', 'Spec'), dataIndex: 'sku_name', width: 120, ellipsis: true },
+  { title: t('order.quantity'), dataIndex: 'quantity', width: 60 },
+  { title: t('order.amount', 'Pay Amount'), dataIndex: 'pay_amount', width: 100 },
+  { title: t('order.contact'), dataIndex: 'contact_name', width: 100, ellipsis: true },
+  { title: t('order.contactMobile'), dataIndex: 'contact_phone', width: 120 },
+  { title: t('order.useDate', 'Use Date'), dataIndex: 'use_date', width: 105 },
+  { title: t('order.status'), dataIndex: 'order_status', width: 90 },
+  { title: t('order.createTime'), dataIndex: 'created_at', width: 165 },
+  { title: t('common.action'), key: 'action_col', width: 200, fixed: 'right' as const },
 ];
 
 // ---------- 商户远程搜索 ----------
@@ -140,17 +156,17 @@ function openPrice(row: TableRow): void {
 
 async function submitPrice(): Promise<void> {
   if (priceForm.payAmount < 0 || priceForm.payAmount > priceForm.totalAmount) {
-    message.warning('实付金额须在 0 与订单总额之间');
+    message.warning(t('order.priceModify.warningRange', 'Pay amount must be between 0 and total'));
     return;
   }
   if (!priceForm.reason.trim()) {
-    message.warning('请填写改价原因');
+    message.warning(t('order.priceModify.inputReason'));
     return;
   }
   priceSubmitting.value = true;
   try {
     await apiOrderModifyPrice({ id: priceForm.id, payAmount: priceForm.payAmount, reason: priceForm.reason.trim() });
-    message.success('订单已改价');
+    message.success(t('order.priceModify.success'));
     priceOpen.value = false;
     void load();
   } finally {
@@ -172,13 +188,13 @@ function openCancel(row: TableRow): void {
 
 async function submitCancel(): Promise<void> {
   if (!cancelForm.reason.trim()) {
-    message.warning('请填写取消原因');
+    message.warning(t('order.cancelModal.inputReason'));
     return;
   }
   cancelSubmitting.value = true;
   try {
     await apiOrderCancel({ id: cancelForm.id, reason: cancelForm.reason.trim() });
-    message.success('订单已取消,库存已释放');
+    message.success(t('order.cancelModal.successStockReleased', 'Order cancelled, stock released'));
     cancelOpen.value = false;
     void load();
   } finally {
@@ -200,13 +216,13 @@ function openRemark(row: TableRow): void {
 
 async function submitRemark(): Promise<void> {
   if (!remarkForm.remark.trim()) {
-    message.warning('请填写备注内容');
+    message.warning(t('order.remarkModal.inputContent'));
     return;
   }
   remarkSubmitting.value = true;
   try {
     await apiOrderRemark({ id: remarkForm.id, remark: remarkForm.remark.trim() });
-    message.success('备注已更新');
+    message.success(t('order.remarkModal.success'));
     remarkOpen.value = false;
     void load();
   } finally {
@@ -229,52 +245,59 @@ async function exportOrders(): Promise<void> {
       pageSize: 2000,
     });
     if (!data.list.length) {
-      message.warning('当前筛选条件下没有可导出的订单');
+      message.warning(t('order.exportEmpty', 'No orders to export under current filter'));
       return;
     }
-    exportCsv(`订单导出_${new Date().toISOString().slice(0, 10)}`, [
-      { title: '订单号', key: 'order_no' },
-      { title: '类型', key: 'order_type', format: (row) => ORDER_TYPE_TEXT[row.order_type] ?? String(row.order_type) },
-      { title: '商品', key: 'goods_name' },
-      { title: '规格', key: 'sku_name' },
-      { title: '数量', key: 'quantity' },
-      { title: '订单总额', key: 'total_amount' },
-      { title: '实付金额', key: 'pay_amount' },
-      { title: '平台佣金', key: 'platform_commission' },
-      { title: '联系人', key: 'contact_name' },
-      { title: '手机号', key: 'contact_phone' },
-      { title: '使用日期', key: 'use_date' },
-      { title: '状态', key: 'order_status', format: (row) => STATUS_MAP[row.order_status]?.text ?? String(row.order_status) },
-      { title: '支付方式', key: 'pay_method', format: (row) => PAY_METHOD_TEXT[row.pay_method] ?? '-' },
-      { title: '下单时间', key: 'created_at' },
+    const statusMap = STATUS_MAP.value;
+    const orderTypeMap = ORDER_TYPE_TEXT.value;
+    const payMethodMap = PAY_METHOD_TEXT.value;
+    exportCsv(t('order.exportFilename', `orders_${new Date().toISOString().slice(0, 10)}`), [
+      { title: t('order.orderNo'), key: 'order_no' },
+      { title: t('order.goodsType'), key: 'order_type', format: (row) => orderTypeMap[row.order_type] ?? String(row.order_type) },
+      { title: t('order.goods'), key: 'goods_name' },
+      { title: t('goods.common.sku', 'Spec'), key: 'sku_name' },
+      { title: t('order.quantity'), key: 'quantity' },
+      { title: t('order.totalAmount', 'Total Amount'), key: 'total_amount' },
+      { title: t('order.amount', 'Pay Amount'), key: 'pay_amount' },
+      { title: t('order.platformCommission', 'Platform Commission'), key: 'platform_commission' },
+      { title: t('order.contact'), key: 'contact_name' },
+      { title: t('order.contactMobile'), key: 'contact_phone' },
+      { title: t('order.useDate', 'Use Date'), key: 'use_date' },
+      { title: t('order.status'), key: 'order_status', format: (row) => statusMap[row.order_status]?.text ?? String(row.order_status) },
+      { title: t('order.filter.payMethod'), key: 'pay_method', format: (row) => payMethodMap[row.pay_method] ?? '-' },
+      { title: t('order.createTime'), key: 'created_at' },
     ], data.list);
-    message.success(`已导出 ${data.list.length} 条订单`);
+    message.success(t('order.exportSuccess', `Exported ${data.list.length} orders`).replace('{count}', String(data.list.length)));
   } finally {
     exporting.value = false;
   }
 }
 
-const pageTitle = computed(() => (props.orderType === 1 ? '酒店订单' : props.orderType === 2 ? '门票订单' : '全部订单'));
+const pageTitle = computed(() => {
+  if (props.orderType === 1) return t('menu.orderHotel');
+  if (props.orderType === 2) return t('menu.orderTicket');
+  return t('menu.orderAll');
+});
 </script>
 
 <template>
   <PageContainer>
     <a-card :bordered="false" class="mtrip-card-shadow" style="margin-bottom: 16px">
       <a-form layout="inline">
-        <a-form-item label="订单号">
-          <a-input v-model:value="query.orderNo" allow-clear placeholder="精确匹配" style="width: 200px" @press-enter="search" />
+        <a-form-item :label="t('order.filter.orderNo')">
+          <a-input v-model:value="query.orderNo" allow-clear :placeholder="t('common.pleaseInput', 'Exact match')" style="width: 200px" @press-enter="search" />
         </a-form-item>
-        <a-form-item label="状态">
-          <a-select v-model:value="query.orderStatus" allow-clear placeholder="全部" style="width: 110px">
+        <a-form-item :label="t('order.status')">
+          <a-select v-model:value="query.orderStatus" allow-clear :placeholder="t('common.all')" style="width: 110px">
             <a-select-option v-for="(item, key) in STATUS_MAP" :key="key" :value="Number(key)">{{ item.text }}</a-select-option>
           </a-select>
         </a-form-item>
-        <a-form-item label="商户">
+        <a-form-item :label="t('merchant.list', 'Merchant')">
           <a-select
             v-model:value="query.merchantId"
             show-search
             allow-clear
-            placeholder="输入名称搜索"
+            :placeholder="t('goods.common.searchMerchantPlaceholder')"
             style="width: 200px"
             :filter-option="false"
             :options="merchantOptions"
@@ -282,22 +305,22 @@ const pageTitle = computed(() => (props.orderType === 1 ? '酒店订单' : props
             @search="searchMerchant"
           />
         </a-form-item>
-        <a-form-item label="联系人">
-          <a-input v-model:value="query.contactName" allow-clear placeholder="模糊匹配" style="width: 130px" @press-enter="search" />
+        <a-form-item :label="t('order.contact')">
+          <a-input v-model:value="query.contactName" allow-clear :placeholder="t('common.pleaseInput', 'Fuzzy match')" style="width: 130px" @press-enter="search" />
         </a-form-item>
-        <a-form-item label="下单日期">
+        <a-form-item :label="t('order.createTimeRange', 'Create Date')">
           <a-range-picker v-model:value="createdRange" value-format="YYYY-MM-DD" style="width: 240px" />
         </a-form-item>
-        <a-form-item label="使用日期">
+        <a-form-item :label="t('order.useDate', 'Use Date')">
           <a-date-picker v-model:value="query.useDate" value-format="YYYY-MM-DD" style="width: 130px" />
         </a-form-item>
-        <a-form-item v-if="isSuper" label="站点">
+        <a-form-item v-if="isSuper" :label="t('common.site')">
           <SiteTreeSelect v-model:value="query.siteId" allow-all style="width: 160px" />
         </a-form-item>
         <a-form-item>
           <a-space>
-            <a-button type="primary" @click="search"><template #icon><SearchOutlined /></template>查询</a-button>
-            <a-button @click="doReset"><template #icon><ReloadOutlined /></template>重置</a-button>
+            <a-button type="primary" @click="search"><template #icon><SearchOutlined /></template>{{ t('common.search') }}</a-button>
+            <a-button @click="doReset"><template #icon><ReloadOutlined /></template>{{ t('common.reset') }}</a-button>
           </a-space>
         </a-form-item>
       </a-form>
@@ -307,7 +330,7 @@ const pageTitle = computed(() => (props.orderType === 1 ? '酒店订单' : props
       <template #title>{{ pageTitle }}</template>
       <template #extra>
         <a-button v-perm="'order:all:export'" :loading="exporting" @click="exportOrders">
-          <template #icon><DownloadOutlined /></template>导出 CSV
+          <template #icon><DownloadOutlined /></template>{{ t('common.export') }} CSV
         </a-button>
       </template>
       <a-table
@@ -329,14 +352,14 @@ const pageTitle = computed(() => (props.orderType === 1 ? '酒店订单' : props
           </template>
           <template v-else-if="column.key === 'action_col'">
             <a-space :size="0">
-              <a-button type="link" size="small" @click="openDetail(record)">详情</a-button>
+              <a-button type="link" size="small" @click="openDetail(record)">{{ t('order.actions.detail') }}</a-button>
               <a-button
                 v-if="record.order_status === 0"
                 v-perm="'order:all:cancel'"
                 type="link"
                 size="small"
                 @click="openPrice(record)"
-              >改价</a-button>
+              >{{ t('order.actions.modifyPrice') }}</a-button>
               <a-button
                 v-if="record.order_status === 0"
                 v-perm="'order:all:cancel'"
@@ -344,8 +367,8 @@ const pageTitle = computed(() => (props.orderType === 1 ? '酒店订单' : props
                 size="small"
                 danger
                 @click="openCancel(record)"
-              >取消</a-button>
-              <a-button type="link" size="small" @click="openRemark(record)">备注</a-button>
+              >{{ t('order.actions.cancel') }}</a-button>
+              <a-button type="link" size="small" @click="openRemark(record)">{{ t('order.actions.remark') }}</a-button>
             </a-space>
           </template>
         </template>
@@ -353,37 +376,37 @@ const pageTitle = computed(() => (props.orderType === 1 ? '酒店订单' : props
     </a-card>
 
     <!-- 详情抽屉 -->
-    <a-drawer v-model:open="drawerOpen" title="订单详情" width="760">
+    <a-drawer v-model:open="drawerOpen" :title="t('order.title', 'Order Detail')" width="760">
       <a-spin :spinning="detailLoading">
         <template v-if="detail">
           <a-descriptions :column="2" size="small" bordered>
-            <a-descriptions-item label="订单号" :span="2">{{ detail.order_no }}</a-descriptions-item>
-            <a-descriptions-item label="状态"><StatusTag :value="detail.order_status" :map="STATUS_MAP" /></a-descriptions-item>
-            <a-descriptions-item label="类型">{{ ORDER_TYPE_TEXT[detail.order_type] ?? '-' }}</a-descriptions-item>
-            <a-descriptions-item label="商品" :span="2">{{ detail.goods_name }} / {{ detail.sku_name }} × {{ detail.quantity }}</a-descriptions-item>
-            <a-descriptions-item label="订单总额">{{ formatAmount(detail.total_amount) }}</a-descriptions-item>
-            <a-descriptions-item label="实付金额">{{ formatAmount(detail.pay_amount) }}</a-descriptions-item>
-            <a-descriptions-item label="优惠金额">{{ formatAmount(detail.discount_amount) }}</a-descriptions-item>
-            <a-descriptions-item label="平台佣金">{{ formatAmount(detail.platform_commission) }}</a-descriptions-item>
-            <a-descriptions-item label="联系人">{{ detail.contact_name }}</a-descriptions-item>
-            <a-descriptions-item label="手机号">{{ detail.contact_phone }}</a-descriptions-item>
-            <a-descriptions-item label="使用日期">{{ detail.use_date || '-' }}</a-descriptions-item>
-            <a-descriptions-item label="离店日期">{{ detail.end_date || '-' }}</a-descriptions-item>
-            <a-descriptions-item label="支付方式">{{ PAY_METHOD_TEXT[detail.pay_method] ?? '-' }}</a-descriptions-item>
-            <a-descriptions-item label="支付时间">{{ detail.pay_time || '-' }}</a-descriptions-item>
-            <a-descriptions-item label="核销码">{{ detail.verify_code || '-' }}</a-descriptions-item>
-            <a-descriptions-item label="下单时间">{{ detail.created_at }}</a-descriptions-item>
-            <a-descriptions-item v-if="detail.cancel_reason" label="取消原因" :span="2">{{ detail.cancel_reason }}</a-descriptions-item>
-            <a-descriptions-item v-if="detail.remark" label="备注" :span="2">{{ detail.remark }}</a-descriptions-item>
+            <a-descriptions-item :label="t('order.orderNo')" :span="2">{{ detail.order_no }}</a-descriptions-item>
+            <a-descriptions-item :label="t('order.status')"><StatusTag :value="detail.order_status" :map="STATUS_MAP" /></a-descriptions-item>
+            <a-descriptions-item :label="t('order.goodsType')">{{ ORDER_TYPE_TEXT[detail.order_type] ?? '-' }}</a-descriptions-item>
+            <a-descriptions-item :label="t('order.goods')" :span="2">{{ detail.goods_name }} / {{ detail.sku_name }} × {{ detail.quantity }}</a-descriptions-item>
+            <a-descriptions-item :label="t('order.totalAmount', 'Total Amount')">{{ formatAmount(detail.total_amount) }}</a-descriptions-item>
+            <a-descriptions-item :label="t('order.amount', 'Pay Amount')">{{ formatAmount(detail.pay_amount) }}</a-descriptions-item>
+            <a-descriptions-item :label="t('order.discountAmount', 'Discount Amount')">{{ formatAmount(detail.discount_amount) }}</a-descriptions-item>
+            <a-descriptions-item :label="t('order.platformCommission', 'Platform Commission')">{{ formatAmount(detail.platform_commission) }}</a-descriptions-item>
+            <a-descriptions-item :label="t('order.contact')">{{ detail.contact_name }}</a-descriptions-item>
+            <a-descriptions-item :label="t('order.contactMobile')">{{ detail.contact_phone }}</a-descriptions-item>
+            <a-descriptions-item :label="t('order.useDate', 'Use Date')">{{ detail.use_date || '-' }}</a-descriptions-item>
+            <a-descriptions-item :label="t('order.endDate', 'Check-out Date')">{{ detail.end_date || '-' }}</a-descriptions-item>
+            <a-descriptions-item :label="t('order.filter.payMethod')">{{ PAY_METHOD_TEXT[detail.pay_method] ?? '-' }}</a-descriptions-item>
+            <a-descriptions-item :label="t('order.payTime')">{{ detail.pay_time || '-' }}</a-descriptions-item>
+            <a-descriptions-item :label="t('order.verify.code')">{{ detail.verify_code || '-' }}</a-descriptions-item>
+            <a-descriptions-item :label="t('order.createTime')">{{ detail.created_at }}</a-descriptions-item>
+            <a-descriptions-item v-if="detail.cancel_reason" :label="t('order.cancelModal.reason')" :span="2">{{ detail.cancel_reason }}</a-descriptions-item>
+            <a-descriptions-item v-if="detail.remark" :label="t('order.remark')" :span="2">{{ detail.remark }}</a-descriptions-item>
           </a-descriptions>
-          <a-divider orientation="left">退款单({{ detailRefunds.length }})</a-divider>
+          <a-divider orientation="left">{{ t('order.refund.title') }}({{ detailRefunds.length }})</a-divider>
           <a-table
             :columns="[
-              { title: '退款单号', dataIndex: 'refund_no', width: 190 },
-              { title: '申请金额', dataIndex: 'apply_amount', width: 100 },
-              { title: '实退金额', dataIndex: 'refund_amount', width: 100 },
-              { title: '状态', dataIndex: 'status', width: 110 },
-              { title: '申请时间', dataIndex: 'created_at', width: 160 },
+              { title: t('order.refund.refundNo'), dataIndex: 'refund_no', width: 190 },
+              { title: t('order.refund.applyAmount', 'Apply Amount'), dataIndex: 'apply_amount', width: 100 },
+              { title: t('order.refund.amount'), dataIndex: 'refund_amount', width: 100 },
+              { title: t('order.status'), dataIndex: 'status', width: 110 },
+              { title: t('order.refund.applyTime'), dataIndex: 'created_at', width: 160 },
             ]"
             :data-source="detailRefunds"
             row-key="id"
@@ -398,14 +421,14 @@ const pageTitle = computed(() => (props.orderType === 1 ? '酒店订单' : props
               </template>
             </template>
           </a-table>
-          <a-divider orientation="left">核销日志({{ detailVerifyLogs.length }})</a-divider>
+          <a-divider orientation="left">{{ t('order.verifyLog.title') }}({{ detailVerifyLogs.length }})</a-divider>
           <a-table
             :columns="[
-              { title: '方式', dataIndex: 'verify_type', width: 100 },
-              { title: '操作人', dataIndex: 'operator_name', width: 120 },
-              { title: '状态', dataIndex: 'status', width: 90 },
-              { title: '撤销原因', dataIndex: 'revoke_reason', ellipsis: true },
-              { title: '时间', dataIndex: 'created_at', width: 160 },
+              { title: t('order.verifyLog.verifyType'), dataIndex: 'verify_type', width: 100 },
+              { title: t('order.verifyLog.operator'), dataIndex: 'operator_name', width: 120 },
+              { title: t('order.status'), dataIndex: 'status', width: 90 },
+              { title: t('order.verifyLog.revokeReason', 'Revoke Reason'), dataIndex: 'revoke_reason', ellipsis: true },
+              { title: t('order.verifyLog.time'), dataIndex: 'created_at', width: 160 },
             ]"
             :data-source="detailVerifyLogs"
             row-key="id"
@@ -415,7 +438,7 @@ const pageTitle = computed(() => (props.orderType === 1 ? '酒店订单' : props
             <template #bodyCell="{ column, record }">
               <template v-if="column.dataIndex === 'verify_type'">{{ VERIFY_TYPE_TEXT[record.verify_type] ?? '-' }}</template>
               <template v-else-if="column.dataIndex === 'status'">
-                <a-tag :color="record.status === 1 ? 'success' : 'default'">{{ record.status === 1 ? '成功' : '已撤销' }}</a-tag>
+                <a-tag :color="record.status === 1 ? 'success' : 'default'">{{ record.status === 1 ? t('common.success') : t('order.verifyLog.revoked', 'Revoked') }}</a-tag>
               </template>
             </template>
           </a-table>
@@ -424,16 +447,16 @@ const pageTitle = computed(() => (props.orderType === 1 ? '酒店订单' : props
     </a-drawer>
 
     <!-- 改价 Modal -->
-    <a-modal v-model:open="priceOpen" title="订单改价" :confirm-loading="priceSubmitting" @ok="submitPrice">
-      <a-alert type="warning" show-icon message="仅待支付订单可改价,新实付不得高于订单总额,差额记入优惠" style="margin-bottom: 16px" />
+    <a-modal v-model:open="priceOpen" :title="t('order.priceModify.title')" :confirm-loading="priceSubmitting" @ok="submitPrice">
+      <a-alert type="warning" show-icon :message="t('order.priceModify.notice')" style="margin-bottom: 16px" />
       <a-form :label-col="{ span: 6 }">
-        <a-form-item label="订单号">{{ priceForm.orderNo }}</a-form-item>
-        <a-form-item label="订单总额">{{ formatAmount(priceForm.totalAmount) }}</a-form-item>
-        <a-form-item label="新实付金额" required>
+        <a-form-item :label="t('order.orderNo')">{{ priceForm.orderNo }}</a-form-item>
+        <a-form-item :label="t('order.totalAmount', 'Total Amount')">{{ formatAmount(priceForm.totalAmount) }}</a-form-item>
+        <a-form-item :label="t('order.newPayAmount', 'New Pay Amount')" required>
           <a-input-number v-model:value="priceForm.payAmount" :min="0" :max="priceForm.totalAmount" :precision="2" style="width: 100%" />
         </a-form-item>
-        <a-form-item label="改价原因" required>
-          <a-textarea v-model:value="priceForm.reason" :rows="3" :maxlength="200" placeholder="必填,记入订单备注" />
+        <a-form-item :label="t('order.priceModify.reason')" required>
+          <a-textarea v-model:value="priceForm.reason" :rows="3" :maxlength="200" :placeholder="t('order.priceModify.requiredPlaceholder', 'Required, recorded in order remark')" />
         </a-form-item>
       </a-form>
     </a-modal>
@@ -441,26 +464,26 @@ const pageTitle = computed(() => (props.orderType === 1 ? '酒店订单' : props
     <!-- 取消 Modal -->
     <a-modal
       v-model:open="cancelOpen"
-      title="取消订单"
+      :title="t('order.cancelModal.title')"
       :confirm-loading="cancelSubmitting"
       :ok-button-props="{ danger: true }"
-      ok-text="确认取消"
+      :ok-text="t('order.cancelModal.confirm')"
       @ok="submitCancel"
     >
-      <a-alert type="warning" show-icon message="仅待支付订单可直接取消(释放锁定库存),已支付请走退款流程" style="margin-bottom: 16px" />
+      <a-alert type="warning" show-icon :message="t('order.cancelModal.notice')" style="margin-bottom: 16px" />
       <a-form :label-col="{ span: 6 }">
-        <a-form-item label="订单号">{{ cancelForm.orderNo }}</a-form-item>
-        <a-form-item label="取消原因" required>
-          <a-textarea v-model:value="cancelForm.reason" :rows="3" :maxlength="200" placeholder="必填" />
+        <a-form-item :label="t('order.orderNo')">{{ cancelForm.orderNo }}</a-form-item>
+        <a-form-item :label="t('order.cancelModal.reason')" required>
+          <a-textarea v-model:value="cancelForm.reason" :rows="3" :maxlength="200" :placeholder="t('common.required', 'Required')" />
         </a-form-item>
       </a-form>
     </a-modal>
 
     <!-- 备注 Modal -->
-    <a-modal v-model:open="remarkOpen" title="订单备注" :confirm-loading="remarkSubmitting" @ok="submitRemark">
+    <a-modal v-model:open="remarkOpen" :title="t('order.remarkModal.title')" :confirm-loading="remarkSubmitting" @ok="submitRemark">
       <a-form :label-col="{ span: 5 }">
-        <a-form-item label="订单号">{{ remarkForm.orderNo }}</a-form-item>
-        <a-form-item label="备注内容" required>
+        <a-form-item :label="t('order.orderNo')">{{ remarkForm.orderNo }}</a-form-item>
+        <a-form-item :label="t('order.remarkModal.content')" required>
           <a-textarea v-model:value="remarkForm.remark" :rows="4" :maxlength="500" show-count />
         </a-form-item>
       </a-form>

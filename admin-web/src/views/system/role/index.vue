@@ -3,6 +3,7 @@ import { onMounted, reactive, ref } from 'vue';
 import { message } from 'ant-design-vue';
 import type { DataNode } from 'ant-design-vue/es/tree';
 import { PlusOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons-vue';
+import { useI18n } from 'vue-i18n';
 import PageContainer from '@/components/PageContainer.vue';
 import StatusTag from '@/components/StatusTag.vue';
 import SiteTreeSelect from '@/components/SiteTreeSelect.vue';
@@ -24,6 +25,7 @@ import type { MenuNode } from '@/api/types';
 /** 角色管理:CRUD / 权限分配(菜单树+按钮勾选) / 查看绑定管理员 */
 const userStore = useUserStore();
 const isSuper = userStore.profile?.isSuper === true;
+const { t } = useI18n();
 
 const { loading, list, query, load, search, reset, pagination } = useTable(apiRoleList, {
   roleName: '',
@@ -32,14 +34,14 @@ const { loading, list, query, load, search, reset, pagination } = useTable(apiRo
 });
 
 const columns = [
-  { title: 'ID', dataIndex: 'id', width: 70 },
-  { title: '角色名称', dataIndex: 'role_name', width: 160 },
-  { title: '类型', dataIndex: 'role_type', width: 100 },
-  { title: '站点', dataIndex: 'site_id', width: 90 },
-  { title: '绑定管理员', dataIndex: 'admin_count', width: 100 },
-  { title: '状态', dataIndex: 'status', width: 80 },
-  { title: '描述', dataIndex: 'description', ellipsis: true },
-  { title: '操作', key: 'action', width: 300, fixed: 'right' as const },
+  { title: t('common.id'), dataIndex: 'id', width: 70 },
+  { title: t('system.role.name'), dataIndex: 'role_name', width: 160 },
+  { title: t('common.type'), dataIndex: 'role_type', width: 100 },
+  { title: t('common.site'), dataIndex: 'site_id', width: 90 },
+  { title: t('system.role.adminCount'), dataIndex: 'admin_count', width: 100 },
+  { title: t('common.status'), dataIndex: 'status', width: 80 },
+  { title: t('common.description'), dataIndex: 'description', ellipsis: true },
+  { title: t('common.action'), key: 'action', width: 300, fixed: 'right' as const },
 ];
 
 // ---------- 新增/编辑 ----------
@@ -62,7 +64,7 @@ function openEdit(row: TableRow): void {
 
 async function saveRole(): Promise<void> {
   if (!form.roleName.trim()) {
-    message.warning('请输入角色名称');
+    message.warning(t('system.role.inputName'));
     return;
   }
   modalSaving.value = true;
@@ -72,7 +74,7 @@ async function saveRole(): Promise<void> {
     } else {
       await apiRoleUpdate({ id: editingId.value, roleName: form.roleName.trim(), description: form.description });
     }
-    message.success(editingId.value === 0 ? '角色创建成功' : '角色更新成功');
+    message.success(editingId.value === 0 ? t('system.role.createSuccess') : t('system.role.updateSuccess'));
     modalOpen.value = false;
     void load();
   } finally {
@@ -82,13 +84,13 @@ async function saveRole(): Promise<void> {
 
 async function toggleStatus(row: TableRow): Promise<void> {
   await apiRoleToggleStatus(row.id);
-  message.success(row.status === 1 ? '已禁用' : '已启用');
+  message.success(row.status === 1 ? t('system.admin.disabled') : t('system.admin.enabled'));
   void load();
 }
 
 async function removeRole(row: TableRow): Promise<void> {
   await apiRoleDelete(row.id);
-  message.success('角色已删除');
+  message.success(t('system.role.deleted'));
   void load();
 }
 
@@ -104,12 +106,11 @@ const halfCheckedKeys = ref<number[]>([]);
 function toTreeNodes(nodes: MenuNode[]): DataNode[] {
   return nodes.map((node) => ({
     key: node.id,
-    title: node.menu_type === 3 ? `${node.menu_name}(按钮)` : node.menu_name,
+    title: node.menu_type === 3 ? `${node.menu_name}(Button)` : node.menu_name,
     children: node.children?.length ? toTreeNodes(node.children) : undefined,
   }));
 }
 
-/** 已授权 id 拆分为「全选节点」与「半选父节点」,避免回显时父节点误全选 */
 function splitChecked(nodes: MenuNode[], granted: Set<number>): { checked: number[]; half: number[] } {
   const checked: number[] = [];
   const half: number[] = [];
@@ -158,9 +159,8 @@ function onPermCheck(_keys: unknown, info: { halfCheckedKeys?: number[] }): void
 async function savePerms(): Promise<void> {
   permSaving.value = true;
   try {
-    // 全选节点 + 半选父节点一并落库,保证父级菜单可见
     await apiRoleAssignPerms(permTarget.value!.id, [...checkedKeys.value, ...halfCheckedKeys.value]);
-    message.success('权限分配成功');
+    message.success(t('system.role.permAssigned'));
     permOpen.value = false;
     void load();
   } finally {
@@ -174,11 +174,11 @@ const adminLoading = ref(false);
 const adminList = ref<TableRow[]>([]);
 const adminTarget = ref<TableRow | null>(null);
 const adminColumns = [
-  { title: 'ID', dataIndex: 'id', width: 70 },
-  { title: '登录账号', dataIndex: 'username' },
-  { title: '姓名', dataIndex: 'real_name' },
-  { title: '站点', dataIndex: 'site_id', width: 80 },
-  { title: '状态', dataIndex: 'status', width: 80 },
+  { title: t('common.id'), dataIndex: 'id', width: 70 },
+  { title: t('system.admin.username'), dataIndex: 'username' },
+  { title: t('user.realName'), dataIndex: 'real_name' },
+  { title: t('common.site'), dataIndex: 'site_id', width: 80 },
+  { title: t('common.status'), dataIndex: 'status', width: 80 },
 ];
 
 async function openAdmins(row: TableRow): Promise<void> {
@@ -201,32 +201,32 @@ onMounted(() => {
   <PageContainer>
     <a-card :bordered="false" class="mtrip-card-shadow" style="margin-bottom: 16px">
       <a-form layout="inline">
-        <a-form-item label="角色名称">
-          <a-input v-model:value="query.roleName" placeholder="模糊搜索" allow-clear style="width: 160px" @press-enter="search" />
+        <a-form-item :label="t('system.role.name')">
+          <a-input v-model:value="query.roleName" :placeholder="t('common.pleaseInput')" allow-clear style="width: 160px" @press-enter="search" />
         </a-form-item>
-        <a-form-item v-if="isSuper" label="站点">
+        <a-form-item v-if="isSuper" :label="t('common.site')">
           <SiteTreeSelect v-model:value="query.siteId" allow-all style="width: 180px" />
         </a-form-item>
-        <a-form-item label="状态">
-          <a-select v-model:value="query.status" allow-clear placeholder="全部" style="width: 110px">
-            <a-select-option :value="1">启用</a-select-option>
-            <a-select-option :value="2">禁用</a-select-option>
+        <a-form-item :label="t('common.status')">
+          <a-select v-model:value="query.status" allow-clear :placeholder="t('common.all')" style="width: 110px">
+            <a-select-option :value="1">{{ t('status.enabled') }}</a-select-option>
+            <a-select-option :value="2">{{ t('status.disabled') }}</a-select-option>
           </a-select>
         </a-form-item>
         <a-form-item>
           <a-space>
-            <a-button type="primary" @click="search"><template #icon><SearchOutlined /></template>查询</a-button>
-            <a-button @click="reset"><template #icon><ReloadOutlined /></template>重置</a-button>
+            <a-button type="primary" @click="search"><template #icon><SearchOutlined /></template>{{ t('common.search') }}</a-button>
+            <a-button @click="reset"><template #icon><ReloadOutlined /></template>{{ t('common.reset') }}</a-button>
           </a-space>
         </a-form-item>
       </a-form>
     </a-card>
 
     <a-card :bordered="false" class="mtrip-card-shadow">
-      <template #title>角色列表</template>
+      <template #title>{{ t('system.role.title') }}</template>
       <template #extra>
         <a-button v-perm="'sys:role:add'" type="primary" @click="openCreate">
-          <template #icon><PlusOutlined /></template>新增角色
+          <template #icon><PlusOutlined /></template>{{ t('system.role.add') }}
         </a-button>
       </template>
       <a-table
@@ -240,10 +240,10 @@ onMounted(() => {
       >
         <template #bodyCell="{ column, record }">
           <template v-if="column.dataIndex === 'role_type'">
-            <a-tag :color="record.role_type === 1 ? 'blue' : 'cyan'">{{ record.role_type === 1 ? '平台角色' : '站点角色' }}</a-tag>
+            <a-tag :color="record.role_type === 1 ? 'blue' : 'cyan'">{{ record.role_type === 1 ? t('system.role.platformRole') : t('system.role.siteRole') }}</a-tag>
           </template>
           <template v-else-if="column.dataIndex === 'site_id'">
-            <a-tag v-if="record.site_id === 0" color="blue">全平台</a-tag>
+            <a-tag v-if="record.site_id === 0" color="blue">{{ t('app.allSites') }}</a-tag>
             <span v-else>{{ record.site_id }}</span>
           </template>
           <template v-else-if="column.dataIndex === 'admin_count'">
@@ -254,19 +254,19 @@ onMounted(() => {
           </template>
           <template v-else-if="column.key === 'action'">
             <a-space :size="0" wrap>
-              <a-button v-perm="'sys:role:edit'" type="link" size="small" @click="openEdit(record)">编辑</a-button>
-              <a-button v-perm="'sys:role:perm'" type="link" size="small" @click="openPerms(record)">分配权限</a-button>
+              <a-button v-perm="'sys:role:edit'" type="link" size="small" @click="openEdit(record)">{{ t('common.edit') }}</a-button>
+              <a-button v-perm="'sys:role:perm'" type="link" size="small" @click="openPerms(record)">{{ t('system.role.assignPerm') }}</a-button>
               <a-popconfirm
                 v-if="record.id !== 1"
-                :title="record.status === 1 ? '禁用后该角色下管理员将失去对应权限,确认?' : '确认启用该角色?'"
+                :title="record.status === 1 ? t('system.role.confirmDisable') : t('system.role.confirmEnable')"
                 @confirm="toggleStatus(record)"
               >
                 <a-button v-perm="'sys:role:edit'" type="link" size="small">
-                  {{ record.status === 1 ? '禁用' : '启用' }}
+                  {{ record.status === 1 ? t('status.disabled') : t('status.enabled') }}
                 </a-button>
               </a-popconfirm>
-              <a-popconfirm v-if="record.id !== 1" title="确认删除该角色?(仍有管理员绑定时将被拒绝)" @confirm="removeRole(record)">
-                <a-button v-perm="'sys:role:delete'" type="link" size="small" danger>删除</a-button>
+              <a-popconfirm v-if="record.id !== 1" :title="t('system.role.confirmDelete')" @confirm="removeRole(record)">
+                <a-button v-perm="'sys:role:delete'" type="link" size="small" danger>{{ t('common.delete') }}</a-button>
               </a-popconfirm>
             </a-space>
           </template>
@@ -277,28 +277,28 @@ onMounted(() => {
     <!-- 新增/编辑 -->
     <a-modal
       v-model:open="modalOpen"
-      :title="editingId === 0 ? '新增角色' : '编辑角色'"
+      :title="editingId === 0 ? t('system.role.add') : t('system.role.edit')"
       :confirm-loading="modalSaving"
       width="480px"
       @ok="saveRole"
     >
       <a-form :label-col="{ span: 5 }" :wrapper-col="{ span: 18 }" style="margin-top: 16px">
-        <a-form-item label="角色名称" required>
+        <a-form-item :label="t('system.role.name')" required>
           <a-input v-model:value="form.roleName" />
         </a-form-item>
-        <a-form-item v-if="isSuper && editingId === 0" label="所属站点">
+        <a-form-item v-if="isSuper && editingId === 0" :label="t('common.site')">
           <SiteTreeSelect v-model:value="form.siteId" allow-all />
         </a-form-item>
-        <a-form-item label="描述">
+        <a-form-item :label="t('common.description')">
           <a-textarea v-model:value="form.description" :rows="3" />
         </a-form-item>
       </a-form>
     </a-modal>
 
     <!-- 分配权限 -->
-    <a-drawer v-model:open="permOpen" :title="`分配权限 - ${permTarget?.role_name ?? ''}`" width="480">
+    <a-drawer v-model:open="permOpen" :title="t('system.role.permDrawerTitle', { name: permTarget?.role_name ?? '' })" width="480">
       <a-spin :spinning="permLoading">
-        <a-alert type="info" show-icon message="勾选菜单与按钮级权限,保存后立即生效" style="margin-bottom: 12px" />
+        <a-alert type="info" show-icon :message="t('system.role.permTip')" style="margin-bottom: 12px" />
         <a-tree
           v-model:checked-keys="checkedKeys"
           :tree-data="permTreeData"
@@ -309,14 +309,14 @@ onMounted(() => {
       </a-spin>
       <template #footer>
         <a-space>
-          <a-button @click="permOpen = false">取消</a-button>
-          <a-button type="primary" :loading="permSaving" @click="savePerms">保存</a-button>
+          <a-button @click="permOpen = false">{{ t('common.cancel') }}</a-button>
+          <a-button type="primary" :loading="permSaving" @click="savePerms">{{ t('common.save') }}</a-button>
         </a-space>
       </template>
     </a-drawer>
 
     <!-- 绑定管理员 -->
-    <a-drawer v-model:open="adminOpen" :title="`绑定管理员 - ${adminTarget?.role_name ?? ''}`" width="560">
+    <a-drawer v-model:open="adminOpen" :title="t('system.role.adminDrawerTitle', { name: adminTarget?.role_name ?? '' })" width="560">
       <a-table
         :columns="adminColumns"
         :data-source="adminList"

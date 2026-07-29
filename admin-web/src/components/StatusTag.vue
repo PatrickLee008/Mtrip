@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue';
+import { useI18n } from 'vue-i18n';
 
 /**
  * 状态标签:全平台统一语义色(UI 方案 2.1 状态色)
@@ -16,9 +17,11 @@ const props = defineProps<{
   map?: Record<string | number, StatusItem>;
 }>();
 
+const { t } = useI18n();
+
 const DEFAULT_MAP: Record<string | number, StatusItem> = {
-  1: { text: '启用', color: 'success' },
-  2: { text: '禁用', color: 'error' },
+  1: { text: t('status.enabled'), color: 'success' },
+  2: { text: t('status.disabled'), color: 'error' },
 };
 
 const item = computed<StatusItem>(() => {

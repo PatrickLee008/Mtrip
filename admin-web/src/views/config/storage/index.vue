@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue';
+import { computed, onMounted, reactive, ref } from 'vue';
 import { message } from 'ant-design-vue';
 import { PlusOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons-vue';
+import { useI18n } from 'vue-i18n';
 import PageContainer from '@/components/PageContainer.vue';
 import SiteTreeSelect from '@/components/SiteTreeSelect.vue';
 import StatusTag from '@/components/StatusTag.vue';
@@ -20,24 +21,29 @@ import {
 /** 文件存储:存储配置(S3/R2/本地,密钥掩码回显、留空保留原值)+ 文件库 */
 const userStore = useUserStore();
 const isSuper = userStore.profile?.isSuper === true;
+const { t } = useI18n();
 const activeTab = ref('storage');
 
-const DRIVER_TEXT: Record<string, string> = { s3: 'AWS S3', r2: 'Cloudflare R2', local: '本地存储' };
+const DRIVER_TEXT = computed<Record<string, string>>(() => ({
+  s3: t('config.storage.typeS3'),
+  r2: t('config.storage.typeR2'),
+  local: t('config.storage.typeLocal'),
+}));
 
 // ---------- Tab1 存储配置 ----------
 const storage = useTable(apiStorageList, { storageName: '', driver: undefined, status: undefined });
 
-const storageColumns = [
-  { title: 'ID', dataIndex: 'id', width: 70 },
-  { title: '存储名称', dataIndex: 'storage_name', width: 150 },
-  { title: '驱动', dataIndex: 'driver', width: 130 },
-  { title: 'Bucket', dataIndex: 'bucket', width: 140, ellipsis: true },
-  { title: '区域', dataIndex: 'region', width: 110 },
-  { title: 'CDN 域名', dataIndex: 'cdn_domain', ellipsis: true },
-  { title: '默认', dataIndex: 'is_default', width: 70 },
-  { title: '状态', dataIndex: 'status', width: 80 },
-  { title: '操作', key: 'action_col', width: 230, fixed: 'right' as const },
-];
+const storageColumns = computed(() => [
+  { title: t('common.id'), dataIndex: 'id', width: 70 },
+  { title: t('config.storage.channelName'), dataIndex: 'storage_name', width: 150 },
+  { title: t('config.storage.channelType'), dataIndex: 'driver', width: 130 },
+  { title: t('config.storage.bucket'), dataIndex: 'bucket', width: 140, ellipsis: true },
+  { title: t('config.storage.region'), dataIndex: 'region', width: 110 },
+  { title: t('config.storage.cdnDomain'), dataIndex: 'cdn_domain', ellipsis: true },
+  { title: t('config.storage.publicRead'), dataIndex: 'is_default', width: 70 },
+  { title: t('common.status'), dataIndex: 'status', width: 80 },
+  { title: t('common.action'), key: 'action_col', width: 230, fixed: 'right' as const },
+]);
 
 const modalOpen = ref(false);
 const modalSaving = ref(false);
@@ -98,17 +104,17 @@ function openEdit(row: TableRow): void {
 
 async function saveStorage(): Promise<void> {
   if (!form.storageName.trim()) {
-    message.warning('请输入存储名称');
+    message.warning(t('common.pleaseInput'));
     return;
   }
   modalSaving.value = true;
   try {
     if (editingId.value) {
       await apiStorageUpdate({ id: editingId.value, ...form });
-      message.success('存储配置已更新');
+      message.success(t('tip.saveSuccess'));
     } else {
       await apiStorageAdd({ ...form });
-      message.success('存储配置已创建');
+      message.success(t('tip.saveSuccess'));
     }
     modalOpen.value = false;
     await storage.load();
@@ -120,37 +126,42 @@ async function saveStorage(): Promise<void> {
 async function toggleStorage(row: TableRow): Promise<void> {
   // 后端校验:默认存储不可停用
   const result = await apiStorageToggleStatus(row.id);
-  message.success(result.status === 1 ? '已启用' : '已停用');
+  message.success(result.status === 1 ? t('status.enabled') : t('status.disabled'));
   await storage.load();
 }
 
 async function removeStorage(row: TableRow): Promise<void> {
   // 后端校验:默认存储不可删除
   await apiStorageDelete(row.id);
-  message.success('存储配置已删除');
+  message.success(t('tip.deleteSuccess'));
   await storage.load();
 }
 
 // ---------- Tab2 文件库 ----------
 const files = useTable(apiFileList, { fileName: '', fileType: undefined, bizType: '', siteId: 0 });
 
-const fileColumns = [
-  { title: 'ID', dataIndex: 'id', width: 70 },
-  { title: '预览', key: 'preview_col', width: 80 },
-  { title: '文件名', dataIndex: 'file_name', ellipsis: true },
-  { title: '类型', dataIndex: 'file_type', width: 90 },
-  { title: '大小(KB)', dataIndex: 'file_size', width: 100 },
-  { title: '业务来源', dataIndex: 'biz_type', width: 110 },
-  { title: '上传人', dataIndex: 'creator_name', width: 110 },
-  { title: '上传时间', dataIndex: 'created_at', width: 160 },
-  { title: '操作', key: 'action_col', width: 80, fixed: 'right' as const },
-];
+const fileColumns = computed(() => [
+  { title: t('common.id'), dataIndex: 'id', width: 70 },
+  { title: t('common.name'), key: 'preview_col', width: 80 },
+  { title: t('config.storage.library.fileName'), dataIndex: 'file_name', ellipsis: true },
+  { title: t('config.storage.library.fileType'), dataIndex: 'file_type', width: 90 },
+  { title: t('config.storage.library.fileSize'), dataIndex: 'file_size', width: 100 },
+  { title: t('config.storage.library.channel'), dataIndex: 'biz_type', width: 110 },
+  { title: t('config.storage.library.uploader'), dataIndex: 'creator_name', width: 110 },
+  { title: t('config.storage.library.uploadTime'), dataIndex: 'created_at', width: 160 },
+  { title: t('common.action'), key: 'action_col', width: 80, fixed: 'right' as const },
+]);
 
-const FILE_TYPE: Record<number, string> = { 1: '图片', 2: '文档', 3: '视频', 4: '其他' };
+const FILE_TYPE = computed<Record<number, string>>(() => ({
+  1: t('config.storage.library.fileType1'),
+  2: t('config.storage.library.fileType2'),
+  3: t('config.storage.library.fileType3'),
+  4: t('config.storage.library.fileType4'),
+}));
 
 async function removeFile(row: TableRow): Promise<void> {
   await apiFileDelete(row.id);
-  message.success('文件已删除');
+  message.success(t('tip.deleteSuccess'));
   await files.load();
 }
 
@@ -173,40 +184,40 @@ onMounted(() => {
     <a-card :bordered="false" class="mtrip-card-shadow">
       <a-tabs v-model:active-key="activeTab">
         <!-- ========== 存储配置 ========== -->
-        <a-tab-pane key="storage" tab="存储配置">
+        <a-tab-pane key="storage" :tab="t('config.storage.title')">
           <div class="tab-toolbar">
             <a-form layout="inline">
-              <a-form-item label="名称">
+              <a-form-item :label="t('common.name')">
                 <a-input
                   v-model:value="storage.query.storageName"
-                  placeholder="模糊搜索"
+                  :placeholder="t('common.pleaseInput')"
                   allow-clear
                   style="width: 160px"
                   @press-enter="storage.search"
                 />
               </a-form-item>
-              <a-form-item label="驱动">
-                <a-select v-model:value="storage.query.driver" allow-clear placeholder="全部" style="width: 150px">
-                  <a-select-option value="s3">AWS S3</a-select-option>
-                  <a-select-option value="r2">Cloudflare R2</a-select-option>
-                  <a-select-option value="local">本地存储</a-select-option>
+              <a-form-item :label="t('config.storage.channelType')">
+                <a-select v-model:value="storage.query.driver" allow-clear :placeholder="t('common.all')" style="width: 150px">
+                  <a-select-option value="s3">{{ t('config.storage.typeS3') }}</a-select-option>
+                  <a-select-option value="r2">{{ t('config.storage.typeR2') }}</a-select-option>
+                  <a-select-option value="local">{{ t('config.storage.typeLocal') }}</a-select-option>
                 </a-select>
               </a-form-item>
-              <a-form-item label="状态">
-                <a-select v-model:value="storage.query.status" allow-clear placeholder="全部" style="width: 100px">
-                  <a-select-option :value="1">启用</a-select-option>
-                  <a-select-option :value="2">禁用</a-select-option>
+              <a-form-item :label="t('common.status')">
+                <a-select v-model:value="storage.query.status" allow-clear :placeholder="t('common.all')" style="width: 100px">
+                  <a-select-option :value="1">{{ t('status.enabled') }}</a-select-option>
+                  <a-select-option :value="2">{{ t('status.disabled') }}</a-select-option>
                 </a-select>
               </a-form-item>
               <a-form-item>
                 <a-space>
-                  <a-button type="primary" @click="storage.search"><template #icon><SearchOutlined /></template>查询</a-button>
-                  <a-button @click="storage.reset"><template #icon><ReloadOutlined /></template>重置</a-button>
+                  <a-button type="primary" @click="storage.search"><template #icon><SearchOutlined /></template>{{ t('common.search') }}</a-button>
+                  <a-button @click="storage.reset"><template #icon><ReloadOutlined /></template>{{ t('common.reset') }}</a-button>
                 </a-space>
               </a-form-item>
             </a-form>
             <a-button v-perm="'config:storage:add'" type="primary" @click="openCreate">
-              <template #icon><PlusOutlined /></template>新增存储
+              <template #icon><PlusOutlined /></template>{{ t('config.storage.actions.add') }}
             </a-button>
           </div>
 
@@ -224,7 +235,7 @@ onMounted(() => {
                 <a-tag :color="record.driver === 'local' ? 'default' : 'blue'">{{ DRIVER_TEXT[record.driver] ?? record.driver }}</a-tag>
               </template>
               <template v-else-if="column.dataIndex === 'is_default'">
-                <a-tag v-if="record.is_default === 1" color="processing">默认</a-tag>
+                <a-tag v-if="record.is_default === 1" color="processing">{{ t('config.storage.isDefault') }}</a-tag>
                 <span v-else>-</span>
               </template>
               <template v-else-if="column.dataIndex === 'status'">
@@ -232,20 +243,20 @@ onMounted(() => {
               </template>
               <template v-else-if="column.key === 'action_col'">
                 <a-space :size="0">
-                  <a-button v-perm="'config:storage:edit'" type="link" size="small" @click="openEdit(record)">编辑</a-button>
-                  <a-tooltip title="联调阶段开放(模块08)">
-                    <a-button type="link" size="small" disabled>连通测试</a-button>
+                  <a-button v-perm="'config:storage:edit'" type="link" size="small" @click="openEdit(record)">{{ t('common.edit') }}</a-button>
+                  <a-tooltip :title="t('tip.comingSoon')">
+                    <a-button type="link" size="small" disabled>{{ t('config.storage.actions.test') }}</a-button>
                   </a-tooltip>
                   <a-popconfirm
-                    :title="record.status === 1 ? '确认停用该存储?默认存储不可停用' : '确认启用该存储?'"
+                    :title="record.status === 1 ? t('common.disable') : t('common.enable')"
                     @confirm="toggleStorage(record)"
                   >
                     <a-button v-perm="'config:storage:status'" type="link" size="small" :danger="record.status === 1">
-                      {{ record.status === 1 ? '停用' : '启用' }}
+                      {{ record.status === 1 ? t('status.disabled') : t('status.enabled') }}
                     </a-button>
                   </a-popconfirm>
-                  <a-popconfirm title="确认删除该存储配置?默认存储不可删除" @confirm="removeStorage(record)">
-                    <a-button v-perm="'config:storage:delete'" type="link" size="small" danger>删除</a-button>
+                  <a-popconfirm :title="t('tip.confirmDelete')" @confirm="removeStorage(record)">
+                    <a-button v-perm="'config:storage:delete'" type="link" size="small" danger>{{ t('common.delete') }}</a-button>
                   </a-popconfirm>
                 </a-space>
               </template>
@@ -254,36 +265,36 @@ onMounted(() => {
         </a-tab-pane>
 
         <!-- ========== 文件库 ========== -->
-        <a-tab-pane key="files" tab="文件库">
+        <a-tab-pane key="files" :tab="t('config.storage.library.title')">
           <div class="tab-toolbar">
             <a-form layout="inline">
-              <a-form-item label="文件名">
+              <a-form-item :label="t('config.storage.library.fileName')">
                 <a-input
                   v-model:value="files.query.fileName"
-                  placeholder="模糊搜索"
+                  :placeholder="t('common.pleaseInput')"
                   allow-clear
                   style="width: 160px"
                   @press-enter="files.search"
                 />
               </a-form-item>
-              <a-form-item label="类型">
-                <a-select v-model:value="files.query.fileType" allow-clear placeholder="全部" style="width: 100px">
-                  <a-select-option :value="1">图片</a-select-option>
-                  <a-select-option :value="2">文档</a-select-option>
-                  <a-select-option :value="3">视频</a-select-option>
-                  <a-select-option :value="4">其他</a-select-option>
+              <a-form-item :label="t('config.storage.library.fileType')">
+                <a-select v-model:value="files.query.fileType" allow-clear :placeholder="t('common.all')" style="width: 100px">
+                  <a-select-option :value="1">{{ FILE_TYPE[1] }}</a-select-option>
+                  <a-select-option :value="2">{{ FILE_TYPE[2] }}</a-select-option>
+                  <a-select-option :value="3">{{ FILE_TYPE[3] }}</a-select-option>
+                  <a-select-option :value="4">{{ FILE_TYPE[4] }}</a-select-option>
                 </a-select>
               </a-form-item>
-              <a-form-item label="业务来源">
-                <a-input v-model:value="files.query.bizType" placeholder="如 hotel" allow-clear style="width: 120px" @press-enter="files.search" />
+              <a-form-item :label="t('config.storage.library.channel')">
+                <a-input v-model:value="files.query.bizType" :placeholder="t('common.pleaseInput')" allow-clear style="width: 120px" @press-enter="files.search" />
               </a-form-item>
-              <a-form-item v-if="isSuper" label="站点">
+              <a-form-item v-if="isSuper" :label="t('common.site')">
                 <SiteTreeSelect v-model:value="files.query.siteId" allow-all style="width: 150px" />
               </a-form-item>
               <a-form-item>
                 <a-space>
-                  <a-button type="primary" @click="files.search"><template #icon><SearchOutlined /></template>查询</a-button>
-                  <a-button @click="files.reset"><template #icon><ReloadOutlined /></template>重置</a-button>
+                  <a-button type="primary" @click="files.search"><template #icon><SearchOutlined /></template>{{ t('common.search') }}</a-button>
+                  <a-button @click="files.reset"><template #icon><ReloadOutlined /></template>{{ t('common.reset') }}</a-button>
                 </a-space>
               </a-form-item>
             </a-form>
@@ -310,8 +321,8 @@ onMounted(() => {
                 {{ ((record.file_size ?? 0) / 1024).toFixed(1) }}
               </template>
               <template v-else-if="column.key === 'action_col'">
-                <a-popconfirm title="确认删除该文件?已被业务引用的文件删除后将无法显示" @confirm="removeFile(record)">
-                  <a-button v-perm="'config:storage:delete'" type="link" size="small" danger>删除</a-button>
+                <a-popconfirm :title="t('config.storage.library.confirmDelete')" @confirm="removeFile(record)">
+                  <a-button v-perm="'config:storage:delete'" type="link" size="small" danger>{{ t('common.delete') }}</a-button>
                 </a-popconfirm>
               </template>
             </template>
@@ -323,7 +334,7 @@ onMounted(() => {
     <!-- 新增/编辑存储 -->
     <a-modal
       v-model:open="modalOpen"
-      :title="editingId ? '编辑存储配置' : '新增存储配置'"
+      :title="editingId ? t('common.edit') + ' ' + t('config.storage.title') : t('config.storage.actions.add')"
       width="620px"
       :confirm-loading="modalSaving"
       @ok="saveStorage"
@@ -331,76 +342,76 @@ onMounted(() => {
       <a-form :label-col="{ style: { width: '110px' } }" style="margin-top: 16px">
         <a-row :gutter="12">
           <a-col :span="12">
-            <a-form-item label="存储名称" required>
-              <a-input v-model:value="form.storageName" placeholder="如:主存储-S3" />
+            <a-form-item :label="t('config.storage.channelName')" required>
+              <a-input v-model:value="form.storageName" :placeholder="t('common.pleaseInput')" />
             </a-form-item>
           </a-col>
           <a-col :span="12">
-            <a-form-item label="驱动" required>
+            <a-form-item :label="t('config.storage.channelType')" required>
               <a-select v-model:value="form.driver">
-                <a-select-option value="s3">AWS S3</a-select-option>
-                <a-select-option value="r2">Cloudflare R2</a-select-option>
-                <a-select-option value="local">本地存储</a-select-option>
+                <a-select-option value="s3">{{ t('config.storage.typeS3') }}</a-select-option>
+                <a-select-option value="r2">{{ t('config.storage.typeR2') }}</a-select-option>
+                <a-select-option value="local">{{ t('config.storage.typeLocal') }}</a-select-option>
               </a-select>
             </a-form-item>
           </a-col>
           <template v-if="form.driver !== 'local'">
             <a-col :span="12">
-              <a-form-item label="Bucket">
+              <a-form-item :label="t('config.storage.bucket')">
                 <a-input v-model:value="form.bucket" />
               </a-form-item>
             </a-col>
             <a-col :span="12">
-              <a-form-item label="区域">
-                <a-input v-model:value="form.region" placeholder="如 eu-west-3" />
+              <a-form-item :label="t('config.storage.region')">
+                <a-input v-model:value="form.region" :placeholder="t('config.storage.regionPlaceholder')" />
               </a-form-item>
             </a-col>
             <a-col :span="12">
-              <a-form-item label="AccessKey">
+              <a-form-item :label="t('config.storage.accessKey')">
                 <a-input
                   v-model:value="form.accessKey"
-                  :placeholder="editingId ? '留空保留原值' : ''"
+                  :placeholder="editingId ? t('common.optional') : ''"
                   autocomplete="off"
                 />
               </a-form-item>
             </a-col>
             <a-col :span="12">
-              <a-form-item label="SecretKey">
+              <a-form-item :label="t('config.storage.secretKey')">
                 <a-input-password
                   v-model:value="form.secretKey"
-                  :placeholder="editingId ? '留空保留原值' : ''"
+                  :placeholder="editingId ? t('common.optional') : ''"
                   autocomplete="new-password"
                 />
               </a-form-item>
             </a-col>
           </template>
           <a-col :span="12">
-            <a-form-item label="CDN 域名">
-              <a-input v-model:value="form.cdnDomain" placeholder="https://cdn.mtrip.com" />
+            <a-form-item :label="t('config.storage.cdnDomain')">
+              <a-input v-model:value="form.cdnDomain" :placeholder="t('config.storage.cdnDomainPlaceholder')" />
             </a-form-item>
           </a-col>
           <a-col :span="12">
-            <a-form-item label="路径前缀">
-              <a-input v-model:value="form.pathPrefix" placeholder="如 mtrip/" />
+            <a-form-item :label="t('config.storage.pathPrefix')">
+              <a-input v-model:value="form.pathPrefix" />
             </a-form-item>
           </a-col>
           <a-col :span="12">
-            <a-form-item label="过期天数">
-              <a-input-number v-model:value="form.expireDays" :min="0" style="width: 100%" placeholder="0=永不过期" />
+            <a-form-item :label="t('config.storage.expireDays')">
+              <a-input-number v-model:value="form.expireDays" :min="0" style="width: 100%" />
             </a-form-item>
           </a-col>
           <a-col :span="12">
-            <a-form-item label="设为默认">
+            <a-form-item :label="t('config.storage.isDefault')">
               <a-switch :checked="form.isDefault === 1" @change="onDefaultChange" />
             </a-form-item>
           </a-col>
           <a-col :span="12">
-            <a-form-item label="归属站点">
+            <a-form-item :label="t('common.site')">
               <SiteTreeSelect v-model:value="form.siteId" allow-all :disabled="!isSuper" />
             </a-form-item>
           </a-col>
           <a-col :span="12">
-            <a-form-item label="备注">
+            <a-form-item :label="t('common.remark')">
               <a-input v-model:value="form.remark" />
             </a-form-item>
           </a-col>

@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { message } from 'ant-design-vue';
 import { DownloadOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons-vue';
+import { useI18n } from 'vue-i18n';
 import PageContainer from '@/components/PageContainer.vue';
 import SiteTreeSelect from '@/components/SiteTreeSelect.vue';
 import { useTable, type TableRow } from '@/composables/useTable';
@@ -12,6 +13,8 @@ import type { SiteNode } from '@/api/types';
 import { apiSiteTree } from '@/api/site';
 import { apiMerchantList } from '@/api/merchant';
 import { apiStatsReport } from '@/api/stats';
+
+const { t } = useI18n();
 
 /**
  * 维度报表共享组件:站点/商户/商品统计三页复用
@@ -58,7 +61,7 @@ function flattenSites(nodes: SiteNode[], map: Record<number, string>): void {
 /** 维度名称列:站点查映射,商户/商品用后端 dim_name */
 function dimName(row: TableRow): string {
   if (props.dim === 'site') {
-    return siteNameMap.value[row.dim_id] ?? `站点 #${row.dim_id}`;
+    return siteNameMap.value[row.dim_id] ?? `${t('common.site')} #${row.dim_id}`;
   }
   return row.dim_name || `#${row.dim_id}`;
 }
@@ -74,17 +77,21 @@ onMounted(() => {
   }
 });
 
-const DIM_LABEL: Record<string, string> = { site: '站点', merchant: '商户', goods: '商品' };
+const DIM_LABEL: Record<string, string> = {
+  site: t('common.site'),
+  merchant: t('merchant.title'),
+  goods: t('goods.common.goodsType'),
+};
 
-const columns = [
-  { title: 'ID', dataIndex: 'dim_id', width: 90 },
-  { title: `${DIM_LABEL[props.dim]}名称`, key: 'name_col', ellipsis: true },
-  { title: '订单数', dataIndex: 'order_count', width: 100 },
-  { title: '已支付', dataIndex: 'paid_count', width: 100 },
-  { title: '销售额', dataIndex: 'sales_amount', width: 130 },
-  { title: '平台佣金', dataIndex: 'commission', width: 130 },
-  { title: '退款额', dataIndex: 'refund_amount', width: 130 },
-];
+const columns = computed(() => [
+  { title: t('common.id'), dataIndex: 'dim_id', width: 90 },
+  { title: `${DIM_LABEL[props.dim]}${t('common.name')}`, key: 'name_col', ellipsis: true },
+  { title: t('order.quantity'), dataIndex: 'order_count', width: 100 },
+  { title: t('order.orderStatus.paid'), dataIndex: 'paid_count', width: 100 },
+  { title: t('order.amount'), dataIndex: 'sales_amount', width: 130 },
+  { title: t('stats.financePage.totalCommission'), dataIndex: 'commission', width: 130 },
+  { title: t('stats.financePage.totalRefund'), dataIndex: 'refund_amount', width: 130 },
+]);
 
 // ---------- 商户远程搜索(商品维度可按商户过滤) ----------
 const merchantOptions = ref<{ label: string; value: number }[]>([]);
@@ -118,23 +125,23 @@ async function exportReport(): Promise<void> {
       pageSize: 2000,
     });
     if (data.list.length === 0) {
-      message.info('当前筛选条件下没有可导出的数据');
+      message.info(t('tip.empty'));
       return;
     }
     exportCsv(
       `${props.title}_${new Date().toISOString().slice(0, 10)}`,
       [
-        { title: 'ID', key: 'dim_id' },
-        { title: `${DIM_LABEL[props.dim]}名称`, key: 'dim_name', format: (row: TableRow) => dimName(row) },
-        { title: '订单数', key: 'order_count' },
-        { title: '已支付', key: 'paid_count' },
-        { title: '销售额', key: 'sales_amount' },
-        { title: '平台佣金', key: 'commission' },
-        { title: '退款额', key: 'refund_amount' },
+        { title: t('common.id'), key: 'dim_id' },
+        { title: `${DIM_LABEL[props.dim]}${t('common.name')}`, key: 'dim_name', format: (row: TableRow) => dimName(row) },
+        { title: t('order.quantity'), key: 'order_count' },
+        { title: t('order.orderStatus.paid'), key: 'paid_count' },
+        { title: t('order.amount'), key: 'sales_amount' },
+        { title: t('stats.financePage.totalCommission'), key: 'commission' },
+        { title: t('stats.financePage.totalRefund'), key: 'refund_amount' },
       ],
       data.list,
     );
-    message.success(`已导出 ${data.list.length} 条统计`);
+    message.success(`${t('common.success')} ${data.list.length}`);
   } finally {
     exporting.value = false;
   }
@@ -145,15 +152,15 @@ async function exportReport(): Promise<void> {
   <PageContainer>
     <a-card :bordered="false" class="mtrip-card-shadow" style="margin-bottom: 16px">
       <a-form layout="inline">
-        <a-form-item label="统计区间">
+        <a-form-item :label="t('goods.stock.filter.dateRange')">
           <a-range-picker v-model:value="dateRange" value-format="YYYY-MM-DD" style="width: 240px" />
         </a-form-item>
-        <a-form-item v-if="props.dim === 'goods'" label="商户">
+        <a-form-item v-if="props.dim === 'goods'" :label="t('merchant.title')">
           <a-select
             v-model:value="query.merchantId"
             show-search
             allow-clear
-            placeholder="输入名称搜索"
+            :placeholder="t('common.pleaseInput')"
             style="width: 200px"
             :filter-option="false"
             :options="merchantOptions"
@@ -161,13 +168,13 @@ async function exportReport(): Promise<void> {
             @search="searchMerchant"
           />
         </a-form-item>
-        <a-form-item v-if="isSuper && props.dim !== 'site'" label="站点">
+        <a-form-item v-if="isSuper && props.dim !== 'site'" :label="t('common.site')">
           <SiteTreeSelect v-model:value="query.siteId" allow-all style="width: 160px" />
         </a-form-item>
         <a-form-item>
           <a-space>
-            <a-button type="primary" @click="search"><template #icon><SearchOutlined /></template>查询</a-button>
-            <a-button @click="doReset"><template #icon><ReloadOutlined /></template>重置</a-button>
+            <a-button type="primary" @click="search"><template #icon><SearchOutlined /></template>{{ t('common.search') }}</a-button>
+            <a-button @click="doReset"><template #icon><ReloadOutlined /></template>{{ t('common.reset') }}</a-button>
           </a-space>
         </a-form-item>
       </a-form>
@@ -176,7 +183,7 @@ async function exportReport(): Promise<void> {
     <a-card :bordered="false" class="mtrip-card-shadow" :title="props.title">
       <template #extra>
         <a-button v-perm="`${props.permPrefix}:export`" :loading="exporting" @click="exportReport">
-          <template #icon><DownloadOutlined /></template>导出CSV
+          <template #icon><DownloadOutlined /></template>{{ t('common.export') }}CSV
         </a-button>
       </template>
       <a-table

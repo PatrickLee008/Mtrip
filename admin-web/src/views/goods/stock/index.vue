@@ -2,6 +2,7 @@
 import { computed, onMounted, reactive, ref } from 'vue';
 import { message } from 'ant-design-vue';
 import { SearchOutlined } from '@ant-design/icons-vue';
+import { useI18n } from 'vue-i18n';
 import PageContainer from '@/components/PageContainer.vue';
 import { useTable, type TableRow } from '@/composables/useTable';
 import { formatAmount } from '@/utils/format';
@@ -19,10 +20,26 @@ import {
 } from '@/api/goods';
 
 /** 库存日历:SKU 价格库存日历(低库存标红)+ 区间批量设置 + 单日调整 + 总览/预警/流水 */
+const { t } = useI18n();
 const activeTab = ref('calendar');
 const LOW_STOCK_THRESHOLD = 5;
-const WEEKDAY_TEXT = ['日', '一', '二', '三', '四', '五', '六'];
-const CHANGE_TYPE_TEXT: Record<number, string> = { 1: '下单锁定', 2: '支付扣减', 3: '释放', 4: '退款回补', 5: '手动调整' };
+const WEEKDAY_TEXT = computed<Record<number, string>>(() => ({
+  0: t('goods.stock.weekday0'),
+  1: t('goods.stock.weekday1'),
+  2: t('goods.stock.weekday2'),
+  3: t('goods.stock.weekday3'),
+  4: t('goods.stock.weekday4'),
+  5: t('goods.stock.weekday5'),
+  6: t('goods.stock.weekday6'),
+}));
+const WEEKDAY_OPTIONS = computed(() => [0, 1, 2, 3, 4, 5, 6].map((idx) => ({ label: WEEKDAY_TEXT.value[idx], value: idx })));
+const CHANGE_TYPE_TEXT = computed<Record<number, string>>(() => ({
+  1: t('goods.stock.changeType1'),
+  2: t('goods.stock.changeType2'),
+  3: t('goods.stock.changeType3'),
+  4: t('goods.stock.changeType4'),
+  5: t('goods.stock.changeType5'),
+}));
 
 function defaultRange(): string[] {
   const fmt = (date: Date): string => {
@@ -51,7 +68,7 @@ async function searchGoods(keyword: string): Promise<void> {
   try {
     const data = await apiGoodsList({ goodsName: keyword, page: 1, pageSize: 20 });
     goodsOptions.value = data.list.map((row: TableRow) => ({
-      label: `#${row.id} [${row.goods_type === 1 ? '酒店' : '门票'}] ${row.goods_name}`,
+      label: `#${row.id} [${row.goods_type === 1 ? t('goods.common.typeHotel') : t('goods.common.typeTicket')}] ${row.goods_name}`,
       value: row.id,
       goodsType: row.goods_type,
     }));
@@ -80,11 +97,11 @@ const baseInfo = reactive({ basePrice: 0, baseStock: 0 });
 
 async function loadCalendar(): Promise<void> {
   if (!goodsId.value || !skuId.value) {
-    message.warning('请先选择商品与 SKU');
+    message.warning(t('goods.stock.warningSelectGoodsSku'));
     return;
   }
   if (dateRange.value.length !== 2) {
-    message.warning('请选择日期区间');
+    message.warning(t('goods.stock.warningSelectDateRange'));
     return;
   }
   calendarLoading.value = true;
@@ -104,20 +121,20 @@ async function loadCalendar(): Promise<void> {
 }
 
 const calendarColumns = [
-  { title: '日期', dataIndex: 'date', width: 120 },
-  { title: '星期', key: 'weekday', width: 70 },
-  { title: '价格', dataIndex: 'price', width: 100 },
-  { title: '总库存', dataIndex: 'stockTotal', width: 90 },
-  { title: '已售', dataIndex: 'stockSold', width: 80 },
-  { title: '锁定', dataIndex: 'stockLocked', width: 80 },
-  { title: '剩余', dataIndex: 'stockLeft', width: 90 },
-  { title: '关房/停售', dataIndex: 'isClosed', width: 90 },
-  { title: '来源', dataIndex: 'hasRecord', width: 90 },
-  { title: '操作', key: 'action_col', width: 90 },
+  { title: t('goods.stock.date'), dataIndex: 'date', width: 120 },
+  { title: t('goods.stock.weekday'), key: 'weekday', width: 70 },
+  { title: t('goods.stock.price'), dataIndex: 'price', width: 100 },
+  { title: t('goods.stock.totalStock'), dataIndex: 'stockTotal', width: 90 },
+  { title: t('goods.stock.sold'), dataIndex: 'stockSold', width: 80 },
+  { title: t('goods.stock.locked'), dataIndex: 'stockLocked', width: 80 },
+  { title: t('goods.stock.remaining'), dataIndex: 'stockLeft', width: 90 },
+  { title: t('goods.stock.columns.isClosed'), dataIndex: 'isClosed', width: 90 },
+  { title: t('goods.stock.columns.hasRecord'), dataIndex: 'hasRecord', width: 90 },
+  { title: t('common.action'), key: 'action_col', width: 90 },
 ];
 
 function weekdayOf(date: string): string {
-  return `周${WEEKDAY_TEXT[new Date(`${date}T00:00:00`).getDay()]}`;
+  return WEEKDAY_TEXT.value[new Date(`${date}T00:00:00`).getDay()] ?? '';
 }
 
 function rowClass(row: StockDay): string {
@@ -158,11 +175,11 @@ async function saveBatch(): Promise<void> {
     return;
   }
   if (batchForm.range.length !== 2) {
-    message.warning('请选择设置区间');
+    message.warning(t('goods.stock.warningSelectSetRange'));
     return;
   }
   if (!batchForm.setPrice && !batchForm.setStock && batchForm.closedAction === 0) {
-    message.warning('价格/库存/关房 至少设置一项');
+    message.warning(t('goods.stock.warningSetOne'));
     return;
   }
   batchSaving.value = true;
@@ -178,7 +195,7 @@ async function saveBatch(): Promise<void> {
       stockTotal: batchForm.setStock ? batchForm.stockTotal : undefined,
       isClosed: batchForm.closedAction === 0 ? undefined : batchForm.closedAction === 1 ? 1 : 0,
     });
-    message.success(`已批量设置 ${result.affectedDays} 天`);
+    message.success(t('goods.stock.successBatchSet', { count: result.affectedDays }));
     batchOpen.value = false;
     await loadCalendar();
   } finally {
@@ -201,7 +218,7 @@ async function saveAdjust(): Promise<void> {
     return;
   }
   if (adjustForm.changeQty === 0) {
-    message.warning('调整数量不能为 0');
+    message.warning(t('goods.stock.warningChangeQtyZero'));
     return;
   }
   adjustSaving.value = true;
@@ -212,7 +229,7 @@ async function saveAdjust(): Promise<void> {
       skuId: skuId.value,
       ...adjustForm,
     });
-    message.success(`库存已调整,当前剩余 ${result.stockLeft}`);
+    message.success(t('goods.stock.successAdjust', { left: result.stockLeft }));
     adjustOpen.value = false;
     await loadCalendar();
   } finally {
@@ -236,32 +253,32 @@ function searchLogs(): void {
 }
 
 const overviewColumns = [
-  { title: '商品ID', dataIndex: 'id', width: 80 },
-  { title: '商品名称', dataIndex: 'goods_name', ellipsis: true },
-  { title: '类型', dataIndex: 'goods_type', width: 80 },
-  { title: '总库存', dataIndex: 'stock_total', width: 100 },
-  { title: '已售', dataIndex: 'stock_sold', width: 90 },
-  { title: '锁定', dataIndex: 'stock_locked', width: 90 },
-  { title: '剩余', dataIndex: 'stock_left', width: 100 },
+  { title: t('goods.stock.columns.goodsId'), dataIndex: 'id', width: 80 },
+  { title: t('goods.stock.columns.goodsName'), dataIndex: 'goods_name', ellipsis: true },
+  { title: t('goods.stock.columns.type'), dataIndex: 'goods_type', width: 80 },
+  { title: t('goods.stock.totalStock'), dataIndex: 'stock_total', width: 100 },
+  { title: t('goods.stock.sold'), dataIndex: 'stock_sold', width: 90 },
+  { title: t('goods.stock.locked'), dataIndex: 'stock_locked', width: 90 },
+  { title: t('goods.stock.remaining'), dataIndex: 'stock_left', width: 100 },
 ];
 const warningColumns = [
-  { title: '日期', dataIndex: 'stock_date', width: 110 },
-  { title: '商品', dataIndex: 'goods_name', ellipsis: true },
-  { title: 'SKU', dataIndex: 'sku_id', width: 80 },
-  { title: '总库存', dataIndex: 'stock_total', width: 90 },
-  { title: '已售', dataIndex: 'stock_sold', width: 80 },
-  { title: '锁定', dataIndex: 'stock_locked', width: 80 },
-  { title: '剩余', dataIndex: 'stock_left', width: 90 },
+  { title: t('goods.stock.date'), dataIndex: 'stock_date', width: 110 },
+  { title: t('goods.stock.columns.goodsName'), dataIndex: 'goods_name', ellipsis: true },
+  { title: t('goods.common.sku'), dataIndex: 'sku_id', width: 80 },
+  { title: t('goods.stock.totalStock'), dataIndex: 'stock_total', width: 90 },
+  { title: t('goods.stock.sold'), dataIndex: 'stock_sold', width: 80 },
+  { title: t('goods.stock.locked'), dataIndex: 'stock_locked', width: 80 },
+  { title: t('goods.stock.remaining'), dataIndex: 'stock_left', width: 90 },
 ];
 const logColumns = [
-  { title: 'ID', dataIndex: 'id', width: 80 },
-  { title: '商品ID', dataIndex: 'goods_id', width: 90 },
-  { title: 'SKU', dataIndex: 'sku_id', width: 80 },
-  { title: '库存日期', dataIndex: 'stock_date', width: 110 },
-  { title: '变动类型', dataIndex: 'change_type', width: 100 },
-  { title: '变动数量', dataIndex: 'change_qty', width: 90 },
-  { title: '备注', dataIndex: 'remark', ellipsis: true },
-  { title: '时间', dataIndex: 'created_at', width: 165 },
+  { title: t('common.id'), dataIndex: 'id', width: 80 },
+  { title: t('goods.stock.columns.goodsId'), dataIndex: 'goods_id', width: 90 },
+  { title: t('goods.common.sku'), dataIndex: 'sku_id', width: 80 },
+  { title: t('goods.stock.columns.stockDate'), dataIndex: 'stock_date', width: 110 },
+  { title: t('goods.stock.columns.changeType'), dataIndex: 'change_type', width: 100 },
+  { title: t('goods.stock.columns.changeQty'), dataIndex: 'change_qty', width: 90 },
+  { title: t('goods.stock.columns.remark'), dataIndex: 'remark', ellipsis: true },
+  { title: t('goods.stock.columns.time'), dataIndex: 'created_at', width: 165 },
 ];
 
 onMounted(() => {
@@ -276,31 +293,31 @@ onMounted(() => {
     <a-card :bordered="false" class="mtrip-card-shadow">
       <a-tabs v-model:active-key="activeTab">
         <!-- 价格库存日历 -->
-        <a-tab-pane key="calendar" tab="价格库存日历">
+        <a-tab-pane key="calendar" :tab="t('goods.stock.tabs.calendar')">
           <a-form layout="inline" style="margin-bottom: 16px">
-            <a-form-item label="商品">
+            <a-form-item :label="t('goods.stock.filter.goods')">
               <a-select
                 v-model:value="goodsId"
                 show-search
                 :filter-option="false"
                 :options="goodsOptions"
                 :loading="goodsSearching"
-                placeholder="输入商品名称搜索"
+                :placeholder="t('goods.stock.placeholderSearchGoods')"
                 style="width: 300px"
                 @search="searchGoods"
                 @change="onGoodsChange"
               />
             </a-form-item>
-            <a-form-item :label="skuType === 2 ? '票种' : '房型'">
-              <a-select v-model:value="skuId" :options="skuOptions" placeholder="选择 SKU" style="width: 220px" />
+            <a-form-item :label="skuType === 2 ? t('goods.common.ticketType') : t('goods.common.roomType')">
+              <a-select v-model:value="skuId" :options="skuOptions" :placeholder="t('goods.stock.placeholderSelectSku')" style="width: 220px" />
             </a-form-item>
-            <a-form-item label="日期区间">
+            <a-form-item :label="t('goods.stock.filter.dateRange')">
               <a-range-picker v-model:value="dateRange" value-format="YYYY-MM-DD" />
             </a-form-item>
             <a-form-item>
               <a-space>
-                <a-button type="primary" @click="loadCalendar"><template #icon><SearchOutlined /></template>查询</a-button>
-                <a-button v-perm="'goods:stock:edit'" :disabled="!skuId" @click="openBatch">批量设置</a-button>
+                <a-button type="primary" @click="loadCalendar"><template #icon><SearchOutlined /></template>{{ t('common.search') }}</a-button>
+                <a-button v-perm="'goods:stock:edit'" :disabled="!skuId" @click="openBatch">{{ t('goods.stock.actions.batchSet') }}</a-button>
               </a-space>
             </a-form-item>
           </a-form>
@@ -309,7 +326,7 @@ onMounted(() => {
             type="info"
             show-icon
             style="margin-bottom: 12px"
-            :message="`基础价 ${formatAmount(baseInfo.basePrice)} / 基础库存 ${baseInfo.baseStock};未单独设置的日期按基础值售卖;剩余 ≤ ${LOW_STOCK_THRESHOLD} 标红`"
+            :message="t('goods.stock.alertBaseInfo', { price: formatAmount(baseInfo.basePrice), stock: baseInfo.baseStock, threshold: LOW_STOCK_THRESHOLD })"
           />
           <a-table
             :columns="calendarColumns"
@@ -327,37 +344,37 @@ onMounted(() => {
                 <span :style="record.stockLeft <= LOW_STOCK_THRESHOLD ? 'color: #f5222d; font-weight: 600' : ''">{{ record.stockLeft }}</span>
               </template>
               <template v-else-if="column.dataIndex === 'isClosed'">
-                <a-tag v-if="record.isClosed === 1" color="error">已关闭</a-tag>
-                <a-tag v-else color="success">开放</a-tag>
+                <a-tag v-if="record.isClosed === 1" color="error">{{ t('goods.stock.tagClosed') }}</a-tag>
+                <a-tag v-else color="success">{{ t('goods.stock.tagOpen') }}</a-tag>
               </template>
               <template v-else-if="column.dataIndex === 'hasRecord'">
-                <a-tag v-if="record.hasRecord === 1" color="processing">已设置</a-tag>
-                <span v-else style="color: #909399">基础值</span>
+                <a-tag v-if="record.hasRecord === 1" color="processing">{{ t('goods.stock.tagSet') }}</a-tag>
+                <span v-else style="color: #909399">{{ t('goods.stock.tagBase') }}</span>
               </template>
               <template v-else-if="column.key === 'action_col'">
-                <a-button v-perm="'goods:stock:edit'" type="link" size="small" @click="openAdjust(record)">调整</a-button>
+                <a-button v-perm="'goods:stock:edit'" type="link" size="small" @click="openAdjust(record)">{{ t('goods.stock.actions.adjust') }}</a-button>
               </template>
             </template>
           </a-table>
         </a-tab-pane>
 
         <!-- 库存总览 -->
-        <a-tab-pane key="overview" tab="库存总览">
+        <a-tab-pane key="overview" :tab="t('goods.stock.tabs.overview')">
           <a-form layout="inline" style="margin-bottom: 16px">
-            <a-form-item label="商品名称">
+            <a-form-item :label="t('goods.stock.columns.goodsName')">
               <a-input v-model:value="overview.query.goodsName" allow-clear style="width: 180px" @press-enter="overview.search()" />
             </a-form-item>
-            <a-form-item label="类型">
-              <a-select v-model:value="overview.query.goodsType" allow-clear placeholder="全部" style="width: 110px">
-                <a-select-option :value="1">酒店</a-select-option>
-                <a-select-option :value="2">门票</a-select-option>
+            <a-form-item :label="t('goods.stock.columns.type')">
+              <a-select v-model:value="overview.query.goodsType" allow-clear :placeholder="t('common.all')" style="width: 110px">
+                <a-select-option :value="1">{{ t('goods.common.typeHotel') }}</a-select-option>
+                <a-select-option :value="2">{{ t('goods.common.typeTicket') }}</a-select-option>
               </a-select>
             </a-form-item>
-            <a-form-item label="未来天数">
+            <a-form-item :label="t('goods.stock.fieldDaysAhead')">
               <a-input-number v-model:value="overview.query.daysAhead" :min="1" :max="90" />
             </a-form-item>
             <a-form-item>
-              <a-button type="primary" @click="overview.search()">查询</a-button>
+              <a-button type="primary" @click="overview.search()">{{ t('common.search') }}</a-button>
             </a-form-item>
           </a-form>
           <a-table
@@ -369,7 +386,7 @@ onMounted(() => {
             size="middle"
           >
             <template #bodyCell="{ column, record }">
-              <template v-if="column.dataIndex === 'goods_type'">{{ record.goods_type === 1 ? '酒店' : '门票' }}</template>
+              <template v-if="column.dataIndex === 'goods_type'">{{ record.goods_type === 1 ? t('goods.common.typeHotel') : t('goods.common.typeTicket') }}</template>
               <template v-else-if="column.dataIndex === 'stock_left'">
                 <span :style="record.stock_left <= LOW_STOCK_THRESHOLD ? 'color: #f5222d; font-weight: 600' : ''">{{ record.stock_left }}</span>
               </template>
@@ -378,16 +395,16 @@ onMounted(() => {
         </a-tab-pane>
 
         <!-- 低库存预警 -->
-        <a-tab-pane key="warning" tab="低库存预警">
+        <a-tab-pane key="warning" :tab="t('goods.stock.tabs.warning')">
           <a-form layout="inline" style="margin-bottom: 16px">
-            <a-form-item label="剩余阈值 ≤">
+            <a-form-item :label="t('goods.stock.fieldThreshold')">
               <a-input-number v-model:value="warning.query.threshold" :min="0" :max="999" />
             </a-form-item>
-            <a-form-item label="未来天数">
+            <a-form-item :label="t('goods.stock.fieldDaysAhead')">
               <a-input-number v-model:value="warning.query.daysAhead" :min="1" :max="90" />
             </a-form-item>
             <a-form-item>
-              <a-button type="primary" @click="warning.search()">查询</a-button>
+              <a-button type="primary" @click="warning.search()">{{ t('common.search') }}</a-button>
             </a-form-item>
           </a-form>
           <a-table
@@ -407,18 +424,18 @@ onMounted(() => {
         </a-tab-pane>
 
         <!-- 变动流水 -->
-        <a-tab-pane key="logs" tab="变动流水">
+        <a-tab-pane key="logs" :tab="t('goods.stock.tabs.logs')">
           <a-form layout="inline" style="margin-bottom: 16px">
-            <a-form-item label="变动类型">
-              <a-select v-model:value="logs.query.changeType" allow-clear placeholder="全部" style="width: 130px">
+            <a-form-item :label="t('goods.stock.columns.changeType')">
+              <a-select v-model:value="logs.query.changeType" allow-clear :placeholder="t('common.all')" style="width: 130px">
                 <a-select-option v-for="(text, type) in CHANGE_TYPE_TEXT" :key="type" :value="Number(type)">{{ text }}</a-select-option>
               </a-select>
             </a-form-item>
-            <a-form-item label="库存日期">
+            <a-form-item :label="t('goods.stock.columns.stockDate')">
               <a-range-picker v-model:value="logRange" value-format="YYYY-MM-DD" />
             </a-form-item>
             <a-form-item>
-              <a-button type="primary" @click="searchLogs">查询</a-button>
+              <a-button type="primary" @click="searchLogs">{{ t('common.search') }}</a-button>
             </a-form-item>
           </a-form>
           <a-table
@@ -445,50 +462,50 @@ onMounted(() => {
     </a-card>
 
     <!-- 区间批量设置 -->
-    <a-modal v-model:open="batchOpen" title="区间批量设置" width="560px" :confirm-loading="batchSaving" @ok="saveBatch">
+    <a-modal v-model:open="batchOpen" :title="t('goods.stock.modalBatchSet')" width="560px" :confirm-loading="batchSaving" @ok="saveBatch">
       <a-form :label-col="{ style: { width: '90px' } }" style="margin-top: 16px">
-        <a-form-item label="日期区间" required>
+        <a-form-item :label="t('goods.stock.batchSetModal.dateRange')" required>
           <a-range-picker v-model:value="batchForm.range" value-format="YYYY-MM-DD" style="width: 100%" />
         </a-form-item>
-        <a-form-item label="仅限星期">
+        <a-form-item :label="t('goods.stock.fieldWeekdays')">
           <a-checkbox-group
             v-model:value="batchForm.weekdays"
-            :options="WEEKDAY_TEXT.map((text, idx) => ({ label: `周${text}`, value: idx }))"
+            :options="WEEKDAY_OPTIONS"
           />
-          <div class="form-tip">不勾选表示区间内每天生效</div>
+          <div class="form-tip">{{ t('goods.stock.tipAllDays') }}</div>
         </a-form-item>
-        <a-form-item label="价格">
+        <a-form-item :label="t('goods.stock.price')">
           <a-space>
-            <a-checkbox v-model:checked="batchForm.setPrice">设置</a-checkbox>
+            <a-checkbox v-model:checked="batchForm.setPrice">{{ t('common.optional') }}</a-checkbox>
             <a-input-number v-model:value="batchForm.price" :min="0" :precision="2" :disabled="!batchForm.setPrice" style="width: 160px" />
           </a-space>
         </a-form-item>
-        <a-form-item label="总库存">
+        <a-form-item :label="t('goods.stock.totalStock')">
           <a-space>
-            <a-checkbox v-model:checked="batchForm.setStock">设置</a-checkbox>
+            <a-checkbox v-model:checked="batchForm.setStock">{{ t('common.optional') }}</a-checkbox>
             <a-input-number v-model:value="batchForm.stockTotal" :min="0" :disabled="!batchForm.setStock" style="width: 160px" />
           </a-space>
-          <div class="form-tip">不可低于当日已售+锁定,否则该日报错回滚</div>
+          <div class="form-tip">{{ t('goods.stock.tipStockMin') }}</div>
         </a-form-item>
-        <a-form-item label="关房/停售">
+        <a-form-item :label="t('goods.stock.fieldCloseOrOff')">
           <a-radio-group v-model:value="batchForm.closedAction">
-            <a-radio :value="0">不变更</a-radio>
-            <a-radio v-perm="'goods:stock:close'" :value="1">关闭</a-radio>
-            <a-radio :value="2">开放</a-radio>
+            <a-radio :value="0">{{ t('goods.stock.optionNoChange') }}</a-radio>
+            <a-radio v-perm="'goods:stock:close'" :value="1">{{ t('goods.stock.optionClose') }}</a-radio>
+            <a-radio :value="2">{{ t('goods.stock.optionOpen') }}</a-radio>
           </a-radio-group>
         </a-form-item>
       </a-form>
     </a-modal>
 
     <!-- 单日调整 -->
-    <a-modal v-model:open="adjustOpen" :title="`调整库存 - ${adjustForm.stockDate}`" width="440px" :confirm-loading="adjustSaving" @ok="saveAdjust">
+    <a-modal v-model:open="adjustOpen" :title="t('goods.stock.modalAdjustTitle', { date: adjustForm.stockDate })" width="440px" :confirm-loading="adjustSaving" @ok="saveAdjust">
       <a-form :label-col="{ style: { width: '90px' } }" style="margin-top: 16px">
-        <a-form-item label="调整数量" required>
+        <a-form-item :label="t('goods.stock.fieldChangeQty')" required>
           <a-input-number v-model:value="adjustForm.changeQty" :min="-9999" :max="9999" style="width: 160px" />
-          <div class="form-tip">正数增加,负数减少;下限=已售+锁定</div>
+          <div class="form-tip">{{ t('goods.stock.tipChangeQty') }}</div>
         </a-form-item>
-        <a-form-item label="备注">
-          <a-input v-model:value="adjustForm.remark" :maxlength="255" placeholder="调整原因" />
+        <a-form-item :label="t('goods.stock.adjustModal.reason')">
+          <a-input v-model:value="adjustForm.remark" :maxlength="255" :placeholder="t('goods.stock.placeholderAdjustReason')" />
         </a-form-item>
       </a-form>
     </a-modal>

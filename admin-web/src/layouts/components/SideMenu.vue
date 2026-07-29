@@ -3,19 +3,28 @@ import { computed, h, ref, watch, type Component } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import type { ItemType } from 'ant-design-vue';
 import * as Icons from '@ant-design/icons-vue';
+import { useI18n } from 'vue-i18n';
 import type { MenuNode } from '@/api/types';
 import { useUserStore } from '@/stores/user';
 import { useAppStore } from '@/stores/app';
+import { resolveMenuI18nKey } from '@/locales/menuI18n';
 
 const route = useRoute();
 const router = useRouter();
 const userStore = useUserStore();
 const appStore = useAppStore();
+const { t } = useI18n();
 
 /** 图标名(如 SettingOutlined)→ 组件,渲染动态菜单图标 */
 function renderIcon(name: string) {
   const icon = (Icons as Record<string, unknown>)[name] as Component | undefined;
   return icon ? () => h(icon) : undefined;
+}
+
+/** 后端菜单名称 → i18n 显示文本 */
+function menuLabel(name: string): string {
+  const key = resolveMenuI18nKey(name);
+  return key ? t(key) : name;
 }
 
 function toItems(nodes: MenuNode[]): ItemType[] {
@@ -25,7 +34,7 @@ function toItems(nodes: MenuNode[]): ItemType[] {
       const children = node.children?.filter((child) => child.menu_type !== 3) ?? [];
       return {
         key: node.route_path || String(node.id),
-        label: node.menu_name,
+        label: menuLabel(node.menu_name),
         icon: node.icon ? renderIcon(node.icon) : undefined,
         children: children.length > 0 ? toItems(children) : undefined,
       } as ItemType;
@@ -33,7 +42,7 @@ function toItems(nodes: MenuNode[]): ItemType[] {
 }
 
 const items = computed<ItemType[]>(() => [
-  { key: '/dashboard', label: '数据大屏', icon: renderIcon('DashboardOutlined') },
+  { key: '/dashboard', label: t('menu.dashboard'), icon: renderIcon('DashboardOutlined') },
   ...toItems(userStore.menus),
 ]);
 

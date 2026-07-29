@@ -1,19 +1,27 @@
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue';
+import { computed, onMounted, reactive, ref } from 'vue';
 import { message } from 'ant-design-vue';
 import { ReloadOutlined, SaveOutlined } from '@ant-design/icons-vue';
+import { useI18n } from 'vue-i18n';
 import PageContainer from '@/components/PageContainer.vue';
 import { apiConfigList, apiConfigReset, apiConfigSave, type GroupedConfigs, type Row } from '@/api/config';
 
 /** 全局参数:按分组 Tab 展示,按 value_type 渲染控件,仅提交变更项;支持按组恢复默认 */
-const GROUP_TABS = [
-  { key: 'base', label: '平台基础' },
-  { key: 'security', label: '安全策略' },
-  { key: 'upload', label: '上传限制' },
-  { key: 'client', label: '客户端与日志' },
-];
+const { t } = useI18n();
 
-const VALUE_TYPE_TEXT: Record<number, string> = { 1: '字符串', 2: '数字', 3: '布尔', 4: 'JSON' };
+const GROUP_TABS = computed(() => [
+  { key: 'base', label: t('config.global.sectionBase') },
+  { key: 'security', label: t('config.global.sectionSecurity') },
+  { key: 'upload', label: t('config.global.sectionUpload') },
+  { key: 'client', label: t('config.global.sectionClient') },
+]);
+
+const VALUE_TYPE_TEXT = computed<Record<number, string>>(() => ({
+  1: t('config.global.valueTypeString'),
+  2: t('config.global.valueTypeNumber'),
+  3: t('config.global.valueTypeBoolean'),
+  4: t('config.global.valueTypeJSON'),
+}));
 
 const loading = ref(false);
 const saving = ref(false);
@@ -72,7 +80,7 @@ async function save(): Promise<void> {
         try {
           JSON.parse(current);
         } catch {
-          message.error(`「${row.config_name}」不是合法 JSON`);
+          message.error(`「${row.config_name}」${t('config.global.valueTypeJSON')}`);
           return;
         }
       }
@@ -80,13 +88,13 @@ async function save(): Promise<void> {
     }
   }
   if (!changed.length) {
-    message.info('没有需要保存的变更');
+    message.info(t('common.info'));
     return;
   }
   saving.value = true;
   try {
     const result = await apiConfigSave(changed);
-    message.success(`已保存 ${result.updated} 项配置`);
+    message.success(`${t('config.global.saved')} ${result.updated}`);
     await load();
   } finally {
     saving.value = false;
@@ -95,7 +103,7 @@ async function save(): Promise<void> {
 
 async function resetGroup(): Promise<void> {
   const result = await apiConfigReset({ group: activeGroup.value });
-  message.success(`已恢复 ${result.reset} 项为系统默认值`);
+  message.success(`${t('config.global.saved')} ${result.reset}`);
   await load();
 }
 
@@ -111,21 +119,21 @@ onMounted(() => {
 <template>
   <PageContainer>
     <a-card :bordered="false" class="mtrip-card-shadow">
-      <template #title>全局参数</template>
+      <template #title>{{ t('config.global.title') }}</template>
       <template #extra>
         <a-space>
           <a-popconfirm
-            :title="`确认将「${GROUP_TABS.find((t) => t.key === activeGroup)?.label}」分组恢复为系统默认值?`"
-            ok-text="恢复默认"
+            :title="`${GROUP_TABS.find((tab) => tab.key === activeGroup)?.label} - ${t('common.confirm')}?`"
+            :ok-text="t('common.confirm')"
             :ok-button-props="{ danger: true }"
             @confirm="resetGroup"
           >
             <a-button v-perm="'config:global:reset'" danger>
-              <template #icon><ReloadOutlined /></template>恢复本组默认
+              <template #icon><ReloadOutlined /></template>{{ t('common.refresh') }}
             </a-button>
           </a-popconfirm>
           <a-button v-perm="'config:global:edit'" type="primary" :loading="saving" @click="save">
-            <template #icon><SaveOutlined /></template>保存变更
+            <template #icon><SaveOutlined /></template>{{ t('config.global.actions.save') }}
           </a-button>
         </a-space>
       </template>
@@ -139,8 +147,8 @@ onMounted(() => {
                 <a-switch
                   v-if="row.value_type === 3"
                   v-model:checked="model[row.config_key]"
-                  checked-children="开"
-                  un-checked-children="关"
+                  :checked-children="t('common.enable')"
+                  :un-checked-children="t('common.disable')"
                 />
                 <!-- 数字 -->
                 <a-input-number
@@ -153,7 +161,7 @@ onMounted(() => {
                   v-else-if="row.value_type === 4"
                   v-model:value="model[row.config_key]"
                   :rows="4"
-                  placeholder="JSON 格式"
+                  :placeholder="t('config.global.valueTypeJSON')"
                 />
                 <!-- 字符串(Logo 类附带图片预览) -->
                 <template v-else>
@@ -163,9 +171,9 @@ onMounted(() => {
                   </div>
                 </template>
                 <div class="cfg-meta">
-                  <span>键:{{ row.config_key }}</span>
-                  <span>类型:{{ VALUE_TYPE_TEXT[row.value_type] ?? row.value_type }}</span>
-                  <span v-if="row.remark">说明:{{ row.remark }}</span>
+                  <span>{{ t('config.global.configKey') }}:{{ row.config_key }}</span>
+                  <span>{{ t('config.global.valueType') }}:{{ VALUE_TYPE_TEXT[row.value_type] ?? row.value_type }}</span>
+                  <span v-if="row.remark">{{ t('common.remark') }}:{{ row.remark }}</span>
                 </div>
               </a-form-item>
             </a-form>

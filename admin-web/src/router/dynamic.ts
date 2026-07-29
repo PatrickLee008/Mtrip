@@ -1,5 +1,6 @@
 import type { Router, RouteRecordRaw } from 'vue-router';
 import type { MenuNode } from '@/api/types';
+import { resolveMenuI18nKey } from '@/locales/menuI18n';
 
 /** views 下全部页面组件(懒加载),key 形如 ../views/system/admin/index.vue */
 const viewModules = import.meta.glob('../views/**/*.vue');
@@ -17,7 +18,7 @@ export function buildRoutes(menus: MenuNode[]): RouteRecordRaw {
       path: '/dashboard',
       name: 'Dashboard',
       component: viewModules['../views/dashboard/index.vue'],
-      meta: { title: '数据大屏' },
+      meta: { title: 'menu.dashboard' },
     },
   ];
 
@@ -28,7 +29,13 @@ export function buildRoutes(menus: MenuNode[]): RouteRecordRaw {
           path: node.route_path,
           name: `menu-${node.id}`,
           component: resolveComponent(node.component),
-          meta: { title: node.menu_name, permKey: node.perm_key, menuId: node.id },
+          // 优先用 i18n key;未知菜单回退到原 menu_name,PageContainer 仍会原样显示
+          meta: {
+            title: resolveMenuI18nKey(node.menu_name) || node.menu_name,
+            rawTitle: node.menu_name,
+            permKey: node.perm_key,
+            menuId: node.id,
+          },
         });
       }
       if (node.children?.length) {

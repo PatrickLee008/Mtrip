@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { reactive, ref } from 'vue';
+import { computed, reactive, ref } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { message } from 'ant-design-vue';
 import { DownloadOutlined, SearchOutlined } from '@ant-design/icons-vue';
 import PageContainer from '@/components/PageContainer.vue';
@@ -10,13 +11,15 @@ import { formatAmount } from '@/utils/format';
 import type { StatusItem } from '@/components/StatusTag.vue';
 import { apiMerchantList, apiMerchantStatement, apiMerchantStatistics } from '@/api/merchant';
 
+const { t } = useI18n();
+
 /** 商户统计:经营数据卡片(默认近30天)+ 结算对账单 */
-const SETTLE_STATUS: Record<number, StatusItem> = {
-  0: { text: '待确认', color: 'warning' },
-  1: { text: '已确认', color: 'processing' },
-  2: { text: '已打款', color: 'success' },
-  3: { text: '争议中', color: 'error' },
-};
+const SETTLE_STATUS = computed<Record<number, StatusItem>>(() => ({
+  0: { text: t('status.pending'), color: 'warning' },
+  1: { text: t('common.confirm'), color: 'processing' },
+  2: { text: t('common.success'), color: 'success' },
+  3: { text: t('common.failed'), color: 'error' },
+}));
 
 const merchantOptions = ref<{ label: string; value: number }[]>([]);
 const merchantId = ref<number>();
@@ -57,7 +60,7 @@ const statement = useTable(
 
 async function loadAll(): Promise<void> {
   if (!merchantId.value) {
-    message.warning('请先选择商户');
+    message.warning(t('merchant.accountPage.merchant'));
     return;
   }
   statsLoading.value = true;
@@ -74,25 +77,25 @@ async function loadAll(): Promise<void> {
   statement.search();
 }
 
-const statementColumns = [
-  { title: '结算单号', dataIndex: 'settle_no', width: 190 },
-  { title: '结算周期', dataIndex: 'settle_cycle', width: 160 },
-  { title: '订单总额', dataIndex: 'order_amount', width: 110 },
-  { title: '平台佣金', dataIndex: 'commission_amount', width: 110 },
-  { title: '退款扣减', dataIndex: 'refund_amount', width: 110 },
-  { title: '应结金额', dataIndex: 'settle_amount', width: 120 },
-  { title: '状态', dataIndex: 'status', width: 90 },
-  { title: '打款时间', dataIndex: 'pay_time', width: 165 },
-];
+const statementColumns = computed(() => [
+  { title: t('finance.settlePage.settleNo'), dataIndex: 'settle_no', width: 190 },
+  { title: t('finance.settlePage.period'), dataIndex: 'settle_cycle', width: 160 },
+  { title: t('finance.settlePage.orderAmount'), dataIndex: 'order_amount', width: 110 },
+  { title: t('finance.settlePage.commission'), dataIndex: 'commission_amount', width: 110 },
+  { title: t('finance.settlePage.refundAmount'), dataIndex: 'refund_amount', width: 110 },
+  { title: t('finance.settlePage.settleAmount'), dataIndex: 'settle_amount', width: 120 },
+  { title: t('finance.settlePage.status'), dataIndex: 'status', width: 90 },
+  { title: t('finance.settlePage.time'), dataIndex: 'pay_time', width: 165 },
+]);
 
 function exportStatement(): void {
   if (!statement.list.value.length) {
-    message.warning('暂无数据可导出');
+    message.warning(t('tip.empty'));
     return;
   }
   exportCsv(
-    `商户对账单_${merchantId.value}`,
-    statementColumns.map((col) => ({ title: col.title, key: col.dataIndex })),
+    `${t('finance.msettlePage.title')}_${merchantId.value}`,
+    statementColumns.value.map((col) => ({ title: col.title, key: col.dataIndex })),
     statement.list.value,
   );
 }
@@ -102,23 +105,23 @@ function exportStatement(): void {
   <PageContainer>
     <a-card :bordered="false" class="mtrip-card-shadow" style="margin-bottom: 16px">
       <a-form layout="inline">
-        <a-form-item label="选择商户">
+        <a-form-item :label="t('merchant.accountPage.merchant')">
           <a-select
             v-model:value="merchantId"
             show-search
             :filter-option="false"
             :options="merchantOptions"
             :loading="searching"
-            placeholder="输入商户名称搜索"
+            :placeholder="t('common.pleaseInput')"
             style="width: 300px"
             @search="searchMerchant"
           />
         </a-form-item>
-        <a-form-item label="统计区间">
+        <a-form-item :label="t('finance.overviewPage.trend')">
           <a-range-picker v-model:value="dateRange" value-format="YYYY-MM-DD" />
         </a-form-item>
         <a-form-item>
-          <a-button type="primary" @click="loadAll"><template #icon><SearchOutlined /></template>查询</a-button>
+          <a-button type="primary" @click="loadAll"><template #icon><SearchOutlined /></template>{{ t('common.search') }}</a-button>
         </a-form-item>
       </a-form>
     </a-card>
@@ -127,45 +130,45 @@ function exportStatement(): void {
       <a-row :gutter="16" style="margin-bottom: 16px">
         <a-col :span="6">
           <a-card :bordered="false" class="mtrip-card-shadow">
-            <a-statistic title="销售额(已支付)" :value="stats.salesAmount" :precision="2" />
-            <div class="stat-aux">订单 {{ stats.orderCount }} 笔 / 支付 {{ stats.paidCount }} 笔</div>
+            <a-statistic :title="t('finance.overviewPage.totalIncome')" :value="stats.salesAmount" :precision="2" />
+            <div class="stat-aux">{{ t('order.goods') }} {{ stats.orderCount }} / {{ t('order.status') }} {{ stats.paidCount }}</div>
           </a-card>
         </a-col>
         <a-col :span="6">
           <a-card :bordered="false" class="mtrip-card-shadow">
-            <a-statistic title="平台佣金" :value="stats.commission" :precision="2" />
-            <div class="stat-aux">统计区间 {{ stats.startDate || '-' }} ~ {{ stats.endDate || '-' }}</div>
+            <a-statistic :title="t('finance.overviewPage.platformCommission')" :value="stats.commission" :precision="2" />
+            <div class="stat-aux">{{ t('finance.overviewPage.trend') }} {{ stats.startDate || '-' }} ~ {{ stats.endDate || '-' }}</div>
           </a-card>
         </a-col>
         <a-col :span="6">
           <a-card :bordered="false" class="mtrip-card-shadow">
-            <a-statistic title="退款额" :value="stats.refundAmount" :precision="2" :value-style="{ color: '#fa541c' }" />
-            <div class="stat-aux">已退款到账口径</div>
+            <a-statistic :title="t('finance.settlePage.refundAmount')" :value="stats.refundAmount" :precision="2" :value-style="{ color: '#fa541c' }" />
+            <div class="stat-aux">{{ t('finance.overviewPage.pendingRefund') }}</div>
           </a-card>
         </a-col>
         <a-col :span="6">
           <a-card :bordered="false" class="mtrip-card-shadow">
-            <a-statistic title="商户应收" :value="stats.merchantReceivable" :precision="2" :value-style="{ color: '#52c41a' }" />
-            <div class="stat-aux">在售商品 {{ stats.onSaleGoods }} 个</div>
+            <a-statistic :title="t('finance.msettlePage.title')" :value="stats.merchantReceivable" :precision="2" :value-style="{ color: '#52c41a' }" />
+            <div class="stat-aux">{{ t('goods.common.statusOnsale') }} {{ stats.onSaleGoods }}</div>
           </a-card>
         </a-col>
       </a-row>
     </a-spin>
 
     <a-card :bordered="false" class="mtrip-card-shadow">
-      <template #title>结算对账单</template>
+      <template #title>{{ t('finance.msettlePage.title') }}</template>
       <template #extra>
         <a-space>
-          <a-input v-model:value="statement.query.settleCycle" allow-clear placeholder="结算周期,如 2026-07" style="width: 170px" />
-          <a-select v-model:value="statement.query.status" allow-clear placeholder="状态" style="width: 110px">
-            <a-select-option :value="0">待确认</a-select-option>
-            <a-select-option :value="1">已确认</a-select-option>
-            <a-select-option :value="2">已打款</a-select-option>
-            <a-select-option :value="3">争议中</a-select-option>
+          <a-input v-model:value="statement.query.settleCycle" allow-clear :placeholder="t('finance.settlePage.period')" style="width: 170px" />
+          <a-select v-model:value="statement.query.status" allow-clear :placeholder="t('common.status')" style="width: 110px">
+            <a-select-option :value="0">{{ SETTLE_STATUS[0].text }}</a-select-option>
+            <a-select-option :value="1">{{ SETTLE_STATUS[1].text }}</a-select-option>
+            <a-select-option :value="2">{{ SETTLE_STATUS[2].text }}</a-select-option>
+            <a-select-option :value="3">{{ SETTLE_STATUS[3].text }}</a-select-option>
           </a-select>
-          <a-button :disabled="!merchantId" @click="statement.search()">查询</a-button>
+          <a-button :disabled="!merchantId" @click="statement.search()">{{ t('common.search') }}</a-button>
           <a-button v-perm="'merchant:stats:export'" :disabled="!merchantId" @click="exportStatement">
-            <template #icon><DownloadOutlined /></template>导出
+            <template #icon><DownloadOutlined /></template>{{ t('common.export') }}
           </a-button>
         </a-space>
       </template>
@@ -187,7 +190,7 @@ function exportStatement(): void {
           </template>
         </template>
       </a-table>
-      <a-empty v-if="!merchantId" description="请先选择商户" style="margin: 40px 0" />
+      <a-empty v-if="!merchantId" :description="t('common.pleaseSelect')" style="margin: 40px 0" />
     </a-card>
   </PageContainer>
 </template>

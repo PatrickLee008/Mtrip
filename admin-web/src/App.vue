@@ -5,6 +5,7 @@ import zhCN from 'ant-design-vue/es/locale/zh_CN';
 import enUS from 'ant-design-vue/es/locale/en_US';
 import dayjs from 'dayjs';
 import 'dayjs/locale/zh-cn';
+import 'dayjs/locale/en';
 import { useI18n } from 'vue-i18n';
 import { useAppStore } from '@/stores/app';
 import { baseToken, darkComponents, lightComponents } from '@/config/theme';

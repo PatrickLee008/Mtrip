@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { onMounted, reactive, ref, watch } from 'vue';
+import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { message } from 'ant-design-vue';
+import { useI18n } from 'vue-i18n';
 import { ReloadOutlined, SearchOutlined } from '@ant-design/icons-vue';
 import PageContainer from '@/components/PageContainer.vue';
 import SiteTreeSelect from '@/components/SiteTreeSelect.vue';
@@ -26,24 +27,29 @@ import {
  * 结算单:0待确认 →(确认)1已确认 →(打款)2已打款;0⇄3有争议
  * 提现:0待审核 →(通过)1打款中 →(成功)2已打款;0→3已驳回;1→(失败)4
  */
+const { t } = useI18n();
 const userStore = useUserStore();
 const isSuper = userStore.profile?.isSuper === true;
 const activeTab = ref('settle');
 
-const SETTLE_STATUS: Record<number, StatusItem> = {
-  0: { text: '待确认', color: 'warning' },
-  1: { text: '已确认', color: 'processing' },
-  2: { text: '已打款', color: 'success' },
-  3: { text: '有争议', color: 'error' },
-};
-const WITHDRAW_STATUS: Record<number, StatusItem> = {
-  0: { text: '待审核', color: 'warning' },
-  1: { text: '打款中', color: 'processing' },
-  2: { text: '已打款', color: 'success' },
-  3: { text: '已驳回', color: 'error' },
-  4: { text: '打款失败', color: 'orange' },
-};
-const ACCOUNT_TYPE_TEXT: Record<number, string> = { 1: '银行卡', 2: 'Stripe', 3: 'PayPal' };
+const SETTLE_STATUS = computed<Record<number, StatusItem>>(() => ({
+  0: { text: t('finance.msettlePage.statusPending'), color: 'warning' },
+  1: { text: t('finance.msettlePage.statusApproved'), color: 'processing' },
+  2: { text: t('finance.msettlePage.statusPaid'), color: 'success' },
+  3: { text: t('finance.msettlePage.statusRejected'), color: 'error' },
+}));
+const WITHDRAW_STATUS = computed<Record<number, StatusItem>>(() => ({
+  0: { text: t('finance.msettlePage.withdraw.statusPending'), color: 'warning' },
+  1: { text: t('finance.msettlePage.withdraw.statusApproved'), color: 'processing' },
+  2: { text: t('finance.msettlePage.withdraw.statusPaid'), color: 'success' },
+  3: { text: t('finance.msettlePage.withdraw.statusRejected'), color: 'error' },
+  4: { text: t('status.failed'), color: 'orange' },
+}));
+const ACCOUNT_TYPE_TEXT = computed<Record<number, string>>(() => ({
+  1: t('finance.msettlePage.withdraw.account'),
+  2: t('config.pay.typeStripe'),
+  3: t('config.pay.typePaypal'),
+}));
 
 // ---------- 商户远程搜索(两 Tab 共用) ----------
 const merchantOptions = ref<{ label: string; value: number }[]>([]);
@@ -71,18 +77,18 @@ const settle = useTable(apiMerchantSettleList, {
   siteId: 0,
 });
 
-const settleColumns = [
-  { title: '结算单号', dataIndex: 'settle_no', width: 190 },
-  { title: '商户ID', dataIndex: 'merchant_id', width: 90 },
-  { title: '结算周期', dataIndex: 'settle_cycle', width: 120 },
-  { title: '订单数', dataIndex: 'order_count', width: 80 },
-  { title: '订单金额', dataIndex: 'order_amount', width: 110 },
-  { title: '退款金额', dataIndex: 'refund_amount', width: 110 },
-  { title: '佣金', dataIndex: 'commission', width: 100 },
-  { title: '应结算', dataIndex: 'settle_amount', width: 110 },
-  { title: '状态', dataIndex: 'status', width: 90 },
-  { title: '操作', key: 'action_col', width: 220, fixed: 'right' as const },
-];
+const settleColumns = computed(() => [
+  { title: t('finance.msettlePage.settleNo'), dataIndex: 'settle_no', width: 190 },
+  { title: t('finance.msettlePage.merchant'), dataIndex: 'merchant_id', width: 90 },
+  { title: t('finance.msettlePage.period'), dataIndex: 'settle_cycle', width: 120 },
+  { title: t('finance.msettlePage.orderCount'), dataIndex: 'order_count', width: 80 },
+  { title: t('finance.msettlePage.orderAmount'), dataIndex: 'order_amount', width: 110 },
+  { title: t('finance.settlePage.refundAmount'), dataIndex: 'refund_amount', width: 110 },
+  { title: t('finance.msettlePage.commission'), dataIndex: 'commission', width: 100 },
+  { title: t('finance.msettlePage.settleAmount'), dataIndex: 'settle_amount', width: 110 },
+  { title: t('finance.msettlePage.status'), dataIndex: 'status', width: 90 },
+  { title: t('common.action'), key: 'action_col', width: 220, fixed: 'right' as const },
+]);
 
 // 结算单详情抽屉
 const settleDrawerOpen = ref(false);
@@ -96,7 +102,7 @@ function openSettleDetail(row: TableRow): void {
 // 确认结算
 async function confirmSettle(row: TableRow): Promise<void> {
   await apiMerchantSettleConfirm({ id: row.id });
-  message.success('结算单已确认');
+  message.success(t('finance.settlePage.confirmModal.success'));
   void settle.load();
 }
 
@@ -117,7 +123,7 @@ async function submitPay(): Promise<void> {
   paySubmitting.value = true;
   try {
     await apiMerchantSettleMarkPaid({ id: payForm.id, payVoucher: payForm.payVoucher.trim() || undefined });
-    message.success('结算单已标记打款');
+    message.success(t('finance.msettlePage.actions.confirm'));
     payOpen.value = false;
     void settle.load();
   } finally {
@@ -140,13 +146,13 @@ function openDispute(row: TableRow): void {
 
 async function submitDispute(): Promise<void> {
   if (disputeForm.mark && !disputeForm.remark.trim()) {
-    message.warning('标记争议必须填写说明');
+    message.warning(t('common.required'));
     return;
   }
   disputeSubmitting.value = true;
   try {
     await apiMerchantSettleDispute({ id: disputeForm.id, remark: disputeForm.remark.trim() || undefined });
-    message.success(disputeForm.mark ? '结算单已标记争议' : '争议已解除,重新待确认');
+    message.success(t('common.success'));
     disputeOpen.value = false;
     void settle.load();
   } finally {
@@ -170,17 +176,17 @@ function withdrawReset(): void {
   withdraw.reset();
 }
 
-const withdrawColumns = [
-  { title: '提现单号', dataIndex: 'withdraw_no', width: 190 },
-  { title: '商户ID', dataIndex: 'merchant_id', width: 90 },
-  { title: '提现金额', dataIndex: 'amount', width: 110 },
-  { title: '手续费', dataIndex: 'fee', width: 90 },
-  { title: '实际到账', dataIndex: 'actual_amount', width: 110 },
-  { title: '收款方式', dataIndex: 'account_type', width: 90 },
-  { title: '状态', dataIndex: 'status', width: 100 },
-  { title: '申请时间', dataIndex: 'created_at', width: 165 },
-  { title: '操作', key: 'action_col', width: 190, fixed: 'right' as const },
-];
+const withdrawColumns = computed(() => [
+  { title: t('finance.msettlePage.withdraw.applyNo'), dataIndex: 'withdraw_no', width: 190 },
+  { title: t('finance.msettlePage.withdraw.merchant'), dataIndex: 'merchant_id', width: 90 },
+  { title: t('finance.msettlePage.withdraw.amount'), dataIndex: 'amount', width: 110 },
+  { title: t('finance.msettlePage.withdraw.fee'), dataIndex: 'fee', width: 90 },
+  { title: t('finance.msettlePage.withdraw.actualAmount'), dataIndex: 'actual_amount', width: 110 },
+  { title: t('finance.msettlePage.withdraw.account'), dataIndex: 'account_type', width: 90 },
+  { title: t('finance.msettlePage.withdraw.status'), dataIndex: 'status', width: 100 },
+  { title: t('finance.msettlePage.withdraw.applyTime'), dataIndex: 'created_at', width: 165 },
+  { title: t('common.action'), key: 'action_col', width: 190, fixed: 'right' as const },
+]);
 
 // 提现详情抽屉(收款账户解密)
 const withdrawDrawerOpen = ref(false);
@@ -213,7 +219,7 @@ function openAudit(row: TableRow): void {
 
 async function submitAudit(): Promise<void> {
   if (auditForm.auditStatus === 2 && !auditForm.auditRemark.trim()) {
-    message.warning('驳回必须填写原因');
+    message.warning(t('finance.msettlePage.withdraw.rejectModal.inputReason'));
     return;
   }
   auditSubmitting.value = true;
@@ -223,7 +229,11 @@ async function submitAudit(): Promise<void> {
       auditStatus: auditForm.auditStatus,
       auditRemark: auditForm.auditRemark.trim() || undefined,
     });
-    message.success(auditForm.auditStatus === 1 ? '审核通过,进入打款中' : '提现申请已驳回');
+    message.success(
+      auditForm.auditStatus === 1
+        ? t('finance.msettlePage.withdraw.approveModal.success')
+        : t('finance.msettlePage.withdraw.rejectModal.success'),
+    );
     auditOpen.value = false;
     void withdraw.load();
   } finally {
@@ -248,7 +258,7 @@ function openPayResult(row: TableRow): void {
 
 async function submitPayResult(): Promise<void> {
   if (payResultForm.payStatus === 2 && !payResultForm.failReason.trim()) {
-    message.warning('打款失败必须填写原因');
+    message.warning(t('common.required'));
     return;
   }
   payResultSubmitting.value = true;
@@ -259,7 +269,8 @@ async function submitPayResult(): Promise<void> {
       tradeNo: payResultForm.tradeNo.trim() || undefined,
       failReason: payResultForm.failReason.trim() || undefined,
     });
-    message.success(payResultForm.payStatus === 1 ? '打款完成,支出流水已记录' : '已标记打款失败');
+    message.success(t('common.success'));
+    payResultForm.payStatus === 1 ? void 0 : void 0;
     payResultOpen.value = false;
     void withdraw.load();
   } finally {
@@ -285,17 +296,17 @@ watch(activeTab, (tab) => {
     <a-card :bordered="false" class="mtrip-card-shadow">
       <a-tabs v-model:active-key="activeTab">
         <!-- ========== 结算单 ========== -->
-        <a-tab-pane key="settle" tab="结算单">
+        <a-tab-pane key="settle" :tab="t('finance.msettlePage.title')">
           <a-form layout="inline" class="tab-toolbar">
-            <a-form-item label="结算单号">
-              <a-input v-model:value="settle.query.settleNo" allow-clear placeholder="精确匹配" style="width: 190px" @press-enter="settle.search" />
+            <a-form-item :label="t('finance.msettlePage.settleNo')">
+              <a-input v-model:value="settle.query.settleNo" allow-clear :placeholder="t('common.pleaseInput')" style="width: 190px" @press-enter="settle.search" />
             </a-form-item>
-            <a-form-item label="商户">
+            <a-form-item :label="t('finance.msettlePage.merchant')">
               <a-select
                 v-model:value="settle.query.merchantId"
                 show-search
                 allow-clear
-                placeholder="输入名称搜索"
+                :placeholder="t('common.pleaseInput')"
                 style="width: 200px"
                 :filter-option="false"
                 :options="merchantOptions"
@@ -303,21 +314,21 @@ watch(activeTab, (tab) => {
                 @search="searchMerchant"
               />
             </a-form-item>
-            <a-form-item label="结算周期">
-              <a-input v-model:value="settle.query.settleCycle" allow-clear placeholder="如 2026-07" style="width: 130px" @press-enter="settle.search" />
+            <a-form-item :label="t('finance.msettlePage.period')">
+              <a-input v-model:value="settle.query.settleCycle" allow-clear placeholder="YYYY-MM" style="width: 130px" @press-enter="settle.search" />
             </a-form-item>
-            <a-form-item label="状态">
-              <a-select v-model:value="settle.query.status" allow-clear placeholder="全部" style="width: 100px">
+            <a-form-item :label="t('common.status')">
+              <a-select v-model:value="settle.query.status" allow-clear :placeholder="t('common.all')" style="width: 100px">
                 <a-select-option v-for="(item, key) in SETTLE_STATUS" :key="key" :value="Number(key)">{{ item.text }}</a-select-option>
               </a-select>
             </a-form-item>
-            <a-form-item v-if="isSuper" label="站点">
+            <a-form-item v-if="isSuper" :label="t('common.site')">
               <SiteTreeSelect v-model:value="settle.query.siteId" allow-all style="width: 160px" />
             </a-form-item>
             <a-form-item>
               <a-space>
-                <a-button type="primary" @click="settle.search"><template #icon><SearchOutlined /></template>查询</a-button>
-                <a-button @click="settle.reset"><template #icon><ReloadOutlined /></template>重置</a-button>
+                <a-button type="primary" @click="settle.search"><template #icon><SearchOutlined /></template>{{ t('common.search') }}</a-button>
+                <a-button @click="settle.reset"><template #icon><ReloadOutlined /></template>{{ t('common.reset') }}</a-button>
               </a-space>
             </a-form-item>
           </a-form>
@@ -338,20 +349,20 @@ watch(activeTab, (tab) => {
                 <span style="font-weight: 600">{{ formatAmount(record.settle_amount) }}</span>
               </template>
               <template v-else-if="column.dataIndex === 'status'">
-                <a-tooltip v-if="record.status === 3 && record.remark" :title="`争议说明:${record.remark}`">
+                <a-tooltip v-if="record.status === 3 && record.remark" :title="record.remark">
                   <span><StatusTag :value="record.status" :map="SETTLE_STATUS" /></span>
                 </a-tooltip>
                 <StatusTag v-else :value="record.status" :map="SETTLE_STATUS" />
               </template>
               <template v-else-if="column.key === 'action_col'">
                 <a-space :size="0">
-                  <a-button type="link" size="small" @click="openSettleDetail(record)">详情</a-button>
+                  <a-button type="link" size="small" @click="openSettleDetail(record)">{{ t('common.detail') }}</a-button>
                   <a-popconfirm
                     v-if="record.status === 0"
-                    title="确认该结算单金额无误?"
+                    :title="t('finance.settlePage.confirmModal.notice')"
                     @confirm="confirmSettle(record)"
                   >
-                    <a-button v-perm="'finance:msettle:confirm'" type="link" size="small">确认结算</a-button>
+                    <a-button v-perm="'finance:msettle:confirm'" type="link" size="small">{{ t('finance.settlePage.actions.confirm') }}</a-button>
                   </a-popconfirm>
                   <a-button
                     v-if="record.status === 1"
@@ -359,7 +370,7 @@ watch(activeTab, (tab) => {
                     type="link"
                     size="small"
                     @click="openPay(record)"
-                  >标记打款</a-button>
+                  >{{ t('finance.msettlePage.actions.confirm') }}</a-button>
                   <a-button
                     v-if="record.status === 0"
                     v-perm="'finance:msettle:confirm'"
@@ -367,14 +378,14 @@ watch(activeTab, (tab) => {
                     size="small"
                     danger
                     @click="openDispute(record)"
-                  >标记争议</a-button>
+                  >{{ t('common.delete') }}</a-button>
                   <a-button
                     v-if="record.status === 3"
                     v-perm="'finance:msettle:confirm'"
                     type="link"
                     size="small"
                     @click="openDispute(record)"
-                  >解除争议</a-button>
+                  >{{ t('common.reset') }}</a-button>
                 </a-space>
               </template>
             </template>
@@ -382,17 +393,17 @@ watch(activeTab, (tab) => {
         </a-tab-pane>
 
         <!-- ========== 提现申请 ========== -->
-        <a-tab-pane key="withdraw" tab="提现申请">
+        <a-tab-pane key="withdraw" :tab="t('finance.msettlePage.withdraw.title')">
           <a-form layout="inline" class="tab-toolbar">
-            <a-form-item label="提现单号">
-              <a-input v-model:value="withdraw.query.withdrawNo" allow-clear placeholder="精确匹配" style="width: 190px" @press-enter="withdraw.search" />
+            <a-form-item :label="t('finance.msettlePage.withdraw.applyNo')">
+              <a-input v-model:value="withdraw.query.withdrawNo" allow-clear :placeholder="t('common.pleaseInput')" style="width: 190px" @press-enter="withdraw.search" />
             </a-form-item>
-            <a-form-item label="商户">
+            <a-form-item :label="t('finance.msettlePage.withdraw.merchant')">
               <a-select
                 v-model:value="withdraw.query.merchantId"
                 show-search
                 allow-clear
-                placeholder="输入名称搜索"
+                :placeholder="t('common.pleaseInput')"
                 style="width: 200px"
                 :filter-option="false"
                 :options="merchantOptions"
@@ -400,21 +411,21 @@ watch(activeTab, (tab) => {
                 @search="searchMerchant"
               />
             </a-form-item>
-            <a-form-item label="状态">
-              <a-select v-model:value="withdraw.query.status" allow-clear placeholder="全部" style="width: 110px">
+            <a-form-item :label="t('common.status')">
+              <a-select v-model:value="withdraw.query.status" allow-clear :placeholder="t('common.all')" style="width: 110px">
                 <a-select-option v-for="(item, key) in WITHDRAW_STATUS" :key="key" :value="Number(key)">{{ item.text }}</a-select-option>
               </a-select>
             </a-form-item>
-            <a-form-item label="申请日期">
+            <a-form-item :label="t('finance.msettlePage.withdraw.applyTime')">
               <a-range-picker v-model:value="withdrawRange" value-format="YYYY-MM-DD" style="width: 240px" />
             </a-form-item>
-            <a-form-item v-if="isSuper" label="站点">
+            <a-form-item v-if="isSuper" :label="t('common.site')">
               <SiteTreeSelect v-model:value="withdraw.query.siteId" allow-all style="width: 160px" />
             </a-form-item>
             <a-form-item>
               <a-space>
-                <a-button type="primary" @click="withdraw.search"><template #icon><SearchOutlined /></template>查询</a-button>
-                <a-button @click="withdrawReset"><template #icon><ReloadOutlined /></template>重置</a-button>
+                <a-button type="primary" @click="withdraw.search"><template #icon><SearchOutlined /></template>{{ t('common.search') }}</a-button>
+                <a-button @click="withdrawReset"><template #icon><ReloadOutlined /></template>{{ t('common.reset') }}</a-button>
               </a-space>
             </a-form-item>
           </a-form>
@@ -442,21 +453,21 @@ watch(activeTab, (tab) => {
               </template>
               <template v-else-if="column.key === 'action_col'">
                 <a-space :size="0">
-                  <a-button type="link" size="small" @click="openWithdrawDetail(record)">详情</a-button>
+                  <a-button type="link" size="small" @click="openWithdrawDetail(record)">{{ t('common.detail') }}</a-button>
                   <a-button
                     v-if="record.status === 0"
                     v-perm="'finance:msettle:confirm'"
                     type="link"
                     size="small"
                     @click="openAudit(record)"
-                  >审核</a-button>
+                  >{{ t('finance.msettlePage.withdraw.actions.approve') }}</a-button>
                   <a-button
                     v-if="record.status === 1"
                     v-perm="'finance:msettle:pay'"
                     type="link"
                     size="small"
                     @click="openPayResult(record)"
-                  >打款结果</a-button>
+                  >{{ t('finance.msettlePage.withdraw.actions.paid') }}</a-button>
                 </a-space>
               </template>
             </template>
@@ -466,63 +477,63 @@ watch(activeTab, (tab) => {
     </a-card>
 
     <!-- 结算单详情抽屉 -->
-    <a-drawer v-model:open="settleDrawerOpen" title="结算单详情" width="560">
+    <a-drawer v-model:open="settleDrawerOpen" :title="t('finance.settlePage.detailModal.title')" width="560">
       <a-descriptions v-if="settleDetail" :column="2" size="small" bordered>
-        <a-descriptions-item label="结算单号" :span="2">{{ settleDetail.settle_no }}</a-descriptions-item>
-        <a-descriptions-item label="商户ID">{{ settleDetail.merchant_id }}</a-descriptions-item>
-        <a-descriptions-item label="结算周期">{{ settleDetail.settle_cycle }}</a-descriptions-item>
-        <a-descriptions-item label="订单数">{{ settleDetail.order_count }}</a-descriptions-item>
-        <a-descriptions-item label="订单金额">{{ formatAmount(settleDetail.order_amount) }}</a-descriptions-item>
-        <a-descriptions-item label="退款金额">{{ formatAmount(settleDetail.refund_amount) }}</a-descriptions-item>
-        <a-descriptions-item label="平台佣金">{{ formatAmount(settleDetail.commission) }}</a-descriptions-item>
-        <a-descriptions-item label="税费">{{ formatAmount(settleDetail.tax_amount) }}</a-descriptions-item>
-        <a-descriptions-item label="应结算金额">
+        <a-descriptions-item :label="t('finance.msettlePage.settleNo')" :span="2">{{ settleDetail.settle_no }}</a-descriptions-item>
+        <a-descriptions-item :label="t('finance.msettlePage.merchant')">{{ settleDetail.merchant_id }}</a-descriptions-item>
+        <a-descriptions-item :label="t('finance.msettlePage.period')">{{ settleDetail.settle_cycle }}</a-descriptions-item>
+        <a-descriptions-item :label="t('finance.msettlePage.orderCount')">{{ settleDetail.order_count }}</a-descriptions-item>
+        <a-descriptions-item :label="t('finance.msettlePage.orderAmount')">{{ formatAmount(settleDetail.order_amount) }}</a-descriptions-item>
+        <a-descriptions-item :label="t('finance.settlePage.refundAmount')">{{ formatAmount(settleDetail.refund_amount) }}</a-descriptions-item>
+        <a-descriptions-item :label="t('finance.msettlePage.commission')">{{ formatAmount(settleDetail.commission) }}</a-descriptions-item>
+        <a-descriptions-item :label="t('finance.settlePage.refundAmount')">{{ formatAmount(settleDetail.tax_amount) }}</a-descriptions-item>
+        <a-descriptions-item :label="t('finance.msettlePage.settleAmount')">
           <span style="color: var(--mtrip-error, #ff4d4f); font-weight: 600">{{ formatAmount(settleDetail.settle_amount) }}</span>
         </a-descriptions-item>
-        <a-descriptions-item label="状态"><StatusTag :value="settleDetail.status" :map="SETTLE_STATUS" /></a-descriptions-item>
-        <a-descriptions-item label="确认时间">{{ settleDetail.confirm_time || '-' }}</a-descriptions-item>
-        <a-descriptions-item label="打款时间">{{ settleDetail.pay_time || '-' }}</a-descriptions-item>
-        <a-descriptions-item label="打款凭证">
-          <a v-if="settleDetail.pay_voucher" :href="settleDetail.pay_voucher" target="_blank">查看凭证</a>
+        <a-descriptions-item :label="t('common.status')"><StatusTag :value="settleDetail.status" :map="SETTLE_STATUS" /></a-descriptions-item>
+        <a-descriptions-item :label="t('finance.settlePage.time')">{{ settleDetail.confirm_time || '-' }}</a-descriptions-item>
+        <a-descriptions-item :label="t('finance.settlePage.time')">{{ settleDetail.pay_time || '-' }}</a-descriptions-item>
+        <a-descriptions-item :label="t('common.remark')">
+          <a v-if="settleDetail.pay_voucher" :href="settleDetail.pay_voucher" target="_blank">{{ t('common.detail') }}</a>
           <span v-else>-</span>
         </a-descriptions-item>
-        <a-descriptions-item v-if="settleDetail.remark" label="备注/争议说明" :span="2">{{ settleDetail.remark }}</a-descriptions-item>
+        <a-descriptions-item v-if="settleDetail.remark" :label="t('common.remark')" :span="2">{{ settleDetail.remark }}</a-descriptions-item>
       </a-descriptions>
     </a-drawer>
 
     <!-- 提现详情抽屉 -->
-    <a-drawer v-model:open="withdrawDrawerOpen" title="提现详情" width="560">
+    <a-drawer v-model:open="withdrawDrawerOpen" :title="t('finance.msettlePage.withdraw.title')" width="560">
       <a-spin :spinning="withdrawDetailLoading">
         <a-descriptions v-if="withdrawDetail" :column="2" size="small" bordered>
-          <a-descriptions-item label="提现单号" :span="2">{{ withdrawDetail.withdraw_no }}</a-descriptions-item>
-          <a-descriptions-item label="商户ID">{{ withdrawDetail.merchant_id }}</a-descriptions-item>
-          <a-descriptions-item label="状态"><StatusTag :value="withdrawDetail.status" :map="WITHDRAW_STATUS" /></a-descriptions-item>
-          <a-descriptions-item label="提现金额">{{ formatAmount(withdrawDetail.amount) }}</a-descriptions-item>
-          <a-descriptions-item label="手续费">{{ formatAmount(withdrawDetail.fee) }}</a-descriptions-item>
-          <a-descriptions-item label="实际到账" :span="2">
+          <a-descriptions-item :label="t('finance.msettlePage.withdraw.applyNo')" :span="2">{{ withdrawDetail.withdraw_no }}</a-descriptions-item>
+          <a-descriptions-item :label="t('finance.msettlePage.withdraw.merchant')">{{ withdrawDetail.merchant_id }}</a-descriptions-item>
+          <a-descriptions-item :label="t('common.status')"><StatusTag :value="withdrawDetail.status" :map="WITHDRAW_STATUS" /></a-descriptions-item>
+          <a-descriptions-item :label="t('finance.msettlePage.withdraw.amount')">{{ formatAmount(withdrawDetail.amount) }}</a-descriptions-item>
+          <a-descriptions-item :label="t('finance.msettlePage.withdraw.fee')">{{ formatAmount(withdrawDetail.fee) }}</a-descriptions-item>
+          <a-descriptions-item :label="t('finance.msettlePage.withdraw.actualAmount')" :span="2">
             <span style="color: var(--mtrip-error, #ff4d4f); font-weight: 600">{{ formatAmount(withdrawDetail.actual_amount) }}</span>
           </a-descriptions-item>
-          <a-descriptions-item label="收款方式">{{ ACCOUNT_TYPE_TEXT[withdrawDetail.account_type] ?? '-' }}</a-descriptions-item>
-          <a-descriptions-item label="打款流水号">{{ withdrawDetail.trade_no || '-' }}</a-descriptions-item>
-          <a-descriptions-item label="收款账户信息" :span="2">{{ withdrawDetail.account_info || '-' }}</a-descriptions-item>
-          <a-descriptions-item label="申请时间">{{ withdrawDetail.created_at }}</a-descriptions-item>
-          <a-descriptions-item label="审核时间">{{ withdrawDetail.audit_time || '-' }}</a-descriptions-item>
-          <a-descriptions-item label="打款时间">{{ withdrawDetail.pay_time || '-' }}</a-descriptions-item>
-          <a-descriptions-item v-if="withdrawDetail.audit_remark" label="审核备注" :span="2">{{ withdrawDetail.audit_remark }}</a-descriptions-item>
+          <a-descriptions-item :label="t('finance.msettlePage.withdraw.account')">{{ ACCOUNT_TYPE_TEXT[withdrawDetail.account_type] ?? '-' }}</a-descriptions-item>
+          <a-descriptions-item :label="t('common.remark')">{{ withdrawDetail.trade_no || '-' }}</a-descriptions-item>
+          <a-descriptions-item :label="t('finance.msettlePage.withdraw.accountName')" :span="2">{{ withdrawDetail.account_info || '-' }}</a-descriptions-item>
+          <a-descriptions-item :label="t('finance.msettlePage.withdraw.applyTime')">{{ withdrawDetail.created_at }}</a-descriptions-item>
+          <a-descriptions-item :label="t('finance.msettlePage.withdraw.processTime')">{{ withdrawDetail.audit_time || '-' }}</a-descriptions-item>
+          <a-descriptions-item :label="t('finance.settlePage.time')">{{ withdrawDetail.pay_time || '-' }}</a-descriptions-item>
+          <a-descriptions-item v-if="withdrawDetail.audit_remark" :label="t('common.remark')" :span="2">{{ withdrawDetail.audit_remark }}</a-descriptions-item>
         </a-descriptions>
       </a-spin>
     </a-drawer>
 
     <!-- 标记打款 Modal(结算单) -->
-    <a-modal v-model:open="payOpen" title="标记打款" :confirm-loading="paySubmitting" @ok="submitPay">
-      <a-alert type="warning" show-icon message="确认后结算单完结不可撤销,请核实打款已完成" style="margin-bottom: 16px" />
+    <a-modal v-model:open="payOpen" :title="t('finance.msettlePage.actions.confirm')" :confirm-loading="paySubmitting" @ok="submitPay">
+      <a-alert type="warning" show-icon :message="t('common.warning')" style="margin-bottom: 16px" />
       <a-form :label-col="{ span: 6 }">
-        <a-form-item label="结算单号">{{ payForm.settleNo }}</a-form-item>
-        <a-form-item label="结算金额">
+        <a-form-item :label="t('finance.msettlePage.settleNo')">{{ payForm.settleNo }}</a-form-item>
+        <a-form-item :label="t('finance.settlePage.settleAmount')">
           <span style="color: var(--mtrip-error, #ff4d4f); font-weight: 600">{{ formatAmount(payForm.settleAmount) }}</span>
         </a-form-item>
-        <a-form-item label="打款凭证URL">
-          <a-input v-model:value="payForm.payVoucher" :maxlength="255" placeholder="选填,凭证图片/文件地址" />
+        <a-form-item :label="t('common.remark')">
+          <a-input v-model:value="payForm.payVoucher" :maxlength="255" :placeholder="t('common.optional')" />
         </a-form-item>
       </a-form>
     </a-modal>
@@ -530,56 +541,56 @@ watch(activeTab, (tab) => {
     <!-- 争议 Modal -->
     <a-modal
       v-model:open="disputeOpen"
-      :title="disputeForm.mark ? '标记争议' : '解除争议'"
+      :title="disputeForm.mark ? t('common.delete') : t('common.reset')"
       :confirm-loading="disputeSubmitting"
       :ok-button-props="disputeForm.mark ? { danger: true } : undefined"
       @ok="submitDispute"
     >
       <a-form :label-col="{ span: 6 }">
-        <a-form-item label="结算单号">{{ disputeForm.settleNo }}</a-form-item>
-        <a-form-item :label="disputeForm.mark ? '争议说明' : '处理说明'" :required="disputeForm.mark">
-          <a-textarea v-model:value="disputeForm.remark" :rows="3" :maxlength="500" :placeholder="disputeForm.mark ? '必填,说明争议原因' : '选填'" />
+        <a-form-item :label="t('finance.msettlePage.settleNo')">{{ disputeForm.settleNo }}</a-form-item>
+        <a-form-item :label="disputeForm.mark ? t('common.delete') : t('common.remark')" :required="disputeForm.mark">
+          <a-textarea v-model:value="disputeForm.remark" :rows="3" :maxlength="500" :placeholder="disputeForm.mark ? t('common.required') : t('common.optional')" />
         </a-form-item>
       </a-form>
     </a-modal>
 
     <!-- 提现审核 Modal -->
-    <a-modal v-model:open="auditOpen" title="提现审核" :confirm-loading="auditSubmitting" @ok="submitAudit">
+    <a-modal v-model:open="auditOpen" :title="t('finance.msettlePage.withdraw.approveModal.title')" :confirm-loading="auditSubmitting" @ok="submitAudit">
       <a-form :label-col="{ span: 6 }">
-        <a-form-item label="提现单号">{{ auditForm.withdrawNo }}</a-form-item>
-        <a-form-item label="实际到账">
+        <a-form-item :label="t('finance.msettlePage.withdraw.applyNo')">{{ auditForm.withdrawNo }}</a-form-item>
+        <a-form-item :label="t('finance.msettlePage.withdraw.actualAmount')">
           <span style="color: var(--mtrip-error, #ff4d4f); font-weight: 600">{{ formatAmount(auditForm.actualAmount) }}</span>
         </a-form-item>
-        <a-form-item label="审核结果" required>
+        <a-form-item :label="t('common.status')" required>
           <a-radio-group v-model:value="auditForm.auditStatus">
-            <a-radio :value="1">通过(进入打款中)</a-radio>
-            <a-radio :value="2">驳回</a-radio>
+            <a-radio :value="1">{{ t('finance.msettlePage.withdraw.actions.approve') }}</a-radio>
+            <a-radio :value="2">{{ t('finance.msettlePage.withdraw.actions.reject') }}</a-radio>
           </a-radio-group>
         </a-form-item>
-        <a-form-item label="审核意见" :required="auditForm.auditStatus === 2">
-          <a-textarea v-model:value="auditForm.auditRemark" :rows="3" :maxlength="500" placeholder="驳回必填" />
+        <a-form-item :label="t('common.remark')" :required="auditForm.auditStatus === 2">
+          <a-textarea v-model:value="auditForm.auditRemark" :rows="3" :maxlength="500" :placeholder="t('common.required')" />
         </a-form-item>
       </a-form>
     </a-modal>
 
     <!-- 打款结果 Modal -->
-    <a-modal v-model:open="payResultOpen" title="确认打款结果" :confirm-loading="payResultSubmitting" @ok="submitPayResult">
+    <a-modal v-model:open="payResultOpen" :title="t('common.confirm')" :confirm-loading="payResultSubmitting" @ok="submitPayResult">
       <a-form :label-col="{ span: 6 }">
-        <a-form-item label="提现单号">{{ payResultForm.withdrawNo }}</a-form-item>
-        <a-form-item label="实际到账">
+        <a-form-item :label="t('finance.msettlePage.withdraw.applyNo')">{{ payResultForm.withdrawNo }}</a-form-item>
+        <a-form-item :label="t('finance.msettlePage.withdraw.actualAmount')">
           <span style="color: var(--mtrip-error, #ff4d4f); font-weight: 600">{{ formatAmount(payResultForm.actualAmount) }}</span>
         </a-form-item>
-        <a-form-item label="打款结果" required>
+        <a-form-item :label="t('common.status')" required>
           <a-radio-group v-model:value="payResultForm.payStatus">
-            <a-radio :value="1">打款成功</a-radio>
-            <a-radio :value="2">打款失败</a-radio>
+            <a-radio :value="1">{{ t('status.success') }}</a-radio>
+            <a-radio :value="2">{{ t('status.failed') }}</a-radio>
           </a-radio-group>
         </a-form-item>
-        <a-form-item v-if="payResultForm.payStatus === 1" label="打款流水号">
-          <a-input v-model:value="payResultForm.tradeNo" :maxlength="64" placeholder="选填,第三方流水号" />
+        <a-form-item v-if="payResultForm.payStatus === 1" :label="t('common.remark')">
+          <a-input v-model:value="payResultForm.tradeNo" :maxlength="64" :placeholder="t('common.optional')" />
         </a-form-item>
-        <a-form-item v-if="payResultForm.payStatus === 2" label="失败原因" required>
-          <a-textarea v-model:value="payResultForm.failReason" :rows="3" :maxlength="400" placeholder="必填" />
+        <a-form-item v-if="payResultForm.payStatus === 2" :label="t('common.remark')" required>
+          <a-textarea v-model:value="payResultForm.failReason" :rows="3" :maxlength="400" :placeholder="t('common.required')" />
         </a-form-item>
       </a-form>
     </a-modal>
