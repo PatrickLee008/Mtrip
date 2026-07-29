@@ -1,0 +1,45 @@
+# =============================================
+# Mtrip 根级 Git 忽略规则
+# 子工程(admin-web/client-app)另有自身 .gitignore
+# =============================================
+
+# ---------- 操作系统 / 编辑器 ----------
+.DS_Store
+Thumbs.db
+Desktop.ini
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# ---------- 临时验证目录(本地脚本产物) ----------
+.tmp-mysql-verify/
+
+# ---------- 日志 ----------
+# 注意:不用裸 logs/(会误伤 client-app/src/logs/ 源码目录),仅限根级与 deploy 挂载目录
+*.log
+/logs/
+deploy/logs/
+
+# ---------- 后端 PHP(Hyperf 微服务) ----------
+backend/**/vendor/
+backend/**/.env
+backend/**/runtime/
+backend/**/composer.lock
+backend/**/.phpunit.result.cache
+backend/**/.phpstorm.meta.php
+
+# ---------- 前端通用(兜底,子工程已各自忽略) ----------
+node_modules/
+dist/
+web-build/
+.expo/
+
+# ---------- 环境变量(仅保留 *.example 模板) ----------
+.env
+.env.local
+.env.*.local
+
+# ---------- 构建/缓存 ----------
+*.tsbuildinfo
+.cache/

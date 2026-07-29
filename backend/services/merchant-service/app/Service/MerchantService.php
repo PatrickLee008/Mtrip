@@ -1,0 +1,114 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Service;
+
+use Hyperf\DbConnection\Db;
+
+/**
+ * 商户状态流转服务:审核通过生成主账号 / 驳回 / 启停联动商品 / 注销
+ */
+class MerchantService
+{
+    /**
+     * 审核通过:置为已启用并生成商户后台主账号(初始密码明文仅返回一次)
+     * @return array{username: string, password: string}
+     */
+    public function approve(array $merchant, string $remark): array
+    {
+        $username = $this->uniqueUsername((int) $merchant['id']);
+        $password = $this->randomPassword();
+        Db::transaction(static function () use ($merchant, $remark, $username, $password) {
+            Db::table('merchant_info')->where('id', $merchant['id'])->update([
+                'status' => 3,
+                'audit_remark' => mb_substr($remark, 0, 500),
+                'audit_by' => \Mtrip\Shared\Context\AdminContext::adminId(),
+                'audit_time' => date('Y-m-d H:i:s'),
+            ]);
+            Db::table('merchant_admin')->insert([
+                'site_id' => (int) $merchant['site_id'],
+                'merchant_id' => (int) $merchant['id'],
+                'username' => $username,
+                'password' => password_hash($password, PASSWORD_BCRYPT),
+                'real_name' => (string) $merchant['contact_name'],
+                'mobile' => (string) $merchant['contact_phone'],
+                'is_owner' => 1,
+                'status' => 1,
+            ]);
+        });
+        return ['username' => $username, 'password' => $password];
+    }
+
+    /** 审核驳回:可修改后重新提交 */
+    public function reject(array $merchant, string $remark): void
+    {
+        Db::table('merchant_info')->where('id', $merchant['id'])->update([
+            'status' => 2,
+            'audit_remark' => mb_substr($remark, 0, 500),
+            'audit_by' => \Mtrip\Shared\Context\AdminContext::adminId(),
+            'audit_time' => date('Y-m-d H:i:s'),
+        ]);
+    }
+
+    /**
+     * 启停切换:禁用时联动下架该商户全部在售商品并停用子账号登录
+     * @return int 联动下架商品数
+     */
+    public function toggle(array $merchant): int
+    {
+        $disable = (int) $merchant['status'] === 3;
+        return (int) Db::transaction(static function () use ($merchant, $disable) {
+            Db::table('merchant_info')->where('id', $merchant['id'])
+                ->update(['status' => $disable ? 4 : 3]);
+            if (! $disable) {
+                return 0;
+            }
+            return Db::table('goods_info')
+                ->where('merchant_id', $merchant['id'])->where('status', 3)
+                ->whereNull('deleted_at')
+                ->update(['status' => 4]);
+        });
+    }
+
+    /**
+     * 注销商户(终态):下架全部商品、停用全部子账号
+     * @return int 联动下架商品数
+     */
+    public function close(array $merchant, string $remark): int
+    {
+        return (int) Db::transaction(static function () use ($merchant, $remark) {
+            Db::table('merchant_info')->where('id', $merchant['id'])->update([
+                'status' => 5,
+                'remark' => mb_substr($remark, 0, 500),
+            ]);
+            Db::table('merchant_admin')->where('merchant_id', $merchant['id'])
+                ->whereNull('deleted_at')->update(['status' => 2]);
+            return Db::table('goods_info')
+                ->where('merchant_id', $merchant['id'])->whereIn('status', [1, 3])
+                ->whereNull('deleted_at')
+                ->update(['status' => 4]);
+        });
+    }
+
+    /** 商户主账号登录名:m{商户ID}(冲突追加随机后缀) */
+    private function uniqueUsername(int $merchantId): string
+    {
+        $username = 'm' . str_pad((string) $merchantId, 6, '0', STR_PAD_LEFT);
+        while (Db::table('merchant_admin')->where('username', $username)->exists()) {
+            $username = 'm' . str_pad((string) $merchantId, 6, '0', STR_PAD_LEFT) . random_int(10, 99);
+        }
+        return $username;
+    }
+
+    /** 随机初始密码:12位含大小写字母数字 */
+    private function randomPassword(): string
+    {
+        $pool = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKMNPQRSTUVWXYZ23456789';
+        $password = '';
+        for ($i = 0; $i < 12; ++$i) {
+            $password .= $pool[random_int(0, strlen($pool) - 1)];
+        }
+        return $password;
+    }
+}

@@ -1,0 +1,69 @@
+// ===== UI 方案 2.1 全局 CSS 变量(色彩/财务分级色) =====
+:root {
+  --mtrip-primary: #1677ff;
+  --mtrip-orange: #ff7d00;
+  --mtrip-success: #00b42a;
+  --mtrip-warning: #ff7d00;
+  --mtrip-danger: #f53f3f;
+  --mtrip-info: #86909c;
+
+  // 中性灰度
+  --mtrip-bg-page: #f7f8fa;
+  --mtrip-bg-card: #ffffff;
+  --mtrip-border: #e5e6eb;
+  --mtrip-text-main: #1d2129;
+  --mtrip-text-secondary: #4e5969;
+  --mtrip-text-aux: #86909c;
+
+  // 财务金额分级色
+  --mtrip-money-income: #00b42a;
+  --mtrip-money-expense: #f53f3f;
+  --mtrip-money-commission: #1677ff;
+  --mtrip-money-tax: #4e5969;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--mtrip-bg-page);
+  color: var(--mtrip-text-main);
+  font-size: 14px;
+}
+
+// 卡片轻阴影(UI 方案 2.3)
+.mtrip-card-shadow {
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+}
+
+// 脱敏辅助文字
+.mtrip-masked {
+  color: var(--mtrip-text-aux);
+  font-size: 12px;
+}
+
+// 表格金额列
+.amount-income { color: var(--mtrip-money-income); }
+.amount-expense { color: var(--mtrip-money-expense); }
+.amount-commission { color: var(--mtrip-money-commission); }
+.amount-tax { color: var(--mtrip-money-tax); }
+
+// 页面通用留白
+.page-wrapper {
+  padding: 16px;
+}
+
+// 滚动条统一
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-thumb {
+  border-radius: 3px;
+  background: rgba(0, 0, 0, 0.2);
+}

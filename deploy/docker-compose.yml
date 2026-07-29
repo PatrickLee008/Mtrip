@@ -1,0 +1,197 @@
+# Mtrip 本地一键联调环境(Windows Docker Desktop 兼容)
+# 用法:cd deploy; Copy-Item .env.example .env; docker compose up -d --build
+# 网关入口:http://localhost:8080(/api/v1/admin/* 与 /api/v1/app/* 统一分发)
+name: mtrip
+
+x-hyperf-common: &hyperf-common
+  restart: unless-stopped
+  environment: &hyperf-env
+    APP_ENV: ${APP_ENV:-dev}
+    SCAN_CACHEABLE: "false"
+    WORKER_NUM: "2"
+    DB_HOST: mysql
+    DB_PORT: "3306"
+    DB_BUSINESS_DATABASE: mtrip_business
+    DB_SYSTEM_DATABASE: mtrip_system
+    DB_USERNAME: ${MYSQL_USER:-mtrip}
+    DB_PASSWORD: ${MYSQL_PASSWORD:-mtrip@2026}
+    DB_MAX_CONNECTIONS: "10"
+    REDIS_HOST: redis
+    REDIS_PORT: "6379"
+    REDIS_AUTH: ""
+    REDIS_DB: "0"
+    MTRIP_JWT_SECRET: ${MTRIP_JWT_SECRET:-mtrip-dev-jwt-secret-change-me}
+    MTRIP_JWT_TTL: "7200"
+    MTRIP_APP_JWT_TTL: "604800"
+    MTRIP_AES_KEY: ${MTRIP_AES_KEY:-mtrip-dev-aes-key-change-me}
+  depends_on:
+    mysql:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+
+services:
+  mysql:
+    image: mysql:8.0
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root@2026}
+      MYSQL_USER: ${MYSQL_USER:-mtrip}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-mtrip@2026}
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --default-time-zone=+00:00
+    ports:
+      - "${MYSQL_HOST_PORT:-3307}:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+      # 首次启动自动建库建表+种子(按文件名顺序执行;重建需 docker compose down -v)
+      - ../database/init/00-create-databases.sql:/docker-entrypoint-initdb.d/00-create-databases.sql:ro
+      - ../database/system/01-admin-role-menu.sql:/docker-entrypoint-initdb.d/10-system-admin-role-menu.sql:ro
+      - ../database/system/02-log.sql:/docker-entrypoint-initdb.d/11-system-log.sql:ro
+      - ../database/system/03-config-site.sql:/docker-entrypoint-initdb.d/12-system-config-site.sql:ro
+      - ../database/system/04-storage-file.sql:/docker-entrypoint-initdb.d/13-system-storage-file.sql:ro
+      - ../database/system/05-pay-sms-map.sql:/docker-entrypoint-initdb.d/14-system-pay-sms-map.sql:ro
+      - ../database/system/06-client.sql:/docker-entrypoint-initdb.d/15-system-client.sql:ro
+      - ../database/merchant/01-merchant.sql:/docker-entrypoint-initdb.d/20-merchant.sql:ro
+      - ../database/merchant/02-supplier.sql:/docker-entrypoint-initdb.d/21-supplier.sql:ro
+      - ../database/goods/01-goods.sql:/docker-entrypoint-initdb.d/30-goods.sql:ro
+      - ../database/order/01-order.sql:/docker-entrypoint-initdb.d/40-order.sql:ro
+      - ../database/order/02-verify.sql:/docker-entrypoint-initdb.d/41-verify.sql:ro
+      - ../database/finance/01-finance.sql:/docker-entrypoint-initdb.d/50-finance.sql:ro
+      - ../database/marketing/01-marketing.sql:/docker-entrypoint-initdb.d/60-marketing.sql:ro
+      - ../database/user/01-user.sql:/docker-entrypoint-initdb.d/70-user.sql:ro
+      - ../database/user/02-user-app.sql:/docker-entrypoint-initdb.d/71-user-app.sql:ro
+      - ../database/seed/01-admin-role.sql:/docker-entrypoint-initdb.d/90-seed-admin-role.sql:ro
+      - ../database/seed/02-menu.sql:/docker-entrypoint-initdb.d/91-seed-menu.sql:ro
+      - ../database/seed/03-config-site.sql:/docker-entrypoint-initdb.d/92-seed-config-site.sql:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-p${MYSQL_ROOT_PASSWORD:-root@2026}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "${REDIS_HOST_PORT:-6380}:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  system-service:
+    <<: *hyperf-common
+    build:
+      context: ../backend
+      dockerfile: services/system-service/Dockerfile
+    environment:
+      <<: *hyperf-env
+      HTTP_PORT: "9501"
+    ports:
+      - "9501:9501"
+
+  user-service:
+    <<: *hyperf-common
+    build:
+      context: ../backend
+      dockerfile: services/user-service/Dockerfile
+    environment:
+      <<: *hyperf-env
+      HTTP_PORT: "9502"
+    ports:
+      - "9502:9502"
+
+  goods-service:
+    <<: *hyperf-common
+    build:
+      context: ../backend
+      dockerfile: services/goods-service/Dockerfile
+    environment:
+      <<: *hyperf-env
+      HTTP_PORT: "9503"
+    ports:
+      - "9503:9503"
+
+  order-service:
+    <<: *hyperf-common
+    build:
+      context: ../backend
+      dockerfile: services/order-service/Dockerfile
+    environment:
+      <<: *hyperf-env
+      HTTP_PORT: "9504"
+    ports:
+      - "9504:9504"
+
+  merchant-service:
+    <<: *hyperf-common
+    build:
+      context: ../backend
+      dockerfile: services/merchant-service/Dockerfile
+    environment:
+      <<: *hyperf-env
+      HTTP_PORT: "9505"
+    ports:
+      - "9505:9505"
+
+  finance-service:
+    <<: *hyperf-common
+    build:
+      context: ../backend
+      dockerfile: services/finance-service/Dockerfile
+    environment:
+      <<: *hyperf-env
+      HTTP_PORT: "9506"
+    ports:
+      - "9506:9506"
+
+  marketing-service:
+    <<: *hyperf-common
+    build:
+      context: ../backend
+      dockerfile: services/marketing-service/Dockerfile
+    environment:
+      <<: *hyperf-env
+      HTTP_PORT: "9507"
+    ports:
+      - "9507:9507"
+
+  payment-service:
+    <<: *hyperf-common
+    build:
+      context: ../backend
+      dockerfile: services/payment-service/Dockerfile
+    environment:
+      <<: *hyperf-env
+      HTTP_PORT: "9508"
+    ports:
+      - "9508:9508"
+
+  gateway:
+    image: openresty/openresty:1.25.3.1-alpine
+    restart: unless-stopped
+    ports:
+      - "${GATEWAY_HOST_PORT:-8080}:80"
+    volumes:
+      - ./openresty/nginx.conf:/usr/local/openresty/nginx/conf/nginx.conf:ro
+      - ./openresty/conf.d:/etc/nginx/conf.d:ro
+    depends_on:
+      - system-service
+      - user-service
+      - goods-service
+      - order-service
+      - merchant-service
+      - finance-service
+      - marketing-service
+      - payment-service
+
+volumes:
+  mysql-data:
+  redis-data:

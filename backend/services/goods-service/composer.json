@@ -1,0 +1,56 @@
+{
+    "name": "mtrip/goods-service",
+    "description": "Mtrip 商品服务:酒店/门票商品、分类、房型票种、价格库存日历(C端 /api/v1/app/goods/* 与管理端 /api/v1/admin/goods/* 公用服务)",
+    "type": "project",
+    "license": "proprietary",
+    "require": {
+        "php": ">=8.1",
+        "mtrip/shared": "*",
+        "hyperf/framework": "~3.1.0",
+        "hyperf/di": "~3.1.0",
+        "hyperf/http-server": "~3.1.0",
+        "hyperf/database": "~3.1.0",
+        "hyperf/db-connection": "~3.1.0",
+        "hyperf/redis": "~3.1.0",
+        "hyperf/config": "~3.1.0",
+        "hyperf/context": "~3.1.0",
+        "hyperf/validation": "~3.1.0",
+        "hyperf/translation": "~3.1.0",
+        "hyperf/exception-handler": "~3.1.0",
+        "hyperf/logger": "~3.1.0",
+        "hyperf/command": "~3.1.0",
+        "hyperf/crontab": "~3.1.0",
+        "hyperf/process": "~3.1.0",
+        "hyperf/engine": "^2.10",
+        "hyperf/support": "~3.1.0"
+    },
+    "require-dev": {
+        "hyperf/devtool": "~3.1.0",
+        "hyperf/testing": "~3.1.0"
+    },
+    "repositories": [
+        {
+            "type": "path",
+            "url": "../../shared",
+            "options": { "symlink": true }
+        }
+    ],
+    "autoload": {
+        "psr-4": {
+            "App\\": "app/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Test\\": "test/"
+        }
+    },
+    "config": {
+        "optimize-autoloader": true,
+        "sort-packages": true
+    },
+    "extra": [],
+    "scripts": {
+        "start": "php bin/hyperf.php start"
+    }
+}

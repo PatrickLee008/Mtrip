@@ -1,0 +1,24 @@
+{
+  "expo": {
+    "name": "Mtrip",
+    "slug": "mtrip-client-app",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "mtrip",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "backgroundColor": "#1668dc"
+    },
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.mtrip.clientapp"
+    },
+    "android": {
+      "package": "com.mtrip.clientapp"
+    },
+    "web": {
+      "bundler": "metro"
+    }
+  }
+}

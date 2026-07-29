@@ -1,0 +1,95 @@
+<script setup lang="ts">
+import { computed } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
+import { useUserStore } from '@/stores/user';
+import type { MenuNode } from '@/api/types';
+
+/**
+ * PageContainer:面包屑 + 页面标题 + 操作按钮区(UI 方案 3.3)
+ */
+const props = defineProps<{
+  /** 覆盖默认标题(默认取路由 meta.title) */
+  title?: string;
+}>();
+
+const route = useRoute();
+const router = useRouter();
+const userStore = useUserStore();
+
+const pageTitle = computed(() => props.title || (route.meta.title as string) || '');
+
+/** 由菜单树推导面包屑:一级目录 / 页面 */
+const breadcrumbs = computed<string[]>(() => {
+  const crumbs: string[] = [];
+  const find = (nodes: MenuNode[], trail: string[]): boolean => {
+    for (const node of nodes) {
+      const next = [...trail, node.menu_name];
+      if (node.menu_type === 2 && node.route_path === route.path) {
+        crumbs.push(...next);
+        return true;
+      }
+      if (node.children?.length && find(node.children, next)) {
+        return true;
+      }
+    }
+    return false;
+  };
+  find(userStore.menus, []);
+  return crumbs.length > 0 ? crumbs : [pageTitle.value];
+});
+</script>
+
+<template>
+  <div class="page-container">
+    <div class="page-header mtrip-card-shadow">
+      <a-breadcrumb class="page-breadcrumb">
+        <a-breadcrumb-item>
+          <a @click="router.push('/dashboard')">首页</a>
+        </a-breadcrumb-item>
+        <a-breadcrumb-item v-for="crumb in breadcrumbs" :key="crumb">{{ crumb }}</a-breadcrumb-item>
+      </a-breadcrumb>
+      <div class="page-title-row">
+        <h2 class="page-title">{{ pageTitle }}</h2>
+        <div class="page-actions">
+          <slot name="extra" />
+        </div>
+      </div>
+    </div>
+    <div class="page-body">
+      <slot />
+    </div>
+  </div>
+</template>
+
+<style scoped lang="less">
+.page-header {
+  padding: 12px 16px;
+  background: var(--mtrip-bg-card);
+
+  .page-breadcrumb {
+    margin-bottom: 4px;
+  }
+
+  .page-title-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+
+    .page-title {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 500;
+      line-height: 26px;
+    }
+
+    .page-actions {
+      display: flex;
+      gap: 8px;
+    }
+  }
+}
+
+.page-body {
+  padding: 16px;
+}
+</style>

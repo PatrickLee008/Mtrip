@@ -1,0 +1,103 @@
+{
+  "common": {
+    "confirm": "OK",
+    "cancel": "Cancel",
+    "submit": "Submit",
+    "loading": "Loading...",
+    "empty": "No data",
+    "retry": "Retry",
+    "loadMore": "Load more",
+    "noMore": "No more",
+    "all": "All",
+    "search": "Search",
+    "success": "Success"
+  },
+  "tab": {
+    "home": "Home",
+    "order": "Orders",
+    "mine": "Me"
+  },
+  "home": {
+    "recommend": "Recommended",
+    "hot": "Trending",
+    "searchPlaceholder": "Search hotels / tickets",
+    "hotel": "Hotels",
+    "ticket": "Tickets"
+  },
+  "site": {
+    "title": "Select Site",
+    "current": "Current site"
+  },
+  "goods": {
+    "listTitle": "Products",
+    "detailTitle": "Detail",
+    "priceFrom": "from",
+    "sales": "{{count}} sold",
+    "sortDefault": "Default",
+    "sortSales": "Sales",
+    "sortNew": "Newest",
+    "selectSku": "Select option",
+    "calendar": "Price calendar",
+    "refundRules": "Cancellation policy",
+    "book": "Book now",
+    "soldOut": "Sold out",
+    "facilities": "Facilities",
+    "address": "Address"
+  },
+  "order": {
+    "confirmTitle": "Confirm Order",
+    "listTitle": "My Orders",
+    "detailTitle": "Order Detail",
+    "useDate": "Use / Check-in date",
+    "endDate": "Check-out date",
+    "quantity": "Quantity",
+    "contactName": "Contact name",
+    "contactPhone": "Contact phone",
+    "remark": "Remark",
+    "totalAmount": "Total",
+    "submitOrder": "Place order",
+    "payNow": "Pay now",
+    "payStripe": "Pay with Stripe",
+    "payPaypal": "Pay with PayPal",
+    "cancelOrder": "Cancel order",
+    "applyRefund": "Request refund",
+    "refundReason": "Refund reason",
+    "verifyCode": "Voucher code",
+    "orderNo": "Order No.",
+    "createdAt": "Created at",
+    "status": {
+      "pending": "Unpaid",
+      "paid": "Paid",
+      "used": "Redeemed",
+      "finished": "Completed",
+      "cancelled": "Cancelled",
+      "refunding": "Refunding",
+      "refunded": "Refunded",
+      "expired": "Expired"
+    }
+  },
+  "user": {
+    "loginTitle": "Sign In",
+    "registerTitle": "Sign Up",
+    "mobile": "Mobile number",
+    "password": "Password",
+    "nickname": "Nickname (optional)",
+    "login": "Sign in",
+    "register": "Sign up",
+    "toRegister": "No account? Sign up",
+    "toLogin": "Have an account? Sign in",
+    "logout": "Sign out",
+    "mineTitle": "Me",
+    "balance": "Balance",
+    "points": "Points",
+    "memberLevel": "Membership",
+    "language": "Language",
+    "gdpr": "Privacy & data consent",
+    "gdprAccepted": "Granted",
+    "gdprNotAccepted": "Not granted",
+    "gdprTip": "By continuing you agree to the Privacy Policy. Your data is processed under GDPR.",
+    "notLogin": "Not signed in, tap to sign in",
+    "invalidMobile": "Invalid mobile number",
+    "invalidPassword": "Password must be 6-32 characters"
+  }
+}

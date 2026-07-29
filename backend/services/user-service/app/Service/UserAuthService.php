@@ -1,0 +1,173 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Service;
+
+use Hyperf\Contract\ConfigInterface;
+use Hyperf\DbConnection\Db;
+use Mtrip\Shared\Constants\ErrorCode;
+use Mtrip\Shared\Exception\BusinessException;
+use Mtrip\Shared\Support\CryptoHelper;
+use Mtrip\Shared\Support\JwtHelper;
+use Mtrip\Shared\Support\MaskHelper;
+
+/**
+ * C端认证服务:注册/登录/Token 签发
+ * 手机号 AES 加密存储 + HMAC 哈希检索(mobile_hash),返回值统一脱敏
+ */
+class UserAuthService
+{
+    public function __construct(protected ConfigInterface $config)
+    {
+    }
+
+    public function register(int $siteId, string $mobile, string $password, string $nickname, int $source, string $ip): array
+    {
+        $mobileHash = $this->mobileHash($mobile);
+        $exists = Db::table('user_info')
+            ->where('site_id', $siteId)->where('mobile_hash', $mobileHash)
+            ->whereNull('deleted_at')->exists();
+        if ($exists) {
+            throw new BusinessException(ErrorCode::DATA_CONFLICT, '该手机号已注册');
+        }
+
+        $now = date('Y-m-d H:i:s');
+        $userId = Db::table('user_info')->insertGetId([
+            'site_id' => $siteId,
+            'nickname' => $nickname !== '' ? $nickname : 'User' . substr($mobile, -4),
+            'mobile' => CryptoHelper::encrypt($mobile, $this->aesKey()),
+            'mobile_hash' => $mobileHash,
+            'password' => password_hash($password, PASSWORD_BCRYPT),
+            'register_source' => $source,
+            'register_time' => $now,
+            'last_login_at' => $now,
+            'last_login_ip' => $ip,
+            'user_status' => 1,
+        ]);
+        $this->actionLog($siteId, $userId, 1, '注册并登录', $ip);
+
+        return $this->issueToken($userId, $siteId);
+    }
+
+    public function login(int $siteId, string $mobile, string $password, string $ip): array
+    {
+        $user = Db::table('user_info')
+            ->where('site_id', $siteId)->where('mobile_hash', $this->mobileHash($mobile))
+            ->whereNull('deleted_at')->first();
+        $user = $user ? (array) $user : null;
+        if (! $user || ! password_verify($password, (string) $user['password'])) {
+            throw new BusinessException(ErrorCode::PARAM_ERROR, '手机号或密码错误');
+        }
+        if ((int) $user['user_status'] === 2) {
+            throw new BusinessException(ErrorCode::FORBIDDEN, '账号已被冻结,请联系客服');
+        }
+        if ((int) $user['user_status'] === 3) {
+            throw new BusinessException(ErrorCode::FORBIDDEN, '账号已注销');
+        }
+
+        Db::table('user_info')->where('id', $user['id'])->update([
+            'last_login_at' => date('Y-m-d H:i:s'),
+            'last_login_ip' => $ip,
+        ]);
+        $this->actionLog($siteId, (int) $user['id'], 1, '密码登录', $ip);
+
+        return $this->issueToken((int) $user['id'], $siteId);
+    }
+
+    public function logout(int $userId, string $ip): void
+    {
+        $user = Db::table('user_info')->where('id', $userId)->first();
+        if ($user) {
+            $this->actionLog((int) ((array) $user)['site_id'], $userId, 1, '退出登录', $ip);
+        }
+    }
+
+    public function refresh(int $userId): array
+    {
+        $user = Db::table('user_info')->where('id', $userId)->whereNull('deleted_at')->first();
+        if (! $user) {
+            throw new BusinessException(ErrorCode::UNAUTHORIZED);
+        }
+        return $this->issueToken($userId, (int) ((array) $user)['site_id']);
+    }
+
+    /** 签发C端 Token 并组装脱敏用户信息 */
+    private function issueToken(int $userId, int $siteId): array
+    {
+        $secret = (string) $this->config->get('mtrip.jwt_secret', '');
+        if ($secret === '') {
+            throw new BusinessException(ErrorCode::SERVER_ERROR, 'JWT 密钥未配置');
+        }
+        $ttl = (int) $this->config->get('mtrip.app_jwt_ttl', 604800);
+        $token = JwtHelper::issue(['aud' => 'app', 'user_id' => $userId, 'site_id' => $siteId], $secret, $ttl);
+
+        return [
+            'token' => $token,
+            'expiresIn' => $ttl,
+            'user' => $this->profile($userId),
+        ];
+    }
+
+    /** 用户资料(脱敏,供 me/登录返回复用) */
+    public function profile(int $userId): array
+    {
+        $user = Db::table('user_info')->where('id', $userId)->whereNull('deleted_at')->first();
+        if (! $user) {
+            throw new BusinessException(ErrorCode::NOT_FOUND, '用户不存在');
+        }
+        $user = (array) $user;
+        $levelName = '';
+        if ((int) $user['member_level_id'] > 0) {
+            $level = Db::table('user_member_level')->where('id', $user['member_level_id'])->first();
+            $levelName = $level ? (string) ((array) $level)['level_name'] : '';
+        }
+        return [
+            'id' => (int) $user['id'],
+            'siteId' => (int) $user['site_id'],
+            'nickname' => (string) $user['nickname'],
+            'avatar' => (string) $user['avatar'],
+            'mobile' => MaskHelper::mobile($this->decryptSafe((string) $user['mobile'])),
+            'email' => MaskHelper::email($this->decryptSafe((string) $user['email'])),
+            'memberLevelId' => (int) $user['member_level_id'],
+            'memberLevelName' => $levelName,
+            'balance' => (string) $user['balance'],
+            'points' => (int) $user['points'],
+            'realNameStatus' => (int) $user['real_name_status'],
+            'registerTime' => (string) $user['register_time'],
+        ];
+    }
+
+    public function mobileHash(string $mobile): string
+    {
+        return hash_hmac('sha256', $mobile, $this->aesKey());
+    }
+
+    public function aesKey(): string
+    {
+        return (string) $this->config->get('mtrip.aes_key', '');
+    }
+
+    public function actionLog(int $siteId, int $userId, int $type, string $content, string $ip): void
+    {
+        Db::table('user_action_log')->insert([
+            'site_id' => $siteId,
+            'user_id' => $userId,
+            'action_type' => $type,
+            'content' => $content,
+            'client_ip' => $ip,
+        ]);
+    }
+
+    private function decryptSafe(string $ciphertext): string
+    {
+        if ($ciphertext === '') {
+            return '';
+        }
+        try {
+            return CryptoHelper::decrypt($ciphertext, $this->aesKey());
+        } catch (\Throwable) {
+            return '';
+        }
+    }
+}

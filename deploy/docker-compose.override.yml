@@ -1,0 +1,69 @@
+# 开发期热更新覆盖配置(docker compose 自动与 docker-compose.yml 合并,无需额外参数)
+# 作用:把本地源码挂载进容器,覆盖镜像内 COPY 的代码
+#   改代码后只需:docker compose restart xxx-service   (约 2 秒,无需 --build)
+#   仅新增 composer 依赖 / 改 Dockerfile 时才需要:docker compose up -d --build xxx-service
+# 说明:
+#   - 只挂 app/ 与 config/,不整目录覆盖 /opt/www(避免遮住镜像内的 vendor/)
+#   - shared 在容器内经 composer path 仓库 symlink 到 /shared,挂 /shared/src 即穿透生效
+#   - 日志挂出到 deploy/logs/<服务名>/(hyperf.log 按天滚动);只挂 runtime/logs 子目录,
+#     不挂整个 runtime/(其下 container/ 是框架代理类缓存,留在容器内)
+#   - 生产部署不使用本文件(compose -f docker-compose.yml 显式指定即可跳过合并)
+
+x-shared-mount: &shared-src ../backend/shared/src:/shared/src
+
+services:
+  system-service:
+    volumes:
+      - ../backend/services/system-service/app:/opt/www/app
+      - ../backend/services/system-service/config:/opt/www/config
+      - ./logs/system-service:/opt/www/runtime/logs
+      - *shared-src
+
+  user-service:
+    volumes:
+      - ../backend/services/user-service/app:/opt/www/app
+      - ../backend/services/user-service/config:/opt/www/config
+      - ./logs/user-service:/opt/www/runtime/logs
+      - *shared-src
+
+  goods-service:
+    volumes:
+      - ../backend/services/goods-service/app:/opt/www/app
+      - ../backend/services/goods-service/config:/opt/www/config
+      - ./logs/goods-service:/opt/www/runtime/logs
+      - *shared-src
+
+  order-service:
+    volumes:
+      - ../backend/services/order-service/app:/opt/www/app
+      - ../backend/services/order-service/config:/opt/www/config
+      - ./logs/order-service:/opt/www/runtime/logs
+      - *shared-src
+
+  merchant-service:
+    volumes:
+      - ../backend/services/merchant-service/app:/opt/www/app
+      - ../backend/services/merchant-service/config:/opt/www/config
+      - ./logs/merchant-service:/opt/www/runtime/logs
+      - *shared-src
+
+  finance-service:
+    volumes:
+      - ../backend/services/finance-service/app:/opt/www/app
+      - ../backend/services/finance-service/config:/opt/www/config
+      - ./logs/finance-service:/opt/www/runtime/logs
+      - *shared-src
+
+  marketing-service:
+    volumes:
+      - ../backend/services/marketing-service/app:/opt/www/app
+      - ../backend/services/marketing-service/config:/opt/www/config
+      - ./logs/marketing-service:/opt/www/runtime/logs
+      - *shared-src
+
+  payment-service:
+    volumes:
+      - ../backend/services/payment-service/app:/opt/www/app
+      - ../backend/services/payment-service/config:/opt/www/config
+      - ./logs/payment-service:/opt/www/runtime/logs
+      - *shared-src

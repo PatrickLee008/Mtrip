@@ -1,0 +1,103 @@
+{
+  "common": {
+    "confirm": "确定",
+    "cancel": "取消",
+    "submit": "提交",
+    "loading": "加载中...",
+    "empty": "暂无数据",
+    "retry": "重试",
+    "loadMore": "加载更多",
+    "noMore": "没有更多了",
+    "all": "全部",
+    "search": "搜索",
+    "success": "操作成功"
+  },
+  "tab": {
+    "home": "首页",
+    "order": "订单",
+    "mine": "我的"
+  },
+  "home": {
+    "recommend": "为你推荐",
+    "hot": "热门榜单",
+    "searchPlaceholder": "搜索酒店 / 景点门票",
+    "hotel": "酒店",
+    "ticket": "门票"
+  },
+  "site": {
+    "title": "选择站点",
+    "current": "当前站点"
+  },
+  "goods": {
+    "listTitle": "商品列表",
+    "detailTitle": "商品详情",
+    "priceFrom": "起",
+    "sales": "已售{{count}}",
+    "sortDefault": "综合",
+    "sortSales": "销量",
+    "sortNew": "最新",
+    "selectSku": "选择规格",
+    "calendar": "价格日历",
+    "refundRules": "退改规则",
+    "book": "立即预订",
+    "soldOut": "已售罄",
+    "facilities": "设施服务",
+    "address": "地址"
+  },
+  "order": {
+    "confirmTitle": "确认订单",
+    "listTitle": "我的订单",
+    "detailTitle": "订单详情",
+    "useDate": "使用/入住日期",
+    "endDate": "离店日期",
+    "quantity": "数量",
+    "contactName": "联系人姓名",
+    "contactPhone": "联系人手机号",
+    "remark": "备注",
+    "totalAmount": "合计",
+    "submitOrder": "提交订单",
+    "payNow": "立即支付",
+    "payStripe": "Stripe 支付",
+    "payPaypal": "PayPal 支付",
+    "cancelOrder": "取消订单",
+    "applyRefund": "申请退款",
+    "refundReason": "退款原因",
+    "verifyCode": "核销码",
+    "orderNo": "订单号",
+    "createdAt": "下单时间",
+    "status": {
+      "pending": "待支付",
+      "paid": "已支付",
+      "used": "已核销",
+      "finished": "已完成",
+      "cancelled": "已取消",
+      "refunding": "退款中",
+      "refunded": "已退款",
+      "expired": "已过期"
+    }
+  },
+  "user": {
+    "loginTitle": "登录",
+    "registerTitle": "注册",
+    "mobile": "手机号",
+    "password": "密码",
+    "nickname": "昵称(选填)",
+    "login": "登录",
+    "register": "注册",
+    "toRegister": "没有账号?去注册",
+    "toLogin": "已有账号?去登录",
+    "logout": "退出登录",
+    "mineTitle": "我的",
+    "balance": "余额",
+    "points": "积分",
+    "memberLevel": "会员等级",
+    "language": "语言",
+    "gdpr": "隐私与数据授权",
+    "gdprAccepted": "已授权",
+    "gdprNotAccepted": "未授权",
+    "gdprTip": "继续使用即代表同意《隐私政策》,我们将按 GDPR 规范处理你的数据",
+    "notLogin": "未登录,点击登录",
+    "invalidMobile": "手机号格式不正确",
+    "invalidPassword": "密码长度须为6-32位"
+  }
+}
