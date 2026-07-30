@@ -11,6 +11,7 @@ USE `mtrip_business`;
 CREATE TABLE IF NOT EXISTS `merchant_info` (
   `id`                  BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '主键',
   `site_id`             BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '所属站点ID,0=全局',
+  `group_id`            BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '所属集团ID(merchant_group),0=独立商户',
   `merchant_name`       VARCHAR(100) NOT NULL COMMENT '商户全称',
   `merchant_short_name` VARCHAR(50)  NOT NULL DEFAULT '' COMMENT '商户简称(C端展示名)',
   `merchant_type`       TINYINT      NOT NULL DEFAULT 1 COMMENT '类型:1酒店 2景区 3综合',
@@ -41,6 +42,7 @@ CREATE TABLE IF NOT EXISTS `merchant_info` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_credit_code` (`credit_code`),
   KEY `idx_site_id` (`site_id`),
+  KEY `idx_group_id` (`group_id`),
   KEY `idx_status` (`status`),
   KEY `idx_created_at` (`created_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin COMMENT='商户表';
@@ -70,7 +72,8 @@ CREATE TABLE IF NOT EXISTS `merchant_account` (
 CREATE TABLE IF NOT EXISTS `merchant_admin` (
   `id`            BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '主键',
   `site_id`       BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '所属站点ID',
-  `merchant_id`   BIGINT UNSIGNED NOT NULL COMMENT '商户ID',
+  `merchant_id`   BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '商户ID,0=集团账号',
+  `group_id`      BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '所属集团ID,>0且merchant_id=0为集团账号',
   `username`      VARCHAR(50)  NOT NULL COMMENT '登录账号',
   `password`      VARCHAR(255) NOT NULL COMMENT '登录密码(bcrypt)',
   `real_name`     VARCHAR(50)  NOT NULL DEFAULT '' COMMENT '姓名',
@@ -85,5 +88,6 @@ CREATE TABLE IF NOT EXISTS `merchant_admin` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_username` (`username`),
   KEY `idx_site_id` (`site_id`),
-  KEY `idx_merchant_id` (`merchant_id`)
+  KEY `idx_merchant_id` (`merchant_id`),
+  KEY `idx_group_id` (`group_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin COMMENT='商户子账号表';

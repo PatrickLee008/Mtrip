@@ -8,7 +8,9 @@ declare(strict_types=1);
  * 按钮级权限由控制器 #[Permission] 注解校验
  */
 
+use App\Controller\GroupController;
 use App\Controller\MerchantController;
+use App\Controller\StoreController;
 use App\Controller\SupplierController;
 use Hyperf\HttpServer\Router\Router;
 use Mtrip\Shared\Middleware\AdminAuthMiddleware;
@@ -31,6 +33,26 @@ Router::addGroup('/api/v1/admin', static function () {
     Router::post('/merchant/close', [MerchantController::class, 'close']);
     Router::get('/merchant/statistics', [MerchantController::class, 'statistics']);
     Router::get('/merchant/statement', [MerchantController::class, 'statement']);
+
+    // ---------- 集团管理(计划 11:管理/授权实体,商户授权绑定) ----------
+    Router::get('/merchant/group/list', [GroupController::class, 'index']);
+    Router::get('/merchant/group/detail', [GroupController::class, 'detail']);
+    Router::post('/merchant/group/add', [GroupController::class, 'create']);
+    Router::post('/merchant/group/update', [GroupController::class, 'update']);
+    Router::post('/merchant/group/toggle-status', [GroupController::class, 'toggleStatus']);
+    Router::post('/merchant/group/bind', [GroupController::class, 'bind']);
+    Router::post('/merchant/group/unbind', [GroupController::class, 'unbind']);
+    Router::post('/merchant/group/account-reset', [GroupController::class, 'accountReset']);
+    Router::post('/merchant/group/delete', [GroupController::class, 'remove']);
+
+    // ---------- 门店管理(计划 11:履约/核销单元,审核通过自动建主门店) ----------
+    Router::get('/merchant/store/list', [StoreController::class, 'index']);
+    Router::get('/merchant/store/detail', [StoreController::class, 'detail']);
+    Router::post('/merchant/store/add', [StoreController::class, 'create']);
+    Router::post('/merchant/store/update', [StoreController::class, 'update']);
+    Router::post('/merchant/store/set-main', [StoreController::class, 'setMain']);
+    Router::post('/merchant/store/toggle-status', [StoreController::class, 'toggleStatus']);
+    Router::post('/merchant/store/delete', [StoreController::class, 'remove']);
 
     // ---------- 供应商管理(CRUD/资质审核/供货商品/结算) ----------
     Router::get('/supplier/list', [SupplierController::class, 'index']);

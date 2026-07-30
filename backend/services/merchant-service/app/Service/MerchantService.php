@@ -7,12 +7,12 @@ namespace App\Service;
 use Hyperf\DbConnection\Db;
 
 /**
- * 商户状态流转服务:审核通过生成主账号 / 驳回 / 启停联动商品 / 注销
+ * 商户状态流转服务:审核通过生成主账号与主门店 / 驳回 / 启停联动商品 / 注销
  */
 class MerchantService
 {
     /**
-     * 审核通过:置为已启用并生成商户后台主账号(初始密码明文仅返回一次)
+     * 审核通过:置为已启用并生成商户后台主账号(初始密码明文仅返回一次),同时自动创建主门店
      * @return array{username: string, password: string}
      */
     public function approve(array $merchant, string $remark): array
@@ -36,6 +36,23 @@ class MerchantService
                 'is_owner' => 1,
                 'status' => 1,
             ]);
+            // 主门店:一商户一门店的默认形态,信息从商户带入(手机号已加密存储,直接复用密文)
+            $hasStore = Db::table('merchant_store')
+                ->where('merchant_id', $merchant['id'])->whereNull('deleted_at')->exists();
+            if (! $hasStore) {
+                Db::table('merchant_store')->insert([
+                    'site_id' => (int) $merchant['site_id'],
+                    'merchant_id' => (int) $merchant['id'],
+                    'store_name' => (string) $merchant['merchant_name'],
+                    'contact_name' => (string) $merchant['contact_name'],
+                    'contact_phone' => (string) $merchant['contact_phone'],
+                    'address' => (string) $merchant['address'],
+                    'longitude' => $merchant['longitude'],
+                    'latitude' => $merchant['latitude'],
+                    'is_main' => 1,
+                    'status' => 1,
+                ]);
+            }
         });
         return ['username' => $username, 'password' => $password];
     }
@@ -72,7 +89,7 @@ class MerchantService
     }
 
     /**
-     * 注销商户(终态):下架全部商品、停用全部子账号
+     * 注销商户(终态):下架全部商品、停用全部子账号、门店联动停业
      * @return int 联动下架商品数
      */
     public function close(array $merchant, string $remark): int
@@ -83,6 +100,8 @@ class MerchantService
                 'remark' => mb_substr($remark, 0, 500),
             ]);
             Db::table('merchant_admin')->where('merchant_id', $merchant['id'])
+                ->whereNull('deleted_at')->update(['status' => 2]);
+            Db::table('merchant_store')->where('merchant_id', $merchant['id'])
                 ->whereNull('deleted_at')->update(['status' => 2]);
             return Db::table('goods_info')
                 ->where('merchant_id', $merchant['id'])->whereIn('status', [1, 3])

@@ -40,6 +40,14 @@ class MerchantController extends AbstractController
         if ($status !== null && $status !== '') {
             $query->where('status', (int) $status);
         }
+        // 集团维度筛选:groupId(含0=独立商户) / unboundOnly=1(仅未绑集团且已启用/禁用,供集团绑定选择器使用)
+        $groupId = $this->input('groupId');
+        if ($groupId !== null && $groupId !== '') {
+            $query->where('group_id', (int) $groupId);
+        }
+        if ($this->intInput('unboundOnly') === 1) {
+            $query->where('group_id', 0)->whereIn('status', [3, 4]);
+        }
         $total = (clone $query)->count();
         $list = $query->orderByDesc('id')->forPage($page, $pageSize)->get()
             ->map(function ($row) {

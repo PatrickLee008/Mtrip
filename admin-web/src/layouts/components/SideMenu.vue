@@ -3,8 +3,6 @@ import { computed, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { Tooltip, Popover } from 'ant-design-vue';
 import * as Icons from '@ant-design/icons-vue';
-import { useI18n } from 'vue-i18n';
-import type { MenuNode } from '@/api/types';
 import { useUserStore } from '@/stores/user';
 import { useAppStore } from '@/stores/app';
 import { menuTitle } from '@/locales/menuI18n';
@@ -13,7 +11,6 @@ const route = useRoute();
 const router = useRouter();
 const userStore = useUserStore();
 const appStore = useAppStore();
-const { t } = useI18n();
 
 /** 图标名 → 组件 */
 function resolveIcon(name: string) {

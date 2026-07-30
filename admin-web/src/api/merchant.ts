@@ -63,6 +63,73 @@ export function apiMerchantStatement(params: Record<string, unknown>): Promise<P
   return get<PageData<Row>>('/admin/merchant/statement', params);
 }
 
+// ---------- 集团(计划 11:管理/授权实体,商户授权绑定) ----------
+export function apiGroupList(params: Record<string, unknown>): Promise<PageData<Row>> {
+  return get<PageData<Row>>('/admin/merchant/group/list', params);
+}
+
+export function apiGroupDetail(id: number): Promise<{ group: Row; merchants: Row[]; accounts: Row[] }> {
+  return get('/admin/merchant/group/detail', { id });
+}
+
+export function apiGroupAdd(data: Record<string, unknown>): Promise<{ id: number }> {
+  return post('/admin/merchant/group/add', data);
+}
+
+export function apiGroupUpdate(data: Record<string, unknown>): Promise<null> {
+  return post('/admin/merchant/group/update', data);
+}
+
+export function apiGroupToggleStatus(id: number): Promise<{ status: number }> {
+  return post('/admin/merchant/group/toggle-status', { id });
+}
+
+export function apiGroupBind(id: number, merchantIds: number[]): Promise<{ bound: number }> {
+  return post('/admin/merchant/group/bind', { id, merchantIds });
+}
+
+export function apiGroupUnbind(id: number, merchantId: number): Promise<null> {
+  return post('/admin/merchant/group/unbind', { id, merchantId });
+}
+
+/** 生成/重置集团主账号(明文密码仅返回一次) */
+export function apiGroupAccountReset(id: number): Promise<{ username: string; password: string; created: boolean }> {
+  return post('/admin/merchant/group/account-reset', { id });
+}
+
+export function apiGroupDelete(id: number): Promise<null> {
+  return post('/admin/merchant/group/delete', { id });
+}
+
+// ---------- 门店(计划 11:履约/核销单元,审核通过自动建主门店) ----------
+export function apiStoreList(params: Record<string, unknown>): Promise<PageData<Row>> {
+  return get<PageData<Row>>('/admin/merchant/store/list', params);
+}
+
+export function apiStoreDetail(id: number): Promise<Row> {
+  return get('/admin/merchant/store/detail', { id });
+}
+
+export function apiStoreAdd(data: Record<string, unknown>): Promise<{ id: number; isMain: number }> {
+  return post('/admin/merchant/store/add', data);
+}
+
+export function apiStoreUpdate(data: Record<string, unknown>): Promise<null> {
+  return post('/admin/merchant/store/update', data);
+}
+
+export function apiStoreSetMain(id: number): Promise<null> {
+  return post('/admin/merchant/store/set-main', { id });
+}
+
+export function apiStoreToggleStatus(id: number): Promise<{ status: number }> {
+  return post('/admin/merchant/store/toggle-status', { id });
+}
+
+export function apiStoreDelete(id: number): Promise<null> {
+  return post('/admin/merchant/store/delete', { id });
+}
+
 // ---------- 供应商 ----------
 export function apiSupplierList(params: Record<string, unknown>): Promise<PageData<Row>> {
   return get<PageData<Row>>('/admin/supplier/list', params);

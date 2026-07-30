@@ -101,7 +101,9 @@ INSERT IGNORE INTO `sys_menu` (`id`, `parent_id`, `menu_name`, `menu_name_en`, `
 (401, 400, '商户列表', 'Merchants',            'menu.merchantList',    'merchant:list:list',    2, '/merchant/list',    'merchant/list/index',    '', 1),
 (402, 400, '商户账户', 'Merchant Accounts',    'menu.merchantAccount', 'merchant:account:list', 2, '/merchant/account', 'merchant/account/index', '', 2),
 (403, 400, '商户权限', 'Merchant Permissions', 'menu.merchantPerm',    'merchant:perm:list',    2, '/merchant/perm',    'merchant/perm/index',    '', 3),
-(404, 400, '商户统计', 'Merchant Stats',       'menu.merchantStats',   'merchant:stats:list',   2, '/merchant/stats',   'merchant/stats/index',   '', 4);
+(404, 400, '商户统计', 'Merchant Stats',       'menu.merchantStats',   'merchant:stats:list',   2, '/merchant/stats',   'merchant/stats/index',   '', 4),
+(405, 400, '集团管理', 'Merchant Groups',      'menu.merchantGroup',   'merchant:group:list',   2, '/merchant/group',   'merchant/group/index',   '', 5),
+(406, 400, '门店管理', 'Merchant Stores',      'menu.merchantStore',   'merchant:store:list',   2, '/merchant/store',   'merchant/store/index',   '', 6);
 INSERT IGNORE INTO `sys_menu` (`id`, `parent_id`, `menu_name`, `menu_name_en`, `perm_key`, `menu_type`, `sort`) VALUES
 (40101, 401, '新增商户', 'Add Merchant',    'merchant:list:add',    3, 1),
 (40102, 401, '编辑商户', 'Edit Merchant',   'merchant:list:edit',   3, 2),
@@ -110,7 +112,17 @@ INSERT IGNORE INTO `sys_menu` (`id`, `parent_id`, `menu_name`, `menu_name_en`, `
 (40105, 401, '删除商户', 'Delete Merchant', 'merchant:list:delete', 3, 5),
 (40201, 402, '编辑账户', 'Edit Account',    'merchant:account:edit',3, 1),
 (40301, 403, '配置权限', 'Configure Permissions', 'merchant:perm:edit', 3, 1),
-(40401, 404, '导出统计', 'Export Stats',    'merchant:stats:export',3, 1);
+(40401, 404, '导出统计', 'Export Stats',    'merchant:stats:export',3, 1),
+(40501, 405, '新增集团', 'Add Group',       'merchant:group:add',    3, 1),
+(40502, 405, '编辑集团', 'Edit Group',      'merchant:group:edit',   3, 2),
+(40503, 405, '启用禁用', 'Enable/Disable',  'merchant:group:status', 3, 3),
+(40504, 405, '绑定解绑', 'Bind/Unbind',     'merchant:group:bind',   3, 4),
+(40505, 405, '集团账号', 'Group Account',   'merchant:group:account',3, 5),
+(40506, 405, '删除集团', 'Delete Group',    'merchant:group:delete', 3, 6),
+(40601, 406, '新增门店', 'Add Store',       'merchant:store:add',    3, 1),
+(40602, 406, '编辑门店', 'Edit Store',      'merchant:store:edit',   3, 2),
+(40603, 406, '营业停业', 'Open/Close',      'merchant:store:status', 3, 3),
+(40604, 406, '删除门店', 'Delete Store',    'merchant:store:delete', 3, 4);
 
 -- ---------- 5 供应商管理 ----------
 INSERT IGNORE INTO `sys_menu` (`id`, `parent_id`, `menu_name`, `menu_name_en`, `i18n_key`, `perm_key`, `menu_type`, `route_path`, `component`, `icon`, `sort`) VALUES

@@ -57,6 +57,11 @@ async function loadTables(): Promise<void> {
   tables.value = await apiRecycleTables();
 }
 
+/** 菜单点击:key 转字符串后切换表 */
+function onMenuClick(info: { key: string | number }): void {
+  selectTable(String(info.key));
+}
+
 function selectTable(key: string): void {
   if (key === activeKey.value) {
     return;
@@ -122,7 +127,7 @@ onMounted(async () => {
       <!-- 左侧:数据类型选择器(分组 + 数量角标) -->
       <a-card :bordered="false" class="mtrip-card-shadow recycle-side">
         <template #title>{{ t('recycle.selectTable') }}</template>
-        <a-menu :selected-keys="[activeKey]" mode="inline" @click="({ key }) => selectTable(String(key))">
+        <a-menu :selected-keys="[activeKey]" mode="inline" @click="onMenuClick">
           <a-menu-item-group :title="t('recycle.groupSystem')">
             <a-menu-item v-for="item in systemTables" :key="item.key">
               <span class="recycle-item">

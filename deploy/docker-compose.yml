@@ -7,8 +7,11 @@ x-hyperf-common: &hyperf-common
   restart: unless-stopped
   environment: &hyperf-env
     APP_ENV: ${APP_ENV:-dev}
-    SCAN_CACHEABLE: "false"
+    # 注解缓存:开发 false(改注解重启即生效),生产必须 true(避坑规范 三.4)
+    SCAN_CACHEABLE: ${SCAN_CACHEABLE:-false}
     WORKER_NUM: "2"
+    # worker 处理 N 个请求后平滑重建,防内存泄漏(避坑规范 三.1)
+    MAX_REQUEST: ${MAX_REQUEST:-10000}
     DB_HOST: mysql
     DB_PORT: "3306"
     DB_BUSINESS_DATABASE: mtrip_business

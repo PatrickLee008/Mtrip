@@ -40,6 +40,8 @@ export const MENU_I18N: Record<string, string> = {
   商家列表: 'menu.merchantList',
   商家账户: 'menu.merchantAccount',
   商家统计: 'menu.merchantStats',
+  集团管理: 'menu.merchantGroup',
+  门店管理: 'menu.merchantStore',
   供应商: 'menu.supplier',
   供应商列表: 'menu.supplierList',
   结算: 'menu.supplierSettle',

@@ -8,6 +8,7 @@
 - 前端页面代码模式:`docs/plans/HANDOFF.md` 第 5 节
 - 统一错误码定义:`backend/shared/src/Constants/ErrorCode.php`
 - 权限键规范:`#[Permission]` 注解键与 `database/seed/02-menu.sql` perm_key 一致
+- Hyperf 生产环境编码与上线检查:`Hyperf生产环境避坑规范.md`(协程/连接池/进程模型/安全编码)
 - 管理后台多语言规范:见下文「管理后台多语言规范」
 
 ## 管理后台多语言规范(admin-web,vue-i18n)

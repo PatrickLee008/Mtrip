@@ -31,7 +31,9 @@ return [
         'open_tcp_nodelay' => true,
         'max_coroutine' => 100000,
         'open_http2_protocol' => false,
-        'max_request' => 100000,
+        // 处理 N 个请求后平滑重建 worker,防常驻内存泄漏 OOM(避坑规范 三.1)
+        'max_request' => (int) env('MAX_REQUEST', 10000),
+        'max_request_grace' => 200,
         'socket_buffer_size' => 2 * 1024 * 1024,
         'buffer_output_size' => 2 * 1024 * 1024,
     ],
