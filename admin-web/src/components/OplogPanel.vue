@@ -11,7 +11,7 @@ import { apiOplogDetail, apiOplogList } from '@/api/system';
 import { exportCsv } from '@/utils/export';
 
 /**
- * 系统操作日志面板:系统管理/操作日志 与 系统日志/后台操作日志 两个菜单复用
+ * 系统操作日志面板:系统日志/后台操作日志 菜单使用
  * 只读,禁止删改;导出基于当前页数据由前端生成 CSV
  */
 const props = defineProps<{

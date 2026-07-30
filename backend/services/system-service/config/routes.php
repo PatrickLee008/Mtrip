@@ -20,6 +20,7 @@ use App\Controller\MenuController;
 use App\Controller\OperationLogController;
 use App\Controller\PayChannelController;
 use App\Controller\PermTemplateController;
+use App\Controller\RecycleController;
 use App\Controller\RoleController;
 use App\Controller\SiteController;
 use App\Controller\SmsController;
@@ -75,6 +76,13 @@ Router::addGroup('/api/v1/admin', static function () {
     // ---------- 模块4 系统操作日志(只读,禁止删改) ----------
     Router::get('/sys/oplog/list', [OperationLogController::class, 'index']);
     Router::get('/sys/oplog/detail', [OperationLogController::class, 'detail']);
+
+    // ---------- 回收站(软删数据统一管理,跨两库) ----------
+    Router::get('/sys/recycle/tables', [RecycleController::class, 'tables']);
+    Router::get('/sys/recycle/list', [RecycleController::class, 'index']);
+    Router::post('/sys/recycle/restore', [RecycleController::class, 'restore']);
+    Router::post('/sys/recycle/purge', [RecycleController::class, 'purge']);
+    Router::post('/sys/recycle/empty', [RecycleController::class, 'empty']);
 
     // ---------- 模块5 全局系统配置 ----------
     Router::get('/sys/config/list', [GlobalConfigController::class, 'index']);

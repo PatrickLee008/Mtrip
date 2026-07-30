@@ -53,6 +53,7 @@ export const MENU_I18N: Record<string, string> = {
   管理员: 'menu.systemAdmin',
   角色: 'menu.systemRole',
   菜单: 'menu.systemMenu',
+  回收站: 'menu.systemRecycle',
   统计: 'menu.stats',
   财务统计: 'menu.statsFinance',
   商品统计: 'menu.statsGoods',

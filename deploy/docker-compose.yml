@@ -33,6 +33,10 @@ x-hyperf-common: &hyperf-common
     MTRIP_PAYLOAD_ENCRYPT: ${MTRIP_PAYLOAD_ENCRYPT:-true}
     # 管理端登录传输加密密钥(与 admin-web VITE_LOGIN_AES_KEY 同值)
     MTRIP_ADMIN_AES_KEY: ${MTRIP_ADMIN_AES_KEY:-}
+    # 提交防重(写操作 Redis 并发锁/X-Form-Id 幂等,锁兜底 TTL 与幂等窗口单位秒)
+    MTRIP_SUBMIT_LOCK: ${MTRIP_SUBMIT_LOCK:-true}
+    MTRIP_SUBMIT_LOCK_TTL: ${MTRIP_SUBMIT_LOCK_TTL:-10}
+    MTRIP_FORM_ID_TTL: ${MTRIP_FORM_ID_TTL:-300}
   depends_on:
     mysql:
       condition: service_healthy

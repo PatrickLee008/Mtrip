@@ -8,6 +8,7 @@ use function Hyperf\Support\env;
  * 数据库连接:
  * - default:mtrip_system(本服务主库)
  * - system:mtrip_system(shared 中间件写审计日志/查客户端配置统一走该连接名)
+ * - business:mtrip_business(回收站统一管理两库软删数据,需跨库读写业务表)
  * 时间统一 UTC(文档 9.8),站点本地时间由前端按站点时区渲染
  */
 $system = [
@@ -35,7 +36,10 @@ $system = [
     ],
 ];
 
+$business = array_merge($system, ['database' => env('DB_BUSINESS_DATABASE', 'mtrip_business')]);
+
 return [
     'default' => $system,
     'system' => $system,
+    'business' => $business,
 ];

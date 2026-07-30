@@ -31,7 +31,7 @@ INSERT IGNORE INTO `sys_menu` (`id`, `parent_id`, `menu_name`, `menu_name_en`, `
 (101, 100, '管理员管理', 'Admins',         'menu.systemAdmin', 'sys:admin:list', 2, '/system/admin', 'system/admin/index', '', 1),
 (102, 100, '角色管理',   'Roles',          'menu.systemRole',  'sys:role:list',  2, '/system/role',  'system/role/index',  '', 2),
 (103, 100, '菜单权限',   'Menus',          'menu.systemMenu',  'sys:menu:list',  2, '/system/menu',  'system/menu/index',  '', 3),
-(104, 100, '操作日志',   'Operation Logs', 'menu.systemOplog', 'sys:oplog:list', 2, '/system/oplog', 'system/oplog/index', '', 4);
+(106, 100, '回收站',     'Recycle Bin',    'menu.systemRecycle', 'sys:recycle:list', 2, '/system/recycle', 'system/recycle/index', '', 6);
 INSERT IGNORE INTO `sys_menu` (`id`, `parent_id`, `menu_name`, `menu_name_en`, `perm_key`, `menu_type`, `sort`) VALUES
 (10101, 101, '新增管理员', 'Add Admin',      'sys:admin:add',      3, 1),
 (10102, 101, '编辑管理员', 'Edit Admin',     'sys:admin:edit',     3, 2),
@@ -45,7 +45,9 @@ INSERT IGNORE INTO `sys_menu` (`id`, `parent_id`, `menu_name`, `menu_name_en`, `
 (10301, 103, '新增菜单',   'Add Menu',       'sys:menu:add',       3, 1),
 (10302, 103, '编辑菜单',   'Edit Menu',      'sys:menu:edit',      3, 2),
 (10303, 103, '删除菜单',   'Delete Menu',    'sys:menu:delete',    3, 3),
-(10401, 104, '导出日志',   'Export Logs',    'sys:oplog:export',   3, 1);
+(10601, 106, '恢复数据',   'Restore',        'sys:recycle:restore', 3, 1),
+(10602, 106, '彻底删除',   'Purge',          'sys:recycle:purge',   3, 2),
+(10603, 106, '一键清空',   'Empty',          'sys:recycle:empty',   3, 3);
 
 -- ---------- 2 系统日志 ----------
 INSERT IGNORE INTO `sys_menu` (`id`, `parent_id`, `menu_name`, `menu_name_en`, `i18n_key`, `perm_key`, `menu_type`, `route_path`, `component`, `icon`, `sort`) VALUES

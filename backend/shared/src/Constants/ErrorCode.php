@@ -39,6 +39,8 @@ class ErrorCode
 
     /** 请求过于频繁(限流) (HTTP 429) */
     public const TOO_MANY_REQUESTS = 42901;
+    /** 重复提交(并发锁/FormId 幂等拦截) (HTTP 429) */
+    public const REPEAT_SUBMIT = 42902;
 
     /** 服务器内部错误 (HTTP 500) */
     public const SERVER_ERROR = 50001;
@@ -61,6 +63,7 @@ class ErrorCode
         self::NOT_FOUND => 404,
         self::DATA_CONFLICT => 409,
         self::TOO_MANY_REQUESTS => 429,
+        self::REPEAT_SUBMIT => 429,
         self::SERVER_ERROR => 500,
         self::THIRD_PARTY_ERROR => 500,
         self::DB_ERROR => 500,
@@ -80,6 +83,7 @@ class ErrorCode
         self::NOT_FOUND => '资源不存在',
         self::DATA_CONFLICT => '数据冲突',
         self::TOO_MANY_REQUESTS => '请求过于频繁',
+        self::REPEAT_SUBMIT => '请求正在处理中,请勿重复提交',
         self::SERVER_ERROR => '服务器内部错误',
         self::THIRD_PARTY_ERROR => '第三方服务调用失败',
         self::DB_ERROR => '数据库操作失败',

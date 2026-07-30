@@ -11,6 +11,7 @@ use Mtrip\Shared\Exception\BusinessException;
 use Mtrip\Shared\Support\CryptoHelper;
 use Mtrip\Shared\Support\JwtHelper;
 use Mtrip\Shared\Support\MaskHelper;
+use Mtrip\Shared\Support\RedisLock;
 
 /**
  * C端认证服务:注册/登录/Token 签发
@@ -18,36 +19,50 @@ use Mtrip\Shared\Support\MaskHelper;
  */
 class UserAuthService
 {
-    public function __construct(protected ConfigInterface $config)
+    public function __construct(protected ConfigInterface $config, protected RedisLock $lock)
     {
     }
 
     public function register(int $siteId, string $mobile, string $password, string $nickname, int $source, string $ip): array
     {
         $mobileHash = $this->mobileHash($mobile);
-        $exists = Db::table('user_info')
-            ->where('site_id', $siteId)->where('mobile_hash', $mobileHash)
-            ->whereNull('deleted_at')->exists();
-        if ($exists) {
-            throw new BusinessException(ErrorCode::DATA_CONFLICT, '该手机号已注册');
-        }
 
-        $now = date('Y-m-d H:i:s');
-        $userId = Db::table('user_info')->insertGetId([
-            'site_id' => $siteId,
-            'nickname' => $nickname !== '' ? $nickname : 'User' . substr($mobile, -4),
-            'mobile' => CryptoHelper::encrypt($mobile, $this->aesKey()),
-            'mobile_hash' => $mobileHash,
-            'password' => password_hash($password, PASSWORD_BCRYPT),
-            'register_source' => $source,
-            'register_time' => $now,
-            'last_login_at' => $now,
-            'last_login_ip' => $ip,
-            'user_status' => 1,
-        ]);
-        $this->actionLog($siteId, $userId, 1, '注册并登录', $ip);
+        // 同手机号并发注册加 Redis 分布式锁串行,业务完成即释放;
+        // 拦截不同设备/客户端同时提交同一手机号导致的"先查后插"竞态
+        $lockKey = "mtrip:lock:user:register:{$siteId}:{$mobileHash}";
+        return $this->lock->run($lockKey, 10, function () use ($siteId, $mobile, $mobileHash, $password, $nickname, $source, $ip): array {
+            $exists = Db::table('user_info')
+                ->where('site_id', $siteId)->where('mobile_hash', $mobileHash)
+                ->whereNull('deleted_at')->exists();
+            if ($exists) {
+                throw new BusinessException(ErrorCode::DATA_CONFLICT, '该手机号已注册');
+            }
 
-        return $this->issueToken($userId, $siteId);
+            $now = date('Y-m-d H:i:s');
+            try {
+                $userId = Db::table('user_info')->insertGetId([
+                    'site_id' => $siteId,
+                    'nickname' => $nickname !== '' ? $nickname : 'User' . substr($mobile, -4),
+                    'mobile' => CryptoHelper::encrypt($mobile, $this->aesKey()),
+                    'mobile_hash' => $mobileHash,
+                    'password' => password_hash($password, PASSWORD_BCRYPT),
+                    'register_source' => $source,
+                    'register_time' => $now,
+                    'last_login_at' => $now,
+                    'last_login_ip' => $ip,
+                    'user_status' => 1,
+                ]);
+            } catch (\Throwable $e) {
+                // 唯一索引 uk_site_mobile_hash 冲突兜底(锁失效/跨实例极端并发)
+                if (str_contains($e->getMessage(), 'uk_site_mobile_hash') || str_contains($e->getMessage(), 'Duplicate entry')) {
+                    throw new BusinessException(ErrorCode::DATA_CONFLICT, '该手机号已注册');
+                }
+                throw $e;
+            }
+            $this->actionLog($siteId, $userId, 1, '注册并登录', $ip);
+
+            return $this->issueToken($userId, $siteId);
+        }, '注册请求处理中,请勿重复提交');
     }
 
     public function login(int $siteId, string $mobile, string $password, string $ip): array
