@@ -69,10 +69,15 @@ cd ../admin-web && npm install && npm run dev    # http://localhost:5173,接口�
 
 ## 质量基线
 
-- 后端:`php -l` 全量零错误;shared 纯逻辑单测 `php backend/shared/tests/run.php`(26 用例,无需 vendor/Swoole)。
-- 前端:`npm run build`(admin-web,vue-tsc 零 TS 报错)/ `npm run typecheck`(client-app)。
-- 工作方式:每完成一项任务,同步更新 `docs/plans/` 对应模块文件、README 进度表和 HANDOFF.md。
+统一执行入口:`powershell -ExecutionPolicy Bypass -File scripts/check.ps1`(按序执行下列四步,任一失败即非零退出):
+
+1. 后端全量 `php -l` 语法检查(backend/,排除 vendor/runtime);
+2. shared 纯逻辑单测 `php backend/shared/tests/run.php`(47 用例,无需 vendor/Swoole);
+3. admin-web `npm run build`(vue-tsc 零 TS 报错);
+4. client-app `npm run typecheck`。
+
+- 工作方式:每完成一项任务,同步更新 `docs/plans/` 对应模块文件、README 进度表和 HANDOFF.md;交付前本地跑一次 `scripts/check.ps1` 作为验收入口。
 
 ## 当前状态(2026-07)
 
-模块 01~07、09、10 已完成;模块 08(部署与网关)完成 60%——deploy 基础设施与权限键统一已落地,**docker compose 启动验证与全链路联调待 Docker 环境就绪后执行**,恢复清单见 [docs/plans/08-部署与网关.md](docs/plans/08-部署与网关.md)。
+模块 01~07、09、10 已完成;模块 08(部署与网关)完成 80%——deploy 基础设施、权限键统一与 **08-6 部署后四步验证(2026-07-30 全部通过:11 容器全 Up、八服务 healthz ok、网关 8081 无签名 401、.env 注入生效)** 已落地,剩余 08-7 全链路联调待执行,清单见 [docs/plans/08-部署与网关.md](docs/plans/08-部署与网关.md)。

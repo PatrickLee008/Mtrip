@@ -2,7 +2,7 @@
 
 > 用途:当 AI 会话上下文超限需要新开会话时,新会话**第一步读取本文件**即可接手全部工作。
 > 维护约定:每完成一个模块或阶段性节点,同步更新本文件的「当前进度」与「下一步」两节。
-> 最后更新:2026-07-28(模块08 收尾定格 60%:除联调外全部完成;08-6/08-7 经用户确认**延后至 Docker 环境就绪**,恢复清单见 08 计划文件)
+> 最后更新:2026-07-30(模块08 升 80%:08-6 部署后四步验证全部通过——11 容器全 Up、八服务 healthz ok、网关 8081 无签名 401 符合预期、.env 注入生效,实际输出记录在 08 计划文件;剩余 08-7 全链路联调)
 
 ## 1. 项目一句话
 
@@ -19,7 +19,7 @@ Mtrip 海外旅游 SaaS 平台:后端 Hyperf 3.1 微服务(backend/)+ 平台管�
 | 05 管理后台系统页面 | 100%(14 页面,npm run build 零 TS 报错) |
 | **06 业务微服务** | **100%(七服务全部完成,八服务 175 文件 php -l 零错误;Docker 联调归模块08)** |
 | **07 管理后台业务页面** | **100%(07-1~07-6 全部完成,npm run build 终检零 TS 报错;接口联调归模块08)** |
-| **08 部署与网关联调** | **部分完成 60%(权限键统一/deploy 基础设施/shared 单测完成;08-6 启动验证+08-7 联调延后至 Docker 就绪,恢复清单见 08 计划文件)** |
+| **08 部署与网关联调** | **部分完成 80%(权限键统一/deploy 基础设施/shared 单测/08-6 启动验证四步全过(2026-07-30);剩余 08-7 全链路联调,清单见 08 计划文件)** |
 | 09/10 移动端 | 100%(09 三服务 C 端接口 / 10 client-app 全量落地;冒烟联调归模块08) |
 
 各模块详细任务清单与完成记录:`docs/plans/01~10-*.md`;开发规范:`docs/guides/`。
@@ -74,7 +74,7 @@ Mtrip 海外旅游 SaaS 平台:后端 Hyperf 3.1 微服务(backend/)+ 平台管�
 2. **模块08 部署与网关联调**(docs/plans/08-部署与网关.md):
    - ~~权限键前后端统一~~ ✅ 08-2 完成。
    - ~~deploy/ 目录~~ ✅ 08-3~08-5 完成:docker-compose.yml(MySQL 3307/Redis 6380/八服务/网关 8080,18 SQL 编号挂载)+ openresty/(map 路由表按 admin/app 二级模块分发、CORS 含签名头、限流 30r/s、错误 JSON)+ .env.example + k8s/ 预留;vite proxy 改指 8080。
-   - **08-6/08-7 延后(经用户确认)**:本机无 docker 命令且 WSL2 虚拟机平台服务不可用(HCS_E_SERVICE_NOT_AVAILABLE);Docker Desktop 就绪后按 08 计划文件「恢复联调清单」执行(`cd deploy; docker compose up -d --build` → 网关验证 → 登录/CRUD/大屏 → 移动端冒烟 → ClientSignMiddleware 签名链路),完成后模块08 升 100%。启动指南已重写:`docs/guides/setup/启动开发指南.md`(含 Docker 一键启动与 WSL2 故障 FAQ)。
+   - **08-6 启动验证 ✅ 2026-07-30 完成**:Docker 29.6.2/Compose v5.3.1 就绪,按 deploy/README.md 第 4 节四步验证全部通过(11 容器全 Up、八服务 healthz ok、网关 **8081** 无签名 POST 返 401 符合预期、MTRIP_SUBMIT_* 注入生效),实际输出记录在 08 计划文件完成记录;**08-7 全链路联调待执行**(登录/CRUD/大屏 → 移动端冒烟 → ClientSignMiddleware 签名链路),完成后模块08 升 100%。启动指南:`docs/guides/setup/启动开发指南.md`。
    - **开发期热更新**:`deploy/docker-compose.override.yml`(compose 自动合并)已把本地 app/、config/、shared/src/ 挂载进容器,各服务日志挂出到 `deploy/logs/<服务名>/`(宿主机直查,已 gitignore);Hyperf 常驻内存,改代码后 `docker compose restart xxx-service`(约 2 秒)生效,仅新增 composer 依赖/改 Dockerfile 才需 `--build`;生产用 `-f docker-compose.yml` 显式指定跳过 override。详见启动指南 2.2 节;Windows 装 Docker Desktop/配 WSL2 见启动指南 2.0 节。
    - ~~shared 包单测~~ ✅ 08-8 完成:`backend/shared/tests/`(bootstrap 自加载+Hyperf 桩,无 vendor 可跑),`D:\BtSoft\php\81\php.exe backend/shared/tests/run.php` 26 用例/96 断言全过;顺带修复 CryptoHelper 空串解密边界(29→28)与 OrderNoGenerator 同毫秒碰撞(随机改自增序列)2 个 bug。
 3. 每完成一阶段:更新 08 计划文件 checkbox、README 进度表、本文件。

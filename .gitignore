@@ -43,3 +43,4 @@ web-build/
 # ---------- 构建/缓存 ----------
 *.tsbuildinfo
 .cache/
+/.qoder
