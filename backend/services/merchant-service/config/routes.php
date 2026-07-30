@@ -15,11 +15,17 @@ use App\Controller\Merchant\RoleController as MerchantRoleController;
 use App\Controller\Merchant\StoreController as MerchantStoreController;
 use App\Controller\MerchantController;
 use App\Controller\StoreController;
+use App\Controller\Supplier\AccountController as SupplierAccountController;
+use App\Controller\Supplier\AuthController as SupplierAuthController;
+use App\Controller\Supplier\GoodsController as SupplierGoodsController;
+use App\Controller\Supplier\RoleController as SupplierRoleController;
+use App\Controller\Supplier\SettleController as SupplierSettleController;
 use App\Controller\SupplierController;
 use Hyperf\HttpServer\Router\Router;
 use Mtrip\Shared\Middleware\AdminAuthMiddleware;
 use Mtrip\Shared\Middleware\MerchantAuthMiddleware;
 use Mtrip\Shared\Middleware\OperationLogMiddleware;
+use Mtrip\Shared\Middleware\SupplierAuthMiddleware;
 
 // 健康检查(网关探活)
 Router::get('/healthz', static fn () => ['status' => 'ok', 'service' => 'merchant-service']);
@@ -120,4 +126,51 @@ Router::addGroup('/api/v1/merchant', static function () {
     Router::post('/store/toggle-status', [MerchantStoreController::class, 'toggleStatus']);
 }, [
     'middleware' => [MerchantAuthMiddleware::class, OperationLogMiddleware::class],
+]);
+
+// ============================================================
+// 供应商端(supplier-web)口径:前缀 /api/v1/supplier/*,SupplierAuthMiddleware 鉴权
+// 供应商为单层主体;数据范围恒为本 supplier_id;按钮级权限由 #[Permission] 校验
+// ============================================================
+// 登录(组外,免鉴权)
+Router::post('/api/v1/supplier/auth/login', [SupplierAuthController::class, 'login']);
+
+Router::addGroup('/api/v1/supplier', static function () {
+    // ---------- 登录态 ----------
+    Router::post('/auth/logout', [SupplierAuthController::class, 'logout']);
+    Router::get('/auth/me', [SupplierAuthController::class, 'me']);
+    Router::get('/auth/menus', [SupplierAuthController::class, 'menus']);
+    Router::post('/auth/password', [SupplierAuthController::class, 'updatePassword']);
+
+    // ---------- 子账号管理 ----------
+    Router::get('/account/list', [SupplierAccountController::class, 'index']);
+    Router::post('/account/add', [SupplierAccountController::class, 'create']);
+    Router::post('/account/update', [SupplierAccountController::class, 'update']);
+    Router::post('/account/toggle-status', [SupplierAccountController::class, 'toggleStatus']);
+    Router::post('/account/reset-password', [SupplierAccountController::class, 'resetPassword']);
+
+    // ---------- 角色管理 ----------
+    Router::get('/role/list', [SupplierRoleController::class, 'index']);
+    Router::get('/role/menu-tree', [SupplierRoleController::class, 'menuTree']);
+    Router::get('/role/menus', [SupplierRoleController::class, 'menus']);
+    Router::post('/role/add', [SupplierRoleController::class, 'create']);
+    Router::post('/role/update', [SupplierRoleController::class, 'update']);
+    Router::post('/role/delete', [SupplierRoleController::class, 'remove']);
+    Router::post('/role/assign', [SupplierRoleController::class, 'assign']);
+    Router::post('/role/grant', [SupplierRoleController::class, 'grant']);
+    Router::get('/role/account-roles', [SupplierRoleController::class, 'accountRoles']);
+
+    // ---------- 供货商品(自助维护) ----------
+    Router::get('/goods/list', [SupplierGoodsController::class, 'index']);
+    Router::get('/goods/detail', [SupplierGoodsController::class, 'detail']);
+    Router::post('/goods/add', [SupplierGoodsController::class, 'create']);
+    Router::post('/goods/update', [SupplierGoodsController::class, 'update']);
+    Router::post('/goods/toggle-status', [SupplierGoodsController::class, 'toggleStatus']);
+    Router::post('/goods/delete', [SupplierGoodsController::class, 'remove']);
+
+    // ---------- 对账结算(只读) ----------
+    Router::get('/settle/list', [SupplierSettleController::class, 'index']);
+    Router::get('/settle/detail', [SupplierSettleController::class, 'detail']);
+}, [
+    'middleware' => [SupplierAuthMiddleware::class, OperationLogMiddleware::class],
 ]);

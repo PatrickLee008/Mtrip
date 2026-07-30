@@ -1,0 +1,40 @@
+import { fileURLToPath, URL } from 'node:url';
+import vue from '@vitejs/plugin-vue';
+import { defineConfig } from 'vite';
+
+// https://vitejs.dev/config/
+export default defineConfig({
+  plugins: [vue()],
+  resolve: {
+    alias: {
+      '@': fileURLToPath(new URL('./src', import.meta.url)),
+    },
+  },
+  css: {
+    preprocessorOptions: {
+      less: { javascriptEnabled: true },
+    },
+  },
+  server: {
+    // 与 admin-web(5173)/merchant-web(5174)并存,供应商端用 5175
+    port: 5175,
+    proxy: {
+      // 开发环境转发到本地网关(OpenResty,deploy/docker-compose 默认 8081)
+      '/api': {
+        target: 'http://127.0.0.1:8081',
+        changeOrigin: true,
+      },
+    },
+  },
+  build: {
+    chunkSizeWarningLimit: 1500,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          antd: ['ant-design-vue', '@ant-design/icons-vue'],
+          echarts: ['echarts'],
+        },
+      },
+    },
+  },
+});
