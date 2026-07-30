@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { message } from 'ant-design-vue';
+import { message, Modal } from 'ant-design-vue';
 import { PlusOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons-vue';
 import PageContainer from '@/components/PageContainer.vue';
 import SiteTreeSelect from '@/components/SiteTreeSelect.vue';
@@ -11,6 +11,7 @@ import { useUserStore } from '@/stores/user';
 import type { StatusItem } from '@/components/StatusTag.vue';
 import {
   apiMerchantList,
+  apiStoreAccountReset,
   apiStoreAdd,
   apiStoreDelete,
   apiStoreDetail,
@@ -79,6 +80,33 @@ async function openDetail(row: TableRow): Promise<void> {
     detail.value = await apiStoreDetail(row.id);
   } finally {
     detailLoading.value = false;
+  }
+}
+
+// ---------- 门店账号生成/重置 ----------
+const accountResetting = ref(false);
+const accountColumns = computed(() => [
+  { title: t('login.username'), dataIndex: 'username' },
+  { title: t('user.realName'), dataIndex: 'real_name' },
+  { title: t('merchant.listPage.status'), dataIndex: 'status', width: 80 },
+  { title: t('system.admin.lastLogin'), dataIndex: 'last_login_at', width: 160 },
+]);
+
+async function resetAccount(): Promise<void> {
+  if (!detail.value) {
+    return;
+  }
+  accountResetting.value = true;
+  try {
+    const account = await apiStoreAccountReset(detail.value.id);
+    Modal.success({
+      title: account.created ? t('merchant.storePage.accountCreated') : t('merchant.storePage.accountReset'),
+      content: `${t('login.username')}:${account.username}  ${t('system.admin.initialPwd')}:${account.password}`,
+      width: 520,
+    });
+    detail.value = await apiStoreDetail(detail.value.id);
+  } finally {
+    accountResetting.value = false;
   }
 }
 
@@ -312,6 +340,23 @@ onMounted(() => {
               </a-space>
             </a-image-preview-group>
           </template>
+
+          <a-divider orientation="left">{{ t('merchant.storePage.storeAccounts') }}</a-divider>
+          <a-space style="margin-bottom: 12px">
+            <a-button
+              v-perm="'merchant:store:account'"
+              type="primary"
+              size="small"
+              :loading="accountResetting"
+              :disabled="detail.status !== 1"
+              @click="resetAccount"
+            >{{ detail.accounts?.length ? t('merchant.storePage.resetAccount') : t('merchant.storePage.genAccount') }}</a-button>
+          </a-space>
+          <a-table :columns="accountColumns" :data-source="detail.accounts || []" row-key="id" size="small" :pagination="false">
+            <template #bodyCell="{ column, record }">
+              <template v-if="column.dataIndex === 'status'"><StatusTag :value="record.status" /></template>
+            </template>
+          </a-table>
         </template>
       </a-spin>
     </a-drawer>

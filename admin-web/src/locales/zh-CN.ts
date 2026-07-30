@@ -1820,6 +1820,17 @@ export default {
       selectMerchant: '请选择所属商户',
       longitude: '经度',
       latitude: '纬度',
+      storeAccounts: '门店账号',
+      genAccount: '生成门店账号',
+      resetAccount: '重置密码',
+      accountCreated: '门店账号已生成',
+      accountReset: '门店账号密码已重置',
+    },
+    accountType: {
+      label: '账号类型',
+      t1: '集团',
+      t2: '商户',
+      t3: '门店',
     },
   },
   supplier: {

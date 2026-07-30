@@ -28,6 +28,7 @@ class MerchantService
             ]);
             Db::table('merchant_admin')->insert([
                 'site_id' => (int) $merchant['site_id'],
+                'account_type' => 2,
                 'merchant_id' => (int) $merchant['id'],
                 'username' => $username,
                 'password' => password_hash($password, PASSWORD_BCRYPT),

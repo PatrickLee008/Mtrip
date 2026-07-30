@@ -52,6 +52,7 @@ Router::addGroup('/api/v1/admin', static function () {
     Router::post('/merchant/store/update', [StoreController::class, 'update']);
     Router::post('/merchant/store/set-main', [StoreController::class, 'setMain']);
     Router::post('/merchant/store/toggle-status', [StoreController::class, 'toggleStatus']);
+    Router::post('/merchant/store/account-reset', [StoreController::class, 'accountReset']);
     Router::post('/merchant/store/delete', [StoreController::class, 'remove']);
 
     // ---------- 供应商管理(CRUD/资质审核/供货商品/结算) ----------

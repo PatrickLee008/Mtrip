@@ -1848,6 +1848,17 @@ export default {
       selectMerchant: 'Please select a merchant',
       longitude: 'Longitude',
       latitude: 'Latitude',
+      storeAccounts: 'Store Accounts',
+      genAccount: 'Generate Store Account',
+      resetAccount: 'Reset Password',
+      accountCreated: 'Store account created',
+      accountReset: 'Store account password reset',
+    },
+    accountType: {
+      label: 'Account Type',
+      t1: 'Group',
+      t2: 'Merchant',
+      t3: 'Store',
     },
   },
   supplier: {

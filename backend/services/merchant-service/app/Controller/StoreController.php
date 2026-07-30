@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace App\Controller;
 
+use App\Service\StoreService;
 use Hyperf\DbConnection\Db;
+use Hyperf\Di\Annotation\Inject;
 use Mtrip\Shared\Annotation\Permission;
 use Mtrip\Shared\Constants\ErrorCode;
 use Mtrip\Shared\Context\AdminContext;
@@ -19,6 +21,9 @@ use Mtrip\Shared\Support\Result;
  */
 class StoreController extends AbstractController
 {
+    #[Inject]
+    protected StoreService $service;
+
     /** 门店列表:筛选 商户/门店名称/状态,联商户名称,联系电话脱敏 */
     public function index(): array
     {
@@ -58,8 +63,25 @@ class StoreController extends AbstractController
         $store['images'] = $this->jsonDecode($store['images']);
         $store['merchant_name'] = (string) (Db::table('merchant_info')
             ->where('id', $store['merchant_id'])->value('merchant_name') ?? '');
+        $store['accounts'] = Db::table('merchant_admin')
+            ->where('account_type', 3)->where('store_id', $store['id'])->whereNull('deleted_at')
+            ->get(['id', 'username', 'real_name', 'is_owner', 'status', 'last_login_at', 'created_at'])
+            ->map(static fn ($row) => (array) $row)->all();
         unset($store['deleted_at']);
         return Result::success($store);
+    }
+
+    /** 生成/重置门店账号(初始密码明文仅返回一次):数据范围=本门店履约 */
+    #[Permission('merchant:store:account')]
+    public function accountReset(): array
+    {
+        $store = $this->findScopedStore($this->requireId());
+        if ((int) $store['status'] !== 1) {
+            throw new BusinessException(ErrorCode::DATA_CONFLICT, '门店已停业,不可生成账号');
+        }
+        // findScopedStore 返回的 contact_phone 为库中密文,直接写入 merchant_admin.mobile(与商户一致)
+        $account = $this->service->resetAccount($store);
+        return Result::success($account, $account['created'] ? '门店账号已生成' : '门店账号密码已重置');
     }
 
     /** 新增门店:商户首个门店自动设为主门店 */

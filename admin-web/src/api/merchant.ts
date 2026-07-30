@@ -126,6 +126,10 @@ export function apiStoreToggleStatus(id: number): Promise<{ status: number }> {
   return post('/admin/merchant/store/toggle-status', { id });
 }
 
+export function apiStoreAccountReset(id: number): Promise<{ username: string; password: string; created: boolean }> {
+  return post('/admin/merchant/store/account-reset', { id });
+}
+
 export function apiStoreDelete(id: number): Promise<null> {
   return post('/admin/merchant/store/delete', { id });
 }

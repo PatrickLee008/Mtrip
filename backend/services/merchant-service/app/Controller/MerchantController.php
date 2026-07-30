@@ -80,7 +80,7 @@ class MerchantController extends AbstractController
             })->all();
         $admins = Db::table('merchant_admin')
             ->where('merchant_id', $merchant['id'])->whereNull('deleted_at')
-            ->get(['id', 'username', 'real_name', 'is_owner', 'status', 'last_login_at', 'created_at'])
+            ->get(['id', 'username', 'real_name', 'account_type', 'store_id', 'is_owner', 'status', 'last_login_at', 'created_at'])
             ->map(static fn ($row) => (array) $row)->all();
 
         return Result::success([

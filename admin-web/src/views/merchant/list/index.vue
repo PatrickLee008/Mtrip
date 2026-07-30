@@ -89,6 +89,7 @@ const accountColumns = computed(() => [
 const adminColumns = computed(() => [
   { title: t('login.username'), dataIndex: 'username' },
   { title: t('user.realName'), dataIndex: 'real_name' },
+  { title: t('merchant.accountType.label'), dataIndex: 'account_type', width: 80 },
   { title: t('merchant.listPage.name'), dataIndex: 'is_owner', width: 70 },
   { title: t('merchant.listPage.status'), dataIndex: 'status', width: 80 },
   { title: t('system.admin.lastLogin'), dataIndex: 'last_login_at', width: 160 },
@@ -446,6 +447,7 @@ onMounted(() => {
           <a-table :columns="adminColumns" :data-source="detailAdmins" row-key="id" size="small" :pagination="false">
             <template #bodyCell="{ column, record }">
               <template v-if="column.dataIndex === 'is_owner'">{{ record.is_owner === 1 ? t('common.yes') : t('common.no') }}</template>
+              <template v-else-if="column.dataIndex === 'account_type'">{{ t(`merchant.accountType.t${record.account_type}`) }}</template>
               <template v-else-if="column.dataIndex === 'status'"><StatusTag :value="record.status" /></template>
             </template>
           </a-table>

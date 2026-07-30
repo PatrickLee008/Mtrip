@@ -72,8 +72,10 @@ CREATE TABLE IF NOT EXISTS `merchant_account` (
 CREATE TABLE IF NOT EXISTS `merchant_admin` (
   `id`            BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '主键',
   `site_id`       BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '所属站点ID',
+  `account_type`  TINYINT      NOT NULL DEFAULT 2 COMMENT '账号类型:1集团 2商户 3门店',
   `merchant_id`   BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '商户ID,0=集团账号',
-  `group_id`      BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '所属集团ID,>0且merchant_id=0为集团账号',
+  `group_id`      BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '所属集团ID(account_type=1时>0)',
+  `store_id`      BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '所属门店ID(account_type=3时>0),0=非门店账号',
   `username`      VARCHAR(50)  NOT NULL COMMENT '登录账号',
   `password`      VARCHAR(255) NOT NULL COMMENT '登录密码(bcrypt)',
   `real_name`     VARCHAR(50)  NOT NULL DEFAULT '' COMMENT '姓名',
@@ -89,5 +91,6 @@ CREATE TABLE IF NOT EXISTS `merchant_admin` (
   UNIQUE KEY `uk_username` (`username`),
   KEY `idx_site_id` (`site_id`),
   KEY `idx_merchant_id` (`merchant_id`),
-  KEY `idx_group_id` (`group_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin COMMENT='商户子账号表';
+  KEY `idx_group_id` (`group_id`),
+  KEY `idx_store_id` (`store_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin COMMENT='商户/集团/门店登录账号表(account_type区分)';

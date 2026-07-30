@@ -122,7 +122,8 @@ INSERT IGNORE INTO `sys_menu` (`id`, `parent_id`, `menu_name`, `menu_name_en`, `
 (40601, 406, '新增门店', 'Add Store',       'merchant:store:add',    3, 1),
 (40602, 406, '编辑门店', 'Edit Store',      'merchant:store:edit',   3, 2),
 (40603, 406, '营业停业', 'Open/Close',      'merchant:store:status', 3, 3),
-(40604, 406, '删除门店', 'Delete Store',    'merchant:store:delete', 3, 4);
+(40604, 406, '删除门店', 'Delete Store',    'merchant:store:delete', 3, 4),
+(40605, 406, '门店账号', 'Store Account',   'merchant:store:account',3, 5);
 
 -- ---------- 5 供应商管理 ----------
 INSERT IGNORE INTO `sys_menu` (`id`, `parent_id`, `menu_name`, `menu_name_en`, `i18n_key`, `perm_key`, `menu_type`, `route_path`, `component`, `icon`, `sort`) VALUES
