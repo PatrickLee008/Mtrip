@@ -13,9 +13,11 @@ use App\Controller\Admin\AdminOrderController;
 use App\Controller\Admin\AdminRefundController;
 use App\Controller\Admin\AdminStatsController;
 use App\Controller\Admin\AdminVerifyController;
+use App\Controller\Merchant\OrderController as MerchantOrderController;
 use App\Controller\OrderController;
 use Hyperf\HttpServer\Router\Router;
 use Mtrip\Shared\Middleware\AdminAuthMiddleware;
+use Mtrip\Shared\Middleware\MerchantAuthMiddleware;
 use Mtrip\Shared\Middleware\OperationLogMiddleware;
 use Mtrip\Shared\Middleware\UserAuthMiddleware;
 
@@ -57,4 +59,13 @@ Router::addGroup('/api/v1/admin/order', static function () {
     Router::get('/stats/report', [AdminStatsController::class, 'report']);
 }, [
     'middleware' => [AdminAuthMiddleware::class, OperationLogMiddleware::class],
+]);
+
+// 商户端(merchant-web):订单与核销,MerchantAuthMiddleware 鉴权 + 商户数据范围
+Router::addGroup('/api/v1/merchant/order', static function () {
+    Router::get('/list', [MerchantOrderController::class, 'index']);
+    Router::get('/detail', [MerchantOrderController::class, 'detail']);
+    Router::post('/verify', [MerchantOrderController::class, 'verify']);
+}, [
+    'middleware' => [MerchantAuthMiddleware::class, OperationLogMiddleware::class],
 ]);

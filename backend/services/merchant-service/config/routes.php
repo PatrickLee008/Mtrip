@@ -9,11 +9,16 @@ declare(strict_types=1);
  */
 
 use App\Controller\GroupController;
+use App\Controller\Merchant\AccountController as MerchantAccountController;
+use App\Controller\Merchant\AuthController as MerchantAuthController;
+use App\Controller\Merchant\RoleController as MerchantRoleController;
+use App\Controller\Merchant\StoreController as MerchantStoreController;
 use App\Controller\MerchantController;
 use App\Controller\StoreController;
 use App\Controller\SupplierController;
 use Hyperf\HttpServer\Router\Router;
 use Mtrip\Shared\Middleware\AdminAuthMiddleware;
+use Mtrip\Shared\Middleware\MerchantAuthMiddleware;
 use Mtrip\Shared\Middleware\OperationLogMiddleware;
 
 // 健康检查(网关探活)
@@ -72,4 +77,47 @@ Router::addGroup('/api/v1/admin', static function () {
     Router::post('/supplier/settle/confirm-pay', [SupplierController::class, 'settleConfirmPay']);
 }, [
     'middleware' => [AdminAuthMiddleware::class, OperationLogMiddleware::class],
+]);
+
+// ============================================================
+// 商户端(merchant-web)口径:前缀 /api/v1/merchant/*,MerchantAuthMiddleware 鉴权
+// account_type(1集团/2商户/3门店)裁剪菜单与数据范围;按钮级权限由 #[Permission] 校验
+// ============================================================
+// 登录(组外,免鉴权)
+Router::post('/api/v1/merchant/auth/login', [MerchantAuthController::class, 'login']);
+
+Router::addGroup('/api/v1/merchant', static function () {
+    // ---------- 登录态 ----------
+    Router::post('/auth/logout', [MerchantAuthController::class, 'logout']);
+    Router::get('/auth/me', [MerchantAuthController::class, 'me']);
+    Router::get('/auth/menus', [MerchantAuthController::class, 'menus']);
+    Router::post('/auth/password', [MerchantAuthController::class, 'updatePassword']);
+
+    // ---------- 子账号管理 ----------
+    Router::get('/account/list', [MerchantAccountController::class, 'index']);
+    Router::post('/account/add', [MerchantAccountController::class, 'create']);
+    Router::post('/account/update', [MerchantAccountController::class, 'update']);
+    Router::post('/account/toggle-status', [MerchantAccountController::class, 'toggleStatus']);
+    Router::post('/account/reset-password', [MerchantAccountController::class, 'resetPassword']);
+
+    // ---------- 角色管理 ----------
+    Router::get('/role/list', [MerchantRoleController::class, 'index']);
+    Router::get('/role/menu-tree', [MerchantRoleController::class, 'menuTree']);
+    Router::get('/role/menus', [MerchantRoleController::class, 'menus']);
+    Router::post('/role/add', [MerchantRoleController::class, 'create']);
+    Router::post('/role/update', [MerchantRoleController::class, 'update']);
+    Router::post('/role/delete', [MerchantRoleController::class, 'remove']);
+    Router::post('/role/assign', [MerchantRoleController::class, 'assign']);
+    Router::post('/role/grant', [MerchantRoleController::class, 'grant']);
+    Router::get('/role/account-roles', [MerchantRoleController::class, 'accountRoles']);
+
+    // ---------- 门店管理 ----------
+    Router::get('/store/list', [MerchantStoreController::class, 'index']);
+    Router::get('/store/detail', [MerchantStoreController::class, 'detail']);
+    Router::post('/store/add', [MerchantStoreController::class, 'create']);
+    Router::post('/store/update', [MerchantStoreController::class, 'update']);
+    Router::post('/store/set-main', [MerchantStoreController::class, 'setMain']);
+    Router::post('/store/toggle-status', [MerchantStoreController::class, 'toggleStatus']);
+}, [
+    'middleware' => [MerchantAuthMiddleware::class, OperationLogMiddleware::class],
 ]);

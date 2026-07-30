@@ -13,8 +13,10 @@ use App\Controller\Admin\AdminGoodsController;
 use App\Controller\Admin\AdminSkuController;
 use App\Controller\Admin\AdminStockController;
 use App\Controller\GoodsController;
+use App\Controller\Merchant\GoodsController as MerchantGoodsController;
 use Hyperf\HttpServer\Router\Router;
 use Mtrip\Shared\Middleware\AdminAuthMiddleware;
+use Mtrip\Shared\Middleware\MerchantAuthMiddleware;
 use Mtrip\Shared\Middleware\OperationLogMiddleware;
 
 // 健康检查(网关探活)
@@ -64,4 +66,17 @@ Router::addGroup('/api/v1/admin/goods', static function () {
     Router::get('/stock/overview', [AdminStockController::class, 'overview']);
 }, [
     'middleware' => [AdminAuthMiddleware::class, OperationLogMiddleware::class],
+]);
+
+// ---------- 商户端商品管理(/api/v1/merchant/goods) ----------
+// 数据范围由 MerchantContext 裁剪:集团看绑定商户全部、商户/门店看本商户
+Router::addGroup('/api/v1/merchant/goods', static function () {
+    Router::get('/list', [MerchantGoodsController::class, 'index']);
+    Router::get('/detail', [MerchantGoodsController::class, 'detail']);
+    Router::post('/add', [MerchantGoodsController::class, 'create']);
+    Router::post('/update', [MerchantGoodsController::class, 'update']);
+    Router::post('/submit', [MerchantGoodsController::class, 'submit']);
+    Router::post('/toggle-status', [MerchantGoodsController::class, 'toggleStatus']);
+}, [
+    'middleware' => [MerchantAuthMiddleware::class, OperationLogMiddleware::class],
 ]);
