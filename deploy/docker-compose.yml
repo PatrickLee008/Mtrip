@@ -84,6 +84,8 @@ services:
       # Consumer App PRD v1.0 增量迁移(在基础表之后、种子之前执行)
       - ../database/goods/02-consumer-dualprice.sql:/docker-entrypoint-initdb.d/80-consumer-goods-dualprice.sql:ro
       - ../database/order/03-consumer-booking.sql:/docker-entrypoint-initdb.d/81-consumer-order-booking.sql:ro
+      - ../database/marketing/02-consumer-longstay.sql:/docker-entrypoint-initdb.d/82-consumer-longstay.sql:ro
+      - ../database/user/03-consumer-traveler.sql:/docker-entrypoint-initdb.d/83-consumer-traveler.sql:ro
       - ../database/seed/01-admin-role.sql:/docker-entrypoint-initdb.d/90-seed-admin-role.sql:ro
       - ../database/seed/02-menu.sql:/docker-entrypoint-initdb.d/91-seed-menu.sql:ro
       - ../database/seed/03-config-site.sql:/docker-entrypoint-initdb.d/92-seed-config-site.sql:ro

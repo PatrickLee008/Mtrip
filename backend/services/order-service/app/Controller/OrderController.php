@@ -72,20 +72,34 @@ class OrderController extends AbstractController
             throw new BusinessException(ErrorCode::PARAM_ERROR, '使用日期不能早于今天');
         }
 
+        $isCitizen = $this->intInput('isCitizen', 0) === 1;
+        $couponId = $this->intInput('couponId', 0);
+        $guests = $this->normalizeGuests($this->input('travelers'), $quantity);
+        $remark = mb_substr($this->strInput('remark'), 0, 500);
+
         $orderNo = OrderNoGenerator::orderNo($siteId);
-        $orderId = Db::transaction(function () use (
+        $priced = Db::transaction(function () use (
             $siteId, $userId, $goods, $sku, $orderType, $goodsId, $skuId,
-            $quantity, $dates, $useDate, $endDate, $orderNo, $contactName, $contactPhone
+            $quantity, $dates, $useDate, $endDate, $orderNo, $contactName, $contactPhone,
+            $isCitizen, $couponId, $guests, $remark
         ) {
             [$totalAmount, $changes] = $this->stockService->lock(
-                $siteId, $goodsId, $orderType, $skuId, $sku, $dates, $quantity
+                $siteId, $goodsId, $orderType, $skuId, $sku, $dates, $quantity, $isCitizen
             );
+            // 长住优惠:仅酒店,按住宿夜数命中最高梯度,对原总价打折
+            $longstay = $orderType === 1 ? $this->longstayDiscount($siteId, count($dates), $totalAmount) : 0.0;
+            // 优惠券(可选):校验归属/状态/有效期/适用范围/门槛,计算抵扣(不在此消耗,支付时消耗)
+            [$couponRefId, $couponDiscount] = $couponId > 0
+                ? $this->resolveCoupon($siteId, $userId, $couponId, $orderType, $goodsId, round($totalAmount - $longstay, 2))
+                : [0, 0.0];
+            $payAmount = max(0.0, round($totalAmount - $longstay - $couponDiscount, 2));
             $unitPrice = round($totalAmount / max(1, count($dates)) / $quantity, 2);
             $orderId = (int) Db::table('order_main')->insertGetId([
                 'order_no' => $orderNo,
                 'site_id' => $siteId,
                 'user_id' => $userId,
                 'order_type' => $orderType,
+                'is_citizen' => $isCitizen ? 1 : 0,
                 'merchant_id' => (int) $goods['merchant_id'],
                 'supplier_id' => (int) $goods['supplier_id'],
                 'goods_id' => $goodsId,
@@ -97,21 +111,39 @@ class OrderController extends AbstractController
                 'unit_price' => $unitPrice,
                 'original_price' => (float) $sku['base_price'],
                 'total_amount' => $totalAmount,
-                'pay_amount' => $totalAmount,
+                'discount_amount' => round($longstay + $couponDiscount, 2),
+                'longstay_discount' => $longstay,
+                'coupon_id' => $couponRefId,
+                'coupon_discount' => $couponDiscount,
+                'alloc_coupon_discount' => $couponDiscount,
+                'pay_amount' => $payAmount,
                 'order_status' => 0,
                 'use_date' => $useDate,
                 'end_date' => $endDate,
                 'contact_name' => mb_substr($contactName, 0, 50),
                 'contact_phone' => CryptoHelper::encrypt($contactPhone, $this->aesKey()),
-                'remark' => mb_substr($this->strInput('remark'), 0, 500),
+                'guests' => $guests !== [] ? json_encode($guests, JSON_UNESCAPED_UNICODE) : null,
+                'remark' => $remark,
             ]);
             $this->stockService->logChanges($orderId, $changes);
-            return $orderId;
+            return [
+                'orderId' => $orderId,
+                'original' => $totalAmount,
+                'longstay' => $longstay,
+                'coupon' => $couponDiscount,
+                'payAmount' => $payAmount,
+            ];
         });
 
         return Result::success([
-            'orderId' => $orderId,
+            'orderId' => $priced['orderId'],
             'orderNo' => $orderNo,
+            'priceDetail' => [
+                'original' => $priced['original'],
+                'longstayDiscount' => $priced['longstay'],
+                'couponDiscount' => $priced['coupon'],
+                'payAmount' => $priced['payAmount'],
+            ],
         ], '下单成功,请在15分钟内完成支付');
     }
 
@@ -140,6 +172,22 @@ class OrderController extends AbstractController
             $this->stockService->deduct($order);
             Db::table('goods_info')->where('id', (int) $order['goods_id'])
                 ->increment('sales_count', (int) $order['quantity']);
+            // 支付成功消耗优惠券:领券记录置已用 + 模板已用数+1(仅当仍未使用)
+            if ((int) $order['coupon_id'] > 0) {
+                $rec = Db::table('marketing_coupon_receive')
+                    ->where('id', (int) $order['coupon_id'])
+                    ->where('status', 0)
+                    ->lockForUpdate()
+                    ->first(['id', 'coupon_id']);
+                if ($rec) {
+                    Db::table('marketing_coupon_receive')->where('id', $rec->id)->update([
+                        'status' => 1,
+                        'order_id' => $orderId,
+                        'used_time' => date('Y-m-d H:i:s'),
+                    ]);
+                    Db::table('marketing_coupon')->where('id', $rec->coupon_id)->increment('used_count');
+                }
+            }
             return ['verifyCode' => $verifyCode];
         });
 
@@ -277,6 +325,108 @@ class OrderController extends AbstractController
             throw new BusinessException(ErrorCode::NOT_FOUND, '订单不存在');
         }
         return (array) $order;
+    }
+
+    /** 长住优惠额:命中站点内 min_nights<=夜数 的最高梯度,按原总价乘折扣率 */
+    private function longstayDiscount(int $siteId, int $nights, float $total): float
+    {
+        $tier = Db::table('marketing_longstay_tier')
+            ->where('site_id', $siteId)
+            ->where('status', 1)
+            ->where('min_nights', '<=', $nights)
+            ->whereNull('deleted_at')
+            ->orderByDesc('min_nights')
+            ->first(['discount_rate']);
+        if (! $tier) {
+            return 0.0;
+        }
+        return round($total * (float) $tier->discount_rate / 100, 2);
+    }
+
+    /**
+     * 校验优惠券并计算抵扣(须在事务内调用,行锁领券记录防并发)。
+     * 券在此不消耗,支付成功时才置已用。
+     * @return array{0:int,1:float} [领券记录ID, 抵扣金额]
+     */
+    private function resolveCoupon(int $siteId, int $userId, int $receiveId, int $orderType, int $goodsId, float $base): array
+    {
+        $rec = Db::table('marketing_coupon_receive')
+            ->where('id', $receiveId)
+            ->where('user_id', $userId)
+            ->where('site_id', $siteId)
+            ->whereNull('deleted_at')
+            ->lockForUpdate()
+            ->first();
+        if (! $rec) {
+            throw new BusinessException(ErrorCode::NOT_FOUND, '优惠券不存在');
+        }
+        $rec = (array) $rec;
+        if ((int) $rec['status'] !== 0) {
+            throw new BusinessException(ErrorCode::DATA_CONFLICT, '优惠券已使用或已失效');
+        }
+        $now = date('Y-m-d H:i:s');
+        if (($rec['valid_start'] && $now < $rec['valid_start']) || ($rec['valid_end'] && $now > $rec['valid_end'])) {
+            throw new BusinessException(ErrorCode::DATA_CONFLICT, '优惠券不在有效期');
+        }
+        $coupon = Db::table('marketing_coupon')->where('id', $rec['coupon_id'])->whereNull('deleted_at')->first();
+        if (! $coupon) {
+            throw new BusinessException(ErrorCode::NOT_FOUND, '优惠券模板不存在');
+        }
+        $coupon = (array) $coupon;
+        // 适用范围:0全部 1酒店 2门票 3指定商品
+        $scope = (int) $coupon['goods_scope'];
+        if ($scope === 1 && $orderType !== 1) {
+            throw new BusinessException(ErrorCode::DATA_CONFLICT, '该券仅限酒店订单');
+        }
+        if ($scope === 2 && $orderType !== 2) {
+            throw new BusinessException(ErrorCode::DATA_CONFLICT, '该券仅限门票订单');
+        }
+        if ($scope === 3) {
+            $ids = is_string($coupon['goods_ids']) ? (json_decode($coupon['goods_ids'], true) ?: []) : (array) ($coupon['goods_ids'] ?? []);
+            if (! in_array($goodsId, array_map('intval', $ids), true)) {
+                throw new BusinessException(ErrorCode::DATA_CONFLICT, '该券不适用于本商品');
+            }
+        }
+        // 门槛
+        $min = (float) $coupon['min_amount'];
+        if ($min > 0 && $base < $min) {
+            throw new BusinessException(ErrorCode::DATA_CONFLICT, '未满使用门槛');
+        }
+        // 抵扣:1满减/3无门槛=直减金额;2折扣券=discount_value 为折扣率(8.50=8.5折,用户付85%),max_discount 封顶
+        $type = (int) $coupon['coupon_type'];
+        $val = (float) $coupon['discount_value'];
+        $maxD = (float) $coupon['max_discount'];
+        if ($type === 2) {
+            $discount = round($base * (1 - $val / 10), 2);
+            if ($maxD > 0 && $discount > $maxD) {
+                $discount = $maxD;
+            }
+        } else {
+            $discount = $val;
+        }
+        $discount = max(0.0, min($discount, $base));
+        return [$receiveId, round($discount, 2)];
+    }
+
+    /** 住客名单归一化:最多 qty 条,每条取 firstName/lastName/phone/email 并限长 */
+    private function normalizeGuests(mixed $input, int $qty): array
+    {
+        if (! is_array($input)) {
+            return [];
+        }
+        $out = [];
+        foreach (array_slice(array_values($input), 0, max(1, $qty)) as $g) {
+            if (! is_array($g)) {
+                continue;
+            }
+            $out[] = [
+                'firstName' => mb_substr(trim((string) ($g['firstName'] ?? '')), 0, 50),
+                'lastName' => mb_substr(trim((string) ($g['lastName'] ?? '')), 0, 50),
+                'phone' => mb_substr(trim((string) ($g['phone'] ?? '')), 0, 30),
+                'email' => mb_substr(trim((string) ($g['email'] ?? '')), 0, 100),
+            ];
+        }
+        return $out;
     }
 
     private function aesKey(): string

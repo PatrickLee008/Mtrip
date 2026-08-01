@@ -40,9 +40,10 @@ class OrderStockService
     /**
      * 锁定库存并计算总价(须在事务内调用)
      * 无日历记录的日期先按 SKU 基础价/基础库存补建
+     * $isCitizen=true 且当日/基础配有公民价(>0)时按公民价计;否则回退外国人价 price/base_price
      * @return array{0: float, 1: array} [总价, 变动明细(供 logChanges)]
      */
-    public function lock(int $siteId, int $goodsId, int $skuType, int $skuId, array $sku, array $dates, int $qty): array
+    public function lock(int $siteId, int $goodsId, int $skuType, int $skuId, array $sku, array $dates, int $qty, bool $isCitizen = false): array
     {
         $total = 0.0;
         $changes = [];
@@ -56,6 +57,7 @@ class OrderStockService
                     'sku_id' => $skuId,
                     'stock_date' => $date,
                     'price' => $sku['base_price'],
+                    'price_citizen' => $sku['base_price_citizen'] ?? 0,
                     'stock_total' => $sku['base_stock'],
                 ]);
                 $row = $this->lockRow($skuType, $skuId, $date);
@@ -69,7 +71,10 @@ class OrderStockService
             }
             Db::table('goods_daily_stock')->where('id', $row['id'])
                 ->increment('stock_locked', $qty);
-            $total += (float) $row['price'] * $qty;
+            $unitPrice = $isCitizen && (float) ($row['price_citizen'] ?? 0) > 0
+                ? (float) $row['price_citizen']
+                : (float) $row['price'];
+            $total += $unitPrice * $qty;
             $changes[] = [
                 'site_id' => $siteId,
                 'goods_id' => $goodsId,

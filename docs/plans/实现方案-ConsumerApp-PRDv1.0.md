@@ -270,4 +270,16 @@ CREATE TABLE IF NOT EXISTS `user_favorite` (
 - [ ] 缅甸双价取价函数(goods-service 公共方法,详情/下单复用)—— 待 M1 一并落。
 - [ ] 网关 `ClientSignMiddleware` 启用 —— 部署期开关(shared 已有实现 + 7 条单测跑绿,底座就绪)。
 
-> 说明:docker init 仅首次建库执行迁移,既有运行库需手动 source 两个增量 SQL(ADD COLUMN 非幂等,已在文件头注明)。
+> 说明:docker init 仅首次建库执行迁移,既有运行库需手动 source 增量 SQL(ADD COLUMN 非幂等,已在文件头注明)。
+
+### M1 核心预订闭环 — 进行中
+- [x] **M1-a 下单增强**(`order-service`,check.ps1 四步全绿):
+  - 双价取价:`OrderStockService::lock` 加 `isCitizen` 参数,`price_citizen>0` 取公民价否则回退 `price`;补建日历行同时写 `price_citizen`。
+  - 长住优惠:`OrderController::longstayDiscount` 命中站点 `marketing_longstay_tier` 最高档,按原总价打折(仅酒店)。
+  - 优惠券:`OrderController::resolveCoupon` 校验归属/状态/有效期/适用范围/门槛并算抵扣(满减/无门槛直减、折扣券按折扣率+封顶);下单只预留不消耗,`pay()` 成功时置领券记录已用 + 模板 used_count+1。
+  - 多住客:`travelers[]` 归一化落 `order_main.guests(JSON)`;下单返回 `priceDetail{original,longstayDiscount,couponDiscount,payAmount}`。
+  - 新表:`marketing_longstay_tier`、`user_traveler`(compose 82/83 挂载)。
+- [ ] M1-b:常旅客 CRUD(`user_traveler` 已建表)、goods 详情/列表输出公民价与评价摘要、`goods_review` 读写。
+- [ ] M1-c:取消退款平台费(convenience fee,仅用户主动取消时从退款额扣)。
+
+> M1-a 已知边界:①券在支付时消耗、无待支付订单过期任务(order_status=7 未落地,库存锁与券预留同受影响,列为后续专项);②住客 `guests` 暂明文存于本人订单(仅本人 detail 可见),PII 加密留待专项;③长住梯度按站点配置,未做 site_id=0 全局兜底。
