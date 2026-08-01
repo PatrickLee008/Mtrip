@@ -256,3 +256,18 @@ CREATE TABLE IF NOT EXISTS `user_favorite` (
 推荐从 **M0 + M1 打通"单酒店预订闭环"** 开始(PRD MVP 的心脏,直接对齐 Acceptance Criteria 的 Hotel Bookings 全条)。M0 中 **钱包资金模型**需先与财务口径确认后再落 DDL。
 
 > 下一步可选:①先出 **M0 落地级方案**(迁移 SQL + 钱包读写公共方法 + 退款确认改造 + 回归用例);或 ②直接从 **M1 下单增强**切入(双价+券+长住+多住客),按上方 §5/§6 编码。请指定起点。
+
+---
+
+## 10. 实施进展(dev 分支)
+
+### M0 地基 — 进行中
+- [x] 双价列迁移:`database/goods/02-consumer-dualprice.sql`(`hotel_room_type.base_price_citizen`、`goods_daily_stock.price_citizen`)。
+- [x] 订单增强迁移:`database/order/03-consumer-booking.sql`(`order_main` +trip_id/is_citizen/longstay_discount/alloc_coupon_discount/platform_fee/guests;`order_refund` +refund_channel)。
+- [x] compose 挂载:`deploy/docker-compose.yml` 新增 80/81 增量迁移(基础表后、种子前)。
+- [x] **退款钱包化**:`order-service` `AdminRefundController::confirm` 改造——`refund_channel=1` 事务内入 `user_info.balance`(行锁+前后快照写 `user_balance_log change_type=3`),`=2` 保留原路(需第三方流水号);`finance_flow` 补 user_id、钱包退款 pay_channel=0。
+- [x] 验收:`scripts/check.ps1` 四步全绿(2026-08-01:php -l 234 文件 0 错误 / shared 47 用例 723 断言全过 / admin-web build 零 TS 报错 / client-app typecheck 通过)。
+- [ ] 缅甸双价取价函数(goods-service 公共方法,详情/下单复用)—— 待 M1 一并落。
+- [ ] 网关 `ClientSignMiddleware` 启用 —— 部署期开关(shared 已有实现 + 7 条单测跑绿,底座就绪)。
+
+> 说明:docker init 仅首次建库执行迁移,既有运行库需手动 source 两个增量 SQL(ADD COLUMN 非幂等,已在文件头注明)。

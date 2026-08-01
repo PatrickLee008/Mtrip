@@ -139,7 +139,11 @@ class AdminRefundController extends AbstractAdminController
         return Result::success(['refundAmount' => $refundAmount], '平台审核通过,进入退款中(原路退回)');
     }
 
-    /** 确认退款到账:退款中(2)→ 已退款(3);更新订单、回补库存、落资金流水 */
+    /**
+     * 确认退款到账:退款中(2)→ 已退款(3);更新订单、回补库存、落资金流水
+     * PRD v1.0:退款默认入 mTrip 钱包(refund_channel=1)——事务内给用户余额入账并写 user_balance_log;
+     *          refund_channel=2 保留原路退回(仅记 finance_flow,不动钱包)。
+     */
     #[Permission('order:refund:audit')]
     public function confirm(): array
     {
@@ -147,15 +151,21 @@ class AdminRefundController extends AbstractAdminController
         if ((int) $refund['status'] !== 2) {
             throw new BusinessException(ErrorCode::DATA_CONFLICT, '仅退款中的退款单可确认到账');
         }
+        $toWallet = (int) ($refund['refund_channel'] ?? 1) === 1;
+        // 原路退回需第三方退款流水号;钱包退款不需要
         $tradeNo = $this->strInput('refundTradeNo');
+        if (! $toWallet && $tradeNo === '') {
+            throw new BusinessException(ErrorCode::PARAM_ERROR, '原路退回需填写第三方退款流水号');
+        }
         $order = Db::table('order_main')->where('id', $refund['order_id'])->first();
         if (! $order) {
             throw new BusinessException(ErrorCode::NOT_FOUND, '关联订单不存在');
         }
         $order = (array) $order;
-        $fullRefund = (float) $refund['refund_amount'] >= (float) $order['pay_amount'];
+        $refundAmount = (float) $refund['refund_amount'];
+        $fullRefund = $refundAmount >= (float) $order['pay_amount'];
 
-        Db::transaction(function () use ($refund, $order, $tradeNo, $fullRefund) {
+        Db::transaction(function () use ($refund, $order, $tradeNo, $fullRefund, $toWallet, $refundAmount) {
             Db::table('order_refund')->where('id', $refund['id'])->update([
                 'status' => 3,
                 'refund_trade_no' => $tradeNo,
@@ -169,23 +179,56 @@ class AdminRefundController extends AbstractAdminController
             if ($fullRefund) {
                 $this->stockService->refundRestore($order);
             }
-            // 资金流水:订单退款支出
+            // 退款入 mTrip 钱包:行锁用户余额 + 前后快照写流水
+            if ($toWallet && $refundAmount > 0) {
+                $this->creditWallet($order, $refund, $refundAmount);
+            }
+            // 资金流水:订单退款支出(钱包退款 pay_channel=0)
             Db::table('finance_flow')->insert([
                 'flow_no' => OrderNoGenerator::flowNo(),
                 'site_id' => (int) $refund['site_id'],
                 'flow_type' => 2,
                 'biz_type' => 2,
-                'amount' => (float) $refund['refund_amount'],
+                'amount' => $refundAmount,
                 'order_id' => (int) $refund['order_id'],
                 'merchant_id' => (int) $refund['merchant_id'],
-                'pay_channel' => (int) $order['pay_method'],
+                'user_id' => (int) $order['user_id'],
+                'pay_channel' => $toWallet ? 0 : (int) $order['pay_method'],
                 'trade_no' => $tradeNo,
                 'flow_status' => 1,
-                'remark' => "退款单 {$refund['refund_no']} 到账确认",
+                'remark' => "退款单 {$refund['refund_no']} 到账确认(" . ($toWallet ? '入mTrip钱包' : '原路退回') . ')',
                 'operator_id' => AdminContext::adminId(),
             ]);
         });
-        return Result::success(null, $fullRefund ? '退款已完成,订单已关闭并回补库存' : '部分退款已完成,订单继续有效');
+        $channelMsg = $toWallet ? '已退入 mTrip 钱包' : '已原路退回';
+        return Result::success(null, ($fullRefund ? '退款已完成,订单已关闭并回补库存' : '部分退款已完成,订单继续有效') . ",{$channelMsg}");
+    }
+
+    /**
+     * 给用户 mTrip 钱包入账(须在事务内调用):行锁 user_info + 前后余额快照写 user_balance_log。
+     * change_type=3 退款;order_id 关联来源订单。
+     */
+    private function creditWallet(array $order, array $refund, float $amount): void
+    {
+        $userId = (int) $order['user_id'];
+        $user = Db::table('user_info')->where('id', $userId)->lockForUpdate()->first(['id', 'balance']);
+        if (! $user) {
+            throw new BusinessException(ErrorCode::NOT_FOUND, '退款目标用户不存在,无法入钱包');
+        }
+        $before = (float) $user->balance;
+        $after = round($before + $amount, 2);
+        Db::table('user_info')->where('id', $userId)->update(['balance' => $after]);
+        Db::table('user_balance_log')->insert([
+            'site_id' => (int) $refund['site_id'],
+            'user_id' => $userId,
+            'change_type' => 3,
+            'amount' => $amount,
+            'before_balance' => $before,
+            'after_balance' => $after,
+            'order_id' => (int) $refund['order_id'],
+            'operator_id' => AdminContext::adminId(),
+            'remark' => "退款单 {$refund['refund_no']} 退入钱包",
+        ]);
     }
 
     /** 取退款单并校验站点数据权限 */
