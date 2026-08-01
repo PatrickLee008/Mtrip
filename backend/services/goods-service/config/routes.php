@@ -18,6 +18,7 @@ use Hyperf\HttpServer\Router\Router;
 use Mtrip\Shared\Middleware\AdminAuthMiddleware;
 use Mtrip\Shared\Middleware\MerchantAuthMiddleware;
 use Mtrip\Shared\Middleware\OperationLogMiddleware;
+use Mtrip\Shared\Middleware\UserAuthMiddleware;
 
 // 健康检查(网关探活)
 Router::get('/healthz', static fn () => ['status' => 'ok', 'service' => 'goods-service']);
@@ -28,7 +29,15 @@ Router::addGroup('/api/v1/app/goods', static function () {
     Router::get('/list', [GoodsController::class, 'list']);
     Router::get('/detail', [GoodsController::class, 'detail']);
     Router::get('/calendar', [GoodsController::class, 'calendar']);
+    Router::get('/reviews', [GoodsController::class, 'reviews']);
 });
+
+// C端评价提交:需登录(离店/完成后本人订单可评)
+Router::addGroup('/api/v1/app/goods', static function () {
+    Router::post('/review/add', [GoodsController::class, 'reviewAdd']);
+}, [
+    'middleware' => [UserAuthMiddleware::class],
+]);
 
 // ---------- 管理端商品管理(文档 6.4.3) ----------
 Router::addGroup('/api/v1/admin/goods', static function () {

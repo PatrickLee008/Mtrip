@@ -11,6 +11,7 @@ declare(strict_types=1);
 use App\Controller\Admin\AdminFeedbackController;
 use App\Controller\Admin\AdminUserController;
 use App\Controller\AuthController;
+use App\Controller\TravelerController;
 use App\Controller\UserController;
 use Hyperf\HttpServer\Router\Router;
 use Mtrip\Shared\Middleware\AdminAuthMiddleware;
@@ -36,6 +37,12 @@ Router::addGroup('/api/v1/app', static function () {
     Router::get('/user/points-logs', [UserController::class, 'pointsLogs']);
     Router::post('/user/feedback/add', [UserController::class, 'addFeedback']);
     Router::get('/user/feedback/list', [UserController::class, 'feedbackList']);
+
+    // 常旅客(Frequent Traveler)
+    Router::get('/user/traveler/list', [TravelerController::class, 'list']);
+    Router::post('/user/traveler/add', [TravelerController::class, 'add']);
+    Router::post('/user/traveler/update', [TravelerController::class, 'update']);
+    Router::post('/user/traveler/delete', [TravelerController::class, 'delete']);
 }, [
     'middleware' => [UserAuthMiddleware::class],
 ]);

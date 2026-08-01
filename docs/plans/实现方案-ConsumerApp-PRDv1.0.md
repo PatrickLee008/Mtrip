@@ -279,7 +279,10 @@ CREATE TABLE IF NOT EXISTS `user_favorite` (
   - 优惠券:`OrderController::resolveCoupon` 校验归属/状态/有效期/适用范围/门槛并算抵扣(满减/无门槛直减、折扣券按折扣率+封顶);下单只预留不消耗,`pay()` 成功时置领券记录已用 + 模板 used_count+1。
   - 多住客:`travelers[]` 归一化落 `order_main.guests(JSON)`;下单返回 `priceDetail{original,longstayDiscount,couponDiscount,payAmount}`。
   - 新表:`marketing_longstay_tier`、`user_traveler`(compose 82/83 挂载)。
-- [ ] M1-b:常旅客 CRUD(`user_traveler` 已建表)、goods 详情/列表输出公民价与评价摘要、`goods_review` 读写。
+- [x] **M1-b 常旅客 + 公民价展示 + 评价**(`user-service`/`goods-service`,check.ps1 四步全绿):
+  - 常旅客 CRUD:`TravelerController`(list/add/update/delete),证件号 AES 加密存储、`MaskHelper::idCard` 脱敏,is_default 互斥;OCR 在客户端/第三方,后端只收解析后字段。
+  - 公民价展示:`goods calendar` 输出 `priceCitizen`(回退 price);`detail`/`list` 输出 `minPriceCitizen`(房型 base_price_citizen>0 取最低,门票/无价回退外国人价);详情房型 SKU 直带 `base_price_citizen`。
+  - 评价:新表 `goods_review`(compose 84 挂载);`detail` 附 `reviewSummary{count,avgRating}`;`GET /app/goods/reviews` 公开分页(join 昵称/头像);`POST /app/goods/review/add`(UserAuthMiddleware,仅本人 order_status∈{2,3} 酒店订单、每单限一次)。
 - [ ] M1-c:取消退款平台费(convenience fee,仅用户主动取消时从退款额扣)。
 
 > M1-a 已知边界:①券在支付时消耗、无待支付订单过期任务(order_status=7 未落地,库存锁与券预留同受影响,列为后续专项);②住客 `guests` 暂明文存于本人订单(仅本人 detail 可见),PII 加密留待专项;③长住梯度按站点配置,未做 site_id=0 全局兜底。
