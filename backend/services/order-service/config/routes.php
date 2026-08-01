@@ -30,6 +30,7 @@ Router::addGroup('/api/v1/app/order', static function () {
     Router::get('/list', [OrderController::class, 'list']);
     Router::get('/detail', [OrderController::class, 'detail']);
     Router::post('/cancel', [OrderController::class, 'cancel']);
+    Router::get('/refund/quote', [OrderController::class, 'refundQuote']);
     Router::post('/refund/apply', [OrderController::class, 'applyRefund']);
     Router::get('/verify-code', [OrderController::class, 'verifyCode']);
 }, [

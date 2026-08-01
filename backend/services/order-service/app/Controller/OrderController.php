@@ -246,7 +246,29 @@ class OrderController extends AbstractController
         return Result::success(null, '订单已取消');
     }
 
-    /** 申请退款:已支付未使用订单,进入商户审核流(退款审核归管理端) */
+    /**
+     * 退款预览(取消页透明展示):按退改规则算可退,再扣平台便民费(仅用户主动取消收)。
+     * PRD 模块 11:结账不收平台费,取消时才从可退额扣;取消页展示 取消费/退款额。
+     */
+    public function refundQuote(): array
+    {
+        $order = $this->ownOrder($this->requireId('orderId'));
+        if ((int) $order['order_status'] !== 1) {
+            throw new BusinessException(ErrorCode::DATA_CONFLICT, '仅已支付且未使用的订单可预览退款');
+        }
+        $q = $this->computeRefund($order);
+        return Result::success([
+            'payAmount' => $q['payAmount'],
+            'refundable' => $q['refundable'],
+            'cancellationFee' => round($q['payAmount'] - $q['refundable'], 2),
+            'platformFee' => $q['platformFee'],
+            'refundAmount' => $q['refundAmount'],
+            'refundChannel' => 1,
+            'refundChannelText' => 'mTrip 钱包',
+        ]);
+    }
+
+    /** 申请退款:已支付未使用订单,按退改规则+平台费核算净退款额,进入商户审核流 */
     public function applyRefund(): array
     {
         $orderId = $this->requireId('orderId');
@@ -258,6 +280,10 @@ class OrderController extends AbstractController
             if ((int) $order['order_status'] !== 1) {
                 throw new BusinessException(ErrorCode::DATA_CONFLICT, '仅已支付且未使用的订单可申请退款');
             }
+            $q = $this->computeRefund($order);
+            if ($q['refundAmount'] <= 0) {
+                throw new BusinessException(ErrorCode::DATA_CONFLICT, '按退改规则该订单不可退款');
+            }
             $images = $this->input('images');
             Db::table('order_refund')->insert([
                 'refund_no' => $refundNo,
@@ -266,18 +292,92 @@ class OrderController extends AbstractController
                 'order_no' => (string) $order['order_no'],
                 'user_id' => (int) $order['user_id'],
                 'merchant_id' => (int) $order['merchant_id'],
-                'refund_type' => 1,
-                'apply_amount' => (float) $order['pay_amount'],
+                'refund_type' => $q['refundAmount'] >= (float) $order['pay_amount'] ? 1 : 2,
+                'apply_amount' => $q['refundAmount'],
+                'refund_channel' => 1,
                 'reason' => mb_substr($reason, 0, 500),
                 'images' => is_array($images) ? json_encode($images, JSON_UNESCAPED_UNICODE) : null,
                 'status' => 0,
             ]);
+            // 记录本单平台便民费(用于对账);退款目的地为 mTrip 钱包(refund_channel=1)
             Db::table('order_main')->where('id', $orderId)->update([
                 'order_status' => 5,
                 'refund_status' => 1,
+                'platform_fee' => $q['platformFee'],
             ]);
         });
         return Result::success(['refundNo' => $refundNo], '退款申请已提交,等待商户审核');
+    }
+
+    /**
+     * 退款核算:refundable=按退改规则可退额;platformFee=可退额×站点便民费率(仅用户主动取消);
+     * refundAmount=refundable−platformFee。
+     * @return array{payAmount:float,refundable:float,platformFee:float,refundAmount:float}
+     */
+    private function computeRefund(array $order): array
+    {
+        $pay = (float) $order['pay_amount'];
+        $rule = Db::table('goods_refund_rule')
+            ->where('goods_id', (int) $order['goods_id'])
+            ->whereNull('deleted_at')
+            ->where(static function ($q) use ($order) {
+                $q->where(static function ($q2) use ($order) {
+                    $q2->where('sku_type', (int) $order['order_type'])->where('sku_id', (int) $order['sku_id']);
+                })->orWhere('sku_type', 0);
+            })
+            ->orderByDesc('sku_type') // SKU 级(1/2)优先于商品级(0)
+            ->first();
+
+        $refundable = $pay; // 无规则视为免费取消(全额可退)
+        if ($rule) {
+            $rule = (array) $rule;
+            $type = (int) $rule['rule_type'];
+            if ($type === 3) {
+                $refundable = 0.0;              // 不可退
+            } elseif ($type === 2) {
+                $refundable = $this->stepRefundable($pay, $rule, $order); // 阶梯
+            }
+            // type=1 免费取消 → 全额
+        }
+        $rate = $this->platformFeeRate((int) $order['site_id']);
+        $platformFee = round($refundable * $rate, 2);
+        $refundAmount = max(0.0, round($refundable - $platformFee, 2));
+        return [
+            'payAmount' => round($pay, 2),
+            'refundable' => round($refundable, 2),
+            'platformFee' => $platformFee,
+            'refundAmount' => $refundAmount,
+        ];
+    }
+
+    /** 阶梯退款:rules=[{hours_before,refund_rate}],按距入住剩余小时命中可满足的最优档 */
+    private function stepRefundable(float $pay, array $rule, array $order): float
+    {
+        $rules = is_string($rule['rules']) ? (json_decode((string) $rule['rules'], true) ?: []) : (array) ($rule['rules'] ?? []);
+        if ($rules === []) {
+            return $pay;
+        }
+        $checkin = strtotime((string) $order['use_date'] . ' 14:00:00');
+        $hoursUntil = $checkin !== false ? ($checkin - time()) / 3600 : 0;
+        usort($rules, static fn ($a, $b) => (float) ($b['hours_before'] ?? 0) <=> (float) ($a['hours_before'] ?? 0));
+        foreach ($rules as $tier) {
+            if ($hoursUntil >= (float) ($tier['hours_before'] ?? 0)) {
+                return round($pay * (float) ($tier['refund_rate'] ?? 0) / 100, 2);
+            }
+        }
+        return 0.0; // 离入住太近,无满足档
+    }
+
+    /** 站点平台便民费率:sys_site_config.platform_fee_rate(百分比,如 5=5%),未配=0 */
+    private function platformFeeRate(int $siteId): float
+    {
+        $value = Db::connection('system')->table('sys_site_config')
+            ->where('site_id', $siteId)
+            ->where('config_key', 'platform_fee_rate')
+            ->whereNull('deleted_at')
+            ->value('config_value');
+        $rate = $value !== null ? (float) $value : 0.0;
+        return $rate > 0 ? $rate / 100 : 0.0;
     }
 
     /** 核销码(二维码展示):仅已支付/已核销订单 */

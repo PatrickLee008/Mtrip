@@ -283,6 +283,14 @@ CREATE TABLE IF NOT EXISTS `user_favorite` (
   - 常旅客 CRUD:`TravelerController`(list/add/update/delete),证件号 AES 加密存储、`MaskHelper::idCard` 脱敏,is_default 互斥;OCR 在客户端/第三方,后端只收解析后字段。
   - 公民价展示:`goods calendar` 输出 `priceCitizen`(回退 price);`detail`/`list` 输出 `minPriceCitizen`(房型 base_price_citizen>0 取最低,门票/无价回退外国人价);详情房型 SKU 直带 `base_price_citizen`。
   - 评价:新表 `goods_review`(compose 84 挂载);`detail` 附 `reviewSummary{count,avgRating}`;`GET /app/goods/reviews` 公开分页(join 昵称/头像);`POST /app/goods/review/add`(UserAuthMiddleware,仅本人 order_status∈{2,3} 酒店订单、每单限一次)。
-- [ ] M1-c:取消退款平台费(convenience fee,仅用户主动取消时从退款额扣)。
+- [x] **M1-c 退款透明 + 平台便民费**(`order-service`,check.ps1 四步全绿):
+  - `GET /app/order/refund/quote`:取消页透明展示 `{payAmount, refundable, cancellationFee, platformFee, refundAmount, refundChannel=mTrip钱包}`。
+  - `computeRefund`:按 `goods_refund_rule`(SKU 级优先商品级;1免费取消/2阶梯/3不可退)算可退额,`stepRefundable` 按距入住剩余小时命中最优档;再扣平台便民费。
+  - 平台费:`platformFeeRate` 读 `sys_site_config.platform_fee_rate`(system 连接,百分比,未配=0),仅对可退额收(结账不收,符合 PRD 模块11)。
+  - `applyRefund` 改为按净额建退款单(refund_channel=1 钱包、refund_type 全/部分自动判定),并把 platform_fee 落 order_main;不可退(净额≤0)明确拒绝。
+
+**M1 核心预订闭环 = 已完成**(M1-a/b/c 全绿)。下一步进入 **M2 促销与用户资产**(促销中心/My Coupons 自动择优、收藏、推荐返利)。
+
+> M1-c 已知边界:①非全额退时管理端 `deduct_amount` 在审核环节按 apply-refund 重算(=0),便民费/取消费拆分展示留待管理端退款页专项;②已支付「不可退」订单的「取消但不退款」路径未覆盖(现直接拒绝退款申请),留待专项;③平台费率取站点配置,未做订单级豁免(如商户/系统原因取消不收,PRD 模块11 表)——按 PRD 仅用户主动取消收,商户/超时/系统取消场景在 M3 结算/异常流补齐。
 
 > M1-a 已知边界:①券在支付时消耗、无待支付订单过期任务(order_status=7 未落地,库存锁与券预留同受影响,列为后续专项);②住客 `guests` 暂明文存于本人订单(仅本人 detail 可见),PII 加密留待专项;③长住梯度按站点配置,未做 site_id=0 全局兜底。
