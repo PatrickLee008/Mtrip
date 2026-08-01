@@ -9,7 +9,9 @@ declare(strict_types=1);
  */
 
 use App\Controller\Admin\AdminCategoryController;
+use App\Controller\Admin\AdminFilterController;
 use App\Controller\Admin\AdminGoodsController;
+use App\Controller\Admin\AdminReviewController;
 use App\Controller\Admin\AdminSkuController;
 use App\Controller\Admin\AdminStockController;
 use App\Controller\GoodsController;
@@ -30,6 +32,7 @@ Router::addGroup('/api/v1/app/goods', static function () {
     Router::get('/detail', [GoodsController::class, 'detail']);
     Router::get('/calendar', [GoodsController::class, 'calendar']);
     Router::get('/reviews', [GoodsController::class, 'reviews']);
+    Router::get('/filters', [GoodsController::class, 'filters']);
 });
 
 // C端评价提交:需登录(离店/完成后本人订单可评)
@@ -73,6 +76,19 @@ Router::addGroup('/api/v1/admin/goods', static function () {
     Router::get('/stock/logs', [AdminStockController::class, 'logs']);
     Router::get('/stock/low-warning', [AdminStockController::class, 'lowWarning']);
     Router::get('/stock/overview', [AdminStockController::class, 'overview']);
+
+    // 酒店评价审核(PRD 模块4)
+    Router::get('/review/list', [AdminReviewController::class, 'index']);
+    Router::post('/review/audit', [AdminReviewController::class, 'audit']);
+    Router::post('/review/reply', [AdminReviewController::class, 'reply']);
+
+    // 筛选/排序项配置(PRD 模块3)
+    Router::get('/filter/list', [AdminFilterController::class, 'filterList']);
+    Router::post('/filter/save', [AdminFilterController::class, 'filterSave']);
+    Router::post('/filter/delete', [AdminFilterController::class, 'filterDelete']);
+    Router::get('/sort/list', [AdminFilterController::class, 'sortList']);
+    Router::post('/sort/save', [AdminFilterController::class, 'sortSave']);
+    Router::post('/sort/delete', [AdminFilterController::class, 'sortDelete']);
 }, [
     'middleware' => [AdminAuthMiddleware::class, OperationLogMiddleware::class],
 ]);

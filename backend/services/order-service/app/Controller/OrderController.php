@@ -4,7 +4,12 @@ declare(strict_types=1);
 
 namespace App\Controller;
 
+use App\Service\FraudService;
+use App\Service\NotifyService;
 use App\Service\OrderStockService;
+use App\Service\PricingService;
+use App\Service\ReferralService;
+use App\Service\SettlementService;
 use App\Service\WalletService;
 use Hyperf\Contract\ConfigInterface;
 use Hyperf\DbConnection\Db;
@@ -28,6 +33,21 @@ class OrderController extends AbstractController
 
     #[Inject]
     protected WalletService $walletService;
+
+    #[Inject]
+    protected NotifyService $notifyService;
+
+    #[Inject]
+    protected FraudService $fraudService;
+
+    #[Inject]
+    protected SettlementService $settlementService;
+
+    #[Inject]
+    protected PricingService $pricingService;
+
+    #[Inject]
+    protected ReferralService $referralService;
 
     #[Inject]
     protected ConfigInterface $config;
@@ -78,7 +98,7 @@ class OrderController extends AbstractController
 
         $isCitizen = $this->intInput('isCitizen', 0) === 1;
         $couponId = $this->intInput('couponId', 0);
-        $guests = $this->normalizeGuests($this->input('travelers'), $quantity);
+        $guests = $this->pricingService->normalizeGuests($this->input('travelers'), $quantity);
         $remark = mb_substr($this->strInput('remark'), 0, 500);
 
         $orderNo = OrderNoGenerator::orderNo($siteId);
@@ -91,10 +111,10 @@ class OrderController extends AbstractController
                 $siteId, $goodsId, $orderType, $skuId, $sku, $dates, $quantity, $isCitizen
             );
             // 长住优惠:仅酒店,按住宿夜数命中最高梯度,对原总价打折
-            $longstay = $orderType === 1 ? $this->longstayDiscount($siteId, count($dates), $totalAmount) : 0.0;
+            $longstay = $orderType === 1 ? $this->pricingService->longstayDiscount($siteId, count($dates), $totalAmount) : 0.0;
             // 优惠券(可选):校验归属/状态/有效期/适用范围/门槛,计算抵扣(不在此消耗,支付时消耗)
             [$couponRefId, $couponDiscount] = $couponId > 0
-                ? $this->resolveCoupon($siteId, $userId, $couponId, $orderType, $goodsId, round($totalAmount - $longstay, 2))
+                ? $this->pricingService->resolveCoupon($siteId, $userId, $couponId, $orderType, $goodsId, round($totalAmount - $longstay, 2))
                 : [0, 0.0];
             $payAmount = max(0.0, round($totalAmount - $longstay - $couponDiscount, 2));
             $unitPrice = round($totalAmount / max(1, count($dates)) / $quantity, 2);
@@ -126,7 +146,7 @@ class OrderController extends AbstractController
                 'end_date' => $endDate,
                 'contact_name' => mb_substr($contactName, 0, 50),
                 'contact_phone' => CryptoHelper::encrypt($contactPhone, $this->aesKey()),
-                'guests' => $guests !== [] ? json_encode($guests, JSON_UNESCAPED_UNICODE) : null,
+                'guests' => $guests !== [] ? CryptoHelper::encrypt(json_encode($guests, JSON_UNESCAPED_UNICODE), $this->aesKey()) : null,
                 'remark' => $remark,
             ]);
             $this->stockService->logChanges($orderId, $changes);
@@ -194,12 +214,31 @@ class OrderController extends AbstractController
             }
             // 推荐返利:被推荐人首个已支付酒店订单达成 → 奖励入推荐人钱包(PRD 模块14)
             if ((int) $order['order_type'] === 1) {
-                $this->grantReferralReward((int) $order['site_id'], (int) $order['user_id'], $orderId);
+                $this->referralService->grantOnFirstBooking((int) $order['site_id'], (int) $order['user_id'], $orderId);
             }
-            return ['verifyCode' => $verifyCode];
+            // 结算分录:按优惠券出资方生成按订单分账(PRD 模块8),回填订单佣金/商户实收
+            $this->settlementService->recordBooking($order);
+            return [
+                'verifyCode' => $verifyCode,
+                'siteId' => (int) $order['site_id'],
+                'userId' => (int) $order['user_id'],
+                'goodsName' => (string) $order['goods_name'],
+                'orderNo' => (string) $order['order_no'],
+            ];
         });
 
-        return Result::success($result, '支付成功');
+        // 预订确认站内通知(事件后置,失败不影响支付结果)
+        try {
+            $this->notifyService->pushOrder(
+                $result['siteId'], $result['userId'], 'booking_confirmed',
+                '预订已确认',
+                "您的预订「{$result['goodsName']}」(订单 {$result['orderNo']})已确认,可在「我的预订」查看凭证。",
+                $orderId,
+            );
+        } catch (\Throwable) {
+        }
+
+        return Result::success(['verifyCode' => $result['verifyCode']], '支付成功');
     }
 
     /** 我的订单分页:status 可选过滤 */
@@ -228,6 +267,7 @@ class OrderController extends AbstractController
     {
         $order = $this->ownOrder($this->requireId('orderId'));
         $order['contact_phone'] = MaskHelper::mobile($this->decryptPhone((string) $order['contact_phone']));
+        $order['guests'] = $this->decryptGuests((string) ($order['guests'] ?? ''));
         if (! in_array((int) $order['order_status'], [1, 2], true)) {
             $order['verify_code'] = '';
         }
@@ -283,7 +323,7 @@ class OrderController extends AbstractController
         $reason = $this->requireStr('reason');
         $refundNo = 'R' . date('YmdHis') . str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
 
-        Db::transaction(function () use ($orderId, $reason, $refundNo) {
+        $snap = Db::transaction(function () use ($orderId, $reason, $refundNo) {
             $order = $this->lockOwnOrder($orderId);
             if ((int) $order['order_status'] !== 1) {
                 throw new BusinessException(ErrorCode::DATA_CONFLICT, '仅已支付且未使用的订单可申请退款');
@@ -313,7 +353,31 @@ class OrderController extends AbstractController
                 'refund_status' => 1,
                 'platform_fee' => $q['platformFee'],
             ]);
+            return [
+                'siteId' => (int) $order['site_id'],
+                'userId' => (int) $order['user_id'],
+                'goodsName' => (string) $order['goods_name'],
+                'orderNo' => (string) $order['order_no'],
+                'refundAmount' => $q['refundAmount'],
+            ];
         });
+
+        // 预订取消/退款站内通知(事件后置,失败不影响退款申请)
+        try {
+            $this->notifyService->pushOrder(
+                $snap['siteId'], $snap['userId'], 'booking_cancelled',
+                '退款申请已提交',
+                "您的预订「{$snap['goodsName']}」(订单 {$snap['orderNo']})退款申请已提交,预计退回 mTrip 钱包 {$snap['refundAmount']},审核通过后到账。",
+                $orderId,
+            );
+        } catch (\Throwable) {
+        }
+        // 风控:取消/退款行为评估(阈值化,后置容错,不影响退款申请)
+        try {
+            $this->fraudService->evaluateCancellation($snap['siteId'], $snap['userId']);
+        } catch (\Throwable) {
+        }
+
         return Result::success(['refundNo' => $refundNo], '退款申请已提交,等待商户审核');
     }
 
@@ -392,44 +456,6 @@ class OrderController extends AbstractController
      * 推荐返利发放(须在事务内调用):被推荐人首个已支付酒店订单达成时,
      * 按站点配置的奖励额给推荐人+新人钱包入账,并把绑定记录置已发放(reward_status=0→1 保证仅首单发放)。
      */
-    private function grantReferralReward(int $siteId, int $inviteeUserId, int $orderId): void
-    {
-        $ref = Db::table('user_referral')
-            ->where('invitee_user_id', $inviteeUserId)
-            ->where('reward_status', 0)
-            ->lockForUpdate()
-            ->first();
-        if (! $ref) {
-            return;
-        }
-        $ref = (array) $ref;
-        $inviterReward = $this->referralReward($siteId, 'referral_reward_inviter');
-        $inviteeReward = $this->referralReward($siteId, 'referral_reward_invitee');
-        if ($inviterReward > 0) {
-            $this->walletService->credit($siteId, (int) $ref['inviter_user_id'], $inviterReward, 4, $orderId, 0, '推荐返利-邀请奖励');
-        }
-        if ($inviteeReward > 0) {
-            $this->walletService->credit($siteId, $inviteeUserId, $inviteeReward, 4, $orderId, 0, '推荐返利-新人奖励');
-        }
-        Db::table('user_referral')->where('id', $ref['id'])->update([
-            'reward_status' => 1,
-            'reward_amount' => $inviterReward,
-            'reward_order_id' => $orderId,
-            'reward_time' => date('Y-m-d H:i:s'),
-        ]);
-    }
-
-    /** 推荐奖励额:sys_site_config[key](绝对金额 MMK),未配=0 */
-    private function referralReward(int $siteId, string $key): float
-    {
-        $value = Db::connection('system')->table('sys_site_config')
-            ->where('site_id', $siteId)
-            ->where('config_key', $key)
-            ->whereNull('deleted_at')
-            ->value('config_value');
-        return $value !== null ? max(0.0, (float) $value) : 0.0;
-    }
-
     /** 核销码(二维码展示):仅已支付/已核销订单 */
     public function verifyCode(): array
     {
@@ -477,108 +503,6 @@ class OrderController extends AbstractController
         return (array) $order;
     }
 
-    /** 长住优惠额:命中站点内 min_nights<=夜数 的最高梯度,按原总价乘折扣率 */
-    private function longstayDiscount(int $siteId, int $nights, float $total): float
-    {
-        $tier = Db::table('marketing_longstay_tier')
-            ->where('site_id', $siteId)
-            ->where('status', 1)
-            ->where('min_nights', '<=', $nights)
-            ->whereNull('deleted_at')
-            ->orderByDesc('min_nights')
-            ->first(['discount_rate']);
-        if (! $tier) {
-            return 0.0;
-        }
-        return round($total * (float) $tier->discount_rate / 100, 2);
-    }
-
-    /**
-     * 校验优惠券并计算抵扣(须在事务内调用,行锁领券记录防并发)。
-     * 券在此不消耗,支付成功时才置已用。
-     * @return array{0:int,1:float} [领券记录ID, 抵扣金额]
-     */
-    private function resolveCoupon(int $siteId, int $userId, int $receiveId, int $orderType, int $goodsId, float $base): array
-    {
-        $rec = Db::table('marketing_coupon_receive')
-            ->where('id', $receiveId)
-            ->where('user_id', $userId)
-            ->where('site_id', $siteId)
-            ->whereNull('deleted_at')
-            ->lockForUpdate()
-            ->first();
-        if (! $rec) {
-            throw new BusinessException(ErrorCode::NOT_FOUND, '优惠券不存在');
-        }
-        $rec = (array) $rec;
-        if ((int) $rec['status'] !== 0) {
-            throw new BusinessException(ErrorCode::DATA_CONFLICT, '优惠券已使用或已失效');
-        }
-        $now = date('Y-m-d H:i:s');
-        if (($rec['valid_start'] && $now < $rec['valid_start']) || ($rec['valid_end'] && $now > $rec['valid_end'])) {
-            throw new BusinessException(ErrorCode::DATA_CONFLICT, '优惠券不在有效期');
-        }
-        $coupon = Db::table('marketing_coupon')->where('id', $rec['coupon_id'])->whereNull('deleted_at')->first();
-        if (! $coupon) {
-            throw new BusinessException(ErrorCode::NOT_FOUND, '优惠券模板不存在');
-        }
-        $coupon = (array) $coupon;
-        // 适用范围:0全部 1酒店 2门票 3指定商品
-        $scope = (int) $coupon['goods_scope'];
-        if ($scope === 1 && $orderType !== 1) {
-            throw new BusinessException(ErrorCode::DATA_CONFLICT, '该券仅限酒店订单');
-        }
-        if ($scope === 2 && $orderType !== 2) {
-            throw new BusinessException(ErrorCode::DATA_CONFLICT, '该券仅限门票订单');
-        }
-        if ($scope === 3) {
-            $ids = is_string($coupon['goods_ids']) ? (json_decode($coupon['goods_ids'], true) ?: []) : (array) ($coupon['goods_ids'] ?? []);
-            if (! in_array($goodsId, array_map('intval', $ids), true)) {
-                throw new BusinessException(ErrorCode::DATA_CONFLICT, '该券不适用于本商品');
-            }
-        }
-        // 门槛
-        $min = (float) $coupon['min_amount'];
-        if ($min > 0 && $base < $min) {
-            throw new BusinessException(ErrorCode::DATA_CONFLICT, '未满使用门槛');
-        }
-        // 抵扣:1满减/3无门槛=直减金额;2折扣券=discount_value 为折扣率(8.50=8.5折,用户付85%),max_discount 封顶
-        $type = (int) $coupon['coupon_type'];
-        $val = (float) $coupon['discount_value'];
-        $maxD = (float) $coupon['max_discount'];
-        if ($type === 2) {
-            $discount = round($base * (1 - $val / 10), 2);
-            if ($maxD > 0 && $discount > $maxD) {
-                $discount = $maxD;
-            }
-        } else {
-            $discount = $val;
-        }
-        $discount = max(0.0, min($discount, $base));
-        return [$receiveId, round($discount, 2)];
-    }
-
-    /** 住客名单归一化:最多 qty 条,每条取 firstName/lastName/phone/email 并限长 */
-    private function normalizeGuests(mixed $input, int $qty): array
-    {
-        if (! is_array($input)) {
-            return [];
-        }
-        $out = [];
-        foreach (array_slice(array_values($input), 0, max(1, $qty)) as $g) {
-            if (! is_array($g)) {
-                continue;
-            }
-            $out[] = [
-                'firstName' => mb_substr(trim((string) ($g['firstName'] ?? '')), 0, 50),
-                'lastName' => mb_substr(trim((string) ($g['lastName'] ?? '')), 0, 50),
-                'phone' => mb_substr(trim((string) ($g['phone'] ?? '')), 0, 30),
-                'email' => mb_substr(trim((string) ($g['email'] ?? '')), 0, 100),
-            ];
-        }
-        return $out;
-    }
-
     private function aesKey(): string
     {
         return (string) $this->config->get('mtrip.aes_key', '');
@@ -594,5 +518,31 @@ class OrderController extends AbstractController
         } catch (\Throwable) {
             return '';
         }
+    }
+
+    /** 解密住客名单并对手机号/邮箱脱敏(整块 AES 存储) */
+    private function decryptGuests(string $ciphertext): array
+    {
+        if ($ciphertext === '') {
+            return [];
+        }
+        try {
+            $json = CryptoHelper::decrypt($ciphertext, $this->aesKey());
+        } catch (\Throwable) {
+            return [];
+        }
+        $arr = json_decode($json, true);
+        if (! is_array($arr)) {
+            return [];
+        }
+        return array_map(static function ($g) {
+            $g = (array) $g;
+            return [
+                'firstName' => (string) ($g['firstName'] ?? ''),
+                'lastName' => (string) ($g['lastName'] ?? ''),
+                'phone' => MaskHelper::mobile((string) ($g['phone'] ?? '')),
+                'email' => MaskHelper::email((string) ($g['email'] ?? '')),
+            ];
+        }, $arr);
     }
 }

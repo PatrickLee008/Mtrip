@@ -7,6 +7,7 @@ declare(strict_types=1);
  * 结算单自动生成 / finance_flow 月分表路由归模块08 定时任务
  */
 
+use App\Controller\AccountEntryController;
 use App\Controller\FinanceController;
 use App\Controller\SettleController;
 use App\Controller\WithdrawController;
@@ -34,6 +35,9 @@ Router::addGroup('/api/v1/admin/finance', static function () {
     Router::post('/settle/confirm', [SettleController::class, 'confirm']);
     Router::post('/settle/mark-paid', [SettleController::class, 'markPaid']);
     Router::post('/settle/dispute', [SettleController::class, 'dispute']);
+    // 结算分账报表(PRD 模块8,只读)
+    Router::get('/entry/list', [AccountEntryController::class, 'index']);
+    Router::get('/entry/summary', [AccountEntryController::class, 'summary']);
 }, [
     'middleware' => [AdminAuthMiddleware::class, OperationLogMiddleware::class],
 ]);

@@ -262,6 +262,36 @@ INSERT IGNORE INTO `sys_menu` (`id`, `parent_id`, `menu_name`, `menu_name_en`, `
 (120203, 1202, '删除规则', 'Delete Rule',    'verify:rule:delete',   3, 3),
 (120301, 1203, '导出日志', 'Export Logs',    'verify:log:export',    3, 1);
 
+-- ---------- 13 移动运营(Consumer App PRD v1.0:C端运营与风控后台)----------
+-- i18n_key 留空 → 前端 resolveMenuTitle 回退中文/英文名(无需新增 admin-web 词条);
+-- 页面 component 无对应 Vue 文件时由 router/dynamic.ts 回退 views/wip/index.vue(admin-web 页面后续专项补齐)
+INSERT IGNORE INTO `sys_menu` (`id`, `parent_id`, `menu_name`, `menu_name_en`, `i18n_key`, `perm_key`, `menu_type`, `route_path`, `component`, `icon`, `sort`) VALUES
+(1300, 0, '移动运营', 'Consumer Ops', '', 'cops', 1, '/cops', '', 'MobileOutlined', 13);
+INSERT IGNORE INTO `sys_menu` (`id`, `parent_id`, `menu_name`, `menu_name_en`, `i18n_key`, `perm_key`, `menu_type`, `route_path`, `component`, `icon`, `sort`) VALUES
+(1301, 1300, '申诉处理',   'Appeals',           '', 'user:appeal:list',       2, '/cops/appeal',   'cops/appeal/index',   '', 1),
+(1302, 1300, '风控看板',   'Risk Control',      '', 'user:fraud:list',        2, '/cops/fraud',    'cops/fraud/index',    '', 2),
+(1303, 1300, '评价审核',   'Reviews',           '', 'goods:review:list',      2, '/cops/review',   'cops/review/index',   '', 3),
+(1304, 1300, '长住梯度',   'Long-Stay Tiers',   '', 'marketing:longstay:list',2, '/cops/longstay', 'cops/longstay/index', '', 4),
+(1305, 1300, '动态主题',   'App Themes',        '', 'config:theme:list',      2, '/cops/theme',    'cops/theme/index',    '', 5),
+(1306, 1300, '客服工作台', 'Support',           '', 'user:chat:list',         2, '/cops/chat',     'cops/chat/index',     '', 6),
+(1307, 1300, 'Trip管理',   'Trips',             '', 'order:trip:list',        2, '/cops/trip',     'cops/trip/index',     '', 7),
+(1308, 1300, '结算分账',   'Settlement Ledger', '', 'finance:entry:list',     2, '/cops/entry',    'cops/entry/index',    '', 8),
+(1309, 1300, '筛选排序配置','Filter & Sort',    '', 'goods:filter:list',      2, '/cops/filter',   'cops/filter/index',   '', 9),
+(1310, 1300, '促销活动',   'Campaigns',        '', 'marketing:campaign:list',2, '/cops/campaign', 'cops/campaign/index', '', 10);
+INSERT IGNORE INTO `sys_menu` (`id`, `parent_id`, `menu_name`, `menu_name_en`, `perm_key`, `menu_type`, `sort`) VALUES
+(130901, 1309, '保存配置', 'Save Config',   'goods:filter:save',         3, 1),
+(130902, 1309, '删除配置', 'Delete Config', 'goods:filter:delete',       3, 2),
+(131001, 1310, '保存活动', 'Save Campaign', 'marketing:campaign:save',   3, 1),
+(131002, 1310, '删除活动', 'Delete Campaign','marketing:campaign:delete',3, 2),
+(130101, 1301, '处理申诉', 'Handle Appeal', 'user:appeal:handle',        3, 1),
+(130301, 1303, '审核评价', 'Audit Review',  'goods:review:audit',        3, 1),
+(130302, 1303, '回复评价', 'Reply Review',  'goods:review:reply',        3, 2),
+(130401, 1304, '保存梯度', 'Save Tier',     'marketing:longstay:save',   3, 1),
+(130402, 1304, '删除梯度', 'Delete Tier',   'marketing:longstay:delete', 3, 2),
+(130501, 1305, '保存主题', 'Save Theme',    'config:theme:save',         3, 1),
+(130502, 1305, '删除主题', 'Delete Theme',  'config:theme:delete',       3, 2),
+(130601, 1306, '回复消息', 'Reply Message', 'user:chat:reply',           3, 1);
+
 -- ---------- 超管角色授权全部菜单 ----------
 INSERT IGNORE INTO `sys_role_menu` (`role_id`, `menu_id`)
 SELECT 1, `id` FROM `sys_menu` WHERE `deleted_at` IS NULL;

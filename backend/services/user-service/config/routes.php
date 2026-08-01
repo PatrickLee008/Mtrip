@@ -8,10 +8,15 @@ declare(strict_types=1);
  * - 管理端 /api/v1/admin/user/*:AdminAuthMiddleware + OperationLogMiddleware
  */
 
+use App\Controller\Admin\AdminChatController;
 use App\Controller\Admin\AdminFeedbackController;
+use App\Controller\Admin\AdminRiskController;
 use App\Controller\Admin\AdminUserController;
+use App\Controller\AppealController;
 use App\Controller\AuthController;
+use App\Controller\ChatController;
 use App\Controller\FavoriteController;
+use App\Controller\NotifyController;
 use App\Controller\ReferralController;
 use App\Controller\TravelerController;
 use App\Controller\UserController;
@@ -54,6 +59,24 @@ Router::addGroup('/api/v1/app', static function () {
     // 推荐返利(Refer & Earn)
     Router::get('/user/referral/my', [ReferralController::class, 'my']);
     Router::get('/user/referral/invitees', [ReferralController::class, 'invitees']);
+
+    // 站内通知(Notification Center)
+    Router::get('/user/notify/list', [NotifyController::class, 'list']);
+    Router::get('/user/notify/unread-count', [NotifyController::class, 'unreadCount']);
+    Router::post('/user/notify/read', [NotifyController::class, 'read']);
+
+    // 风控申诉(Booking Risk Appeal)
+    Router::get('/user/appeal/status', [AppealController::class, 'status']);
+    Router::post('/user/appeal/submit', [AppealController::class, 'submit']);
+
+    // 在线客服 / 与酒店聊天(Chat)
+    Router::get('/chat/faqs', [ChatController::class, 'faqs']);
+    Router::get('/chat/conversations', [ChatController::class, 'conversations']);
+    Router::post('/chat/start', [ChatController::class, 'start']);
+    Router::get('/chat/messages', [ChatController::class, 'messages']);
+    Router::post('/chat/send', [ChatController::class, 'send']);
+    Router::post('/chat/finish', [ChatController::class, 'finish']);
+    Router::post('/chat/rate', [ChatController::class, 'rate']);
 }, [
     'middleware' => [UserAuthMiddleware::class],
 ]);
@@ -65,6 +88,20 @@ Router::addGroup('/api/v1/admin/user', static function () {
     Router::post('/toggle-status', [AdminUserController::class, 'toggleStatus']);
     Router::get('/feedback/list', [AdminFeedbackController::class, 'index']);
     Router::post('/feedback/handle', [AdminFeedbackController::class, 'handle']);
+    // 风控与申诉(PRD 模块10.1)
+    Router::get('/appeal/list', [AdminRiskController::class, 'appealList']);
+    Router::post('/appeal/handle', [AdminRiskController::class, 'appealHandle']);
+    Router::get('/fraud/list', [AdminRiskController::class, 'fraudList']);
+}, [
+    'middleware' => [AdminAuthMiddleware::class, OperationLogMiddleware::class],
+]);
+
+// 管理端:客服工作台(PRD 模块13)
+Router::addGroup('/api/v1/admin/chat', static function () {
+    Router::get('/list', [AdminChatController::class, 'index']);
+    Router::get('/messages', [AdminChatController::class, 'messages']);
+    Router::post('/reply', [AdminChatController::class, 'reply']);
+    Router::post('/close', [AdminChatController::class, 'close']);
 }, [
     'middleware' => [AdminAuthMiddleware::class, OperationLogMiddleware::class],
 ]);

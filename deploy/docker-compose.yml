@@ -89,9 +89,19 @@ services:
       - ../database/goods/03-consumer-review.sql:/docker-entrypoint-initdb.d/84-consumer-review.sql:ro
       - ../database/user/04-consumer-favorite.sql:/docker-entrypoint-initdb.d/85-consumer-favorite.sql:ro
       - ../database/user/05-consumer-referral.sql:/docker-entrypoint-initdb.d/86-consumer-referral.sql:ro
+      - ../database/user/06-consumer-notify.sql:/docker-entrypoint-initdb.d/87-consumer-notify.sql:ro
+      - ../database/system/07-app-theme.sql:/docker-entrypoint-initdb.d/88-consumer-app-theme.sql:ro
+      - ../database/user/07-consumer-fraud-appeal.sql:/docker-entrypoint-initdb.d/89-consumer-fraud-appeal.sql:ro
       - ../database/seed/01-admin-role.sql:/docker-entrypoint-initdb.d/90-seed-admin-role.sql:ro
       - ../database/seed/02-menu.sql:/docker-entrypoint-initdb.d/91-seed-menu.sql:ro
       - ../database/seed/03-config-site.sql:/docker-entrypoint-initdb.d/92-seed-config-site.sql:ro
+      # 结算出资分账(与种子无依赖,置于末尾)
+      - ../database/marketing/03-consumer-funding.sql:/docker-entrypoint-initdb.d/93-consumer-funding.sql:ro
+      - ../database/finance/02-consumer-account-entry.sql:/docker-entrypoint-initdb.d/94-consumer-account-entry.sql:ro
+      - ../database/user/08-consumer-chat.sql:/docker-entrypoint-initdb.d/95-consumer-chat.sql:ro
+      - ../database/order/04-consumer-trip.sql:/docker-entrypoint-initdb.d/96-consumer-trip.sql:ro
+      - ../database/goods/04-consumer-filter.sql:/docker-entrypoint-initdb.d/97-consumer-filter.sql:ro
+      - ../database/marketing/04-consumer-campaign.sql:/docker-entrypoint-initdb.d/98-consumer-campaign.sql:ro
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-p${MYSQL_ROOT_PASSWORD:-root@2026}"]
       interval: 5s

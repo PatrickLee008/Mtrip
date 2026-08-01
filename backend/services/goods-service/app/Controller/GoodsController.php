@@ -112,13 +112,11 @@ class GoodsController extends AbstractController
         if ($starLevel > 0) {
             $query->where('star_level', $starLevel);
         }
+        // 可配置筛选(PRD 模块3):价格区间/设施/含早/免费取消/评分下限
+        $this->applyFilters($query);
 
-        // 排序:default 权重 / sales 销量 / new 最新
-        match ($this->strInput('sortBy')) {
-            'sales' => $query->orderByDesc('sales_count'),
-            'new' => $query->orderByDesc('id'),
-            default => $query->orderByDesc('sort_weight')->orderByDesc('id'),
-        };
+        // 可配置排序(PRD 模块3):default/price_asc/price_desc/star/rating/sales/new/distance
+        $this->applySort($query, $this->strInput('sortBy'));
 
         $total = (clone $query)->count();
         $list = $query->forPage($page, $pageSize)
@@ -335,6 +333,129 @@ class GoodsController extends AbstractController
             'skuId' => $skuId,
             'calendar' => $calendar,
         ]);
+    }
+
+    /** 可配置筛选/排序项(PRD 模块3):C 端渲染筛选面板与排序菜单 */
+    public function filters(): array
+    {
+        $siteId = $this->requireSiteId();
+        $filters = $this->pickConfig('goods_filter_config', $siteId, 'filter_key',
+            ['filter_key', 'filter_name', 'filter_name_en', 'filter_type', 'options', 'sort']);
+        foreach ($filters as &$f) {
+            $f['options'] = $f['options'] ? json_decode((string) $f['options'], true) : [];
+        }
+        unset($f);
+        $sorts = $this->pickConfig('goods_sort_config', $siteId, 'sort_key',
+            ['sort_key', 'sort_name', 'sort_name_en', 'sort']);
+        return Result::success(['filters' => $filters, 'sorts' => $sorts]);
+    }
+
+    /** 取站点配置:site 行优先、全局(0)兜底,按 sort 排序,仅保留指定列 */
+    private function pickConfig(string $table, int $siteId, string $keyCol, array $cols): array
+    {
+        $rows = Db::table($table)
+            ->whereIn('site_id', [$siteId, 0])
+            ->where('status', 1)
+            ->whereNull('deleted_at')
+            ->get()->map(static fn ($r) => (array) $r)->all();
+        $byKey = [];
+        foreach ($rows as $r) {
+            $k = (string) $r[$keyCol];
+            if (! isset($byKey[$k]) || (int) $r['site_id'] > (int) $byKey[$k]['site_id']) {
+                $byKey[$k] = $r;
+            }
+        }
+        $out = array_values($byKey);
+        usort($out, static fn ($a, $b) => ((int) $a['sort'] <=> (int) $b['sort']) ?: ((int) $a['id'] <=> (int) $b['id']));
+        return array_map(static fn ($r) => array_intersect_key($r, array_flip($cols)), $out);
+    }
+
+    /** 应用可配置筛选到查询(酒店维度:价格/设施/含早/免费取消/评分) */
+    private function applyFilters($query): void
+    {
+        $priceMin = $this->floatInput('priceMin');
+        $priceMax = $this->floatInput('priceMax');
+        if ($priceMin > 0 || $priceMax > 0) {
+            $query->whereExists(function ($q) use ($priceMin, $priceMax) {
+                $q->from('hotel_room_type')
+                    ->whereColumn('hotel_room_type.goods_id', 'goods_info.id')
+                    ->where('hotel_room_type.status', 1)->whereNull('hotel_room_type.deleted_at');
+                if ($priceMin > 0) {
+                    $q->where('hotel_room_type.base_price', '>=', $priceMin);
+                }
+                if ($priceMax > 0) {
+                    $q->where('hotel_room_type.base_price', '<=', $priceMax);
+                }
+            });
+        }
+        // 设施:facilities JSON 需同时包含所选各项
+        $amenities = $this->input('amenities');
+        $amenityList = is_array($amenities) ? $amenities : ($amenities !== null && $amenities !== '' ? explode(',', (string) $amenities) : []);
+        foreach ($amenityList as $a) {
+            $a = trim((string) $a);
+            if ($a !== '') {
+                $query->whereRaw('JSON_CONTAINS(facilities, ?)', [json_encode($a, JSON_UNESCAPED_UNICODE)]);
+            }
+        }
+        if ($this->intInput('breakfast') === 1) {
+            $query->whereExists(function ($q) {
+                $q->from('hotel_room_type')->whereColumn('hotel_room_type.goods_id', 'goods_info.id')
+                    ->where('hotel_room_type.breakfast', '>', 0)
+                    ->where('hotel_room_type.status', 1)->whereNull('hotel_room_type.deleted_at');
+            });
+        }
+        if ($this->intInput('freeCancel') === 1) {
+            $query->whereExists(function ($q) {
+                $q->from('goods_refund_rule')->whereColumn('goods_refund_rule.goods_id', 'goods_info.id')
+                    ->where('goods_refund_rule.rule_type', 1)->whereNull('goods_refund_rule.deleted_at');
+            });
+        }
+        $reviewScore = $this->floatInput('reviewScore');
+        if ($reviewScore > 0) {
+            $query->whereRaw(
+                '(SELECT COALESCE(AVG(rating),0) FROM goods_review WHERE goods_review.goods_id = goods_info.id AND goods_review.status = 1 AND goods_review.deleted_at IS NULL) >= ?',
+                [$reviewScore],
+            );
+        }
+    }
+
+    /** 应用可配置排序到查询(sort_key 白名单) */
+    private function applySort($query, string $sortBy): void
+    {
+        $minPrice = '(SELECT MIN(base_price) FROM hotel_room_type WHERE hotel_room_type.goods_id = goods_info.id AND hotel_room_type.status = 1 AND hotel_room_type.deleted_at IS NULL)';
+        $avgRating = '(SELECT COALESCE(AVG(rating),0) FROM goods_review WHERE goods_review.goods_id = goods_info.id AND goods_review.status = 1 AND goods_review.deleted_at IS NULL)';
+        switch ($sortBy) {
+            case 'price_asc':
+                $query->orderByRaw("{$minPrice} ASC");
+                break;
+            case 'price_desc':
+                $query->orderByRaw("{$minPrice} DESC");
+                break;
+            case 'star':
+                $query->orderByDesc('star_level');
+                break;
+            case 'rating':
+                $query->orderByRaw("{$avgRating} DESC");
+                break;
+            case 'sales':
+                $query->orderByDesc('sales_count');
+                break;
+            case 'new':
+                $query->orderByDesc('id');
+                break;
+            case 'distance':
+                $lat = $this->floatInput('lat');
+                $lng = $this->floatInput('lng');
+                if ($lat !== 0.0 && $lng !== 0.0) {
+                    // 近距离平方距离排序(免三角函数,足够列表排序用);无经纬度回退综合
+                    $query->orderByRaw('(POW(COALESCE(latitude,0) - ?, 2) + POW(COALESCE(longitude,0) - ?, 2)) ASC', [$lat, $lng]);
+                } else {
+                    $query->orderByDesc('sort_weight')->orderByDesc('id');
+                }
+                break;
+            default:
+                $query->orderByDesc('sort_weight')->orderByDesc('id');
+        }
     }
 
     /** 列表行统一转数组并附加起价(含公民起价) */

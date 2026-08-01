@@ -12,9 +12,11 @@ declare(strict_types=1);
 use App\Controller\Admin\AdminOrderController;
 use App\Controller\Admin\AdminRefundController;
 use App\Controller\Admin\AdminStatsController;
+use App\Controller\Admin\AdminTripController;
 use App\Controller\Admin\AdminVerifyController;
 use App\Controller\Merchant\OrderController as MerchantOrderController;
 use App\Controller\OrderController;
+use App\Controller\TripController;
 use Hyperf\HttpServer\Router\Router;
 use Mtrip\Shared\Middleware\AdminAuthMiddleware;
 use Mtrip\Shared\Middleware\MerchantAuthMiddleware;
@@ -33,6 +35,12 @@ Router::addGroup('/api/v1/app/order', static function () {
     Router::get('/refund/quote', [OrderController::class, 'refundQuote']);
     Router::post('/refund/apply', [OrderController::class, 'applyRefund']);
     Router::get('/verify-code', [OrderController::class, 'verifyCode']);
+
+    // 多酒店 Trip(单结账多预订,PRD 模块1.1)
+    Router::post('/trip/create', [TripController::class, 'create']);
+    Router::post('/trip/pay', [TripController::class, 'pay']);
+    Router::get('/trip/detail', [TripController::class, 'detail']);
+    Router::get('/trip/list', [TripController::class, 'list']);
 }, [
     'middleware' => [UserAuthMiddleware::class],
 ]);
@@ -58,6 +66,9 @@ Router::addGroup('/api/v1/admin/order', static function () {
     // 数据统计中心(只读):数据大屏 + 站点/商户/商品维度报表
     Router::get('/stats/dashboard', [AdminStatsController::class, 'dashboard']);
     Router::get('/stats/report', [AdminStatsController::class, 'report']);
+    // 多酒店 Trip 管理(PRD 模块1.1)
+    Router::get('/trip/list', [AdminTripController::class, 'index']);
+    Router::get('/trip/detail', [AdminTripController::class, 'detail']);
 }, [
     'middleware' => [AdminAuthMiddleware::class, OperationLogMiddleware::class],
 ]);

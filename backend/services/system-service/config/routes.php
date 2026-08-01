@@ -25,6 +25,7 @@ use App\Controller\RoleController;
 use App\Controller\SiteController;
 use App\Controller\SmsController;
 use App\Controller\StorageController;
+use App\Controller\ThemeController;
 use Hyperf\HttpServer\Router\Router;
 use Mtrip\Shared\Middleware\AdminAuthMiddleware;
 use Mtrip\Shared\Middleware\OperationLogMiddleware;
@@ -38,6 +39,8 @@ Router::post('/api/v1/admin/auth/login', [AuthController::class, 'login']);
 // C端公开站点接口(模块09 移动端微服务,无需登录)
 Router::get('/api/v1/app/site/list', [AppSiteController::class, 'list']);
 Router::get('/api/v1/app/site/config', [AppSiteController::class, 'config']);
+// C端动态主题(无需登录,PRD 模块15)
+Router::get('/api/v1/app/theme/active', [ThemeController::class, 'active']);
 
 Router::addGroup('/api/v1/admin', static function () {
     // ---------- 登录态 ----------
@@ -45,6 +48,11 @@ Router::addGroup('/api/v1/admin', static function () {
     Router::get('/auth/me', [AuthController::class, 'me']);
     Router::get('/auth/menus', [AuthController::class, 'menus']);
     Router::post('/auth/password', [AuthController::class, 'updatePassword']);
+
+    // ---------- 动态主题管理(PRD 模块15)----------
+    Router::get('/config/theme/list', [ThemeController::class, 'adminList']);
+    Router::post('/config/theme/save', [ThemeController::class, 'save']);
+    Router::post('/config/theme/delete', [ThemeController::class, 'delete']);
 
     // ---------- 模块1 管理员账号管理 ----------
     Router::get('/sys/admin/list', [AdminController::class, 'index']);

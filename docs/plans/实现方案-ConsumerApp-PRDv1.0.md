@@ -101,9 +101,58 @@ finance 结算/提现                           推荐返利 / 通知 / 风控�
 - 动态主题(`app_theme`,C 端 `theme/active`,priority + 时段 + 失效回退)。
 - 在线客服/酒店聊天(`chat_*`,机器人 FAQ + 转人工 + 会话评分)。
 
-### M4 Phase2 / 高风险
-- **Trip 多酒店**(单支付拆多单 + 券按占比分摊 + 按单结算/退款)——PRD 标注需可行性评估,独立设计。
-- AI 助手、旅行保险(PRD 明示 Phase2)。
+### M4 Trip 多酒店 / Phase2 — 进行中
+- [x] **M4 Trip 多酒店**(check.ps1 四步全绿,架构级 A2):新表 `order_trip`(compose 96;`order_main.trip_id/alloc_coupon_discount` M0 已预留);抽出 `order-service PricingService`(长住/券校验/住客归一化,`OrderController` 已重构复用,消除重复)。`TripController`:
+  - `create`:1-10 个酒店项,逐项锁库存(双价)+ 长住,得各项净额;整单券按净额**占比分摊**(末项吸收余数,Σ=券额)落各 `alloc_coupon_discount`;建 `order_trip` + N 个 `order_main`(trip_id 关联,状态待支付)。
+  - `pay`:**单笔支付**确认整单下所有预订(逐个 verifyCode/扣库存/`recordBooking` 结算分录),整单券消耗一次,确认通知一次。
+  - `detail`(主单+各预订按入住日)/`list`。
+  - 各预订沿用既有独立取消/退款/结算生命周期(退款按 `pay_amount`=分摊后净额,天然正确)。
+- 已知边界:本期仅酒店;预订失败补偿为结构化占位(mock 支付不触发);Trip 支付未接推荐返利(单单路径仍支持),留待与正式支付一并补。
+
+### Admin 管理端(后端+菜单先行,Vue 页面后续专项)
+- [x] **Admin 后端 + 菜单种子**(check.ps1 四步全绿):新增 C 端运营/风控后台接口(#[Permission] 键与菜单种子 perm_key 对齐),新建一级菜单 **移动运营(1300)** 8 页面(component 无 Vue → 回退 wip):
+  - 风控申诉(user-service `AdminRiskController`):`/admin/user/appeal/list|handle`、`/admin/user/fraud/list`——处理动作 1通过解冻/2驳回维持/3升级封禁。
+  - 客服工作台(user-service `AdminChatController`):`/admin/chat/list|messages|reply|close`(坐席 sender_type=2)。
+  - 评价审核(goods-service `AdminReviewController`):`/admin/goods/review/list|audit|reply`。
+  - 长住梯度(marketing-service `LongstayController`):`/admin/marketing/longstay/list|save|delete`。
+  - 券出资(marketing-service `CouponController`):add/update 增收 `fundingSource`/`fundingRules`。
+  - 动态主题(system-service `ThemeController` admin):`/admin/config/theme/list|save|delete`。
+  - Trip 管理(order-service `AdminTripController`):`/admin/order/trip/list|detail`。
+  - 结算分账报表(finance-service `AccountEntryController`,只读):`/admin/finance/entry/list|summary`。
+- [x] **admin-web Vue 页面**(cops/* 8 页,check.ps1 四步全绿):`api/cops.ts` 统一接口模块 + `views/cops/{appeal,fraud,review,longstay,theme,chat,trip,entry}/index.vue`;沿用 `useTable`/`PageContainer`/`v-perm`/`SiteTreeSelect` 房式,`#bodyCell` 用具名脚本助手(`isAmt`/`fmt`)规避 union 类型;router `import.meta.glob('../views/**/*.vue')` 自动收录,菜单 component 命中真实页面(不再回退 wip)。标签用中文直出(未接 i18n 词条,后续可补)。
+
+### Phase2 / 收尾
+- AI 助手、旅行保险(PRD 明示不在首发)。
+
+## 收口:PRD 覆盖矩阵(2026-08-02,全程 check.ps1 四步全绿)
+
+| PRD 模块 | 状态 | 落地位置 |
+|---|---|---|
+| 1 预订生命周期 / 9 确认取消退款 / 11 平台费透明 | ✅ | M0/M1(order 下单-支付-取消-退款钱包-便民费) |
+| 1.1 多酒店 Trip(A2) | ✅ | M4(TripController 单支付拆多单+券占比分摊) |
+| 2.1 长住 Long-Stay | ✅ | M1(取价)+ admin 梯度配置 |
+| 3 列表/筛选/排序 | ✅ | C 端价格/星级/设施/含早/免费取消/评分筛选 + 低价/高价/星级/好评/距离排序;`/app/goods/filters` 可配置项 + admin 筛选排序配置(goods_filter_config/goods_sort_config) |
+| 4 详情/选房 + 双价 + 评价 | ✅ | M0 双价 / M1-b 评价 + admin 审核 |
+| 4.1 与酒店聊天 / 13 客服 | ✅ | M3-e + admin 客服工作台 |
+| 5 住客信息 / 7 常旅客·收藏 | ✅ | M1 多住客 / M1-b 常旅客 / M2-a 收藏 |
+| 6.1 促销中心 / My Coupons / 自动择优 | ✅ | M2-b(领券中心/My Coupons/best-match)+ 促销活动 `marketing_campaign`(C 端 `/app/marketing/campaigns`+detail,含关联可领券;admin CRUD + cops/campaign 页) |
+| 8 结算出资分账(A3) | ✅ | M3-d + admin 分账报表 |
+| 10 通知中心 | 🟡 | M3-a 站内信 + 事件触发;**Push/SMS/Email 多渠道分发**待接第三方 |
+| 10.1 风控与申诉 | ✅ | M3-c + admin 申诉处理/风控看板 |
+| 14 推荐返利 | ✅ | M2-c |
+| 15 动态主题 | ✅ | M3-b + admin 主题 CRUD |
+| 缅甸公民双价 | ✅ | M0 贯穿搜索/详情/下单 |
+| 退款钱包化(A1) | ✅ | M0(三项架构级 A1/A2/A3 全部落地) |
+| 12 AI 助手 / 6 旅行保险 | ⏸ | PRD 明示 Phase2,不在首发 |
+
+## 遗留清单(非首发关键路径,按需再排)
+
+1. ~~Module 3 后台可配置筛选/排序项~~ ✅ **已完成**(2026-08-02):`goods_filter_config`/`goods_sort_config`(seed 默认项,compose 97)+ `GoodsController` list 加 价格区间/设施(JSON_CONTAINS)/含早/免费取消/评分下限 筛选 + price_asc/desc·star·rating·distance 排序 + `GET /app/goods/filters` 可配置项;admin `AdminFilterController`(filter/sort CRUD,键受白名单约束)+ 菜单 1309 筛选排序配置 + admin-web `cops/filter` 双 Tab 页。待 check.ps1。
+2. **通知多渠道分发**:Push(FCM/APNs)/SMS/Email + 模板本地化——需第三方选型与授权。
+3. **正式支付渠道**:Stripe/PayPal 收单替换 mock——需授权;当前 payment-service 为渠道抽象。
+4. **Trip 预订失败补偿**:结构化占位待正式支付一并补。~~Trip 支付接推荐返利~~ ✅ 已完成(2026-08-02):抽出 `ReferralService`(OrderController 已重构复用),`TripController::pay` 首单达成发放。
+5. **cops/* 页面 i18n 词条**(现中文直出)。~~住客 guests PII 加密~~ ✅ 已完成(2026-08-02):create/Trip 下单整块 AES 加密存 `order_main.guests`,order detail 解密 + 手机/邮箱脱敏。~~admin 促销中心落地页编辑器~~ ✅(marketing_campaign)。
+6. **Phase2**:AI 助手、旅行保险。
 
 ---
 
@@ -294,13 +343,20 @@ CREATE TABLE IF NOT EXISTS `user_favorite` (
 ### M2 促销与用户资产 — 进行中
 - [x] **M2-a 收藏(Saved Hotels)**(`user-service`,check.ps1 四步全绿):新表 `user_favorite`(compose 85);`FavoriteController` list(join goods 输出图/名/位置/星级)/add(幂等 insertOrIgnore)/remove(按 goodsId)。
 - [x] **M2-b 促销中心/My Coupons**(`marketing-service`,check.ps1 四步全绿):新增 C 端基类 `AppAbstractController` + `MarketingController`:`promotion/banners`(复用 marketing_banner 专题位)、`coupon/available`(领券中心,附本人已领数/可领判定,批量查避免 N+1)、`coupon/claim`(校验进行中/领满/个人限领,生成券码写领券记录 + received_count+1)、`coupon/my?type=available|used|expired`、`coupon/best-match`(自动择优,与 order 端 resolveCoupon 同规则算最高抵扣)。
-- [~] **M2-c 推荐返利**(`user-service`+`order-service`,已编码,待 check.ps1):
+- [x] **M2-c 推荐返利**(`user-service`+`order-service`,check.ps1 四步全绿):
   - 数据:`user_info.referral_code`(唯一,惰性生成)+ 新表 `user_referral`(绑定/奖励,invitee 唯一,compose 86)。
   - 注册绑定:`UserAuthService.register` 收 `referralCode`——生成本人推荐码(MT+userId36进制+随机),按码绑定推荐人(无效码拦截注册,PRD 模块14);`AuthController` 透传。
   - 我的推荐:`ReferralController` my(推荐码/邀请数/累计奖励)、invitees(邀请列表+奖励状态)。
   - 奖励发放:新增 `order-service WalletService`(统一钱包入账,退款确认已重构复用);`OrderController::pay` 在被推荐人**首个已支付酒店订单**达成时,按 `sys_site_config.referral_reward_inviter/invitee` 给推荐人+新人钱包入账并置 `reward_status=1`(0→1 保证仅首单发放)。
 
-> M2-c 已编码并逐行自查(移除 AdminRefundController.creditWallet 后导入完整、奖励发放在 pay 事务内、首单幂等由 reward_status=0 守卫),因执行环境临时不可用暂未跑 `scripts/check.ps1`;恢复后补跑。
+**M2 促销与用户资产 = 已完成**(a/b/c 全绿)。
+
+### M3 运营与风控 — 进行中
+- [x] **M3-a 通知中心**(check.ps1 四步全绿):新表 `notify_record`(compose 87);`order-service NotifyService`——`pay` 成功写 `booking_confirmed`、`applyRefund` 写 `booking_cancelled`(均事件后置 try 包裹,不阻断主流程);`user-service NotifyController` `/app/notify/list|unread-count|read`(单条/全部已读)。多渠道(Push/SMS/Email)与模板本地化留待接第三方。
+- [x] **M3-b 动态主题**(check.ps1 四步全绿):新表 `mtrip_system.app_theme`(compose 88)+ 内置默认主题;`system-service` `SysTheme` 模型 + `ThemeController::active` 公开接口 `GET /api/v1/app/theme/active`(status=1+时段+优先级择一,无命中回退 is_default)。admin 主题 CRUD 与 admin-web 编辑器归后续 admin 专项。
+- [x] **M3-c 风控与申诉**(check.ps1 四步全绿):新表 `user_fraud`/`user_appeal`(compose 89);`order-service FraudService.evaluateCancellation`——退款申请后按 `sys_site_config.fraud_cancel_threshold/window_days`(未配=不启用)统计近 N 天退款次数,超阈值升 level=2 并冻结账号(user_status=2,登录侧已拦截);`user-service AppealController` `/app/appeal/status|submit`(受限才可申诉、每次仅一条待审)。admin 风控看板/申诉队列处理归后续 admin 专项。
+- [x] **M3-d 结算出资分账**(check.ps1 四步全绿,架构级 A3):`marketing_coupon` +`funding_source`/`funding_rules`(compose 93);新表 `finance_account_entry`(按订单结算分录,compose 94);`order-service SettlementService.recordBooking`——支付事务内按券出资方拆 mtrip/merchant/partner_pays,算 `merchant_settlement=order−commission−merchant_pays`、`platform_revenue=commission−mtrip_pays`(佣金率取 `sys_site_config.commission_rate` 未配=0),幂等(uk_order),并回填 order_main 佣金/商户实收。对齐 PRD 模块8 Campaign Expense Record。admin 结算报表取数归后续 admin 专项。
+- [x] **M3-e 在线客服/酒店聊天**(check.ps1 四步全绿):新表 `chat_conversation`/`chat_message`(compose 95);`user-service ChatController` `/app/chat/faqs|conversations|start|messages|send|finish|rate`——type1 酒店咨询(target=酒店)/type2 客服(机器人即时应答,转人工/酒店回复由坐席端后续接入),会话复用进行中同目标、结束后可评分。坐席端/酒店回复写入归后续 merchant/admin 专项。
 
 > M1-c 已知边界:①非全额退时管理端 `deduct_amount` 在审核环节按 apply-refund 重算(=0),便民费/取消费拆分展示留待管理端退款页专项;②已支付「不可退」订单的「取消但不退款」路径未覆盖(现直接拒绝退款申请),留待专项;③平台费率取站点配置,未做订单级豁免(如商户/系统原因取消不收,PRD 模块11 表)——按 PRD 仅用户主动取消收,商户/超时/系统取消场景在 M3 结算/异常流补齐。
 

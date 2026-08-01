@@ -197,6 +197,8 @@ class CouponController extends AbstractController
             'discount_value' => $discountValue,
             'min_amount' => round($this->floatInput('minAmount'), 2),
             'max_discount' => round($this->floatInput('maxDiscount'), 2),
+            'funding_source' => in_array($this->intInput('fundingSource', 1), [1, 2, 3, 4], true) ? $this->intInput('fundingSource', 1) : 1,
+            'funding_rules' => is_array($fr = $this->input('fundingRules')) ? json_encode($fr, JSON_UNESCAPED_UNICODE) : null,
             'goods_scope' => $goodsScope,
             'goods_ids' => $goodsScope === 3 ? json_encode(array_map('intval', $goodsIds)) : null,
             'total_count' => max(0, $this->intInput('totalCount')),

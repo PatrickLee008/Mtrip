@@ -21,6 +21,53 @@ class MarketingController extends AppAbstractController
         'c.min_amount', 'c.max_discount', 'c.goods_scope', 'c.goods_ids', 'c.remark',
     ];
 
+    /** 促销中心活动列表(展示中):PRD 模块6.1 */
+    public function campaigns(): array
+    {
+        $siteId = $this->requireSiteId();
+        $now = date('Y-m-d H:i:s');
+        $rows = Db::table('marketing_campaign')
+            ->where('site_id', $siteId)
+            ->where('status', 1)
+            ->whereNull('deleted_at')
+            ->where(static function ($q) use ($now) {
+                $q->whereNull('start_time')->orWhere('start_time', '<=', $now);
+            })
+            ->where(static function ($q) use ($now) {
+                $q->whereNull('end_time')->orWhere('end_time', '>=', $now);
+            })
+            ->orderBy('sort')->orderByDesc('id')
+            ->get(['id', 'title', 'subtitle', 'banner', 'landing_url'])
+            ->map(static fn ($r) => (array) $r)->all();
+        return Result::success($rows);
+    }
+
+    /** 活动详情:含落地页 + 可领优惠券模板 */
+    public function campaignDetail(): array
+    {
+        $siteId = $this->requireSiteId();
+        $c = Db::table('marketing_campaign')
+            ->where('id', $this->requireId())->where('site_id', $siteId)
+            ->where('status', 1)->whereNull('deleted_at')->first();
+        if (! $c) {
+            throw new BusinessException(ErrorCode::NOT_FOUND, '活动不存在或已下架');
+        }
+        $c = (array) $c;
+        $couponIds = $c['coupon_ids'] ? (json_decode((string) $c['coupon_ids'], true) ?: []) : [];
+        $c['coupon_ids'] = array_map('intval', is_array($couponIds) ? $couponIds : []);
+        $coupons = [];
+        if ($c['coupon_ids'] !== []) {
+            $coupons = Db::table('marketing_coupon')
+                ->whereIn('id', $c['coupon_ids'])->where('site_id', $siteId)
+                ->where('status', 1)->whereNull('deleted_at')
+                ->get(['id', 'coupon_name', 'coupon_type', 'discount_value', 'min_amount', 'max_discount', 'goods_scope'])
+                ->map(static fn ($r) => (array) $r)->all();
+        }
+        $c['coupons'] = $coupons;
+        unset($c['deleted_at']);
+        return Result::success($c);
+    }
+
     /** 促销中心 Banner:复用 marketing_banner 专题位(position=3),展示中 */
     public function promotionBanners(): array
     {
