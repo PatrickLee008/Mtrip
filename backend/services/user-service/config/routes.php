@@ -11,6 +11,8 @@ declare(strict_types=1);
 use App\Controller\Admin\AdminFeedbackController;
 use App\Controller\Admin\AdminUserController;
 use App\Controller\AuthController;
+use App\Controller\FavoriteController;
+use App\Controller\ReferralController;
 use App\Controller\TravelerController;
 use App\Controller\UserController;
 use Hyperf\HttpServer\Router\Router;
@@ -43,6 +45,15 @@ Router::addGroup('/api/v1/app', static function () {
     Router::post('/user/traveler/add', [TravelerController::class, 'add']);
     Router::post('/user/traveler/update', [TravelerController::class, 'update']);
     Router::post('/user/traveler/delete', [TravelerController::class, 'delete']);
+
+    // 收藏(Saved Hotels)
+    Router::get('/user/favorite/list', [FavoriteController::class, 'list']);
+    Router::post('/user/favorite/add', [FavoriteController::class, 'add']);
+    Router::post('/user/favorite/remove', [FavoriteController::class, 'remove']);
+
+    // 推荐返利(Refer & Earn)
+    Router::get('/user/referral/my', [ReferralController::class, 'my']);
+    Router::get('/user/referral/invitees', [ReferralController::class, 'invitees']);
 }, [
     'middleware' => [UserAuthMiddleware::class],
 ]);

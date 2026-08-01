@@ -23,14 +23,14 @@ class UserAuthService
     {
     }
 
-    public function register(int $siteId, string $mobile, string $password, string $nickname, int $source, string $ip): array
+    public function register(int $siteId, string $mobile, string $password, string $nickname, int $source, string $ip, string $referralCode = ''): array
     {
         $mobileHash = $this->mobileHash($mobile);
 
         // 同手机号并发注册加 Redis 分布式锁串行,业务完成即释放;
         // 拦截不同设备/客户端同时提交同一手机号导致的"先查后插"竞态
         $lockKey = "mtrip:lock:user:register:{$siteId}:{$mobileHash}";
-        return $this->lock->run($lockKey, 10, function () use ($siteId, $mobile, $mobileHash, $password, $nickname, $source, $ip): array {
+        return $this->lock->run($lockKey, 10, function () use ($siteId, $mobile, $mobileHash, $password, $nickname, $source, $ip, $referralCode): array {
             $exists = Db::table('user_info')
                 ->where('site_id', $siteId)->where('mobile_hash', $mobileHash)
                 ->whereNull('deleted_at')->exists();
@@ -59,10 +59,43 @@ class UserAuthService
                 }
                 throw $e;
             }
+            // 生成本人推荐码 + (可选)绑定推荐关系;推荐码无效则拦截注册(PRD 模块14)
+            $this->setupReferral($siteId, $userId, $referralCode);
             $this->actionLog($siteId, $userId, 1, '注册并登录', $ip);
 
             return $this->issueToken($userId, $siteId);
         }, '注册请求处理中,请勿重复提交');
+    }
+
+    /** 生成本人推荐码(基于 userId 唯一),并按传入推荐码绑定推荐人 */
+    private function setupReferral(int $siteId, int $userId, string $referralCode): void
+    {
+        Db::table('user_info')->where('id', $userId)->update(['referral_code' => $this->genReferralCode($userId)]);
+        if ($referralCode === '') {
+            return;
+        }
+        $inviter = Db::table('user_info')
+            ->where('site_id', $siteId)->where('referral_code', $referralCode)
+            ->whereNull('deleted_at')->first(['id', 'user_status']);
+        if (! $inviter || (int) $inviter->user_status !== 1) {
+            throw new BusinessException(ErrorCode::PARAM_ERROR, '推荐码无效');
+        }
+        if ((int) $inviter->id === $userId) {
+            throw new BusinessException(ErrorCode::PARAM_ERROR, '不能使用自己的推荐码');
+        }
+        Db::table('user_referral')->insert([
+            'site_id' => $siteId,
+            'inviter_user_id' => (int) $inviter->id,
+            'invitee_user_id' => $userId,
+            'reward_status' => 0,
+            'bind_time' => date('Y-m-d H:i:s'),
+        ]);
+    }
+
+    /** 推荐码:MT + userId 的 36 进制(唯一)+ 1 字节随机(增加不可猜性),全大写 */
+    public function genReferralCode(int $userId): string
+    {
+        return 'MT' . strtoupper(base_convert((string) $userId, 10, 36)) . strtoupper(bin2hex(random_bytes(1)));
     }
 
     public function login(int $siteId, string $mobile, string $password, string $ip): array

@@ -37,6 +37,7 @@ class AuthController extends AbstractController
             $this->strInput('nickname'),
             $this->registerSource(),
             $this->clientIp(),
+            $this->strInput('referralCode'),
         );
         return Result::success($data, '注册成功');
     }

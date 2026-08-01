@@ -289,7 +289,18 @@ CREATE TABLE IF NOT EXISTS `user_favorite` (
   - 平台费:`platformFeeRate` 读 `sys_site_config.platform_fee_rate`(system 连接,百分比,未配=0),仅对可退额收(结账不收,符合 PRD 模块11)。
   - `applyRefund` 改为按净额建退款单(refund_channel=1 钱包、refund_type 全/部分自动判定),并把 platform_fee 落 order_main;不可退(净额≤0)明确拒绝。
 
-**M1 核心预订闭环 = 已完成**(M1-a/b/c 全绿)。下一步进入 **M2 促销与用户资产**(促销中心/My Coupons 自动择优、收藏、推荐返利)。
+**M1 核心预订闭环 = 已完成**(M1-a/b/c 全绿)。
+
+### M2 促销与用户资产 — 进行中
+- [x] **M2-a 收藏(Saved Hotels)**(`user-service`,check.ps1 四步全绿):新表 `user_favorite`(compose 85);`FavoriteController` list(join goods 输出图/名/位置/星级)/add(幂等 insertOrIgnore)/remove(按 goodsId)。
+- [x] **M2-b 促销中心/My Coupons**(`marketing-service`,check.ps1 四步全绿):新增 C 端基类 `AppAbstractController` + `MarketingController`:`promotion/banners`(复用 marketing_banner 专题位)、`coupon/available`(领券中心,附本人已领数/可领判定,批量查避免 N+1)、`coupon/claim`(校验进行中/领满/个人限领,生成券码写领券记录 + received_count+1)、`coupon/my?type=available|used|expired`、`coupon/best-match`(自动择优,与 order 端 resolveCoupon 同规则算最高抵扣)。
+- [~] **M2-c 推荐返利**(`user-service`+`order-service`,已编码,待 check.ps1):
+  - 数据:`user_info.referral_code`(唯一,惰性生成)+ 新表 `user_referral`(绑定/奖励,invitee 唯一,compose 86)。
+  - 注册绑定:`UserAuthService.register` 收 `referralCode`——生成本人推荐码(MT+userId36进制+随机),按码绑定推荐人(无效码拦截注册,PRD 模块14);`AuthController` 透传。
+  - 我的推荐:`ReferralController` my(推荐码/邀请数/累计奖励)、invitees(邀请列表+奖励状态)。
+  - 奖励发放:新增 `order-service WalletService`(统一钱包入账,退款确认已重构复用);`OrderController::pay` 在被推荐人**首个已支付酒店订单**达成时,按 `sys_site_config.referral_reward_inviter/invitee` 给推荐人+新人钱包入账并置 `reward_status=1`(0→1 保证仅首单发放)。
+
+> M2-c 已编码并逐行自查(移除 AdminRefundController.creditWallet 后导入完整、奖励发放在 pay 事务内、首单幂等由 reward_status=0 守卫),因执行环境临时不可用暂未跑 `scripts/check.ps1`;恢复后补跑。
 
 > M1-c 已知边界:①非全额退时管理端 `deduct_amount` 在审核环节按 apply-refund 重算(=0),便民费/取消费拆分展示留待管理端退款页专项;②已支付「不可退」订单的「取消但不退款」路径未覆盖(现直接拒绝退款申请),留待专项;③平台费率取站点配置,未做订单级豁免(如商户/系统原因取消不收,PRD 模块11 表)——按 PRD 仅用户主动取消收,商户/超时/系统取消场景在 M3 结算/异常流补齐。
 

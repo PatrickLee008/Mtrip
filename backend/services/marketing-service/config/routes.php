@@ -8,12 +8,25 @@ declare(strict_types=1);
  */
 
 use App\Controller\CouponController;
+use App\Controller\MarketingController;
 use Hyperf\HttpServer\Router\Router;
 use Mtrip\Shared\Middleware\AdminAuthMiddleware;
 use Mtrip\Shared\Middleware\OperationLogMiddleware;
+use Mtrip\Shared\Middleware\UserAuthMiddleware;
 
 // 健康检查(网关探活)
 Router::get('/healthz', static fn () => ['status' => 'ok', 'service' => 'marketing-service']);
+
+// C端营销:促销中心 / 领券中心 / 我的券 / 自动择优(登录态)
+Router::addGroup('/api/v1/app/marketing', static function () {
+    Router::get('/promotion/banners', [MarketingController::class, 'promotionBanners']);
+    Router::get('/coupon/available', [MarketingController::class, 'availableCoupons']);
+    Router::post('/coupon/claim', [MarketingController::class, 'claim']);
+    Router::get('/coupon/my', [MarketingController::class, 'myCoupons']);
+    Router::get('/coupon/best-match', [MarketingController::class, 'bestMatch']);
+}, [
+    'middleware' => [UserAuthMiddleware::class],
+]);
 
 Router::addGroup('/api/v1/admin/marketing', static function () {
     Router::get('/coupon/list', [CouponController::class, 'index']);
