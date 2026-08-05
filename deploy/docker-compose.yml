@@ -74,6 +74,13 @@ services:
       - ../database/system/06-client.sql:/docker-entrypoint-initdb.d/15-system-client.sql:ro
       - ../database/merchant/01-merchant.sql:/docker-entrypoint-initdb.d/20-merchant.sql:ro
       - ../database/merchant/02-supplier.sql:/docker-entrypoint-initdb.d/21-supplier.sql:ro
+      # 集团/门店 + 商户账号类型 + 商户/供应商 RBAC(依赖 20/21 的基础表,须在其后)
+      - ../database/merchant/03-group-store.sql:/docker-entrypoint-initdb.d/22-merchant-group-store.sql:ro
+      - ../database/merchant/04-admin-account-type.sql:/docker-entrypoint-initdb.d/23-merchant-admin-account-type.sql:ro
+      - ../database/merchant/05-merchant-rbac.sql:/docker-entrypoint-initdb.d/24-merchant-rbac.sql:ro
+      - ../database/merchant/06-supplier-rbac.sql:/docker-entrypoint-initdb.d/25-supplier-rbac.sql:ro
+      - ../database/seed/04-merchant-menu.sql:/docker-entrypoint-initdb.d/26-seed-merchant-menu.sql:ro
+      - ../database/seed/05-supplier-menu.sql:/docker-entrypoint-initdb.d/27-seed-supplier-menu.sql:ro
       - ../database/goods/01-goods.sql:/docker-entrypoint-initdb.d/30-goods.sql:ro
       - ../database/order/01-order.sql:/docker-entrypoint-initdb.d/40-order.sql:ro
       - ../database/order/02-verify.sql:/docker-entrypoint-initdb.d/41-verify.sql:ro

@@ -35,6 +35,11 @@ cd client-app; npm start                    # expo start
 # 全栈起服务(MySQL+Redis+8 服务+网关,首次自动建库导种子)
 cd deploy; cp .env.example .env; docker compose up -d --build
 docker compose restart goods-service        # 开发期改后端代码后重启(约 2 秒,override 已挂载本地代码)
+docker compose restart gateway              # 重建过后端服务(IP 变)后必跑,否则网关缓存旧 IP 报 50200
+
+# 增量执行 SQL(脚本幂等,不必 down -v 重建;新增 SQL 仍须登记进 compose 的 initdb 挂载)
+powershell -ExecutionPolicy Bypass -File scripts/db-apply.ps1 database/merchant/03-group-store.sql database/seed/04-merchant-menu.sql
+# 彻底清库重来(会删数据):cd deploy; docker compose down -v; docker compose up -d --build
 ```
 
 后端**没有单测框架/单测命令**;`backend/shared/tests/run.php` 是手写的纯逻辑测试跑器(`tests/bootstrap.php` 自带 Hyperf 桩,无需 composer install)。要单跑某类逻辑,直接编辑该 run.php 的用例列表。
