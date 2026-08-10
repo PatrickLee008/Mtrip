@@ -66,6 +66,7 @@ Router::addGroup('/api/v1/admin/order', static function () {
     // 数据统计中心(只读):数据大屏 + 站点/商户/商品维度报表
     Router::get('/stats/dashboard', [AdminStatsController::class, 'dashboard']);
     Router::get('/stats/report', [AdminStatsController::class, 'report']);
+    Router::get('/stats/custom', [AdminStatsController::class, 'custom']);
     // 多酒店 Trip 管理(PRD 模块1.1)
     Router::get('/trip/list', [AdminTripController::class, 'index']);
     Router::get('/trip/detail', [AdminTripController::class, 'detail']);

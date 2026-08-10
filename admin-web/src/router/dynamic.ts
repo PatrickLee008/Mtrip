@@ -39,7 +39,8 @@ export function buildRoutes(menus: MenuNode[]): RouteRecordRaw {
 
   const walk = (nodes: MenuNode[]): void => {
     for (const node of nodes) {
-      if (node.menu_type === 2 && node.route_path) {
+      // 路由去重:同 path 已注册(如硬编码 /dashboard 与菜单 Dashboard 同 path)→ 跳过重复注册,侧边栏仍正常显示该菜单
+      if (node.menu_type === 2 && node.route_path && !children.some((c) => c.path === node.route_path)) {
         const name = `menu-${node.id}`;
         children.push({
           path: node.route_path,

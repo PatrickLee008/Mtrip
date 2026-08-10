@@ -80,14 +80,14 @@ const roleLabel = computed(() => (userStore.isSuper ? t('app.superAdmin') : t('a
   position: relative;
   overflow: hidden;
   // 确保侧边栏背景色统一
-  background: #001529 !important;
+  background: var(--sap-navy) !important;
 
   .sider-menu-wrap {
     height: calc(100% - 36px);
     overflow-y: auto;
     overflow-x: hidden;
     // 统一内部滚动区域背景色
-    background: #001529;
+    background: var(--sap-navy);
   }
 
   .sider-footer {
@@ -98,7 +98,7 @@ const roleLabel = computed(() => (userStore.isSuper ? t('app.superAdmin') : t('a
     color: rgba(255, 255, 255, 0.55);
     border-top: 1px solid rgba(255, 255, 255, 0.1);
     white-space: nowrap;
-    background: #001529;
+    background: var(--sap-navy);
 
     .divider {
       margin: 0 6px;
@@ -109,7 +109,7 @@ const roleLabel = computed(() => (userStore.isSuper ? t('app.superAdmin') : t('a
 
 // 修复 Ant Design Menu 在 dark 主题下的背景色
 .layout-sider :deep(.ant-menu.ant-menu-dark) {
-  background: #001529;
+  background: var(--sap-navy);
 }
 
 .layout-right {

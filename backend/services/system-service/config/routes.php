@@ -13,8 +13,10 @@ use App\Controller\ApiLogController;
 use App\Controller\AppSiteController;
 use App\Controller\AuthController;
 use App\Controller\ClientController;
+use App\Controller\FeatureController;
 use App\Controller\FileController;
 use App\Controller\GlobalConfigController;
+use App\Controller\HelpController;
 use App\Controller\MapConfigController;
 use App\Controller\MenuController;
 use App\Controller\OperationLogController;
@@ -163,6 +165,22 @@ Router::addGroup('/api/v1/admin', static function () {
     Router::get('/client/api-log/list', [ApiLogController::class, 'index']);
     Router::get('/client/api-log/detail', [ApiLogController::class, 'detail']);
     Router::get('/client/api-log/stats', [ApiLogController::class, 'stats']);
+
+    // ---------- 帮助中心(Super Admin Portal · 全新,前缀 /admin/help/*)----------
+    Router::get('/help/article/list', [HelpController::class, 'articles']);
+    Router::post('/help/article/save', [HelpController::class, 'articleSave']);
+    Router::post('/help/article/delete', [HelpController::class, 'articleDelete']);
+    Router::get('/help/category/list', [HelpController::class, 'categories']);
+    Router::post('/help/category/save', [HelpController::class, 'categorySave']);
+    Router::post('/help/category/delete', [HelpController::class, 'categoryDelete']);
+    Router::get('/help/announcement/list', [HelpController::class, 'announcements']);
+    Router::post('/help/announcement/save', [HelpController::class, 'announcementSave']);
+    Router::post('/help/announcement/delete', [HelpController::class, 'announcementDelete']);
+    Router::get('/help/analytics', [HelpController::class, 'searchAnalytics']);
+
+    // ---------- 平台特性开关(Super Admin Portal 模块11)----------
+    Router::get('/config/features/list', [FeatureController::class, 'index']);
+    Router::post('/config/features/save', [FeatureController::class, 'save']);
 }, [
     'middleware' => [AdminAuthMiddleware::class, OperationLogMiddleware::class],
 ]);

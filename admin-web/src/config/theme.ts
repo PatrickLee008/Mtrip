@@ -1,18 +1,19 @@
 import type { ThemeConfig } from 'ant-design-vue/es/config-provider/context';
 
 /**
- * UI 方案 2.1 色彩体系:主蓝 #1677FF、辅助橙 #FF7D00、
- * 成功 #00B42A / 警告 #FF7D00 / 危险 #F53F3F / 信息 #86909C
+ * Super Admin Portal 设计令牌(docs/redesign/super-admin-portal/design-system.md):
+ * 主蓝 #1664FF、成功 #027A48 / 警告 #B54708 / 危险 #C01048 / 信息 #026AA2。
+ * 深色导航底 navy #0A1628(见 BasicLayout / SideMenu 的 --sap-navy)。
  */
 export const baseToken: ThemeConfig['token'] = {
-  colorPrimary: '#1677FF',
-  colorSuccess: '#00B42A',
-  colorWarning: '#FF7D00',
-  colorError: '#F53F3F',
-  colorInfo: '#1677FF',
+  colorPrimary: '#1664FF',
+  colorSuccess: '#027A48',
+  colorWarning: '#B54708',
+  colorError: '#C01048',
+  colorInfo: '#026AA2',
   borderRadius: 4,
   fontFamily:
-    '-apple-system, BlinkMacSystemFont, Roboto, "Segoe UI", "Helvetica Neue", Arial, "PingFang SC", "Microsoft YaHei", sans-serif',
+    '"Inter", -apple-system, BlinkMacSystemFont, Roboto, "Segoe UI", "Helvetica Neue", Arial, "PingFang SC", "Microsoft YaHei", sans-serif',
 };
 
 /** 亮色主题下的组件级微调(antd-vue 4.x Layout token) */

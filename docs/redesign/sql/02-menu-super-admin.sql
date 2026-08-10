@@ -1,0 +1,9 @@
+-- 【已提升为正式种子 · SUPERSEDED】
+-- 本草案已定稿并覆盖到:database/seed/02-menu.sql(菜单树唯一事实源)。
+-- 三个待确认项的处置结论:
+--   Q1 Dashboard 路由重复 → 已在 admin-web/src/router/dynamic.ts 加「同 path 去重」守卫(菜单驱动 /dashboard,侧栏仍显示)。
+--   Q2 三级分组(Hotel/Restaurant、Customer 360)→ 当前 SideMenu 两级,暂扁平化;三级留作前端后续增强。
+--   Q3 按钮平移 → 正式种子已把现有 perm_key 按新页面父级平移保留;超管在 hasAnyPermission 中 bypass,
+--       故不影响超管授权;非超管角色在重构后需在后台重新分配权限。
+-- 正式种子为「先清后建」(DELETE sys_role_menu/sys_menu → 重建),使 scripts/db-apply.ps1 可真正重排。
+-- 请勿在此文件继续维护,改动一律去 database/seed/02-menu.sql。

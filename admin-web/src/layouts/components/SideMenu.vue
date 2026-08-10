@@ -226,12 +226,12 @@ function onPopoverVisibleChange(groupKey: string, visible: boolean): void {
   text-align: center;
 
   &:hover {
-    background: rgba(22, 119, 255, 0.3);
+    background: rgba(22, 100, 255, 0.3);
     color: #fff;
   }
 
   &.active {
-    background: #1677ff;
+    background: #1664ff;
     color: #fff;
   }
 }
@@ -265,7 +265,7 @@ function onPopoverVisibleChange(groupKey: string, visible: boolean): void {
   }
 
   &.active {
-    background: #1677ff;
+    background: #1664ff;
     color: #fff;
   }
 }
@@ -291,8 +291,8 @@ function onPopoverVisibleChange(groupKey: string, visible: boolean): void {
     }
 
     &.has-active-child {
-      color: #1677ff;
-      background: rgba(22, 119, 255, 0.15);
+      color: #1664ff;
+      background: rgba(22, 100, 255, 0.15);
     }
   }
 
@@ -358,12 +358,12 @@ function onPopoverVisibleChange(groupKey: string, visible: boolean): void {
     transition: all 0.2s ease;
 
     &:hover {
-      background: rgba(22, 119, 255, 0.3);
+      background: rgba(22, 100, 255, 0.3);
       color: #fff;
     }
 
     &.active {
-      background: #1677ff;
+      background: #1664ff;
       color: #fff;
     }
   }

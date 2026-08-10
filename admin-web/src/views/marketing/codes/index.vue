@@ -1,0 +1,152 @@
+<script setup lang="ts">
+import { computed, onMounted, reactive, ref } from 'vue';
+import { useI18n } from 'vue-i18n';
+import { message } from 'ant-design-vue';
+import { PlusOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons-vue';
+import PageContainer from '@/components/PageContainer.vue';
+import StatusTag from '@/components/StatusTag.vue';
+import { useTable, type TableRow } from '@/composables/useTable';
+import type { StatusItem } from '@/components/StatusTag.vue';
+import { apiPromoCodes, apiPromoCodeSave, apiPromoCodeDelete } from '@/api/promotion';
+
+/** 促销码(Super Admin Portal 模块 05) */
+const { t } = useI18n();
+
+const C_STATUS: Record<number, StatusItem> = {
+  1: { text: 'Active', color: 'success' }, 2: { text: 'Paused', color: 'warning' },
+  3: { text: 'Expired', color: 'default' }, 4: { text: 'Scheduled', color: 'processing' },
+  5: { text: 'Draft', color: 'default' },
+};
+const TYPES = ['percentage', 'fixed', 'free_night', 'cashback'];
+
+const { loading, list, query, load, search, reset, pagination } = useTable(apiPromoCodes, {
+  keyword: '', status: undefined,
+});
+
+const columns = computed(() => [
+  { title: 'Code', dataIndex: 'code', width: 140 },
+  { title: 'Name', dataIndex: 'name', ellipsis: true },
+  { title: 'Type', dataIndex: 'discount_type', width: 110 },
+  { title: 'Discount', dataIndex: 'discount_display', width: 120 },
+  { title: 'Usage', dataIndex: 'usage_count', width: 120 },
+  { title: 'Stack', dataIndex: 'stackable', width: 80 },
+  { title: 'Status', dataIndex: 'status', width: 110 },
+  { title: t('common.action'), key: 'action_col', width: 130, fixed: 'right' as const },
+]);
+
+const modalOpen = ref(false);
+const saving = ref(false);
+const editingId = ref(0);
+const form = reactive({
+  code: '', name: '', discountType: 'percentage', discountValue: 0, discountDisplay: '', status: 1,
+  startDate: '', endDate: '', usageLimit: 0, perUserLimit: 0, minSpend: 0, stackable: 0,
+  merchantScope: 'all', merchantCount: 0,
+});
+function openCreate(): void {
+  editingId.value = 0;
+  Object.assign(form, { code: '', name: '', discountType: 'percentage', discountValue: 0, discountDisplay: '', status: 1, startDate: '', endDate: '', usageLimit: 0, perUserLimit: 0, minSpend: 0, stackable: 0, merchantScope: 'all', merchantCount: 0 });
+  modalOpen.value = true;
+}
+function openEdit(row: TableRow): void {
+  editingId.value = row.id;
+  Object.assign(form, {
+    code: row.code, name: row.name ?? '', discountType: row.discount_type, discountValue: Number(row.discount_value ?? 0),
+    discountDisplay: row.discount_display ?? '', status: Number(row.status) || 1, startDate: row.start_date ?? '', endDate: row.end_date ?? '',
+    usageLimit: Number(row.usage_limit ?? 0), perUserLimit: Number(row.per_user_limit ?? 0), minSpend: Number(row.min_spend ?? 0),
+    stackable: Number(row.stackable) || 0, merchantScope: row.merchant_scope ?? 'all', merchantCount: Number(row.merchant_count ?? 0),
+  });
+  modalOpen.value = true;
+}
+async function save(): Promise<void> {
+  if (!editingId.value && !form.code.trim()) { message.warning('Code is required'); return; }
+  saving.value = true;
+  try {
+    await apiPromoCodeSave({ id: editingId.value || undefined, ...form });
+    message.success(t('tip.saveSuccess'));
+    modalOpen.value = false;
+    await load();
+  } finally { saving.value = false; }
+}
+async function remove(row: TableRow): Promise<void> {
+  await apiPromoCodeDelete(row.id);
+  message.success(t('common.delete'));
+  await load();
+}
+
+onMounted(() => { void load(); });
+</script>
+
+<template>
+  <PageContainer>
+    <a-card :bordered="false" class="mtrip-card-shadow" style="margin-bottom: 16px">
+      <a-form layout="inline">
+        <a-form-item label="Keyword"><a-input v-model:value="query.keyword" allow-clear style="width: 180px" @press-enter="search" /></a-form-item>
+        <a-form-item label="Status">
+          <a-select v-model:value="query.status" allow-clear placeholder="All" style="width: 130px">
+            <a-select-option :value="1">Active</a-select-option>
+            <a-select-option :value="2">Paused</a-select-option>
+            <a-select-option :value="4">Scheduled</a-select-option>
+            <a-select-option :value="5">Draft</a-select-option>
+          </a-select>
+        </a-form-item>
+        <a-form-item>
+          <a-space>
+            <a-button type="primary" @click="search"><template #icon><SearchOutlined /></template>{{ t('common.search') }}</a-button>
+            <a-button @click="reset"><template #icon><ReloadOutlined /></template>{{ t('common.reset') }}</a-button>
+          </a-space>
+        </a-form-item>
+      </a-form>
+    </a-card>
+
+    <a-card :bordered="false" class="mtrip-card-shadow">
+      <template #extra>
+        <a-button v-perm="'marketing:promocode:save'" type="primary" @click="openCreate"><template #icon><PlusOutlined /></template>New Code</a-button>
+      </template>
+      <a-table :columns="columns" :data-source="list" :loading="loading" :pagination="pagination" row-key="id" size="middle" :scroll="{ x: 1050 }">
+        <template #bodyCell="{ column, record }">
+          <template v-if="column.dataIndex === 'usage_count'">{{ record.usage_count }} / {{ record.usage_limit || '∞' }}</template>
+          <template v-else-if="column.dataIndex === 'stackable'">{{ record.stackable === 1 ? 'Yes' : 'No' }}</template>
+          <template v-else-if="column.dataIndex === 'status'"><StatusTag :value="record.status" :map="C_STATUS" /></template>
+          <template v-else-if="column.key === 'action_col'">
+            <a-space :size="0">
+              <a-button v-perm="'marketing:promocode:save'" type="link" size="small" @click="openEdit(record)">{{ t('common.edit') }}</a-button>
+              <a-popconfirm title="Delete this code?" @confirm="remove(record)">
+                <a-button v-perm="'marketing:promocode:save'" type="link" size="small" danger>{{ t('common.delete') }}</a-button>
+              </a-popconfirm>
+            </a-space>
+          </template>
+        </template>
+      </a-table>
+    </a-card>
+
+    <a-modal v-model:open="modalOpen" :title="editingId ? t('common.edit') : 'New Promo Code'" width="640px" :confirm-loading="saving" @ok="save">
+      <a-form :label-col="{ style: { width: '120px' } }" style="margin-top: 12px">
+        <a-row :gutter="12">
+          <a-col :span="12"><a-form-item label="Code" :required="!editingId"><a-input v-model:value="form.code" :disabled="!!editingId" /></a-form-item></a-col>
+          <a-col :span="12"><a-form-item label="Name"><a-input v-model:value="form.name" /></a-form-item></a-col>
+          <a-col :span="12"><a-form-item label="Type"><a-select v-model:value="form.discountType"><a-select-option v-for="tp in TYPES" :key="tp" :value="tp">{{ tp }}</a-select-option></a-select></a-form-item></a-col>
+          <a-col :span="12"><a-form-item label="Value"><a-input-number v-model:value="form.discountValue" :min="0" style="width: 100%" /></a-form-item></a-col>
+          <a-col :span="12"><a-form-item label="Display"><a-input v-model:value="form.discountDisplay" /></a-form-item></a-col>
+          <a-col :span="12"><a-form-item label="Usage Limit"><a-input-number v-model:value="form.usageLimit" :min="0" style="width: 100%" /></a-form-item></a-col>
+          <a-col :span="12"><a-form-item label="Per User Limit"><a-input-number v-model:value="form.perUserLimit" :min="0" style="width: 100%" /></a-form-item></a-col>
+          <a-col :span="12"><a-form-item label="Min Spend"><a-input-number v-model:value="form.minSpend" :min="0" style="width: 100%" /></a-form-item></a-col>
+          <a-col :span="12"><a-form-item label="Start"><a-input v-model:value="form.startDate" placeholder="YYYY-MM-DD" /></a-form-item></a-col>
+          <a-col :span="12"><a-form-item label="End"><a-input v-model:value="form.endDate" placeholder="YYYY-MM-DD" /></a-form-item></a-col>
+          <a-col :span="12">
+            <a-form-item label="Stackable"><a-switch :checked="form.stackable === 1" @change="(v) => (form.stackable = v ? 1 : 0)" /></a-form-item>
+          </a-col>
+          <a-col :span="12">
+            <a-form-item label="Status">
+              <a-select v-model:value="form.status">
+                <a-select-option :value="1">Active</a-select-option>
+                <a-select-option :value="2">Paused</a-select-option>
+                <a-select-option :value="4">Scheduled</a-select-option>
+                <a-select-option :value="5">Draft</a-select-option>
+              </a-select>
+            </a-form-item>
+          </a-col>
+        </a-row>
+      </a-form>
+    </a-modal>
+  </PageContainer>
+</template>

@@ -15,6 +15,8 @@ use App\Controller\Merchant\RoleController as MerchantRoleController;
 use App\Controller\Merchant\StoreController as MerchantStoreController;
 use App\Controller\MerchantController;
 use App\Controller\StoreController;
+use App\Controller\PlatformRuleController;
+use App\Controller\VerifyController;
 use App\Controller\Supplier\AccountController as SupplierAccountController;
 use App\Controller\Supplier\AuthController as SupplierAuthController;
 use App\Controller\Supplier\GoodsController as SupplierGoodsController;
@@ -44,6 +46,19 @@ Router::addGroup('/api/v1/admin', static function () {
     Router::post('/merchant/close', [MerchantController::class, 'close']);
     Router::get('/merchant/statistics', [MerchantController::class, 'statistics']);
     Router::get('/merchant/statement', [MerchantController::class, 'statement']);
+
+    // ---------- 商户验证工作流(Super Admin Portal Phase 1,docs/redesign 模块 02/03) ----------
+    Router::get('/merchant/verify/list', [VerifyController::class, 'index']);
+    Router::get('/merchant/verify/detail', [VerifyController::class, 'detail']);
+    Router::post('/merchant/verify/approve', [VerifyController::class, 'approve']);
+    Router::post('/merchant/verify/reject', [VerifyController::class, 'reject']);
+    Router::post('/merchant/verify/resubmit', [VerifyController::class, 'resubmit']);
+    Router::post('/merchant/verify/doc-review', [VerifyController::class, 'docReview']);
+    Router::get('/merchant/documents', [VerifyController::class, 'documents']);
+    Router::post('/merchant/blacklist', [VerifyController::class, 'blacklist']);
+    Router::post('/merchant/unblacklist', [VerifyController::class, 'unblacklist']);
+    Router::get('/merchant/activities', [VerifyController::class, 'activities']);
+    Router::get('/merchant/blacklist-list', [VerifyController::class, 'blacklistList']);
 
     // ---------- 集团管理(计划 11:管理/授权实体,商户授权绑定) ----------
     Router::get('/merchant/group/list', [GroupController::class, 'index']);
@@ -81,6 +96,25 @@ Router::addGroup('/api/v1/admin', static function () {
     Router::get('/supplier/settle/list', [SupplierController::class, 'settleList']);
     Router::post('/supplier/settle/audit', [SupplierController::class, 'settleAudit']);
     Router::post('/supplier/settle/confirm-pay', [SupplierController::class, 'settleConfirmPay']);
+}, [
+    'middleware' => [AdminAuthMiddleware::class, OperationLogMiddleware::class],
+]);
+
+// ============================================================
+// 平台规则与合规(Super Admin Portal 模块08)前缀 /api/v1/admin/compliance/*
+// 网关 map:compliance → merchant_service
+// ============================================================
+Router::addGroup('/api/v1/admin/compliance', static function () {
+    Router::get('/rule/list', [PlatformRuleController::class, 'rules']);
+    Router::post('/rule/save', [PlatformRuleController::class, 'ruleSave']);
+    Router::post('/rule/publish', [PlatformRuleController::class, 'rulePublish']);
+    Router::post('/rule/delete', [PlatformRuleController::class, 'ruleDelete']);
+    Router::get('/violation/list', [PlatformRuleController::class, 'violations']);
+    Router::post('/violation/handle', [PlatformRuleController::class, 'violationHandle']);
+    Router::get('/warning/list', [PlatformRuleController::class, 'warnings']);
+    Router::post('/warning/issue', [PlatformRuleController::class, 'warningIssue']);
+    Router::post('/warning/revoke', [PlatformRuleController::class, 'warningRevoke']);
+    Router::get('/history/list', [PlatformRuleController::class, 'complianceHistory']);
 }, [
     'middleware' => [AdminAuthMiddleware::class, OperationLogMiddleware::class],
 ]);

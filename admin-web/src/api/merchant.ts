@@ -190,3 +190,51 @@ export function apiSupplierSettleAudit(data: { id: number; auditStatus: number; 
 export function apiSupplierSettleConfirmPay(data: Record<string, unknown>): Promise<null> {
   return post('/admin/supplier/settle/confirm-pay', data);
 }
+
+// ---------- 商户验证工作流(Super Admin Portal Phase 1,VerifyController) ----------
+/** 验证工单列表:tab=pending|approved|rejected|resubmission */
+export function apiVerifyList(params: Record<string, unknown>): Promise<PageData<Row>> {
+  return get<PageData<Row>>('/admin/merchant/verify/list', params);
+}
+
+export function apiVerifyDetail(id: number): Promise<{ merchant: Row; documents: Row[]; timeline: Row[] }> {
+  return get('/admin/merchant/verify/detail', { id });
+}
+
+/** 通过验证:0/6→3,返回生成的商户主账号(明文密码仅此一次) */
+export function apiVerifyApprove(id: number, remark?: string): Promise<{ username: string; password: string }> {
+  return post('/admin/merchant/verify/approve', { id, remark });
+}
+
+export function apiVerifyReject(id: number, reason: string): Promise<null> {
+  return post('/admin/merchant/verify/reject', { id, reason });
+}
+
+export function apiVerifyResubmit(id: number, comment: string): Promise<null> {
+  return post('/admin/merchant/verify/resubmit', { id, comment });
+}
+
+/** 逐份文档核验:action=verify|reject(reject 必填 reason) */
+export function apiVerifyDocReview(data: { docId: number; action: string; reason?: string }): Promise<null> {
+  return post('/admin/merchant/verify/doc-review', data);
+}
+
+export function apiMerchantDocuments(params: Record<string, unknown>): Promise<PageData<Row>> {
+  return get<PageData<Row>>('/admin/merchant/documents', params);
+}
+
+export function apiMerchantBlacklist(id: number, reason: string, evidence?: string): Promise<null> {
+  return post('/admin/merchant/blacklist', { id, reason, evidence });
+}
+
+export function apiMerchantUnblacklist(id: number): Promise<null> {
+  return post('/admin/merchant/unblacklist', { id });
+}
+
+export function apiMerchantActivities(params: Record<string, unknown>): Promise<PageData<Row>> {
+  return get<PageData<Row>>('/admin/merchant/activities', params);
+}
+
+export function apiMerchantBlacklistList(params: Record<string, unknown>): Promise<PageData<Row>> {
+  return get<PageData<Row>>('/admin/merchant/blacklist-list', params);
+}

@@ -1,10 +1,30 @@
-// ===== UI 方案 2.1 全局 CSS 变量(色彩/财务分级色) =====
+// ===== Super Admin Portal 设计令牌(docs/redesign/super-admin-portal/design-system.md) =====
 :root {
-  --mtrip-primary: #1677ff;
+  // 深色导航
+  --sap-navy: #0a1628;
+  --sap-navy-light: #112240;
+  --sap-navy-hover: #1a3352;
+  // 品牌与语义
+  --sap-brand: #1664ff;
+  --sap-brand-dark: #0e4fcc;
+  --sap-brand-light: #e6effe;
+  --sap-surface: #f0f2f6;
+  --sap-card: #ffffff;
+  --sap-border: #e3e8f0;
+  --sap-text: #1a2332;
+  --sap-muted: #667085;
+  --sap-success: #027a48; --sap-success-bg: #ecfdf3;
+  --sap-warning: #b54708; --sap-warning-bg: #fffaeb;
+  --sap-danger:  #c01048; --sap-danger-bg:  #fff1f3;
+  --sap-info:    #026aa2; --sap-info-bg:    #f0f9ff;
+  --sap-font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+
+  // 兼容旧变量(指向新令牌,存量页面无需改动)
+  --mtrip-primary: var(--sap-brand);
   --mtrip-orange: #ff7d00;
-  --mtrip-success: #00b42a;
-  --mtrip-warning: #ff7d00;
-  --mtrip-danger: #f53f3f;
+  --mtrip-success: var(--sap-success);
+  --mtrip-warning: var(--sap-warning);
+  --mtrip-danger: var(--sap-danger);
   --mtrip-info: #86909c;
 
   // 中性灰度
@@ -16,9 +36,9 @@
   --mtrip-text-aux: #86909c;
 
   // 财务金额分级色
-  --mtrip-money-income: #00b42a;
-  --mtrip-money-expense: #f53f3f;
-  --mtrip-money-commission: #1677ff;
+  --mtrip-money-income: var(--sap-success);
+  --mtrip-money-expense: var(--sap-danger);
+  --mtrip-money-commission: var(--sap-brand);
   --mtrip-money-tax: #4e5969;
 }
 

@@ -11,6 +11,7 @@ declare(strict_types=1);
 use App\Controller\Admin\AdminChatController;
 use App\Controller\Admin\AdminFeedbackController;
 use App\Controller\Admin\AdminRiskController;
+use App\Controller\Admin\AdminReferralController;
 use App\Controller\Admin\AdminUserController;
 use App\Controller\AppealController;
 use App\Controller\AuthController;
@@ -92,6 +93,12 @@ Router::addGroup('/api/v1/admin/user', static function () {
     Router::get('/appeal/list', [AdminRiskController::class, 'appealList']);
     Router::post('/appeal/handle', [AdminRiskController::class, 'appealHandle']);
     Router::get('/fraud/list', [AdminRiskController::class, 'fraudList']);
+    // 推荐返利记录(Super Admin Portal Phase 2 · Referral)
+    Router::get('/referral-list', [AdminReferralController::class, 'index']);
+    // Customer 360 + 黑名单(Super Admin Portal Phase 3)
+    Router::get('/customer360', [AdminUserController::class, 'customer360']);
+    Router::post('/blacklist', [AdminUserController::class, 'blacklist']);
+    Router::post('/unblacklist', [AdminUserController::class, 'unblacklist']);
 }, [
     'middleware' => [AdminAuthMiddleware::class, OperationLogMiddleware::class],
 ]);

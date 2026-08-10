@@ -132,13 +132,14 @@ class MerchantController extends AbstractController
         if (($phone = $this->strInput('contactPhone')) !== '') {
             $data['contact_phone'] = $this->encryptField($phone);
         }
-        // 驳回后编辑 → 重新进入待审核(可重提)
-        if ((int) $merchant['status'] === 2) {
+        // 驳回(2)/待重新提交(6)后编辑 → 重新进入待审核(可重提)
+        $resubmit = in_array((int) $merchant['status'], [2, 6], true);
+        if ($resubmit) {
             $data['status'] = 0;
             $data['audit_remark'] = '';
         }
         Db::table('merchant_info')->where('id', $merchant['id'])->update($data);
-        return Result::success(null, (int) $merchant['status'] === 2 ? '已重新提交审核' : '商户更新成功');
+        return Result::success(null, $resubmit ? '已重新提交审核' : '商户更新成功');
     }
 
     /** 审核:auditStatus 1通过(生成商户主账号并启用) 2驳回(必填原因) */

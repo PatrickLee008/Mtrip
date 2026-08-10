@@ -81,6 +81,8 @@ services:
       - ../database/merchant/06-supplier-rbac.sql:/docker-entrypoint-initdb.d/25-supplier-rbac.sql:ro
       - ../database/seed/04-merchant-menu.sql:/docker-entrypoint-initdb.d/26-seed-merchant-menu.sql:ro
       - ../database/seed/05-supplier-menu.sql:/docker-entrypoint-initdb.d/27-seed-supplier-menu.sql:ro
+      # 商户验证工作流(Super Admin Portal Phase 1,依赖 20-merchant 基础表)
+      - ../database/merchant/07-verify-workflow.sql:/docker-entrypoint-initdb.d/28-merchant-verify-workflow.sql:ro
       - ../database/goods/01-goods.sql:/docker-entrypoint-initdb.d/30-goods.sql:ro
       - ../database/order/01-order.sql:/docker-entrypoint-initdb.d/40-order.sql:ro
       - ../database/order/02-verify.sql:/docker-entrypoint-initdb.d/41-verify.sql:ro
@@ -109,6 +111,17 @@ services:
       - ../database/order/04-consumer-trip.sql:/docker-entrypoint-initdb.d/96-consumer-trip.sql:ro
       - ../database/goods/04-consumer-filter.sql:/docker-entrypoint-initdb.d/97-consumer-filter.sql:ro
       - ../database/marketing/04-consumer-campaign.sql:/docker-entrypoint-initdb.d/98-consumer-campaign.sql:ro
+      # 带货达人与联盟(Super Admin Portal Phase 2)
+      - ../database/marketing/05-affiliate.sql:/docker-entrypoint-initdb.d/99-affiliate.sql:ro
+      # 终端用户黑名单(Super Admin Portal Phase 3)
+      - ../database/user/09-enduser-blacklist.sql:/docker-entrypoint-initdb.d/99b-enduser-blacklist.sql:ro
+      # 帮助中心(Super Admin Portal)
+      - ../database/system/08-helpcenter.sql:/docker-entrypoint-initdb.d/99c-helpcenter.sql:ro
+      # 平台规则与合规(模块08)+ 促销独立实体(模块05)
+      - ../database/merchant/08-compliance.sql:/docker-entrypoint-initdb.d/99d-compliance.sql:ro
+      - ../database/marketing/06-promotion-extras.sql:/docker-entrypoint-initdb.d/99e-promotion-extras.sql:ro
+      # 平台特性开关(模块11)
+      - ../database/system/09-feature-flag.sql:/docker-entrypoint-initdb.d/99f-feature-flag.sql:ro
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-p${MYSQL_ROOT_PASSWORD:-root@2026}"]
       interval: 5s

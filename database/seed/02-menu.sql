@@ -2,296 +2,338 @@
 SET NAMES utf8mb4;
 
 -- ============================================================
--- 种子数据 02:菜单按钮权限树(12 个一级菜单 + 页面 + 按钮)
+-- 种子数据 02:菜单按钮权限树 —— Super Admin Portal 新 IA(15 模块 + 遗留分组)
+-- 设计源:docs/redesign/super-admin-portal/(modules 01-13);gap-analysis / migration-plan
 -- 库:mtrip_system
--- ID 规则:一级目录=100N;页面=一级+序号;按钮=页面ID*100+序号
--- menu_type:1一级菜单(目录) 2页面菜单 3页面按钮
--- 多语言:menu_name=中文名;menu_name_en=英文名(词条缺失时非中文环境的回退显示);
---        i18n_key=前端词条 key(admin-web src/locales,目录/页面必填,按钮不占词条)
+--
+-- ID 规则:一级目录/顶级页=N00;二级页面=父+序号;按钮=页面ID*100+序号
+-- menu_type:1一级目录 2页面 3按钮
+-- 多语言:i18n_key 命中词条→翻译;留空→回退 menu_name_en(英)/menu_name(中),新页无需加词条
+-- component:必须与 admin-web/src/views/{component}.vue 一致;缺失自动回退 views/wip(前端渐进补齐)
+-- 多个页面可共享同一 component(dynamic.ts 按 route name 包装,KeepAlive 可区分)
+--
+-- perm_key:
+--   【复用】现有 backend #[Permission] 已用的键(merchant/order/finance/marketing/stats/user/
+--            sys/config/supplier/goods/verify/log/…),原样保留,现有授权不受影响。
+--   【新增】新模块键(affiliate/platform/help/merchant:verify/inventory:alert/config:feature/
+--            sys:session/…),待对应后端落地时三处对齐(注解↔本表↔前端 v-perm)。
+--   注:平台超管(is_super,site_id=0)在 AdminContext::hasAnyPermission 中直接放行(bypass),
+--        故按钮增减不影响超管;非超管角色在菜单重构后需在后台重新分配权限(sys_role_menu)。
+--   本表按钮为各模块关键项,后续随页面落地按需扩充。
+--
+-- 重构安全:本文件是菜单树的唯一事实源,采用「先清后建」使 db-apply 能真正重排
+--   (INSERT IGNORE 无法覆盖旧行);fresh init(down -v)时两表为空,DELETE 为 no-op。
 -- ============================================================
 USE `mtrip_system`;
 
--- ---------- 一级目录 ----------
-INSERT IGNORE INTO `sys_menu` (`id`, `parent_id`, `menu_name`, `menu_name_en`, `i18n_key`, `perm_key`, `menu_type`, `route_path`, `component`, `icon`, `sort`) VALUES
-(100,  0, '系统管理',    'System',        'menu.system',    'sys',       1, '/system',    '', 'SettingOutlined',     1),
-(200,  0, '系统日志',    'Logs',          'menu.log',       'log',       1, '/log',       '', 'FileSearchOutlined',  2),
-(300,  0, '系统配置',    'System Config', 'menu.config',    'config',    1, '/config',    '', 'ToolOutlined',        3),
-(400,  0, '商户管理',    'Merchant',      'menu.merchant',  'merchant',  1, '/merchant',  '', 'ShopOutlined',        4),
-(500,  0, '供应商管理',  'Supplier',      'menu.supplier',  'supplier',  1, '/supplier',  '', 'ApartmentOutlined',   5),
-(600,  0, 'C端用户管理', 'User',          'menu.user',      'user',      1, '/user',      '', 'TeamOutlined',        6),
-(700,  0, '商品管理',    'Goods',         'menu.goods',     'goods',     1, '/goods',     '', 'GoldOutlined',        7),
-(800,  0, '订单管理',    'Order',         'menu.order',     'order',     1, '/order',     '', 'ProfileOutlined',     8),
-(900,  0, '财务管理',    'Finance',       'menu.finance',   'finance',   1, '/finance',   '', 'AccountBookOutlined', 9),
-(1000, 0, '营销活动',    'Marketing',     'menu.marketing', 'marketing', 1, '/marketing', '', 'GiftOutlined',        10),
-(1100, 0, '数据统计中心','Statistics',    'menu.stats',     'stats',     1, '/stats',     '', 'BarChartOutlined',    11),
-(1200, 0, '核销管理',    'Verification',  'menu.verify',    'verify',    1, '/verify',    '', 'ScanOutlined',        12);
+-- 先清后建(菜单重构):子表先删,父表后删,再整体重建 + 重新授权超管
+DELETE FROM `sys_role_menu`;
+DELETE FROM `sys_menu`;
 
--- ---------- 1 系统管理 ----------
-INSERT IGNORE INTO `sys_menu` (`id`, `parent_id`, `menu_name`, `menu_name_en`, `i18n_key`, `perm_key`, `menu_type`, `route_path`, `component`, `icon`, `sort`) VALUES
-(101, 100, '管理员管理', 'Admins',         'menu.systemAdmin', 'sys:admin:list', 2, '/system/admin', 'system/admin/index', '', 1),
-(102, 100, '角色管理',   'Roles',          'menu.systemRole',  'sys:role:list',  2, '/system/role',  'system/role/index',  '', 2),
-(103, 100, '菜单权限',   'Menus',          'menu.systemMenu',  'sys:menu:list',  2, '/system/menu',  'system/menu/index',  '', 3),
-(106, 100, '回收站',     'Recycle Bin',    'menu.systemRecycle', 'sys:recycle:list', 2, '/system/recycle', 'system/recycle/index', '', 6);
-INSERT IGNORE INTO `sys_menu` (`id`, `parent_id`, `menu_name`, `menu_name_en`, `perm_key`, `menu_type`, `sort`) VALUES
-(10101, 101, '新增管理员', 'Add Admin',      'sys:admin:add',      3, 1),
-(10102, 101, '编辑管理员', 'Edit Admin',     'sys:admin:edit',     3, 2),
-(10103, 101, '删除管理员', 'Delete Admin',   'sys:admin:delete',   3, 3),
-(10104, 101, '重置密码',   'Reset Password', 'sys:admin:reset-pwd',3, 4),
-(10105, 101, '启用禁用',   'Enable/Disable', 'sys:admin:status',   3, 5),
-(10201, 102, '新增角色',   'Add Role',       'sys:role:add',       3, 1),
-(10202, 102, '编辑角色',   'Edit Role',      'sys:role:edit',      3, 2),
-(10203, 102, '删除角色',   'Delete Role',    'sys:role:delete',    3, 3),
-(10204, 102, '分配权限',   'Assign Permissions', 'sys:role:perm',  3, 4),
-(10301, 103, '新增菜单',   'Add Menu',       'sys:menu:add',       3, 1),
-(10302, 103, '编辑菜单',   'Edit Menu',      'sys:menu:edit',      3, 2),
-(10303, 103, '删除菜单',   'Delete Menu',    'sys:menu:delete',    3, 3),
-(10601, 106, '恢复数据',   'Restore',        'sys:recycle:restore', 3, 1),
-(10602, 106, '彻底删除',   'Purge',          'sys:recycle:purge',   3, 2),
-(10603, 106, '一键清空',   'Empty',          'sys:recycle:empty',   3, 3);
+-- ================= 一级目录 + 顶级页(parent_id=0)=================
+INSERT IGNORE INTO `sys_menu` (`id`,`parent_id`,`menu_name`,`menu_name_en`,`i18n_key`,`perm_key`,`menu_type`,`route_path`,`component`,`icon`,`sort`) VALUES
+(100,0,'仪表盘','Dashboard','menu.dashboard','dashboard:view',2,'/dashboard','dashboard/index','DashboardOutlined',1),
+(200,0,'商户验证','Merchant Verification','','merchant:verify',1,'/merchant-verify','','SafetyCertificateOutlined',2),
+(300,0,'商户管理','Merchant Management','menu.merchant','merchant',1,'/merchant','','ShopOutlined',3),
+(400,0,'业务运营','Business Operations','','biz',1,'/biz','','ProfileOutlined',4),
+(500,0,'促销与活动','Campaign & Promotion','menu.marketing','marketing',1,'/marketing','','GiftOutlined',5),
+(600,0,'带货达人','Affiliate & Influencer','','affiliate',1,'/affiliate','','TeamOutlined',6),
+(700,0,'平台规则与合规','Platform Rules & Compliance','','compliance',1,'/compliance','','AuditOutlined',7),
+(800,0,'用户与角色','User & Role Management','menu.system','sys',1,'/system','','SettingOutlined',8),
+(900,0,'报表与分析','Reports & Analytics','menu.stats','stats',1,'/stats','','BarChartOutlined',9),
+(1000,0,'终端用户管理','End User Management','menu.user','user',1,'/user','','UserOutlined',10),
+(1100,0,'帮助中心','Help Center','','helpcenter',1,'/helpcenter','','QuestionCircleOutlined',11),
+(1200,0,'内容管理','Content Management','','content',1,'/content','','LayoutOutlined',12),
+(1300,0,'平台配置','Platform Configuration','menu.config','config',1,'/config','','ToolOutlined',13),
+-- ---- 遗留模块(保留为独立分组)----
+(1400,0,'供应商管理','Supplier','menu.supplier','supplier',1,'/supplier','','ApartmentOutlined',14),
+(1500,0,'商品(门票/分类)','Goods (legacy)','menu.goods','goods',1,'/goods','','GoldOutlined',15),
+(1600,0,'核销管理','Verification','menu.verify','verify',1,'/verify','','ScanOutlined',16),
+(1700,0,'Trip 管理','Trips','','trip',1,'/trip','','CompassOutlined',17),
+(1800,0,'系统日志','Logs','menu.log','log',1,'/log','','FileSearchOutlined',18);
 
--- ---------- 2 系统日志 ----------
-INSERT IGNORE INTO `sys_menu` (`id`, `parent_id`, `menu_name`, `menu_name_en`, `i18n_key`, `perm_key`, `menu_type`, `route_path`, `component`, `icon`, `sort`) VALUES
-(201, 200, '后台操作日志', 'Operation Logs', 'menu.logOperation', 'log:operation:list', 2, '/log/operation', 'log/operation/index', '', 1),
-(202, 200, '接口调用日志', 'API Logs',       'menu.logApi',       'log:api:list',       2, '/log/api',       'log/api/index',       '', 2);
-INSERT IGNORE INTO `sys_menu` (`id`, `parent_id`, `menu_name`, `menu_name_en`, `perm_key`, `menu_type`, `sort`) VALUES
-(20101, 201, '导出操作日志', 'Export Operation Logs', 'log:operation:export', 3, 1),
-(20201, 202, '导出接口日志', 'Export API Logs',       'log:api:export',       3, 1);
+-- ================= 200 商户验证(4 状态页,共享 merchant/verify/index)=================
+INSERT IGNORE INTO `sys_menu` (`id`,`parent_id`,`menu_name`,`menu_name_en`,`i18n_key`,`perm_key`,`menu_type`,`route_path`,`component`,`icon`,`sort`) VALUES
+(201,200,'待审核','Pending Review','','merchant:list:audit',2,'/merchant-verify/pending','merchant/verify/index','',1),
+(202,200,'已通过','Approved','','merchant:list:audit',2,'/merchant-verify/approved','merchant/verify/index','',2),
+(203,200,'已驳回','Rejected','','merchant:list:audit',2,'/merchant-verify/rejected','merchant/verify/index','',3),
+(204,200,'重新提交','Resubmission','','merchant:list:audit',2,'/merchant-verify/resubmission','merchant/verify/index','',4);
+INSERT IGNORE INTO `sys_menu` (`id`,`parent_id`,`menu_name`,`menu_name_en`,`perm_key`,`menu_type`,`sort`) VALUES
+(20101,201,'通过审核','Approve','merchant:verify:approve',3,1),
+(20102,201,'驳回申请','Reject','merchant:verify:reject',3,2),
+(20103,201,'要求重交','Request Resubmission','merchant:verify:resubmit',3,3),
+(20104,201,'核验文档','Verify Document','merchant:verify:doc',3,4);
 
--- ---------- 3 系统配置 ----------
-INSERT IGNORE INTO `sys_menu` (`id`, `parent_id`, `menu_name`, `menu_name_en`, `i18n_key`, `perm_key`, `menu_type`, `route_path`, `component`, `icon`, `sort`) VALUES
-(301, 300, '全局参数',     'Global Config',        'menu.configGlobal',  'config:global:list',  2, '/config/global',  'config/global/index',  '', 1),
-(302, 300, '站点管理',     'Site Management',      'menu.configSite',    'config:site:list',    2, '/config/site',    'config/site/index',    '', 2),
-(303, 300, '存储配置',     'Storage Channels',     'menu.configStorage', 'config:storage:list', 2, '/config/storage', 'config/storage/index', '', 3),
-(304, 300, '支付配置',     'Payment Channels',     'menu.configPay',     'config:pay:list',     2, '/config/pay',     'config/pay/index',     '', 4),
-(305, 300, '短信配置',     'SMS Channels',         'menu.configSms',     'config:sms:list',     2, '/config/sms',     'config/sms/index',     '', 5),
-(306, 300, '地图配置',     'Map Config',           'menu.configMap',     'config:map:list',     2, '/config/map',     'config/map/index',     '', 6),
-(307, 300, '客户端密钥',   'Client Credentials',   'menu.configClient',  'config:client:list',  2, '/config/client',  'config/client/index',  '', 7),
-(308, 300, '接口权限模板', 'Permission Templates', 'menu.configPermTpl', 'config:permtpl:list', 2, '/config/permtpl', 'config/permtpl/index', '', 8);
-INSERT IGNORE INTO `sys_menu` (`id`, `parent_id`, `menu_name`, `menu_name_en`, `perm_key`, `menu_type`, `sort`) VALUES
-(30101, 301, '编辑参数',   'Edit Params',      'config:global:edit',      3, 1),
-(30102, 301, '恢复默认',   'Restore Defaults', 'config:global:reset',     3, 2),
-(30201, 302, '新增站点',   'Add Site',         'config:site:add',         3, 1),
-(30202, 302, '编辑站点',   'Edit Site',        'config:site:edit',        3, 2),
-(30203, 302, '删除站点',   'Delete Site',      'config:site:delete',      3, 3),
-(30204, 302, '启用停用',   'Enable/Disable',   'config:site:status',      3, 4),
-(30301, 303, '新增存储',   'Add Storage',      'config:storage:add',      3, 1),
-(30302, 303, '编辑存储',   'Edit Storage',     'config:storage:edit',     3, 2),
-(30303, 303, '删除存储',   'Delete Storage',   'config:storage:delete',   3, 3),
-(30304, 303, '启用停用',   'Enable/Disable',   'config:storage:status',   3, 4),
-(30401, 304, '新增渠道',   'Add Channel',      'config:pay:add',          3, 1),
-(30402, 304, '编辑渠道',   'Edit Channel',     'config:pay:edit',         3, 2),
-(30403, 304, '删除渠道',   'Delete Channel',   'config:pay:delete',       3, 3),
-(30404, 304, '启用停用',   'Enable/Disable',   'config:pay:status',       3, 4),
-(30501, 305, '新增渠道',   'Add Channel',      'config:sms:add',          3, 1),
-(30502, 305, '编辑渠道',   'Edit Channel',     'config:sms:edit',         3, 2),
-(30503, 305, '删除渠道',   'Delete Channel',   'config:sms:delete',       3, 3),
-(30504, 305, '模板管理',   'Template Management', 'config:sms:template',  3, 4),
-(30601, 306, '编辑配置',   'Edit Config',      'config:map:edit',         3, 1),
-(30701, 307, '新增客户端', 'Add Client',       'config:client:add',       3, 1),
-(30702, 307, '编辑客户端', 'Edit Client',      'config:client:edit',      3, 2),
-(30703, 307, '删除客户端', 'Delete Client',    'config:client:delete',    3, 3),
-(30704, 307, '启用禁用',   'Enable/Disable',   'config:client:status',    3, 4),
-(30705, 307, '重置密钥',   'Reset Secret',     'config:client:reset-secret', 3, 5),
-(30801, 308, '新增模板',   'Add Template',     'config:permtpl:add',      3, 1),
-(30802, 308, '编辑模板',   'Edit Template',    'config:permtpl:edit',     3, 2),
-(30803, 308, '删除模板',   'Delete Template',  'config:permtpl:delete',   3, 3);
+-- ================= 300 商户管理 =================
+INSERT IGNORE INTO `sys_menu` (`id`,`parent_id`,`menu_name`,`menu_name_en`,`i18n_key`,`perm_key`,`menu_type`,`route_path`,`component`,`icon`,`sort`) VALUES
+(301,300,'全部商户','All Merchants','menu.merchantList','merchant:list:list',2,'/merchant/list','merchant/list/index','',1),
+(302,300,'商户文档','Merchant Documents','','merchant:doc:list',2,'/merchant/documents','merchant/documents/index','',2),
+(303,300,'已暂停','Suspended','','merchant:list:list',2,'/merchant/suspended','merchant/suspended/index','',3),
+(304,300,'黑名单','Blacklisted','','merchant:list:list',2,'/merchant/blacklisted','merchant/blacklisted/index','',4),
+(305,300,'商户活动','Merchant Activities','','merchant:activity:list',2,'/merchant/activities','merchant/activities/index','',5),
+(306,300,'商户账户','Merchant Accounts','menu.merchantAccount','merchant:account:list',2,'/merchant/account','merchant/account/index','',6),
+(307,300,'集团管理','Groups','menu.merchantGroup','merchant:group:list',2,'/merchant/group','merchant/group/index','',7),
+(308,300,'门店管理','Stores','menu.merchantStore','merchant:store:list',2,'/merchant/store','merchant/store/index','',8),
+(309,300,'商户统计','Merchant Stats','menu.merchantStats','merchant:stats:list',2,'/merchant/stats','merchant/stats/index','',9);
+INSERT IGNORE INTO `sys_menu` (`id`,`parent_id`,`menu_name`,`menu_name_en`,`perm_key`,`menu_type`,`sort`) VALUES
+(30101,301,'新增商户','Add','merchant:list:add',3,1),
+(30102,301,'编辑商户','Edit','merchant:list:edit',3,2),
+(30103,301,'冻结解冻','Freeze/Unfreeze','merchant:list:status',3,3),
+(30104,301,'商户代入','Impersonate','merchant:list:impersonate',3,4),
+(30105,301,'删除商户','Delete','merchant:list:delete',3,5),
+(30601,306,'编辑账户','Edit Account','merchant:account:edit',3,1),
+(30701,307,'新增集团','Add Group','merchant:group:add',3,1),
+(30702,307,'编辑集团','Edit Group','merchant:group:edit',3,2),
+(30801,308,'新增门店','Add Store','merchant:store:add',3,1),
+(30802,308,'编辑门店','Edit Store','merchant:store:edit',3,2);
 
--- ---------- 4 商户管理 ----------
-INSERT IGNORE INTO `sys_menu` (`id`, `parent_id`, `menu_name`, `menu_name_en`, `i18n_key`, `perm_key`, `menu_type`, `route_path`, `component`, `icon`, `sort`) VALUES
-(401, 400, '商户列表', 'Merchants',            'menu.merchantList',    'merchant:list:list',    2, '/merchant/list',    'merchant/list/index',    '', 1),
-(402, 400, '商户账户', 'Merchant Accounts',    'menu.merchantAccount', 'merchant:account:list', 2, '/merchant/account', 'merchant/account/index', '', 2),
-(403, 400, '商户权限', 'Merchant Permissions', 'menu.merchantPerm',    'merchant:perm:list',    2, '/merchant/perm',    'merchant/perm/index',    '', 3),
-(404, 400, '商户统计', 'Merchant Stats',       'menu.merchantStats',   'merchant:stats:list',   2, '/merchant/stats',   'merchant/stats/index',   '', 4),
-(405, 400, '集团管理', 'Merchant Groups',      'menu.merchantGroup',   'merchant:group:list',   2, '/merchant/group',   'merchant/group/index',   '', 5),
-(406, 400, '门店管理', 'Merchant Stores',      'menu.merchantStore',   'merchant:store:list',   2, '/merchant/store',   'merchant/store/index',   '', 6);
-INSERT IGNORE INTO `sys_menu` (`id`, `parent_id`, `menu_name`, `menu_name_en`, `perm_key`, `menu_type`, `sort`) VALUES
-(40101, 401, '新增商户', 'Add Merchant',    'merchant:list:add',    3, 1),
-(40102, 401, '编辑商户', 'Edit Merchant',   'merchant:list:edit',   3, 2),
-(40103, 401, '入驻审核', 'Entry Audit',     'merchant:list:audit',  3, 3),
-(40104, 401, '冻结解冻', 'Freeze/Unfreeze', 'merchant:list:status', 3, 4),
-(40105, 401, '删除商户', 'Delete Merchant', 'merchant:list:delete', 3, 5),
-(40201, 402, '编辑账户', 'Edit Account',    'merchant:account:edit',3, 1),
-(40301, 403, '配置权限', 'Configure Permissions', 'merchant:perm:edit', 3, 1),
-(40401, 404, '导出统计', 'Export Stats',    'merchant:stats:export',3, 1),
-(40501, 405, '新增集团', 'Add Group',       'merchant:group:add',    3, 1),
-(40502, 405, '编辑集团', 'Edit Group',      'merchant:group:edit',   3, 2),
-(40503, 405, '启用禁用', 'Enable/Disable',  'merchant:group:status', 3, 3),
-(40504, 405, '绑定解绑', 'Bind/Unbind',     'merchant:group:bind',   3, 4),
-(40505, 405, '集团账号', 'Group Account',   'merchant:group:account',3, 5),
-(40506, 405, '删除集团', 'Delete Group',    'merchant:group:delete', 3, 6),
-(40601, 406, '新增门店', 'Add Store',       'merchant:store:add',    3, 1),
-(40602, 406, '编辑门店', 'Edit Store',      'merchant:store:edit',   3, 2),
-(40603, 406, '营业停业', 'Open/Close',      'merchant:store:status', 3, 3),
-(40604, 406, '删除门店', 'Delete Store',    'merchant:store:delete', 3, 4),
-(40605, 406, '门店账号', 'Store Account',   'merchant:store:account',3, 5);
+-- ================= 400 业务运营(Bookings + Inventory 扁平)=================
+INSERT IGNORE INTO `sys_menu` (`id`,`parent_id`,`menu_name`,`menu_name_en`,`i18n_key`,`perm_key`,`menu_type`,`route_path`,`component`,`icon`,`sort`) VALUES
+(401,400,'全部预订','All Bookings','menu.orderAll','order:all:list',2,'/order/all','order/all/index','',1),
+(402,400,'退款请求','Refund Requests','menu.orderRefund','order:refund:list',2,'/order/refund','order/refund/index','',2),
+(403,400,'结算与对账','Settlement & Reconciliation','menu.financeMSettle','finance:msettle:list',2,'/finance/msettle','finance/msettle/index','',3),
+(404,400,'预订历史','Booking History','','order:all:list',2,'/order/history','order/all/index','',4),
+(405,400,'库存总览','Inventory Overview','','goods:stock:list',2,'/inventory/overview','inventory/overview/index','',5),
+(406,400,'房型可用量','Room Availability','','goods:stock:list',2,'/inventory/availability','inventory/calendar/index','',6),
+(407,400,'库存明细','Room Inventory Detail','','goods:stock:list',2,'/inventory/detail','inventory/calendar/index','',7),
+(408,400,'库存时间线','Inventory Timeline','','goods:stock:list',2,'/inventory/timeline','inventory/alerts/index','',8),
+(409,400,'可用量日历','Availability Calendar','','goods:stock:list',2,'/inventory/calendar','inventory/calendar/index','',9),
+(410,400,'库存告警','Inventory Alerts','','inventory:alert:list',2,'/inventory/alerts','inventory/alerts/index','',10),
+(411,400,'库存报表','Inventory Reports','','goods:stock:list',2,'/inventory/reports','inventory/overview/index','',11);
+INSERT IGNORE INTO `sys_menu` (`id`,`parent_id`,`menu_name`,`menu_name_en`,`perm_key`,`menu_type`,`sort`) VALUES
+(40101,401,'订单详情','Detail','order:all:detail',3,1),
+(40102,401,'取消订单','Cancel','order:all:cancel',3,2),
+(40103,401,'导出订单','Export','order:all:export',3,3),
+(40201,402,'退款审核','Audit Refund','order:refund:audit',3,1),
+(40301,403,'确认结算','Confirm','finance:msettle:confirm',3,1),
+(40302,403,'标记打款','Mark Paid','finance:msettle:pay',3,2),
+(40501,405,'调整库存','Adjust Stock','goods:stock:edit',3,1),
+(40502,405,'关房停售','Close Sale','goods:stock:close',3,2),
+(41001,410,'处理告警','Acknowledge/Resolve','inventory:alert:handle',3,1);
 
--- ---------- 5 供应商管理 ----------
-INSERT IGNORE INTO `sys_menu` (`id`, `parent_id`, `menu_name`, `menu_name_en`, `i18n_key`, `perm_key`, `menu_type`, `route_path`, `component`, `icon`, `sort`) VALUES
-(501, 500, '供应商列表', 'Suppliers',        'menu.supplierList',   'supplier:list:list',   2, '/supplier/list',   'supplier/list/index',   '', 1),
-(502, 500, '供货商品',   'Supplier Goods',   'menu.supplierGoods',  'supplier:goods:list',  2, '/supplier/goods',  'supplier/goods/index',  '', 2),
-(503, 500, '对账结算',   'Settlement',       'menu.supplierSettle', 'supplier:settle:list', 2, '/supplier/settle', 'supplier/settle/index', '', 3),
-(504, 500, '供应商报表', 'Supplier Reports', 'menu.supplierReport', 'supplier:report:list', 2, '/supplier/report', 'supplier/report/index', '', 4);
-INSERT IGNORE INTO `sys_menu` (`id`, `parent_id`, `menu_name`, `menu_name_en`, `perm_key`, `menu_type`, `sort`) VALUES
-(50101, 501, '新增供应商', 'Add Supplier',    'supplier:list:add',      3, 1),
-(50102, 501, '编辑供应商', 'Edit Supplier',   'supplier:list:edit',     3, 2),
-(50103, 501, '启用停用',   'Enable/Disable',  'supplier:list:status',   3, 3),
-(50104, 501, '删除供应商', 'Delete Supplier', 'supplier:list:delete',   3, 4),
-(50301, 503, '确认对账',   'Confirm Reconciliation', 'supplier:settle:confirm',3, 1),
-(50302, 503, '标记打款',   'Mark Paid',       'supplier:settle:pay',    3, 2),
-(50401, 504, '导出报表',   'Export Report',   'supplier:report:export', 3, 1);
+-- ================= 500 促销与活动 =================
+INSERT IGNORE INTO `sys_menu` (`id`,`parent_id`,`menu_name`,`menu_name_en`,`i18n_key`,`perm_key`,`menu_type`,`route_path`,`component`,`icon`,`sort`) VALUES
+(501,500,'活动','Campaigns','','marketing:campaign:list',2,'/marketing/campaign','cops/campaign/index','',1),
+(502,500,'商户促销','Promotions','','marketing:activity:list',2,'/marketing/promotions','cops/campaign/index','',2),
+(503,500,'代金券','Vouchers','','marketing:voucher:list',2,'/marketing/vouchers','marketing/vouchers/index','',3),
+(504,500,'促销码','Promotion Codes','','marketing:promocode:list',2,'/marketing/codes','marketing/codes/index','',4),
+(505,500,'新客奖励','Welcome Rewards','','marketing:welcome:list',2,'/marketing/welcome','marketing/welcome/index','',5),
+(506,500,'活动分析','Campaign Analytics','','marketing:campaign:list',2,'/marketing/analytics','stats/dashboard/index','',6),
+(507,500,'优惠券','Coupons','menu.marketingCoupon','marketing:coupon:list',2,'/marketing/coupon','marketing/coupon/index','',7),
+(508,500,'长住梯度','Long-Stay Tiers','','marketing:longstay:list',2,'/cops/longstay','cops/longstay/index','',8);
+INSERT IGNORE INTO `sys_menu` (`id`,`parent_id`,`menu_name`,`menu_name_en`,`perm_key`,`menu_type`,`sort`) VALUES
+(50101,501,'保存活动','Save','marketing:campaign:save',3,1),
+(50102,501,'删除活动','Delete','marketing:campaign:delete',3,2),
+(50301,503,'保存代金券','Save Voucher','marketing:voucher:save',3,1),
+(50401,504,'保存促销码','Save Code','marketing:promocode:save',3,1),
+(50501,505,'保存新客奖励','Save Welcome','marketing:welcome:save',3,1),
+(50701,507,'新增优惠券','Add','marketing:coupon:add',3,1),
+(50702,507,'编辑优惠券','Edit','marketing:coupon:edit',3,2),
+(50703,507,'停止发放','Stop','marketing:coupon:stop',3,3),
+(50801,508,'保存梯度','Save Tier','marketing:longstay:save',3,1);
 
--- ---------- 6 C端用户管理 ----------
-INSERT IGNORE INTO `sys_menu` (`id`, `parent_id`, `menu_name`, `menu_name_en`, `i18n_key`, `perm_key`, `menu_type`, `route_path`, `component`, `icon`, `sort`) VALUES
-(601, 600, '用户列表',     'Users',            'menu.userList',     'user:list:list',     2, '/user/list',     'user/list/index',     '', 1),
-(602, 600, '会员等级',     'Member Levels',    'menu.userLevel',    'user:level:list',    2, '/user/level',    'user/level/index',    '', 2),
-(603, 600, '反馈投诉',     'Feedback',         'menu.userFeedback', 'user:feedback:list', 2, '/user/feedback', 'user/feedback/index', '', 3),
-(604, 600, '用户操作日志', 'User Action Logs', 'menu.userLog',      'user:log:list',      2, '/user/log',      'user/log/index',      '', 4);
-INSERT IGNORE INTO `sys_menu` (`id`, `parent_id`, `menu_name`, `menu_name_en`, `perm_key`, `menu_type`, `sort`) VALUES
-(60101, 601, '冻结解冻', 'Freeze/Unfreeze', 'user:list:status',         3, 1),
-(60102, 601, '余额调整', 'Adjust Balance',  'user:list:adjust-balance', 3, 2),
-(60103, 601, '积分调整', 'Adjust Points',   'user:list:adjust-points',  3, 3),
-(60201, 602, '新增等级', 'Add Level',       'user:level:add',           3, 1),
-(60202, 602, '编辑等级', 'Edit Level',      'user:level:edit',          3, 2),
-(60203, 602, '删除等级', 'Delete Level',    'user:level:delete',        3, 3),
-(60301, 603, '处理反馈', 'Handle Feedback', 'user:feedback:handle',     3, 1);
+-- ================= 600 带货达人(全新,perm_key 待后端落地对齐)=================
+INSERT IGNORE INTO `sys_menu` (`id`,`parent_id`,`menu_name`,`menu_name_en`,`i18n_key`,`perm_key`,`menu_type`,`route_path`,`component`,`icon`,`sort`) VALUES
+(601,600,'达人申请','Applications','','affiliate:application:list',2,'/affiliate/applications','affiliate/applications/index','',1),
+(602,600,'合作方名录','Partner Directory','','affiliate:partner:list',2,'/affiliate/partners','affiliate/partners/index','',2),
+(603,600,'联盟计划','Affiliate Program','','affiliate:program:list',2,'/affiliate/program','affiliate/program/index','',3),
+(604,600,'奖励钱包','Reward Wallet','','affiliate:wallet:list',2,'/affiliate/wallet','affiliate/wallet/index','',4),
+(605,600,'反欺诈合规','Fraud & Compliance','','affiliate:fraud:list',2,'/affiliate/fraud','affiliate/fraud/index','',5),
+(606,600,'联盟折扣码','Affiliate Codes','','affiliate:code:list',2,'/affiliate/codes','affiliate/codes/index','',6),
+(607,600,'推荐返利活动','Referral Campaigns','','affiliate:referral:list',2,'/affiliate/referral','affiliate/referral/index','',7);
+INSERT IGNORE INTO `sys_menu` (`id`,`parent_id`,`menu_name`,`menu_name_en`,`perm_key`,`menu_type`,`sort`) VALUES
+(60101,601,'通过申请','Approve','affiliate:application:approve',3,1),
+(60102,601,'驳回申请','Reject','affiliate:application:reject',3,2),
+(60301,603,'保存计划','Save Program','affiliate:program:save',3,1),
+(60401,604,'钱包调整','Adjust','affiliate:wallet:adjust',3,1),
+(60402,604,'提现打款','Pay Withdrawal','affiliate:withdraw:pay',3,2),
+(60501,605,'处置案件','Handle Case','affiliate:fraud:handle',3,1),
+(60601,606,'保存码','Save Code','affiliate:code:save',3,1),
+(60602,606,'删除码','Delete Code','affiliate:code:delete',3,2),
+(60701,607,'保存推荐活动','Save Referral','affiliate:referral:save',3,1);
 
--- ---------- 7 商品管理 ----------
-INSERT IGNORE INTO `sys_menu` (`id`, `parent_id`, `menu_name`, `menu_name_en`, `i18n_key`, `perm_key`, `menu_type`, `route_path`, `component`, `icon`, `sort`) VALUES
-(701, 700, '酒店管理',     'Hotels',        'menu.goodsHotel',    'goods:hotel:list',    2, '/goods/hotel',    'goods/hotel/index',    '', 1),
-(702, 700, '门票管理',     'Tickets',       'menu.goodsTicket',   'goods:ticket:list',   2, '/goods/ticket',   'goods/ticket/index',   '', 2),
-(703, 700, '商品分类',     'Categories',    'menu.goodsCategory', 'goods:category:list', 2, '/goods/category', 'goods/category/index', '', 3),
-(704, 700, '库存管控',     'Stock Control', 'menu.goodsStock',    'goods:stock:list',    2, '/goods/stock',    'goods/stock/index',    '', 4),
-(705, 700, '上下架审核',   'Listing Audit', 'menu.goodsAudit',    'goods:audit:list',    2, '/goods/audit',    'goods/audit/index',    '', 5);
-INSERT IGNORE INTO `sys_menu` (`id`, `parent_id`, `menu_name`, `menu_name_en`, `perm_key`, `menu_type`, `sort`) VALUES
-(70101, 701, '新增酒店', 'Add Hotel',     'goods:hotel:add',      3, 1),
-(70102, 701, '编辑酒店', 'Edit Hotel',    'goods:hotel:edit',     3, 2),
-(70103, 701, '删除酒店', 'Delete Hotel',  'goods:hotel:delete',   3, 3),
-(70104, 701, '房型管理', 'Room Types',    'goods:hotel:room',     3, 4),
-(70201, 702, '新增门票', 'Add Ticket',    'goods:ticket:add',     3, 1),
-(70202, 702, '编辑门票', 'Edit Ticket',   'goods:ticket:edit',    3, 2),
-(70203, 702, '删除门票', 'Delete Ticket', 'goods:ticket:delete',  3, 3),
-(70204, 702, '票种管理', 'Ticket Types',  'goods:ticket:type',    3, 4),
-(70301, 703, '新增分类', 'Add Category',  'goods:category:add',   3, 1),
-(70302, 703, '编辑分类', 'Edit Category', 'goods:category:edit',  3, 2),
-(70303, 703, '删除分类', 'Delete Category', 'goods:category:delete',3, 3),
-(70401, 704, '调整库存', 'Adjust Stock',  'goods:stock:edit',     3, 1),
-(70402, 704, '关房停售', 'Close Sale',    'goods:stock:close',    3, 2),
-(70501, 705, '审核商品', 'Audit Goods',   'goods:audit:audit',    3, 1),
-(70502, 705, '强制下架', 'Force Offline', 'goods:audit:off',      3, 2);
+-- ================= 700 平台规则与合规(全新)=================
+INSERT IGNORE INTO `sys_menu` (`id`,`parent_id`,`menu_name`,`menu_name_en`,`i18n_key`,`perm_key`,`menu_type`,`route_path`,`component`,`icon`,`sort`) VALUES
+(701,700,'平台规则','Platform Rules','','platform:rule:list',2,'/compliance/rules','compliance/rules/index','',1),
+(702,700,'商户违规','Merchant Violations','','platform:violation:list',2,'/compliance/violations','compliance/violations/index','',2),
+(703,700,'警告历史','Warning History','','platform:warning:list',2,'/compliance/warnings','compliance/warnings/index','',3),
+(704,700,'合规历史','Compliance History','','platform:compliance:list',2,'/compliance/history','compliance/history/index','',4);
+INSERT IGNORE INTO `sys_menu` (`id`,`parent_id`,`menu_name`,`menu_name_en`,`perm_key`,`menu_type`,`sort`) VALUES
+(70101,701,'保存规则','Save','platform:rule:save',3,1),
+(70102,701,'发布下线','Publish/Unpublish','platform:rule:publish',3,2),
+(70201,702,'处置违规','Handle','platform:violation:handle',3,1),
+(70301,703,'签发警告','Issue','platform:warning:issue',3,1),
+(70302,703,'吊销警告','Revoke','platform:warning:revoke',3,2);
 
--- ---------- 8 订单管理 ----------
-INSERT IGNORE INTO `sys_menu` (`id`, `parent_id`, `menu_name`, `menu_name_en`, `i18n_key`, `perm_key`, `menu_type`, `route_path`, `component`, `icon`, `sort`) VALUES
-(801, 800, '全部订单', 'All Orders',           'menu.orderAll',    'order:all:list',    2, '/order/all',    'order/all/index',    '', 1),
-(802, 800, '酒店订单', 'Hotel Orders',         'menu.orderHotel',  'order:hotel:list',  2, '/order/hotel',  'order/hotel/index',  '', 2),
-(803, 800, '门票订单', 'Ticket Orders',        'menu.orderTicket', 'order:ticket:list', 2, '/order/ticket', 'order/ticket/index', '', 3),
-(804, 800, '退款审核', 'Refund Audit',         'menu.orderRefund', 'order:refund:list', 2, '/order/refund', 'order/refund/index', '', 4),
-(805, 800, '核销记录', 'Verification Records', 'menu.orderVerify', 'order:verify:list', 2, '/order/verify', 'order/verify/index', '', 5),
-(806, 800, '导出对账', 'Export Statements',    'menu.orderExport', 'order:export:list', 2, '/order/export', 'order/export/index', '', 6);
-INSERT IGNORE INTO `sys_menu` (`id`, `parent_id`, `menu_name`, `menu_name_en`, `perm_key`, `menu_type`, `sort`) VALUES
-(80101, 801, '订单详情', 'Order Detail',        'order:all:detail',   3, 1),
-(80102, 801, '取消订单', 'Cancel Order',        'order:all:cancel',   3, 2),
-(80103, 801, '导出订单', 'Export Orders',       'order:all:export',   3, 3),
-(80401, 804, '退款审核', 'Refund Audit',        'order:refund:audit', 3, 1),
-(80501, 805, '撤销核销', 'Revoke Verification', 'order:verify:revoke',3, 1),
-(80601, 806, '导出对账单', 'Export Statement',  'order:export:export', 3, 1);
+-- ================= 800 用户与角色(= 现系统管理,复用 sys:* 权限)=================
+INSERT IGNORE INTO `sys_menu` (`id`,`parent_id`,`menu_name`,`menu_name_en`,`i18n_key`,`perm_key`,`menu_type`,`route_path`,`component`,`icon`,`sort`) VALUES
+(801,800,'管理员','Users','menu.systemAdmin','sys:admin:list',2,'/system/admin','system/admin/index','',1),
+(802,800,'角色','Roles','menu.systemRole','sys:role:list',2,'/system/role','system/role/index','',2),
+(803,800,'权限矩阵','Permission Matrix','menu.systemMenu','sys:menu:list',2,'/system/menu','system/menu/index','',3),
+(804,800,'活跃会话','Active Sessions','','sys:session:list',2,'/system/sessions','system/admin/index','',4),
+(805,800,'回收站','Recycle Bin','menu.systemRecycle','sys:recycle:list',2,'/system/recycle','system/recycle/index','',5);
+INSERT IGNORE INTO `sys_menu` (`id`,`parent_id`,`menu_name`,`menu_name_en`,`perm_key`,`menu_type`,`sort`) VALUES
+(80101,801,'新增管理员','Add','sys:admin:add',3,1),
+(80102,801,'编辑管理员','Edit','sys:admin:edit',3,2),
+(80103,801,'删除管理员','Delete','sys:admin:delete',3,3),
+(80104,801,'重置密码','Reset Password','sys:admin:reset-pwd',3,4),
+(80105,801,'启用禁用','Enable/Disable','sys:admin:status',3,5),
+(80201,802,'新增角色','Add','sys:role:add',3,1),
+(80202,802,'编辑角色','Edit','sys:role:edit',3,2),
+(80203,802,'删除角色','Delete','sys:role:delete',3,3),
+(80204,802,'分配权限','Assign Permissions','sys:role:perm',3,4),
+(80301,803,'新增菜单','Add Menu','sys:menu:add',3,1),
+(80302,803,'编辑菜单','Edit Menu','sys:menu:edit',3,2),
+(80303,803,'删除菜单','Delete Menu','sys:menu:delete',3,3),
+(80401,804,'强制登出','Force Logout','sys:session:kick',3,1),
+(80501,805,'恢复数据','Restore','sys:recycle:restore',3,1),
+(80502,805,'彻底删除','Purge','sys:recycle:purge',3,2);
 
--- ---------- 9 财务管理 ----------
-INSERT IGNORE INTO `sys_menu` (`id`, `parent_id`, `menu_name`, `menu_name_en`, `i18n_key`, `perm_key`, `menu_type`, `route_path`, `component`, `icon`, `sort`) VALUES
-(901, 900, '资金总览',   'Finance Overview',    'menu.financeOverview', 'finance:overview:list', 2, '/finance/overview', 'finance/overview/index', '', 1),
-(902, 900, '商户结算',   'Merchant Settlement', 'menu.financeMSettle',  'finance:msettle:list',  2, '/finance/msettle',  'finance/msettle/index',  '', 2),
-(903, 900, '供应商结算', 'Supplier Settlement', 'menu.financeSettle',   'finance:ssettle:list',  2, '/finance/ssettle',  'finance/ssettle/index',  '', 3),
-(904, 900, '资金流水',   'Fund Flows',          'menu.financeFlow',     'finance:flow:list',     2, '/finance/flow',     'finance/flow/index',     '', 4),
-(905, 900, '税费配置',   'Tax Config',          'menu.financeTax',      'finance:tax:list',      2, '/finance/tax',      'finance/tax/index',      '', 5);
-INSERT IGNORE INTO `sys_menu` (`id`, `parent_id`, `menu_name`, `menu_name_en`, `perm_key`, `menu_type`, `sort`) VALUES
-(90201, 902, '确认结算', 'Confirm Settlement', 'finance:msettle:confirm', 3, 1),
-(90202, 902, '标记打款', 'Mark Paid',          'finance:msettle:pay',     3, 2),
-(90301, 903, '确认结算', 'Confirm Settlement', 'finance:ssettle:confirm', 3, 1),
-(90302, 903, '标记打款', 'Mark Paid',          'finance:ssettle:pay',     3, 2),
-(90401, 904, '手动调账', 'Manual Adjustment',  'finance:flow:adjust',     3, 1),
-(90402, 904, '导出流水', 'Export Flows',       'finance:flow:export',     3, 2),
-(90501, 905, '新增税费', 'Add Tax',            'finance:tax:add',         3, 1),
-(90502, 905, '编辑税费', 'Edit Tax',           'finance:tax:edit',        3, 2),
-(90503, 905, '删除税费', 'Delete Tax',         'finance:tax:delete',      3, 3);
+-- ================= 900 报表与分析(= 现统计,复用 stats:* 权限)=================
+INSERT IGNORE INTO `sys_menu` (`id`,`parent_id`,`menu_name`,`menu_name_en`,`i18n_key`,`perm_key`,`menu_type`,`route_path`,`component`,`icon`,`sort`) VALUES
+(901,900,'高管仪表盘','Executive Dashboard','menu.statsDashboard','stats:dashboard:list',2,'/stats/dashboard','stats/dashboard/index','',1),
+(902,900,'交易报表','Transaction Reports','menu.statsFinance','stats:finance:list',2,'/stats/finance','stats/finance/index','',2),
+(903,900,'业务报表','Business Reports','','stats:site:list',2,'/stats/business','stats/business/index','',3),
+(904,900,'自定义报表','Custom Reports','','stats:custom:list',2,'/stats/custom','stats/custom/index','',4),
+(905,900,'商户统计','Merchant Stats','menu.statsMerchant','stats:merchant:list',2,'/stats/merchant','stats/merchant/index','',5),
+(906,900,'商品统计','Goods Stats','menu.statsGoods','stats:goods:list',2,'/stats/goods','stats/goods/index','',6),
+(907,900,'站点统计','Site Stats','menu.statsSite','stats:site:list',2,'/stats/site','stats/site/index','',7);
+INSERT IGNORE INTO `sys_menu` (`id`,`parent_id`,`menu_name`,`menu_name_en`,`perm_key`,`menu_type`,`sort`) VALUES
+(90201,902,'导出报表','Export','stats:finance:export',3,1),
+(90301,903,'导出报表','Export','stats:site:export',3,1),
+(90401,904,'导出报表','Export','stats:custom:export',3,1),
+(90501,905,'导出统计','Export','stats:merchant:export',3,1),
+(90601,906,'导出统计','Export','stats:goods:export',3,1);
 
--- ---------- 10 营销活动 ----------
-INSERT IGNORE INTO `sys_menu` (`id`, `parent_id`, `menu_name`, `menu_name_en`, `i18n_key`, `perm_key`, `menu_type`, `route_path`, `component`, `icon`, `sort`) VALUES
-(1001, 1000, '优惠券',   'Coupons',          'menu.marketingCoupon',   'marketing:coupon:list',   2, '/marketing/coupon',   'marketing/coupon/index',   '', 1),
-(1002, 1000, '限时活动', 'Flash Activities', 'menu.marketingActivity', 'marketing:activity:list', 2, '/marketing/activity', 'marketing/activity/index', '', 2),
-(1003, 1000, '首页推荐', 'Home Banners',     'menu.marketingBanner',   'marketing:banner:list',   2, '/marketing/banner',   'marketing/banner/index',   '', 3),
-(1004, 1000, '积分活动', 'Points Campaigns', 'menu.marketingPoints',   'marketing:points:list',   2, '/marketing/points',   'marketing/points/index',   '', 4);
-INSERT IGNORE INTO `sys_menu` (`id`, `parent_id`, `menu_name`, `menu_name_en`, `perm_key`, `menu_type`, `sort`) VALUES
-(100101, 1001, '新增优惠券', 'Add Coupon',       'marketing:coupon:add',     3, 1),
-(100102, 1001, '编辑优惠券', 'Edit Coupon',      'marketing:coupon:edit',    3, 2),
-(100103, 1001, '停止发放',   'Stop Issuing',     'marketing:coupon:stop',    3, 3),
-(100104, 1001, '删除优惠券', 'Delete Coupon',    'marketing:coupon:delete',  3, 4),
-(100201, 1002, '新增活动',   'Add Activity',     'marketing:activity:add',   3, 1),
-(100202, 1002, '编辑活动',   'Edit Activity',    'marketing:activity:edit',  3, 2),
-(100203, 1002, '暂停活动',   'Pause Activity',   'marketing:activity:pause', 3, 3),
-(100204, 1002, '删除活动',   'Delete Activity',  'marketing:activity:delete',3, 4),
-(100301, 1003, '新增推荐',   'Add Banner',       'marketing:banner:add',     3, 1),
-(100302, 1003, '编辑推荐',   'Edit Banner',      'marketing:banner:edit',    3, 2),
-(100303, 1003, '删除推荐',   'Delete Banner',    'marketing:banner:delete',  3, 3),
-(100304, 1003, '上架下架',   'On/Off Shelf',     'marketing:banner:status',  3, 4),
-(100401, 1004, '编辑积分规则','Edit Points Rule','marketing:points:edit',    3, 1);
+-- ================= 1000 终端用户管理(= 现 C端用户 + cops chat/appeal/fraud)=================
+INSERT IGNORE INTO `sys_menu` (`id`,`parent_id`,`menu_name`,`menu_name_en`,`i18n_key`,`perm_key`,`menu_type`,`route_path`,`component`,`icon`,`sort`) VALUES
+(1001,1000,'用户目录','User Directory','menu.userList','user:list:list',2,'/user/list','user/list/index','',1),
+(1002,1000,'对话中心','Conversation Center','','user:chat:list',2,'/cops/chat','cops/chat/index','',2),
+(1003,1000,'用户画像','User Profile','','user:list:list',2,'/user/profile','user/profile/index','',3),
+(1004,1000,'预订历史','Booking History','','user:list:list',2,'/user/bookings','order/all/index','',4),
+(1005,1000,'用户活动','User Activities','','user:log:list',2,'/user/log','user/log/index','',5),
+(1006,1000,'用户交易','User Transactions','','user:list:list',2,'/user/transactions','finance/flow/index','',6),
+(1007,1000,'奖励与券','Rewards & Coupons','','user:list:list',2,'/user/rewards','marketing/coupon/index','',7),
+(1008,1000,'用户支持','User Support','menu.userFeedback','user:feedback:list',2,'/user/feedback','user/feedback/index','',8),
+(1009,1000,'访客会话','Guest Conversations','','user:chat:list',2,'/user/conversations','cops/chat/index','',9),
+(1010,1000,'已暂停用户','Suspended Users','','user:list:status',2,'/user/suspended','user/suspended/index','',10),
+(1011,1000,'黑名单','Blacklist','','user:list:list',2,'/user/blacklist','user/blacklist/index','',11),
+(1012,1000,'申诉处理','Appeals','','user:appeal:list',2,'/cops/appeal','cops/appeal/index','',12),
+(1013,1000,'会员等级','Member Levels','','user:level:list',2,'/user/level','user/level/index','',13),
+(1014,1000,'风控看板','Risk Control','','user:fraud:list',2,'/cops/fraud','cops/fraud/index','',14);
+INSERT IGNORE INTO `sys_menu` (`id`,`parent_id`,`menu_name`,`menu_name_en`,`perm_key`,`menu_type`,`sort`) VALUES
+(100101,1001,'冻结解冻','Freeze/Unfreeze','user:list:status',3,1),
+(100102,1001,'余额调整','Adjust Balance','user:list:adjust-balance',3,2),
+(100103,1001,'积分调整','Adjust Points','user:list:adjust-points',3,3),
+(100201,1002,'回复消息','Reply','user:chat:reply',3,1),
+(100801,1008,'处理反馈','Handle','user:feedback:handle',3,1),
+(101301,1013,'新增等级','Add Level','user:level:add',3,1),
+(101302,1013,'编辑等级','Edit Level','user:level:edit',3,2),
+(101201,1012,'处理申诉','Handle Appeal','user:appeal:handle',3,1);
 
--- ---------- 11 数据统计中心 ----------
-INSERT IGNORE INTO `sys_menu` (`id`, `parent_id`, `menu_name`, `menu_name_en`, `i18n_key`, `perm_key`, `menu_type`, `route_path`, `component`, `icon`, `sort`) VALUES
-(1101, 1100, '数据大屏', 'Data Dashboard',  'menu.statsDashboard', 'stats:dashboard:list', 2, '/stats/dashboard', 'stats/dashboard/index', '', 1),
-(1102, 1100, '站点统计', 'Site Stats',      'menu.statsSite',      'stats:site:list',      2, '/stats/site',      'stats/site/index',      '', 2),
-(1103, 1100, '商户统计', 'Merchant Stats',  'menu.statsMerchant',  'stats:merchant:list',  2, '/stats/merchant',  'stats/merchant/index',  '', 3),
-(1104, 1100, '商品统计', 'Goods Stats',     'menu.statsGoods',     'stats:goods:list',     2, '/stats/goods',     'stats/goods/index',     '', 4),
-(1105, 1100, '财务报表', 'Finance Reports', 'menu.statsFinance',   'stats:finance:list',   2, '/stats/finance',   'stats/finance/index',   '', 5);
-INSERT IGNORE INTO `sys_menu` (`id`, `parent_id`, `menu_name`, `menu_name_en`, `perm_key`, `menu_type`, `sort`) VALUES
-(110201, 1102, '导出统计', 'Export Stats',  'stats:site:export',     3, 1),
-(110301, 1103, '导出统计', 'Export Stats',  'stats:merchant:export', 3, 1),
-(110401, 1104, '导出统计', 'Export Stats',  'stats:goods:export',    3, 1),
-(110501, 1105, '导出报表', 'Export Report', 'stats:finance:export',  3, 1);
+-- ================= 1100 帮助中心(全新)=================
+INSERT IGNORE INTO `sys_menu` (`id`,`parent_id`,`menu_name`,`menu_name_en`,`i18n_key`,`perm_key`,`menu_type`,`route_path`,`component`,`icon`,`sort`) VALUES
+(1101,1100,'FAQ 文章','FAQ Articles','','help:article:list',2,'/helpcenter/articles','helpcenter/articles/index','',1),
+(1102,1100,'分类','Categories','','help:category:list',2,'/helpcenter/categories','helpcenter/categories/index','',2),
+(1103,1100,'公告','Announcements','','help:announcement:list',2,'/helpcenter/announcements','helpcenter/announcements/index','',3),
+(1104,1100,'搜索分析','Search Analytics','','help:analytics:list',2,'/helpcenter/analytics','helpcenter/analytics/index','',4);
+INSERT IGNORE INTO `sys_menu` (`id`,`parent_id`,`menu_name`,`menu_name_en`,`perm_key`,`menu_type`,`sort`) VALUES
+(110101,1101,'保存文章','Save','help:article:save',3,1),
+(110102,1101,'发布归档','Publish/Archive','help:article:publish',3,2),
+(110201,1102,'保存分类','Save','help:category:save',3,1),
+(110301,1103,'发布公告','Publish','help:announcement:publish',3,1);
 
--- ---------- 12 核销管理 ----------
-INSERT IGNORE INTO `sys_menu` (`id`, `parent_id`, `menu_name`, `menu_name_en`, `i18n_key`, `perm_key`, `menu_type`, `route_path`, `component`, `icon`, `sort`) VALUES
-(1201, 1200, '核销设备', 'Verification Devices', 'menu.verifyDevice', 'verify:device:list', 2, '/verify/device', 'verify/device/index', '', 1),
-(1202, 1200, '核销规则', 'Verification Rules',   'menu.verifyRule',   'verify:rule:list',   2, '/verify/rule',   'verify/rule/index',   '', 2),
-(1203, 1200, '核销日志', 'Verification Logs',    'menu.verifyLog',    'verify:log:list',    2, '/verify/log',    'verify/log/index',    '', 3);
-INSERT IGNORE INTO `sys_menu` (`id`, `parent_id`, `menu_name`, `menu_name_en`, `perm_key`, `menu_type`, `sort`) VALUES
-(120101, 1201, '新增设备', 'Add Device',     'verify:device:add',    3, 1),
-(120102, 1201, '编辑设备', 'Edit Device',    'verify:device:edit',   3, 2),
-(120103, 1201, '删除设备', 'Delete Device',  'verify:device:delete', 3, 3),
-(120104, 1201, '启用禁用', 'Enable/Disable', 'verify:device:status', 3, 4),
-(120201, 1202, '新增规则', 'Add Rule',       'verify:rule:add',      3, 1),
-(120202, 1202, '编辑规则', 'Edit Rule',      'verify:rule:edit',     3, 2),
-(120203, 1202, '删除规则', 'Delete Rule',    'verify:rule:delete',   3, 3),
-(120301, 1203, '导出日志', 'Export Logs',    'verify:log:export',    3, 1);
+-- ================= 1200 内容管理(Banner 复用 marketing:banner;Theme 复用 config:theme)=================
+INSERT IGNORE INTO `sys_menu` (`id`,`parent_id`,`menu_name`,`menu_name_en`,`i18n_key`,`perm_key`,`menu_type`,`route_path`,`component`,`icon`,`sort`) VALUES
+(1201,1200,'横幅管理','Banner Management','','marketing:banner:list',2,'/marketing/banner','marketing/banner/index','',1),
+(1202,1200,'主题管理','Theme Management','','config:theme:list',2,'/cops/theme','cops/theme/index','',2);
+INSERT IGNORE INTO `sys_menu` (`id`,`parent_id`,`menu_name`,`menu_name_en`,`perm_key`,`menu_type`,`sort`) VALUES
+(120101,1201,'新增横幅','Add','marketing:banner:add',3,1),
+(120102,1201,'编辑横幅','Edit','marketing:banner:edit',3,2),
+(120103,1201,'上下架','On/Off','marketing:banner:status',3,3),
+(120201,1202,'保存主题','Save','config:theme:save',3,1),
+(120202,1202,'删除主题','Delete','config:theme:delete',3,2);
 
--- ---------- 13 移动运营(Consumer App PRD v1.0:C端运营与风控后台)----------
--- i18n_key 留空 → 前端 resolveMenuTitle 回退中文/英文名(无需新增 admin-web 词条);
--- 页面 component 无对应 Vue 文件时由 router/dynamic.ts 回退 views/wip/index.vue(admin-web 页面后续专项补齐)
-INSERT IGNORE INTO `sys_menu` (`id`, `parent_id`, `menu_name`, `menu_name_en`, `i18n_key`, `perm_key`, `menu_type`, `route_path`, `component`, `icon`, `sort`) VALUES
-(1300, 0, '移动运营', 'Consumer Ops', '', 'cops', 1, '/cops', '', 'MobileOutlined', 13);
-INSERT IGNORE INTO `sys_menu` (`id`, `parent_id`, `menu_name`, `menu_name_en`, `i18n_key`, `perm_key`, `menu_type`, `route_path`, `component`, `icon`, `sort`) VALUES
-(1301, 1300, '申诉处理',   'Appeals',           '', 'user:appeal:list',       2, '/cops/appeal',   'cops/appeal/index',   '', 1),
-(1302, 1300, '风控看板',   'Risk Control',      '', 'user:fraud:list',        2, '/cops/fraud',    'cops/fraud/index',    '', 2),
-(1303, 1300, '评价审核',   'Reviews',           '', 'goods:review:list',      2, '/cops/review',   'cops/review/index',   '', 3),
-(1304, 1300, '长住梯度',   'Long-Stay Tiers',   '', 'marketing:longstay:list',2, '/cops/longstay', 'cops/longstay/index', '', 4),
-(1305, 1300, '动态主题',   'App Themes',        '', 'config:theme:list',      2, '/cops/theme',    'cops/theme/index',    '', 5),
-(1306, 1300, '客服工作台', 'Support',           '', 'user:chat:list',         2, '/cops/chat',     'cops/chat/index',     '', 6),
-(1307, 1300, 'Trip管理',   'Trips',             '', 'order:trip:list',        2, '/cops/trip',     'cops/trip/index',     '', 7),
-(1308, 1300, '结算分账',   'Settlement Ledger', '', 'finance:entry:list',     2, '/cops/entry',    'cops/entry/index',    '', 8),
-(1309, 1300, '筛选排序配置','Filter & Sort',    '', 'goods:filter:list',      2, '/cops/filter',   'cops/filter/index',   '', 9),
-(1310, 1300, '促销活动',   'Campaigns',        '', 'marketing:campaign:list',2, '/cops/campaign', 'cops/campaign/index', '', 10);
-INSERT IGNORE INTO `sys_menu` (`id`, `parent_id`, `menu_name`, `menu_name_en`, `perm_key`, `menu_type`, `sort`) VALUES
-(130901, 1309, '保存配置', 'Save Config',   'goods:filter:save',         3, 1),
-(130902, 1309, '删除配置', 'Delete Config', 'goods:filter:delete',       3, 2),
-(131001, 1310, '保存活动', 'Save Campaign', 'marketing:campaign:save',   3, 1),
-(131002, 1310, '删除活动', 'Delete Campaign','marketing:campaign:delete',3, 2),
-(130101, 1301, '处理申诉', 'Handle Appeal', 'user:appeal:handle',        3, 1),
-(130301, 1303, '审核评价', 'Audit Review',  'goods:review:audit',        3, 1),
-(130302, 1303, '回复评价', 'Reply Review',  'goods:review:reply',        3, 2),
-(130401, 1304, '保存梯度', 'Save Tier',     'marketing:longstay:save',   3, 1),
-(130402, 1304, '删除梯度', 'Delete Tier',   'marketing:longstay:delete', 3, 2),
-(130501, 1305, '保存主题', 'Save Theme',    'config:theme:save',         3, 1),
-(130502, 1305, '删除主题', 'Delete Theme',  'config:theme:delete',       3, 2),
-(130601, 1306, '回复消息', 'Reply Message', 'user:chat:reply',           3, 1);
+-- ================= 1300 平台配置(= 现系统配置 + 特性开关 + 筛选/税费)=================
+INSERT IGNORE INTO `sys_menu` (`id`,`parent_id`,`menu_name`,`menu_name_en`,`i18n_key`,`perm_key`,`menu_type`,`route_path`,`component`,`icon`,`sort`) VALUES
+(1301,1300,'全局参数','Global Config','menu.configGlobal','config:global:list',2,'/config/global','config/global/index','',1),
+(1302,1300,'站点管理','Site Management','menu.configSite','config:site:list',2,'/config/site','config/site/index','',2),
+(1303,1300,'存储配置','Storage','menu.configStorage','config:storage:list',2,'/config/storage','config/storage/index','',3),
+(1304,1300,'支付配置','Payment','menu.configPay','config:pay:list',2,'/config/pay','config/pay/index','',4),
+(1305,1300,'短信配置','SMS','menu.configSms','config:sms:list',2,'/config/sms','config/sms/index','',5),
+(1306,1300,'地图配置','Map','menu.configMap','config:map:list',2,'/config/map','config/map/index','',6),
+(1307,1300,'客户端密钥','Client','menu.configClient','config:client:list',2,'/config/client','config/client/index','',7),
+(1308,1300,'接口权限模板','Permission Templates','menu.configPermTpl','config:permtpl:list',2,'/config/permtpl','config/permtpl/index','',8),
+(1309,1300,'特性开关','Feature Toggles','','config:feature:list',2,'/config/features','config/features/index','',9),
+(1310,1300,'筛选排序配置','Filter & Sort','','goods:filter:list',2,'/cops/filter','cops/filter/index','',10),
+(1311,1300,'税费配置','Tax Config','menu.financeTax','finance:tax:list',2,'/finance/tax','finance/tax/index','',11);
+INSERT IGNORE INTO `sys_menu` (`id`,`parent_id`,`menu_name`,`menu_name_en`,`perm_key`,`menu_type`,`sort`) VALUES
+(130101,1301,'编辑参数','Edit','config:global:edit',3,1),
+(130201,1302,'新增站点','Add Site','config:site:add',3,1),
+(130202,1302,'编辑站点','Edit Site','config:site:edit',3,2),
+(130901,1309,'保存开关','Save','config:feature:save',3,1),
+(131001,1310,'保存配置','Save','goods:filter:save',3,1);
 
--- ---------- 超管角色授权全部菜单 ----------
+-- ================= 遗留:1400 供应商 =================
+INSERT IGNORE INTO `sys_menu` (`id`,`parent_id`,`menu_name`,`menu_name_en`,`i18n_key`,`perm_key`,`menu_type`,`route_path`,`component`,`icon`,`sort`) VALUES
+(1401,1400,'供应商列表','Suppliers','menu.supplierList','supplier:list:list',2,'/supplier/list','supplier/list/index','',1),
+(1402,1400,'供货商品','Supplier Goods','','supplier:goods:list',2,'/supplier/goods','supplier/goods/index','',2),
+(1403,1400,'对账结算','Settlement','menu.supplierSettle','supplier:settle:list',2,'/supplier/settle','supplier/settle/index','',3),
+(1404,1400,'供应商报表','Reports','','supplier:report:list',2,'/supplier/report','supplier/report/index','',4);
+INSERT IGNORE INTO `sys_menu` (`id`,`parent_id`,`menu_name`,`menu_name_en`,`perm_key`,`menu_type`,`sort`) VALUES
+(140101,1401,'新增供应商','Add','supplier:list:add',3,1),
+(140102,1401,'编辑供应商','Edit','supplier:list:edit',3,2),
+(140301,1403,'确认对账','Confirm','supplier:settle:confirm',3,1),
+(140302,1403,'标记打款','Mark Paid','supplier:settle:pay',3,2);
+
+-- ================= 遗留:1500 商品(门票/分类/审核/评价/酒店基础)=================
+INSERT IGNORE INTO `sys_menu` (`id`,`parent_id`,`menu_name`,`menu_name_en`,`i18n_key`,`perm_key`,`menu_type`,`route_path`,`component`,`icon`,`sort`) VALUES
+(1501,1500,'酒店管理','Hotels','menu.goodsHotel','goods:hotel:list',2,'/goods/hotel','goods/hotel/index','',1),
+(1502,1500,'门票管理','Tickets','menu.goodsTicket','goods:ticket:list',2,'/goods/ticket','goods/ticket/index','',2),
+(1503,1500,'商品分类','Categories','menu.goodsCategory','goods:category:list',2,'/goods/category','goods/category/index','',3),
+(1504,1500,'库存管控','Stock','menu.goodsStock','goods:stock:list',2,'/goods/stock','goods/stock/index','',4),
+(1505,1500,'上下架审核','Listing Audit','menu.goodsAudit','goods:audit:list',2,'/goods/audit','goods/audit/index','',5),
+(1506,1500,'评价审核','Reviews','','goods:review:list',2,'/cops/review','cops/review/index','',6);
+INSERT IGNORE INTO `sys_menu` (`id`,`parent_id`,`menu_name`,`menu_name_en`,`perm_key`,`menu_type`,`sort`) VALUES
+(150101,1501,'新增酒店','Add','goods:hotel:add',3,1),
+(150102,1501,'编辑酒店','Edit','goods:hotel:edit',3,2),
+(150201,1502,'新增门票','Add','goods:ticket:add',3,1),
+(150501,1505,'审核商品','Audit','goods:audit:audit',3,1),
+(150601,1506,'审核评价','Audit Review','goods:review:audit',3,1),
+(150602,1506,'回复评价','Reply','goods:review:reply',3,2);
+
+-- ================= 遗留:1600 核销 =================
+INSERT IGNORE INTO `sys_menu` (`id`,`parent_id`,`menu_name`,`menu_name_en`,`i18n_key`,`perm_key`,`menu_type`,`route_path`,`component`,`icon`,`sort`) VALUES
+(1601,1600,'核销设备','Devices','','verify:device:list',2,'/verify/device','verify/device/index','',1),
+(1602,1600,'核销规则','Rules','','verify:rule:list',2,'/verify/rule','verify/rule/index','',2),
+(1603,1600,'核销日志','Logs','menu.verifyLog','verify:log:list',2,'/verify/log','verify/log/index','',3),
+(1604,1600,'订单核销记录','Order Verify','menu.orderVerify','order:verify:list',2,'/order/verify','order/verify/index','',4);
+INSERT IGNORE INTO `sys_menu` (`id`,`parent_id`,`menu_name`,`menu_name_en`,`perm_key`,`menu_type`,`sort`) VALUES
+(160101,1601,'新增设备','Add','verify:device:add',3,1),
+(160201,1602,'新增规则','Add','verify:rule:add',3,1),
+(160401,1604,'撤销核销','Revoke','order:verify:revoke',3,1);
+
+-- ================= 遗留:1700 Trip / 结算 / 财务明细 =================
+INSERT IGNORE INTO `sys_menu` (`id`,`parent_id`,`menu_name`,`menu_name_en`,`i18n_key`,`perm_key`,`menu_type`,`route_path`,`component`,`icon`,`sort`) VALUES
+(1701,1700,'Trip 管理','Trips','','order:trip:list',2,'/cops/trip','cops/trip/index','',1),
+(1702,1700,'结算分账','Settlement Ledger','','finance:entry:list',2,'/cops/entry','cops/entry/index','',2),
+(1703,1700,'资金总览','Finance Overview','menu.financeOverview','finance:overview:list',2,'/finance/overview','finance/overview/index','',3),
+(1704,1700,'供应商结算','Supplier Settlement','menu.financeSettle','finance:ssettle:list',2,'/finance/ssettle','finance/ssettle/index','',4),
+(1705,1700,'资金流水','Fund Flows','menu.financeFlow','finance:flow:list',2,'/finance/flow','finance/flow/index','',5);
+INSERT IGNORE INTO `sys_menu` (`id`,`parent_id`,`menu_name`,`menu_name_en`,`perm_key`,`menu_type`,`sort`) VALUES
+(170401,1704,'确认结算','Confirm','finance:ssettle:confirm',3,1),
+(170402,1704,'标记打款','Mark Paid','finance:ssettle:pay',3,2),
+(170501,1705,'手动调账','Adjust','finance:flow:adjust',3,1);
+
+-- ================= 遗留:1800 日志 =================
+INSERT IGNORE INTO `sys_menu` (`id`,`parent_id`,`menu_name`,`menu_name_en`,`i18n_key`,`perm_key`,`menu_type`,`route_path`,`component`,`icon`,`sort`) VALUES
+(1801,1800,'操作日志','Operation Logs','menu.logOperation','log:operation:list',2,'/log/operation','log/operation/index','',1),
+(1802,1800,'接口日志','API Logs','menu.logApi','log:api:list',2,'/log/api','log/api/index','',2);
+INSERT IGNORE INTO `sys_menu` (`id`,`parent_id`,`menu_name`,`menu_name_en`,`perm_key`,`menu_type`,`sort`) VALUES
+(180101,1801,'导出操作日志','Export','log:operation:export',3,1),
+(180201,1802,'导出接口日志','Export','log:api:export',3,1);
+
+-- ================= 超管角色授权全部菜单 =================
+-- 注:菜单重构后 perm_key/ID 变化,非超管角色须在后台重新分配权限;超管在 hasAnyPermission 中 bypass。
 INSERT IGNORE INTO `sys_role_menu` (`role_id`, `menu_id`)
 SELECT 1, `id` FROM `sys_menu` WHERE `deleted_at` IS NULL;

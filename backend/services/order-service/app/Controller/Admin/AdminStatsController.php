@@ -21,6 +21,34 @@ class AdminStatsController extends AbstractAdminController
         'goods' => 'goods_id',
     ];
 
+    /**
+     * 自定义报表(Super Admin Portal 模块10 Custom Reports):
+     * 按 reportType(bookings/revenue) + 日期区间 + 商户 过滤订单明细,分页返回
+     */
+    public function custom(): array
+    {
+        [$page, $pageSize] = $this->pageParams();
+        [$startDate, $endDate] = $this->rangeParams();
+        $reportType = $this->strInput('reportType', 'bookings');
+
+        $query = Db::table('order_main')
+            ->whereBetween('created_at', ["{$startDate} 00:00:00", "{$endDate} 23:59:59"])
+            ->whereNull('deleted_at');
+        $this->applySiteScope($query);
+        if (($merchantId = $this->intInput('merchantId')) > 0) {
+            $query->where('merchant_id', $merchantId);
+        }
+        // 营收报表口径:仅已支付/已核销/已完成
+        if ($reportType === 'revenue') {
+            $query->whereIn('order_status', [1, 2, 3]);
+        }
+        $total = (clone $query)->count();
+        $rows = $query->orderByDesc('id')->forPage($page, $pageSize)
+            ->get(['id', 'order_no', 'order_type', 'merchant_id', 'goods_name', 'sku_name', 'quantity', 'pay_amount', 'platform_commission', 'merchant_receivable', 'order_status', 'refund_status', 'created_at'])
+            ->map(static fn ($r) => (array) $r)->all();
+        return Result::page($rows, $total, $page, $pageSize);
+    }
+
     /** 数据大屏:KPI 4 卡片 + 每日趋势(销售额/订单量分类型) + 站点/商户排行 + 最新订单 */
     public function dashboard(): array
     {

@@ -7,7 +7,9 @@ declare(strict_types=1);
  * 活动/Banner/积分商城归后续迭代;本期落地优惠券模板 + 领券记录
  */
 
+use App\Controller\AffiliateController;
 use App\Controller\CampaignController;
+use App\Controller\PromotionController;
 use App\Controller\CouponController;
 use App\Controller\LongstayController;
 use App\Controller\MarketingController;
@@ -51,6 +53,47 @@ Router::addGroup('/api/v1/admin/marketing', static function () {
     Router::post('/campaign/save', [CampaignController::class, 'save']);
     Router::post('/campaign/toggle-status', [CampaignController::class, 'toggleStatus']);
     Router::post('/campaign/delete', [CampaignController::class, 'remove']);
+    // 促销独立实体(Super Admin Portal 模块05):代金券/促销码/新客奖励
+    Router::get('/voucher/list', [PromotionController::class, 'vouchers']);
+    Router::post('/voucher/save', [PromotionController::class, 'voucherSave']);
+    Router::post('/voucher/delete', [PromotionController::class, 'voucherDelete']);
+    Router::get('/promo-code/list', [PromotionController::class, 'codes']);
+    Router::post('/promo-code/save', [PromotionController::class, 'codeSave']);
+    Router::post('/promo-code/delete', [PromotionController::class, 'codeDelete']);
+    Router::get('/welcome/list', [PromotionController::class, 'welcomes']);
+    Router::post('/welcome/save', [PromotionController::class, 'welcomeSave']);
+    Router::post('/welcome/delete', [PromotionController::class, 'welcomeDelete']);
+}, [
+    'middleware' => [AdminAuthMiddleware::class, OperationLogMiddleware::class],
+]);
+
+// ============================================================
+// 带货达人与联盟(Super Admin Portal Phase 2)前缀 /api/v1/admin/affiliate/*
+// 网关 map:affiliate → marketing_service(deploy/openresty/conf.d/mtrip.conf)
+// ============================================================
+Router::addGroup('/api/v1/admin/affiliate', static function () {
+    // 申请审核
+    Router::get('/application/list', [AffiliateController::class, 'applications']);
+    Router::post('/application/approve', [AffiliateController::class, 'applicationApprove']);
+    Router::post('/application/reject', [AffiliateController::class, 'applicationReject']);
+    // 合作方名录
+    Router::get('/partner/list', [AffiliateController::class, 'partners']);
+    Router::post('/partner/toggle-status', [AffiliateController::class, 'partnerToggle']);
+    // 联盟计划
+    Router::get('/program', [AffiliateController::class, 'program']);
+    Router::post('/program/save', [AffiliateController::class, 'programSave']);
+    // 联盟折扣码
+    Router::get('/code/list', [AffiliateController::class, 'codes']);
+    Router::post('/code/save', [AffiliateController::class, 'codeSave']);
+    Router::post('/code/delete', [AffiliateController::class, 'codeDelete']);
+    // 奖励钱包
+    Router::get('/wallet/commission-log', [AffiliateController::class, 'commissionLog']);
+    Router::get('/wallet/withdraw-list', [AffiliateController::class, 'withdraws']);
+    Router::post('/wallet/withdraw-pay', [AffiliateController::class, 'withdrawPay']);
+    Router::post('/wallet/adjust', [AffiliateController::class, 'walletAdjust']);
+    // 反欺诈
+    Router::get('/fraud/list', [AffiliateController::class, 'fraudCases']);
+    Router::post('/fraud/handle', [AffiliateController::class, 'fraudHandle']);
 }, [
     'middleware' => [AdminAuthMiddleware::class, OperationLogMiddleware::class],
 ]);
