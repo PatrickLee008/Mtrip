@@ -1,63 +1,57 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { Tooltip, Popover } from 'ant-design-vue';
 import * as Icons from '@ant-design/icons-vue';
 import { useUserStore } from '@/stores/user';
-import { useAppStore } from '@/stores/app';
 import { menuTitle } from '@/locales/menuI18n';
 
 const route = useRoute();
 const router = useRouter();
 const userStore = useUserStore();
-const appStore = useAppStore();
 
 /** 图标名 → 组件 */
 function resolveIcon(name: string) {
   return (Icons as Record<string, unknown>)[name] as (() => unknown) | undefined;
 }
 
-interface FlatChild {
+interface MenuItem {
   key: string;
   label: string;
   icon?: string;
 }
 
 interface MenuGroup {
-  /** 一级分类 key */
-  groupKey: string;
-  groupLabel: string;
-  groupIcon?: string;
-  children: FlatChild[];
+  key: string;
+  label: string;
+  icon?: string;
+  children: MenuItem[];
 }
 
-/** 将菜单树转为分组结构 */
+/** 将后端菜单树转为侧边栏分组结构 */
 const groups = computed<MenuGroup[]>(() => {
   const result: MenuGroup[] = [];
   const nodes = userStore.menus;
 
   for (const node of nodes) {
     if (node.menu_type === 1) {
-      const children: FlatChild[] = (node.children ?? [])
+      const children: MenuItem[] = (node.children ?? [])
         .filter((child) => child.menu_type === 2)
         .map((child) => ({
           key: child.route_path || String(child.id),
           label: menuTitle(child),
           icon: child.icon || undefined,
         }));
-      if (children.length > 0) {
-        result.push({
-          groupKey: node.route_path || String(node.id),
-          groupLabel: menuTitle(node),
-          groupIcon: node.icon || undefined,
-          children,
-        });
-      }
+      result.push({
+        key: node.route_path || String(node.id),
+        label: menuTitle(node),
+        icon: node.icon || undefined,
+        children,
+      });
     } else if (node.menu_type === 2) {
       result.push({
-        groupKey: node.route_path || String(node.id),
-        groupLabel: menuTitle(node),
-        groupIcon: node.icon || undefined,
+        key: node.route_path || String(node.id),
+        label: menuTitle(node),
+        icon: node.icon || undefined,
         children: [],
       });
     }
@@ -65,307 +59,265 @@ const groups = computed<MenuGroup[]>(() => {
   return result;
 });
 
+/** 展开的分组 key 集合 */
+const expandedKeys = ref<Set<string>>(new Set());
+
 const activeKey = ref(route.path);
-const popoverOpen = ref<Record<string, boolean>>({});
 
 watch(
   () => route.path,
   (path) => {
     activeKey.value = path;
+    // 自动展开包含当前路由的分组
+    for (const g of groups.value) {
+      if (g.children.some((c) => c.key === path)) {
+        expandedKeys.value.add(g.key);
+      }
+    }
   },
   { immediate: true },
 );
 
-function navigate(key: string): void {
+/** 分组是否处于激活状态(自身或子项匹配) */
+function isGroupActive(group: MenuGroup): boolean {
+  if (group.children.length === 0) return group.key === activeKey.value;
+  return group.key === activeKey.value || group.children.some((c) => c.key === activeKey.value);
+}
+
+/** 点击分组 */
+function onGroupClick(group: MenuGroup): void {
+  if (group.children.length > 0) {
+    // 切换展开/折叠
+    if (expandedKeys.value.has(group.key)) {
+      expandedKeys.value.delete(group.key);
+    } else {
+      expandedKeys.value.add(group.key);
+    }
+  } else {
+    router.push(group.key);
+  }
+}
+
+/** 点击子菜单项 */
+function onChildClick(key: string): void {
   router.push(key);
-}
-
-function closePopover(groupKey: string): void {
-  popoverOpen.value[groupKey] = false;
-}
-
-function onPopoverVisibleChange(groupKey: string, visible: boolean): void {
-  popoverOpen.value[groupKey] = visible;
 }
 </script>
 
 <template>
-  <nav class="side-menu" :class="{ collapsed: appStore.collapsed }">
-    <template v-for="group in groups" :key="group.groupKey">
-      <!-- 有子菜单的分组 -->
-      <div v-if="group.children.length > 0" class="menu-group">
-        <!-- 展开模式 -->
-        <template v-if="!appStore.collapsed">
-          <div class="group-title">
-            <component :is="resolveIcon(group.groupIcon || '')" v-if="group.groupIcon" class="group-icon" />
-            <span class="group-label">{{ group.groupLabel }}</span>
-          </div>
-          <div class="group-children">
-            <span
+  <nav class="sidebar-nav">
+    <div v-for="group in groups" :key="group.key" class="nav-group">
+      <!-- 一级菜单项 -->
+      <button
+        :class="['nav-item', { active: isGroupActive(group), expanded: expandedKeys.has(group.key) }]"
+        @click="onGroupClick(group)"
+      >
+        <span class="nav-icon">
+          <component :is="resolveIcon(group.icon || '')" v-if="group.icon" />
+        </span>
+        <span class="nav-label">{{ group.label }}</span>
+        <span v-if="group.children.length > 0" class="nav-arrow">
+          <Icons.CaretDownOutlined />
+        </span>
+      </button>
+
+      <!-- 子菜单列表 -->
+      <Transition name="submenu">
+        <div v-if="group.children.length > 0 && expandedKeys.has(group.key)" class="submenu-wrap">
+          <div class="submenu-inner">
+            <button
               v-for="child in group.children"
               :key="child.key"
-              :class="['child-item', { active: child.key === activeKey }]"
-              @click="navigate(child.key)"
+              :class="['submenu-item', { active: child.key === activeKey }]"
+              @click="onChildClick(child.key)"
             >
-              {{ child.label }}
-            </span>
+              <span class="dot" />
+              <span class="submenu-label">{{ child.label }}</span>
+            </button>
           </div>
-        </template>
-
-        <!-- 折叠模式：仅 Popover -->
-        <template v-else>
-          <Popover
-            :open="popoverOpen[group.groupKey]"
-            placement="rightTop"
-            trigger="hover"
-            overlay-class-name="side-menu-popover"
-            @open-change="(v: boolean) => onPopoverVisibleChange(group.groupKey, v)"
-          >
-            <template #content>
-              <div class="popover-title">{{ group.groupLabel }}</div>
-              <div class="popover-children">
-                <span
-                  v-for="child in group.children"
-                  :key="child.key"
-                  :class="['popover-child', { active: child.key === activeKey }]"
-                  @click="navigate(child.key); closePopover(group.groupKey)"
-                >
-                  {{ child.label }}
-                </span>
-              </div>
-            </template>
-            <div
-              :class="['collapsed-icon', { 'has-active-child': group.children.some(c => c.key === activeKey) }]"
-            >
-              <component :is="resolveIcon(group.groupIcon || '')" v-if="group.groupIcon" />
-            </div>
-          </Popover>
-        </template>
-      </div>
-
-      <!-- 无子菜单的顶级项（如 Dashboard） -->
-      <div v-else class="menu-group">
-        <Tooltip :title="group.groupLabel" placement="right" v-if="appStore.collapsed">
-          <div
-            :class="['top-item', { active: group.groupKey === activeKey }]"
-            @click="navigate(group.groupKey)"
-          >
-            <component :is="resolveIcon(group.groupIcon || '')" v-if="group.groupIcon" class="top-icon" />
-          </div>
-        </Tooltip>
-        <div
-          v-else
-          :class="['top-item', { active: group.groupKey === activeKey }]"
-          @click="navigate(group.groupKey)"
-        >
-          <component :is="resolveIcon(group.groupIcon || '')" v-if="group.groupIcon" class="top-icon" />
-          <span class="top-label">{{ group.groupLabel }}</span>
         </div>
-      </div>
-    </template>
+      </Transition>
+    </div>
   </nav>
 </template>
 
 <style scoped lang="less">
-.side-menu {
-  padding: 8px 0;
-  height: 100%;
+.sidebar-nav {
+  padding: 4px 12px 12px;
   overflow-y: auto;
   overflow-x: hidden;
-}
+  height: 100%;
+  scrollbar-width: none;
 
-.menu-group {
-  margin-bottom: 4px;
-}
-
-// ===== 一级分类标题 =====
-.group-title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 14px 16px 6px;
-  color: rgba(255, 255, 255, 0.85);
-  font-size: 13px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 1px;
-  white-space: nowrap;
-  overflow: hidden;
-
-  .group-icon {
-    font-size: 14px;
-    opacity: 0.7;
-  }
-
-  .group-label {
-    overflow: hidden;
-    text-overflow: ellipsis;
+  &::-webkit-scrollbar {
+    display: none;
   }
 }
 
-// ===== 二级菜单：网格标签式 =====
-.group-children {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
-  padding: 4px 12px 12px;
+.nav-group {
+  margin-bottom: 2px;
 }
 
-.child-item {
+// ===== 一级菜单按钮 =====
+.nav-item {
   display: flex;
   align-items: center;
-  justify-content: center;
-  padding: 8px 4px;
+  width: 100%;
+  height: 34px;
+  padding: 0 10px;
+  border: none;
+  border-left: 2px solid transparent;
   border-radius: 6px;
-  font-size: 13px;
-  color: rgba(255, 255, 255, 0.75);
+  background: transparent;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 12.5px;
+  font-weight: 400;
   cursor: pointer;
-  white-space: nowrap;
-  transition: all 0.2s ease;
-  background: rgba(255, 255, 255, 0.06);
-  text-align: center;
+  text-align: left;
+  transition: all 0.15s ease;
+  gap: 8px;
+  outline: none;
 
-  &:hover {
-    background: rgba(22, 100, 255, 0.3);
-    color: #fff;
-  }
-
-  &.active {
-    background: #1664ff;
-    color: #fff;
-  }
-}
-
-// ===== 顶级菜单项 =====
-.top-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 16px;
-  margin: 0 8px;
-  border-radius: 6px;
-  color: rgba(255, 255, 255, 0.75);
-  cursor: pointer;
-  font-size: 14px;
-  transition: all 0.2s ease;
-  white-space: nowrap;
-
-  .top-icon {
-    font-size: 16px;
-  }
-
-  .top-label {
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  &:hover {
-    background: rgba(255, 255, 255, 0.08);
-    color: #fff;
-  }
-
-  &.active {
-    background: #1664ff;
-    color: #fff;
-  }
-}
-
-// ===== 折叠模式 =====
-.collapsed {
-  .collapsed-icon {
+  .nav-icon {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 48px;
-    height: 48px;
-    margin: 4px auto;
-    border-radius: 8px;
-    color: rgba(255, 255, 255, 0.65);
-    font-size: 18px;
-    cursor: pointer;
-    transition: all 0.2s ease;
+    flex-shrink: 0;
+    font-size: 15px;
+    opacity: 0.6;
+  }
 
-    &:hover {
-      background: rgba(255, 255, 255, 0.1);
-      color: #fff;
-    }
+  .nav-label {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 12px;
+  }
 
-    &.has-active-child {
-      color: #1664ff;
-      background: rgba(22, 100, 255, 0.15);
+  .nav-arrow {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+    font-size: 10px;
+    opacity: 0.45;
+    transition: transform 0.2s ease;
+  }
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.05);
+    color: rgba(255, 255, 255, 0.75);
+  }
+
+  &.active {
+    color: #fff;
+    font-weight: 500;
+  }
+
+  &.active:not(.expanded) {
+    background: rgba(22, 100, 255, 0.22);
+    border-left-color: #1664ff;
+
+    .nav-icon {
+      opacity: 1;
     }
   }
 
-  .top-item {
-    justify-content: center;
-    padding: 10px 0;
-    margin: 4px auto;
-    width: 48px;
-    height: 48px;
-    border-radius: 8px;
+  &.expanded {
+    color: #fff;
+    background: rgba(255, 255, 255, 0.06);
 
-    .top-icon {
-      font-size: 18px;
+    .nav-icon {
+      opacity: 1;
+    }
+
+    .nav-arrow {
+      transform: rotate(180deg);
     }
   }
 }
 
-// ===== Popover 样式（全局样式，不使用 scoped） =====
-</style>
+// ===== 子菜单区域 =====
+.submenu-wrap {
+  overflow: hidden;
+}
 
-<style lang="less">
-// Popover 弹窗全局样式（暗色主题）
-.side-menu-popover {
-  .ant-popover-inner {
-    background: #1f1f1f !important;
-    border: 1px solid #303030 !important;
-    padding: 0 !important;
-    min-width: 160px;
-    border-radius: 8px;
+.submenu-inner {
+  margin: 4px 0 4px 18px;
+  border-left: 1px solid rgba(255, 255, 255, 0.09);
+  padding-left: 8px;
+}
+
+.submenu-item {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  height: 29px;
+  padding: 0 6px 0 8px;
+  border: none;
+  border-left: 2px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.42);
+  font-size: 12px;
+  font-weight: 400;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.15s ease;
+  gap: 8px;
+  outline: none;
+
+  .dot {
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: currentColor;
+    flex-shrink: 0;
+    opacity: 0.5;
   }
 
-  .ant-popover-arrow::before {
-    background: #1f1f1f !important;
-    border: 1px solid #303030 !important;
-  }
-
-  .ant-popover-inner-content {
-    padding: 0;
-  }
-
-  .popover-title {
-    padding: 8px 12px 6px;
-    font-size: 12px;
-    font-weight: 600;
-    color: rgba(255, 255, 255, 0.5);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-  }
-
-  .popover-children {
-    padding: 4px;
-  }
-
-  .popover-child {
-    display: block;
-    padding: 8px 12px;
-    border-radius: 4px;
-    font-size: 13px;
-    color: rgba(255, 255, 255, 0.75);
-    cursor: pointer;
+  .submenu-label {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
     white-space: nowrap;
-    transition: all 0.2s ease;
+  }
 
-    &:hover {
-      background: rgba(22, 100, 255, 0.3);
-      color: #fff;
-    }
+  &:hover {
+    color: rgba(255, 255, 255, 0.72);
+    background: rgba(255, 255, 255, 0.04);
+  }
 
-    &.active {
-      background: #1664ff;
-      color: #fff;
+  &.active {
+    color: #fff;
+    font-weight: 500;
+    background: rgba(22, 100, 255, 0.2);
+    border-left-color: #1664ff;
+
+    .dot {
+      opacity: 1;
     }
   }
+}
+
+// ===== 展开/折叠过渡动画 =====
+.submenu-enter-active {
+  transition: all 0.2s ease;
+}
+
+.submenu-leave-active {
+  transition: all 0.15s ease;
+}
+
+.submenu-enter-from,
+.submenu-leave-to {
+  opacity: 0;
+  max-height: 0;
+}
+
+.submenu-enter-to,
+.submenu-leave-from {
+  opacity: 1;
+  max-height: 500px;
 }
 </style>

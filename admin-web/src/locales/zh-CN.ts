@@ -74,6 +74,8 @@ export default {
     wip: '页面建设中',
     wipTip: '该菜单页面正在开发中,敬请期待',
     language: '语言',
+    help: '帮助',
+    siteSwitch: '切换站点',
     welcome: '欢迎回来,{name}!',
     welcomeTip: '欢迎回来,{name}!完整数据大屏(趋势图表/排行/实时监控)将在业务模块上线后开放。',
     kpi: {

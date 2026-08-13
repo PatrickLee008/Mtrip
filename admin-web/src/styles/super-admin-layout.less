@@ -1,0 +1,40 @@
+// ===== Super Admin Portal 主界面布局级微调(对齐原型;新增文件,不动原框架) =====
+:root {
+  // 内容区底色对齐原型 surface #F0F2F6(原 --mtrip-bg-page 为 #f7f8fa)
+  --mtrip-bg-page: var(--sap-surface);
+}
+
+[data-theme='dark'] {
+  --mtrip-bg-page: #0b0b0b;
+}
+
+// 细滚动条(原型 5px #CBD5E1)
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+[data-theme='dark'] {
+  ::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.18);
+
+    &:hover {
+      background: rgba(255, 255, 255, 0.28);
+    }
+  }
+}
+
+// 主内容区背景
+.ant-layout-content {
+  background: var(--mtrip-bg-page);
+}

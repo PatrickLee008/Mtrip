@@ -15,8 +15,10 @@ const props = withDefaults(
     disabled?: boolean;
     allowAll?: boolean;
     placeholder?: string;
+    /** Tree select popup mount container (default body) */
+    popupContainer?: (triggerNode?: HTMLElement) => HTMLElement;
   }>(),
-  { value: 0, disabled: false, allowAll: false, placeholder: '' },
+  { value: 0, disabled: false, allowAll: false, placeholder: '', popupContainer: undefined },
 );
 
 const emit = defineEmits<{
@@ -68,5 +70,6 @@ const innerValue = computed({
     :dropdown-style="{ maxHeight: '400px', overflow: 'auto' }"
     show-search
     tree-node-filter-prop="label"
+    :get-popup-container="props.popupContainer"
   />
 </template>

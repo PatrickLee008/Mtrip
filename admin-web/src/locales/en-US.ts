@@ -77,6 +77,8 @@ export default {
     wip: 'Under Construction',
     wipTip: 'This page is under development, stay tuned',
     language: 'Language',
+    help: 'Help',
+    siteSwitch: 'Switch Site',
     welcome: 'Welcome back, {name}!',
     welcomeTip: 'Welcome back, {name}! The full dashboard (trend charts / rankings / real-time monitoring) will be available after business modules come online.',
     kpi: {
