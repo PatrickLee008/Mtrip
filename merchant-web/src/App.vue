@@ -8,7 +8,7 @@ import 'dayjs/locale/zh-cn';
 import 'dayjs/locale/en';
 import { useI18n } from 'vue-i18n';
 import { useAppStore } from '@/stores/app';
-import { baseToken, darkComponents, lightComponents } from '@/config/theme';
+import { baseToken, lightComponents } from '@/config/theme';
 
 const appStore = useAppStore();
 const { locale } = useI18n();
@@ -16,9 +16,9 @@ const { locale } = useI18n();
 const antdLocale = computed(() => (appStore.locale === 'zh-CN' ? zhCN : enUS));
 
 const themeConfig = computed(() => ({
-  algorithm: appStore.theme === 'dark' ? antdTheme.darkAlgorithm : antdTheme.defaultAlgorithm,
+  algorithm: antdTheme.defaultAlgorithm,
   token: baseToken,
-  components: appStore.theme === 'dark' ? darkComponents : lightComponents,
+  components: lightComponents,
 }));
 
 // 语言联动:vue-i18n + dayjs
@@ -27,15 +27,6 @@ watch(
   (value) => {
     locale.value = value;
     dayjs.locale(value === 'zh-CN' ? 'zh-cn' : 'en');
-  },
-  { immediate: true },
-);
-
-// 暗色模式给 body 加标记,便于全局样式覆盖
-watch(
-  () => appStore.theme,
-  (value) => {
-    document.documentElement.setAttribute('data-theme', value);
   },
   { immediate: true },
 );

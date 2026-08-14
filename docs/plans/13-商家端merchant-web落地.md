@@ -55,6 +55,28 @@
 - [x] 后端 `php -l` 全量语法检查(PowerShell `ForEach-Object`):新增/改动文件 0 报错
 - [x] 前端 `vue-tsc --noEmit` 类型检查:通过(EXIT=0)
 
+## 2026-08-14 布局原型化改造(侧边栏 + 顶部菜单)
+
+> 按 Figma 原型(big-plank-58319748.figma.site,Hotel Merchant Dashboard)重构主界面框架,与 admin-web 的 redesign 方向对齐;内容区业务页未动。
+
+### 关键决策
+- 移除多页签 TabsView(含 keep-alive),直接渲染当前路由;`stores/tabs.ts`、`layouts/components/TabsView.vue` 已删除,`router/guard.ts` 页签逻辑同步移除(与 admin-web 已撤页签的状态一致)
+- 移除暗色模式与语言切换 UI(stores/app.ts 仅留 locale 持久化);App.vue 固定 defaultAlgorithm
+- 侧边栏物业切换器(Property Switcher)照搬原型假数据:All Properties(Portfolio view)+ HOTELS 分组(The Horizon Resort/Blue Lagoon Boutique/Cityview Business Hotel)+ RESTAURANTS 分组(The Terrace Kitchen/Horizon Rooftop Dining)+ 底部 Add New Property;选中项浅蓝底+蓝色细边框高亮,选中后切换器显示对应物业;不接真实数据。菜单内容仍由后端动态菜单树驱动
+
+### 落地文件
+- `layouts/BasicLayout.vue`:flex 全高布局;228px 白底侧边栏(Logo mTrip/Merchant → 主体切换器 → 可滚动菜单 → 底部 Logout),右侧 56px Header + router-view
+- `layouts/components/SideMenu.vue`:浅色分组菜单(大写分组标题 11px/600;菜单项 13px/500 圆角 8px;选中态 #EFF6FF+#2563EB;hover #F1F5F9;子项圆点指示器)
+- `layouts/components/AppHeader.vue`:面包屑(mTrip › 当前页,resolveMenuTitle 解析)+ 176px 搜索框(视觉占位)+ 通知铃铛(红点占位)+ 蓝底圆头像用户下拉(保留改密/登出)
+- 全局配色/字体对齐原型:主色 #2563EB、页面背景 #F4F6FB、边框 #E2E8F0、slate 文字层级;字体 Plus Jakarta Sans(index.html Google Fonts + theme.ts fontFamily);antd token borderRadius 8
+- i18n:新增 header.searchPlaceholder/notifications;清理 tabs.*、app.language/darkTheme/lightTheme
+- `components/PageContainer.vue` min-height 重算(去 tabs 40px,header 48→56)
+
+### 验证
+- [x] `vue-tsc --noEmit` 通过(EXIT=0)
+- [x] dev server 启动正常(端口 5176);界面效果由用户自行验收
+- 测试账号:m000001 密码已重置为 `Mtrip@2026`(原随机密码无人持有,直接 UPDATE bcrypt 落库)
+
 ## 升级说明
 - 存量库依次执行 `database/merchant/05-merchant-rbac.sql` 与 `database/seed/04-merchant-menu.sql`(均幂等)。
 - 后端 shared/merchant-service/order-service/goods-service 改动需重建对应 service 容器生效;网关改 `mtrip.conf` 后 reload OpenResty。

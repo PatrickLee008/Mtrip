@@ -1,16 +1,13 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { Tooltip, Popover } from 'ant-design-vue';
 import * as Icons from '@ant-design/icons-vue';
 import { useUserStore } from '@/stores/user';
-import { useAppStore } from '@/stores/app';
 import { menuTitle } from '@/locales/menuI18n';
 
 const route = useRoute();
 const router = useRouter();
 const userStore = useUserStore();
-const appStore = useAppStore();
 
 /** 图标名 → 组件 */
 function resolveIcon(name: string) {
@@ -31,7 +28,7 @@ interface MenuGroup {
   children: FlatChild[];
 }
 
-/** 将菜单树转为分组结构 */
+/** 将菜单树转为分组结构(保留原逻辑:目录→分组,页面→顶级项) */
 const groups = computed<MenuGroup[]>(() => {
   const result: MenuGroup[] = [];
   const nodes = userStore.menus;
@@ -66,7 +63,6 @@ const groups = computed<MenuGroup[]>(() => {
 });
 
 const activeKey = ref(route.path);
-const popoverOpen = ref<Record<string, boolean>>({});
 
 watch(
   () => route.path,
@@ -79,87 +75,36 @@ watch(
 function navigate(key: string): void {
   router.push(key);
 }
-
-function closePopover(groupKey: string): void {
-  popoverOpen.value[groupKey] = false;
-}
-
-function onPopoverVisibleChange(groupKey: string, visible: boolean): void {
-  popoverOpen.value[groupKey] = visible;
-}
 </script>
 
 <template>
-  <nav class="side-menu" :class="{ collapsed: appStore.collapsed }">
+  <nav class="side-menu">
     <template v-for="group in groups" :key="group.groupKey">
-      <!-- 有子菜单的分组 -->
+      <!-- 有子菜单的分组:大写分组标题 + 缩进子项 -->
       <div v-if="group.children.length > 0" class="menu-group">
-        <!-- 展开模式 -->
-        <template v-if="!appStore.collapsed">
-          <div class="group-title">
-            <component :is="resolveIcon(group.groupIcon || '')" v-if="group.groupIcon" class="group-icon" />
-            <span class="group-label">{{ group.groupLabel }}</span>
-          </div>
-          <div class="group-children">
-            <span
-              v-for="child in group.children"
-              :key="child.key"
-              :class="['child-item', { active: child.key === activeKey }]"
-              @click="navigate(child.key)"
-            >
-              {{ child.label }}
-            </span>
-          </div>
-        </template>
-
-        <!-- 折叠模式：仅 Popover -->
-        <template v-else>
-          <Popover
-            :open="popoverOpen[group.groupKey]"
-            placement="rightTop"
-            trigger="hover"
-            overlay-class-name="side-menu-popover"
-            @open-change="(v: boolean) => onPopoverVisibleChange(group.groupKey, v)"
+        <div class="group-title">{{ group.groupLabel }}</div>
+        <div class="group-children">
+          <span
+            v-for="child in group.children"
+            :key="child.key"
+            :class="['menu-item', 'child-item', { active: child.key === activeKey }]"
+            @click="navigate(child.key)"
           >
-            <template #content>
-              <div class="popover-title">{{ group.groupLabel }}</div>
-              <div class="popover-children">
-                <span
-                  v-for="child in group.children"
-                  :key="child.key"
-                  :class="['popover-child', { active: child.key === activeKey }]"
-                  @click="navigate(child.key); closePopover(group.groupKey)"
-                >
-                  {{ child.label }}
-                </span>
-              </div>
-            </template>
-            <div
-              :class="['collapsed-icon', { 'has-active-child': group.children.some(c => c.key === activeKey) }]"
-            >
-              <component :is="resolveIcon(group.groupIcon || '')" v-if="group.groupIcon" />
-            </div>
-          </Popover>
-        </template>
+            <component :is="resolveIcon(child.icon || '')" v-if="child.icon" class="item-icon" />
+            <span v-else class="child-dot" />
+            <span class="item-label">{{ child.label }}</span>
+          </span>
+        </div>
       </div>
 
-      <!-- 无子菜单的顶级项（如 Dashboard） -->
+      <!-- 无子菜单的顶级页面项(如工作台) -->
       <div v-else class="menu-group">
-        <Tooltip :title="group.groupLabel" placement="right" v-if="appStore.collapsed">
-          <div
-            :class="['top-item', { active: group.groupKey === activeKey }]"
-            @click="navigate(group.groupKey)"
-          >
-            <component :is="resolveIcon(group.groupIcon || '')" v-if="group.groupIcon" class="top-icon" />
-          </div>
-        </Tooltip>
         <div
-          v-else
-          :class="['top-item', { active: group.groupKey === activeKey }]"
+          :class="['menu-item', { active: group.groupKey === activeKey }]"
           @click="navigate(group.groupKey)"
         >
-          <component :is="resolveIcon(group.groupIcon || '')" v-if="group.groupIcon" class="top-icon" />
-          <span class="top-label">{{ group.groupLabel }}</span>
+          <component :is="resolveIcon(group.groupIcon || '')" v-if="group.groupIcon" class="item-icon" />
+          <span class="item-label">{{ group.groupLabel }}</span>
         </div>
       </div>
     </template>
@@ -168,202 +113,92 @@ function onPopoverVisibleChange(groupKey: string, visible: boolean): void {
 
 <style scoped lang="less">
 .side-menu {
-  padding: 8px 0;
-  height: 100%;
-  overflow-y: auto;
-  overflow-x: hidden;
+  padding: 12px 0;
 }
 
 .menu-group {
-  margin-bottom: 4px;
+  margin-bottom: 12px; // 原型组间间距 12px(mb-3)
+
+  &:first-child {
+    margin-bottom: 4px; // 原型首组(PORTFOLIO)后仅 4px(mb-1)
+  }
 }
 
-// ===== 一级分类标题 =====
+// ===== 分组标题(原型:11px/600 大写 letter-spacing 1.1px,padding 0 12px,下方 4px) =====
 .group-title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 14px 16px 6px;
-  color: rgba(255, 255, 255, 0.85);
-  font-size: 13px;
+  padding: 0 12px;
+  margin-bottom: 4px;
+  font-size: 11px;
   font-weight: 600;
+  line-height: 16.5px;
+  letter-spacing: 1.1px;
   text-transform: uppercase;
-  letter-spacing: 1px;
+  color: var(--mtrip-text-aux);
   white-space: nowrap;
   overflow: hidden;
-
-  .group-icon {
-    font-size: 14px;
-    opacity: 0.7;
-  }
-
-  .group-label {
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
+  text-overflow: ellipsis;
 }
 
-// ===== 二级菜单：网格标签式 =====
 .group-children {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
-  padding: 4px 12px 12px;
-}
-
-.child-item {
   display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 8px 4px;
-  border-radius: 6px;
-  font-size: 13px;
-  color: rgba(255, 255, 255, 0.75);
-  cursor: pointer;
-  white-space: nowrap;
-  transition: all 0.2s ease;
-  background: rgba(255, 255, 255, 0.06);
-  text-align: center;
-
-  &:hover {
-    background: rgba(22, 119, 255, 0.3);
-    color: #fff;
-  }
-
-  &.active {
-    background: #1677ff;
-    color: #fff;
-  }
+  flex-direction: column;
 }
 
-// ===== 顶级菜单项 =====
-.top-item {
+// ===== 菜单项(原型:13px/500 圆角 8px,padding 8px 12px,左右 margin 4px,图标 15px gap 10px) =====
+.menu-item {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 10px 16px;
-  margin: 0 8px;
-  border-radius: 6px;
-  color: rgba(255, 255, 255, 0.75);
+  margin: 0 4px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 19.5px;
+  color: var(--mtrip-text-secondary);
   cursor: pointer;
-  font-size: 14px;
-  transition: all 0.2s ease;
   white-space: nowrap;
+  transition: background 0.15s ease, color 0.15s ease;
 
-  .top-icon {
-    font-size: 16px;
+  .item-icon {
+    font-size: 15px;
+    color: var(--mtrip-text-aux);
+    flex-shrink: 0;
+    transition: color 0.15s ease;
   }
 
-  .top-label {
+  .item-label {
     overflow: hidden;
     text-overflow: ellipsis;
   }
 
   &:hover {
-    background: rgba(255, 255, 255, 0.08);
-    color: #fff;
+    background: var(--mtrip-bg-hover);
   }
 
   &.active {
-    background: #1677ff;
-    color: #fff;
-  }
-}
+    background: var(--mtrip-primary-light);
+    color: var(--mtrip-primary);
 
-// ===== 折叠模式 =====
-.collapsed {
-  .collapsed-icon {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 48px;
-    height: 48px;
-    margin: 4px auto;
-    border-radius: 8px;
-    color: rgba(255, 255, 255, 0.65);
-    font-size: 18px;
-    cursor: pointer;
-    transition: all 0.2s ease;
-
-    &:hover {
-      background: rgba(255, 255, 255, 0.1);
-      color: #fff;
+    .item-icon {
+      color: var(--mtrip-primary);
     }
 
-    &.has-active-child {
-      color: #1677ff;
-      background: rgba(22, 119, 255, 0.15);
-    }
-  }
-
-  .top-item {
-    justify-content: center;
-    padding: 10px 0;
-    margin: 4px auto;
-    width: 48px;
-    height: 48px;
-    border-radius: 8px;
-
-    .top-icon {
-      font-size: 18px;
+    .child-dot {
+      background: var(--mtrip-primary);
     }
   }
 }
-</style>
 
-<style lang="less">
-// Popover 弹窗全局样式（暗色主题）
-.side-menu-popover {
-  .ant-popover-inner {
-    background: #1f1f1f !important;
-    border: 1px solid #303030 !important;
-    padding: 0 !important;
-    min-width: 160px;
-    border-radius: 8px;
-  }
-
-  .ant-popover-arrow::before {
-    background: #1f1f1f !important;
-    border: 1px solid #303030 !important;
-  }
-
-  .ant-popover-inner-content {
-    padding: 0;
-  }
-
-  .popover-title {
-    padding: 8px 12px 6px;
-    font-size: 12px;
-    font-weight: 600;
-    color: rgba(255, 255, 255, 0.5);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-  }
-
-  .popover-children {
-    padding: 4px;
-  }
-
-  .popover-child {
-    display: block;
-    padding: 8px 12px;
-    border-radius: 4px;
-    font-size: 13px;
-    color: rgba(255, 255, 255, 0.75);
-    cursor: pointer;
-    white-space: nowrap;
-    transition: all 0.2s ease;
-
-    &:hover {
-      background: rgba(22, 119, 255, 0.3);
-      color: #fff;
-    }
-
-    &.active {
-      background: #1677ff;
-      color: #fff;
-    }
+// ===== 分组子项:无图标时用小圆点指示器 =====
+.child-item {
+  .child-dot {
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: var(--mtrip-text-aux);
+    flex-shrink: 0;
+    transition: background 0.15s ease;
   }
 }
 </style>

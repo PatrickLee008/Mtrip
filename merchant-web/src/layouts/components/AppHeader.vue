@@ -1,46 +1,58 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
-import { useRouter } from 'vue-router';
+import { useRoute } from 'vue-router';
 import { Modal, message } from 'ant-design-vue';
 import {
-  MenuFoldOutlined,
-  MenuUnfoldOutlined,
+  BellOutlined,
+  CheckOutlined,
+  DownOutlined,
   GlobalOutlined,
-  BulbOutlined,
-  BulbFilled,
-  UserOutlined,
   LockOutlined,
   LogoutOutlined,
-  CheckOutlined,
+  RightOutlined,
+  SearchOutlined,
+  UserOutlined,
 } from '@ant-design/icons-vue';
 import { useI18n } from 'vue-i18n';
-import { useAppStore } from '@/stores/app';
 import { useUserStore } from '@/stores/user';
 import { apiUpdatePassword } from '@/api/auth';
+import { resolveMenuTitle } from '@/locales/menuI18n';
 import { SUPPORTED_LOCALES, type SupportedLocale } from '@/locales';
 
-const appStore = useAppStore();
 const userStore = useUserStore();
-const router = useRouter();
-const { t } = useI18n();
+const route = useRoute();
+const { t, locale } = useI18n();
 
 const displayName = computed(() => userStore.profile?.realName || userStore.profile?.username || '-');
 
-/** 当前主体名称(集团/商户/门店) */
-const subjectName = computed(() => userStore.profile?.subjectName || '-');
+/** 当前语言 key,用于下拉菜单选中态 */
+const currentLocale = computed(() => locale.value as SupportedLocale);
 
-/** 主体类型标签色:1集团 蓝 / 2商户 绿 / 3门店 橙 */
-const ACCOUNT_TYPE_META: Record<number, { key: string; color: string }> = {
-  1: { key: 'accountType.group', color: 'blue' },
-  2: { key: 'accountType.merchant', color: 'green' },
-  3: { key: 'accountType.store', color: 'orange' },
-};
-const subjectTag = computed(() => ACCOUNT_TYPE_META[userStore.accountType]);
+/** 当前语言展示名(显示在按钮文字中) */
+const currentLocaleLabel = computed(
+  () => SUPPORTED_LOCALES.find((item) => item.key === currentLocale.value)?.label ?? '',
+);
 
-/** 语言切换(模板内禁用类型标注/as 断言,回调放 script 具名函数) */
-function onLocaleClick(e: { key: string | number }): void {
-  appStore.setLocale(String(e.key) as SupportedLocale);
+/** 切换语言:写入 localStorage 并即时切换 i18n locale */
+function onSwitchLanguage(key: SupportedLocale): void {
+  if (key === currentLocale.value) return;
+  locale.value = key;
+  localStorage.setItem('mtrip_merchant_locale', key);
 }
+
+/** a-menu 点击事件:从 key 字段取出选中的语言 */
+function onMenuClick(info: { key: string }): void {
+  onSwitchLanguage(info.key as SupportedLocale);
+}
+
+/** 面包屑当前页名(与页面标题同一套解析:词条 key → 中英回退) */
+const currentPage = computed(() =>
+  resolveMenuTitle(
+    (route.meta.title as string) || '',
+    (route.meta.rawTitle as string) || '',
+    (route.meta.rawTitleEn as string) || '',
+  ),
+);
 
 function onLogout(): void {
   Modal.confirm({
@@ -85,56 +97,57 @@ async function onSubmitPassword(): Promise<void> {
 
 <template>
   <div class="app-header">
-    <!-- Logo 区:点击回工作台 -->
-    <div class="logo" @click="router.push('/dashboard')">
-      <span class="logo-badge">M</span>
-      <span class="logo-title">{{ t('app.title') }}</span>
+    <!-- 面包屑(原型:mTrip › 当前页) -->
+    <div class="breadcrumb">
+      <span class="crumb-root">mTrip</span>
+      <RightOutlined class="crumb-arrow" />
+      <span class="crumb-current">{{ currentPage }}</span>
     </div>
-
-    <span class="header-action" @click="appStore.toggleCollapsed()">
-      <MenuFoldOutlined v-if="!appStore.collapsed" />
-      <MenuUnfoldOutlined v-else />
-    </span>
 
     <div class="header-space" />
 
-    <!-- 当前主体(集团/商户/门店),替代平台端站点切换器 -->
-    <div class="subject-info">
-      <a-tag v-if="subjectTag" :color="subjectTag.color">{{ t(subjectTag.key) }}</a-tag>
-      <span class="subject-name">{{ subjectName }}</span>
+    <!-- 搜索框(原型:176px 浅灰底,视觉占位) -->
+    <div class="header-search">
+      <SearchOutlined class="search-icon" />
+      <input class="search-input" type="text" :placeholder="t('header.searchPlaceholder')" />
     </div>
 
-    <!-- 主题切换 -->
-    <a-tooltip :title="appStore.theme === 'light' ? t('app.darkTheme') : t('app.lightTheme')">
-      <span class="header-action" @click="appStore.toggleTheme()">
-        <BulbFilled v-if="appStore.theme === 'dark'" />
-        <BulbOutlined v-else />
-      </span>
+    <!-- 通知铃铛(原型:32px 按钮 + 右上红点) -->
+    <a-tooltip :title="t('header.notifications')">
+      <button class="bell-btn" type="button">
+        <BellOutlined class="bell-icon" />
+        <span class="bell-dot" />
+      </button>
     </a-tooltip>
 
-    <!-- 语言切换(下拉,支持英文/中文切换) -->
+    <!-- 语言切换(地球图标 + 当前语言名 + 下拉菜单) -->
     <a-dropdown :trigger="['click']">
-      <a-tooltip :title="t('app.language')">
-        <span class="header-action"><GlobalOutlined /></span>
+      <a-tooltip :title="t('header.switchLanguage')">
+        <button class="lang-btn" type="button">
+          <GlobalOutlined class="lang-icon" />
+          <span class="lang-name">{{ currentLocaleLabel }}</span>
+          <DownOutlined class="lang-chevron" />
+        </button>
       </a-tooltip>
       <template #overlay>
-        <a-menu :selected-keys="[appStore.locale]" @click="onLocaleClick">
-          <a-menu-item v-for="loc in SUPPORTED_LOCALES" :key="loc.key">
-            <CheckOutlined v-if="appStore.locale === loc.key" style="margin-right: 6px" />
-            <span v-else style="display: inline-block; width: 16px" />
-            {{ loc.label }}
+        <a-menu :selected-keys="[currentLocale]" @click="onMenuClick">
+          <a-menu-item v-for="item in SUPPORTED_LOCALES" :key="item.key">
+            <span class="lang-menu-label">
+              <CheckOutlined v-if="item.key === currentLocale" class="lang-menu-check" />
+              <span v-else class="lang-menu-check-placeholder" />
+              {{ item.label }}
+            </span>
           </a-menu-item>
         </a-menu>
       </template>
     </a-dropdown>
 
-    <!-- 个人账号区 -->
-    <a-dropdown>
+    <!-- 用户区(原型:28px 蓝底圆头像 + 用户名 + chevron) -->
+    <a-dropdown :trigger="['click']">
       <span class="header-user">
-        <a-avatar size="small">
-          <template #icon><UserOutlined /></template>
-        </a-avatar>
+        <span class="user-avatar"><UserOutlined /></span>
         <span class="user-name">{{ displayName }}</span>
+        <DownOutlined class="user-chevron" />
       </span>
       <template #overlay>
         <a-menu>
@@ -175,35 +188,31 @@ async function onSubmitPassword(): Promise<void> {
 .app-header {
   display: flex;
   align-items: center;
-  height: 48px;
-  padding: 0 16px;
-  gap: 4px;
+  gap: 16px;
+  height: 56px;
+  padding: 0 20px;
 }
 
-.logo {
+// ===== 面包屑(原型:13px,mTrip 灰 / 箭头浅灰 / 当前页加粗深色) =====
+.breadcrumb {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-right: 12px;
-  cursor: pointer;
+  gap: 6px;
+  font-size: 13px;
   white-space: nowrap;
 
-  .logo-badge {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 28px;
-    height: 28px;
-    border-radius: 6px;
-    background: var(--mtrip-primary);
-    color: #fff;
-    font-weight: 700;
-    font-size: 16px;
+  .crumb-root {
+    color: var(--mtrip-text-aux);
   }
 
-  .logo-title {
-    font-size: 16px;
+  .crumb-arrow {
+    font-size: 11px;
+    color: #cbd5e1;
+  }
+
+  .crumb-current {
     font-weight: 600;
+    color: var(--mtrip-text-main);
   }
 }
 
@@ -211,53 +220,166 @@ async function onSubmitPassword(): Promise<void> {
   flex: 1;
 }
 
-.subject-info {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  margin-right: 12px;
-  white-space: nowrap;
+// ===== 搜索框(原型:176px,浅灰底 #F8FAFC,圆角 8px,12px 字) =====
+.header-search {
+  position: relative;
+  width: 176px;
+  flex-shrink: 0;
 
-  .subject-name {
-    max-width: 160px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    font-weight: 500;
+  .search-icon {
+    position: absolute;
+    left: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 12px;
+    color: var(--mtrip-text-aux);
+    pointer-events: none;
+  }
+
+  .search-input {
+    width: 100%;
+    height: 31px;
+    padding: 6px 12px 6px 32px;
+    border: 1px solid var(--mtrip-border);
+    border-radius: 8px;
+    background: var(--mtrip-bg-soft);
+    font-size: 12px;
+    font-family: inherit;
+    color: var(--mtrip-text-main);
+    outline: none;
+    transition: border-color 0.15s ease, background 0.15s ease;
+
+    &::placeholder {
+      color: var(--mtrip-text-aux);
+    }
+
+    &:focus {
+      border-color: var(--mtrip-primary);
+      background: var(--mtrip-bg-card);
+    }
   }
 }
 
-.header-action {
+// ===== 通知铃铛(原型:32px 圆角 8px,hover 浅灰,右上 8px 红点) =====
+.bell-btn {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
-  border-radius: 6px;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
   cursor: pointer;
-  font-size: 16px;
+  transition: background 0.15s ease;
+  outline: none;
 
   &:hover {
-    background: rgba(0, 0, 0, 0.06);
+    background: var(--mtrip-bg-hover);
+  }
+
+  .bell-icon {
+    font-size: 15px;
+    color: #64748b;
+  }
+
+  .bell-dot {
+    position: absolute;
+    top: 6px;
+    right: 7px;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #ef4444;
   }
 }
 
-.header-user {
+// ===== 语言切换(地球图标 + 当前语言名 + chevron) =====
+.lang-btn {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 0 8px;
-  border-radius: 6px;
+  height: 32px;
+  padding: 0 10px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
   cursor: pointer;
+  transition: background 0.15s ease;
+  outline: none;
 
   &:hover {
-    background: rgba(0, 0, 0, 0.06);
+    background: var(--mtrip-bg-hover);
+  }
+
+  .lang-icon {
+    font-size: 14px;
+    color: #64748b;
+  }
+
+  .lang-name {
+    font-size: 12px;
+    font-weight: 500;
+    color: #334155;
+  }
+
+  .lang-chevron {
+    font-size: 10px;
+    color: var(--mtrip-text-aux);
+  }
+}
+
+.lang-menu-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+
+  .lang-menu-check {
+    font-size: 12px;
+    color: var(--mtrip-primary);
+  }
+
+  .lang-menu-check-placeholder {
+    width: 12px;
+  }
+}
+
+// ===== 用户区(原型:28px 蓝底圆头像 + 12px 用户名 + chevron) =====
+.header-user {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding-left: 8px;
+  cursor: pointer;
+
+  .user-avatar {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: #dbeafe;
+    color: var(--mtrip-primary);
+    font-size: 13px;
+    flex-shrink: 0;
   }
 
   .user-name {
-    max-width: 120px;
+    max-width: 140px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    font-size: 12px;
+    font-weight: 500;
+    color: #334155;
+  }
+
+  .user-chevron {
+    font-size: 10px;
+    color: var(--mtrip-text-aux);
   }
 }
 </style>

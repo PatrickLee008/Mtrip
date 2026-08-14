@@ -1,35 +1,28 @@
-// ===== UI 方案 2.1 全局 CSS 变量(色彩/财务分级色),与 admin-web 一致 =====
+// ===== 全局 CSS 变量(对齐 Figma 原型:主色 #2563EB / 页面背景 #F4F6FB / slate 灰阶) =====
 :root {
-  --mtrip-primary: #1677ff;
+  --mtrip-primary: #2563eb;
+  --mtrip-primary-light: #eff6ff;
   --mtrip-orange: #ff7d00;
   --mtrip-success: #00b42a;
   --mtrip-warning: #ff7d00;
-  --mtrip-danger: #f53f3f;
+  --mtrip-danger: #ef4444;
   --mtrip-info: #86909c;
 
-  // 中性灰度
-  --mtrip-bg-page: #f7f8fa;
+  // 中性灰度(slate 色阶)
+  --mtrip-bg-page: #f4f6fb;
   --mtrip-bg-card: #ffffff;
-  --mtrip-border: #e5e6eb;
-  --mtrip-text-main: #1d2129;
-  --mtrip-text-secondary: #4e5969;
-  --mtrip-text-aux: #86909c;
+  --mtrip-bg-hover: #f1f5f9;
+  --mtrip-bg-soft: #f8fafc;
+  --mtrip-border: #e2e8f0;
+  --mtrip-text-main: #0f172a;
+  --mtrip-text-secondary: #475569;
+  --mtrip-text-aux: #94a3b8;
 
   // 财务金额分级色
   --mtrip-money-income: #00b42a;
   --mtrip-money-expense: #f53f3f;
-  --mtrip-money-commission: #1677ff;
+  --mtrip-money-commission: #2563eb;
   --mtrip-money-tax: #4e5969;
-}
-
-// ===== 暗色模式变量覆盖 =====
-[data-theme='dark'] {
-  --mtrip-bg-page: #0b0b0b;
-  --mtrip-bg-card: #141414;
-  --mtrip-border: #303030;
-  --mtrip-text-main: #e8e8e8;
-  --mtrip-text-secondary: #a6a6a6;
-  --mtrip-text-aux: #6e6e6e;
 }
 
 html,
@@ -44,15 +37,12 @@ body {
   background: var(--mtrip-bg-page);
   color: var(--mtrip-text-main);
   font-size: 14px;
+  font-family: 'Plus Jakarta Sans', Inter, system-ui, -apple-system, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
 }
 
-// ===== 卡片轻阴影(UI 方案 2.3) =====
+// ===== 卡片轻阴影 =====
 .mtrip-card-shadow {
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
-
-  [data-theme='dark'] & {
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
-  }
 }
 
 // ===== 脱敏辅助文字 =====
@@ -87,16 +77,6 @@ body {
   }
 }
 
-[data-theme='dark'] {
-  ::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.15);
-
-    &:hover {
-      background: rgba(255, 255, 255, 0.25);
-    }
-  }
-}
-
 // ===== 过渡动画 =====
 .fade-enter-active,
 .fade-leave-active {
@@ -106,55 +86,4 @@ body {
 .fade-enter-from,
 .fade-leave-to {
   opacity: 0;
-}
-
-// ===== Ant Design 组件暗色适配 =====
-[data-theme='dark'] {
-  .ant-layout-header {
-    background: var(--mtrip-bg-card) !important;
-    color: var(--mtrip-text-main);
-  }
-
-  .ant-layout-sider {
-    background: #001529 !important;
-  }
-
-  .ant-card {
-    background: var(--mtrip-bg-card);
-    border-color: var(--mtrip-border);
-  }
-
-  .ant-table {
-    background: var(--mtrip-bg-card);
-  }
-
-  .ant-table-thead > tr > th {
-    background: rgba(255, 255, 255, 0.04);
-    border-color: var(--mtrip-border);
-  }
-
-  .ant-table-tbody > tr > td {
-    border-color: var(--mtrip-border);
-  }
-
-  .ant-table-tbody > tr:hover > td {
-    background: rgba(255, 255, 255, 0.02);
-  }
-
-  .ant-modal-content {
-    background: var(--mtrip-bg-card);
-  }
-
-  .ant-dropdown-menu {
-    background: var(--mtrip-bg-card);
-  }
-
-  .ant-dropdown-menu-item {
-    color: var(--mtrip-text-main);
-
-    &:hover {
-      background: var(--mtrip-primary);
-      color: #fff;
-    }
-  }
 }

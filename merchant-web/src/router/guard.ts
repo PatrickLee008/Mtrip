@@ -1,6 +1,5 @@
 import type { Router } from 'vue-router';
 import { useUserStore } from '@/stores/user';
-import { useTabsStore } from '@/stores/tabs';
 import { apiMe } from '@/api/auth';
 import { clearAuth } from '@/utils/auth';
 import { installDynamicRoutes } from './dynamic';
@@ -8,6 +7,7 @@ import { resolveMenuTitle } from '@/locales/menuI18n';
 
 /**
  * 路由守卫:登录态校验 → 动态路由注入(刷新恢复) → 页面标题
+ * (多页签已取消:不再维护页签状态,随 docs/redesign 原型改造移除)
  */
 export function setupRouterGuard(router: Router): void {
   router.beforeEach(async (to) => {
@@ -34,9 +34,6 @@ export function setupRouterGuard(router: Router): void {
         const { menus } = await userStore.loadMenus();
         installDynamicRoutes(router, menus);
         userStore.routesLoaded = true;
-        // 恢复页签状态
-        const tabsStore = useTabsStore();
-        tabsStore.restore();
         // 重新进入目标路由(此时动态路由已注册)
         return { ...to, replace: true };
       } catch {
@@ -61,19 +58,5 @@ export function setupRouterGuard(router: Router): void {
     document.title = display
       ? `${display} - ${import.meta.env.VITE_APP_TITLE}`
       : (import.meta.env.VITE_APP_TITLE as string);
-
-    // 自动添加页签（非公开路由）
-    if (!to.meta.public && to.path !== '/' && to.path !== '/login') {
-      const tabsStore = useTabsStore();
-      tabsStore.addTab({
-        key: to.path,
-        title: display || to.path,
-        i18nKey: (to.meta.title as string) || undefined,
-        fullPath: to.fullPath,
-        closable: to.path !== '/dashboard',
-        name: typeof to.name === 'string' ? to.name : undefined,
-        keepAlive: to.meta.keepAlive !== false,
-      });
-    }
   });
 }
