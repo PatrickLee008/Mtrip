@@ -8,8 +8,6 @@ import {
   QuestionCircleOutlined,
   BellOutlined,
   ApartmentOutlined,
-  BulbOutlined,
-  BulbFilled,
   GlobalOutlined,
   DownOutlined,
   LockOutlined,
@@ -258,14 +256,6 @@ async function onSubmitPassword(): Promise<void> {
           />
         </div>
       </div>
-
-      <!-- 主题切换 -->
-      <a-tooltip :title="appStore.theme === 'light' ? t('app.darkTheme') : t('app.lightTheme')">
-        <span class="header-action" @click="appStore.toggleTheme()">
-          <BulbFilled v-if="appStore.theme === 'dark'" />
-          <BulbOutlined v-else />
-        </span>
-      </a-tooltip>
 
       <!-- 语言切换 -->
       <a-dropdown :trigger="['click']">

@@ -68,8 +68,6 @@ export default {
     allSites: '全平台',
     superAdmin: '超级管理员',
     siteAdmin: '站点运营',
-    lightTheme: '亮色模式',
-    darkTheme: '暗色模式',
     dashboard: '数据大屏',
     wip: '页面建设中',
     wipTip: '该菜单页面正在开发中,敬请期待',

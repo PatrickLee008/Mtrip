@@ -329,79 +329,70 @@ onMounted(() => {
       </a-form>
     </a-card>
 
-    <a-card :bordered="false" class="mtrip-card-shadow">
-      <template #title>{{ t('merchant.listPage.title') }}</template>
-      <template #extra>
-        <a-button v-perm="'merchant:list:add'" type="primary" @click="openCreate">
-          <template #icon><PlusOutlined /></template>{{ t('merchant.listPage.name') }}
-        </a-button>
-      </template>
-      <a-table
-        :columns="columns"
-        :data-source="list"
-        :loading="loading"
-        :pagination="pagination"
-        row-key="id"
-        size="middle"
-        :scroll="{ x: 1400 }"
-      >
-        <template #bodyCell="{ column, record }">
-          <template v-if="column.dataIndex === 'merchant_type'">
-            {{ TYPE_TEXT[record.merchant_type] ?? record.merchant_type }}
-          </template>
-          <template v-else-if="column.dataIndex === 'settlement_cycle'">
-            {{ record.settlement_cycle === 30 ? t('common.all') : `T+${record.settlement_cycle}` }}
-          </template>
-          <template v-else-if="column.dataIndex === 'status'">
-            <StatusTag :value="record.status" :map="STATUS_MAP" />
-          </template>
-          <template v-else-if="column.key === 'action_col'">
-            <a-space :size="0">
-              <a-button type="link" size="small" @click="openDetail(record)">{{ t('common.detail') }}</a-button>
-              <a-button
-                v-if="record.status !== 5"
-                v-perm="'merchant:list:edit'"
-                type="link"
-                size="small"
-                @click="openEdit(record)"
-              >{{ t('common.edit') }}</a-button>
-              <a-button
-                v-if="record.status === 0"
-                v-perm="'merchant:list:audit'"
-                type="link"
-                size="small"
-                style="color: var(--mtrip-warning, #faad14)"
-                @click="openAudit(record)"
-              >{{ t('goods.audit.columns.pass') }}</a-button>
-              <a-button
-                v-if="record.status === 3 || record.status === 4"
-                v-perm="'merchant:list:edit'"
-                type="link"
-                size="small"
-                @click="openCommission(record)"
-              >{{ t('config.pay.feeRate') }}</a-button>
-              <a-popconfirm
-                v-if="record.status === 3 || record.status === 4"
-                :title="record.status === 3 ? t('common.disable') : t('common.enable')"
-                @confirm="toggleStatus(record)"
-              >
-                <a-button v-perm="'merchant:list:status'" type="link" size="small" :danger="record.status === 3">
-                  {{ record.status === 3 ? t('common.disable') : t('common.enable') }}
-                </a-button>
-              </a-popconfirm>
-              <a-button
-                v-if="record.status !== 5"
-                v-perm="'merchant:list:delete'"
-                type="link"
-                size="small"
-                danger
-                @click="openClose(record)"
-              >{{ t('common.delete') }}</a-button>
-            </a-space>
-          </template>
+    <a-table
+      :columns="columns"
+      :data-source="list"
+      :loading="loading"
+      row-key="id"
+      size="middle"
+      :scroll="{ x: 1400 }"
+    >
+      <template #bodyCell="{ column, record }">
+        <template v-if="column.dataIndex === 'merchant_type'">
+          {{ TYPE_TEXT[record.merchant_type] ?? record.merchant_type }}
         </template>
-      </a-table>
-    </a-card>
+        <template v-else-if="column.dataIndex === 'settlement_cycle'">
+          {{ record.settlement_cycle === 30 ? t('common.all') : `T+${record.settlement_cycle}` }}
+        </template>
+        <template v-else-if="column.dataIndex === 'status'">
+          <StatusTag :value="record.status" :map="STATUS_MAP" />
+        </template>
+        <template v-else-if="column.key === 'action_col'">
+          <a-space :size="0">
+            <a-button type="link" size="small" @click="openDetail(record)">{{ t('common.detail') }}</a-button>
+            <a-button
+              v-if="record.status !== 5"
+              v-perm="'merchant:list:edit'"
+              type="link"
+              size="small"
+              @click="openEdit(record)"
+            >{{ t('common.edit') }}</a-button>
+            <a-button
+              v-if="record.status === 0"
+              v-perm="'merchant:list:audit'"
+              type="link"
+              size="small"
+              style="color: var(--mtrip-warning, #faad14)"
+              @click="openAudit(record)"
+            >{{ t('goods.audit.columns.pass') }}</a-button>
+            <a-button
+              v-if="record.status === 3 || record.status === 4"
+              v-perm="'merchant:list:edit'"
+              type="link"
+              size="small"
+              @click="openCommission(record)"
+            >{{ t('config.pay.feeRate') }}</a-button>
+            <a-popconfirm
+              v-if="record.status === 3 || record.status === 4"
+              :title="record.status === 3 ? t('common.disable') : t('common.enable')"
+              @confirm="toggleStatus(record)"
+            >
+              <a-button v-perm="'merchant:list:status'" type="link" size="small" :danger="record.status === 3">
+                {{ record.status === 3 ? t('common.disable') : t('common.enable') }}
+              </a-button>
+            </a-popconfirm>
+            <a-button
+              v-if="record.status !== 5"
+              v-perm="'merchant:list:delete'"
+              type="link"
+              size="small"
+              danger
+              @click="openClose(record)"
+            >{{ t('common.delete') }}</a-button>
+          </a-space>
+        </template>
+      </template>
+    </a-table>
 
     <!-- 详情抽屉 -->
     <a-drawer v-model:open="drawerOpen" :title="t('common.detail')" width="720">

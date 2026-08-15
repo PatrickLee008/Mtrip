@@ -42,16 +42,6 @@
   --mtrip-money-tax: #4e5969;
 }
 
-// ===== 暗色模式变量覆盖 =====
-[data-theme='dark'] {
-  --mtrip-bg-page: #0b0b0b;
-  --mtrip-bg-card: #141414;
-  --mtrip-border: #303030;
-  --mtrip-text-main: #e8e8e8;
-  --mtrip-text-secondary: #a6a6a6;
-  --mtrip-text-aux: #6e6e6e;
-}
-
 html,
 body,
 #app {
@@ -69,10 +59,6 @@ body {
 // ===== 卡片轻阴影(UI 方案 2.3) =====
 .mtrip-card-shadow {
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
-
-  [data-theme='dark'] & {
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
-  }
 }
 
 // ===== 脱敏辅助文字 =====
@@ -86,6 +72,148 @@ body {
 .amount-expense { color: var(--mtrip-money-expense); }
 .amount-commission { color: var(--mtrip-money-commission); }
 .amount-tax { color: var(--mtrip-money-tax); }
+
+// ===== 表格样式(对齐 figma 原型,全平台 a-table 生效) =====
+// 设计意图(方案 A):
+//   默认(无 bordered)表格 = 原型视觉:外框 1px #E3E8F0 + 12px 圆角 + 内横线 + 无竖线
+//   bordered 表格 = 全网格特殊模式(保留给财务对账等场景),仅统一其颜色
+// ===========================
+
+// 表头:底 #F8FAFC(rgb(248,250,252),对齐原型) / 文字 #64748B / 11px·600 / 行高 36px / 去竖向分隔线
+// 多层覆盖,避免 antd sticky header / table-wrapper 容器白底覆盖 th 背景色
+// 使用 !important 因为 antd 4.x 使用 CSS-in-JS 运行时注入样式,后加载的同优先级规则会覆盖我们
+.ant-table-thead,
+.ant-table-thead > tr,
+.ant-table-header > table,
+.ant-table-thead > tr > th {
+  background: #F8FAFC !important;
+}
+
+.ant-table-thead > tr > th {
+  color: #64748B !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  height: 36px !important;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+  border-bottom: 1px solid var(--sap-border) !important;
+
+  // 去掉 antd 表头列间竖向分隔竖线
+  &::before {
+    display: none !important;
+  }
+}
+
+// 正文:12px/400,对齐原型字号
+.ant-table-tbody > tr > td {
+  font-size: 12px !important;
+  font-weight: 400 !important;
+  padding: 10px 12px !important;
+}
+
+// antd 内部的 measure-row(表格列宽测量用隐形行)原本 inline-style padding:0,被上面 !important 覆盖后形成空白行,这里强制归零
+.ant-table-tbody > tr.ant-table-measure-row > td {
+  padding: 0 !important;
+  height: 0 !important;
+  font-size: 0 !important;
+  border: 0 !important;
+}
+
+// 行 hover:极浅 #FAFBFC
+.ant-table-tbody > tr:hover > td,
+.ant-table-tbody > tr.ant-table-row:hover > td {
+  background: #FAFBFC !important;
+}
+
+// ---------- 默认表格(方案 A):外框 1px #E3E8F0 + 12px 圆角,把 表格+分页栏 包进同一个白盒 ----------
+// antd DOM 层级:
+//   .ant-table-wrapper (最外层,容纳 table 和 pagination)
+//     .ant-table (表格本体)
+//       .ant-table-container (滚动/固定容器)
+//     .ant-table-pagination (底部分页栏)
+//
+// 视觉一体性:把外框放在 .ant-table-wrapper,让表格和分页栏在同一个盒子里
+// 所有表格(含 bordered)统一用 wrapper 画外框,不再用 :has()
+.ant-table-wrapper {
+  background: #FFFFFF !important;
+  border: 1px solid var(--sap-border) !important;
+  border-radius: 12px !important;
+  overflow: hidden;
+}
+
+// container 不再单独画外框,只负责内部裁剪
+.ant-table-container {
+  border-radius: 0;
+  overflow: hidden;
+}
+
+// 默认表格的表体内横线颜色统一为 #E3E8F0(antd 默认用 border-top + last-child border-bottom)
+.ant-table:not(.ant-table-bordered) .ant-table-tbody > tr > td {
+  border-top-color: var(--sap-border) !important;
+}
+.ant-table:not(.ant-table-bordered) .ant-table-tbody > tr:last-child > td {
+  border-bottom-color: transparent !important;
+}
+
+// ---------- 分页栏:背景色对齐原型 rgb(250,251,252) = #FAFBFC ----------
+// 两种场景都覆盖:a-table 内嵌分页(.ant-table-wrapper .ant-table-pagination) + 独立分页组件(外部 a-pagination)
+.ant-table-wrapper .ant-table-pagination.ant-pagination,
+.ant-pagination {
+  margin: 0;
+  padding: 12px 16px;
+  background: #FAFBFC !important;
+  border-top: 1px solid var(--sap-border) !important;
+}
+
+// ---------- 分页激活项:对齐原型 当前页蓝底 #1664FF(rgb(22,100,255)) + 白字 ----------
+.ant-pagination-item-active,
+.ant-pagination-item-active:hover,
+.ant-pagination-item-active:focus {
+  background-color: #1664FF !important;
+  border-color: #1664FF !important;
+}
+.ant-pagination-item-active a,
+.ant-pagination-item-active:hover a,
+.ant-pagination-item-active:focus a {
+  color: #FFFFFF !important;
+  background-color: transparent !important;
+}
+
+// ---------- bordered 表格(全网格特殊模式):wrapper 已统一画外框,antd 内部边框只画颜色不重复 ----------
+// 关键:wrapper 已提供左边框,容器的 border-inline-start 改为 transparent 避免双线
+// 右边框由每行末单元格的 border-inline-end 渲染(与 wrapper 右边框无缝衔接)
+.ant-table-bordered > .ant-table-container {
+  border-inline-start-color: transparent !important;
+}
+
+// bordered 单元格边框颜色(右边框 + 下边框)
+.ant-table-bordered .ant-table-thead > tr > th,
+.ant-table-bordered .ant-table-tbody > tr > td {
+  border-inline-end-color: var(--sap-border) !important;
+}
+
+.ant-table-bordered .ant-table-tbody > tr > td {
+  border-bottom-color: var(--sap-border) !important;
+}
+
+// bordered 表头顶部和表体分隔线颜色
+.ant-table-bordered .ant-table-container > .ant-table-content > table,
+.ant-table-bordered .ant-table-container > .ant-table-header > table {
+  border-top-color: var(--sap-border) !important;
+}
+
+// bordered 模式最后一行底边线透明,与 wrapper 底外框合并
+.ant-table-bordered .ant-table-tbody > tr:last-child > td {
+  border-bottom-color: transparent !important;
+}
+
+// ---------- 通用:首行首末单元格圆角贴合容器 ----------
+.ant-table-thead > tr:first-child > th:first-child {
+  border-start-start-radius: 12px;
+}
+.ant-table-thead > tr:first-child > th:last-child {
+  border-start-end-radius: 12px;
+}
 
 // ===== 页面通用留白 =====
 .page-wrapper {
@@ -107,16 +235,6 @@ body {
   }
 }
 
-[data-theme='dark'] {
-  ::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.15);
-
-    &:hover {
-      background: rgba(255, 255, 255, 0.25);
-    }
-  }
-}
-
 // ===== 过渡动画 =====
 .fade-enter-active,
 .fade-leave-active {
@@ -126,61 +244,4 @@ body {
 .fade-enter-from,
 .fade-leave-to {
   opacity: 0;
-}
-
-// ===== Ant Design 组件暗色适配 =====
-[data-theme='dark'] {
-  // 修复 Header 背景色
-  .ant-layout-header {
-    background: var(--mtrip-bg-card) !important;
-    color: var(--mtrip-text-main);
-  }
-
-  // 修复 Sider 菜单背景
-  .ant-layout-sider {
-    background: #001529 !important;
-  }
-
-  // 修复卡片样式
-  .ant-card {
-    background: var(--mtrip-bg-card);
-    border-color: var(--mtrip-border);
-  }
-
-  // 修复表格样式
-  .ant-table {
-    background: var(--mtrip-bg-card);
-  }
-
-  .ant-table-thead > tr > th {
-    background: rgba(255, 255, 255, 0.04);
-    border-color: var(--mtrip-border);
-  }
-
-  .ant-table-tbody > tr > td {
-    border-color: var(--mtrip-border);
-  }
-
-  .ant-table-tbody > tr:hover > td {
-    background: rgba(255, 255, 255, 0.02);
-  }
-
-  // 修复弹窗样式
-  .ant-modal-content {
-    background: var(--mtrip-bg-card);
-  }
-
-  // 修复下拉菜单
-  .ant-dropdown-menu {
-    background: var(--mtrip-bg-card);
-  }
-
-  .ant-dropdown-menu-item {
-    color: var(--mtrip-text-main);
-
-    &:hover {
-      background: var(--mtrip-primary);
-      color: #fff;
-    }
-  }
 }

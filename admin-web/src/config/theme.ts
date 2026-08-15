@@ -16,18 +16,10 @@ export const baseToken: ThemeConfig['token'] = {
     '"Inter", -apple-system, BlinkMacSystemFont, Roboto, "Segoe UI", "Helvetica Neue", Arial, "PingFang SC", "Microsoft YaHei", sans-serif',
 };
 
-/** 亮色主题下的组件级微调(antd-vue 4.x Layout token) */
+/** 组件级微调(antd-vue 4.x Layout token) */
 export const lightComponents: ThemeConfig['components'] = {
   Layout: {
     colorBgHeader: '#FFFFFF',
-  },
-  Card: { borderRadiusLG: 8 },
-  Modal: { borderRadiusLG: 8 },
-};
-
-export const darkComponents: ThemeConfig['components'] = {
-  Layout: {
-    colorBgHeader: '#141414',
   },
   Card: { borderRadiusLG: 8 },
   Modal: { borderRadiusLG: 8 },

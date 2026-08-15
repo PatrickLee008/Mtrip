@@ -71,8 +71,6 @@ export default {
     allSites: 'All Sites',
     superAdmin: 'Super Admin',
     siteAdmin: 'Site Operator',
-    lightTheme: 'Light',
-    darkTheme: 'Dark',
     dashboard: 'Dashboard',
     wip: 'Under Construction',
     wipTip: 'This page is under development, stay tuned',
