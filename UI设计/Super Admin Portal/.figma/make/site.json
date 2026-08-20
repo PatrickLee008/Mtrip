@@ -1,0 +1,10 @@
+{
+  "description": "Streamline hotel management with an intuitive admin portal designed for enterprise users, enhancing operational efficiency and data management.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}
