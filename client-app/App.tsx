@@ -5,6 +5,14 @@
 import React, { useEffect, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { useFonts } from 'expo-font';
+import { Outfit_400Regular, Outfit_600SemiBold } from '@expo-google-fonts/outfit';
+import {
+  Inter_400Regular,
+  Inter_500Medium,
+  Inter_600SemiBold,
+  Inter_700Bold,
+} from '@expo-google-fonts/inter';
 
 import ToastHost from '@/components/common/ToastHost';
 import { LoadingView } from '@/components/common/StateViews';
@@ -17,6 +25,15 @@ initI18n('en-US');
 
 export default function App() {
   const [ready, setReady] = useState(false);
+  // 设计稿字体(Outfit 标题 / Inter 正文),未就绪时继续显示加载态
+  const [fontsLoaded] = useFonts({
+    Outfit_400Regular,
+    Outfit_600SemiBold,
+    Inter_400Regular,
+    Inter_500Medium,
+    Inter_600SemiBold,
+    Inter_700Bold,
+  });
 
   useEffect(() => {
     void (async () => {
@@ -32,7 +49,7 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <StatusBar style="dark" />
-      {ready ? <AppNavigator /> : <LoadingView />}
+      {ready && fontsLoaded ? <AppNavigator /> : <LoadingView />}
       <ToastHost />
     </SafeAreaProvider>
   );

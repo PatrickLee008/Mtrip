@@ -14,15 +14,99 @@
   },
   "tab": {
     "home": "Home",
-    "order": "Orders",
-    "mine": "Me"
+    "myPick": "My Pick",
+    "promotions": "Promotions",
+    "more": "More"
+  },
+  "myPick": {
+    "empty": "Nothing saved yet"
+  },
+  "promotions": {
+    "empty": "No promotions right now"
   },
   "home": {
-    "recommend": "Recommended",
-    "hot": "Trending",
-    "searchPlaceholder": "Search hotels / tickets",
-    "hotel": "Hotels",
-    "ticket": "Tickets"
+    "searchPlaceholder": "Search anything...",
+    "explore": "Explore",
+    "seeAll": "See All",
+    "bookNow": "Book Now",
+    "comingSoon": "Coming soon",
+    "quickAction": {
+      "hotels": "Hotels",
+      "bus": "Bus",
+      "food": "Food",
+      "cars": "Cars",
+      "package": "Package",
+      "tours": "Tours",
+      "flights": "Flights",
+      "parks": "Parks",
+      "support": "Support"
+    },
+    "filter": {
+      "multiBooking": "Multi Booking",
+      "longStay": "Long Stay"
+    },
+    "promo": {
+      "badge": "New user promotion",
+      "category": "Hotels",
+      "title": "20% Off"
+    },
+    "member": {
+      "title": "Member can save more",
+      "desc": "Login or register for free to unlock special deals & lower prices on selected properties",
+      "action": "Login/Sign Up"
+    },
+    "destinations": {
+      "title": "Popular Destinations",
+      "bagan": { "name": "Bagan", "desc": "2,200+ Ancient Temples", "category": "HISTORIC WONDERS" },
+      "inleLake": { "name": "Inle Lake", "desc": "Water Villages & Gardens", "category": "FLOATING LIFE" },
+      "ngapali": { "name": "Ngapali", "desc": "Pristine White Sands", "category": "LUXURY COASTAL" }
+    },
+    "specialDeals": {
+      "title": "Special Deals",
+      "badge": "SPECIAL OFFER",
+      "headline": "Explore Bagan - 20% Off"
+    },
+    "stays": {
+      "title": "Hotel Promotion",
+      "preferred": "PREFERRED",
+      "perNight": "/ night"
+    },
+    "dining": {
+      "title": "Dining Offers",
+      "rangoonTeaHouse": { "name": "Rangoon Tea House", "desc": "Modern Burmese Cuisine" },
+      "seeds": { "name": "Seeds Restaurant", "desc": "Lakeside Fine Dining" }
+    },
+    "routes": {
+      "title": "Popular Routes",
+      "yangonMandalay": { "name": "Yangon → Mandalay", "desc": "VIP Night Bus • 9h 30m" },
+      "yangonBagan": { "name": "Yangon → Bagan", "desc": "Domestic Flight • 1h 20m" }
+    },
+    "experiences": {
+      "title": "Local Experiences",
+      "highDemand": "HIGH DEMAND",
+      "balloon": { "name": "Hot Air Balloon over Bagan", "desc": "Experience the world from above" },
+      "sunsetBoat": { "name": "Sunset Boat Private Tour", "desc": "Inle Lake's hidden waterways" }
+    },
+    "assistance": {
+      "liveSupport": { "name": "Live Support", "desc": "24/7 Agent Help" },
+      "visaGuide": { "name": "Visa Guide", "desc": "eVisa Documents" },
+      "emergency": { "name": "Emergency", "desc": "Hotline Services" }
+    },
+    "magazine": {
+      "title": "Discover Myanmar",
+      "pagodaTips": {
+        "category": "CULTURE GUIDE",
+        "title": "10 Respectful Tips for Visiting Myanmar's Pagodas",
+        "excerpt": "Learn the essentials of local etiquette, from dress codes to traditional greetings, to make the most of your visit.",
+        "meta": "Thiri Kyaw • 5 min read"
+      },
+      "mohinga": {
+        "category": "FOOD & DINING",
+        "title": "The Best Mohinga Spots in Yangon: A Local's Secret List",
+        "excerpt": "From street-side stalls to upscale cafes, we've ranked the best places to enjoy Myanmar's national dish.",
+        "meta": "Ko Htet • 8 min read"
+      }
+    }
   },
   "site": {
     "title": "Select Site",

@@ -2,7 +2,24 @@
 
 > 用途:当 AI 会话上下文超限需要新开会话时,新会话**第一步读取本文件**即可接手全部工作。
 > 维护约定:每完成一个模块或阶段性节点,同步更新本文件的「当前进度」与「下一步」两节。
-> 最后更新:2026-08-14(merchant-web 布局原型化改造,见下方「★ 前端 redesign 进展」)
+> 最后更新:2026-08-20(client-app 底部导航 + 首页按 Figma 重做,见下方「★ 前端 redesign 进展」)
+
+## ★ 前端 redesign 进展(2026-08-20,client-app)
+
+- **移动端主色统一为 `#4169ED`**(Figma `M-Trip` 设计稿),底部 Tab 改为 Home / My Pick / Promotions / More 四项 + 自绘 SVG 图标(`navigation/index.tsx`、`components/common/TabBarIcon.tsx`)。
+- **首页按 Figma `M-Trip / Home`(node `81:2464`)重做**:14 个区块拆为 `src/components/home/*`(SearchSection / QuickActionGrid / PromoCard / MemberCard / DestinationCard / SpecialDealBanner / StayCard / DiningCard / RouteCard / ExperienceCard / AssistanceGrid / MagazineCard 等),设计令牌集中在 `config/theme.ts`(新增 Figma 色板与 `radius.card/btn/tile`)与新增的 `config/typography.ts`(Outfit/Inter 字号预设)。
+- 数据分工:「热门目的地」取 `fetchHome().hot`、「酒店特惠」取 `fetchHome().recommend`,其余 11 个区块用 `screens/home/homeSections.ts` 的静态常量(文案走 i18n `home.*`,后端接口就绪后逐块替换)。接口失败只让这两块降级为空,静态区块照常渲染。
+- 字体依赖:`@expo-google-fonts/outfit` + `@expo-google-fonts/inter` + `expo-font`,在 `App.tsx` 用 `useFonts` 与 `bootstrapStores` 一起 gate。
+- 素材:快捷入口 4 个 PNG + 顶部栏 mTrip 字标 `logo.png` 用 `scripts/figma-home-icons.py` 从 Figma 导出(需环境变量 `FIGMA_TOKEN`,须在仓库根目录跑);大图无本地素材,统一走接口 `cover_image` 或 `components/home/CoverImage.tsx` 的主色渐变占位。
+- **快捷入口只有一行 4 项(Hotels / Food / Cars / Package)**:设计稿里第二行 `Section - Quick Action Dashboard`(`81:2781`)与第一行 Bus 所在 `Container`(`81:2486`)都带 `visible:false`,是隐藏稿。行宽 370、gap 16、每项 80.5x80.5 圆角 24 的**图片填充**方块(4x80.5+3x16=370 正好铺满),导出的 PNG 本身就是蓝色圆角图标,**不能再垫白色底板**(之前垫了白底 56x56 导致图标带白边)。`homeSections.ts` 只保留单个 `QUICK_ACTIONS`。
+- **促销大卡按设计稿 `Section - Upcoming Trip Card`(node 81:2516)重做**(`components/home/PromoCard.tsx`):370x180 r32 `#0036AD`、pad 24、内容左对齐竖排 gap 8 并垂直居中;右上角 148x117、透明度 20% 的床形矢量水印(path 取自设计稿 `fillGeometry`,`react-native-svg` 绘制,被卡片圆角裁掉)。徽章 r9999 `#1F4ED3` + Inter 700/10 大写字距 0.5 `#C8D1FF`;`Hotels` Outfit 600/16;`20% Off` Inter 600/24 且容器透明度 0.9;按钮白底 r12 pad 24/8 + Inter 400/16 `#0036AD`。
+- **顶部栏按设计稿 `Header - TopAppBar`(node `81:2733`)重做**(`components/home/HomeHeader.tsx`):高 47、左右 pad 16;左侧 mTrip 字标为**位图**(设计稿里同名文本节点 `visible=false`,只能走 `assets/images/logo.png`),右侧为积分胶囊(62x32 r8 主色 10%,含 `fluent:diamond-12-filled` + 积分数)+ 36x36 圆形消息按钮(`fluent:alert-16-filled`)。这两枚图标的 path 已按设计稿 `fillGeometry` 精确对齐(`HomeIcon.tsx` 支持每图标独立 viewBox,用负 minX/minY 抵消子节点偏移)。
+- **站点切换已从首页移到「更多」页**:设计稿顶部栏没有 Select Site,`components/business/SiteSwitchEntry.tsx` 已删除,入口改为 `screens/user/MineScreen.tsx` 里 `entryCard` 的一行(否则 `SiteSelect` 路由无处可达)。
+- 字体补充:顶部栏积分是 Inter **Medium Italic** 16,但 `@expo-google-fonts/inter` 不含斜体字重,退化为 `Inter_500Medium` + `fontStyle:'italic'`(web 合成斜体,原生为正体)。
+- 设计稿离线快照放在 `.figma-cache/`(已加入 `.gitignore`)。
+- **位图素材已全部落盘**(2026-08-20 确认):`client-app/assets/images/logo.png` + `home/` 下 9 个 PNG。`scripts/figma-home-icons.py` 只在需要**新增**设计稿里没导过的 node 时才跑(token 从仓库根 `.env.local` 自动读取,须在仓库根目录执行)。
+- **门禁待补跑**:`cd client-app; npm run typecheck`(本次会话命令行被限流,始终没能执行)。`scripts/check.ps1` 因本机 `php` 不在 PATH 第 1 步即中断,与本改动无关。
+- 已知取舍:`components/home/HomeIcon.tsx` 里 `bell` / `diamond` 已按设计稿 `fillGeometry` 对齐,其余 6 枚(search/heart/location/gift/alert/chat/document)仍是同体系标准 24 网格图标顶替;要完全对齐只需改该文件 `ICONS` 表里的 `d` / `viewBox`,组件接口不变。
 
 ## ★ 前端 redesign 进展(2026-08-14)
 

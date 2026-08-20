@@ -14,15 +14,99 @@
   },
   "tab": {
     "home": "首页",
-    "order": "订单",
-    "mine": "我的"
+    "myPick": "我的精选",
+    "promotions": "优惠活动",
+    "more": "更多"
+  },
+  "myPick": {
+    "empty": "还没有收藏内容"
+  },
+  "promotions": {
+    "empty": "暂无优惠活动"
   },
   "home": {
-    "recommend": "为你推荐",
-    "hot": "热门榜单",
-    "searchPlaceholder": "搜索酒店 / 景点门票",
-    "hotel": "酒店",
-    "ticket": "门票"
+    "searchPlaceholder": "想去哪里?",
+    "explore": "探索",
+    "seeAll": "查看全部",
+    "bookNow": "立即预订",
+    "comingSoon": "该业务暂未开放",
+    "quickAction": {
+      "hotels": "酒店",
+      "bus": "巴士",
+      "food": "美食",
+      "cars": "租车",
+      "package": "套餐",
+      "tours": "跟团游",
+      "flights": "机票",
+      "parks": "景区",
+      "support": "客服"
+    },
+    "filter": {
+      "multiBooking": "多程预订",
+      "longStay": "长住优惠"
+    },
+    "promo": {
+      "badge": "新用户专享",
+      "category": "酒店",
+      "title": "8 折"
+    },
+    "member": {
+      "title": "会员省更多",
+      "desc": "免费注册登录,解锁指定房源的专享折扣与更低价格",
+      "action": "登录 / 注册"
+    },
+    "destinations": {
+      "title": "热门目的地",
+      "bagan": { "name": "蒲甘", "desc": "2200+ 座古老佛塔", "category": "历史遗迹" },
+      "inleLake": { "name": "茵莱湖", "desc": "水上村落与浮岛花园", "category": "水上生活" },
+      "ngapali": { "name": "额布里", "desc": "洁白细腻的原始沙滩", "category": "海岸度假" }
+    },
+    "specialDeals": {
+      "title": "限时特惠",
+      "badge": "特别优惠",
+      "headline": "畅游蒲甘 立减 20%"
+    },
+    "stays": {
+      "title": "酒店特惠",
+      "preferred": "优选",
+      "perNight": "/ 晚"
+    },
+    "dining": {
+      "title": "餐饮优惠",
+      "rangoonTeaHouse": { "name": "仰光茶室", "desc": "现代缅甸料理" },
+      "seeds": { "name": "Seeds 餐厅", "desc": "湖畔精致餐饮" }
+    },
+    "routes": {
+      "title": "热门路线",
+      "yangonMandalay": { "name": "仰光 → 曼德勒", "desc": "VIP 夜班车 • 9 小时 30 分" },
+      "yangonBagan": { "name": "仰光 → 蒲甘", "desc": "国内航班 • 1 小时 20 分" }
+    },
+    "experiences": {
+      "title": "在地体验",
+      "highDemand": "热门抢手",
+      "balloon": { "name": "蒲甘热气球之旅", "desc": "从高空俯瞰千塔之城" },
+      "sunsetBoat": { "name": "日落私人船游", "desc": "探访茵莱湖的隐秘水道" }
+    },
+    "assistance": {
+      "liveSupport": { "name": "在线客服", "desc": "7×24 小时人工服务" },
+      "visaGuide": { "name": "签证指南", "desc": "电子签材料说明" },
+      "emergency": { "name": "紧急求助", "desc": "24 小时热线支持" }
+    },
+    "magazine": {
+      "title": "发现缅甸",
+      "pagodaTips": {
+        "category": "文化指南",
+        "title": "参观缅甸佛塔的 10 条礼仪提示",
+        "excerpt": "从着装规范到传统问候方式,了解当地礼仪要点,让你的旅程更从容。",
+        "meta": "Thiri Kyaw • 5 分钟阅读"
+      },
+      "mohinga": {
+        "category": "美食餐饮",
+        "title": "仰光鱼汤米线地图:本地人的私藏名单",
+        "excerpt": "从街边摊到精品咖啡馆,我们挑出了品尝缅甸国民美食的最佳去处。",
+        "meta": "Ko Htet • 8 分钟阅读"
+      }
+    }
   },
   "site": {
     "title": "选择站点",

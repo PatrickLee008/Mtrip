@@ -53,4 +53,8 @@ export const CURRENCY_SYMBOLS: Record<string, string> = {
   JPY: '¥',
   CNY: '¥',
   THB: '฿',
+  // MMK 不配符号:设计稿写作「MMK 185,000」,走 formatMoney 的「币种码 + 空格」兜底
 };
+
+/** 不带小数位的币种(设计稿 MMK 写作 185,000 而非 185,000.00) */
+export const ZERO_DECIMAL_CURRENCIES = ['MMK', 'JPY', 'KRW', 'VND'];
