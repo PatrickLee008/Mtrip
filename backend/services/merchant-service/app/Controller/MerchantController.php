@@ -69,6 +69,22 @@ class MerchantController extends AbstractController
         $merchant['legal_id_images'] = $this->jsonDecode($merchant['legal_id_images']);
         unset($merchant['deleted_at']);
 
+        // 账户安全字段(整改 A3/B3,2FA 字段来自 10-merchant-account-security.sql)
+        $merchant['two_fa_enabled'] = (int) ($merchant['two_fa_enabled'] ?? 0);
+        $merchant['two_fa_method'] = (string) ($merchant['two_fa_method'] ?? '');
+        $merchant['two_fa_enrolled_at'] = $merchant['two_fa_enrolled_at'] ?? null;
+        $merchant['two_fa_last_reset_at'] = $merchant['two_fa_last_reset_at'] ?? null;
+        $merchant['two_fa_status'] = (int) ($merchant['two_fa_status'] ?? 0);
+        $merchant['access_status'] = (int) ($merchant['access_status'] ?? 0);
+
+        // 月度绩效(原型 Monthly Performance:Revenue MTD / Bookings MTD,口径与 statistics 一致)
+        $monthStart = date('Y-m-01 00:00:00');
+        $orderQuery = Db::table('order_main')
+            ->where('merchant_id', $merchant['id'])->whereNull('deleted_at');
+        $paid = (clone $orderQuery)->whereIn('order_status', [1, 2, 3]);
+        $merchant['revenue_mtd'] = round((float) (clone $paid)->where('created_at', '>=', $monthStart)->sum('pay_amount'), 2);
+        $merchant['bookings_mtd'] = (int) (clone $paid)->where('created_at', '>=', $monthStart)->count();
+
         $accounts = Db::table('merchant_account')
             ->where('merchant_id', $merchant['id'])->whereNull('deleted_at')
             ->orderByDesc('is_default')->orderBy('id')->get()
@@ -88,6 +104,119 @@ class MerchantController extends AbstractController
             'accounts' => $accounts,
             'admins' => $admins,
         ]);
+    }
+
+    /**
+     * 暂停商户(整改 A4,原型 Suspend Merchant):阻止新预订,不影响已确认订单
+     * status 3已启用 → 4已禁用(=Suspended);必填原因;写活动日志
+     */
+    #[Permission('merchant:list:status')]
+    public function suspend(): array
+    {
+        $merchant = $this->findScoped($this->requireId());
+        if ((int) $merchant['status'] !== 3) {
+            throw new BusinessException(ErrorCode::DATA_CONFLICT, '仅已启用商户可暂停');
+        }
+        $reason = $this->requireStr('reason');
+        Db::table('merchant_info')->where('id', $merchant['id'])->update([
+            'status' => 4,
+            'audit_remark' => mb_substr($reason, 0, 500),
+            'audit_by' => AdminContext::adminId(),
+            'audit_time' => date('Y-m-d H:i:s'),
+        ]);
+        $this->pushActivityLog($merchant, 'suspension', '商户暂停:' . $reason);
+        return Result::success(null, '商户已暂停,新预订已阻止(已确认订单不受影响)');
+    }
+
+    /** 恢复商户(整改 A4,原型 Reactivate):Suspended → Active */
+    #[Permission('merchant:list:status')]
+    public function activate(): array
+    {
+        $merchant = $this->findScoped($this->requireId());
+        if ((int) $merchant['status'] !== 4) {
+            throw new BusinessException(ErrorCode::DATA_CONFLICT, '仅已暂停商户可恢复');
+        }
+        Db::table('merchant_info')->where('id', $merchant['id'])->update([
+            'status' => 3,
+            'audit_by' => AdminContext::adminId(),
+            'audit_time' => date('Y-m-d H:i:s'),
+        ]);
+        $this->pushActivityLog($merchant, 'reactivation', '商户恢复启用');
+        return Result::success(null, '商户已恢复启用');
+    }
+
+    /**
+     * 重置商户 2FA(PRD 模块 12 账户安全):置 two_fa_status=需要重置、失效现有绑定、
+     * 生成新设置密钥(加密存储,供商户下次登录注册流程消费);管理端不展示二维码/密钥
+     */
+    #[Permission('merchant:list:2fa')]
+    public function resetTwoFa(): array
+    {
+        $merchant = $this->findScoped($this->requireId());
+        Db::table('merchant_info')->where('id', $merchant['id'])->update([
+            'two_fa_enabled' => 0,
+            'two_fa_method' => '',
+            'two_fa_status' => 2,
+            'two_fa_secret_enc' => $this->encryptField($this->generateBase32Secret()),
+            'two_fa_last_reset_at' => date('Y-m-d H:i:s'),
+        ]);
+        $this->pushActivityLog($merchant, 'profile_update', '重置商户 2FA(需重新注册 Google Authenticator)');
+        return Result::success(null, '2FA 已重置,商户下次登录需重新注册 Google Authenticator');
+    }
+
+    /**
+     * 开始代入会话(整改 B2,原型 Start Impersonation Session):
+     * 原因必选(4 类预置 + Other),全程审计;同商户同操作人仅允许一个进行中会话
+     */
+    #[Permission('merchant:list:impersonate')]
+    public function impersonateStart(): array
+    {
+        $merchant = $this->findScoped($this->requireId('merchantId'));
+        if ((int) $merchant['status'] === 5) {
+            throw new BusinessException(ErrorCode::DATA_CONFLICT, '已注销商户不可代入');
+        }
+        $reason = $this->strInput('reason');
+        if (! in_array($reason, ['technical_support', 'booking_investigation', 'payment_investigation', 'customer_complaint', 'other'], true)) {
+            throw new BusinessException(ErrorCode::PARAM_ERROR, '请选择代入原因');
+        }
+        $active = Db::table('merchant_impersonation_session')
+            ->where('merchant_id', $merchant['id'])
+            ->where('operator_id', AdminContext::adminId())
+            ->where('status', 1)->exists();
+        if ($active) {
+            throw new BusinessException(ErrorCode::DATA_CONFLICT, '该商户存在进行中的代入会话');
+        }
+        $sessionKey = 'IMP-' . strtoupper(substr(bin2hex(random_bytes(6)), 0, 8)) . '-' . time();
+        $sessionId = Db::table('merchant_impersonation_session')->insertGetId([
+            'site_id' => (int) $merchant['site_id'],
+            'merchant_id' => (int) $merchant['id'],
+            'operator_id' => AdminContext::adminId(),
+            'operator_name' => AdminContext::adminName(),
+            'reason' => $reason,
+            'session_key' => $sessionKey,
+            'status' => 1,
+        ]);
+        $this->pushActivityLog($merchant, 'impersonation', '代入会话开始:' . $reason);
+        return Result::success(['session_id' => $sessionId, 'session_key' => $sessionKey], '代入会话已开始,所有操作将记录审计');
+    }
+
+    /** 结束代入会话(整改 B2):结束该商户所有进行中会话,写 end 审计 */
+    #[Permission('merchant:list:impersonate')]
+    public function impersonateEnd(): array
+    {
+        $merchantId = $this->intInput('merchantId');
+        if ($merchantId <= 0) {
+            $merchantId = $this->requireId('id');
+        }
+        $merchant = $this->findScoped($merchantId);
+        $updated = Db::table('merchant_impersonation_session')
+            ->where('merchant_id', $merchant['id'])->where('status', 1)
+            ->update(['status' => 2, 'ended_at' => date('Y-m-d H:i:s')]);
+        if ($updated <= 0) {
+            throw new BusinessException(ErrorCode::DATA_CONFLICT, '没有进行中的代入会话');
+        }
+        $this->pushActivityLog($merchant, 'impersonation', '代入会话结束');
+        return Result::success(null, '代入会话已结束');
     }
 
     /** 新增商户(平台代录入,进入待审核) */
@@ -357,6 +486,38 @@ class MerchantController extends AbstractController
         $merchant = (array) $merchant;
         $this->assertSiteScope((int) $merchant['site_id']);
         return $merchant;
+    }
+
+    /** 写商户活动日志(暂停/恢复/2FA 等账户操作审计) */
+    private function pushActivityLog(array $merchant, string $type, string $desc, int $status = 1): void
+    {
+        Db::table('merchant_activity_log')->insert([
+            'site_id' => (int) $merchant['site_id'],
+            'merchant_id' => (int) $merchant['id'],
+            'activity_type' => $type,
+            'description' => mb_substr($desc, 0, 255),
+            'performed_by' => AdminContext::adminName() ?: 'Admin',
+            'performed_by_id' => AdminContext::adminId(),
+            'ip_address' => $this->clientIp(),
+            'status' => $status,
+        ]);
+    }
+
+    /** 生成 Base32 2FA 设置密钥(供商户注册流程消费,管理端不展示) */
+    private function generateBase32Secret(int $bytes = 20): string
+    {
+        $alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+        $bits = '';
+        foreach (str_split(random_bytes($bytes)) as $ch) {
+            $bits .= str_pad(decbin(ord($ch)), 8, '0', STR_PAD_LEFT);
+        }
+        $secret = '';
+        foreach (str_split($bits, 5) as $chunk) {
+            if (strlen($chunk) === 5) {
+                $secret .= $alphabet[bindec($chunk)];
+            }
+        }
+        return $secret;
     }
 
     /** 收集可选编辑字段(snake_case 列 ← 驼峰入参) */

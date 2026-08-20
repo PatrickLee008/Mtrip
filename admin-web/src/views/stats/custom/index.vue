@@ -1,6 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
-import { useI18n } from 'vue-i18n';
+import { computed } from 'vue';
 import { message } from 'ant-design-vue';
 import { DownloadOutlined, SearchOutlined } from '@ant-design/icons-vue';
 import PageContainer from '@/components/PageContainer.vue';
@@ -8,7 +7,6 @@ import { useTable } from '@/composables/useTable';
 import { apiCustomReport } from '@/api/reports';
 
 /** 自定义报表构建器(Super Admin Portal 模块 10 Custom Reports) */
-const { t } = useI18n();
 
 const TYPE_TEXT: Record<number, string> = { 1: 'Hotel', 2: 'Ticket' };
 const ORDER_STATUS: Record<number, string> = {

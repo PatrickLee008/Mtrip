@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue';
+import { onMounted, reactive, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { message } from 'ant-design-vue';
 import { PlusOutlined } from '@ant-design/icons-vue';
@@ -231,7 +231,7 @@ onMounted(() => {
           <a-form-item label="Reward Value"><a-input-number v-model:value="form.rewardValue" :min="0" style="width: 100%" /></a-form-item>
         </template>
         <a-form-item label="Enabled">
-          <a-switch :checked="form.enabled === 1" @change="(v) => (form.enabled = v ? 1 : 0)" />
+          <a-switch :checked="form.enabled === 1" @change="(v: boolean | string) => (form.enabled = v ? 1 : 0)" />
         </a-form-item>
       </a-form>
     </a-modal>

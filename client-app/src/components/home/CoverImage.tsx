@@ -4,7 +4,7 @@
  */
 
 import React from 'react';
-import { Image, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
+import { Image, StyleSheet, Text, View, type ImageStyle, type StyleProp, type ViewStyle } from 'react-native';
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 
 import { colors } from '@/config/theme';
@@ -23,7 +23,7 @@ interface Props {
 export default function CoverImage({ uri, width, height, radius = 0, label, style }: Props) {
   const box = { width, height, borderRadius: radius };
   if (uri) {
-    return <Image source={{ uri }} style={[box, style]} resizeMode="cover" />;
+    return <Image source={{ uri }} style={[box, style as StyleProp<ImageStyle>]} resizeMode="cover" />;
   }
   return (
     <View style={[box, styles.wrap, style]}>

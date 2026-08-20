@@ -20,6 +20,68 @@
 - **位图素材已全部落盘**(2026-08-20 确认):`client-app/assets/images/logo.png` + `home/` 下 9 个 PNG。`scripts/figma-home-icons.py` 只在需要**新增**设计稿里没导过的 node 时才跑(token 从仓库根 `.env.local` 自动读取,须在仓库根目录执行)。
 - **门禁待补跑**:`cd client-app; npm run typecheck`(本次会话命令行被限流,始终没能执行)。`scripts/check.ps1` 因本机 `php` 不在 PATH 第 1 步即中断,与本改动无关。
 - 已知取舍:`components/home/HomeIcon.tsx` 里 `bell` / `diamond` 已按设计稿 `fillGeometry` 对齐,其余 6 枚(search/heart/location/gift/alert/chat/document)仍是同体系标准 24 网格图标顶替;要完全对齐只需改该文件 `ICONS` 表里的 `d` / `viewBox`,组件接口不变。
+> 最后更新:2026-08-16(商户验证模块原型对齐整改 + 中英文国际化补齐,见下方「★ 商户验证原型对齐整改」)
+>
+> ⚠ 2026-08-20:此前基于 Figma 原型(stir-long v4.2.1)的商户管理整改已判定不符合正式 PRD(《mTrip_Super_Admin_Portal_PRD_Enterprise_v1.0_中文版.md》/《mTrip_Merchant App PRD_v1.0_中文版.md》),相关需求文档与整改清单已删除;商户验证与审批将按新 PRD 重新整改,方案见 docs/redesign/商户验证与审批整改方案.md。
+>
+> ★ 2026-08-20(最新原型 localhost:8443 v4.2.1):Merchant Verification 子菜单收敛为 4 项(Pending Review/Approved/Rejected/Resubmission),Onboarding 不再作为独立子菜单——已从 database/seed/02-menu.sql 删除 205 及其按钮 20501-20506 并 db-apply 落库,admin-web 验证页队列卡同步改 4 张并移除 onboarding 跳转;页面/接口/权限注解保留待重构。四个验证页共用「Merchant Verification & Onboarding」表格(行状态=入驻生命周期,含 Under Review/Waiting for Documents),下一步按附录「商户验证菜单调整」继续重构页面。
+>
+> ★ 2026-08-20(线索并入待审核):按用户要求,onboarding 业务移入「待审核」——菜单 201 component 改指 merchant/onboarding/index(/merchant-verify/pending 直接渲染原入驻页,可新增线索+看线索列表),页面级 perm_key 改 merchant:onboarding:list,原 20501-20506 按钮权限以 20111-20116 挂回 201(RBAC 三处对齐);202/203/204 仍用 merchant/verify/index。onboarding 页标题语义改「待审核/Pending Review」。详见整改方案附录。
+>
+> ★ 2026-08-20(四队列线索视图,按原型):用户确认「按原型做」后,201-204 四页统一为线索视角(component 全指 merchant/onboarding/index,路由末段决定队列 pending/approved/rejected/resubmission);新增 merchant_application.resubmit_required_at(16-merchant-onboarding-queues.sql,initdb 37-*)+ OnboardingController queue 过滤/queues 统计/resubmit-mark|clear(重交标记闭环,sendKyc/approve/reject 自动清除);前端四统计卡+业态/国家/关键词筛选+状态列(重交→Waiting for Documents)+抽屉要求重交/取消按钮,录入线索仅待审核页;接口冒烟通过+check.ps1 四步全绿。verify/index.vue 已不挂路由,保留作 merchant_info 验证工作台备用。
+>
+> ★ 2026-08-20(徽标+代码清理):侧边栏徽标接真实计数(SideMenu.vue 调 /merchant/onboarding/queues,仅待审核/重新提交两项显示,60s 自动刷新,计数 0 隐藏)。清理:删除 views/merchant/verify/index.vue 及 api/merchant.ts 中仅其使用的 apiVerify*(保留 apiVerifyDocReview 供商户文档页),verifyPage 词条修剪为在用 10 键;后端 VerifyController 接口与菜单 20101-20106 权限位保留(接口契约锚点)。数据库无冗余删除项。
+>
+> ★ 2026-08-20(阶段机 4→6 节点):按最新原型,入驻阶段改为 6 节点(新线索→已联系→已发送 KYC 信息→等待文件→审核中→得到正式认可)。stage 重映射:旧 4(Under Review)→5、5(Approved)→6(Officially Approved)、6(Rejected)→7,新增 17-merchant-onboarding-stages.sql(initdb 38-*)迁移;OnboardingController 队列口径 pending=1-5未重交/approved=6/rejected=7/resubmission=1-5已重交,updateStage 1-5,approve→6,reject→7,confirm→4(等待文件);StageSteps 6 节点+STAGE_MAP 七状态;冒烟通过+check.ps1 全绿。
+>
+> ★ 2026-08-20(抽屉二次校准):抓原型抽屉实测——阶段调整下拉为全量 7 项(选中 6/7 走通过/驳回弹窗);删除「要求重交/取消重交要求」按钮(原型无此按钮)及 resubmit-mark|clear 接口/前端 API/词条;Resubmission 队列口径改为 stage=4(等待文件),pending=stage 1,2,3,5;应用级 resubmit_required_at 列废弃(16 号改为不建列+新增 18 号清理脚本 initdb 39-*,存量迁移后删列);stage 6 英文节点=Approved。电脑重启后 11 容器恢复、DB 迁移/代码改动无损,冒烟+check.ps1 全绿。
+>
+> ★ 2026-08-20(操作列图标化):按原型 Actions 列实测,待审核/重新提交行操作改为 4 个 28×28 图标按钮(eye 查看 / check-circle 通过 / close-circle 驳回 / sync 发送提醒),已通过/已驳回仅 eye 查看;onboarding/index.vue 新增 rowRemind 行内提醒,操作列宽度 230→150;check.ps1 全绿。
+>
+> ★ 2026-08-20(线索档案字段):按最新原型,待审核表格 Merchant Name(商家名称)与 Business Name(公司名称)分列;新增 merchant_application.merchant_name/city/address(19-merchant-onboarding-profile.sql,initdb 39a-*);录入线索弹窗拆「商家名称*」「公司名称*」并增城市/注册地址;详情注册信息改原型 8 项(公司/联系人/手机/邮箱/地址/城市/国家/注册号);后端 create 写入新字段、index 关键词搜索加 merchant_name;冒烟+check.ps1 全绿。
+>
+> ★ 2026-08-20(详情 KYC 区块):按原型整改注册企业下区块——验证范围/企业类型/验证模板/所需文件文案对齐,所需文件加「模板名+份数」,提交文件表改 Document/Status(⚠ Awaiting review)/Uploaded/Actions(View/Approve/Reject);VerifyController::docReview 支持入驻阶段文档(merchant_id=0,时间线挂 application_id),documentDetail 同步;冒烟(verify→1/reject→3/时间线2条)+check.ps1 全绿。
+>
+> ★ 2026-08-20(详情 KYC 样式对齐):抓原型 computed style 逐项实现——验证范围改按钮组(12/600 #1664FF/#EEF4FF)、企业类型改胶囊行(11px 圆角20)、验证模板下拉 37.5 高、提交文件表头 10/700 #64748B(!important 覆盖 antd cssinjs)、View/Approve/Reject 彩色小徽章按钮、Send KYC/底部动作条/Add Note 对齐原型色值;playwright 数值化验证全部一致;check.ps1 全绿。
+>
+> ★ 2026-08-20(原型地址纠正+菜单恢复):客户确认最新原型为 https://stir-long-36886628.figma.site/(localhost:8443 整改作废)。实测 stir-long 侧边栏 Merchant Verification = Onboarding→Pending Verification→Resubmission→Approved→Rejected。恢复:02-menu.sql 5 菜单(205 Onboarding sort1 + 201 待验证/204 重交/202 通过/203 驳回 sort2-5,201-204 用 merchant/verify/index)+按钮 20501-20506/20101-20106;verify/index.vue 从 git HEAD 恢复(基础版)并适配 reject 为 reasonCode 1-9 下拉;api/merchant.ts 恢复 apiVerifyList/Detail/Approve/Reject(ReasonCode)/Resubmit;onboarding/index.vue 改回独立页(全量线索+阶段筛选+录入线索常显,移除队列逻辑);i18n 标题回入驻语义。DB 核对+前端实测+接口冒烟(reject reasonCode 命中 rejected)+check.ps1 全绿。
+>
+> ★ 2026-08-20(菜单更名+五状态卡片导航):菜单中文更名——201 待核实/Pending Verification、202 得到正式认可/Approved、203 已拒绝/Rejected(英文保持原型);新增共享组件 components/MerchantVerifyNav.vue(原型卡片样式:标签11px/500、数字26px/700主题色、32×3进度条、激活浅底+主题描边,计数 verify/queues,60s刷新),Onboarding 页与验证四状态页顶部接入,verify 页移除原 a-tabs;修复状态页白屏= vite dev 旧模块缓存(重启 vite --force);前端实测新菜单名+卡片导航+跳转正常,check.ps1 全绿。
+>
+> ★ 2026-08-21(入驻阶段回归四节点):阶段机改回 1 新线索/2 已联系/3 KYC访问权限已授予/4 KYC进行中/5 得到正式认可/6 已拒绝(21-merchant-onboarding-stages-v2.sql,initdb 39c-*,stage 5→4、6→5、7→6);StageSteps 四节点;「调整」下拉六项(选中 5/6 走通过/驳回弹窗),样式对齐原型(灰底 #F1F5F9/边框 #CBD5E1/圆角6/高24/11px 600);后端 updateStage 1-4、approve→5、reject→6、队列口径同步;冒烟+前端实测+check.ps1 全绿。
+>
+> ★ 2026-08-21(状态卡阶段配色+拒绝提示):详情状态卡顶部栏底色随阶段变化(1 灰 #F1F5F9/2 青 #ECFEFF/3 紫 #F5F3FF/4 琥珀 #FFFBEB/5 绿 #ECFDF3/6 红 #FFF1F3,同色系下边框,前三项用户指定其余按原型色板);stage=6 时隐藏步骤条改显红色提示框「申请已拒绝——入驻流程已结束」;前端实测六条线索全部符合,check.ps1 全绿。
+>
+> ★ 2026-08-21(详情区块调整):§2 注册信息改回公司信息 7 项(公司/集团名称、注册号、注册国家/地区、提交时间、企业数量、企业类型、商户 ID);§3 注册企业恢复手风琴表格(点击行展开业务提交详情:业态/联系人/城市/手机/邮箱,补齐 bizSubmittedDetails 等词条);§4 运营评估对齐原型 Operations Assessment——业务类别(多选)/操作员类型/企业数量/预计发布日期/内部备注,saveAssessment 传 businessTypes/numBusinesses;前端实测+check.ps1 全绿。
+>
+> ★ 2026-08-21(审批流程梳理+重交闭环):按 PRD 模块 11 五队列梳理完整流程——入驻中(线索4阶段)→入驻通过(onboarding approve)创建 merchant_info status=0 进入待核实 → 文档逐份核验(门禁)→ 需更正时 verify/resubmit 转重新提交(status=6,文档置需重交)→ 新增 verify/resubmit-received(确认商户重交:文档加 revision 回待审、status 6→0 回待核实)→ 全文档核验后 verify/approve 生成访问码(status=3)/或 reject(status=2)。前端重新提交页加 Resubmitted/Confirm Resubmission 按钮;完整流程冒烟全通+check.ps1 全绿。待核实列表空=无 status=0 商户(经入驻通过产生)。
+>
+> ★ 2026-08-21(入驻申请页数据范围):onboarding 页默认 queue=pending(后端 stage 1-4),仅展示入驻中线索(新线索/已联系/KYC访问权限已授予/KYC进行中),终态(得到正式认可/已拒绝)不再出现;实测仅进行中线索+check.ps1 全绿。
+>
+> ★ 2026-08-21(KYC 区块重构):删除详情抽屉「KYC 管理」栏与「KYC 文档」栏;企业类型/验证模板/所需文件联动移入注册企业表格展开区(行图标改圆形 emoji,复用 selectBiz/loadTemplates/pickTemplate);新增 KYC Submission Method 区块(Merchant Self-Service/Assist Merchant with KYC radio + Assist 按钮调 sendKyc);清理旧 KYC 样式约 330 行与废弃 script;实测无 KYC 管理/文档栏、展开区联动正常+check.ps1 全绿。
+>
+> ★ 2026-08-21(KYC 设置与访问布局修正):用户澄清后按 stir-long 原型重建——KYC 设置与访问为运营评估下方独立区块(当前选中企业卡片 → 验证范围按钮组 → 企业类型多标签 → 验证模板下拉 → 所需文件 → 预览要求/编辑模板/发送KYC请求按钮 → KYC 提交方法卡片[Merchant Self-Service/Assist Merchant with KYC]),随注册企业表格选中企业联动默认第一项;注册企业表格展开区移除 KYC 联动(恢复仅业务提交详情);从备份恢复 KYC 样式约 330 行+预览弹窗+setScope/previewOpen;实测布局齐全+check.ps1 全绿。
+>
+> ★ 2026-08-21(验证模板编辑):实现编辑模板——后端 OnboardingController::kycTemplateUpdate(权限 merchant:onboarding:kyc,POST /merchant/onboarding/kyc-template-update,名称/业态/docs JSON 数组校验);前端编辑模板弹窗(名称/业态/文档动态行[名称/类型/必填+删除]/添加文档),保存后刷新模板;清理 editTemplateTodo 占位词条;冒烟误写模板已用 22-kyc-template-restore.sql 恢复(幂等,未登记 initdb);接口+前端实测+check.ps1 全绿。
+> ★ 2026-08-20(KYC Management 卡片切换):按原型将 KYC 配置下沉到业务单元级——新增 `database/merchant/20-merchant-business-kyc.sql`(merchant_application_business 加 kyc_scope/kyc_template_id,存量按业态回填首个启用模板,compose initdb 39b-*,已 db-apply);OnboardingController create 写入默认 scope=1、sendKyc 新增可选 businessId 同步业务单元 scope/模板(申请级字段兼容保留);前端详情抽屉 KYC 区新增 Registered Businesses 卡片列表(原型实测样式:左 3px 高亮边、选中 #EEF4FF+#1664FF、emoji 图标 30x30、名称 12/600、副行 10px #94A3B8、KYC 徽章复用 rb-badge),点击卡片切换 Verification Scope/业态胶囊高亮/模板下拉/所需文件(模板缺省取该业态首模板),scope/模板修改写回选中业务单元、发送 KYC 时随 businessId 落库;业态胶囊改只读联动;底部改原型三按钮(Preview Requirements 弹窗预览所需文件/Edit Template 提示规划中/Send KYC Request 加 SendOutlined),移除提交方式 radio(后端 submissionMethod 兼容保留,默认 1);KYC 标题行补盾牌图标(13px #94A3B8);新词条 previewRequirements/editTemplate/editTemplateTodo/registeredAt。冒烟(detail 返回业务级字段/sendKyc businessId 写入并回滚)+check.ps1 四步全绿。
+>
+> ★ 2026-08-20(抽屉清理冗余+控件校准):应用户反馈删除 §3 注册企业表格(与 KYC 区 Registered Businesses 卡片列表功能重复)及连带代码(openBizId/toggleBiz/手风琴展开/rb-table-card~rb-expand 样式/5 个仅该表格用词条/MenuOutlined+DownOutlined 引用),rb-badge 保留供 KYC 卡片徽章复用;KYC 区三控件按原型实测值校准:验证范围改一体式分段控件(外层边框包裹+内部分隔线+flex:1)、企业类型胶囊未选中文字改 #1A2332、验证模板下拉字重 400。vue-tsc 零报错+check.ps1 四步全绿。
+>
+> ★ 2026-08-20(KYC 布局单列+所需文件卡片):用户反馈三字段误排一行、所需文件未对齐——Browser 代理重测原型确认:字段每行一个纵向堆叠(间距 12px/控件 100% 宽/label 11px/600/0.55px 大写/Template label mb 4px),所需文件为灰底卡片(1px #E3E8F0+8px 圆角+#F8FAFC,标题行 #F1F5F9 底 8px 12px 含模板名与「N documents」,条目 8px 12px+绿勾 13px #059669+分隔线 #F1F5F9,原型无 Optional 标注);.kyc-grid 三列 grid 改 block 单列,所需文件与预览弹窗改 kyc-doc-card 卡片式,移除 ifApplicable 词条,胶囊未选中文字按实测改回 #64748B,模板下拉 padding 8px 32px 8px 10px。原型截图存 docs/kyc-management-section.png。vue-tsc+check.ps1 全绿。
+>
+
+## ★ 商户验证原型对齐整改(2026-08-16)
+
+对照 Figma 原型 stir-long v4.2.1(Merchant Verification)补齐 5 项差距,范围仅商户验证模块:
+
+- **Onboarding 入驻流水线**:`database/merchant/09-merchant-application.sql`(merchant_application/business/kyc_template/note/verify_document_revision 5 表 + merchant_info access_code 等 3 列 + doc/timeline application_id,守卫式幂等 ALTER;已登记 compose initdb 29-*);`OnboardingController` 12 接口 `/api/v1/admin/merchant/onboarding/*`(权限键 merchant:onboarding:*);前端 `views/merchant/onboarding/index.vue`(菜单 205,component `merchant/onboarding/index`)。
+- **凭证/驳回/重交/门禁**:approve 生成 `MTRP-{HOTEL|ATTRACTION|TRAVEL}-{6位}` access_code + channels(email/sms/inapp)写 timeline credentials_sent;reject 改 reasonCode(1-9 预置枚举)必填;文档重交新增 revision 行(Original vs Resubmitted 对比);存在 status=2 未核验文档时拒绝最终 approve;`regenerateCode` 仅已启用商户可用(权限 merchant:verify:regencode)。
+- **验证记录**:db-apply 落库核验(5 表/9 模板/3 新列/菜单种子)、接口全流程冒烟全过(创建→指派→发KYC→转商户→门禁→逐份核验→approve出码→regenerate/reject/resubmit)、`check.ps1` 四步全绿。
+- **国际化(2026-08-16 补齐)**:`views/merchant/onboarding/index.vue` 与 `views/merchant/verify/index.vue` 全量接入 vue-i18n;词条在 `locales/en-US.ts` 新增 `merchant.rejectReasons`(两页共用 9 项驳回原因)/`merchant.verifyPage`/`merchant.onboardingPage` 三个命名空间,zh-CN 同步提供全部中文翻译;页面内状态映射表/选项列表均改为 computed 以随语言切换刷新。
+- **入驻阶段步骤条(2026-08-16,实测值对齐原型)**:新组件 `components/StageSteps.vue`,按浏览器实测 stir-long 原型精确还原:节点 24×24(激活蓝实心+8px 白芯/已过绿 #059669+白勾/未到 #F1F5F9 底+#CBD5E1 边+6px 灰芯),连接线 flex:1 高 2px #E3E8F0 对齐节点中心(已过段变绿),标签 9px 距节点 4px(激活 700 蓝/未到 500 #94A3B8);stage 5=全部完成,stage 6=全部置灰由 StatusTag 表达终态。onboarding 抽屉 §1 区重构为原型三段式卡片 `.onboarding-stage-card`(1px #E3E8F0 边+10px 圆角:灰底 #F1F5F9 状态行+步骤条区+信息行 4 列 grid,标签 10px/600 大写 #94A3B8,值 12px/600 #1A2332);原型截图留工作区根目录 `onboarding-drawer-top.png` 供对照。
+- **公司信息分区样式(2026-08-20,原型实测值照搬)**:onboarding 抽屉 §2 Company Information 重做——标题行(BankOutlined 13px #94A3B8 + 12px/700/字距 0.84px 大写 #64748B + flex-1 尾部 1px #F1F5F9 装饰线) + 灰底卡片网格 `.co-grid-stack`(单元格 #F8FAFC + 1px #F1F5F9 边 + 6px 圆角 + 8px 12px,标签 11px #94A3B8/值 13px/500 #1A2332,行/列间距均 8px),布局 2 列×4 格 + 3 列×3 格 + 3 列×1 格(KYC);字段保留现有 8 项。后按原型类目定稿:注释集团/KYC 范围两项,新增「申请已提交」(app.submitted_at,新词条 labelSubmitted),业务类型按用户要求恢复置于企业数量后,最终 7 项=2 列×4 格(公司名|注册号、国家|提交时间) + 3 列×3 格(企业数|业务类型|商户ID)。随后 §3 注册企业分区标题同原型改造:MenuOutlined + 大写标题带个数 (N) + 尾部装饰线(zh 词条 registeredBusinesses 改「注册企业」)。随后 §3 表格按原型实测自绘重做并支持行展开:grid 六列(24px/1fr/120px/100px/110px/20px)圆角 8px 卡片表,表头 10px/700 大写灰底 #F8FAFC,行白底整行可点、展开态 #F0F9FF + 3px #1664FF 左条 + chevron 翻转,手风琴展开区(灰底,小标题 BUSINESS-SUBMITTED DETAILS + 3 列灰底卡片:业态/联系人/城市/电话/邮箱,复用 .co-cell);KYC 状态改小徽章;新增词条 bizSubmittedDetails/bizDetailBusinessType,移除无用 bizColumns/KYC_STATUS_MAP。注:业务表联系人列(contact_name/contact_phone 加密/contact_email)由 15-merchant-verify-rework.sql 补入;展开区曾误绑 contact_person 致不显示,已改绑 contact_name,detail 接口对 contact_phone 解密后明文返回(应用户要求不脱敏,入驻阶段需完整联系方式跟进;VerifyController 商户侧仍保持脱敏)。§4 运营评估文案与组件调整(应用户要求):操作员类型/预计发布日期(a-input 换 a-date-picker,value-format YYYY-MM-DD)/操作说明,en 同步 Expected Release Date/Operation Instructions。随后 §4 按原型实测重做样式:同 §2 标题行(SafetyCertificateOutlined 图标) + 斜体副标题「由商户运营人员填写」(新词条 opsAssessmentSubtitle) + 两列 grid(gap 10px)灰底控件(#F8FAFC/#E3E8F0/6px 圆角/12px,标签 11px/600 #94A3B8),操作说明三行 textarea 独占整行;原型无 Save 按钮,保留在标题行右侧小幽灵按钮;placeholder 同步原型文案(en: Add Merchant Operations assessment notes here…)。随后四队列统计卡按新原型(localhost:8443)实测重做:grid 四列 gap 12px、白底 1px #E3E8F0、8px 圆角、12px 内边距、无阴影、无 hover 反馈;标签 11px/500 #94A3B8(选中态 600+主题色) + 数字 26px/700 主题色(Pending #D97706/Approved #059669/Rejected #DC2626/Resubmission #2563EB) + 迷你进度条 32x3(轨道 #E3E8F0,填充按计数占比);当前队列卡浅色底(#FFFBEB/#ECFDF3/#FFF1F2/#EFF6FF)+ 0 0 0 1px 同色系描边阴影 + 标签行右侧 6px 主题色圆点;原型卡片不可点击,本应用保留点击切换队列功能(cursor:pointer)。随后搜索栏改用通用组件 SearchFilterBar(v-model 绑 query.keyword,v-model:filter-values 绑 sfbFilters,业态/国家两筛选,结果数摘要接 pagination.total;筛选变化自动触发重查,handleSfbSearch 同步筛选值到 query;移除原 a-form 搜索/重置按钮、SearchOutlined/ReloadOutlined import 与 useTable reset 解构;新词条 onboardingPage.resultCount=个结果/results)。随后顶部标题区与分页栏按新原型(localhost:8443)实测重做:eyebrow 11px/500/字距 0.55px 大写 #94A3B8→4px→主标题 18px/700 #1A2332→2px→描述 13px/400 #94A3B8,标题块与统计卡间距 20px,Export 改 34px 描边按钮(1px #E3E8F0/6px 圆角/13px #475569 + DownloadOutlined);分页栏重挂 a-table(class ob-pagination:灰底 #FAFBFC+上边框 1px #F1F5F9+12px 16px,左文案 12px #94A3B8 zh「第 1 – 6 条,共6条」/en Showing 1–6 of 6,新词条 paginationInfo 命名插值 {from}{to}{total};按钮 28x28 无边框 4px 圆角,当前页 #1664FF 白字 600,禁用 #CBD5E1,移除条数选择器/快速跳转,useTable pagination 页面级包装为 tablePagination)。
+- **遗留边界**:merchant-web 商户端 KYC 提交/重交入口后续接;Send KYC/Reminder 仅写审计时间线,真实通知通道后续接;Marketplace Ranking/Impersonation/Notify/2FA/Commission Plan 不在本次范围。
+- 详情:`docs/redesign/migration-plan.md` 进度表新增行 + `docs/redesign/gap-analysis.md` Merchant Verification 行已标注闭环。
 
 ## ★ 前端 redesign 进展(2026-08-14)
 

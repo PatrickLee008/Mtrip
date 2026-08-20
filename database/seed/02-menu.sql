@@ -52,17 +52,27 @@ INSERT IGNORE INTO `sys_menu` (`id`,`parent_id`,`menu_name`,`menu_name_en`,`i18n
 (1700,0,'Trip 管理','Trips','','trip',1,'/trip','','CompassOutlined',17),
 (1800,0,'系统日志','Logs','menu.log','log',1,'/log','','FileSearchOutlined',18);
 
--- ================= 200 商户验证(4 状态页,共享 merchant/verify/index)=================
+-- ================= 200 商户验证(5 菜单:Onboarding + 4 验证状态页,对齐 stir-long 原型)=================
 INSERT IGNORE INTO `sys_menu` (`id`,`parent_id`,`menu_name`,`menu_name_en`,`i18n_key`,`perm_key`,`menu_type`,`route_path`,`component`,`icon`,`sort`) VALUES
-(201,200,'待审核','Pending Review','','merchant:list:audit',2,'/merchant-verify/pending','merchant/verify/index','',1),
-(202,200,'已通过','Approved','','merchant:list:audit',2,'/merchant-verify/approved','merchant/verify/index','',2),
-(203,200,'已驳回','Rejected','','merchant:list:audit',2,'/merchant-verify/rejected','merchant/verify/index','',3),
-(204,200,'重新提交','Resubmission','','merchant:list:audit',2,'/merchant-verify/resubmission','merchant/verify/index','',4);
+(201,200,'待核实','Pending Verification','','merchant:list:audit',2,'/merchant-verify/pending','merchant/verify/index','',2),
+(202,200,'得到正式认可','Approved','','merchant:list:audit',2,'/merchant-verify/approved','merchant/verify/index','',4),
+(203,200,'已拒绝','Rejected','','merchant:list:audit',2,'/merchant-verify/rejected','merchant/verify/index','',5),
+(204,200,'重新提交','Resubmission','','merchant:list:audit',2,'/merchant-verify/resubmission','merchant/verify/index','',3),
+(205,200,'入驻申请','Onboarding','','merchant:onboarding:list',2,'/merchant-verify/onboarding','merchant/onboarding/index','',1);
+-- 排序对齐原型侧边栏:Onboarding → Pending Verification → Resubmission → Approved → Rejected
 INSERT IGNORE INTO `sys_menu` (`id`,`parent_id`,`menu_name`,`menu_name_en`,`perm_key`,`menu_type`,`sort`) VALUES
 (20101,201,'通过审核','Approve','merchant:verify:approve',3,1),
 (20102,201,'驳回申请','Reject','merchant:verify:reject',3,2),
 (20103,201,'要求重交','Request Resubmission','merchant:verify:resubmit',3,3),
-(20104,201,'核验文档','Verify Document','merchant:verify:doc',3,4);
+(20104,201,'核验文档','Verify Document','merchant:verify:doc',3,4),
+(20105,201,'重生成访问码','Regenerate Access Code','merchant:verify:regencode',3,5),
+(20106,201,'重发访问码','Resend Access Code','merchant:verify:resend',3,6),
+(20501,205,'录入线索','Create Lead','merchant:onboarding:create',3,1),
+(20502,205,'更新阶段','Update Stage','merchant:onboarding:update',3,2),
+(20503,205,'指派运营','Assign Ops','merchant:onboarding:assign',3,3),
+(20504,205,'发送KYC','Send KYC','merchant:onboarding:kyc',3,4),
+(20505,205,'入驻通过','Approve Onboarding','merchant:onboarding:approve',3,5),
+(20506,205,'入驻驳回','Reject Onboarding','merchant:onboarding:reject',3,6);
 
 -- ================= 300 商户管理 =================
 INSERT IGNORE INTO `sys_menu` (`id`,`parent_id`,`menu_name`,`menu_name_en`,`i18n_key`,`perm_key`,`menu_type`,`route_path`,`component`,`icon`,`sort`) VALUES
@@ -74,18 +84,24 @@ INSERT IGNORE INTO `sys_menu` (`id`,`parent_id`,`menu_name`,`menu_name_en`,`i18n
 (306,300,'商户账户','Merchant Accounts','menu.merchantAccount','merchant:account:list',2,'/merchant/account','merchant/account/index','',6),
 (307,300,'集团管理','Groups','menu.merchantGroup','merchant:group:list',2,'/merchant/group','merchant/group/index','',7),
 (308,300,'门店管理','Stores','menu.merchantStore','merchant:store:list',2,'/merchant/store','merchant/store/index','',8),
-(309,300,'商户统计','Merchant Stats','menu.merchantStats','merchant:stats:list',2,'/merchant/stats','merchant/stats/index','',9);
+(309,300,'商户统计','Merchant Stats','menu.merchantStats','merchant:stats:list',2,'/merchant/stats','merchant/stats/index','',9),
+(310,300,'市场排名','Marketplace Ranking','','merchant:ranking:list',2,'/merchant/ranking','merchant/ranking/index','',10);
 INSERT IGNORE INTO `sys_menu` (`id`,`parent_id`,`menu_name`,`menu_name_en`,`perm_key`,`menu_type`,`sort`) VALUES
 (30101,301,'新增商户','Add','merchant:list:add',3,1),
 (30102,301,'编辑商户','Edit','merchant:list:edit',3,2),
 (30103,301,'冻结解冻','Freeze/Unfreeze','merchant:list:status',3,3),
 (30104,301,'商户代入','Impersonate','merchant:list:impersonate',3,4),
 (30105,301,'删除商户','Delete','merchant:list:delete',3,5),
+(30106,301,'重置2FA','Reset 2FA','merchant:list:2fa',3,6),
+(30107,301,'发送通知','Notify','merchant:list:notify',3,7),
 (30601,306,'编辑账户','Edit Account','merchant:account:edit',3,1),
 (30701,307,'新增集团','Add Group','merchant:group:add',3,1),
 (30702,307,'编辑集团','Edit Group','merchant:group:edit',3,2),
 (30801,308,'新增门店','Add Store','merchant:store:add',3,1),
-(30802,308,'编辑门店','Edit Store','merchant:store:edit',3,2);
+(30802,308,'编辑门店','Edit Store','merchant:store:edit',3,2),
+(31001,310,'保存排序','Save Order','merchant:ranking:save',3,1),
+(31002,310,'发布','Publish','merchant:ranking:publish',3,2),
+(31003,310,'新增目的地','Add Destination','merchant:ranking:add',3,3);
 
 -- ================= 400 业务运营(Bookings + Inventory 扁平)=================
 INSERT IGNORE INTO `sys_menu` (`id`,`parent_id`,`menu_name`,`menu_name_en`,`i18n_key`,`perm_key`,`menu_type`,`route_path`,`component`,`icon`,`sort`) VALUES

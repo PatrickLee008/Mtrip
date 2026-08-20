@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, watch } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
+import { computed, onMounted, ref, watch } from 'vue';
+import { useRoute } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { Modal, message } from 'ant-design-vue';
 import { ReloadOutlined, SearchOutlined } from '@ant-design/icons-vue';
 import PageContainer from '@/components/PageContainer.vue';
 import StatusTag from '@/components/StatusTag.vue';
+import MerchantVerifyNav from '@/components/MerchantVerifyNav.vue';
 import { useTable, type TableRow } from '@/composables/useTable';
 import type { StatusItem } from '@/components/StatusTag.vue';
 import {
@@ -15,6 +16,7 @@ import {
   apiVerifyList,
   apiVerifyReject,
   apiVerifyResubmit,
+  apiVerifyResubmitReceived,
 } from '@/api/merchant';
 
 /**
@@ -23,7 +25,6 @@ import {
  */
 const { t } = useI18n();
 const route = useRoute();
-const router = useRouter();
 
 const TABS = [
   { key: 'pending', label: 'Pending Review' },
@@ -56,6 +57,19 @@ const DOC_STATUS: Record<number, StatusItem> = {
 };
 const TYPE_TEXT: Record<number, string> = { 1: 'Hotel', 2: 'Scenic', 3: 'Composite' };
 
+/** 预置驳回原因(与后端 VerifyController::REJECT_REASONS 对齐) */
+const REJECT_REASONS = [
+  { code: 1, label: 'Expired business registration' },
+  { code: 2, label: 'Invalid or missing operating license' },
+  { code: 3, label: 'Incomplete documentation' },
+  { code: 4, label: 'Identity verification failed' },
+  { code: 5, label: 'Business does not meet platform requirements' },
+  { code: 6, label: 'Premises / fleet documents invalid' },
+  { code: 7, label: 'Insurance or safety certification missing' },
+  { code: 8, label: 'Suspected fraudulent application' },
+  { code: 9, label: 'Duplicate merchant account' },
+];
+
 const { loading, list, query, load, search, reset, pagination } = useTable(apiVerifyList, {
   tab: activeTab.value,
   keyword: '',
@@ -70,12 +84,6 @@ watch(
     search();
   },
 );
-
-function switchTab(key: string): void {
-  if (key !== activeTab.value) {
-    void router.push(`/merchant-verify/${key}`);
-  }
-}
 
 const columns = computed(() => [
   { title: 'Lead ID', dataIndex: 'id', width: 90 },
@@ -148,22 +156,24 @@ async function doApprove(): Promise<void> {
 }
 
 const rejectOpen = ref(false);
-const rejectReason = ref('');
+const rejectReasonCode = ref<number | undefined>(undefined);
+const rejectNote = ref('');
 const rejectSaving = ref(false);
 function openReject(row: TableRow): void {
   actionTarget.value = row;
-  rejectReason.value = '';
+  rejectReasonCode.value = undefined;
+  rejectNote.value = '';
   rejectOpen.value = true;
 }
 async function doReject(): Promise<void> {
   if (!actionTarget.value) return;
-  if (!rejectReason.value.trim()) {
-    message.warning('Rejection reason is required');
+  if (!rejectReasonCode.value) {
+    message.warning('Please select a rejection reason');
     return;
   }
   rejectSaving.value = true;
   try {
-    await apiVerifyReject(actionTarget.value.id, rejectReason.value);
+    await apiVerifyReject(actionTarget.value.id, rejectReasonCode.value, rejectNote.value.trim() || undefined);
     message.success('Application rejected');
     rejectOpen.value = false;
     drawerOpen.value = false;
@@ -196,6 +206,20 @@ async function doResub(): Promise<void> {
     await load();
   } finally {
     resubSaving.value = false;
+  }
+}
+
+/** 确认商户已重新提交文件(重新提交 → 待验证闭环) */
+const resubReceivedSaving = ref(false);
+async function markResubmitted(row: TableRow): Promise<void> {
+  resubReceivedSaving.value = true;
+  try {
+    await apiVerifyResubmitReceived(row.id);
+    message.success('Resubmission confirmed, merchant returned to Pending Verification');
+    drawerOpen.value = false;
+    await load();
+  } finally {
+    resubReceivedSaving.value = false;
   }
 }
 
@@ -247,10 +271,8 @@ onMounted(() => {
 
 <template>
   <PageContainer>
+    <MerchantVerifyNav :active="activeTab" />
     <a-card :bordered="false" class="mtrip-card-shadow" style="margin-bottom: 16px">
-      <a-tabs :active-key="activeTab" @change="switchTab">
-        <a-tab-pane v-for="tab in TABS" :key="tab.key" :tab="tab.label" />
-      </a-tabs>
       <a-form layout="inline">
         <a-form-item label="Keyword">
           <a-input v-model:value="query.keyword" allow-clear placeholder="Name / credit code / contact" style="width: 220px" @press-enter="search" />
@@ -306,6 +328,7 @@ onMounted(() => {
                 <a-button v-perm="'merchant:verify:approve'" type="link" size="small" style="color: var(--sap-success)" @click="openApprove(record)">Approve</a-button>
                 <a-button v-perm="'merchant:verify:reject'" type="link" size="small" danger @click="openReject(record)">Reject</a-button>
                 <a-button v-if="activeTab === 'pending'" v-perm="'merchant:verify:resubmit'" type="link" size="small" style="color: var(--sap-warning)" @click="openResub(record)">Resubmit</a-button>
+                <a-button v-if="activeTab === 'resubmission'" v-perm="'merchant:verify:resubmit'" type="link" size="small" style="color: var(--sap-warning)" :loading="resubReceivedSaving" @click="markResubmitted(record)">Resubmitted</a-button>
               </template>
             </a-space>
           </template>
@@ -372,6 +395,7 @@ onMounted(() => {
             <a-button v-perm="'merchant:verify:approve'" type="primary" @click="openApprove(detail)">Approve Merchant</a-button>
             <a-button v-perm="'merchant:verify:reject'" danger @click="openReject(detail)">Reject</a-button>
             <a-button v-if="activeTab === 'pending'" v-perm="'merchant:verify:resubmit'" @click="openResub(detail)">Request Resubmission</a-button>
+            <a-button v-if="activeTab === 'resubmission'" v-perm="'merchant:verify:resubmit'" type="primary" ghost :loading="resubReceivedSaving" @click="markResubmitted(detail)">Confirm Resubmission</a-button>
           </div>
         </template>
       </a-spin>
@@ -385,7 +409,14 @@ onMounted(() => {
 
     <!-- 驳回 -->
     <a-modal v-model:open="rejectOpen" title="Reject Application" :confirm-loading="rejectSaving" ok-text="Reject" :ok-button-props="{ danger: true }" @ok="doReject">
-      <a-textarea v-model:value="rejectReason" :rows="4" placeholder="Rejection reason (required)" />
+      <a-form layout="vertical">
+        <a-form-item label="Rejection Reason" required>
+          <a-select v-model:value="rejectReasonCode" :options="REJECT_REASONS" placeholder="Select reason…" style="width: 100%" />
+        </a-form-item>
+        <a-form-item label="Additional Notes (optional)">
+          <a-textarea v-model:value="rejectNote" :rows="3" placeholder="Additional notes for the merchant (optional)" />
+        </a-form-item>
+      </a-form>
     </a-modal>
 
     <!-- 要求重交 -->

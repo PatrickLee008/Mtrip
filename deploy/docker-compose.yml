@@ -83,7 +83,31 @@ services:
       - ../database/seed/05-supplier-menu.sql:/docker-entrypoint-initdb.d/27-seed-supplier-menu.sql:ro
       # 商户验证工作流(Super Admin Portal Phase 1,依赖 20-merchant 基础表)
       - ../database/merchant/07-verify-workflow.sql:/docker-entrypoint-initdb.d/28-merchant-verify-workflow.sql:ro
-      - ../database/goods/01-goods.sql:/docker-entrypoint-initdb.d/30-goods.sql:ro
+      # 商户入驻流水线(原型对齐整改,依赖 28 的 doc/timeline 表 ALTER)
+      - ../database/merchant/09-merchant-application.sql:/docker-entrypoint-initdb.d/29-merchant-application.sql:ro
+      # 商户账户安全(2FA 字段,整改 A3/B3,依赖 29 的 reject_reason_code 列)
+      - ../database/merchant/10-merchant-account-security.sql:/docker-entrypoint-initdb.d/30-merchant-account-security.sql:ro
+      - ../database/goods/01-goods.sql:/docker-entrypoint-initdb.d/31-goods.sql:ro
+      # 商户管理整改 Phase B:通知中心 / KYC 确认状态位 / 代入会话
+      - ../database/merchant/11-merchant-notify.sql:/docker-entrypoint-initdb.d/32-merchant-notify.sql:ro
+      - ../database/merchant/12-merchant-confirmation.sql:/docker-entrypoint-initdb.d/33-merchant-confirmation.sql:ro
+      - ../database/merchant/13-merchant-impersonation.sql:/docker-entrypoint-initdb.d/34-merchant-impersonation.sql:ro
+      # 商户管理整改 Phase C:Marketplace Ranking(商家/目的地/审计 + demo 种子)
+      - ../database/merchant/14-merchant-ranking.sql:/docker-entrypoint-initdb.d/35-merchant-ranking.sql:ro
+      # 正式 PRD v1.0 整改:商户验证与审批(五队列/业务联系方式/访问码日志/2FA状态/重交标记/拒绝快照)
+      - ../database/merchant/15-merchant-verify-rework.sql:/docker-entrypoint-initdb.d/36-merchant-verify-rework.sql:ro
+      # 最新原型 v4.2.1:Merchant Verification 四队列线索视图(线索重交标记)
+      - ../database/merchant/16-merchant-onboarding-queues.sql:/docker-entrypoint-initdb.d/37-merchant-onboarding-queues.sql:ro
+      # 最新原型 v4.2.1:入驻阶段流程节点 4 → 6(stage 4→5, 5→6, 6→7)
+      - ../database/merchant/17-merchant-onboarding-stages.sql:/docker-entrypoint-initdb.d/38-merchant-onboarding-stages.sql:ro
+      # 最新原型 v4.2.1:废弃重交标记列(stage 4 承担等待文件,存量迁移后清理)
+      - ../database/merchant/18-merchant-onboarding-resubmit-cleanup.sql:/docker-entrypoint-initdb.d/39-merchant-onboarding-resubmit-cleanup.sql:ro
+      # 最新原型 v4.2.1:线索档案字段(商家名称/城市/地址)
+      - ../database/merchant/19-merchant-onboarding-profile.sql:/docker-entrypoint-initdb.d/39a-merchant-onboarding-profile.sql:ro
+      # 最新原型 v4.2.1:业务单元级 KYC 配置(KYC Management 按注册企业卡片切换)
+      - ../database/merchant/20-merchant-business-kyc.sql:/docker-entrypoint-initdb.d/39b-merchant-business-kyc.sql:ro
+      # 最新原型 stir-long:入驻阶段回归四节点流程(stage 5→4, 6→5, 7→6)
+      - ../database/merchant/21-merchant-onboarding-stages-v2.sql:/docker-entrypoint-initdb.d/39c-merchant-onboarding-stages-v2.sql:ro
       - ../database/order/01-order.sql:/docker-entrypoint-initdb.d/40-order.sql:ro
       - ../database/order/02-verify.sql:/docker-entrypoint-initdb.d/41-verify.sql:ro
       - ../database/finance/01-finance.sql:/docker-entrypoint-initdb.d/50-finance.sql:ro

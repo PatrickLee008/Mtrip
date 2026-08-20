@@ -14,6 +14,9 @@ use App\Controller\Merchant\AuthController as MerchantAuthController;
 use App\Controller\Merchant\RoleController as MerchantRoleController;
 use App\Controller\Merchant\StoreController as MerchantStoreController;
 use App\Controller\MerchantController;
+use App\Controller\NotificationController;
+use App\Controller\OnboardingController;
+use App\Controller\RankingController;
 use App\Controller\StoreController;
 use App\Controller\PlatformRuleController;
 use App\Controller\VerifyController;
@@ -40,6 +43,24 @@ Router::addGroup('/api/v1/admin', static function () {
     Router::post('/merchant/update', [MerchantController::class, 'update']);
     Router::post('/merchant/audit', [MerchantController::class, 'audit']);
     Router::post('/merchant/toggle-status', [MerchantController::class, 'toggleStatus']);
+    Router::post('/merchant/suspend', [MerchantController::class, 'suspend']);
+    Router::post('/merchant/activate', [MerchantController::class, 'activate']);
+    Router::post('/merchant/reset-2fa', [MerchantController::class, 'resetTwoFa']);
+    Router::post('/merchant/impersonate/start', [MerchantController::class, 'impersonateStart']);
+    Router::post('/merchant/impersonate/end', [MerchantController::class, 'impersonateEnd']);
+    // ---------- Marketplace Ranking(整改 Phase C,前缀沿用 merchant 网关零改动) ----------
+    Router::get('/merchant/ranking/list', [RankingController::class, 'listings']);
+    Router::post('/merchant/ranking/save-order', [RankingController::class, 'saveOrder']);
+    Router::post('/merchant/ranking/pin', [RankingController::class, 'pin']);
+    Router::post('/merchant/ranking/publish', [RankingController::class, 'publish']);
+    Router::get('/merchant/ranking/history', [RankingController::class, 'history']);
+    Router::get('/merchant/ranking/destinations', [RankingController::class, 'destinations']);
+    Router::post('/merchant/ranking/destination/add', [RankingController::class, 'destinationAdd']);
+    Router::post('/merchant/ranking/destination/update', [RankingController::class, 'destinationUpdate']);
+    Router::post('/merchant/ranking/destination/pin', [RankingController::class, 'destinationPin']);
+    Router::post('/merchant/notification/send', [NotificationController::class, 'send']);
+    Router::get('/merchant/notification/list', [NotificationController::class, 'list']);
+    Router::get('/merchant/notification/templates', [NotificationController::class, 'templates']);
     Router::post('/merchant/commission', [MerchantController::class, 'commission']);
     Router::get('/merchant/account', [MerchantController::class, 'accounts']);
     Router::post('/merchant/account-save', [MerchantController::class, 'saveAccount']);
@@ -49,16 +70,39 @@ Router::addGroup('/api/v1/admin', static function () {
 
     // ---------- 商户验证工作流(Super Admin Portal Phase 1,docs/redesign 模块 02/03) ----------
     Router::get('/merchant/verify/list', [VerifyController::class, 'index']);
+    Router::get('/merchant/verify/queues', [VerifyController::class, 'queues']);
     Router::get('/merchant/verify/detail', [VerifyController::class, 'detail']);
     Router::post('/merchant/verify/approve', [VerifyController::class, 'approve']);
     Router::post('/merchant/verify/reject', [VerifyController::class, 'reject']);
     Router::post('/merchant/verify/resubmit', [VerifyController::class, 'resubmit']);
+    Router::post('/merchant/verify/resubmit-received', [VerifyController::class, 'resubmitReceived']);
+    Router::post('/merchant/verify/resend-code', [VerifyController::class, 'resendCode']);
     Router::post('/merchant/verify/doc-review', [VerifyController::class, 'docReview']);
     Router::get('/merchant/documents', [VerifyController::class, 'documents']);
+    Router::get('/merchant/document/detail', [VerifyController::class, 'documentDetail']);
+    Router::post('/merchant/document/resubmit', [VerifyController::class, 'documentResubmit']);
     Router::post('/merchant/blacklist', [VerifyController::class, 'blacklist']);
     Router::post('/merchant/unblacklist', [VerifyController::class, 'unblacklist']);
     Router::get('/merchant/activities', [VerifyController::class, 'activities']);
     Router::get('/merchant/blacklist-list', [VerifyController::class, 'blacklistList']);
+    Router::post('/merchant/verify/regenerate-code', [VerifyController::class, 'regenerateCode']);
+
+    // ---------- 商户入驻流水线(Onboarding,原型 stir-long v4.2.1 / Merchant Verification) ----------
+    Router::get('/merchant/onboarding/list', [OnboardingController::class, 'index']);
+    Router::get('/merchant/onboarding/queues', [OnboardingController::class, 'queues']);
+    Router::get('/merchant/onboarding/detail', [OnboardingController::class, 'detail']);
+    Router::get('/merchant/onboarding/kyc-templates', [OnboardingController::class, 'kycTemplates']);
+    Router::post('/merchant/onboarding/kyc-template-update', [OnboardingController::class, 'kycTemplateUpdate']);
+    Router::post('/merchant/onboarding/add', [OnboardingController::class, 'create']);
+    Router::post('/merchant/onboarding/update-stage', [OnboardingController::class, 'updateStage']);
+    Router::post('/merchant/onboarding/assign-ops', [OnboardingController::class, 'assignOps']);
+    Router::post('/merchant/onboarding/save-assessment', [OnboardingController::class, 'saveAssessment']);
+    Router::post('/merchant/onboarding/send-kyc', [OnboardingController::class, 'sendKyc']);
+    Router::post('/merchant/onboarding/send-reminder', [OnboardingController::class, 'sendReminder']);
+    Router::post('/merchant/onboarding/note-add', [OnboardingController::class, 'addNote']);
+    Router::post('/merchant/onboarding/confirm', [OnboardingController::class, 'confirm']);
+    Router::post('/merchant/onboarding/approve', [OnboardingController::class, 'approve']);
+    Router::post('/merchant/onboarding/reject', [OnboardingController::class, 'reject']);
 
     // ---------- 集团管理(计划 11:管理/授权实体,商户授权绑定) ----------
     Router::get('/merchant/group/list', [GroupController::class, 'index']);

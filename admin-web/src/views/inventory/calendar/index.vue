@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { reactive, ref } from 'vue';
-import { useI18n } from 'vue-i18n';
 import { message } from 'ant-design-vue';
 import { SearchOutlined } from '@ant-design/icons-vue';
 import PageContainer from '@/components/PageContainer.vue';
@@ -8,7 +7,6 @@ import type { TableRow } from '@/composables/useTable';
 import { apiInventoryCalendar } from '@/api/inventory';
 
 /** 可用量日历(Super Admin Portal 模块 04b):单 SKU 分日库存/价格网格 */
-const { t } = useI18n();
 
 function todayPlus(days: number): string {
   const d = new Date();

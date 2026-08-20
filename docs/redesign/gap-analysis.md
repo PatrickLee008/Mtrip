@@ -15,7 +15,7 @@ Dashboard · Merchant Verification · Merchant Management · Business Operations
 | 新模块 | 子页 | 现有对应 | 后端现状 | 差距 |
 |---|---|---|---|---|
 | Dashboard | 单页 | dashboard + stats/dashboard | AdminStatsController | 新聚合口径(待审达人/系统告警/活动运营总览) |
-| Merchant Verification | Pending/Approved/Rejected/Resubmission | 仅 `merchant:list:audit` 按钮 | MerchantController(含审核) | **新增** 文档表/时间线/重交态/审核人;4 状态页 |
+| Merchant Verification | Pending/Approved/Rejected/Resubmission/Onboarding | 仅 `merchant:list:audit` 按钮 | MerchantController(含审核) | **新增** 文档表/时间线/重交态/审核人;4 状态页。✅ 2026-08-16 原型对齐整改闭环:Onboarding 入驻流水线(5 表+9 KYC 模板)/ Access Code 凭证(MTRP-XXX)/ 9 项预置驳回原因/重交版本对比/逐份核验门禁均已落地(`09-merchant-application.sql` + `OnboardingController`) |
 | Merchant Management | All/Documents/Suspended/Blacklisted/Activities | merchant/list·account·group·store·stats | 已实现 | 新增 Documents/Suspended/Blacklisted/Activities + 黑名单/活动日志 |
 | Business Ops · Bookings | All/Refunds/Settlements/History | order/* + finance/msettle | 已实现 | 重组;补对账抽屉/审计时间线/SLA |
 | Business Ops · Inventory | Overview/Availability/Detail/Timeline/Calendar/Alerts/Reports | goods/stock | AdminStockController | 新增日历/时间线/可用量/告警 UI + 告警模型 |

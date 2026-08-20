@@ -2,29 +2,53 @@
 import { computed, onMounted, reactive, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { Modal, message } from 'ant-design-vue';
-import { PlusOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons-vue';
+import { BellOutlined, CopyOutlined, LoginOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons-vue';
 import PageContainer from '@/components/PageContainer.vue';
 import SiteTreeSelect from '@/components/SiteTreeSelect.vue';
 import StatusTag from '@/components/StatusTag.vue';
+import NotifyDrawer from '@/components/merchant/NotifyDrawer.vue';
+import ImpersonateModal from '@/components/merchant/ImpersonateModal.vue';
 import { useTable, type TableRow } from '@/composables/useTable';
 import { useUserStore } from '@/stores/user';
 import type { StatusItem } from '@/components/StatusTag.vue';
 import {
   apiMerchantAdd,
+  apiMerchantActivate,
   apiMerchantAudit,
   apiMerchantClose,
   apiMerchantCommission,
   apiMerchantDetail,
   apiMerchantList,
-  apiMerchantToggleStatus,
+  apiMerchantReset2Fa,
+  apiMerchantSuspend,
   apiMerchantUpdate,
 } from '@/api/merchant';
+import { exportCsv } from '@/utils/exportCsv';
 
 const { t } = useI18n();
 
 /** 商户列表:入驻审核/费率配置/启停/注销(文档 6.4.2;状态机 0→3/2,3⇄4,5终态) */
 const userStore = useUserStore();
 const isSuper = userStore.profile?.isSuper === true;
+
+/** 导出当前筛选结果(整改 D2) */
+async function exportList(): Promise<void> {
+  const data = await apiMerchantList({ ...query, page: 1, pageSize: 200 });
+  exportCsv(`merchants-${Date.now()}.csv`, [
+    { key: 'id', label: 'ID' },
+    { key: 'merchant_name', label: 'Merchant' },
+    { key: 'merchant_type', label: 'Type' },
+    { key: 'contact_name', label: 'Contact' },
+    { key: 'contact_phone', label: 'Phone' },
+    { key: 'commission_rate', label: 'Commission %' },
+    { key: 'status', label: 'Status' },
+    { key: 'created_at', label: 'Created At' },
+  ], data.list.map((row) => ({
+    ...row,
+    merchant_type: TYPE_TEXT.value[row.merchant_type] ?? row.merchant_type,
+    status: STATUS_MAP.value[row.status]?.text ?? row.status,
+  })));
+}
 
 const STATUS_MAP = computed<Record<number, StatusItem>>(() => ({
   0: { text: t('status.pending'), color: 'warning' },
@@ -39,7 +63,7 @@ const TYPE_TEXT = computed<Record<number, string>>(() => ({
   3: t('merchant.title'),
 }));
 
-const { loading, list, query, load, search, reset, pagination } = useTable(apiMerchantList, {
+const { loading, list, query, load, search, reset } = useTable(apiMerchantList, {
   merchantName: '',
   merchantType: undefined,
   status: undefined,
@@ -65,6 +89,7 @@ const detailLoading = ref(false);
 const detail = ref<TableRow | null>(null);
 const detailAccounts = ref<TableRow[]>([]);
 const detailAdmins = ref<TableRow[]>([]);
+const copied = ref(false);
 
 async function openDetail(row: TableRow): Promise<void> {
   drawerOpen.value = true;
@@ -77,6 +102,104 @@ async function openDetail(row: TableRow): Promise<void> {
   } finally {
     detailLoading.value = false;
   }
+}
+
+function copyCode(): void {
+  if (!detail.value?.access_code) {
+    return;
+  }
+  void navigator.clipboard.writeText(detail.value.access_code).then(() => {
+    copied.value = true;
+    setTimeout(() => {
+      copied.value = false;
+    }, 2000);
+  });
+}
+
+// ---------- 暂停 / 恢复(整改 A4:带原因,阻止新预订,不影响已确认订单) ----------
+const suspendOpen = ref(false);
+const suspendSaving = ref(false);
+const suspendReason = ref('');
+
+function openSuspend(row: TableRow): void {
+  suspendTarget.value = row;
+  suspendReason.value = '';
+  suspendOpen.value = true;
+}
+
+async function doSuspend(): Promise<void> {
+  if (!detail.value && !suspendTarget.value) {
+    return;
+  }
+  const id = suspendTarget.value?.id ?? detail.value?.id;
+  if (!suspendReason.value.trim()) {
+    message.warning(t('common.required'));
+    return;
+  }
+  suspendSaving.value = true;
+  try {
+    await apiMerchantSuspend(id, suspendReason.value);
+    message.success(t('merchant.profile.suspendSuccess'));
+    suspendOpen.value = false;
+    await load();
+    if (drawerOpen.value && detail.value) {
+      await openDetail(detail.value);
+    }
+  } finally {
+    suspendSaving.value = false;
+  }
+}
+
+const suspendTarget = ref<TableRow | null>(null);
+
+// ---------- 发送通知 / 代入(整改 B1/B2) ----------
+const notifyOpen = ref(false);
+const notifyTarget = ref<TableRow | null>(null);
+
+function openNotify(row: TableRow): void {
+  notifyTarget.value = row;
+  notifyOpen.value = true;
+}
+
+const impersonateOpen = ref(false);
+const impersonateTarget = ref<TableRow | null>(null);
+
+function openImpersonate(row: TableRow): void {
+  impersonateTarget.value = row;
+  impersonateOpen.value = true;
+}
+
+function confirmActivate(row: TableRow): void {
+  Modal.confirm({
+    title: t('merchant.profile.activate'),
+    content: t('merchant.profile.activateConfirm', { name: row.merchant_name || '' }),
+    okText: t('merchant.profile.activate'),
+    async onOk() {
+      await apiMerchantActivate(row.id);
+      message.success(t('merchant.profile.activateSuccess'));
+      await load();
+      if (drawerOpen.value) {
+        await openDetail(row);
+      }
+    },
+  });
+}
+
+// ---------- 重置 2FA(整改 B3) ----------
+function confirmReset2Fa(): void {
+  if (!detail.value) {
+    return;
+  }
+  Modal.confirm({
+    title: t('merchant.profile.reset2Fa'),
+    content: t('merchant.profile.reset2FaConfirm', { name: detail.value.merchant_name || '' }),
+    okText: t('merchant.profile.reset2Fa'),
+    async onOk() {
+      await apiMerchantReset2Fa(detail.value!.id);
+      message.success(t('merchant.profile.reset2FaSuccess'));
+      await openDetail(detail.value!);
+    },
+  });
 }
 
 const accountColumns = computed(() => [
@@ -113,29 +236,6 @@ const form = reactive({
   remark: '',
   siteId: 0,
 });
-
-function resetForm(): void {
-  Object.assign(form, {
-    merchantName: '',
-    merchantType: 1,
-    creditCode: '',
-    legalPerson: '',
-    legalIdCard: '',
-    legalIdImages: [],
-    contactName: '',
-    contactPhone: '',
-    contactEmail: '',
-    address: '',
-    remark: '',
-    siteId: 0,
-  });
-}
-
-function openCreate(): void {
-  editingId.value = 0;
-  resetForm();
-  modalOpen.value = true;
-}
 
 function openEdit(row: TableRow): void {
   editingId.value = row.id;
@@ -252,12 +352,7 @@ async function saveCommission(): Promise<void> {
   }
 }
 
-// ---------- 启停 / 注销 ----------
-async function toggleStatus(row: TableRow): Promise<void> {
-  const result = await apiMerchantToggleStatus(row.id);
-  message.success(result.status === 3 ? t('common.enable') : t('common.disable'));
-  await load();
-}
+// ---------- 注销 ----------
 
 const closeOpen = ref(false);
 const closeSaving = ref(false);
@@ -297,6 +392,9 @@ onMounted(() => {
 <template>
   <PageContainer>
     <a-card :bordered="false" class="mtrip-card-shadow" style="margin-bottom: 16px">
+      <template #extra>
+        <a-button type="link" style="color: #1664ff" @click="exportList">{{ t('common.export') }}</a-button>
+      </template>
       <a-form layout="inline">
         <a-form-item :label="t('merchant.listPage.name')">
           <a-input v-model:value="query.merchantName" allow-clear :placeholder="t('common.pleaseInput')" style="width: 180px" @press-enter="search" />
@@ -372,15 +470,38 @@ onMounted(() => {
               size="small"
               @click="openCommission(record)"
             >{{ t('config.pay.feeRate') }}</a-button>
-            <a-popconfirm
-              v-if="record.status === 3 || record.status === 4"
-              :title="record.status === 3 ? t('common.disable') : t('common.enable')"
-              @confirm="toggleStatus(record)"
-            >
-              <a-button v-perm="'merchant:list:status'" type="link" size="small" :danger="record.status === 3">
-                {{ record.status === 3 ? t('common.disable') : t('common.enable') }}
-              </a-button>
-            </a-popconfirm>
+            <a-button
+              v-if="record.status === 3"
+              v-perm="'merchant:list:status'"
+              type="link"
+              size="small"
+              danger
+              @click="openSuspend(record)"
+            >{{ t('merchant.profile.suspend') }}</a-button>
+            <a-button
+              v-if="record.status === 4"
+              v-perm="'merchant:list:status'"
+              type="link"
+              size="small"
+              style="color: #059669"
+              @click="confirmActivate(record)"
+            >{{ t('merchant.profile.activate') }}</a-button>
+            <a-tooltip :title="t('merchant.notifyPage.title')">
+              <a-button
+                v-perm="'merchant:list:notify'"
+                type="link"
+                size="small"
+                @click="openNotify(record)"
+              ><template #icon><BellOutlined /></template></a-button>
+            </a-tooltip>
+            <a-tooltip :title="t('merchant.impersonate.title')">
+              <a-button
+                v-perm="'merchant:list:impersonate'"
+                type="link"
+                size="small"
+                @click="openImpersonate(record)"
+              ><template #icon><LoginOutlined /></template></a-button>
+            </a-tooltip>
             <a-button
               v-if="record.status !== 5"
               v-perm="'merchant:list:delete'"
@@ -395,25 +516,94 @@ onMounted(() => {
     </a-table>
 
     <!-- 详情抽屉 -->
-    <a-drawer v-model:open="drawerOpen" :title="t('common.detail')" width="720">
+    <a-drawer v-model:open="drawerOpen" :title="detail ? `${t('merchant.profile.merchantId')}: ${detail.merchant_name}` : t('common.detail')" width="720">
       <a-spin :spinning="detailLoading">
         <template v-if="detail">
-          <a-descriptions :column="2" size="small" bordered>
-            <a-descriptions-item :label="t('merchant.listPage.name')" :span="2">{{ detail.merchant_name }}</a-descriptions-item>
-            <a-descriptions-item :label="t('common.type')">{{ TYPE_TEXT[detail.merchant_type] ?? detail.merchant_type }}</a-descriptions-item>
-            <a-descriptions-item :label="t('common.status')"><StatusTag :value="detail.status" :map="STATUS_MAP" /></a-descriptions-item>
-            <a-descriptions-item :label="t('merchant.listPage.code')" :span="2">{{ detail.credit_code }}</a-descriptions-item>
-            <a-descriptions-item :label="t('common.name')">{{ detail.legal_person }}</a-descriptions-item>
-            <a-descriptions-item :label="t('system.admin.mobile')">{{ detail.legal_id_card || '-' }}</a-descriptions-item>
-            <a-descriptions-item :label="t('merchant.listPage.contact')">{{ detail.contact_name }}</a-descriptions-item>
-            <a-descriptions-item :label="t('merchant.listPage.phone')">{{ detail.contact_phone }}</a-descriptions-item>
-            <a-descriptions-item :label="t('merchant.listPage.email')" :span="2">{{ detail.contact_email || '-' }}</a-descriptions-item>
-            <a-descriptions-item :label="t('common.address')" :span="2">{{ detail.address || '-' }}</a-descriptions-item>
-            <a-descriptions-item :label="t('config.pay.feeRate')">{{ detail.commission_rate }}%</a-descriptions-item>
-            <a-descriptions-item :label="t('merchant.listPage.code')">{{ detail.settlement_cycle === 30 ? t('common.all') : `T+${detail.settlement_cycle}` }}</a-descriptions-item>
-            <a-descriptions-item :label="t('goods.audit.auditModal.opinion')" :span="2">{{ detail.audit_remark || '-' }}</a-descriptions-item>
-            <a-descriptions-item :label="t('common.remark')" :span="2">{{ detail.remark || '-' }}</a-descriptions-item>
+          <!-- 头部卡(整改 A3,原型 §3.5.5) -->
+          <div style="display: flex; gap: 14px; padding: 14px; border: 1px solid #e3e8f0; border-radius: 10px; margin-bottom: 16px; background: #fff">
+            <div style="width: 48px; height: 48px; border-radius: 8px; background: #1664ff; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: 700; flex-shrink: 0">
+              {{ (detail.merchant_name || 'M').slice(0, 1) }}
+            </div>
+            <div style="flex: 1; min-width: 0">
+              <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap">
+                <span style="font-size: 16px; font-weight: 700; color: #1a2332">{{ detail.merchant_name }}</span>
+                <a-tag v-if="detail.is_vip === 1" color="gold">VIP</a-tag>
+                <StatusTag :value="detail.status" :map="STATUS_MAP" />
+              </div>
+              <div style="font-size: 12px; color: #64748b; margin-top: 4px">{{ detail.merchant_short_name || detail.credit_code }}</div>
+              <div style="font-size: 11px; color: #94a3b8; margin-top: 4px">{{ TYPE_TEXT[detail.merchant_type] ?? detail.merchant_type }}</div>
+            </div>
+          </div>
+
+          <!-- 字段网格 -->
+          <a-descriptions :column="2" size="small" bordered style="margin-bottom: 16px">
+            <a-descriptions-item :label="t('merchant.profile.merchantId')">{{ detail.id }}</a-descriptions-item>
+            <a-descriptions-item :label="t('merchant.profile.regNo')">{{ detail.credit_code || '-' }}</a-descriptions-item>
+            <a-descriptions-item :label="t('merchant.profile.owner')">{{ detail.legal_person || '-' }}</a-descriptions-item>
+            <a-descriptions-item :label="t('merchant.profile.commissionPlan')">
+              {{ detail.commission_rate != null ? `${detail.commission_rate}%` : '-' }}
+            </a-descriptions-item>
+            <a-descriptions-item :label="t('merchant.listPage.email')">{{ detail.contact_email || '-' }}</a-descriptions-item>
+            <a-descriptions-item :label="t('merchant.listPage.phone')">{{ detail.contact_phone || '-' }}</a-descriptions-item>
+            <a-descriptions-item :label="t('merchant.profile.bankName')">{{ detailAccounts[0]?.bank_name || '-' }}</a-descriptions-item>
+            <a-descriptions-item :label="t('merchant.profile.bankAccount')">{{ detailAccounts[0]?.account_no || '-' }}</a-descriptions-item>
+            <a-descriptions-item :label="t('merchant.profile.joinDate')">{{ detail.created_at || '-' }}</a-descriptions-item>
+            <a-descriptions-item :label="t('merchant.profile.lastLogin')">{{ detail.last_login_at || '-' }}</a-descriptions-item>
           </a-descriptions>
+
+          <!-- 账户安全(整改 A3/B3) -->
+          <a-divider orientation="left">{{ t('merchant.profile.accountSecurity') }}</a-divider>
+          <a-descriptions :column="2" size="small" bordered>
+            <a-descriptions-item :label="t('merchant.profile.merchantAccessCode')" :span="2">
+              <a-space>
+                <code style="font-weight: 600">{{ detail.access_code || '-' }}</code>
+                <a-button v-if="detail.access_code" type="link" size="small" @click="copyCode">
+                  <template #icon><CopyOutlined /></template>{{ copied ? t('merchant.profile.copied') : t('merchant.profile.copy') }}
+                </a-button>
+              </a-space>
+            </a-descriptions-item>
+            <a-descriptions-item :label="t('merchant.profile.twoFaStatus')">
+              <a-tag :color="detail.two_fa_enabled === 1 ? 'success' : 'default'">
+                {{ detail.two_fa_enabled === 1 ? t('merchant.profile.twoFaEnabled') : t('merchant.profile.twoFaDisabled') }}
+              </a-tag>
+            </a-descriptions-item>
+            <a-descriptions-item :label="t('merchant.profile.twoFaMethod')">{{ detail.two_fa_enabled === 1 ? detail.two_fa_method || '-' : '-' }}</a-descriptions-item>
+            <a-descriptions-item :label="t('merchant.profile.twoFaEnrolled')">{{ detail.two_fa_enrolled_at || '-' }}</a-descriptions-item>
+            <a-descriptions-item :label="t('merchant.profile.twoFaLastReset')">{{ detail.two_fa_last_reset_at || '-' }}</a-descriptions-item>
+          </a-descriptions>
+          <div style="font-size: 12px; color: #64748b; margin: 8px 0">{{ t('merchant.profile.reset2FaHint') }}</div>
+          <a-button v-perm="'merchant:list:2fa'" size="small" @click="confirmReset2Fa">{{ t('merchant.profile.reset2Fa') }}</a-button>
+
+          <!-- 月度绩效(整改 A3) -->
+          <a-divider orientation="left">{{ t('merchant.profile.monthlyPerformance') }}</a-divider>
+          <a-row :gutter="12">
+            <a-col :span="12">
+              <div style="border: 1px solid #e3e8f0; border-radius: 8px; padding: 12px 14px; background: #f8fafc">
+                <div style="font-size: 11px; color: #94a3b8">{{ t('merchant.profile.revenueMtd') }}</div>
+                <div style="font-size: 18px; font-weight: 700; color: #1a2332; margin-top: 2px">
+                  {{ detail.revenue_mtd != null ? `¥${Number(detail.revenue_mtd).toLocaleString()}` : '-' }}
+                </div>
+              </div>
+            </a-col>
+            <a-col :span="12">
+              <div style="border: 1px solid #e3e8f0; border-radius: 8px; padding: 12px 14px; background: #f8fafc">
+                <div style="font-size: 11px; color: #94a3b8">{{ t('merchant.profile.bookingsMtd') }}</div>
+                <div style="font-size: 18px; font-weight: 700; color: #1a2332; margin-top: 2px">{{ detail.bookings_mtd ?? '-' }}</div>
+              </div>
+            </a-col>
+          </a-row>
+
+          <!-- 底部动作(整改 A4) -->
+          <div style="display: flex; gap: 8px; margin-top: 16px">
+            <a-button v-if="detail.status === 3" v-perm="'merchant:list:status'" danger @click="openSuspend(detail)">
+              {{ t('merchant.profile.suspend') }}
+            </a-button>
+            <a-button v-if="detail.status === 4" v-perm="'merchant:list:status'" type="primary" ghost @click="confirmActivate(detail)">
+              {{ t('merchant.profile.activate') }}
+            </a-button>
+            <a-button v-perm="'merchant:list:notify'" @click="openNotify(detail)">{{ t('merchant.notifyPage.title') }}</a-button>
+            <a-button v-perm="'merchant:list:impersonate'" @click="openImpersonate(detail)">{{ t('merchant.impersonate.start') }}</a-button>
+          </div>
 
           <template v-if="detail.legal_id_images?.length">
             <a-divider orientation="left">{{ t('goods.common.images') }}</a-divider>
@@ -585,5 +775,32 @@ onMounted(() => {
       />
       <a-textarea v-model:value="closeRemark" :rows="3" :placeholder="t('common.required')" />
     </a-modal>
+
+    <!-- 暂停商户(整改 A4:必填原因,阻止新预订) -->
+    <a-modal
+      v-model:open="suspendOpen"
+      :title="`${t('merchant.profile.suspend')}:${suspendTarget?.merchant_name ?? detail?.merchant_name ?? ''}`"
+      width="480px"
+      :confirm-loading="suspendSaving"
+      :ok-text="t('merchant.profile.suspend')"
+      :ok-button-props="{ danger: true }"
+      @ok="doSuspend"
+    >
+      <a-alert
+        :message="t('merchant.profile.suspendConfirm', { name: suspendTarget?.merchant_name ?? detail?.merchant_name ?? '' })"
+        type="warning"
+        show-icon
+        style="margin: 8px 0 16px"
+      />
+      <a-form layout="vertical">
+        <a-form-item :label="`${t('merchant.profile.suspendReason')} *`">
+          <a-textarea v-model:value="suspendReason" :rows="3" :placeholder="t('common.required')" />
+        </a-form-item>
+      </a-form>
+    </a-modal>
+
+    <!-- 发送通知抽屉 / 代入弹窗(整改 B1/B2) -->
+    <NotifyDrawer v-model:open="notifyOpen" :merchant="notifyTarget" @sent="load" />
+    <ImpersonateModal v-model:open="impersonateOpen" :merchant="impersonateTarget" />
   </PageContainer>
 </template>
