@@ -89,6 +89,8 @@
 > ★ 2026-08-20(KYC 布局单列+所需文件卡片):用户反馈三字段误排一行、所需文件未对齐——Browser 代理重测原型确认:字段每行一个纵向堆叠(间距 12px/控件 100% 宽/label 11px/600/0.55px 大写/Template label mb 4px),所需文件为灰底卡片(1px #E3E8F0+8px 圆角+#F8FAFC,标题行 #F1F5F9 底 8px 12px 含模板名与「N documents」,条目 8px 12px+绿勾 13px #059669+分隔线 #F1F5F9,原型无 Optional 标注);.kyc-grid 三列 grid 改 block 单列,所需文件与预览弹窗改 kyc-doc-card 卡片式,移除 ifApplicable 词条,胶囊未选中文字按实测改回 #64748B,模板下拉 padding 8px 32px 8px 10px。原型截图存 docs/kyc-management-section.png。vue-tsc+check.ps1 全绿。
 >
 
+> ★ 2026-08-22(待核实页国际化补齐):修复 `merchant/verify/index.vue`(待核实/重新提交/已通过/已拒绝四状态共用)中英文切换失效——根因是页面绝大多数文案硬编码英文,仅 common.* 少数走 t()。本轮将 `locales/en-US.ts`/`zh-CN.ts` 的 `merchant.verifyPage` 由 6 键扩至约 80 键(表格列/状态/类型/按钮/抽屉描述/文档表/时间线/底部动作/四类弹窗/提示语),zh-CN 全部中文;`STATUS_MAP`/`DOC_STATUS`/`TYPE_TEXT`/`REJECT_REASONS`(r1-9)改 `computed`+`t()` 随 locale 响应式刷新,columns/docColumns 及模板各处硬编码文案全部接入 t()。`vue-tsc --noEmit` 零报错 + `npm run build` 通过(仅原 chunk 体积警告,与本次无关)。
+
 ## ★ 商户验证原型对齐整改(2026-08-16)
 
 对照 Figma 原型 stir-long v4.2.1(Merchant Verification)补齐 5 项差距,范围仅商户验证模块:
