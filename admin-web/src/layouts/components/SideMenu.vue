@@ -4,18 +4,19 @@ import { useRoute, useRouter } from 'vue-router';
 import * as Icons from '@ant-design/icons-vue';
 import { useUserStore } from '@/stores/user';
 import { menuTitle } from '@/locales/menuI18n';
-import { apiOnboardingQueues } from '@/api/merchant';
+import { apiVerifyQueues } from '@/api/merchant';
 
 const route = useRoute();
 const router = useRouter();
 const userStore = useUserStore();
 
-/** 商户验证队列计数(侧边栏徽标:仅待审核/重新提交显示,60s 自动刷新) */
+/** 商户验证队列计数(侧边栏徽标:入驻申请/待核实/重新提交显示,60s 自动刷新) */
 const queueCounts = ref<Record<string, number>>({});
 let queueTimer: number | undefined;
 async function loadQueues(): Promise<void> {
   try {
-    queueCounts.value = await apiOnboardingQueues();
+    // 待核实/重新提交均来自 merchant_info.status，不能使用入驻线索 stage 统计。
+    queueCounts.value = await apiVerifyQueues();
   } catch {
     queueCounts.value = {};
   }
@@ -30,17 +31,18 @@ onUnmounted(() => {
   }
 });
 
-/** 子菜单徽标:仅待审核(/merchant-verify/pending)与重新提交(/merchant-verify/resubmission),计数 0 不显示 */
+/** 子菜单徽标:入驻申请、待核实、重新提交；计数 0 不显示 */
 function childBadge(child: MenuItem): number | undefined {
+  if (child.key === '/merchant-verify/onboarding') return (queueCounts.value.onboarding ?? 0) > 0 ? queueCounts.value.onboarding : undefined;
   if (child.key === '/merchant-verify/pending') return (queueCounts.value.pending ?? 0) > 0 ? queueCounts.value.pending : undefined;
   if (child.key === '/merchant-verify/resubmission') return (queueCounts.value.resubmission ?? 0) > 0 ? queueCounts.value.resubmission : undefined;
   return undefined;
 }
 
-/** 父级徽标:商户验证显示子菜单徽标总计(待审核 + 重新提交),计数 0 不显示 */
+/** 父级徽标:商户验证显示三项待办总计,计数 0 不显示 */
 function groupBadge(group: MenuGroup): number | undefined {
   if (group.key !== '/merchant-verify') return undefined;
-  const total = (queueCounts.value.pending ?? 0) + (queueCounts.value.resubmission ?? 0);
+  const total = (queueCounts.value.onboarding ?? 0) + (queueCounts.value.pending ?? 0) + (queueCounts.value.resubmission ?? 0);
   return total > 0 ? total : undefined;
 }
 

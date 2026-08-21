@@ -56,6 +56,34 @@ body {
   font-size: 14px;
 }
 
+// ===== 抽屉底部操作栏 =====
+// 使用 a-drawer #footer 的操作栏脱离 body 滚动区，绝对固定在抽屉底部。
+.ant-drawer .ant-drawer-content {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+.ant-drawer .ant-drawer-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+
+.ant-drawer .ant-drawer-body:has(~ .ant-drawer-footer) {
+  padding-bottom: 88px !important;
+}
+
+.ant-drawer .ant-drawer-footer {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 1;
+  flex: 0 0 auto;
+  background: rgb(250, 251, 252);
+}
+
 // ===== 卡片轻阴影(UI 方案 2.3) =====
 .mtrip-card-shadow {
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);

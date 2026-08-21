@@ -93,6 +93,13 @@
 
 对照 Figma 原型 stir-long v4.2.1(Merchant Verification)补齐 5 项差距,范围仅商户验证模块:
 
+- **KYC 提交方式样式(2026-08-21)**:依据 PRD 模块 11 的“商户自助提交 / 协助商户完成 KYC”两种路径，已按 Figma 原型侧边栏实测改为双端布局：卡片 12px×14px 内边距、8px 圆角；左侧为 10px 大写灰色标题与 20px 高蓝色方式标签，右侧为 36px 高琥珀色描边协助入口。两个入口仍更新同一 `submissionMethod` 值，不改变既有 RBAC 与提交流程。
+- **协助商户 KYC 侧边栏(2026-08-21)**: 点击“协助商户完成 KYC 流程”后，新增嵌套右侧抽屉，按 Figma 原型实现标题身份区、协助录入提示、企业信息表单、证件上传卡片、商户确认待办卡与固定操作栏。商户确认卡含待办状态、运营不可代确认提示和“发送确认请求”入口。当前仅提供视觉与布局，保存、文件选择、确认请求和提交验证尚未接入后端流程。
+- **商户验证菜单微标口径修正(2026-08-21)**: SideMenu 微标统一改读 `VerifyController::queues`：入驻申请=进行中的 `merchant_application.stage 1-4`，待核实/重新提交=`merchant_info.status 0/6`，不再将不同流程的统计混用。父级“商户验证”微标为这三项待办之和，60 秒自动刷新保持不变。
+- **全局 Drawer Footer 固定(2026-08-21)**: `admin-web/src/styles/index.less` 为 Ant Design Drawer 的 `.ant-drawer-footer` 设为绝对定位（bottom: 0），并让有 footer 的 body 独立滚动、预留 88px 底部空间，所有使用 `#footer` 插槽的底部操作栏不再随内容滚动；body 内的存量按钮不受影响。
+- **入驻申请详情操作栏固定(2026-08-21)**: onboarding 详情抽屉原本置于 body 末尾的 `.drawer-footer` 已移入 `#footer` 插槽，保留原有权限控制、阶段判断与按钮行为，现与全局 Drawer footer 规则一致固定于底部。
+- **入驻申请公司信息网格(2026-08-21)**: 公司信息前四项保持两列布局，企业数量、企业类型和商户 ID 拆入独立三列网格，确保三项始终同一行展示。
+
 - **Onboarding 入驻流水线**:`database/merchant/09-merchant-application.sql`(merchant_application/business/kyc_template/note/verify_document_revision 5 表 + merchant_info access_code 等 3 列 + doc/timeline application_id,守卫式幂等 ALTER;已登记 compose initdb 29-*);`OnboardingController` 12 接口 `/api/v1/admin/merchant/onboarding/*`(权限键 merchant:onboarding:*);前端 `views/merchant/onboarding/index.vue`(菜单 205,component `merchant/onboarding/index`)。
 - **凭证/驳回/重交/门禁**:approve 生成 `MTRP-{HOTEL|ATTRACTION|TRAVEL}-{6位}` access_code + channels(email/sms/inapp)写 timeline credentials_sent;reject 改 reasonCode(1-9 预置枚举)必填;文档重交新增 revision 行(Original vs Resubmitted 对比);存在 status=2 未核验文档时拒绝最终 approve;`regenerateCode` 仅已启用商户可用(权限 merchant:verify:regencode)。
 - **验证记录**:db-apply 落库核验(5 表/9 模板/3 新列/菜单种子)、接口全流程冒烟全过(创建→指派→发KYC→转商户→门禁→逐份核验→approve出码→regenerate/reject/resubmit)、`check.ps1` 四步全绿。

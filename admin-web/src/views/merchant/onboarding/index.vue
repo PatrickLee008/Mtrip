@@ -6,15 +6,20 @@ import {
   BankOutlined,
   CheckCircleOutlined,
   CloseCircleOutlined,
+  ClockCircleOutlined,
   DeleteOutlined,
   DownloadOutlined,
   EditOutlined,
   EyeOutlined,
+  FileTextOutlined,
+  InfoCircleOutlined,
   MenuOutlined,
   PlusOutlined,
   SafetyCertificateOutlined,
   SendOutlined,
   SyncOutlined,
+  UploadOutlined,
+  UserOutlined,
 } from '@ant-design/icons-vue';
 import PageContainer from '@/components/PageContainer.vue';
 import SearchFilterBar, { type FilterConfig } from '@/components/SearchFilterBar.vue';
@@ -200,6 +205,7 @@ async function loadOps(): Promise<void> {
 
 // ---------- 详情抽屉 ----------
 const drawerOpen = ref(false);
+const assistOpen = ref(false);
 const detailLoading = ref(false);
 const app = ref<TableRow | null>(null);
 const businesses = ref<TableRow[]>([]);
@@ -331,6 +337,18 @@ const previewOpen = ref(false);
 // 注册企业表格当前展开的业务单元(点击展开行时联动 KYC 配置)
 const kycBizId = ref(0);
 const currentBiz = computed<TableRow | null>(() => businesses.value.find((b) => b.id === kycBizId.value) ?? null);
+const assistKycDocs = computed(() => {
+  const docs = templateDocs(selectedTemplate.value);
+  return docs.length ? docs : [
+    { name: t('merchant.onboardingPage.assistDefaultDocRegistration'), doc_type: 'business_registration', required: true },
+    { name: t('merchant.onboardingPage.assistDefaultDocLicense'), doc_type: 'operating_license', required: true },
+  ];
+});
+
+function openAssistKyc(): void {
+  kycSetup.submissionMethod = 2;
+  assistOpen.value = true;
+}
 
 /** 展开注册企业行:载入该业务单元的 KYC 配置(企业类型/验证模板/所需文件联动) */
 async function selectBiz(biz: TableRow): Promise<void> {
@@ -811,6 +829,8 @@ onMounted(() => {
                   <div class="co-cell-label">{{ t('merchant.onboardingPage.labelSubmitted') }}</div>
                   <div class="co-cell-value">{{ app.submitted_at || '-' }}</div>
                 </div>
+              </div>
+              <div class="co-grid co-grid--3col">
                 <div class="co-cell">
                   <div class="co-cell-label">{{ t('merchant.onboardingPage.labelNumBusinesses') }}</div>
                   <div class="co-cell-value">{{ app.num_businesses }}</div>
@@ -1026,11 +1046,25 @@ onMounted(() => {
           </div>
           <!-- KYC 提交方法卡片(原型 KYC SUBMISSION METHOD) -->
           <div class="kyc-submit-card">
-            <div class="kyc-submit-card__title">{{ t('merchant.onboardingPage.kycSubmissionMethod') }}</div>
-            <a-radio-group v-model:value="kycSetup.submissionMethod" :disabled="!editable">
-              <a-radio :value="1">{{ t('merchant.onboardingPage.methodSelfService') }}</a-radio>
-              <a-radio :value="2">{{ t('merchant.onboardingPage.methodAssist') }}</a-radio>
-            </a-radio-group>
+            <div class="kyc-submit-card__method">
+              <div>
+                <div class="kyc-submit-card__title">{{ t('merchant.onboardingPage.kycSubmissionMethod') }}</div>
+                <button
+                  type="button"
+                  class="kyc-submit-card__tag"
+                  :class="{ 'is-active': kycSetup.submissionMethod === 1 }"
+                  :disabled="!editable"
+                  @click="kycSetup.submissionMethod = 1"
+                >{{ t('merchant.onboardingPage.methodSelfService') }}</button>
+              </div>
+              <button
+                type="button"
+                class="kyc-submit-card__assist"
+                :class="{ 'is-active': kycSetup.submissionMethod === 2 }"
+                :disabled="!editable"
+                @click="openAssistKyc"
+              ><SafetyCertificateOutlined />{{ t('merchant.onboardingPage.methodAssistAction') }}</button>
+            </div>
           </div>
           <!-- 预览弹窗(Preview Requirements) -->
           <a-modal
@@ -1107,17 +1141,112 @@ onMounted(() => {
             <a-button v-perm="'merchant:onboarding:update'" :disabled="!editable" :loading="noteSaving" class="kyc-note-btn" @click="addNote">{{ t('merchant.onboardingPage.addNote') }}</a-button>
           </a-input-group>
 
-          <!-- 底部动作条(按阶段) -->
-          <div v-if="editable" class="drawer-footer">
-            <a-button v-perm="'merchant:onboarding:kyc'" class="drawer-footer-btn drawer-footer-btn--ghost" @click="sendReminder">{{ t('merchant.onboardingPage.sendReminder') }}</a-button>
-            <template v-if="app.stage >= 3">
-              <a-button v-perm="'merchant:onboarding:approve'" class="drawer-footer-btn drawer-footer-btn--primary" @click="openApprove(app)">{{ t('merchant.onboardingPage.approveOnboarding') }}</a-button>
-              <a-button v-perm="'merchant:onboarding:reject'" class="drawer-footer-btn drawer-footer-btn--danger" @click="openReject(app)">{{ t('merchant.onboardingPage.rejectLead') }}</a-button>
-            </template>
-            <a-button v-else v-perm="'merchant:onboarding:reject'" class="drawer-footer-btn drawer-footer-btn--danger" @click="openReject(app)">{{ t('merchant.onboardingPage.rejectLead') }}</a-button>
-          </div>
         </template>
       </a-spin>
+      <template #footer>
+        <div v-if="editable && app" class="drawer-footer">
+          <a-button v-perm="'merchant:onboarding:kyc'" class="drawer-footer-btn drawer-footer-btn--ghost" @click="sendReminder">{{ t('merchant.onboardingPage.sendReminder') }}</a-button>
+          <template v-if="app.stage >= 3">
+            <a-button v-perm="'merchant:onboarding:approve'" class="drawer-footer-btn drawer-footer-btn--primary" @click="openApprove(app)">{{ t('merchant.onboardingPage.approveOnboarding') }}</a-button>
+            <a-button v-perm="'merchant:onboarding:reject'" class="drawer-footer-btn drawer-footer-btn--danger" @click="openReject(app)">{{ t('merchant.onboardingPage.rejectLead') }}</a-button>
+          </template>
+          <a-button v-else v-perm="'merchant:onboarding:reject'" class="drawer-footer-btn drawer-footer-btn--danger" @click="openReject(app)">{{ t('merchant.onboardingPage.rejectLead') }}</a-button>
+        </div>
+      </template>
+    </a-drawer>
+
+    <!-- 协助商户完成 KYC：当前仅对齐原型界面，提交与上传逻辑后续接入 -->
+    <a-drawer v-model:open="assistOpen" class="assist-kyc-drawer" width="720" :z-index="1100">
+      <template #title>
+        <div class="assist-kyc-drawer__title">
+          <span class="assist-kyc-drawer__title-icon"><SafetyCertificateOutlined /></span>
+          <div>
+            <div class="assist-kyc-drawer__title-main">{{ t('merchant.onboardingPage.assistDrawerTitle') }}</div>
+            <div class="assist-kyc-drawer__title-sub">{{ t('merchant.onboardingPage.assistDrawerSubtitle', { name: currentBiz?.business_name || app?.company_name || '-', operator: app?.assigned_ops_name || t('merchant.onboardingPage.unassigned') }) }}</div>
+          </div>
+        </div>
+      </template>
+
+      <div class="assist-kyc-notice">
+        <SafetyCertificateOutlined class="assist-kyc-notice__icon" />
+        <div>
+          <div class="assist-kyc-notice__title">{{ t('merchant.onboardingPage.assistNoticeTitle') }}</div>
+          <div class="assist-kyc-notice__text">{{ t('merchant.onboardingPage.assistNoticeText') }}</div>
+        </div>
+      </div>
+
+      <div class="assist-kyc-section-title"><BankOutlined />{{ t('merchant.onboardingPage.assistBusinessInfo') }}</div>
+      <div class="assist-kyc-form-grid">
+        <div class="assist-kyc-field">
+          <label>{{ t('merchant.onboardingPage.assistBusinessName') }}</label>
+          <a-input :value="currentBiz?.business_name || app?.company_name" readonly />
+        </div>
+        <div class="assist-kyc-field">
+          <label>{{ t('merchant.onboardingPage.assistContactPerson') }}</label>
+          <a-input :placeholder="t('merchant.onboardingPage.assistContactPlaceholder')" />
+        </div>
+        <div class="assist-kyc-field">
+          <label>{{ t('merchant.onboardingPage.assistPhone') }}</label>
+          <a-input :placeholder="t('merchant.onboardingPage.assistPhonePlaceholder')" />
+        </div>
+        <div class="assist-kyc-field">
+          <label>{{ t('merchant.onboardingPage.assistEmail') }}</label>
+          <a-input :placeholder="t('merchant.onboardingPage.assistEmailPlaceholder')" />
+        </div>
+      </div>
+      <div class="assist-kyc-field assist-kyc-field--full">
+        <label>{{ t('merchant.onboardingPage.assistAddress') }}</label>
+        <a-input :placeholder="t('merchant.onboardingPage.assistAddressPlaceholder')" />
+      </div>
+      <div class="assist-kyc-field assist-kyc-field--full">
+        <label>{{ t('merchant.onboardingPage.assistOpsNotes') }}</label>
+        <a-textarea :rows="2" :placeholder="t('merchant.onboardingPage.assistOpsNotesPlaceholder')" />
+      </div>
+
+      <div class="assist-kyc-section-title assist-kyc-section-title--docs"><FileTextOutlined />{{ t('merchant.onboardingPage.assistDocumentUpload') }}<span>{{ t('merchant.onboardingPage.assistUploadedCount', { count: 0, total: assistKycDocs.length }) }}</span></div>
+      <div v-for="doc in assistKycDocs" :key="doc.doc_type" class="assist-kyc-document">
+        <div class="assist-kyc-document__head">
+          <span class="assist-kyc-document__icon"><FileTextOutlined /></span>
+          <div>
+            <div class="assist-kyc-document__name">{{ doc.name }}</div>
+            <div class="assist-kyc-document__required">{{ doc.required ? t('merchant.onboardingPage.tplDocRequiredLabel') : t('merchant.onboardingPage.assistOptional') }}</div>
+          </div>
+        </div>
+        <div class="assist-kyc-document__controls">
+          <div>
+            <div class="assist-kyc-document__label">{{ t('merchant.onboardingPage.assistUploadDocument') }}</div>
+            <a-button size="small" class="assist-kyc-document__upload"><template #icon><UploadOutlined /></template>{{ t('merchant.onboardingPage.assistChooseFile') }}</a-button>
+          </div>
+          <div>
+            <div class="assist-kyc-document__label">{{ t('merchant.onboardingPage.assistSource') }}</div>
+            <a-select :value="'ops'" size="small" class="assist-kyc-document__source" :options="[{ value: 'ops', label: t('merchant.onboardingPage.assistSourceOps') }]" />
+          </div>
+        </div>
+        <div class="assist-kyc-document__empty"><InfoCircleOutlined />{{ t('merchant.onboardingPage.assistNoDocument') }}</div>
+      </div>
+
+      <div class="assist-kyc-section-title assist-kyc-section-title--confirmation"><UserOutlined />{{ t('merchant.onboardingPage.assistMerchantConfirmation') }}</div>
+      <div class="assist-kyc-confirmation">
+        <div class="assist-kyc-confirmation__head">
+          <span>{{ t('merchant.onboardingPage.assistConfirmationStatus') }}</span>
+          <span class="assist-kyc-confirmation__pending"><ClockCircleOutlined />{{ t('merchant.onboardingPage.assistConfirmationPending') }}</span>
+        </div>
+        <div class="assist-kyc-confirmation__notice">
+          <div>{{ t('merchant.onboardingPage.assistConfirmationText') }}</div>
+          <div class="assist-kyc-confirmation__notice-warning">{{ t('merchant.onboardingPage.assistConfirmationWarning') }}</div>
+        </div>
+        <a-button type="primary" class="assist-kyc-confirmation__send"><template #icon><SendOutlined /></template>{{ t('merchant.onboardingPage.assistSendConfirmation') }}</a-button>
+      </div>
+
+      <template #footer>
+        <div class="assist-kyc-footer">
+          <span>{{ t('merchant.onboardingPage.assistingAs', { name: app?.assigned_ops_name || t('merchant.onboardingPage.unassigned') }) }}</span>
+          <div>
+            <a-button>{{ t('merchant.onboardingPage.assistSaveDraft') }}</a-button>
+            <a-button type="primary" class="assist-kyc-footer__submit"><template #icon><SendOutlined /></template>{{ t('merchant.onboardingPage.assistSubmitVerification') }}</a-button>
+          </div>
+        </div>
+      </template>
     </a-drawer>
 
     <!-- 录入线索 -->
@@ -2112,13 +2241,431 @@ onMounted(() => {
   background: #f8fafc;
 }
 
+.kyc-submit-card__method {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+}
+
 .kyc-submit-card__title {
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 600;
-  color: #475569;
-  margin-bottom: 8px;
-  text-transform: uppercase;
+  line-height: 14px;
+  color: #94a3b8;
+  margin-bottom: 4px;
   letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.kyc-submit-card__tag,
+.kyc-submit-card__assist {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid;
+  border-radius: 6px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.kyc-submit-card__tag {
+  min-height: 20px;
+  padding: 0 7px;
+  border-radius: 4px;
+  border-color: #bfdbfe;
+  background: #eff6ff;
+  color: #2563eb;
+  font-size: 10px;
+  line-height: 18px;
+}
+
+.kyc-submit-card__assist {
+  min-height: 36px;
+  padding: 0 13px;
+  gap: 6px;
+  border-color: #fde68a;
+  background: #fffbeb;
+  color: #b45309;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.kyc-submit-card__assist .anticon {
+  font-size: 14px;
+}
+
+.kyc-submit-card__tag:hover:not(:disabled),
+.kyc-submit-card__tag.is-active {
+  border-color: #1664ff;
+  background: #eff6ff;
+}
+
+.kyc-submit-card__assist:hover:not(:disabled),
+.kyc-submit-card__assist.is-active {
+  border-color: #f59e0b;
+  background: #fef3c7;
+}
+
+.kyc-submit-card__tag:disabled,
+.kyc-submit-card__assist:disabled {
+  color: #94a3b8;
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+@media (max-width: 560px) {
+  .kyc-submit-card__method {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .kyc-submit-card__assist {
+    width: 100%;
+  }
+}
+
+/* 协助 KYC 嵌套侧边栏（原型 Assist Merchant with KYC） */
+.assist-kyc-drawer :deep(.ant-drawer-header) {
+  min-height: 60px;
+  padding: 12px 20px;
+  border-bottom-color: #eef2f6;
+}
+
+.assist-kyc-drawer :deep(.ant-drawer-header-title) {
+  align-items: flex-start;
+}
+
+.assist-kyc-drawer :deep(.ant-drawer-close) {
+  margin-top: 2px;
+  color: #94a3b8;
+}
+
+.assist-kyc-drawer :deep(.ant-drawer-body) {
+  padding: 16px 20px 24px;
+  background: #fff;
+}
+
+.assist-kyc-drawer :deep(.ant-drawer-footer) {
+  padding: 14px 20px;
+  border-top-color: #eef2f6;
+}
+
+.assist-kyc-drawer__title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.assist-kyc-drawer__title-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid #fde68a;
+  border-radius: 7px;
+  background: #fffbeb;
+  color: #b45309;
+  font-size: 15px;
+}
+
+.assist-kyc-drawer__title-main {
+  color: #1a2332;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 20px;
+}
+
+.assist-kyc-drawer__title-sub {
+  margin-top: 1px;
+  color: #94a3b8;
+  font-size: 10px;
+  font-weight: 400;
+  line-height: 15px;
+}
+
+.assist-kyc-notice {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 18px;
+  padding: 14px 16px;
+  border: 1px solid #fde68a;
+  border-radius: 8px;
+  background: #fffbeb;
+}
+
+.assist-kyc-notice__icon {
+  flex: 0 0 auto;
+  margin-top: 1px;
+  color: #b45309;
+  font-size: 14px;
+}
+
+.assist-kyc-notice__title {
+  color: #92400e;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 18px;
+}
+
+.assist-kyc-notice__text {
+  margin-top: 2px;
+  color: #92400e;
+  font-size: 11px;
+  line-height: 17px;
+}
+
+.assist-kyc-section-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #eef2f6;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.assist-kyc-section-title > .anticon {
+  color: #94a3b8;
+  font-size: 13px;
+}
+
+.assist-kyc-section-title > span {
+  color: #94a3b8;
+  font-size: 10px;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.assist-kyc-section-title--docs {
+  margin-top: 20px;
+}
+
+.assist-kyc-section-title--confirmation {
+  margin-top: 20px;
+}
+
+.assist-kyc-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.assist-kyc-field {
+  min-width: 0;
+}
+
+.assist-kyc-field--full {
+  margin-top: 10px;
+}
+
+.assist-kyc-field label,
+.assist-kyc-document__label {
+  display: block;
+  margin-bottom: 5px;
+  color: #94a3b8;
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 14px;
+}
+
+.assist-kyc-field :deep(.ant-input),
+.assist-kyc-field :deep(.ant-input-affix-wrapper) {
+  min-height: 34px;
+  border-color: #e3e8f0;
+  border-radius: 6px;
+  background: #fff;
+  color: #334155;
+  font-size: 12px;
+}
+
+.assist-kyc-field :deep(textarea.ant-input) {
+  min-height: 56px;
+  padding-top: 8px;
+  resize: vertical;
+}
+
+.assist-kyc-document {
+  margin-top: 12px;
+  padding: 14px;
+  border: 1px solid #eef2f6;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.assist-kyc-document__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.assist-kyc-document__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  background: #eff6ff;
+  color: #2563eb;
+  font-size: 14px;
+}
+
+.assist-kyc-document__name {
+  color: #1a2332;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 17px;
+}
+
+.assist-kyc-document__required {
+  color: #94a3b8;
+  font-size: 10px;
+  line-height: 14px;
+}
+
+.assist-kyc-document__controls {
+  display: grid;
+  grid-template-columns: 1fr 160px;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.assist-kyc-document__upload {
+  border-color: #e3e8f0;
+  border-radius: 5px;
+  color: #475569;
+  font-size: 11px;
+}
+
+.assist-kyc-document__source {
+  width: 100%;
+}
+
+.assist-kyc-document__source :deep(.ant-select-selector) {
+  border-color: #e3e8f0 !important;
+  border-radius: 5px !important;
+  font-size: 11px;
+}
+
+.assist-kyc-document__empty {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+  padding: 6px 8px;
+  border: 1px solid #fde68a;
+  border-radius: 5px;
+  background: #fffbeb;
+  color: #a16207;
+  font-size: 10px;
+  line-height: 14px;
+}
+
+.assist-kyc-confirmation {
+  margin-top: 12px;
+  padding: 16px;
+  border: 1px solid #e3e8f0;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.assist-kyc-confirmation__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 20px;
+}
+
+.assist-kyc-confirmation__pending {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 9px;
+  border: 1px solid #fde68a;
+  border-radius: 999px;
+  background: #fffbeb;
+  color: #b45309;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 16px;
+}
+
+.assist-kyc-confirmation__notice {
+  margin-top: 14px;
+  padding: 12px 14px;
+  border: 1px solid #eef2f6;
+  border-radius: 7px;
+  background: #f8fafc;
+  color: #475569;
+  font-size: 11px;
+  line-height: 19px;
+}
+
+.assist-kyc-confirmation__notice-warning {
+  margin-top: 7px;
+  color: #c2410c;
+  font-style: italic;
+}
+
+.assist-kyc-confirmation__send {
+  height: 34px;
+  margin-top: 14px;
+  border-radius: 6px;
+  background: #1664ff !important;
+  border-color: #1664ff !important;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.assist-kyc-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: #94a3b8;
+  font-size: 10px;
+}
+
+.assist-kyc-footer > div {
+  display: flex;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+.assist-kyc-footer :deep(.ant-btn) {
+  height: 34px;
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+.assist-kyc-footer__submit {
+  background: #1664ff !important;
+  border-color: #1664ff !important;
+  font-weight: 600;
+}
+
+@media (max-width: 680px) {
+  .assist-kyc-form-grid,
+  .assist-kyc-document__controls {
+    grid-template-columns: 1fr;
+  }
+
+  .assist-kyc-footer {
+    align-items: flex-start;
+    flex-direction: column;
+  }
 }
 
 .kyc-send-btn {
@@ -2244,7 +2791,6 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-top: 20px;
 }
 
 .drawer-footer-btn {
