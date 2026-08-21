@@ -7,13 +7,18 @@
  *
  * 边长按实测行宽算,四个格子写死同一个 width/height —— 不用 aspectRatio 推导,
  * 避免 web 端因图片固有比例/像素取整导致四个格子宽高不一致。
+ *
+ * 投影分两档(设计稿两组方块用了不同 Effect,见 QuickAction.tone):
+ *   solid(Hotels/Food)DS_AG 0/20 blur40 spread-10 #0F294D 8%
+ *   tint (Cars/Package)Effect/DS 0/1 blur2 黑 5%
+ * 阴影挂在外层 View 上而不是 Image 上 —— iOS 需要不透明底才画得出阴影。
  */
 
 import React, { useState } from 'react';
 import { Image, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { useTranslation } from 'react-i18next';
 
-import { PAGE_PADDING } from '@/config/theme';
+import { PAGE_PADDING, shadows } from '@/config/theme';
 import { fonts } from '@/config/typography';
 import type { QuickAction } from '@/screens/home/homeSections';
 
@@ -43,11 +48,19 @@ export default function QuickActionGrid({ items, onPress }: Props) {
           style={({ pressed }) => [styles.item, { width: size }, pressed && styles.pressed]}
           onPress={() => onPress(item)}
         >
-          <Image
-            source={item.icon}
-            style={[styles.tile, { width: size, height: size }]}
-            resizeMode="cover"
-          />
+          <View
+            style={[
+              styles.tileShadow,
+              item.tone === 'solid' ? shadows.card : shadows.subtle,
+              { width: size, height: size },
+            ]}
+          >
+            <Image
+              source={item.icon}
+              style={[styles.tile, { width: size, height: size }]}
+              resizeMode="cover"
+            />
+          </View>
           <Text style={styles.label} numberOfLines={1}>
             {t(`home.quickAction.${item.key}`)}
           </Text>
@@ -61,7 +74,9 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', gap: GAP },
   item: { alignItems: 'center' },
   pressed: { opacity: 0.8 },
-  /* 图标即底板:正方形 + 圆角 24,不加白底与阴影 */
+  /* 承载投影:iOS 的 shadow 需要不透明底色才会绘制,圆角与图片保持一致 */
+  tileShadow: { borderRadius: 24, backgroundColor: '#FFFFFF' },
+  /* 图标即底板:正方形 + 圆角 24,不加白底 */
   tile: { borderRadius: 24 },
   label: {
     marginTop: 8,

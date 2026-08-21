@@ -8,7 +8,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 
 import HomeIcon from '@/components/home/HomeIcon';
-import { colors, radius } from '@/config/theme';
+import { colors, radius, shadows } from '@/config/theme';
 import { fonts, text } from '@/config/typography';
 
 export default function MemberCard({ onPress }: { onPress: () => void }) {
@@ -30,9 +30,13 @@ export default function MemberCard({ onPress }: { onPress: () => void }) {
 const styles = StyleSheet.create({
   card: {
     borderRadius: radius.card,
+    /* 设计稿 1px --secondary 描边 + DS_AG 投影 */
+    borderWidth: 1,
+    borderColor: colors.softBlue,
     backgroundColor: colors.surface,
     padding: 24,
     gap: 8,
+    ...shadows.card,
   },
   titleRow: { flexDirection: 'row', alignItems: 'center' },
   title: { marginLeft: 12 },

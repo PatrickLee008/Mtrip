@@ -12,9 +12,11 @@ interface Props {
   title: string;
   /** 传入即显示右侧链接 */
   onSeeAll?: () => void;
+  /** 覆盖右侧链接文案(默认 home.seeAll = See All) */
+  seeAllLabel?: string;
 }
 
-export default function SectionHeader({ title, onSeeAll }: Props) {
+export default function SectionHeader({ title, onSeeAll, seeAllLabel }: Props) {
   const { t } = useTranslation();
   return (
     <View style={styles.row}>
@@ -23,7 +25,7 @@ export default function SectionHeader({ title, onSeeAll }: Props) {
       </Text>
       {onSeeAll ? (
         <Pressable onPress={onSeeAll} hitSlop={8}>
-          <Text style={text.link}>{t('home.seeAll')}</Text>
+          <Text style={text.link}>{seeAllLabel ?? t('home.seeAll')}</Text>
         </Pressable>
       ) : null}
     </View>

@@ -1,5 +1,8 @@
 /**
- * 首页搜索区(设计稿 370x66 r32 #FEFEFE,pad 12/24,gap 12)
+ * 首页搜索区(设计稿 `Search Section` node 81:2466)
+ *
+ * 设计稿实测:370x66 r32 #FEFEFE,pad 12/24,gap 12,
+ * 1px --secondary #D9E1FB 描边 + DS_AG 投影(0/20 blur40 spread-10 #0F294D 8%)
  */
 
 import React from 'react';
@@ -7,7 +10,7 @@ import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 
 import HomeIcon from '@/components/home/HomeIcon';
-import { colors, radius } from '@/config/theme';
+import { colors, radius, shadows } from '@/config/theme';
 import { fonts } from '@/config/typography';
 
 interface Props {
@@ -43,9 +46,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     height: 66,
     borderRadius: radius.card,
+    borderWidth: 1,
+    borderColor: colors.softBlue,
     backgroundColor: colors.surface,
     paddingHorizontal: 24,
     paddingVertical: 12,
+    ...shadows.card,
   },
   input: {
     flex: 1,

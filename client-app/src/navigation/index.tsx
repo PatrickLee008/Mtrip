@@ -18,6 +18,7 @@ import type { MainTabParamList, RootStackParamList } from '@/navigation/types';
 import GoodsDetailScreen from '@/screens/goods/GoodsDetailScreen';
 import GoodsListScreen from '@/screens/goods/GoodsListScreen';
 import HomeScreen from '@/screens/home/HomeScreen';
+import HotelsScreen from '@/screens/hotel/HotelsScreen';
 import MyPickScreen from '@/screens/mypick/MyPickScreen';
 import OrderConfirmScreen from '@/screens/order/OrderConfirmScreen';
 import OrderDetailScreen from '@/screens/order/OrderDetailScreen';
@@ -87,7 +88,12 @@ function MainTabs() {
         component={HomeScreen}
         options={{ title: t('tab.home'), headerShown: false }}
       />
-      <Tab.Screen name="MyPickTab" component={MyPickScreen} options={{ title: t('tab.myPick') }} />
+      {/* 我的精选自带设计稿顶部栏(HomeHeader),隐藏 Tab 导航头 */}
+      <Tab.Screen
+        name="MyPickTab"
+        component={MyPickScreen}
+        options={{ title: t('tab.myPick'), headerShown: false }}
+      />
       <Tab.Screen
         name="PromotionsTab"
         component={PromotionsScreen}
@@ -108,6 +114,11 @@ export default function AppNavigator() {
           name="SiteSelect"
           component={SiteSelectScreen}
           options={{ title: t('site.title') }}
+        />
+        <Stack.Screen
+          name="Hotels"
+          component={HotelsScreen}
+          options={{ title: t('hotels.title'), headerShown: false }}
         />
         <Stack.Screen
           name="GoodsList"
@@ -134,7 +145,12 @@ export default function AppNavigator() {
           component={OrderDetailScreen}
           options={{ title: t('order.detailTitle') }}
         />
-        <Stack.Screen name="Login" component={LoginScreen} options={{ title: t('user.loginTitle') }} />
+        {/* 登录页按设计稿自带顶部栏(返回 / Sign Up)且插画要铺到状态栏,故关掉 Stack 头 */}
+        <Stack.Screen
+          name="Login"
+          component={LoginScreen}
+          options={{ title: t('user.loginTitle'), headerShown: false }}
+        />
         <Stack.Screen
           name="Register"
           component={RegisterScreen}

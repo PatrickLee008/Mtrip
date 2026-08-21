@@ -64,6 +64,22 @@ export interface GoodsItem {
   minPrice: number;
 }
 
+/**
+ * 收藏列表行(user-service /user/favorite/list,join goods_info 直出)
+ * 注意:后端未返回起价与评分,故收藏卡片不展示价格
+ */
+export interface FavoriteItem {
+  id: number;
+  goods_id: number;
+  created_at: string;
+  goods_name: string;
+  cover_image: string;
+  address: string;
+  star_level: number;
+  goods_type: number;
+  status: number;
+}
+
 /** 商品分类(两级树) */
 export interface GoodsCategory {
   id: number;

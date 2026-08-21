@@ -2,7 +2,7 @@
 
 > 用途:当 AI 会话上下文超限需要新开会话时,新会话**第一步读取本文件**即可接手全部工作。
 > 维护约定:每完成一个模块或阶段性节点,同步更新本文件的「当前进度」与「下一步」两节。
-> 最后更新:2026-08-20(client-app 底部导航 + 首页按 Figma 重做,见下方「★ 前端 redesign 进展」)
+> 最后更新:2026-08-21(client-app 底部导航 + 首页 + 我的精选 + 酒店筛选面板按 Figma 重做,见下方「★ 前端 redesign 进展」)
 
 ## ★ 前端 redesign 进展(2026-08-20,client-app)
 
@@ -20,6 +20,25 @@
 - **位图素材已全部落盘**(2026-08-20 确认):`client-app/assets/images/logo.png` + `home/` 下 9 个 PNG。`scripts/figma-home-icons.py` 只在需要**新增**设计稿里没导过的 node 时才跑(token 从仓库根 `.env.local` 自动读取,须在仓库根目录执行)。
 - **门禁待补跑**:`cd client-app; npm run typecheck`(本次会话命令行被限流,始终没能执行)。`scripts/check.ps1` 因本机 `php` 不在 PATH 第 1 步即中断,与本改动无关。
 - 已知取舍:`components/home/HomeIcon.tsx` 里 `bell` / `diamond` 已按设计稿 `fillGeometry` 对齐,其余 6 枚(search/heart/location/gift/alert/chat/document)仍是同体系标准 24 网格图标顶替;要完全对齐只需改该文件 `ICONS` 表里的 `d` / `viewBox`,组件接口不变。
+
+### ★ 2026-08-21(client-app「我的精选」按 Figma `My Pick` node `289:1112` 重做)
+
+- `screens/mypick/MyPickScreen.tsx` 由占位空页改为完整页面:顶部栏(复用 `HomeHeader`)→ 三分类页签 → 预订卡列表 → 入住反馈卡 → 收藏酒店(横滑)→ 收藏餐厅(横滑)→ 新用户促销卡(复用 `PromoCard`)。`navigation/index.tsx` 的 `MyPickTab` 改 `headerShown: false`(页面自带设计稿顶部栏)。
+- 新增组件 `components/mypick/`:`PickTabs`(370x52 r32 三等分页签)、`BookingCard`(封面 + 状态胶囊 + 房型 + 日期/人数两栏 + 主按钮/地图按钮)、`FeedbackCard`、`SavedRestaurantCard`(322 宽,图上胶囊组 + 距离/时长/配送费)。
+- 数据分工同 HomeScreen:预订列表取 `/order/list`(前端按 `myPickSections.ts` 的 `TAB_STATUS` 把 upcoming/completed/cancelled 映射到订单状态集合,因后端 `status` 只收单值),收藏酒店取新接的 `/user/favorite/list`;**未登录时用设计稿示例卡兜底,已登录且为空时走空态文案**。收藏餐厅后端无对应品类(`GOODS_TYPE` 只有 1 酒店 / 2 门票),走 `myPickSections.ts` 静态常量。
+- 新增 `api/user.ts` 的 `fetchFavoriteList/addFavorite/removeFavorite` 与 `types/models.ts` 的 `FavoriteItem`。**收藏接口 join 商品直出,不含起价**,故 `StayCard` 改为 `minPrice > 0` 才渲染价格行。
+- 复用改造:`SectionHeader` 新增可选 `seeAllLabel`(设计稿「Save Restaurants」右侧是 View all);`theme.ts` 新增 `colors.textSoft`(设计稿 `--text-2` = `rgba(25,26,37,0.5)`)与 `colors.statusPaid`(`#10B981`)。
+- **未完成项**:`HomeIcon.tsx` 新增的 7 枚图标(check/calendar/travelers/map/star/heartFilled/motorcycle)本次会话因命令行与网络工具全程被限流,**没能取到设计稿 SVG,仍是同体系 24 网格顶替**,文件内已留 TODO 与对应 node id;`cd client-app; npm run typecheck` 同样未能执行,需下次会话补跑。(其中 calendar/travelers 已于酒店页对齐、star 已于本条下方的筛选面板对齐,TODO 只剩 check/map/heartFilled/motorcycle)
+
+### ★ 2026-08-21(client-app 酒店筛选面板,Figma `Filter overlay` node `408:1824`)
+
+- 酒店页顶部栏的筛选按钮由 `comingSoon` 改为拉起 `components/hotel/HotelFilterSheet.tsx`:RN 自带 `Modal`(`animationType="none"`)+ `Animated` 做**从底部升起**的浮层(升起 260ms `Easing.out(cubic)` / 落下 200ms,背板 40% 黑同步淡入;关闭动画放完才卸载,故组件内自持一份挂载态)。面板上圆角 32、`maxHeight` 取窗口高 86%,**吸顶头(X / Filter By / Reset)+ 可滚动主体 + 吸底 CTA** 三段式,吸底条按 `useSafeAreaInsets().bottom` 加安全区。
+- 主体四区:Recent Filters / Budget(计价口径下拉 → 直方图+双滑块 → 最低最高输入框)/ Popular Filters(10 项,其一是 4 颗星无文字)/ Property Types(4 项 + Show more)。
+- **`components/hotel/PriceRangeSlider.tsx`**:未引入 `@react-native-community/slider` 与 gesture-handler,双滑块用 RN 自带 `PanResponder` 自绘(手势回调内一律读 ref,避免闭包拿到过期 props)。设计稿 21 根柱子的**高度**是静态曲线(后端无价格分布接口),但**染色实时算**——按柱心是否落在两滑块中心之间取 `--text` / `--text-2`,拖动观感与设计稿一致。
+- **与后端的关系**:`/api/v1/app/goods/list` 只有 goodsType/categoryId/keyword,**没有价格区间与设施筛选参数,所以选择结果只留在 `HotelsScreen` 的状态里,不进请求**;各行右侧计数(600+/1200+…)与 CTA 总数(6300+)是设计稿静态值。计价口径下拉与 Show more 设计稿没有第二组选项,走 `onComingSoon`。价格域取 0~1,000,000 步进 10,000(设计稿只给了 10,000 / 500,000 两个示例值)。
+- 设计稿文案笔误已修正:`Show Resluts` → Show Results、`2bedrooms` → 2 bedrooms;新增 i18n `hotels.filter.*`(中英各 25 键,插值用 `{{total}}` 而非 i18next 保留字 `count`)。
+- `HomeIcon.tsx` 新增 `close`(408:1971)/ `caretLeft`(fluent:ios-arrow-24-filled,用时外层转 -90° 当下拉箭头),并用 `fluent:star-12-filled` 的 path **顶替原 24 网格 star 草图**(SavedRestaurantCard 同步受益);`theme.ts` 新增 `colors.star = #FFC100`。
+- 门禁:`cd client-app; npm run typecheck` 已跑通零报错。
 > 最后更新:2026-08-16(商户验证模块原型对齐整改 + 中英文国际化补齐,见下方「★ 商户验证原型对齐整改」)
 >
 > ⚠ 2026-08-20:此前基于 Figma 原型(stir-long v4.2.1)的商户管理整改已判定不符合正式 PRD(《mTrip_Super_Admin_Portal_PRD_Enterprise_v1.0_中文版.md》/《mTrip_Merchant App PRD_v1.0_中文版.md》),相关需求文档与整改清单已删除;商户验证与审批将按新 PRD 重新整改,方案见 docs/redesign/商户验证与审批整改方案.md。

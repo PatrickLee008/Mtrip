@@ -13,7 +13,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import Svg, { Path } from 'react-native-svg';
 
-import { colors, radius } from '@/config/theme';
+import { colors, radius, shadows } from '@/config/theme';
 import { fonts } from '@/config/typography';
 
 /** 设计稿装饰图形(床),原始尺寸 148.1333x101 */
@@ -56,12 +56,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.deepBlue,
     padding: 24,
     overflow: 'hidden',
-    /* 设计稿 DROP_SHADOW 0/4 blur6 spread-4 黑 10% */
-    shadowColor: '#000000',
-    shadowOpacity: 0.1,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 2,
+    /* 设计稿两层黑 10%(0/10 blur15 spread-3 + 0/4 blur6 spread-4),RN 取近似的一层 */
+    ...shadows.raised,
   },
   art: {
     position: 'absolute',

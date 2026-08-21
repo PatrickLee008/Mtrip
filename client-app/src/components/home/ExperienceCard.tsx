@@ -4,11 +4,11 @@
  */
 
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View, type ImageSourcePropType } from 'react-native';
 import { useTranslation } from 'react-i18next';
 
 import CoverImage from '@/components/home/CoverImage';
-import { colors, radius } from '@/config/theme';
+import { colors, radius, shadows } from '@/config/theme';
 import { fonts } from '@/config/typography';
 
 interface Props {
@@ -16,15 +16,31 @@ interface Props {
   name: string;
   desc: string;
   uri?: string | null;
+  /** 无 uri 时的本地兜底图(设计稿临时素材) */
+  coverSource?: ImageSourcePropType;
   highDemand?: boolean;
   onPress: () => void;
 }
 
-export default function ExperienceCard({ width, name, desc, uri, highDemand, onPress }: Props) {
+export default function ExperienceCard({
+  width,
+  name,
+  desc,
+  uri,
+  coverSource,
+  highDemand,
+  onPress,
+}: Props) {
   const { t } = useTranslation();
   return (
     <Pressable style={({ pressed }) => [styles.card, { width }, pressed && styles.pressed]} onPress={onPress}>
-      <CoverImage uri={uri} width={width} height={256} radius={radius.card} />
+      <CoverImage
+        uri={uri}
+        fallback={coverSource}
+        width={width}
+        height={256}
+        radius={radius.card}
+      />
       <View style={styles.mask} />
       {highDemand ? (
         <View style={styles.badge}>
@@ -44,7 +60,14 @@ export default function ExperienceCard({ width, name, desc, uri, highDemand, onP
 }
 
 const styles = StyleSheet.create({
-  card: { height: 256, borderRadius: radius.card, backgroundColor: '#FFFFFF', overflow: 'hidden' },
+  /* 设计稿两层黑 10% 投影(0/10 blur15 spread-3 + 0/4 blur6 spread-4),RN 取近似的一层 */
+  card: {
+    height: 256,
+    borderRadius: radius.card,
+    backgroundColor: '#FFFFFF',
+    overflow: 'hidden',
+    ...shadows.raised,
+  },
   pressed: { opacity: 0.92 },
   mask: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(6, 28, 52, 0.32)' },
   badge: {

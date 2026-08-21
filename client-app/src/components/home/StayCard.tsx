@@ -5,7 +5,7 @@
  */
 
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View, type ImageSourcePropType } from 'react-native';
 import { useTranslation } from 'react-i18next';
 
 import HomeIcon from '@/components/home/HomeIcon';
@@ -20,10 +20,12 @@ const COVER_WIDTH = STAY_CARD_WIDTH - 2;
 
 interface Props {
   goods: GoodsItem;
+  /** goods.cover_image 为空时的本地兜底图(设计稿临时素材) */
+  coverSource?: ImageSourcePropType;
   onPress: (goods: GoodsItem) => void;
 }
 
-export default function StayCard({ goods, onPress }: Props) {
+export default function StayCard({ goods, coverSource, onPress }: Props) {
   const { t } = useTranslation();
   return (
     <Pressable
@@ -33,6 +35,7 @@ export default function StayCard({ goods, onPress }: Props) {
       <View style={styles.coverWrap}>
         <CoverImage
           uri={goods.cover_image}
+          fallback={coverSource}
           width={COVER_WIDTH}
           height={176}
           label={goods.goods_name}
@@ -62,10 +65,15 @@ export default function StayCard({ goods, onPress }: Props) {
           </View>
         ) : null}
         <View style={styles.row}>
-          <View style={styles.priceRow}>
-            <PriceText amount={goods.minPrice} />
-            <Text style={styles.perNight}>{t('home.stays.perNight')}</Text>
-          </View>
+          {/* 收藏列表接口不返回起价(minPrice=0),此时整行只留右侧徽章 */}
+          {goods.minPrice > 0 ? (
+            <View style={styles.priceRow}>
+              <PriceText amount={goods.minPrice} />
+              <Text style={styles.perNight}>{t('home.stays.perNight')}</Text>
+            </View>
+          ) : (
+            <View />
+          )}
           {goods.is_recommend === 1 ? (
             <View style={styles.badge}>
               <Text style={styles.badgeText}>{t('home.stays.preferred')}</Text>
@@ -81,6 +89,9 @@ const styles = StyleSheet.create({
   card: {
     width: STAY_CARD_WIDTH,
     borderRadius: radius.card,
+    /* 设计稿 1px --secondary 描边;coverWrap 的 margin:1 就是给它让位 */
+    borderWidth: 1,
+    borderColor: colors.softBlue,
     backgroundColor: '#FFFFFF',
     overflow: 'hidden',
   },

@@ -19,7 +19,54 @@
     "more": "More"
   },
   "myPick": {
-    "empty": "Nothing saved yet"
+    "empty": "Nothing saved yet",
+    "tab": {
+      "upcoming": "Upcoming",
+      "completed": "Completed",
+      "cancelled": "Cancelled"
+    },
+    "booking": {
+      "dates": "DATES",
+      "travelers": "TRAVELERS",
+      "travelersValue": "{{people}} travellers, {{rooms}} room",
+      "viewDetails": "View Details",
+      "empty": "No bookings in this tab yet",
+      "sample": {
+        "hotel": "The Heritage Bagan Hotel",
+        "address": "Min Nanthu Village, Bagan",
+        "room": "Deluxe Room with Pagoda View",
+        "dates": "Thu, 4 Jun - Fri, 5 Jun"
+      }
+    },
+    "feedback": {
+      "title": "How was your last stay",
+      "desc": "Share your honest feedback and earn 70 loyalty points for your next trip.",
+      "action": "Review Now"
+    },
+    "savedHotels": {
+      "title": "Save Hotels",
+      "heritageBagan": {
+        "name": "The Heritage Bagan Hotel",
+        "address": "Nyaung-U, Bagan"
+      },
+      "strandSuites": {
+        "name": "Strand Heritage Suites",
+        "address": "Downtown Yangon"
+      }
+    },
+    "savedRestaurants": {
+      "title": "Save Restaurants",
+      "viewAll": "View all",
+      "premium": "Premium choice",
+      "freeDelivery": "Free Delivery",
+      "goldenMandalay": {
+        "name": "The Golden Mandalay",
+        "discount": "15% Off"
+      },
+      "shweFlower": {
+        "name": "Shwe Flower"
+      }
+    }
   },
   "promotions": {
     "empty": "No promotions right now"
@@ -41,10 +88,6 @@
       "parks": "Parks",
       "support": "Support"
     },
-    "filter": {
-      "multiBooking": "Multi Booking",
-      "longStay": "Long Stay"
-    },
     "promo": {
       "badge": "New user promotion",
       "category": "Hotels",
@@ -57,9 +100,21 @@
     },
     "destinations": {
       "title": "Popular Destinations",
-      "bagan": { "name": "Bagan", "desc": "2,200+ Ancient Temples", "category": "HISTORIC WONDERS" },
-      "inleLake": { "name": "Inle Lake", "desc": "Water Villages & Gardens", "category": "FLOATING LIFE" },
-      "ngapali": { "name": "Ngapali", "desc": "Pristine White Sands", "category": "LUXURY COASTAL" }
+      "bagan": {
+        "name": "Bagan",
+        "desc": "2,200+ Ancient Temples",
+        "category": "HISTORIC WONDERS"
+      },
+      "inleLake": {
+        "name": "Inle Lake",
+        "desc": "Water Villages & Gardens",
+        "category": "FLOATING LIFE"
+      },
+      "ngapali": {
+        "name": "Ngapali",
+        "desc": "Pristine White Sands",
+        "category": "LUXURY COASTAL"
+      }
     },
     "specialDeals": {
       "title": "Special Deals",
@@ -73,24 +128,26 @@
     },
     "dining": {
       "title": "Dining Offers",
-      "rangoonTeaHouse": { "name": "Rangoon Tea House", "desc": "Modern Burmese Cuisine" },
-      "seeds": { "name": "Seeds Restaurant", "desc": "Lakeside Fine Dining" }
-    },
-    "routes": {
-      "title": "Popular Routes",
-      "yangonMandalay": { "name": "Yangon → Mandalay", "desc": "VIP Night Bus • 9h 30m" },
-      "yangonBagan": { "name": "Yangon → Bagan", "desc": "Domestic Flight • 1h 20m" }
+      "rangoonTeaHouse": {
+        "name": "Rangoon Tea House",
+        "desc": "Modern Burmese Cuisine"
+      },
+      "seeds": {
+        "name": "Seeds Restaurant",
+        "desc": "Lakeside Fine Dining"
+      }
     },
     "experiences": {
       "title": "Local Experiences",
       "highDemand": "HIGH DEMAND",
-      "balloon": { "name": "Hot Air Balloon over Bagan", "desc": "Experience the world from above" },
-      "sunsetBoat": { "name": "Sunset Boat Private Tour", "desc": "Inle Lake's hidden waterways" }
-    },
-    "assistance": {
-      "liveSupport": { "name": "Live Support", "desc": "24/7 Agent Help" },
-      "visaGuide": { "name": "Visa Guide", "desc": "eVisa Documents" },
-      "emergency": { "name": "Emergency", "desc": "Hotline Services" }
+      "balloon": {
+        "name": "Hot Air Balloon over Bagan",
+        "desc": "Experience the world from above"
+      },
+      "sunsetBoat": {
+        "name": "Sunset Boat Private Tour",
+        "desc": "Inle Lake's hidden waterways"
+      }
     },
     "magazine": {
       "title": "Discover Myanmar",
@@ -99,12 +156,6 @@
         "title": "10 Respectful Tips for Visiting Myanmar's Pagodas",
         "excerpt": "Learn the essentials of local etiquette, from dress codes to traditional greetings, to make the most of your visit.",
         "meta": "Thiri Kyaw • 5 min read"
-      },
-      "mohinga": {
-        "category": "FOOD & DINING",
-        "title": "The Best Mohinga Spots in Yangon: A Local's Secret List",
-        "excerpt": "From street-side stalls to upscale cafes, we've ranked the best places to enjoy Myanmar's national dish.",
-        "meta": "Ko Htet • 8 min read"
       }
     }
   },
@@ -182,6 +233,53 @@
     "gdprTip": "By continuing you agree to the Privacy Policy. Your data is processed under GDPR.",
     "notLogin": "Not signed in, tap to sign in",
     "invalidMobile": "Invalid mobile number",
-    "invalidPassword": "Password must be 6-32 characters"
+    "invalidPassword": "Password must be 6-32 characters",
+    "tagline": "Travel with us",
+    "mobilePlaceholder": "9xxxxxxxx",
+    "passwordPlaceholder": "Enter your password",
+    "rememberMe": "Remember me",
+    "orLoginWith": "Or login with"
+  },
+  "hotels": {
+    "title": "Hotel & Homestay",
+    "searchPlaceholder": "Search",
+    "checkIn": "Check In",
+    "checkOut": "Check Out",
+    "guests": "Guests",
+    "guestsValue": "{{adults}} Adults, {{rooms}} room",
+    "myanmarCitizen": "Myanmar Citizen",
+    "search": "Search",
+    "stayLonger": "Stay Longer, Save More",
+    "nights": "{{nights}} Nights",
+    "adTitle": "YOUR AD HERE",
+    "adSize": "320*180",
+    "filter": {
+      "title": "Filter By",
+      "reset": "Reset",
+      "recent": "Recent Filters",
+      "budget": "Budget",
+      "budgetBasis": "Price per room per night (incl. taxes & fees)",
+      "minimum": "Minimum",
+      "maximum": "Maximum",
+      "currency": "MMK",
+      "popular": "Popular Filters",
+      "propertyTypes": "Property Types",
+      "showMore": "Show more",
+      "showResults": "Show Results ({{total}})",
+      "options": {
+        "breakfast": "Breakfast included",
+        "hotel": "Hotel",
+        "rating9": "Rating 9 +",
+        "freeCancellation": "Free Cancellation",
+        "wifi": "Wifi Included",
+        "gym": "Gym",
+        "bedrooms2": "2 bedrooms",
+        "bedrooms3": "3 bedrooms",
+        "pool": "Pool",
+        "homesApts": "Homes & Apts",
+        "hostels": "Hostels",
+        "hourly": "Hourly rate rooms"
+      }
+    }
   }
 }

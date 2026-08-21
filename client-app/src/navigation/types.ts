@@ -16,6 +16,8 @@ export type MainTabParamList = {
 export type RootStackParamList = {
   MainTabs: NavigatorScreenParams<MainTabParamList>;
   SiteSelect: undefined;
+  /** 酒店搜索页(Figma 91:200),首页快捷入口 hotels 的落地页 */
+  Hotels: undefined;
   GoodsList: { goodsType?: number; categoryId?: number; keyword?: string; title?: string };
   GoodsDetail: { id: number };
   OrderList: undefined;

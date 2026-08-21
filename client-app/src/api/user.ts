@@ -4,7 +4,7 @@
 
 import { get, post, postEncrypted } from '@/api/request';
 import type { PageData, PageParams } from '@/api/types';
-import type { AuthResult, UserProfile } from '@/types/models';
+import type { AuthResult, FavoriteItem, UserProfile } from '@/types/models';
 
 export function apiRegister(params: {
   mobile: string;
@@ -48,6 +48,20 @@ export function fetchBalanceLogs(params: PageParams): Promise<PageData<Record<st
 
 export function fetchPointsLogs(params: PageParams): Promise<PageData<Record<string, unknown>>> {
   return get('/api/v1/app/user/points-logs', { ...params });
+}
+
+/* ---- 收藏(Saved Hotels,需登录) ---- */
+
+export function fetchFavoriteList(params: PageParams): Promise<PageData<FavoriteItem>> {
+  return get('/api/v1/app/user/favorite/list', { ...params });
+}
+
+export function addFavorite(goodsId: number): Promise<null> {
+  return post<null>('/api/v1/app/user/favorite/add', { goodsId });
+}
+
+export function removeFavorite(goodsId: number): Promise<null> {
+  return post<null>('/api/v1/app/user/favorite/remove', { goodsId });
 }
 
 export function addFeedback(params: {

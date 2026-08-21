@@ -1,9 +1,12 @@
 /**
  * 首页(按 Figma M-Trip / Home 81:2464 重做)
  *
- * 结构与设计稿一致:搜索 → 快捷入口(一行 4 项)→ 筛选 chips → 促销卡 → 会员卡 →
- * 热门目的地 → 限时特惠 → 酒店特惠 → 餐饮 → 路线 → 本地体验 → 旅行协助 → 杂志流。
+ * 结构与设计稿一致:搜索 → 快捷入口(一行 4 项)→ 促销卡 → 会员卡 →
+ * 热门目的地 → 限时特惠 → 酒店特惠 → 餐饮 → 本地体验 → 杂志流。
  * 其中「热门目的地」取接口 hot、「酒店特惠」取接口 recommend,其余区块暂用 homeSections.ts 的静态数据。
+ *
+ * 设计稿里 visible:false 的区块不实现:筛选 chips(Multi Booking / Long Stay)、热门路线、
+ * 旅行协助九宫格、快捷入口第二行、杂志流第二篇(Mohinga)。
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
@@ -13,8 +16,14 @@ import { useNavigation } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
 
 import { fetchHome } from '@/api/goods';
+import {
+  TEMP_DESTINATION_COVERS,
+  TEMP_DINING_COVERS,
+  TEMP_EXPERIENCE_COVERS,
+  TEMP_MAGAZINE_COVERS,
+  TEMP_SPECIAL_DEAL_COVER,
+} from '@/assets/tempImages';
 import { LoadingView } from '@/components/common/StateViews';
-import AssistanceGrid from '@/components/home/AssistanceGrid';
 import DestinationCard, { DESTINATION_CARD_WIDTH } from '@/components/home/DestinationCard';
 import DiningCard, { DINING_CARD_WIDTH } from '@/components/home/DiningCard';
 import ExperienceCard from '@/components/home/ExperienceCard';
@@ -23,8 +32,6 @@ import MagazineCard from '@/components/home/MagazineCard';
 import MemberCard from '@/components/home/MemberCard';
 import PromoCard from '@/components/home/PromoCard';
 import QuickActionGrid from '@/components/home/QuickActionGrid';
-import QuickFilterChips from '@/components/home/QuickFilterChips';
-import RouteCard from '@/components/home/RouteCard';
 import SearchSection from '@/components/home/SearchSection';
 import SectionHeader from '@/components/home/SectionHeader';
 import SpecialDealBanner from '@/components/home/SpecialDealBanner';
@@ -37,7 +44,6 @@ import {
   EXPERIENCES,
   MAGAZINE_ITEMS,
   QUICK_ACTIONS,
-  ROUTES,
   type QuickAction,
 } from '@/screens/home/homeSections';
 import { useCommonStore } from '@/store/commonStore';
@@ -109,6 +115,10 @@ export default function HomeScreen() {
   };
 
   const quickActionPress = (item: QuickAction) => {
+    if (item.route) {
+      navigation.navigate(item.route);
+      return;
+    }
     if (item.goodsType) {
       goList(item.goodsType, t(`home.quickAction.${item.key}`));
       return;
@@ -149,9 +159,6 @@ export default function HomeScreen() {
         {/* 01 快捷入口(设计稿只有一行 4 项) */}
         <QuickActionGrid items={QUICK_ACTIONS} onPress={quickActionPress} />
 
-        {/* 03 快捷筛选 */}
-        <QuickFilterChips onPress={comingSoon} />
-
         {/* 04 新用户促销 */}
         <PromoCard onPress={() => goList(GOODS_TYPE.HOTEL, t('home.promo.category'))} />
 
@@ -188,6 +195,7 @@ export default function HomeScreen() {
                     name={t(`home.destinations.${d.key}.name`)}
                     desc={t(`home.destinations.${d.key}.desc`)}
                     category={t(`home.destinations.${d.key}.category`)}
+                    coverSource={TEMP_DESTINATION_COVERS[d.key]}
                     onPress={comingSoon}
                   />
                 ))}
@@ -199,6 +207,7 @@ export default function HomeScreen() {
           <SectionHeader title={t('home.specialDeals.title')} />
           <SpecialDealBanner
             width={contentWidth}
+            coverSource={TEMP_SPECIAL_DEAL_COVER}
             onPress={() => goList(GOODS_TYPE.TICKET, t('home.specialDeals.title'))}
           />
         </View>
@@ -241,26 +250,11 @@ export default function HomeScreen() {
                 key={key}
                 name={t(`home.dining.${key}.name`)}
                 desc={t(`home.dining.${key}.desc`)}
+                coverSource={TEMP_DINING_COVERS[key]}
                 onPress={comingSoon}
               />
             ))}
           </ScrollView>
-        </View>
-
-        {/* 10 热门路线 */}
-        <View>
-          <SectionHeader title={t('home.routes.title')} />
-          <View style={styles.stack}>
-            {ROUTES.map((r) => (
-              <RouteCard
-                key={r.key}
-                name={t(`home.routes.${r.key}.name`)}
-                desc={t(`home.routes.${r.key}.desc`)}
-                price={r.price}
-                originalPrice={r.originalPrice}
-              />
-            ))}
-          </View>
         </View>
 
         {/* 11 本地体验 */}
@@ -273,15 +267,13 @@ export default function HomeScreen() {
                 width={contentWidth}
                 name={t(`home.experiences.${e.key}.name`)}
                 desc={t(`home.experiences.${e.key}.desc`)}
+                coverSource={TEMP_EXPERIENCE_COVERS[e.key]}
                 highDemand={e.highDemand}
                 onPress={comingSoon}
               />
             ))}
           </View>
         </View>
-
-        {/* 12 旅行协助 */}
-        <AssistanceGrid onPress={comingSoon} />
 
         {/* 13 杂志流 */}
         <View>
@@ -295,6 +287,7 @@ export default function HomeScreen() {
                 title={t(`home.magazine.${key}.title`)}
                 excerpt={t(`home.magazine.${key}.excerpt`)}
                 meta={t(`home.magazine.${key}.meta`)}
+                coverSource={TEMP_MAGAZINE_COVERS[key]}
                 showDivider={i < MAGAZINE_ITEMS.length - 1}
                 onPress={comingSoon}
               />
