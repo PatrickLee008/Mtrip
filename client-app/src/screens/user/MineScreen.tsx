@@ -14,6 +14,7 @@ import { SUPPORTED_LANGS, type Lang } from '@/config/global';
 import { colors, fontSize, radius, spacing } from '@/config/theme';
 import { changeLanguage } from '@/i18n';
 import { useCommonStore } from '@/store/commonStore';
+import { useSiteStore } from '@/store/siteStore';
 import { useUserStore } from '@/store/userStore';
 
 const LANG_LABELS: Record<Lang, string> = { 'zh-CN': '中文', 'en-US': 'English' };
@@ -28,6 +29,7 @@ export default function MineScreen() {
   const lang = useCommonStore((s) => s.lang);
   const setLang = useCommonStore((s) => s.setLang);
   const gdprAccepted = useCommonStore((s) => s.gdprAccepted);
+  const siteName = useSiteStore((s) => s.siteName);
 
   // 获焦刷新资料(余额/积分变动)
   useFocusEffect(
@@ -82,6 +84,24 @@ export default function MineScreen() {
           </View>
         </View>
       ) : null}
+
+      <View style={styles.entryCard}>
+        <Pressable style={styles.entryRow} onPress={() => navigation.navigate('OrderList')}>
+          <Text style={styles.settingLabel}>{t('order.listTitle')}</Text>
+          <Text style={styles.entryArrow}>›</Text>
+        </Pressable>
+        {/* 站点切换:设计稿顶部栏没有这一项,多站点是设计稿未覆盖的需求,统一收到「我的」 */}
+        <Pressable
+          style={[styles.entryRow, styles.entryRowTop]}
+          onPress={() => navigation.navigate('SiteSelect')}
+        >
+          <Text style={styles.settingLabel}>{t('site.title')}</Text>
+          <View style={styles.entryValueWrap}>
+            {siteName ? <Text style={styles.settingValue}>{siteName}</Text> : null}
+            <Text style={styles.entryArrow}>›</Text>
+          </View>
+        </Pressable>
+      </View>
 
       <View style={styles.settingCard}>
         <View style={styles.settingRow}>
@@ -145,6 +165,22 @@ const styles = StyleSheet.create({
   statDivider: { width: StyleSheet.hairlineWidth, backgroundColor: colors.border },
   statValue: { fontSize: fontSize.price, fontWeight: '700', color: colors.text },
   statLabel: { marginTop: spacing.xs, fontSize: fontSize.xs, color: colors.textSecondary },
+  entryCard: {
+    backgroundColor: colors.card,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.md,
+  },
+  entryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: spacing.lg,
+  },
+  /* 同一张卡里的第二行起加分隔线 */
+  entryRowTop: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border },
+  entryValueWrap: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  entryArrow: { fontSize: fontSize.lg, color: colors.textSecondary },
   settingCard: {
     backgroundColor: colors.card,
     borderRadius: radius.md,

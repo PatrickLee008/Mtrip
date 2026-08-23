@@ -34,6 +34,101 @@ export function apiMerchantToggleStatus(id: number): Promise<{ status: number; o
   return post('/admin/merchant/toggle-status', { id });
 }
 
+/** 暂停商户(整改 A4):阻止新预订,不影响已确认订单,必填原因 */
+export function apiMerchantSuspend(id: number, reason: string): Promise<null> {
+  return post('/admin/merchant/suspend', { id, reason });
+}
+
+/** 恢复商户(整改 A4):Suspended → Active */
+export function apiMerchantActivate(id: number): Promise<null> {
+  return post('/admin/merchant/activate', { id });
+}
+
+/** 重置商户 2FA(整改 B3):商户下次登录需重新绑定 */
+export function apiMerchantReset2Fa(id: number): Promise<null> {
+  return post('/admin/merchant/reset-2fa', { id });
+}
+
+/** 发送商户通知(整改 B1):分类/标题/正文/深链/渠道/定时 */
+export function apiMerchantNotifySend(data: {
+  merchantId: number;
+  category: string;
+  title: string;
+  message: string;
+  deepLinkType?: string;
+  deepLinkValue?: string;
+  channels: string[];
+  sendType?: number;
+  sendAt?: string;
+}): Promise<null> {
+  return post('/admin/merchant/notification/send', data);
+}
+
+/** 通知模板(Use Template 自动填充) */
+export function apiMerchantNotifyTemplates(): Promise<Row[]> {
+  return get('/admin/merchant/notification/templates');
+}
+
+/** 开始代入会话(整改 B2):原因必选,全程审计 */
+export function apiMerchantImpersonateStart(
+  merchantId: number,
+  reason: string,
+): Promise<{ session_id: number; session_key: string }> {
+  return post('/admin/merchant/impersonate/start', { merchantId, reason });
+}
+
+/** 结束代入会话(整改 B2) */
+export function apiMerchantImpersonateEnd(merchantId: number): Promise<null> {
+  return post('/admin/merchant/impersonate/end', { merchantId });
+}
+
+/** KYC 提交确认(整改 B4,接口契约;merchant-web 接入另行排期) */
+export function apiOnboardingConfirm(id: number): Promise<null> {
+  return post('/admin/merchant/onboarding/confirm', { id });
+}
+
+// ---------- Marketplace Ranking(整改 Phase C) ----------
+export function apiRankingListings(params: Record<string, unknown>): Promise<{ list: Row[]; cities: string[] }> {
+  return get('/admin/merchant/ranking/list', params);
+}
+
+export function apiRankingSaveOrder(items: { id: number; rank: number; featured: number }[]): Promise<null> {
+  return post('/admin/merchant/ranking/save-order', { items });
+}
+
+export function apiRankingPin(id: number, pinned: number): Promise<null> {
+  return post('/admin/merchant/ranking/pin', { id, pinned });
+}
+
+export function apiRankingPublish(): Promise<null> {
+  return post('/admin/merchant/ranking/publish');
+}
+
+export function apiRankingHistory(params: Record<string, unknown>): Promise<PageData<Row>> {
+  return get('/admin/merchant/ranking/history', params);
+}
+
+export function apiRankingDestinations(params: Record<string, unknown>): Promise<{ list: Row[]; regions: string[] }> {
+  return get('/admin/merchant/ranking/destinations', params);
+}
+
+export function apiRankingDestinationAdd(data: {
+  name: string;
+  region: string;
+  tagline?: string;
+  imageUrl?: string;
+}): Promise<{ id: number }> {
+  return post('/admin/merchant/ranking/destination/add', data);
+}
+
+export function apiRankingDestinationUpdate(data: Record<string, unknown>): Promise<null> {
+  return post('/admin/merchant/ranking/destination/update', data);
+}
+
+export function apiRankingDestinationPin(id: number, pinned: number): Promise<null> {
+  return post('/admin/merchant/ranking/destination/pin', { id, pinned });
+}
+
 export function apiMerchantCommission(data: {
   id: number;
   commissionRate: number;
@@ -191,27 +286,38 @@ export function apiSupplierSettleConfirmPay(data: Record<string, unknown>): Prom
   return post('/admin/supplier/settle/confirm-pay', data);
 }
 
-// ---------- 商户验证工作流(Super Admin Portal Phase 1,VerifyController) ----------
+// ---------- 商户验证工作流(VerifyController,Merchant Verification 状态页共用) ----------
 /** 验证工单列表:tab=pending|approved|rejected|resubmission */
 export function apiVerifyList(params: Record<string, unknown>): Promise<PageData<Row>> {
   return get<PageData<Row>>('/admin/merchant/verify/list', params);
+}
+
+/** 五状态汇总数量(入驻/待核实/重新提交/得到正式认可/已拒绝) */
+export function apiVerifyQueues(): Promise<Record<string, number>> {
+  return get('/admin/merchant/verify/queues');
 }
 
 export function apiVerifyDetail(id: number): Promise<{ merchant: Row; documents: Row[]; timeline: Row[] }> {
   return get('/admin/merchant/verify/detail', { id });
 }
 
-/** 通过验证:0/6→3,返回生成的商户主账号(明文密码仅此一次) */
+/** 通过验证:待审核/待重新提交 → 已启用(返回商户主账号明文密码仅此一次) */
 export function apiVerifyApprove(id: number, remark?: string): Promise<{ username: string; password: string }> {
   return post('/admin/merchant/verify/approve', { id, remark });
 }
 
-export function apiVerifyReject(id: number, reason: string): Promise<null> {
-  return post('/admin/merchant/verify/reject', { id, reason });
+/** 驳回验证:预置原因码(1-9)必填 + 可选补充说明 */
+export function apiVerifyReject(id: number, reasonCode: number, note?: string): Promise<null> {
+  return post('/admin/merchant/verify/reject', { id, reasonCode, note });
 }
 
 export function apiVerifyResubmit(id: number, comment: string): Promise<null> {
   return post('/admin/merchant/verify/resubmit', { id, comment });
+}
+
+/** 确认商户已重新提交文件:回到待验证队列 */
+export function apiVerifyResubmitReceived(id: number): Promise<null> {
+  return post('/admin/merchant/verify/resubmit-received', { id });
 }
 
 /** 逐份文档核验:action=verify|reject(reject 必填 reason) */
@@ -219,8 +325,88 @@ export function apiVerifyDocReview(data: { docId: number; action: string; reason
   return post('/admin/merchant/verify/doc-review', data);
 }
 
-export function apiMerchantDocuments(params: Record<string, unknown>): Promise<PageData<Row>> {
-  return get<PageData<Row>>('/admin/merchant/documents', params);
+// ---------- 商户入驻流水线(Onboarding,OnboardingController) ----------
+export function apiOnboardingList(params: Record<string, unknown>): Promise<PageData<Row>> {
+  return get<PageData<Row>>('/admin/merchant/onboarding/list', params);
+}
+
+/** 四队列计数(原型顶部统计卡:待审核/已通过/已驳回/重新提交) */
+export function apiOnboardingQueues(): Promise<Record<string, number>> {
+  return get('/admin/merchant/onboarding/queues');
+}
+
+export function apiOnboardingDetail(id: number): Promise<{
+  application: Row;
+  businesses: Row[];
+  documents: Row[];
+  timeline: Row[];
+  notes: Row[];
+  template: Row | null;
+}> {
+  return get('/admin/merchant/onboarding/detail', { id });
+}
+
+export function apiOnboardingKycTemplates(businessType?: string): Promise<Row[]> {
+  return get('/admin/merchant/onboarding/kyc-templates', businessType ? { businessType } : {});
+}
+
+/** 编辑 KYC 验证模板(名称/业态/所需文档清单) */
+export function apiOnboardingKycTemplateUpdate(data: Record<string, unknown>): Promise<null> {
+  return post('/admin/merchant/onboarding/kyc-template-update', data);
+}
+
+export function apiOnboardingAdd(data: Record<string, unknown>): Promise<Row> {
+  return post('/admin/merchant/onboarding/add', data);
+}
+
+export function apiOnboardingUpdateStage(id: number, stage: number): Promise<null> {
+  return post('/admin/merchant/onboarding/update-stage', { id, stage });
+}
+
+export function apiOnboardingAssignOps(id: number, opsId: number, opsName: string): Promise<null> {
+  return post('/admin/merchant/onboarding/assign-ops', { id, opsId, opsName });
+}
+
+export function apiOnboardingSaveAssessment(data: Record<string, unknown>): Promise<null> {
+  return post('/admin/merchant/onboarding/save-assessment', data);
+}
+
+export function apiOnboardingSendKyc(data: { id: number; templateId: number; kycScope: number; submissionMethod: number; businessId?: number }): Promise<null> {
+  return post('/admin/merchant/onboarding/send-kyc', data);
+}
+
+export function apiOnboardingSendReminder(id: number, note?: string): Promise<null> {
+  return post('/admin/merchant/onboarding/send-reminder', { id, note });
+}
+
+export function apiOnboardingAddNote(id: number, note: string): Promise<null> {
+  return post('/admin/merchant/onboarding/note-add', { id, note });
+}
+
+/** 入驻通过:转正式商户进入 Pending Verification */
+export function apiOnboardingApprove(id: number): Promise<{ merchant_id: number }> {
+  return post('/admin/merchant/onboarding/approve', { id });
+}
+
+/** 入驻驳回:预置原因码(1-9) + 可选补充说明 */
+export function apiOnboardingReject(id: number, reasonCode: number, note?: string): Promise<null> {
+  return post('/admin/merchant/onboarding/reject', { id, reasonCode, note });
+}
+
+export function apiMerchantDocuments(
+  params: Record<string, unknown>,
+): Promise<PageData<Row> & { stats?: Record<string, number> }> {
+  return get<PageData<Row> & { stats?: Record<string, number> }>('/admin/merchant/documents', params);
+}
+
+/** 文档详情(含核验历史时间线) */
+export function apiMerchantDocumentDetail(docId: number): Promise<{ document: Row; history: Row[] }> {
+  return get('/admin/merchant/document/detail', { docId });
+}
+
+/** 文档级要求重交(6 项预置原因之一) */
+export function apiMerchantDocumentResubmit(docId: number, reason: string): Promise<null> {
+  return post('/admin/merchant/document/resubmit', { docId, reason });
 }
 
 export function apiMerchantBlacklist(id: number, reason: string, evidence?: string): Promise<null> {
@@ -231,8 +417,10 @@ export function apiMerchantUnblacklist(id: number): Promise<null> {
   return post('/admin/merchant/unblacklist', { id });
 }
 
-export function apiMerchantActivities(params: Record<string, unknown>): Promise<PageData<Row>> {
-  return get<PageData<Row>>('/admin/merchant/activities', params);
+export function apiMerchantActivities(
+  params: Record<string, unknown>,
+): Promise<PageData<Row> & { stats?: Record<string, number> }> {
+  return get<PageData<Row> & { stats?: Record<string, number> }>('/admin/merchant/activities', params);
 }
 
 export function apiMerchantBlacklistList(params: Record<string, unknown>): Promise<PageData<Row>> {

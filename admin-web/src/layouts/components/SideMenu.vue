@@ -1,13 +1,50 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import * as Icons from '@ant-design/icons-vue';
 import { useUserStore } from '@/stores/user';
 import { menuTitle } from '@/locales/menuI18n';
+import { apiVerifyQueues } from '@/api/merchant';
 
 const route = useRoute();
 const router = useRouter();
 const userStore = useUserStore();
+
+/** 商户验证队列计数(侧边栏徽标:入驻申请/待核实/重新提交显示,60s 自动刷新) */
+const queueCounts = ref<Record<string, number>>({});
+let queueTimer: number | undefined;
+async function loadQueues(): Promise<void> {
+  try {
+    // 待核实/重新提交均来自 merchant_info.status，不能使用入驻线索 stage 统计。
+    queueCounts.value = await apiVerifyQueues();
+  } catch {
+    queueCounts.value = {};
+  }
+}
+onMounted(() => {
+  void loadQueues();
+  queueTimer = window.setInterval(() => void loadQueues(), 60000);
+});
+onUnmounted(() => {
+  if (queueTimer) {
+    window.clearInterval(queueTimer);
+  }
+});
+
+/** 子菜单徽标:入驻申请、待核实、重新提交；计数 0 不显示 */
+function childBadge(child: MenuItem): number | undefined {
+  if (child.key === '/merchant-verify/onboarding') return (queueCounts.value.onboarding ?? 0) > 0 ? queueCounts.value.onboarding : undefined;
+  if (child.key === '/merchant-verify/pending') return (queueCounts.value.pending ?? 0) > 0 ? queueCounts.value.pending : undefined;
+  if (child.key === '/merchant-verify/resubmission') return (queueCounts.value.resubmission ?? 0) > 0 ? queueCounts.value.resubmission : undefined;
+  return undefined;
+}
+
+/** 父级徽标:商户验证显示三项待办总计,计数 0 不显示 */
+function groupBadge(group: MenuGroup): number | undefined {
+  if (group.key !== '/merchant-verify') return undefined;
+  const total = (queueCounts.value.onboarding ?? 0) + (queueCounts.value.pending ?? 0) + (queueCounts.value.resubmission ?? 0);
+  return total > 0 ? total : undefined;
+}
 
 /** 图标名 → 组件 */
 function resolveIcon(name: string) {
@@ -116,6 +153,7 @@ function onChildClick(key: string): void {
           <component :is="resolveIcon(group.icon || '')" v-if="group.icon" />
         </span>
         <span class="nav-label">{{ group.label }}</span>
+        <span v-if="groupBadge(group)" class="nav-badge">{{ groupBadge(group) }}</span>
         <span v-if="group.children.length > 0" class="nav-arrow">
           <Icons.CaretDownOutlined />
         </span>
@@ -133,6 +171,11 @@ function onChildClick(key: string): void {
             >
               <span class="dot" />
               <span class="submenu-label">{{ child.label }}</span>
+              <span
+                v-if="childBadge(child)"
+                class="nav-badge"
+                :class="{ 'nav-badge--pending': child.key === '/merchant-verify/pending' }"
+              >{{ childBadge(child) }}</span>
             </button>
           </div>
         </div>
@@ -298,6 +341,27 @@ function onChildClick(key: string): void {
       opacity: 1;
     }
   }
+}
+
+// ===== 菜单徽标(一级/子级通用;待审核橙色,其余品牌蓝) =====
+.nav-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: #1664ff;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.nav-badge--pending {
+  background: rgb(245, 158, 11);
 }
 
 // ===== 展开/折叠过渡动画 =====

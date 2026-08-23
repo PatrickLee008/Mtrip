@@ -119,7 +119,7 @@ onMounted(() => {
         <a-form-item label="Description"><a-input v-model:value="form.description" /></a-form-item>
         <a-form-item label="Sort"><a-input-number v-model:value="form.sort" :min="0" style="width: 100%" /></a-form-item>
         <a-form-item label="Visible">
-          <a-switch :checked="form.visible === 1" @change="(v) => (form.visible = v ? 1 : 0)" />
+          <a-switch :checked="form.visible === 1" @change="(v: boolean | string) => (form.visible = v ? 1 : 0)" />
         </a-form-item>
       </a-form>
     </a-modal>

@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, watch } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
+import { computed, onMounted, ref, watch } from 'vue';
+import { useRoute } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { Modal, message } from 'ant-design-vue';
 import { ReloadOutlined, SearchOutlined } from '@ant-design/icons-vue';
 import PageContainer from '@/components/PageContainer.vue';
 import StatusTag from '@/components/StatusTag.vue';
+import MerchantVerifyNav from '@/components/MerchantVerifyNav.vue';
 import { useTable, type TableRow } from '@/composables/useTable';
 import type { StatusItem } from '@/components/StatusTag.vue';
 import {
@@ -15,6 +16,7 @@ import {
   apiVerifyList,
   apiVerifyReject,
   apiVerifyResubmit,
+  apiVerifyResubmitReceived,
 } from '@/api/merchant';
 
 /**
@@ -23,7 +25,6 @@ import {
  */
 const { t } = useI18n();
 const route = useRoute();
-const router = useRouter();
 
 const TABS = [
   { key: 'pending', label: 'Pending Review' },
@@ -39,22 +40,32 @@ function tabFromPath(path: string): string {
 const activeTab = computed(() => tabFromPath(route.path));
 
 // merchant_info.status 语义(含 Phase 1 扩展 6=待重新提交)
-const STATUS_MAP: Record<number, StatusItem> = {
-  0: { text: 'Pending', color: 'warning' },
-  2: { text: 'Rejected', color: 'error' },
-  3: { text: 'Approved', color: 'success' },
-  4: { text: 'Suspended', color: 'orange' },
-  5: { text: 'Closed', color: 'default' },
-  6: { text: 'Resubmission', color: 'processing' },
-};
-const DOC_STATUS: Record<number, StatusItem> = {
-  1: { text: 'Verified', color: 'success' },
-  2: { text: 'Pending', color: 'warning' },
-  3: { text: 'Rejected', color: 'error' },
-  4: { text: 'Expired', color: 'error' },
-  5: { text: 'Resubmission', color: 'processing' },
-};
-const TYPE_TEXT: Record<number, string> = { 1: 'Hotel', 2: 'Scenic', 3: 'Composite' };
+const VP = (k: string): string => t(`merchant.verifyPage.${k}`);
+const STATUS_MAP = computed<Record<number, StatusItem>>(() => ({
+  0: { text: VP('statusPending'), color: 'warning' },
+  2: { text: VP('statusRejected'), color: 'error' },
+  3: { text: VP('statusApproved'), color: 'success' },
+  4: { text: VP('statusSuspended'), color: 'orange' },
+  5: { text: VP('statusClosed'), color: 'default' },
+  6: { text: VP('statusResubmission'), color: 'processing' },
+}));
+const DOC_STATUS = computed<Record<number, StatusItem>>(() => ({
+  1: { text: t('merchant.verifyPage.docVerified'), color: 'success' },
+  2: { text: t('merchant.verifyPage.docPending'), color: 'warning' },
+  3: { text: t('merchant.verifyPage.docRejected'), color: 'error' },
+  4: { text: t('merchant.verifyPage.docExpired'), color: 'error' },
+  5: { text: t('merchant.verifyPage.docResubRequired'), color: 'processing' },
+}));
+const TYPE_TEXT = computed<Record<number, string>>(() => ({
+  1: t('merchant.verifyPage.typeHotel'),
+  2: t('merchant.verifyPage.typeScenic'),
+  3: t('merchant.verifyPage.typeComposite'),
+}));
+
+/** 预置驳回原因(键与后端 VerifyController::REJECT_REASONS 及 merchant.rejectReasons.r{1..9} 对齐) */
+const REJECT_REASONS = computed(() =>
+  [1, 2, 3, 4, 5, 6, 7, 8, 9].map((code) => ({ code, label: t(`merchant.rejectReasons.r${code}`) })),
+);
 
 const { loading, list, query, load, search, reset, pagination } = useTable(apiVerifyList, {
   tab: activeTab.value,
@@ -71,20 +82,14 @@ watch(
   },
 );
 
-function switchTab(key: string): void {
-  if (key !== activeTab.value) {
-    void router.push(`/merchant-verify/${key}`);
-  }
-}
-
 const columns = computed(() => [
-  { title: 'Lead ID', dataIndex: 'id', width: 90 },
-  { title: 'Merchant', dataIndex: 'merchant_name', width: 220, ellipsis: true },
-  { title: 'Contact', dataIndex: 'contact_name', width: 150 },
-  { title: 'Type', dataIndex: 'merchant_type', width: 90 },
-  { title: 'Submitted', dataIndex: 'created_at', width: 165 },
-  { title: 'Status', dataIndex: 'status', width: 120 },
-  { title: 'Reviewed', dataIndex: 'audit_time', width: 165 },
+  { title: VP('colLeadId'), dataIndex: 'id', width: 90 },
+  { title: VP('colMerchant'), dataIndex: 'merchant_name', width: 220, ellipsis: true },
+  { title: VP('colContact'), dataIndex: 'contact_name', width: 150 },
+  { title: VP('colType'), dataIndex: 'merchant_type', width: 90 },
+  { title: VP('colSubmitted'), dataIndex: 'created_at', width: 165 },
+  { title: VP('colStatus'), dataIndex: 'status', width: 120 },
+  { title: VP('colReviewed'), dataIndex: 'audit_time', width: 165 },
   { title: t('common.action'), key: 'action_col', width: 260, fixed: 'right' as const },
 ]);
 
@@ -109,10 +114,10 @@ async function openDetail(row: TableRow): Promise<void> {
 }
 
 const docColumns = computed(() => [
-  { title: 'Document', dataIndex: 'name', ellipsis: true },
-  { title: 'Status', dataIndex: 'status', width: 120 },
-  { title: 'Expiry', dataIndex: 'expiry_date', width: 120 },
-  { title: 'Reviewer', dataIndex: 'reviewer_name', width: 120 },
+  { title: VP('colDoc'), dataIndex: 'name', ellipsis: true },
+  { title: VP('colDocStatus'), dataIndex: 'status', width: 120 },
+  { title: VP('colDocExpiry'), dataIndex: 'expiry_date', width: 120 },
+  { title: VP('colDocReviewer'), dataIndex: 'reviewer_name', width: 120 },
   { title: t('common.action'), key: 'doc_action', width: 150 },
 ]);
 
@@ -135,7 +140,7 @@ async function doApprove(): Promise<void> {
     approveOpen.value = false;
     if (account) {
       Modal.success({
-        title: 'Merchant Approved',
+        title: t('merchant.verifyPage.approvedAccountTitle'),
         content: `Username: ${account.username}  ·  Initial Password: ${account.password}`,
         width: 520,
       });
@@ -148,23 +153,25 @@ async function doApprove(): Promise<void> {
 }
 
 const rejectOpen = ref(false);
-const rejectReason = ref('');
+const rejectReasonCode = ref<number | undefined>(undefined);
+const rejectNote = ref('');
 const rejectSaving = ref(false);
 function openReject(row: TableRow): void {
   actionTarget.value = row;
-  rejectReason.value = '';
+  rejectReasonCode.value = undefined;
+  rejectNote.value = '';
   rejectOpen.value = true;
 }
 async function doReject(): Promise<void> {
   if (!actionTarget.value) return;
-  if (!rejectReason.value.trim()) {
-    message.warning('Rejection reason is required');
+  if (!rejectReasonCode.value) {
+    message.warning(t('merchant.verifyPage.rejectRequiredWarn'));
     return;
   }
   rejectSaving.value = true;
   try {
-    await apiVerifyReject(actionTarget.value.id, rejectReason.value);
-    message.success('Application rejected');
+    await apiVerifyReject(actionTarget.value.id, rejectReasonCode.value, rejectNote.value.trim() || undefined);
+    message.success(t('merchant.verifyPage.rejectSuccess'));
     rejectOpen.value = false;
     drawerOpen.value = false;
     await load();
@@ -184,13 +191,13 @@ function openResub(row: TableRow): void {
 async function doResub(): Promise<void> {
   if (!actionTarget.value) return;
   if (!resubComment.value.trim()) {
-    message.warning('Comment is required');
+    message.warning(t('merchant.verifyPage.resubRequiredWarn'));
     return;
   }
   resubSaving.value = true;
   try {
     await apiVerifyResubmit(actionTarget.value.id, resubComment.value);
-    message.success('Merchant notified to resubmit');
+    message.success(t('merchant.verifyPage.resubSuccess'));
     resubOpen.value = false;
     drawerOpen.value = false;
     await load();
@@ -199,10 +206,24 @@ async function doResub(): Promise<void> {
   }
 }
 
+/** 确认商户已重新提交文件(重新提交 → 待验证闭环) */
+const resubReceivedSaving = ref(false);
+async function markResubmitted(row: TableRow): Promise<void> {
+  resubReceivedSaving.value = true;
+  try {
+    await apiVerifyResubmitReceived(row.id);
+    message.success(t('merchant.verifyPage.resubReceivedSuccess'));
+    drawerOpen.value = false;
+    await load();
+  } finally {
+    resubReceivedSaving.value = false;
+  }
+}
+
 // ---------- 文档核验 ----------
 async function verifyDoc(row: TableRow): Promise<void> {
   await apiVerifyDocReview({ docId: row.id, action: 'verify' });
-  message.success('Document verified');
+  message.success(t('merchant.verifyPage.docVerifySuccess'));
   await refreshDocs();
 }
 const docRejectOpen = ref(false);
@@ -217,13 +238,13 @@ function openDocReject(row: TableRow): void {
 async function doDocReject(): Promise<void> {
   if (!docTarget.value) return;
   if (!docRejectReason.value.trim()) {
-    message.warning('Reason is required');
+    message.warning(t('merchant.verifyPage.docRejectRequiredWarn'));
     return;
   }
   docRejectSaving.value = true;
   try {
     await apiVerifyDocReview({ docId: docTarget.value.id, action: 'reject', reason: docRejectReason.value });
-    message.success('Document rejected');
+    message.success(t('merchant.verifyPage.docRejectSuccess'));
     docRejectOpen.value = false;
     await refreshDocs();
   } finally {
@@ -247,19 +268,17 @@ onMounted(() => {
 
 <template>
   <PageContainer>
+    <MerchantVerifyNav :active="activeTab" />
     <a-card :bordered="false" class="mtrip-card-shadow" style="margin-bottom: 16px">
-      <a-tabs :active-key="activeTab" @change="switchTab">
-        <a-tab-pane v-for="tab in TABS" :key="tab.key" :tab="tab.label" />
-      </a-tabs>
       <a-form layout="inline">
-        <a-form-item label="Keyword">
-          <a-input v-model:value="query.keyword" allow-clear placeholder="Name / credit code / contact" style="width: 220px" @press-enter="search" />
+        <a-form-item :label="t('merchant.verifyPage.keywordLabel')">
+          <a-input v-model:value="query.keyword" allow-clear :placeholder="t('merchant.verifyPage.keywordPlaceholder')" style="width: 220px" @press-enter="search" />
         </a-form-item>
-        <a-form-item label="Type">
-          <a-select v-model:value="query.merchantType" allow-clear placeholder="All" style="width: 120px">
-            <a-select-option :value="1">Hotel</a-select-option>
-            <a-select-option :value="2">Scenic</a-select-option>
-            <a-select-option :value="3">Composite</a-select-option>
+        <a-form-item :label="t('merchant.verifyPage.typeLabel')">
+          <a-select v-model:value="query.merchantType" allow-clear :placeholder="t('merchant.verifyPage.typeAll')" style="width: 120px">
+            <a-select-option :value="1">{{ t('merchant.verifyPage.typeHotel') }}</a-select-option>
+            <a-select-option :value="2">{{ t('merchant.verifyPage.typeScenic') }}</a-select-option>
+            <a-select-option :value="3">{{ t('merchant.verifyPage.typeComposite') }}</a-select-option>
           </a-select>
         </a-form-item>
         <a-form-item>
@@ -303,9 +322,10 @@ onMounted(() => {
             <a-space :size="0">
               <a-button type="link" size="small" @click="openDetail(record)">{{ t('common.detail') }}</a-button>
               <template v-if="canAct">
-                <a-button v-perm="'merchant:verify:approve'" type="link" size="small" style="color: var(--sap-success)" @click="openApprove(record)">Approve</a-button>
-                <a-button v-perm="'merchant:verify:reject'" type="link" size="small" danger @click="openReject(record)">Reject</a-button>
-                <a-button v-if="activeTab === 'pending'" v-perm="'merchant:verify:resubmit'" type="link" size="small" style="color: var(--sap-warning)" @click="openResub(record)">Resubmit</a-button>
+                <a-button v-perm="'merchant:verify:approve'" type="link" size="small" style="color: var(--sap-success)" @click="openApprove(record)">{{ t('merchant.verifyPage.btnApprove') }}</a-button>
+                <a-button v-perm="'merchant:verify:reject'" type="link" size="small" danger @click="openReject(record)">{{ t('merchant.verifyPage.btnReject') }}</a-button>
+                <a-button v-if="activeTab === 'pending'" v-perm="'merchant:verify:resubmit'" type="link" size="small" style="color: var(--sap-warning)" @click="openResub(record)">{{ t('merchant.verifyPage.btnResubmit') }}</a-button>
+                <a-button v-if="activeTab === 'resubmission'" v-perm="'merchant:verify:resubmit'" type="link" size="small" style="color: var(--sap-warning)" :loading="resubReceivedSaving" @click="markResubmitted(record)">{{ t('merchant.verifyPage.btnResubmitted') }}</a-button>
               </template>
             </a-space>
           </template>
@@ -314,23 +334,23 @@ onMounted(() => {
     </a-card>
 
     <!-- 验证详情抽屉 -->
-    <a-drawer v-model:open="drawerOpen" title="Merchant Verification Details" width="760">
+    <a-drawer v-model:open="drawerOpen" :title="t('merchant.verifyPage.drawerTitle')" width="760">
       <a-spin :spinning="detailLoading">
         <template v-if="detail">
           <a-descriptions :column="2" size="small" bordered>
-            <a-descriptions-item label="Merchant" :span="2">{{ detail.merchant_name }}</a-descriptions-item>
-            <a-descriptions-item label="Type">{{ TYPE_TEXT[detail.merchant_type] ?? detail.merchant_type }}</a-descriptions-item>
-            <a-descriptions-item label="Status"><StatusTag :value="detail.status" :map="STATUS_MAP" /></a-descriptions-item>
-            <a-descriptions-item label="Credit Code" :span="2">{{ detail.credit_code }}</a-descriptions-item>
-            <a-descriptions-item label="Legal Person">{{ detail.legal_person }}</a-descriptions-item>
-            <a-descriptions-item label="Contact">{{ detail.contact_name }}</a-descriptions-item>
-            <a-descriptions-item label="Phone">{{ detail.contact_phone }}</a-descriptions-item>
-            <a-descriptions-item label="Email">{{ detail.contact_email || '-' }}</a-descriptions-item>
-            <a-descriptions-item label="Address" :span="2">{{ detail.address || '-' }}</a-descriptions-item>
-            <a-descriptions-item label="Review Note" :span="2">{{ detail.audit_remark || '-' }}</a-descriptions-item>
+            <a-descriptions-item :label="t('merchant.verifyPage.detailMerchant')" :span="2">{{ detail.merchant_name }}</a-descriptions-item>
+            <a-descriptions-item :label="t('merchant.verifyPage.detailType')">{{ TYPE_TEXT[detail.merchant_type] ?? detail.merchant_type }}</a-descriptions-item>
+            <a-descriptions-item :label="t('merchant.verifyPage.detailStatus')"><StatusTag :value="detail.status" :map="STATUS_MAP" /></a-descriptions-item>
+            <a-descriptions-item :label="t('merchant.verifyPage.detailCreditCode')" :span="2">{{ detail.credit_code }}</a-descriptions-item>
+            <a-descriptions-item :label="t('merchant.verifyPage.detailLegalPerson')">{{ detail.legal_person }}</a-descriptions-item>
+            <a-descriptions-item :label="t('merchant.verifyPage.detailContact')">{{ detail.contact_name }}</a-descriptions-item>
+            <a-descriptions-item :label="t('merchant.verifyPage.detailPhone')">{{ detail.contact_phone }}</a-descriptions-item>
+            <a-descriptions-item :label="t('merchant.verifyPage.detailEmail')">{{ detail.contact_email || '-' }}</a-descriptions-item>
+            <a-descriptions-item :label="t('merchant.verifyPage.detailAddress')" :span="2">{{ detail.address || '-' }}</a-descriptions-item>
+            <a-descriptions-item :label="t('merchant.verifyPage.detailReviewNote')" :span="2">{{ detail.audit_remark || '-' }}</a-descriptions-item>
           </a-descriptions>
 
-          <a-divider orientation="left">Submitted Documents</a-divider>
+          <a-divider orientation="left">{{ t('merchant.verifyPage.docHeader') }}</a-divider>
           <a-table :columns="docColumns" :data-source="documents" row-key="id" size="small" :pagination="false">
             <template #bodyCell="{ column, record }">
               <template v-if="column.dataIndex === 'name'">
@@ -344,15 +364,15 @@ onMounted(() => {
               <template v-else-if="column.dataIndex === 'reviewer_name'">{{ record.reviewer_name || '-' }}</template>
               <template v-else-if="column.key === 'doc_action'">
                 <a-space :size="0">
-                  <a-button v-if="record.status !== 1" v-perm="'merchant:verify:doc'" type="link" size="small" style="color: var(--sap-success)" @click="verifyDoc(record)">Verify</a-button>
-                  <a-button v-if="record.status !== 3" v-perm="'merchant:verify:doc'" type="link" size="small" danger @click="openDocReject(record)">Reject</a-button>
+                  <a-button v-if="record.status !== 1" v-perm="'merchant:verify:doc'" type="link" size="small" style="color: var(--sap-success)" @click="verifyDoc(record)">{{ t('merchant.verifyPage.docActionVerify') }}</a-button>
+                  <a-button v-if="record.status !== 3" v-perm="'merchant:verify:doc'" type="link" size="small" danger @click="openDocReject(record)">{{ t('merchant.verifyPage.docActionReject') }}</a-button>
                 </a-space>
               </template>
             </template>
           </a-table>
-          <a-empty v-if="!documents.length" description="No documents uploaded yet" :image="undefined" style="margin: 12px 0" />
+          <a-empty v-if="!documents.length" :description="t('merchant.verifyPage.emptyNoDocs')" :image="undefined" style="margin: 12px 0" />
 
-          <a-divider orientation="left">Activity Timeline</a-divider>
+          <a-divider orientation="left">{{ t('merchant.verifyPage.timelineHeader') }}</a-divider>
           <a-timeline>
             <a-timeline-item
               v-for="ev in timeline"
@@ -362,40 +382,48 @@ onMounted(() => {
               <div style="font-weight: 500">{{ ev.action }}</div>
               <div v-if="ev.note" style="font-size: 12px; color: var(--sap-muted)">{{ ev.note }}</div>
               <div style="font-size: 12px; color: var(--sap-muted)">
-                {{ ev.operator_name || 'System' }} · {{ ev.created_at }}
+                {{ ev.operator_name || t('merchant.verifyPage.timelineSystem') }} · {{ ev.created_at }}
               </div>
             </a-timeline-item>
           </a-timeline>
-          <a-empty v-if="!timeline.length" description="No timeline yet" :image="undefined" style="margin: 12px 0" />
+          <a-empty v-if="!timeline.length" :description="t('merchant.verifyPage.emptyNoTimeline')" :image="undefined" style="margin: 12px 0" />
 
           <div v-if="canAct" style="margin-top: 16px; display: flex; gap: 8px">
-            <a-button v-perm="'merchant:verify:approve'" type="primary" @click="openApprove(detail)">Approve Merchant</a-button>
-            <a-button v-perm="'merchant:verify:reject'" danger @click="openReject(detail)">Reject</a-button>
-            <a-button v-if="activeTab === 'pending'" v-perm="'merchant:verify:resubmit'" @click="openResub(detail)">Request Resubmission</a-button>
+            <a-button v-perm="'merchant:verify:approve'" type="primary" @click="openApprove(detail)">{{ t('merchant.verifyPage.footerApproveMerchant') }}</a-button>
+            <a-button v-perm="'merchant:verify:reject'" danger @click="openReject(detail)">{{ t('merchant.verifyPage.footerReject') }}</a-button>
+            <a-button v-if="activeTab === 'pending'" v-perm="'merchant:verify:resubmit'" @click="openResub(detail)">{{ t('merchant.verifyPage.footerRequestResubmission') }}</a-button>
+            <a-button v-if="activeTab === 'resubmission'" v-perm="'merchant:verify:resubmit'" type="primary" ghost :loading="resubReceivedSaving" @click="markResubmitted(detail)">{{ t('merchant.verifyPage.footerConfirmResubmission') }}</a-button>
           </div>
         </template>
       </a-spin>
     </a-drawer>
 
     <!-- 通过 -->
-    <a-modal v-model:open="approveOpen" title="Approve Merchant Application" :confirm-loading="approveSaving" ok-text="Approve" @ok="doApprove">
-      <p style="margin: 8px 0 12px">This grants the merchant full access to list and receive bookings, and generates their portal account.</p>
-      <a-textarea v-model:value="approveRemark" :rows="3" placeholder="Review note (optional)" />
+    <a-modal v-model:open="approveOpen" :title="t('merchant.verifyPage.approveModalTitle')" :confirm-loading="approveSaving" :ok-text="t('merchant.verifyPage.btnApprove')" @ok="doApprove">
+      <p style="margin: 8px 0 12px">{{ t('merchant.verifyPage.approveModalDesc') }}</p>
+      <a-textarea v-model:value="approveRemark" :rows="3" :placeholder="t('merchant.verifyPage.approveRemarkPlaceholder')" />
     </a-modal>
 
     <!-- 驳回 -->
-    <a-modal v-model:open="rejectOpen" title="Reject Application" :confirm-loading="rejectSaving" ok-text="Reject" :ok-button-props="{ danger: true }" @ok="doReject">
-      <a-textarea v-model:value="rejectReason" :rows="4" placeholder="Rejection reason (required)" />
+    <a-modal v-model:open="rejectOpen" :title="t('merchant.verifyPage.rejectModalTitle')" :confirm-loading="rejectSaving" :ok-text="t('merchant.verifyPage.btnReject')" :ok-button-props="{ danger: true }" @ok="doReject">
+      <a-form layout="vertical">
+        <a-form-item :label="t('merchant.verifyPage.rejectReasonLabel')" required>
+          <a-select v-model:value="rejectReasonCode" :options="REJECT_REASONS" :placeholder="t('merchant.verifyPage.rejectReasonPlaceholder')" style="width: 100%" />
+        </a-form-item>
+        <a-form-item :label="t('merchant.verifyPage.rejectNoteLabel')">
+          <a-textarea v-model:value="rejectNote" :rows="3" :placeholder="t('merchant.verifyPage.rejectNotePlaceholder')" />
+        </a-form-item>
+      </a-form>
     </a-modal>
 
     <!-- 要求重交 -->
-    <a-modal v-model:open="resubOpen" title="Request Resubmission" :confirm-loading="resubSaving" ok-text="Send Notification" @ok="doResub">
-      <a-textarea v-model:value="resubComment" :rows="4" placeholder="Explain what needs to be corrected (required)" />
+    <a-modal v-model:open="resubOpen" :title="t('merchant.verifyPage.resubModalTitle')" :confirm-loading="resubSaving" :ok-text="t('merchant.verifyPage.resubOk')" @ok="doResub">
+      <a-textarea v-model:value="resubComment" :rows="4" :placeholder="t('merchant.verifyPage.resubPlaceholder')" />
     </a-modal>
 
     <!-- 文档驳回 -->
-    <a-modal v-model:open="docRejectOpen" title="Reject Document" :confirm-loading="docRejectSaving" ok-text="Reject" :ok-button-props="{ danger: true }" @ok="doDocReject">
-      <a-textarea v-model:value="docRejectReason" :rows="3" placeholder="Reason for the merchant (required)" />
+    <a-modal v-model:open="docRejectOpen" :title="t('merchant.verifyPage.docRejectModalTitle')" :confirm-loading="docRejectSaving" :ok-text="t('merchant.verifyPage.btnReject')" :ok-button-props="{ danger: true }" @ok="doDocReject">
+      <a-textarea v-model:value="docRejectReason" :rows="3" :placeholder="t('merchant.verifyPage.docRejectPlaceholder')" />
     </a-modal>
   </PageContainer>
 </template>

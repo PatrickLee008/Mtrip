@@ -133,7 +133,7 @@ onMounted(() => { void load(); });
           <a-col :span="12"><a-form-item label="Start"><a-input v-model:value="form.startDate" placeholder="YYYY-MM-DD" /></a-form-item></a-col>
           <a-col :span="12"><a-form-item label="End"><a-input v-model:value="form.endDate" placeholder="YYYY-MM-DD" /></a-form-item></a-col>
           <a-col :span="12">
-            <a-form-item label="Stackable"><a-switch :checked="form.stackable === 1" @change="(v) => (form.stackable = v ? 1 : 0)" /></a-form-item>
+            <a-form-item label="Stackable"><a-switch :checked="form.stackable === 1" @change="(v: boolean | string) => (form.stackable = v ? 1 : 0)" /></a-form-item>
           </a-col>
           <a-col :span="12">
             <a-form-item label="Status">

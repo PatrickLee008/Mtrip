@@ -25,3 +25,15 @@ export function formatAmount(value: number | string, digits = 2): string {
 export function formatMoney(value: number | string, currency = 'USD', digits = 2): string {
   return currencySymbol(currency) + formatAmount(value, digits);
 }
+
+/**
+ * 整改 D3 补充:统一金额展示入口(站点币种可配)。
+ * 当前默认 MMK(缅甸站点);真实站点币种以 sys_site.currency 为准,接入多站点数据后由站点配置注入。
+ */
+export function formatCurrency(value: number | string | null | undefined, currency = 'MMK'): string {
+  const num = Number(value ?? 0);
+  if (!num) {
+    return '';
+  }
+  return formatMoney(num, currency);
+}

@@ -2,12 +2,15 @@
 import { computed, onMounted } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { message } from 'ant-design-vue';
-import { ReloadOutlined, SearchOutlined } from '@ant-design/icons-vue';
+import { BellOutlined, LoginOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons-vue';
 import PageContainer from '@/components/PageContainer.vue';
 import StatusTag from '@/components/StatusTag.vue';
+import NotifyDrawer from '@/components/merchant/NotifyDrawer.vue';
+import ImpersonateModal from '@/components/merchant/ImpersonateModal.vue';
 import { useTable, type TableRow } from '@/composables/useTable';
 import type { StatusItem } from '@/components/StatusTag.vue';
-import { apiMerchantList, apiMerchantToggleStatus } from '@/api/merchant';
+import { apiMerchantActivate, apiMerchantList } from '@/api/merchant';
+import { ref } from 'vue';
 
 /** 已暂停商户(Super Admin Portal 模块 03),固定 status=4(已禁用/暂停) */
 const { t } = useI18n();
@@ -34,9 +37,25 @@ const columns = computed(() => [
 ]);
 
 async function reactivate(row: TableRow): Promise<void> {
-  await apiMerchantToggleStatus(row.id);
-  message.success(t('common.enable'));
+  await apiMerchantActivate(row.id);
+  message.success(t('merchant.profile.activateSuccess'));
   await load();
+}
+
+const notifyOpen = ref(false);
+const notifyTarget = ref<TableRow | null>(null);
+
+function openNotify(row: TableRow): void {
+  notifyTarget.value = row;
+  notifyOpen.value = true;
+}
+
+const impersonateOpen = ref(false);
+const impersonateTarget = ref<TableRow | null>(null);
+
+function openImpersonate(row: TableRow): void {
+  impersonateTarget.value = row;
+  impersonateOpen.value = true;
 }
 
 onMounted(() => { void load(); });
@@ -67,10 +86,18 @@ onMounted(() => { void load(); });
             <a-popconfirm v-if="record.status === 4" title="Reactivate this merchant?" @confirm="reactivate(record)">
               <a-button v-perm="'merchant:list:status'" type="link" size="small" style="color: var(--sap-success)">Reactivate</a-button>
             </a-popconfirm>
-            <span v-else style="color: var(--sap-muted)">-</span>
+            <a-tooltip :title="t('merchant.notifyPage.title')">
+              <a-button v-perm="'merchant:list:notify'" type="link" size="small" @click="openNotify(record)"><template #icon><BellOutlined /></template></a-button>
+            </a-tooltip>
+            <a-tooltip :title="t('merchant.impersonate.title')">
+              <a-button v-perm="'merchant:list:impersonate'" type="link" size="small" @click="openImpersonate(record)"><template #icon><LoginOutlined /></template></a-button>
+            </a-tooltip>
           </template>
         </template>
       </a-table>
     </a-card>
+
+    <NotifyDrawer v-model:open="notifyOpen" :merchant="notifyTarget" @sent="load" />
+    <ImpersonateModal v-model:open="impersonateOpen" :merchant="impersonateTarget" />
   </PageContainer>
 </template>

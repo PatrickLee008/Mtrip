@@ -47,7 +47,7 @@ onMounted(() => {
               <a-switch
                 v-perm="'config:feature:save'"
                 :checked="item.enabled === 1"
-                @change="(checked) => toggle(item, checked)"
+                @change="(checked: boolean | string) => toggle(item, !!checked)"
               />
             </template>
           </a-list-item>

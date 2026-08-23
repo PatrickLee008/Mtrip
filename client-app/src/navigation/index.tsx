@@ -1,23 +1,29 @@
 /**
- * 导航结构:RootStack + 底部 Tab(首页/订单/我的)
+ * 导航结构:RootStack + 底部 Tab(首页/精选/优惠/更多)
+ * 底部 Tab 样式还原 Figma M-Trip / Home 81:2464 的 BottomNavBar
  * 需登录页面由页面内守卫(useUserStore.isLogin)跳转 Login
  */
 
 import React from 'react';
-import { Text } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
-import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { createBottomTabNavigator, type BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 
-import { colors, fontSize } from '@/config/theme';
+import TabBarIcon from '@/components/common/TabBarIcon';
+import { colors } from '@/config/theme';
 import type { MainTabParamList, RootStackParamList } from '@/navigation/types';
 import GoodsDetailScreen from '@/screens/goods/GoodsDetailScreen';
 import GoodsListScreen from '@/screens/goods/GoodsListScreen';
 import HomeScreen from '@/screens/home/HomeScreen';
+import HotelsScreen from '@/screens/hotel/HotelsScreen';
+import MyPickScreen from '@/screens/mypick/MyPickScreen';
 import OrderConfirmScreen from '@/screens/order/OrderConfirmScreen';
 import OrderDetailScreen from '@/screens/order/OrderDetailScreen';
 import OrderListScreen from '@/screens/order/OrderListScreen';
+import PromotionsScreen from '@/screens/promotions/PromotionsScreen';
 import SiteSelectScreen from '@/screens/site/SiteSelectScreen';
 import LoginScreen from '@/screens/user/LoginScreen';
 import MineScreen from '@/screens/user/MineScreen';
@@ -26,34 +32,74 @@ import RegisterScreen from '@/screens/user/RegisterScreen';
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const Tab = createBottomTabNavigator<MainTabParamList>();
 
-const TAB_ICONS: Record<keyof MainTabParamList, string> = {
-  HomeTab: '🏠',
-  OrderTab: '📋',
-  MineTab: '👤',
-};
+/** 设计稿取值:底栏底色 / 未选中前景色(50% 透明度叠加) */
+const TAB_BAR_BG = '#FEFEFE';
+const TAB_INACTIVE_FG = 'rgba(25, 26, 37, 0.5)';
+/** 单个页签 92x48、圆角 20、内边距 4、图标与文字间距 4 */
+const TAB_ITEM_WIDTH = 92;
+const TAB_ITEM_HEIGHT = 48;
+const TAB_BAR_PADDING = 16;
+
+function MainTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
+  const insets = useSafeAreaInsets();
+  return (
+    <View style={[styles.tabBar, { paddingBottom: TAB_BAR_PADDING + insets.bottom }]}>
+      {state.routes.map((route, index) => {
+        const focused = state.index === index;
+        const { options } = descriptors[route.key];
+        const label = options.title ?? route.name;
+        const iconColor = focused ? TAB_BAR_BG : TAB_INACTIVE_FG;
+        const onPress = () => {
+          const event = navigation.emit({
+            type: 'tabPress',
+            target: route.key,
+            canPreventDefault: true,
+          });
+          if (!focused && !event.defaultPrevented) {
+            navigation.navigate(route.name, route.params);
+          }
+        };
+        return (
+          <Pressable
+            key={route.key}
+            style={[styles.tabItem, focused && styles.tabItemActive]}
+            accessibilityRole="button"
+            accessibilityState={focused ? { selected: true } : {}}
+            accessibilityLabel={label}
+            onPress={onPress}
+          >
+            <TabBarIcon name={route.name as keyof MainTabParamList} color={iconColor} />
+            <Text style={[styles.tabLabel, focused ? styles.tabFgActive : styles.tabFgInactive]}>
+              {label}
+            </Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
 
 function MainTabs() {
   const { t } = useTranslation();
   return (
-    <Tab.Navigator
-      screenOptions={({ route }) => ({
-        tabBarActiveTintColor: colors.primary,
-        tabBarInactiveTintColor: colors.textSecondary,
-        tabBarIcon: ({ focused }) => (
-          <Text style={{ fontSize: fontSize.lg, opacity: focused ? 1 : 0.55 }}>
-            {TAB_ICONS[route.name]}
-          </Text>
-        ),
-        headerTitleAlign: 'center',
-      })}
-    >
+    <Tab.Navigator tabBar={(props) => <MainTabBar {...props} />} screenOptions={{ headerTitleAlign: 'center' }}>
       <Tab.Screen
         name="HomeTab"
         component={HomeScreen}
         options={{ title: t('tab.home'), headerShown: false }}
       />
-      <Tab.Screen name="OrderTab" component={OrderListScreen} options={{ title: t('tab.order') }} />
-      <Tab.Screen name="MineTab" component={MineScreen} options={{ title: t('tab.mine') }} />
+      {/* 我的精选自带设计稿顶部栏(HomeHeader),隐藏 Tab 导航头 */}
+      <Tab.Screen
+        name="MyPickTab"
+        component={MyPickScreen}
+        options={{ title: t('tab.myPick'), headerShown: false }}
+      />
+      <Tab.Screen
+        name="PromotionsTab"
+        component={PromotionsScreen}
+        options={{ title: t('tab.promotions') }}
+      />
+      <Tab.Screen name="MoreTab" component={MineScreen} options={{ title: t('tab.more') }} />
     </Tab.Navigator>
   );
 }
@@ -70,6 +116,11 @@ export default function AppNavigator() {
           options={{ title: t('site.title') }}
         />
         <Stack.Screen
+          name="Hotels"
+          component={HotelsScreen}
+          options={{ title: t('hotels.title'), headerShown: false }}
+        />
+        <Stack.Screen
           name="GoodsList"
           component={GoodsListScreen}
           options={({ route }) => ({ title: route.params?.title ?? t('goods.listTitle') })}
@@ -78,6 +129,11 @@ export default function AppNavigator() {
           name="GoodsDetail"
           component={GoodsDetailScreen}
           options={{ title: t('goods.detailTitle') }}
+        />
+        <Stack.Screen
+          name="OrderList"
+          component={OrderListScreen}
+          options={{ title: t('order.listTitle') }}
         />
         <Stack.Screen
           name="OrderConfirm"
@@ -89,7 +145,12 @@ export default function AppNavigator() {
           component={OrderDetailScreen}
           options={{ title: t('order.detailTitle') }}
         />
-        <Stack.Screen name="Login" component={LoginScreen} options={{ title: t('user.loginTitle') }} />
+        {/* 登录页按设计稿自带顶部栏(返回 / Sign Up)且插画要铺到状态栏,故关掉 Stack 头 */}
+        <Stack.Screen
+          name="Login"
+          component={LoginScreen}
+          options={{ title: t('user.loginTitle'), headerShown: false }}
+        />
         <Stack.Screen
           name="Register"
           component={RegisterScreen}
@@ -99,3 +160,26 @@ export default function AppNavigator() {
     </NavigationContainer>
   );
 }
+
+const styles = StyleSheet.create({
+  tabBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: TAB_BAR_BG,
+    paddingTop: TAB_BAR_PADDING,
+    paddingHorizontal: TAB_BAR_PADDING,
+  },
+  tabItem: {
+    width: TAB_ITEM_WIDTH,
+    height: TAB_ITEM_HEIGHT,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 4,
+    borderRadius: 20,
+  },
+  tabItemActive: { backgroundColor: colors.primary },
+  tabLabel: { marginTop: 4, fontSize: 12, fontWeight: '600', lineHeight: 16 },
+  tabFgActive: { color: TAB_BAR_BG },
+  tabFgInactive: { color: TAB_INACTIVE_FG },
+});

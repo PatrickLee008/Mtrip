@@ -2,12 +2,15 @@
 import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { ShopOutlined, LogoutOutlined } from '@ant-design/icons-vue';
-import { Modal } from 'ant-design-vue';
+import { Modal, message } from 'ant-design-vue';
 import { useUserStore } from '@/stores/user';
+import { useImpersonationStore } from '@/stores/impersonation';
+import { apiMerchantImpersonateEnd } from '@/api/merchant';
 import AppHeader from './components/AppHeader.vue';
 import SideMenu from './components/SideMenu.vue';
 
 const userStore = useUserStore();
+const impersonationStore = useImpersonationStore();
 const { t } = useI18n();
 
 const userInitials = computed(() => {
@@ -28,6 +31,16 @@ function onLogout(): void {
       window.location.href = '/login';
     },
   });
+}
+
+/** 结束代入会话(整改 B2):结束全局横幅对应的会话并写 end 审计 */
+async function endImpersonation(): Promise<void> {
+  if (!impersonationStore.active) {
+    return;
+  }
+  await apiMerchantImpersonateEnd(impersonationStore.active.merchantId);
+  message.success(t('merchant.impersonate.ended'));
+  impersonationStore.end();
 }
 </script>
 
@@ -77,6 +90,16 @@ function onLogout(): void {
 
     <!-- 右侧主区域 -->
     <a-layout class="layout-main">
+      <!-- 代入会话横幅(整改 B2):全局显示,所有操作记录审计 -->
+      <div v-if="impersonationStore.active" class="impersonation-bar">
+        <span>
+          {{ t('merchant.impersonate.banner', {
+            name: impersonationStore.active.merchantName,
+            key: impersonationStore.active.sessionKey,
+          }) }}
+        </span>
+        <button class="impersonation-end" @click="endImpersonation">{{ t('merchant.impersonate.endSession') }}</button>
+      </div>
       <a-layout-header class="layout-header">
         <AppHeader />
       </a-layout-header>
@@ -274,6 +297,36 @@ function onLogout(): void {
   line-height: 56px;
   padding: 0;
   border-bottom: 1px solid var(--mtrip-border);
+}
+
+.impersonation-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  height: 36px;
+  padding: 0 16px;
+  background: #fffbeb;
+  border-bottom: 1px solid #fde68a;
+  color: #92400e;
+  font-size: 12px;
+  font-weight: 500;
+  flex-shrink: 0;
+
+  .impersonation-end {
+    height: 24px;
+    padding: 0 12px;
+    border: 1px solid #fde68a;
+    border-radius: 4px;
+    background: #fff;
+    color: #b45309;
+    font-size: 12px;
+    cursor: pointer;
+
+    &:hover {
+      background: #fef3c7;
+    }
+  }
 }
 
 .layout-content {

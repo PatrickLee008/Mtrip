@@ -13,18 +13,22 @@ class MerchantService
 {
     /**
      * 审核通过:置为已启用并生成商户后台主账号(初始密码明文仅返回一次),同时自动创建主门店
-     * @return array{username: string, password: string}
+     * 同步生成商户门户访问码(access_code,原型 MTRP-{业态}-{6位})与凭证下发渠道记录
+     * @return array{username: string, password: string, access_code: string}
      */
-    public function approve(array $merchant, string $remark): array
+    public function approve(array $merchant, string $remark, string $channels = ''): array
     {
         $username = $this->uniqueUsername((int) $merchant['id']);
         $password = $this->randomPassword();
-        Db::transaction(static function () use ($merchant, $remark, $username, $password) {
+        $accessCode = $this->generateAccessCode((int) $merchant['merchant_type']);
+        Db::transaction(static function () use ($merchant, $remark, $username, $password, $accessCode, $channels) {
             Db::table('merchant_info')->where('id', $merchant['id'])->update([
                 'status' => 3,
                 'audit_remark' => mb_substr($remark, 0, 500),
                 'audit_by' => \Mtrip\Shared\Context\AdminContext::adminId(),
                 'audit_time' => date('Y-m-d H:i:s'),
+                'access_code' => $accessCode,
+                'credential_channels' => mb_substr($channels, 0, 30),
             ]);
             Db::table('merchant_admin')->insert([
                 'site_id' => (int) $merchant['site_id'],
@@ -55,7 +59,7 @@ class MerchantService
                 ]);
             }
         });
-        return ['username' => $username, 'password' => $password];
+        return ['username' => $username, 'password' => $password, 'access_code' => $accessCode];
     }
 
     /** 审核驳回:可修改后重新提交 */
@@ -119,6 +123,24 @@ class MerchantService
             $username = 'm' . str_pad((string) $merchantId, 6, '0', STR_PAD_LEFT) . random_int(10, 99);
         }
         return $username;
+    }
+
+    /**
+     * 生成商户门户访问码:MTRP-{业态}-{6位随机}(原型 Approve Merchant 弹窗),全平台唯一
+     * @param int $merchantType 商户类型(1酒店 2景区 3综合)
+     */
+    public function generateAccessCode(int $merchantType): string
+    {
+        $label = [1 => 'HOTEL', 2 => 'ATTRACTION', 3 => 'TRAVEL'][$merchantType] ?? 'TRAVEL';
+        $pool = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+        do {
+            $suffix = '';
+            for ($i = 0; $i < 6; ++$i) {
+                $suffix .= $pool[random_int(0, strlen($pool) - 1)];
+            }
+            $code = sprintf('MTRP-%s-%s', $label, $suffix);
+        } while (Db::table('merchant_info')->where('access_code', $code)->exists());
+        return $code;
     }
 
     /** 随机初始密码:12位含大小写字母数字 */

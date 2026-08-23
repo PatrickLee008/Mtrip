@@ -2,17 +2,17 @@
  * 格式化工具:多币种金额 / 时间 / 脱敏(GDPR)
  */
 
-import { CURRENCY_SYMBOLS } from '@/config/global';
+import { CURRENCY_SYMBOLS, ZERO_DECIMAL_CURRENCIES } from '@/config/global';
 
-/** 多币种价格:formatMoney(1234.5, 'EUR') => €1,234.50 */
+/** 多币种价格:formatMoney(1234.5, 'EUR') => €1,234.50;零小数币种 => MMK 185,000 */
 export function formatMoney(amount: number | string, currency = 'EUR'): string {
   const value = typeof amount === 'string' ? Number(amount) : amount;
   if (!Number.isFinite(value)) return '-';
   const symbol = CURRENCY_SYMBOLS[currency] ?? `${currency} `;
-  const fixed = value.toFixed(2);
-  const [int, dec] = fixed.split('.');
+  const digits = ZERO_DECIMAL_CURRENCIES.includes(currency) ? 0 : 2;
+  const [int, dec] = value.toFixed(digits).split('.');
   const withComma = int.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-  return `${symbol}${withComma}.${dec}`;
+  return dec ? `${symbol}${withComma}.${dec}` : `${symbol}${withComma}`;
 }
 
 /** 日期:2026-07-28 或含时间 */
