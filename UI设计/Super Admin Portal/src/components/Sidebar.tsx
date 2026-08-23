@@ -1,9 +1,9 @@
 import { useState } from 'react'
 import {
-  LayoutDashboard, ShieldCheck, Building2,
+  LayoutDashboard, ShieldCheck, Building2, CalendarCheck,
   Megaphone, Users2, UserCog, BarChart3, Settings, LogOut,
   Globe, ChevronDown, ChevronRight, Circle, Hotel,
-  AlertTriangle, HelpCircle, Users, LayoutGrid, UserCircle2,
+  AlertTriangle, Layers, HelpCircle, Users, LayoutGrid, UserCircle2,
   Briefcase, UtensilsCrossed, Lock,
 } from 'lucide-react'
 import type { PageId } from '../App'
@@ -184,15 +184,13 @@ const navGroups: NavGroup[] = [
     label: 'End User Management',
     icon: <Users size={15} />,
     children: [
-      { id: 'endusers',               label: 'User Directory' },
-      { id: 'conversations-center',  label: 'Conversation Center', badge: 3, badgeColor: '#7C3AED' },
+      { id: 'endusers',              label: 'User Directory' },
       { id: 'endusers-profile',      label: 'User Profile' },
       { id: 'endusers-bookings',     label: 'Booking History' },
       { id: 'endusers-activities',   label: 'User Activities' },
       { id: 'endusers-transactions', label: 'User Transactions' },
       { id: 'endusers-rewards',      label: 'Rewards & Coupons' },
       { id: 'endusers-support',      label: 'User Support' },
-      { id: 'endusers-conversations', label: 'Guest Conversations' },
       { id: 'endusers-suspended',    label: 'Suspended Users', badge: 2, badgeColor: '#F59E0B' },
       { id: 'endusers-blacklist',    label: 'Blacklist', badge: 1, badgeColor: '#DC2626' },
     ],
@@ -412,11 +410,10 @@ export default function Sidebar({ activePage, onNavigate, onLogout, endUserCtx }
                 </div>
               )
             } else if (g.id === 'endusers') {
-              const dirOnly         = g.children.filter(c => c.id === 'endusers' || c.id === 'conversations-center')
+              const dirOnly         = g.children.filter(c => c.id === 'endusers')
               const userDetailItems = g.children.filter(c =>
                 ['endusers-profile','endusers-bookings','endusers-activities',
-                 'endusers-transactions','endusers-rewards','endusers-support',
-                 'endusers-conversations'].includes(c.id)
+                 'endusers-transactions','endusers-rewards','endusers-support'].includes(c.id)
               )
               const adminItems = g.children.filter(c => ['endusers-suspended','endusers-blacklist'].includes(c.id))
               inner = (

@@ -86,8 +86,6 @@ export type PageId =
   | 'endusers-rewards'
   | 'endusers-support'
   | 'endusers-notifications'
-  | 'endusers-conversations'
-  | 'conversations-center'
   | 'endusers-suspended'
   | 'endusers-blacklist'
   // Inventory & Availability
@@ -139,7 +137,7 @@ export default function App() {
   const endUserPages: PageId[] = [
     'endusers', 'endusers-profile', 'endusers-bookings', 'endusers-activities',
     'endusers-transactions', 'endusers-rewards', 'endusers-support', 'endusers-notifications',
-    'endusers-conversations', 'conversations-center', 'endusers-suspended', 'endusers-blacklist',
+    'endusers-suspended', 'endusers-blacklist',
   ]
   const inventoryPages: PageId[] = [
     'inventory', 'inventory-availability', 'inventory-detail', 'inventory-timeline',

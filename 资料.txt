@@ -10,3 +10,19 @@ https://big-plank-58319748.figma.site/
 
 管理平台：
 https://stir-long-36886628.figma.site/
+
+
+Super admin PRD
+https://docs.google.com/document/d/1CVPWR2nR5_K87GziadLB9kAEni6r5N2w75v0fEiwWMc/edit?usp=sharing
+
+Super admin prototype
+ https://stir-long-36886628.figma.site
+
+Hotel Merchant PRD
+https://docs.google.com/document/d/1Q5S-LJ08dMU1pYHr706BIjZZGEEMvJET6KvKU502T_w/edit?usp=sharing
+
+Hotel Merchant Portal (Web) Prototype
+https://big-plank-58319748.figma.site
+
+Merchant Login / Register Flow (App) Figma
+https://www.figma.com/design/fsK2rrl2sadcowrxspvGV8/mTrip_Merchant?node-id=1-2&p=f&t=Vw27xWp8TB03Mcgi-0#1881137672

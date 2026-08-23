@@ -56,8 +56,6 @@ const pageTitles: Partial<Record<PageId, { title: string; crumbs: string[] }>> =
   'endusers-rewards':    { title: 'End User Management', crumbs: ['Home', 'End User Management', 'Rewards & Coupons'] },
   'endusers-support':        { title: 'End User Management', crumbs: ['Home', 'End User Management', 'User Support'] },
   'endusers-notifications':  { title: 'End User Management', crumbs: ['Home', 'End User Management', 'User Directory', 'User Profile', 'Notification History'] },
-  'conversations-center':    { title: 'End User Management', crumbs: ['Home', 'End User Management', 'Conversation Center'] },
-  'endusers-conversations': { title: 'End User Management', crumbs: ['Home', 'End User Management', 'User Directory', 'User Profile', 'Guest Conversations'] },
   'endusers-suspended':      { title: 'End User Management', crumbs: ['Home', 'End User Management', 'Suspended Users'] },
   'endusers-blacklist':  { title: 'End User Management', crumbs: ['Home', 'End User Management', 'Blacklist'] },
   'helpcenter': { title: 'Help Center Management', crumbs: ['Home', 'Help Center Management', 'FAQ Articles'] },
