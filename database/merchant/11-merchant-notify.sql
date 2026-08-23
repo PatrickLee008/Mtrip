@@ -21,6 +21,8 @@ CREATE TABLE IF NOT EXISTS `merchant_notify` (
   `send_type`       TINYINT      NOT NULL DEFAULT 1 COMMENT '发送方式:1立即 2定时',
   `send_at`         DATETIME     NULL DEFAULT NULL COMMENT '定时发送时间(立即发送=发送时刻)',
   `status`          TINYINT      NOT NULL DEFAULT 1 COMMENT '状态:1已发送 2定时中 3发送失败',
+  `read_at`         DATETIME     NULL DEFAULT NULL COMMENT '商户端已读时间',
+  `read_by`         BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '商户端已读操作员ID',
   `operator_id`     BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '发送操作人ID',
   `operator_name`   VARCHAR(50)  NOT NULL DEFAULT '' COMMENT '发送操作人姓名(快照)',
   `created_at`      DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
@@ -28,6 +30,7 @@ CREATE TABLE IF NOT EXISTS `merchant_notify` (
   PRIMARY KEY (`id`),
   KEY `idx_site_merchant` (`site_id`, `merchant_id`),
   KEY `idx_status` (`status`),
+  KEY `idx_read_at` (`read_at`),
   KEY `idx_send_at` (`send_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin COMMENT='商户通知记录(整改 B1)';
 

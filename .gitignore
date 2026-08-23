@@ -48,3 +48,4 @@ web-build/
 # ---------- 设计稿离线快照(Figma REST 拉取的中间产物,体积大且可重新生成) ----------
 .figma-cache/
 
+/.workbuddy

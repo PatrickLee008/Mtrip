@@ -11,6 +11,7 @@ declare(strict_types=1);
 use App\Controller\GroupController;
 use App\Controller\Merchant\AccountController as MerchantAccountController;
 use App\Controller\Merchant\AuthController as MerchantAuthController;
+use App\Controller\Merchant\NotificationController as MerchantNotificationController;
 use App\Controller\Merchant\RoleController as MerchantRoleController;
 use App\Controller\Merchant\StoreController as MerchantStoreController;
 use App\Controller\MerchantController;
@@ -202,6 +203,11 @@ Router::addGroup('/api/v1/merchant', static function () {
     Router::post('/store/update', [MerchantStoreController::class, 'update']);
     Router::post('/store/set-main', [MerchantStoreController::class, 'setMain']);
     Router::post('/store/toggle-status', [MerchantStoreController::class, 'toggleStatus']);
+
+    // ---------- 通知中心(Merchant App M6) ----------
+    Router::get('/notifications/list', [MerchantNotificationController::class, 'index']);
+    Router::get('/notifications/summary', [MerchantNotificationController::class, 'summary']);
+    Router::post('/notifications/read', [MerchantNotificationController::class, 'read']);
 }, [
     'middleware' => [MerchantAuthMiddleware::class, OperationLogMiddleware::class],
 ]);

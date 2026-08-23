@@ -2,7 +2,21 @@
 
 > 用途:当 AI 会话上下文超限需要新开会话时,新会话**第一步读取本文件**即可接手全部工作。
 > 维护约定:每完成一个模块或阶段性节点,同步更新本文件的「当前进度」与「下一步」两节。
-> 最后更新:2026-08-21(client-app 底部导航 + 首页 + 我的精选 + 酒店筛选面板按 Figma 重做,见下方「★ 前端 redesign 进展」)
+> 最后更新:2026-08-23(merchant-web M2/M3 客房与房量价格首轮补齐,见下方「★ merchant-web 进展」)
+
+## ★ merchant-web 进展(2026-08-23)
+
+- 用户明确后续范围:**不只做 M5**,需同步检查 M2/M3/M5/M6/M8/M9/M10;第一步先做样式同步,采用公共 CSS 覆盖复用现有 antd/公共组件,实在没有的组件再实现。
+- 已落地样式底座:`merchant-web/src/main.ts` 调整 reset/覆盖层加载顺序;`merchant-web/src/styles/index.less` 统一卡片、筛选表单、按钮、表格、分页、Tag、Modal/Drawer 为 Hotel Merchant Dashboard 原型口径;`PageContainer` 同步 `24px 28px` 留白和浅蓝背景氛围。
+- 已补模块入口:`database/seed/04-merchant-menu.sql` 新增 M2 客房管理、M3 房量与价格、M5 收益结算、M6 通知中心/设置、M8 营销活动、M9 评价管理、M10 帮助中心;未实现组件继续由 `router/dynamic.ts` 回退 `views/wip/index.vue`。
+- i18n 与文档:`merchant-web/src/locales/{zh-CN,en-US}.ts`、`menuI18n.ts` 补齐新增菜单/WIP 文案;新增 `docs/plans/实现方案-Merchant-全模块差距与样式同步.md`;`docs/plans/13-商家端merchant-web落地.md` 与 `docs/plans/README.md` 已同步。
+- 样式阶段验证:`cd merchant-web && npm run build` 通过(EXIT=0;仅 Vite chunk 体积警告);随后已继续进入 M5/M6/M9/M10 首轮接口与页面实现。
+- M5/M6/M9/M10 首轮继续推进:dashboard 接真实 `merchant/stats/dashboard`,新增收益结算页;新增通知中心/设置页、评价管理页、帮助中心轻量页;Header 通知铃铛接未读数。
+- 后端新增 merchant 视角接口:order-service `Merchant/StatsController`,finance-service `Merchant/EarningsController`,merchant-service `Merchant/NotificationController`,goods-service `Merchant/ReviewController`;网关已登记 `stats`/`earnings`/`notifications`/`reviews`;新增 SQL `22-merchant-web-notify-read.sql` 与 `05-merchant-review-flag.sql` 已登记 initdb。
+- M8 营销活动首轮已补齐:marketing-service 新增 `Merchant/PromotionController`,路由 `/api/v1/merchant/promotions/*`,支持统计/列表/详情/新建/编辑/发布/停发/删除;商家活动复用 `marketing_coupon`,新增 `merchant_id` 与 `created_by_merchant_admin` 字段(全新 DDL + 幂等迁移 `database/marketing/07-merchant-promotion-owner.sql`,已登记 initdb);网关登记 `promotions→marketing_service`;前端新增 `api/promotions.ts` 与 `views/promotions/index.vue`,文案全走 i18n,按钮权限 `mch:promotions:add/edit/status/delete` 已对齐菜单种子。
+- M2/M3 客房与房量价格首轮已补齐:goods-service 新增 `Merchant/RoomController` 与 `Merchant/AvailabilityController`,路由 `/api/v1/merchant/rooms/*`、`/api/v1/merchant/availability/*`;房型详情字段与房量价格限制字段已补入 `database/goods/01-goods.sql`,存量幂等迁移 `database/goods/06-merchant-room-availability-fields.sql` 已登记 initdb;网关登记 `rooms/availability→goods_service`;前端新增 `api/rooms.ts`、`api/availability.ts`、`views/rooms/index.vue`、`views/availability/index.vue`,按 Hotel Merchant Dashboard 的 RoomsScreen/AvailabilityScreen 复刻列表、全页表单、日历网格、单日抽屉与批量更新;按钮权限 `mch:rooms:*`、`mch:availability:*` 已对齐菜单种子。
+- M5 dashboard 的 `activePromotionCount` 已从占位改为读取当前有效 M8 商家活动;入住率/ADR 仍待 M2/M3 房型与房量价格域完成后回填。
+- 最新验证:`D:\BtSoft\php\81\php.exe -l` 检查新增/修改 PHP 控制器和路由通过;`cd merchant-web; npm run build` 通过(EXIT=0;仅 Vite chunk 体积警告)。服务启停/网关重启仍由用户控制。
 
 ## ★ 前端 redesign 进展(2026-08-20,client-app)
 
@@ -214,4 +228,3 @@ Mtrip 海外旅游 SaaS 平台:后端 Hyperf 3.1 微服务(backend/)+ 平台管�
 工作方式不变:每完成一项任务同步更新 docs/plans/ 对应模块文件、README 进度表和 HANDOFF.md。
 后端约定见 HANDOFF.md 第4节,前端模式见第5节,模块08 关键事项见第6节。
 ```
-

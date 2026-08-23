@@ -13,8 +13,10 @@ use App\Controller\PromotionController;
 use App\Controller\CouponController;
 use App\Controller\LongstayController;
 use App\Controller\MarketingController;
+use App\Controller\Merchant\PromotionController as MerchantPromotionController;
 use Hyperf\HttpServer\Router\Router;
 use Mtrip\Shared\Middleware\AdminAuthMiddleware;
+use Mtrip\Shared\Middleware\MerchantAuthMiddleware;
 use Mtrip\Shared\Middleware\OperationLogMiddleware;
 use Mtrip\Shared\Middleware\UserAuthMiddleware;
 
@@ -65,6 +67,20 @@ Router::addGroup('/api/v1/admin/marketing', static function () {
     Router::post('/welcome/delete', [PromotionController::class, 'welcomeDelete']);
 }, [
     'middleware' => [AdminAuthMiddleware::class, OperationLogMiddleware::class],
+]);
+
+// Merchant App M8: promotions owned by the current merchant scope.
+Router::addGroup('/api/v1/merchant/promotions', static function () {
+    Router::get('/summary', [MerchantPromotionController::class, 'summary']);
+    Router::get('/list', [MerchantPromotionController::class, 'index']);
+    Router::get('/detail', [MerchantPromotionController::class, 'detail']);
+    Router::post('/add', [MerchantPromotionController::class, 'add']);
+    Router::post('/update', [MerchantPromotionController::class, 'update']);
+    Router::post('/publish', [MerchantPromotionController::class, 'publish']);
+    Router::post('/toggle-status', [MerchantPromotionController::class, 'toggleStatus']);
+    Router::post('/delete', [MerchantPromotionController::class, 'remove']);
+}, [
+    'middleware' => [MerchantAuthMiddleware::class, OperationLogMiddleware::class],
 ]);
 
 // ============================================================

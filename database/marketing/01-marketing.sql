@@ -11,6 +11,8 @@ USE `mtrip_business`;
 CREATE TABLE IF NOT EXISTS `marketing_coupon` (
   `id`             BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '主键',
   `site_id`        BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '所属站点ID',
+  `merchant_id`    BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '商家ID(0=平台券)',
+  `created_by_merchant_admin` BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '商家端创建人ID',
   `coupon_name`    VARCHAR(100) NOT NULL COMMENT '优惠券名称',
   `coupon_type`    TINYINT      NOT NULL DEFAULT 1 COMMENT '券类型:1满减券 2折扣券 3无门槛券',
   `discount_value` DECIMAL(12,2) NOT NULL DEFAULT 0.00 COMMENT '优惠值(满减/无门槛=金额,折扣=折扣率如8.50)',
@@ -33,6 +35,7 @@ CREATE TABLE IF NOT EXISTS `marketing_coupon` (
   `deleted_at`     DATETIME     NULL DEFAULT NULL COMMENT '删除时间(软删)',
   PRIMARY KEY (`id`),
   KEY `idx_site_id` (`site_id`),
+  KEY `idx_merchant_id` (`merchant_id`),
   KEY `idx_status` (`status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin COMMENT='优惠券模板表';
 

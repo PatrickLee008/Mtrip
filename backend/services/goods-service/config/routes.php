@@ -15,7 +15,10 @@ use App\Controller\Admin\AdminReviewController;
 use App\Controller\Admin\AdminSkuController;
 use App\Controller\Admin\AdminStockController;
 use App\Controller\GoodsController;
+use App\Controller\Merchant\AvailabilityController as MerchantAvailabilityController;
 use App\Controller\Merchant\GoodsController as MerchantGoodsController;
+use App\Controller\Merchant\ReviewController as MerchantReviewController;
+use App\Controller\Merchant\RoomController as MerchantRoomController;
 use Hyperf\HttpServer\Router\Router;
 use Mtrip\Shared\Middleware\AdminAuthMiddleware;
 use Mtrip\Shared\Middleware\MerchantAuthMiddleware;
@@ -102,6 +105,43 @@ Router::addGroup('/api/v1/merchant/goods', static function () {
     Router::post('/update', [MerchantGoodsController::class, 'update']);
     Router::post('/submit', [MerchantGoodsController::class, 'submit']);
     Router::post('/toggle-status', [MerchantGoodsController::class, 'toggleStatus']);
+}, [
+    'middleware' => [MerchantAuthMiddleware::class, OperationLogMiddleware::class],
+]);
+
+// ---------- 商户端客房/房型管理(/api/v1/merchant/rooms) ----------
+// 房型挂在酒店商品(goods_info.goods_type=1)下,按 goods_info.merchant_id 强制裁剪范围
+Router::addGroup('/api/v1/merchant/rooms', static function () {
+    Router::get('/hotel-options', [MerchantRoomController::class, 'hotelOptions']);
+    Router::get('/list', [MerchantRoomController::class, 'index']);
+    Router::get('/detail', [MerchantRoomController::class, 'detail']);
+    Router::post('/save', [MerchantRoomController::class, 'save']);
+    Router::post('/toggle-status', [MerchantRoomController::class, 'toggleStatus']);
+    Router::post('/delete', [MerchantRoomController::class, 'delete']);
+}, [
+    'middleware' => [MerchantAuthMiddleware::class, OperationLogMiddleware::class],
+]);
+
+// ---------- 商户端房量与价格(/api/v1/merchant/availability) ----------
+// 复用 goods_daily_stock,仅开放酒店房型(sku_type=1)维度
+Router::addGroup('/api/v1/merchant/availability', static function () {
+    Router::get('/options', [MerchantAvailabilityController::class, 'options']);
+    Router::get('/calendar', [MerchantAvailabilityController::class, 'calendar']);
+    Router::get('/logs', [MerchantAvailabilityController::class, 'logs']);
+    Router::post('/save-day', [MerchantAvailabilityController::class, 'saveDay']);
+    Router::post('/batch-set', [MerchantAvailabilityController::class, 'batchSet']);
+    Router::post('/sync-now', [MerchantAvailabilityController::class, 'syncNow']);
+}, [
+    'middleware' => [MerchantAuthMiddleware::class, OperationLogMiddleware::class],
+]);
+
+// ---------- 商户端评价管理(/api/v1/merchant/reviews) ----------
+// 通过 goods_info.merchant_id 强制裁剪商户数据范围
+Router::addGroup('/api/v1/merchant/reviews', static function () {
+    Router::get('/list', [MerchantReviewController::class, 'index']);
+    Router::get('/summary', [MerchantReviewController::class, 'summary']);
+    Router::post('/reply', [MerchantReviewController::class, 'reply']);
+    Router::post('/flag', [MerchantReviewController::class, 'flag']);
 }, [
     'middleware' => [MerchantAuthMiddleware::class, OperationLogMiddleware::class],
 ]);

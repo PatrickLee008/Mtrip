@@ -1,7 +1,7 @@
 # 实现方案 — Merchant App M5:经营看板真实化 + 收益结算
 
 > 配套文档:`续作-Merchant-下一步与提示词.md`(覆盖矩阵/工程约定)、`13-商家端merchant-web落地.md`、`设计文档/mTrip_Merchant App PRD_v1.0.md`(Module 5 + Merchant Dashboard 章节)。
-> 状态:**设计稿(待评审)**。评审通过后再进入编码;编码后 `cd merchant-web && npm run build` 全绿、后端 `scripts/check.ps1` 全绿方可提交。
+> 状态:**首轮已实现(待联调)**。已完成 dashboard 真实化、收益结算页、order/finance 商户视角接口、网关与菜单登记;2026-08-23 M8 完成后 Active Promotions 已改为真实统计,入住率/ADR 仍依赖 M2/M3。
 > 更新时间:2026-08-23
 
 ---
@@ -37,7 +37,7 @@
 
 **Out of Scope(留后续,本方案仅标注依赖)**
 - 入住率/ADR/间夜数:依赖 M2 客房 + M3 房量库存价格(当前无房型/房量域,首轮以"预订量/营收/结算"为主,入住率与 ADR 暂以 `—` 占位并标注待 M3 接入)。
-- Active Promotions / 营销:依赖 M8 营销(留属性位,后端暂返回 0)。
+- Active Promotions / 营销:2026-08-23 已随 M8 接入 `marketing_coupon` 真实统计。
 - 未读消息 / 系统通知:依赖 M6 通知中心(首轮告警区仅展示运营类静态/同步告警占位,真实通知留 M6)。
 - 结算单自动生成周期、发票、平台级申诉审批流:依赖财务模块08 定时任务与配置,本方案只做查询与前端申诉入口。
 
@@ -91,7 +91,7 @@ GET /api/v1/merchant/stats/dashboard
     todayOperations: [{ orderId, orderNo, guest, room, checkIn, checkOut, status }]
   说明:
     - todayCheckIn/Out、currentGuest、occupancy 依赖 M3 房量库存,首轮 return null/—,注释待 M3。
-    - activePromotionCount 依赖 M8,首轮返回 0。
+    - activePromotionCount 已接 M8,统计当前 merchant 范围内有效的 `marketing_coupon`。
     - pendingConfirmationCount = 待支付/待确认订单数;revenueToday = 今日已支付 pay_amount 求和。
     - 数据范围用 MerchantContext::scopeMerchantIds() 注入 whereIn('merchant_id', ...)。
 ```
@@ -175,7 +175,7 @@ INSERT IGNORE INTO `merchant_menu` (id,parent_id,menu_name,menu_name_en,perm_key
 
 ## 9. 风险与待定
 - **入住率/ADR/间夜数**:强依赖 M2 客房 + M3 房量库存(当前无房型/房量域)。首轮不做,UI 占位并标注,避免伪造指标。建议 M3 落地后回头补 `stats/dashboard` 的 occupancy 计算。
-- **Active Promotions**:依赖 M8,首轮返回 0。
+- **Active Promotions**:已接 M8 首轮商家营销活动;平台审核流/活动效果分析仍归 M8 后续。
 - **通知/告警真实数据**:依赖 M6,首轮 dashboard 告警区仅静态占位。
 - **结算单生成与发票**:依赖财务模块08 定时任务与周期配置;本方案只做查询 + 申诉入口,自动生成归专项。
 - **Failed 状态**:PRD 有 Failed,但现有 `finance_merchant_settle.status` 仅 0/1/2/3(争议)。首轮将 3 映射为 Disputed,Failed 待退款异常链路明确后再补(或复用退款状态)。
@@ -184,13 +184,13 @@ INSERT IGNORE INTO `merchant_menu` (id,parent_id,menu_name,menu_name_en,perm_key
 ---
 
 ## 10. 子任务清单(供逐条执行,每条可独立验收)
-1. **后端-order**:新增 `Merchant/StatsController::dashboard`,路由 `/api/v1/merchant/stats` 组,复用 AdminStatsController 聚合逻辑并改商户范围;`php -l` 通过。
-2. **后端-finance**:`FinanceController` 加 `merchantOverview`(商户范围);`SettleController` 加 `merchantIndex`/`merchantExport` + 复用 `detail`/`dispute` 加商户断言;路由 `/api/v1/merchant/earnings` 组 + Permission 注解。
-3. **网关**:`mtrip.conf` 的 `map $merchant_module` 加 `stats→order_service`、`earnings→finance_service`;`docker compose restart gateway`。
-4. **种子**:`04-merchant-menu.sql` 加「经营分析/收益结算」菜单与按钮 perm_key;`db-apply` 或重建 finance/order 容器。
-5. **前端-api**:`api/stats.ts`、`api/earnings.ts`。
-6. **前端-组件**:`components/EchartsCard.vue`。
-7. **前端-dashboard**:真实化( KPI + 趋势图 + 物业表现 + 今日运营 + 告警位)。
-8. **前端-earnings**:`views/earnings/index.vue`(列表/详情抽屉/申诉/导出)。
-9. **前端-i18n**:`analytics.*` / `earnings.*` 中英文词条 + 菜单 i18n。
-10. **联调验收**:网关探活 → 登录拿 token → dashboard/earnings 接口联调 → `npm run build` + `check.ps1` 全绿 → 更新 `docs/plans/` 与 README 进度。
+1. [x] **后端-order**:新增 `Merchant/StatsController::dashboard`,路由 `/api/v1/merchant/stats` 组,按 `MerchantContext::scopeMerchantIds()` 强制范围;`php -l` 通过。
+2. [x] **后端-finance**:新增 `Merchant/EarningsController` 的 overview/list/detail/dispute;路由 `/api/v1/merchant/earnings` 组 + `mch:earnings:dispute` Permission 注解。
+3. [x] **网关**:`mtrip.conf` 的 `map $merchant_module` 加 `stats→order_service`、`earnings→finance_service`。
+4. [x] **种子**:`04-merchant-menu.sql` 加「收益结算」页面与 `mch:earnings:export/dispute` 按钮权限。
+5. [x] **前端-api**:`api/stats.ts`、`api/earnings.ts`。
+6. [x] **前端-组件**:`components/EChartCard.vue`。
+7. [x] **前端-dashboard**:真实化 KPI + 趋势图 + 物业表现 + 今日运营 + 告警位。
+8. [x] **前端-earnings**:`views/earnings/index.vue`(列表/详情抽屉/申诉/前端 CSV 导出)。
+9. [x] **前端-i18n**:`dashboard.*` / `earnings.*` 中英文词条 + 菜单 i18n。
+10. [~] **联调验收**:本地 `php -l` 与 `merchant-web npm run build` 已通过;服务启停由用户控制,待用户重启相关服务和网关后做接口联调。

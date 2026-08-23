@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
-import { useRoute } from 'vue-router';
+import { computed, onMounted, ref } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 import { Modal, message } from 'ant-design-vue';
 import {
   BellOutlined,
@@ -16,12 +16,15 @@ import {
 import { useI18n } from 'vue-i18n';
 import { useUserStore } from '@/stores/user';
 import { apiUpdatePassword } from '@/api/auth';
+import { apiNotificationSummary } from '@/api/notifications';
 import { resolveMenuTitle } from '@/locales/menuI18n';
 import { SUPPORTED_LOCALES, type SupportedLocale } from '@/locales';
 
 const userStore = useUserStore();
 const route = useRoute();
+const router = useRouter();
 const { t, locale } = useI18n();
+const unreadCount = ref(0);
 
 const displayName = computed(() => userStore.profile?.realName || userStore.profile?.username || '-');
 
@@ -65,6 +68,15 @@ function onLogout(): void {
   });
 }
 
+async function loadUnreadCount(): Promise<void> {
+  try {
+    const data = await apiNotificationSummary();
+    unreadCount.value = data.unread;
+  } catch {
+    unreadCount.value = 0;
+  }
+}
+
 // ===== 修改密码弹窗 =====
 const pwdOpen = ref(false);
 const pwdLoading = ref(false);
@@ -93,6 +105,10 @@ async function onSubmitPassword(): Promise<void> {
     pwdLoading.value = false;
   }
 }
+
+onMounted(() => {
+  void loadUnreadCount();
+});
 </script>
 
 <template>
@@ -114,9 +130,10 @@ async function onSubmitPassword(): Promise<void> {
 
     <!-- 通知铃铛(原型:32px 按钮 + 右上红点) -->
     <a-tooltip :title="t('header.notifications')">
-      <button class="bell-btn" type="button">
+      <button class="bell-btn" type="button" @click="router.push('/notifications')">
         <BellOutlined class="bell-icon" />
-        <span class="bell-dot" />
+        <span v-if="unreadCount > 0" class="bell-dot" />
+        <span v-if="unreadCount > 0" class="bell-count">{{ unreadCount > 9 ? '9+' : unreadCount }}</span>
       </button>
     </a-tooltip>
 
@@ -293,6 +310,22 @@ async function onSubmitPassword(): Promise<void> {
     height: 8px;
     border-radius: 50%;
     background: #ef4444;
+  }
+
+  .bell-count {
+    position: absolute;
+    top: 1px;
+    right: 1px;
+    min-width: 14px;
+    height: 14px;
+    padding: 0 3px;
+    border: 2px solid #fff;
+    border-radius: 999px;
+    background: #ef4444;
+    color: #fff;
+    font-size: 9px;
+    font-weight: 800;
+    line-height: 10px;
   }
 }
 

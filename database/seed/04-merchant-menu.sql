@@ -17,7 +17,15 @@ INSERT IGNORE INTO `merchant_menu` (`id`, `parent_id`, `menu_name`, `menu_name_e
 (200, 0, '组织与权限', 'Org',       'menu.org',       'mch:org',         1, '/account',   '',                'TeamOutlined',      2, '1,2'),
 (300, 0, '门店管理',   'Stores',    'menu.store',     'mch:store:list',  2, '/store',     'store/index',     'ShopOutlined',      3, '1,2,3'),
 (400, 0, '订单核销',   'Orders',    'menu.order',     'mch:order:list',  2, '/order',     'order/index',     'ProfileOutlined',   4, '1,2,3'),
-(500, 0, '商品管理',   'Goods',     'menu.goods',     'mch:goods:list',  2, '/goods',     'goods/index',     'GoldOutlined',      5, '1,2,3');
+(500, 0, '商品管理',   'Goods',     'menu.goods',     'mch:goods:list',  2, '/goods',     'goods/index',     'GoldOutlined',      5, '1,2,3'),
+(600, 0, '客房管理',   'Rooms',     'menu.rooms',     'mch:rooms:list',  2, '/rooms',     'rooms/index',     'HomeOutlined',      6, '1,2,3'),
+(700, 0, '房量与价格', 'Availability & Pricing', 'menu.availability', 'mch:availability:list', 2, '/availability', 'availability/index', 'CalendarOutlined', 7, '1,2,3'),
+(800, 0, '收益结算',   'Earnings',  'menu.earnings',  'mch:earnings:list', 2, '/earnings', 'earnings/index', 'AccountBookOutlined', 8, '1,2,3'),
+(900, 0, '通知中心',   'Notifications', 'menu.notifications', 'mch:notifications:list', 2, '/notifications', 'notifications/index', 'BellOutlined', 9, '1,2,3'),
+(1000, 0, '营销活动',  'Promotions', 'menu.promotions', 'mch:promotions:list', 2, '/promotions', 'promotions/index', 'TagOutlined', 10, '1,2,3'),
+(1100, 0, '评价管理',  'Reviews', 'menu.reviews', 'mch:reviews:list', 2, '/reviews', 'reviews/index', 'StarOutlined', 11, '1,2,3'),
+(1200, 0, '帮助中心',  'Support', 'menu.support', 'mch:support:list', 2, '/support', 'support/index', 'CustomerServiceOutlined', 12, '1,2,3'),
+(1300, 0, '设置',      'Settings', 'menu.settings', 'mch:settings:list', 2, '/settings', 'settings/index', 'SettingOutlined', 13, '1,2,3');
 
 -- ---------- 组织与权限:子账号管理 + 角色管理 ----------
 INSERT IGNORE INTO `merchant_menu` (`id`, `parent_id`, `menu_name`, `menu_name_en`, `i18n_key`, `perm_key`, `menu_type`, `route_path`, `component`, `icon`, `sort`, `account_scope`) VALUES
@@ -50,6 +58,40 @@ INSERT IGNORE INTO `merchant_menu` (`id`, `parent_id`, `menu_name`, `menu_name_e
 (50001, 500, '新增商品', 'Add Goods',      'mch:goods:add',    3, 1, '1,2'),
 (50002, 500, '编辑商品', 'Edit Goods',     'mch:goods:edit',   3, 2, '1,2'),
 (50003, 500, '上下架',   'On/Off Shelf',   'mch:goods:status', 3, 3, '1,2');
+
+-- ---------- 客房管理按钮 ----------
+INSERT IGNORE INTO `merchant_menu` (`id`, `parent_id`, `menu_name`, `menu_name_en`, `perm_key`, `menu_type`, `sort`, `account_scope`) VALUES
+(60001, 600, '新增房型', 'Add Room Type',      'mch:rooms:add',    3, 1, '1,2'),
+(60002, 600, '编辑房型', 'Edit Room Type',     'mch:rooms:edit',   3, 2, '1,2'),
+(60003, 600, '删除房型', 'Delete Room Type',   'mch:rooms:delete', 3, 3, '1,2'),
+(60004, 600, '启用停售', 'Enable/Disable',     'mch:rooms:status', 3, 4, '1,2');
+
+-- ---------- 房量与价格按钮 ----------
+INSERT IGNORE INTO `merchant_menu` (`id`, `parent_id`, `menu_name`, `menu_name_en`, `perm_key`, `menu_type`, `sort`, `account_scope`) VALUES
+(70001, 700, '编辑日历', 'Edit Calendar',  'mch:availability:edit',        3, 1, '1,2,3'),
+(70002, 700, '批量更新', 'Bulk Update',    'mch:availability:bulk-update', 3, 2, '1,2,3'),
+(70003, 700, '同步库存', 'Sync Inventory', 'mch:availability:sync',        3, 3, '1,2,3');
+
+-- ---------- 收益结算按钮 ----------
+INSERT IGNORE INTO `merchant_menu` (`id`, `parent_id`, `menu_name`, `menu_name_en`, `perm_key`, `menu_type`, `sort`, `account_scope`) VALUES
+(80001, 800, '导出结算单', 'Export Settlements', 'mch:earnings:export',  3, 1, '1,2,3'),
+(80002, 800, '提交申诉',   'Submit Dispute',    'mch:earnings:dispute', 3, 2, '1,2,3');
+
+-- ---------- 通知中心按钮 ----------
+INSERT IGNORE INTO `merchant_menu` (`id`, `parent_id`, `menu_name`, `menu_name_en`, `perm_key`, `menu_type`, `sort`, `account_scope`) VALUES
+(90001, 900, '标记已读', 'Mark as Read', 'mch:notifications:read', 3, 1, '1,2,3');
+
+-- ---------- 营销活动按钮 ----------
+INSERT IGNORE INTO `merchant_menu` (`id`, `parent_id`, `menu_name`, `menu_name_en`, `perm_key`, `menu_type`, `sort`, `account_scope`) VALUES
+(100001, 1000, '新增活动', 'Add Promotion',    'mch:promotions:add',    3, 1, '1,2'),
+(100002, 1000, '编辑活动', 'Edit Promotion',   'mch:promotions:edit',   3, 2, '1,2'),
+(100003, 1000, '发布/停发', 'Publish/Pause',   'mch:promotions:status', 3, 3, '1,2'),
+(100004, 1000, '删除活动', 'Delete Promotion', 'mch:promotions:delete', 3, 4, '1,2');
+
+-- ---------- 评价管理按钮 ----------
+INSERT IGNORE INTO `merchant_menu` (`id`, `parent_id`, `menu_name`, `menu_name_en`, `perm_key`, `menu_type`, `sort`, `account_scope`) VALUES
+(110001, 1100, '回复评价', 'Reply Review', 'mch:reviews:reply', 3, 1, '1,2,3'),
+(110002, 1100, '标记复核', 'Flag Review',  'mch:reviews:flag',  3, 2, '1,2,3');
 
 -- ---------- 内置角色(merchant_id=0,is_builtin=1;按 account_type 区分) ----------
 INSERT INTO `merchant_role` (`id`, `site_id`, `group_id`, `merchant_id`, `account_type`, `role_name`, `role_code`, `is_builtin`, `status`, `remark`)

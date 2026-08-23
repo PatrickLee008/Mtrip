@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { message } from 'ant-design-vue';
 import { CheckCircleOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons-vue';
 import { useI18n } from 'vue-i18n';
@@ -24,13 +24,16 @@ function doReset(): void {
   reset();
 }
 
-const ORDER_STATUS_MAP: Record<number, StatusItem> = {
+const ORDER_STATUS_MAP = computed<Record<number, StatusItem>>(() => ({
   0: { text: t('order.statusMap.unpaid'), color: 'warning' },
   1: { text: t('order.statusMap.paid'), color: 'processing' },
   2: { text: t('order.statusMap.used'), color: 'success' },
-  3: { text: t('order.statusMap.cancelled'), color: 'default' },
-  4: { text: t('order.statusMap.refunded'), color: 'error' },
-};
+  3: { text: t('order.statusMap.completed'), color: 'success' },
+  4: { text: t('order.statusMap.cancelled'), color: 'default' },
+  5: { text: t('order.statusMap.refunding'), color: 'warning' },
+  6: { text: t('order.statusMap.refunded'), color: 'error' },
+  7: { text: t('order.statusMap.expired'), color: 'default' },
+}));
 
 const columns = [
   { title: t('order.orderNo'), dataIndex: 'order_no', width: 200 },
@@ -134,8 +137,11 @@ onMounted(() => {
           <a-select v-model:value="query.orderStatus" allow-clear :placeholder="t('common.all')" style="width: 120px">
             <a-select-option :value="1">{{ t('order.statusMap.paid') }}</a-select-option>
             <a-select-option :value="2">{{ t('order.statusMap.used') }}</a-select-option>
-            <a-select-option :value="3">{{ t('order.statusMap.cancelled') }}</a-select-option>
-            <a-select-option :value="4">{{ t('order.statusMap.refunded') }}</a-select-option>
+            <a-select-option :value="3">{{ t('order.statusMap.completed') }}</a-select-option>
+            <a-select-option :value="4">{{ t('order.statusMap.cancelled') }}</a-select-option>
+            <a-select-option :value="5">{{ t('order.statusMap.refunding') }}</a-select-option>
+            <a-select-option :value="6">{{ t('order.statusMap.refunded') }}</a-select-option>
+            <a-select-option :value="7">{{ t('order.statusMap.expired') }}</a-select-option>
           </a-select>
         </a-form-item>
         <a-form-item :label="t('order.createdAt')">

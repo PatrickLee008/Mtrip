@@ -6,8 +6,8 @@ import { router } from '@/router';
 import { setupRouterGuard } from '@/router/guard';
 import { setupDirectives } from '@/directives/perm';
 import { i18n } from '@/locales';
-import '@/styles/index.less';
 import 'ant-design-vue/dist/reset.css';
+import '@/styles/index.less';
 
 const app = createApp(App);
 

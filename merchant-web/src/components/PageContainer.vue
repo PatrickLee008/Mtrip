@@ -19,8 +19,16 @@ defineProps<{
 
 <style scoped lang="less">
 .page-body {
-  padding: 16px;
-  background: var(--mtrip-bg-page);
+  padding: 24px 28px;
+  background:
+    radial-gradient(circle at 8% 0%, rgba(37, 99, 235, 0.06), transparent 28%),
+    var(--mtrip-bg-page);
   min-height: calc(100vh - 56px); // 减去 header(56)
+}
+
+@media (max-width: 900px) {
+  .page-body {
+    padding: 16px;
+  }
 }
 </style>

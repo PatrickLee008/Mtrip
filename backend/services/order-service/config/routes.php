@@ -15,6 +15,7 @@ use App\Controller\Admin\AdminStatsController;
 use App\Controller\Admin\AdminTripController;
 use App\Controller\Admin\AdminVerifyController;
 use App\Controller\Merchant\OrderController as MerchantOrderController;
+use App\Controller\Merchant\StatsController as MerchantStatsController;
 use App\Controller\OrderController;
 use App\Controller\TripController;
 use Hyperf\HttpServer\Router\Router;
@@ -79,6 +80,13 @@ Router::addGroup('/api/v1/merchant/order', static function () {
     Router::get('/list', [MerchantOrderController::class, 'index']);
     Router::get('/detail', [MerchantOrderController::class, 'detail']);
     Router::post('/verify', [MerchantOrderController::class, 'verify']);
+}, [
+    'middleware' => [MerchantAuthMiddleware::class, OperationLogMiddleware::class],
+]);
+
+// 商户端经营看板统计(Merchant App M5)
+Router::addGroup('/api/v1/merchant/stats', static function () {
+    Router::get('/dashboard', [MerchantStatsController::class, 'dashboard']);
 }, [
     'middleware' => [MerchantAuthMiddleware::class, OperationLogMiddleware::class],
 ]);

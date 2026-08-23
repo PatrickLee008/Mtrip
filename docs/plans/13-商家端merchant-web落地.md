@@ -82,7 +82,87 @@
 - 后端 shared/merchant-service/order-service/goods-service 改动需重建对应 service 容器生效;网关改 `mtrip.conf` 后 reload OpenResty。
 - merchant-web 首次运行需 `npm install`,开发端口 5174,经同一网关新增 `/api/v1/merchant` 前缀访问;生产二级域名/路径由运维决定,本轮只保证网关路由可达。
 
+## 2026-08-23 全模块样式同步与入口补齐
+
+> 用户明确:后续不只做 M5,需对 M2/M3/M5/M6/M8/M9/M10 一并检查;第一步先同步样式,优先 CSS 覆盖复用原有组件,缺失组件再实现。
+
+### 落地文件
+- `merchant-web/src/main.ts`:调整样式加载顺序,让项目覆盖层在 antd reset 后生效。
+- `merchant-web/src/styles/index.less`:新增全局 antd 覆盖层,统一卡片/表单/按钮/表格/分页/Tag/Modal/Drawer 到 Hotel Merchant Dashboard 原型口径(白卡片、12px 圆角、`#E2E8F0` 边框、`#F8FAFC` 表头/筛选底、`#2563EB` 主按钮)。
+- `merchant-web/src/components/PageContainer.vue`:页面留白调整为 `24px 28px`,背景保留 `#F4F6FB` 并加轻微蓝色氛围层。
+- `database/seed/04-merchant-menu.sql`:补齐 PRD 待办模块入口:M2 客房管理、M3 房量与价格、M5 收益结算、M6 通知中心/设置、M8 营销活动、M9 评价管理、M10 帮助中心。组件尚未实现时按 `router/dynamic.ts` 回退 `views/wip/index.vue`。
+- `merchant-web/src/locales/{zh-CN,en-US}.ts` 与 `menuI18n.ts`:补齐新增菜单词条与 WIP 提示。
+- 新增专项文档:`docs/plans/实现方案-Merchant-全模块差距与样式同步.md`。
+
+### 验证
+- [x] `cd merchant-web && npm run build` 通过(EXIT=0;仅保留原 Vite chunk 体积警告)。
+
 ## 未尽事项(后续批次)
 - 供应商端(supplier-web / supplier_admin)仍为占位,未在本轮。
 - 商品新增表单为最小可用集(类型/名称/分类/供应商/封面/简介),SKU/退改规则等富字段沿用平台侧或后续补齐。
 - 精细报表/导出、工作台真实统计接入留后续批次。
+
+## 2026-08-23 M5/M6/M9/M10 首轮补齐
+
+> 在全局样式同步后继续按用户要求推进"不只 M5"的增量:优先复用既有 antd/公共 CSS,缺失能力再补轻量组件与后端接口。
+
+### 后端与数据库
+- order-service 新增 `App\Controller\Merchant\StatsController`,路由 `/api/v1/merchant/stats/dashboard`,返回经营看板 KPI、趋势、物业表现、今日运营;商户范围统一用 `MerchantContext::scopeMerchantIds()`。
+- finance-service 新增 `App\Controller\Merchant\EarningsController`,路由 `/api/v1/merchant/earnings/*`,支持收益总览、结算单列表/详情、商户申诉(`mch:earnings:dispute`)。
+- merchant-service 新增 `App\Controller\Merchant\NotificationController`,路由 `/api/v1/merchant/notifications/*`,支持通知列表/统计/标记已读(`mch:notifications:read`)。
+- goods-service 新增 `App\Controller\Merchant\ReviewController`,路由 `/api/v1/merchant/reviews/*`,支持评价列表/统计/回复(`mch:reviews:reply`)/标记平台复核(`mch:reviews:flag`),通过 `goods_info.merchant_id` 裁剪范围。
+- 数据库补 `merchant_notify.read_at/read_by` 与 `goods_review.merchant_flag_*` 字段;新增 `database/merchant/22-merchant-web-notify-read.sql`、`database/goods/05-merchant-review-flag.sql` 并登记 `deploy/docker-compose.yml` initdb。
+
+### 网关与前端
+- `deploy/openresty/conf.d/mtrip.conf` 已在 `map $merchant_module` 登记 `stats`、`earnings`、`notifications`、`reviews` 上游。
+- 前端新增 `api/{stats,earnings,notifications,reviews}.ts` 与 `views/{earnings,notifications,reviews,settings,support}/index.vue`;Header 铃铛接通知未读数并跳转 `/notifications`。
+- M5 dashboard/earnings、M6 notifications/settings、M9 reviews、M10 support 文案均接入 `vue-i18n`;按钮权限与 `04-merchant-menu.sql` 对齐。
+
+### 验证
+- [x] `D:\BtSoft\php\81\php.exe -l` 检查新增/修改后端控制器与路由通过。
+- [x] `cd merchant-web; npm run build` 通过(EXIT=0;仅 Vite chunk 体积警告)。
+
+## 2026-08-23 M8 营销活动首轮补齐
+
+> 继 M5/M6/M9/M10 后,继续按“前后端一起开发、SQL 差异补脚本、公共 CSS 覆盖优先”的策略补齐 Merchant App PRD Module 8。
+
+### 后端与数据库
+- marketing-service 新增 `App\Controller\Merchant\PromotionController`,路由 `/api/v1/merchant/promotions/*`,支持 `summary/list/detail/add/update/publish/toggle-status/delete`。
+- 写接口权限键为 `mch:promotions:add`、`mch:promotions:edit`、`mch:promotions:status`、`mch:promotions:delete`,已同步 `database/seed/04-merchant-menu.sql` 按钮种子。
+- 商家活动复用 `marketing_coupon`,新增 `merchant_id` 与 `created_by_merchant_admin`;全新库已改 `database/marketing/01-marketing.sql`,存量库新增幂等迁移 `database/marketing/07-merchant-promotion-owner.sql`,并登记 `deploy/docker-compose.yml` initdb。
+- 首轮强制 `goods_scope=3` 并校验所有 `goodsIds` 属于当前 `MerchantContext::scopeMerchantIds()` 范围,避免商家出资优惠影响其他商家。
+- `deploy/openresty/conf.d/mtrip.conf` 已登记 `promotions -> marketing_service`;dashboard 的 `activePromotionCount` 已由占位改为读取当前有效商家活动。
+
+### 前端
+- 新增 `merchant-web/src/api/promotions.ts` 与 `merchant-web/src/views/promotions/index.vue`。
+- 页面复用 antd + 公共 CSS 覆盖层,按 Hotel Merchant Dashboard PromotionsScreen 口径实现深蓝焦点卡、统计卡、筛选、表格、新建/编辑弹窗、发布/停发/删除操作。
+- 适用商品复用既有 `apiGoodsList`,集团账号前端限制一个活动只选择同一商家的商品;按钮均使用 `v-perm` 对齐权限键。
+- `merchant-web/src/locales/{zh-CN,en-US}.ts` 已补齐 M8 页面文案,无硬编码业务文案。
+
+### 验证
+- [x] `D:\BtSoft\php\81\php.exe -l` 检查 marketing-service 新控制器/路由与 order-service StatsController 通过。
+- [x] `cd merchant-web; npm run build` 通过(EXIT=0;仅 Vite chunk 体积警告)。
+
+## 2026-08-23 M2/M3 客房与房量价格首轮补齐
+
+> 按用户要求继续推进非 M5 模块,并强调“界面一定要跟原型一样”:本轮优先复用 antd + 公共 CSS 覆盖,只在页面级补缺失结构。
+
+### 设计差距与方案
+- 新增专项文档 `docs/plans/实现方案-Merchant-M2M3-客房与房量价格.md`,记录 RoomsScreen / AvailabilityScreen 与现有 merchant-web 的差距、接口契约、字段补齐、权限位、网关和 initdb 清单。
+- M2 复用 `hotel_room_type` 作为房型子实体,补足房型编码、描述、成人/儿童容量、床数量、楼层、景观、吸烟、餐食/取消政策、周末价、加床价、首发库存、视频、发布流程状态等字段。
+- M3 复用 `goods_daily_stock` 作为房量价格日历,补足最少/最多入住、CTA/CTD、库存来源、备注字段。
+
+### 后端、数据库与网关
+- goods-service 新增 `App\Controller\Merchant\RoomController`,路由 `/api/v1/merchant/rooms/*`,支持酒店选项、房型列表/详情、保存、上下架、删除;写接口权限 `mch:rooms:add/edit/status/delete` 已对齐菜单种子。
+- goods-service 新增 `App\Controller\Merchant\AvailabilityController`,路由 `/api/v1/merchant/availability/*`,支持房型树、日历查询、单日保存、批量更新、变更日志、同步占位;写接口权限 `mch:availability:edit/bulk-update/sync` 已对齐菜单种子。
+- `deploy/openresty/conf.d/mtrip.conf` 已登记 `rooms -> goods_service`、`availability -> goods_service`。
+- `database/goods/01-goods.sql` 已覆盖新增字段;存量库幂等迁移 `database/goods/06-merchant-room-availability-fields.sql` 已新增并登记 `deploy/docker-compose.yml` initdb。
+
+### 前端
+- 新增 `merchant-web/src/api/rooms.ts`、`merchant-web/src/views/rooms/index.vue`:按原型实现酒店筛选、页面标题、搜索/状态筛选、房型表格、设施胶囊、封面占位、全页 Create/Edit Room Type 表单、媒体占位格、发布流程提示、固定底部动作条。
+- 新增 `merchant-web/src/api/availability.ts`、`merchant-web/src/views/availability/index.vue`:按原型实现工具栏、PMS/CM 同步状态、图例、可横向滚动日历网格、单日编辑抽屉、Pricing Rules / Active Alerts 面板、Bulk Update 弹窗。
+- `merchant-web/src/locales/{zh-CN,en-US}.ts` 补齐 `rooms.*` 与 `availability.*` 文案;新增按钮均使用 `v-perm`。
+
+### 验证
+- [x] `D:\BtSoft\php\81\php.exe -l` 检查新增 RoomController / AvailabilityController / routes.php 通过。
+- [x] `cd merchant-web; npm run build` 通过(EXIT=0;仅 Vite chunk 体积警告)。

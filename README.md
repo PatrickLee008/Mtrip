@@ -21,7 +21,7 @@ MTrip/
 │   └── services/            # 8 个微服务:system 9501 / user 9502 / goods 9503 / order 9504
 │                            #            merchant 9505 / finance 9506 / marketing 9507 / payment 9508
 ├── admin-web/               # 平台管理后台(动态菜单 + v-perm 按钮权限)
-├── merchant-web/            # 商户后台(本期占位,未开发)
+├── merchant-web/            # 商户后台(Vue3+Vite+TS,端口5174;骨架/RBAC/订单/商品/门店已建)
 ├── client-app/              # C 端 Expo 应用(iOS/Android/Web)
 ├── database/                # DDL 按服务分目录 + seed/ 种子数据(管理员/菜单/站点)
 ├── deploy/                  # docker-compose.yml + openresty/ 网关 + k8s/ 预留
@@ -81,3 +81,5 @@ cd ../admin-web && npm install && npm run dev    # http://localhost:5173,接口�
 ## 当前状态(2026-07)
 
 模块 01~07、09、10 已完成;模块 08(部署与网关)完成 80%——deploy 基础设施、权限键统一与 **08-6 部署后四步验证(2026-07-30 全部通过:11 容器全 Up、八服务 healthz ok、网关 8081 无签名 401、.env 注入生效)** 已落地,剩余 08-7 全链路联调待执行,清单见 [docs/plans/08-部署与网关.md](docs/plans/08-部署与网关.md)。
+
+补充(2026-08-23):商家端 `merchant-web` 已完成全局样式同步与 M5/M6/M8/M9/M10 首轮页面/接口增量,详见 [docs/plans/13-商家端merchant-web落地.md](docs/plans/13-商家端merchant-web落地.md)、[docs/plans/实现方案-Merchant-全模块差距与样式同步.md](docs/plans/实现方案-Merchant-全模块差距与样式同步.md) 与 [docs/plans/实现方案-Merchant-M8-营销活动.md](docs/plans/实现方案-Merchant-M8-营销活动.md)。

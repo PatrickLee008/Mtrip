@@ -13,6 +13,14 @@ export const MENU_I18N: Record<string, string> = {
   门店管理: 'menu.store',
   订单核销: 'menu.order',
   商品管理: 'menu.goods',
+  客房管理: 'menu.rooms',
+  房量与价格: 'menu.availability',
+  收益结算: 'menu.earnings',
+  通知中心: 'menu.notifications',
+  营销活动: 'menu.promotions',
+  评价管理: 'menu.reviews',
+  帮助中心: 'menu.support',
+  设置: 'menu.settings',
 };
 
 /** 把后端返回的中文菜单名解析为 i18n key(找不到时返回 undefined,原样使用) */

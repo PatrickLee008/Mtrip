@@ -18,6 +18,10 @@ CREATE TABLE IF NOT EXISTS `goods_review` (
   `content`       VARCHAR(2000) NOT NULL DEFAULT '' COMMENT '评价内容',
   `images`        JSON         NULL COMMENT '评价图片',
   `reply_content` VARCHAR(2000) NOT NULL DEFAULT '' COMMENT '商户/平台回复',
+  `merchant_flag_status` TINYINT NOT NULL DEFAULT 0 COMMENT '商户标记复核状态:0未标记 1已标记',
+  `merchant_flag_reason` VARCHAR(500) NOT NULL DEFAULT '' COMMENT '商户标记复核原因',
+  `merchant_flagged_at` DATETIME NULL DEFAULT NULL COMMENT '商户标记复核时间',
+  `merchant_flagged_by` BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '商户标记复核操作员ID',
   `status`        TINYINT      NOT NULL DEFAULT 1 COMMENT '状态:0待审 1显示 2隐藏',
   `created_at`    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `updated_at`    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
@@ -25,5 +29,6 @@ CREATE TABLE IF NOT EXISTS `goods_review` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_order` (`order_id`),
   KEY `idx_goods_status` (`site_id`, `goods_id`, `status`),
+  KEY `idx_merchant_flag` (`merchant_flag_status`, `merchant_flagged_at`),
   KEY `idx_user_id` (`user_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin COMMENT='酒店评价表';

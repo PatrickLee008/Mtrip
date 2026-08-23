@@ -4,6 +4,9 @@
 -- Verification Scope / Business Type / Verification Template / Required Documents
 -- 数据库: mtrip_business
 -- ============================================================
+-- 强制客户端连接字符集为 utf8mb4,防止容器内 mysql 客户端按 latin1 解析导致中文乱码
+SET NAMES utf8mb4;
+
 USE `mtrip_business`;
 
 -- merchant_application_business 增加验证范围

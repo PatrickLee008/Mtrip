@@ -9,10 +9,12 @@ declare(strict_types=1);
 
 use App\Controller\AccountEntryController;
 use App\Controller\FinanceController;
+use App\Controller\Merchant\EarningsController as MerchantEarningsController;
 use App\Controller\SettleController;
 use App\Controller\WithdrawController;
 use Hyperf\HttpServer\Router\Router;
 use Mtrip\Shared\Middleware\AdminAuthMiddleware;
+use Mtrip\Shared\Middleware\MerchantAuthMiddleware;
 use Mtrip\Shared\Middleware\OperationLogMiddleware;
 
 // 健康检查(网关探活)
@@ -40,4 +42,14 @@ Router::addGroup('/api/v1/admin/finance', static function () {
     Router::get('/entry/summary', [AccountEntryController::class, 'summary']);
 }, [
     'middleware' => [AdminAuthMiddleware::class, OperationLogMiddleware::class],
+]);
+
+// 商户端(merchant-web):收益与结算(Merchant App M5)
+Router::addGroup('/api/v1/merchant/earnings', static function () {
+    Router::get('/overview', [MerchantEarningsController::class, 'overview']);
+    Router::get('/settle/list', [MerchantEarningsController::class, 'settleList']);
+    Router::get('/settle/detail', [MerchantEarningsController::class, 'settleDetail']);
+    Router::post('/settle/dispute', [MerchantEarningsController::class, 'settleDispute']);
+}, [
+    'middleware' => [MerchantAuthMiddleware::class, OperationLogMiddleware::class],
 ]);
