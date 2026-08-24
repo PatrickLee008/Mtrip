@@ -13,9 +13,12 @@
  *   折扣卡   --tab 底,1px --secondary 描边,圆角 32,padding 24,gap 16;四行整体 50% 透明
  *   广告位   320:180 比例,白底,1px --secondary 描边,圆角 32
  *
+ * 入住/离店拉起 DatePickerSheet(695:1428),选中的区间只回填到本页搜索卡:
+ * 列表接口没有日期参数,不参与 Search 请求。
+ *
  * 未实现的能力(设计稿有、当前没有对应依赖或接口),一律走 comingSoon:
- *   目的地定位、日期选择(未引入日期选择器)、入住人选择
- * Search 提交后跳到既有的 GoodsList,带 goodsType=酒店 与关键词。
+ *   目的地定位、入住人选择
+ * Search 提交后跳搜索结果页 HotelResults(设计稿 1695:6325),带上关键词/日期/公民身份。
  * 顶部栏筛选按钮拉起 HotelFilterSheet(408:1824);列表接口没有价格/设施筛选参数,
  * 选择结果目前只存在本页状态里,不参与 Search 请求。
  */
@@ -29,6 +32,10 @@ import { useTranslation } from 'react-i18next';
 
 import HomeIcon from '@/components/home/HomeIcon';
 import PromoCard from '@/components/home/PromoCard';
+import DatePickerSheet, {
+  DateRangeValue,
+  defaultDateRange,
+} from '@/components/hotel/DatePickerSheet';
 import HotelFilterSheet, {
   DEFAULT_HOTEL_FILTER,
   HotelFilterValue,
@@ -64,26 +71,30 @@ export default function HotelsScreen() {
   const [citizen, setCitizen] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
   const [filter, setFilter] = useState<HotelFilterValue>(DEFAULT_HOTEL_FILTER);
+  const [dateOpen, setDateOpen] = useState(false);
+  const [range, setRange] = useState<DateRangeValue>(() => defaultDateRange(DEFAULT_NIGHTS));
 
   const comingSoon = () => showToast(t('home.comingSoon'));
 
   /* 设计稿的日期形如 Wed, Jun 3;跟随当前语言,zh-CN 会渲染成中文写法 */
-  const formatDay = (offsetDays: number) => {
-    const d = new Date();
-    d.setDate(d.getDate() + offsetDays);
-    return d.toLocaleDateString(i18n.language, {
+  const formatDay = (key: string) => {
+    const [y, m, d] = key.split('-').map(Number);
+    return new Date(y, m - 1, d).toLocaleDateString(i18n.language, {
       weekday: 'short',
       month: 'short',
       day: 'numeric',
     });
   };
 
+  /** 跳搜索结果页(设计稿 1695:6325),把当前搜索卡的条件一起带过去 */
   const search = () => {
     const kw = keyword.trim();
-    navigation.navigate('GoodsList', {
-      goodsType: GOODS_TYPE.HOTEL,
-      title: t('hotels.title'),
+    navigation.navigate('HotelResults', {
       ...(kw ? { keyword: kw } : {}),
+      checkIn: range.checkIn,
+      checkOut: range.checkOut,
+      flexDays: range.flexDays,
+      citizen,
     });
   };
 
@@ -120,26 +131,25 @@ export default function HotelsScreen() {
               </View>
 
               <View style={styles.dateRow}>
-                <Pressable
-                  style={({ pressed }) => [styles.field, styles.dateField, pressed && styles.pressed]}
-                  onPress={comingSoon}
-                >
-                  <HomeIcon name="calendar" size={20} color={colors.primary} />
-                  <View>
-                    <Text style={styles.fieldLabel}>{t('hotels.checkIn')}</Text>
-                    <Text style={styles.fieldValue}>{formatDay(0)}</Text>
-                  </View>
-                </Pressable>
-                <Pressable
-                  style={({ pressed }) => [styles.field, styles.dateField, pressed && styles.pressed]}
-                  onPress={comingSoon}
-                >
-                  <HomeIcon name="calendar" size={20} color={colors.primary} />
-                  <View>
-                    <Text style={styles.fieldLabel}>{t('hotels.checkOut')}</Text>
-                    <Text style={styles.fieldValue}>{formatDay(DEFAULT_NIGHTS)}</Text>
-                  </View>
-                </Pressable>
+                {(['checkIn', 'checkOut'] as const).map((field) => (
+                  <Pressable
+                    key={field}
+                    style={({ pressed }) => [
+                      styles.field,
+                      styles.dateField,
+                      pressed && styles.pressed,
+                    ]}
+                    onPress={() => setDateOpen(true)}
+                  >
+                    <HomeIcon name="calendar" size={20} color={colors.primary} />
+                    <View>
+                      <Text style={styles.fieldLabel}>
+                        {t(field === 'checkIn' ? 'hotels.checkIn' : 'hotels.checkOut')}
+                      </Text>
+                      <Text style={styles.fieldValue}>{formatDay(range[field])}</Text>
+                    </View>
+                  </Pressable>
+                ))}
               </View>
 
               <Pressable
@@ -236,6 +246,17 @@ export default function HotelsScreen() {
           </Pressable>
         </View>
       </SafeAreaView>
+
+      {/* 日期选择器:选中的区间目前只回填到搜索卡,列表接口没有日期参数 */}
+      <DatePickerSheet
+        visible={dateOpen}
+        value={range}
+        onClose={() => setDateOpen(false)}
+        onConfirm={(next) => {
+          setRange(next);
+          setDateOpen(false);
+        }}
+      />
 
       <HotelFilterSheet
         visible={filterOpen}

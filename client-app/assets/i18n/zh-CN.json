@@ -253,6 +253,67 @@
     "nights": "{{nights}} 晚",
     "adTitle": "广告位招租",
     "adSize": "320*180",
+    "datePicker": {
+      "title": "选择日期",
+      "totalDuration": "总时长",
+      "exactDates": "精确日期",
+      "flexDay": "±1 天",
+      "flexDays": "±{{days}} 天",
+      "confirm": "确认",
+      "holidays": {
+        "nationalDay": "国庆日"
+      }
+    },
+    "results": {
+      "found": "找到 {{total}} 家住宿",
+      "taxNote": "价格含税费",
+      "viewMap": "查看地图",
+      "sortBy": "排序",
+      "empty": "没有符合条件的住宿",
+      "favoriteFailed": "收藏操作失败",
+      "rating": "评分:{{score}}",
+      "reviews": "({{reviews}} 条评价)",
+      "excellent": "超赞",
+      "highDemand": "热订中",
+      "citizenOff": "公民价省 {{percent}}%",
+      "bestSeller": "热销",
+      "demoNotice": "当前为设计稿演示数据(未连接后端)",
+      "chips": {
+        "rating4": "评分 4 分以上",
+        "freeCancellation": "免费取消",
+        "breakfast": "含早餐",
+        "freeWifi": "免费 Wi-Fi"
+      },
+      "sort": {
+        "recommended": "mTrip 推荐",
+        "priceAsc": "价格最低",
+        "priceDesc": "价格最高",
+        "distance": "距离最近",
+        "star": "星级从高到低",
+        "rating": "评价最高"
+      },
+      "demo": {
+        "summerPromo": "夏日促销",
+        "longStayOff": "住 7 晚立减 5%",
+        "longStayNotSupported": "不支持长住优惠",
+        "heritageBagan": {
+          "name": "蒲甘传承酒店",
+          "address": "娘乌,老蒲甘"
+        },
+        "aureumPalace": {
+          "name": "金宫度假村",
+          "address": "敏南都村,蒲甘"
+        },
+        "thiripyitsaya": {
+          "name": "锡里皮萨雅度假村",
+          "address": "江畔,老蒲甘"
+        },
+        "baganLodge": {
+          "name": "蒲甘小屋酒店",
+          "address": "新蒲甘"
+        }
+      }
+    },
     "filter": {
       "title": "筛选",
       "reset": "重置",

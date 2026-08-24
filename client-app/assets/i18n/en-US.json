@@ -253,6 +253,67 @@
     "nights": "{{nights}} Nights",
     "adTitle": "YOUR AD HERE",
     "adSize": "320*180",
+    "datePicker": {
+      "title": "Choose Date",
+      "totalDuration": "Total Duration",
+      "exactDates": "Exact Dates",
+      "flexDay": "±1 Day",
+      "flexDays": "±{{days}} Days",
+      "confirm": "Confirm",
+      "holidays": {
+        "nationalDay": "National Day"
+      }
+    },
+    "results": {
+      "found": "{{total}} Properties Found",
+      "taxNote": "Prices include taxes and fees",
+      "viewMap": "View map",
+      "sortBy": "Sort by",
+      "empty": "No properties found",
+      "favoriteFailed": "Could not update favorites",
+      "rating": "Rating: {{score}}",
+      "reviews": "({{reviews}} Review)",
+      "excellent": "EXCELLENT",
+      "highDemand": "HIGH DEMAND",
+      "citizenOff": "{{percent}}% off for citizens",
+      "bestSeller": "BEST SELLER",
+      "demoNotice": "Sample data from the design (backend not connected)",
+      "chips": {
+        "rating4": "Rating 4+",
+        "freeCancellation": "Free Cancellation",
+        "breakfast": "Breakfast",
+        "freeWifi": "Free Wifi"
+      },
+      "sort": {
+        "recommended": "mTrip Recommended",
+        "priceAsc": "Lowest Price",
+        "priceDesc": "Highest Price",
+        "distance": "Nearest Distance",
+        "star": "Star Rating (High to low)",
+        "rating": "Top Guest Ratings"
+      },
+      "demo": {
+        "summerPromo": "SUMMER PROMO",
+        "longStayOff": "5% off for 7Nights",
+        "longStayNotSupported": "Long Stay Not Supported",
+        "heritageBagan": {
+          "name": "The Heritage Bagan Hotel",
+          "address": "Nyaung-U, Old Bagan"
+        },
+        "aureumPalace": {
+          "name": "Aureum Palace Resort",
+          "address": "Min Nanthu Village, Bagan"
+        },
+        "thiripyitsaya": {
+          "name": "Thiripyitsaya Sanctuary Resort",
+          "address": "River Side, Old Bagan"
+        },
+        "baganLodge": {
+          "name": "Bagan Lodge",
+          "address": "New Bagan"
+        }
+      }
+    },
     "filter": {
       "title": "Filter By",
       "reset": "Reset",

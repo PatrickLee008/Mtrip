@@ -12,8 +12,8 @@
 | 文件 | 素材像素 | 展示框 | 用在哪 | 将来由谁替代 |
 | --- | --- | --- | --- | --- |
 | `booking-cover.jpg` | 330×330 | 402×176 | 未登录时的示例预订卡封面 | `/order/list` 的 `goods_image` |
-| `hotel-heritage-bagan.png` | 512×512 | 298×176 | 收藏酒店兜底卡 1 | `/user/favorite/list` 的 `cover_image` |
-| `hotel-strand-suites.png` | 512×512 | 298×176 | 收藏酒店兜底卡 2 | 同上 |
+| `hotel-heritage-bagan.png` | 512×512 | 298×176 | 收藏酒店兜底卡 1;酒店搜索结果演示卡 1(`1695:6325`) | `/user/favorite/list` 的 `cover_image` |
+| `hotel-strand-suites.png` | 512×512 | 298×176 | 收藏酒店兜底卡 2;酒店搜索结果演示卡 2(顶替设计稿的 Aureum Palace 图,未导出) | 同上 |
 | `restaurant-golden-mandalay.jpg` | 512×279 | 322×128 | 收藏餐厅卡 1 | 后端暂无餐饮品类 |
 | `restaurant-shwe-flower.jpg` | 512×279 | 322×128 | 收藏餐厅卡 2 | 同上 |
 

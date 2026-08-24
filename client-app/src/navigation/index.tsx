@@ -18,6 +18,7 @@ import type { MainTabParamList, RootStackParamList } from '@/navigation/types';
 import GoodsDetailScreen from '@/screens/goods/GoodsDetailScreen';
 import GoodsListScreen from '@/screens/goods/GoodsListScreen';
 import HomeScreen from '@/screens/home/HomeScreen';
+import HotelResultsScreen from '@/screens/hotel/HotelResultsScreen';
 import HotelsScreen from '@/screens/hotel/HotelsScreen';
 import MyPickScreen from '@/screens/mypick/MyPickScreen';
 import OrderConfirmScreen from '@/screens/order/OrderConfirmScreen';
@@ -118,6 +119,11 @@ export default function AppNavigator() {
         <Stack.Screen
           name="Hotels"
           component={HotelsScreen}
+          options={{ title: t('hotels.title'), headerShown: false }}
+        />
+        <Stack.Screen
+          name="HotelResults"
+          component={HotelResultsScreen}
           options={{ title: t('hotels.title'), headerShown: false }}
         />
         <Stack.Screen

@@ -53,6 +53,32 @@
 - 设计稿文案笔误已修正:`Show Resluts` → Show Results、`2bedrooms` → 2 bedrooms;新增 i18n `hotels.filter.*`(中英各 25 键,插值用 `{{total}}` 而非 i18next 保留字 `count`)。
 - `HomeIcon.tsx` 新增 `close`(408:1971)/ `caretLeft`(fluent:ios-arrow-24-filled,用时外层转 -90° 当下拉箭头),并用 `fluent:star-12-filled` 的 path **顶替原 24 网格 star 草图**(SavedRestaurantCard 同步受益);`theme.ts` 新增 `colors.star = #FFC100`。
 - 门禁:`cd client-app; npm run typecheck` 已跑通零报错。
+
+### ★ 2026-08-24(client-app 日期选择器,Figma `Choose Date` node `695:1428`)
+
+- 酒店页搜索卡的入住/离店两格由 `comingSoon` 改为拉起 `components/hotel/DatePickerSheet.tsx`:RN 自带 `Modal`(`animationType="none"`)+ `Animated` 做**居中卡片**浮层(淡入 + 上移 24px,220ms/180ms;关闭动画放完才卸载,同筛选面板自持挂载态)。**设计稿背后的大图保持原亮度、没有遮罩**,故背板只留一层透明的点击关闭区。
+- 卡片自上而下:标题 → 入住/离店两张 `#EFF4FF` 卡(中间悬一枚 `--tab` 底的箭头徽章,设计稿是 arrow-left 旋转 180°)→ 总晚数条 → 月份切换 → 七列日历 → 节假日说明 → 弹性日期档(Exact Dates / ±1 / ±2 / ±3 / ±7)→ Confirm。
+- **七列等宽用像素值算,不用百分比**:RN 的 `flexWrap + gap` 不像 CSS grid 那样自动扣列间距,百分比宽会因 6 道 8px 间距挤到第二行;列宽由窗口宽减去卡片外边距/描边/内边距/间距后除 7 并向下取整(常量 `CARD_MARGIN/CARD_PADDING/CARD_BORDER/GRID_GAP` 是单一出处,改内边距时一起改)。
+- 交互:先点入住再点离店,点到入住日或更早则重新起头;今天之前的日期沿用设计稿 9~11 号那一档的置灰样式并禁点,月份不能翻到当月之前;只选了入住日时 Confirm 置灰。星期表头与月份标题走 `toLocaleDateString`(`weekday:'narrow'` / `month:'long'`)跟随语言。
+- 与设计稿的取舍:设计稿的日历是「Mini Calendar Mockup」(只画了 9 号往后四周),这里按真实月份铺满整月;首尾格下方 4px 白点(`696:1643`)落在白色卡片上不可见,未实现;节假日后端无接口,组件内 `HOLIDAYS` 静态表按 MM-DD 命中(设计稿的 Oct 19 National Day);设计稿 `±3Day/±7Day` 少了复数,统一按「1 天 / 多天」两个文案键。
+- **与后端的关系**:`/api/v1/app/goods/list` 没有日期参数,选中的区间只回填到 `HotelsScreen` 的搜索卡,不进 Search 请求。
+- `HomeIcon.tsx` 新增 `caretLeftSlim`(695:1428 的 Frame 337,导出 SVG 的 path,viewBox 收到字形包围盒 `4 0 7 12`;朝右那枚是它旋转 180°);分隔线取导出资产 Line 11 的实际描边 `#555555` @10%。新增 i18n `hotels.datePicker.*` 中英各 7 键。
+- 门禁:`cd client-app; npm run typecheck` 零报错;`scripts/check.ps1` 因本机 `php` 不在 PATH 第 1 步即中断(与本改动无关)。
+
+### ★ 2026-08-24(client-app 酒店搜索结果页,Figma `Long Stay Search Results` node `1695:6325`)
+
+- 新增 `screens/hotel/HotelResultsScreen.tsx`(路由 `HotelResults`,`headerShown:false`,页面自带悬浮顶部栏),酒店页 Search 由跳通用 `GoodsList` 改跳这里并带上关键词/日期/公民身份;`GoodsList` 仍留给门票等其它品类。
+- 页面结构:顶部大图(与搜索卡重叠 148,同酒店页)→ 搜索卡(回显并可改条件,点 Search 才生效)→ 筛选 chips(横滑,即时生效)→ 结果头(总数 / 含税说明 / View map)→ 卡片列表(FlatList 自持分页:下拉刷新 + 触底加载,空/错/加载态复用 `StateViews`)。
+- **chips 与排序都落到真实查询参数**,不是纯前端状态:Rating 4+ → `reviewScore=4`、Free Cancellation → `freeCancel=1`、Breakfast → `breakfast=1`、Free Wifi → `amenities=Wifi`、Sort by → `sortBy` 白名单(`GoodsController::applySort`;面板实际给出的六项见下条)。`api/goods.ts` 的 `GoodsListParams` 已按后端 `applyFilters/applySort` 补齐,并导出 `GoodsSortBy`。
+- 新增 `components/hotel/HotelResultCard.tsx`:封面 176 高,上下各压一条主色渐变条(`react-native-svg` 画,项目未引 expo-linear-gradient),左上星级(`star_level` 颗)、右上收藏心、左下评分行、右下评价档徽章;正文为名称/地址/价格与徽章。徽章按 `is_recommend → PREFERRED`、`is_hot → HIGH DEMAND` 映射。
+- **数据缺口(设计稿有、接口没有)**:①「Rating: 9.3 (1,230 Review)」与 EXCELLENT 徽章 —— `/app/goods/list` 不下发评分(只有详情的 `reviewSummary`),`GoodsItem.rating/reviewCount` 已留可选字段,拿不到时整行不渲染;要点亮只需在 `GoodsController::list` 的 `rowWithPrice` 里补一份与 `applySort` 同款的 `AVG(rating)/COUNT(*)` 子查询。②设计稿的促销小行(SUMMER PROMO / 5% off for 7Nights / Long Stay Not Supported)无对应字段,改用**公民价**表达:勾选 Myanmar Citizen 且 `minPriceCitizen` 更低时划掉原价并显示省了百分之几(`GoodsItem` 补 `minPriceCitizen` 可选字段,后端 `rowWithPrice` 本来就下发)。③BEST SELLER 徽章无对应字段,未实现。
+- **演示数据(2026-08-24 追加)**:接口没连通或没返回结果时,列表回落到 `screens/hotel/demoResults.ts` —— **直接照搬设计稿那四张卡的原始数值与文案**(评分 9.3/7.8/4.3/4.3 与评价数、MMK 195,000/175,000/195,000/155,000、EXCELLENT、SUMMER PROMO、5% off for 7Nights、Long Stay Not Supported、PREFERRED/HIGH DEMAND/BEST SELLER),结果头总数同步显示演示条数,下方给一条可点重试的提示条(请求失败时把错误原因一并带出,不让演示数据盖掉故障)。演示卡 id 取负数(同 `myPickSections.ts` 的约定):点卡片不跳详情、点心只切本地状态;chips / 排序 / 关键词在演示态下由 `queryDemoResults` 在前端本地生效。封面复用 My Pick 的两张设计稿临时图,另两张走 `CoverImage` 的渐变占位(设计稿那两张图没导出)。**注意设计稿评分是 10 分制、后端是 5 分制**,演示数据按设计稿原样展示,接真实数据后自然变成 5 分制。
+- 为承载上述设计稿元素,`HotelResultCard` 增开三个可选属性 `ratingTier / promo / badge`(不传就按 `rating`≥4.5 → EXCELLENT、`is_recommend/is_hot` → 徽章、公民价 → 促销小行 自行推导),`theme.ts` 新增 `colors.orange = #F59E0B`(设计稿 `--orange`)。
+- 收藏心接的是真接口:登录后进页拉一次 `/user/favorite/list` 建集合,点击先改本地再发 `addFavorite/removeFavorite`,失败回滚;未登录点击跳 `Login`。
+- 新增 `components/hotel/SortSheet.tsx`,按 Figma `Sort by` node `901:1673` 落地:**锚定在「Sort by」chip 下方 8px 弹出的卡片**(白底 / 1px `--divider` 描边 / 圆角 32 / padding 25 / 行距 20,行 = 20px 勾选框 + Inter 500/14 `--text-2`),背板是透明点击关闭区(设计稿无遮罩)。位置由 `measureInWindow` 量 chip 得到,取不到锚点时退到屏幕上方居中。六项即设计稿:mTrip Recommended / Lowest Price / Highest Price / Nearest Distance / Star Rating (High to low) / Top Guest Ratings → `default / price_asc / price_desc / distance / star / rating`。**Nearest Distance 走 `comingSoon` 不改排序**——后端 `distance` 要带 lat/lng,client-app 未接定位,没坐标时后端会静默回退成综合排序。选中态图标用主色(设计稿两态同为 `--text-2`,只靠内芯区分、辨识度太弱),文字色沿用设计稿。顶部栏筛选按钮复用 `HotelFilterSheet`;View map 与入住人选择仍走 `comingSoon`。
+- 图标取舍:设计稿的 `fluent:arrow-sort-down-lines-16-filled`(Sort by)与 15px 地图图标暂用项目图标表里同体系的 `filter` / `map` 字形(`map` 本来就在 `HomeIcon.tsx` 的 TODO 顶替名单里),两处代码内已注明。
+- 新增 i18n `hotels.results.*` 中英各 22 键(评价数插值用 `{{reviews}}`、避开 i18next 保留字 `count`)。门禁:`cd client-app; npm run typecheck` 零报错;`scripts/check.ps1` 因本机 `php` 不在 PATH 第 1 步即中断(与本改动无关)。
+
 > 最后更新:2026-08-16(商户验证模块原型对齐整改 + 中英文国际化补齐,见下方「★ 商户验证原型对齐整改」)
 >
 > ⚠ 2026-08-20:此前基于 Figma 原型(stir-long v4.2.1)的商户管理整改已判定不符合正式 PRD(《mTrip_Super_Admin_Portal_PRD_Enterprise_v1.0_中文版.md》/《mTrip_Merchant App PRD_v1.0_中文版.md》),相关需求文档与整改清单已删除;商户验证与审批将按新 PRD 重新整改,方案见 docs/redesign/商户验证与审批整改方案.md。

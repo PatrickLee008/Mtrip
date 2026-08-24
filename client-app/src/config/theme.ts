@@ -42,6 +42,8 @@ export const colors = {
   tintBg: '#EFF4FF',
   /** 热门角标红 */
   hot: '#EC1317',
+  /** 设计稿 --orange:提示性文案(如「Long Stay Not Supported」) */
+  orange: '#F59E0B',
   /** 评分星标黄(设计稿 fluent:star-12-filled 填充色) */
   star: '#FFC100',
   /** 紧急求助底/前景 */

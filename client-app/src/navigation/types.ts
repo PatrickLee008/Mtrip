@@ -18,6 +18,17 @@ export type RootStackParamList = {
   SiteSelect: undefined;
   /** 酒店搜索页(Figma 91:200),首页快捷入口 hotels 的落地页 */
   Hotels: undefined;
+  /** 酒店搜索结果页(Figma 1695:6325),酒店搜索页 Search 的落地页 */
+  HotelResults: {
+    keyword?: string;
+    /** YYYY-MM-DD */
+    checkIn?: string;
+    checkOut?: string;
+    /** 弹性日期天数,0=精确日期 */
+    flexDays?: number;
+    /** 是否按缅甸公民价展示 */
+    citizen?: boolean;
+  };
   GoodsList: { goodsType?: number; categoryId?: number; keyword?: string; title?: string };
   GoodsDetail: { id: number };
   OrderList: undefined;
