@@ -10,10 +10,15 @@ SET NAMES utf8mb4;
 -- ============================================================
 USE `mtrip_business`;
 
--- 存量重交标记的进行中线索 → 等待文件(stage 4),保持 Resubmission 队列成员
-UPDATE `merchant_application`
-SET `stage` = 4
-WHERE `resubmit_required_at` IS NOT NULL AND `stage` BETWEEN 1 AND 5;
+-- 存量重交标记的进行中线索 → 等待文件(stage 4),保持 Resubmission 队列成员。
+-- 注意:新版 16 号脚本已不再创建 merchant_application.resubmit_required_at,
+-- fresh init 时必须先探测列存在后才能引用该列。
+SET @col_exists := (SELECT COUNT(*) FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA = 'mtrip_business' AND TABLE_NAME = 'merchant_application' AND COLUMN_NAME = 'resubmit_required_at');
+SET @ddl := IF(@col_exists > 0,
+  'UPDATE `merchant_application` SET `stage` = 4 WHERE `resubmit_required_at` IS NOT NULL AND `stage` BETWEEN 1 AND 5',
+  'SELECT 1');
+PREPARE stmt FROM @ddl; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
 -- 删除索引
 SET @idx_exists := (SELECT COUNT(*) FROM information_schema.STATISTICS

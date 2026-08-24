@@ -26,7 +26,7 @@ docker compose up -d --build   # 构建镜像并启动全部服务(分钟级)
 | 只改 PHP 代码(`app/`、`config/`、`shared/src`) | `docker compose restart user-service`(或不带服务名重启全部) | ~2 秒/个 |
 | 改了 `docker-compose.yml` / `.env` 环境变量 | `docker compose up -d`,然后 `docker compose restart gateway` | ~10 秒 |
 | 新增 composer 依赖 / 改 Dockerfile | `docker compose up -d --build xxx-service` | 分钟级 |
-| 改了数据库初始化 SQL(需重跑建表) | `docker compose down -v; docker compose up -d --build`(**清空数据卷,慎用**) | 分钟级 |
+| 改了数据库初始化 SQL(需重跑建表) | `reinit.bat` 或 `docker compose down -v; docker compose up -d --build`(**清空数据卷,慎用**) | 分钟级 |
 
 热重启原理:`docker-compose.override.yml` 把本地 `app/`、`config/`、`backend/shared/src` 挂载进容器覆盖镜像内代码,
 `restart` 后 Hyperf 重新扫描即生效,无需重建镜像。
@@ -63,6 +63,7 @@ docker exec mtrip-user-service-1 sh -c "env | grep MTRIP_SUBMIT"
 
 - 服务日志挂载在 `deploy/logs/<服务名>/`:`hyperf.log`(异常,按天滚动)、`request.log`(全量请求,`MTRIP_REQUEST_LOG=true` 时)
 - 实时看容器输出:`docker compose logs -f user-service`
+- 重建后无初始化数据:优先运行 `reinit.bat`。该脚本会先单独启动 MySQL,等待 `sys_admin/sys_menu/sys_site/merchant_menu/merchant_role` 确认有数据后再启动全量服务;若失败会打印 `mysql` init 日志尾部。
 - 常用开关(改 `.env` 后须 `docker compose up -d` + 重启网关,详见 `.env` 内注释):
   `MTRIP_REQUEST_LOG` / `MTRIP_CLIENT_SIGN` / `MTRIP_PAYLOAD_ENCRYPT` / `MTRIP_SUBMIT_LOCK`
 
