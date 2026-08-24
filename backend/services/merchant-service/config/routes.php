@@ -73,6 +73,7 @@ Router::addGroup('/api/v1/admin', static function () {
     Router::get('/merchant/verify/list', [VerifyController::class, 'index']);
     Router::get('/merchant/verify/queues', [VerifyController::class, 'queues']);
     Router::get('/merchant/verify/detail', [VerifyController::class, 'detail']);
+    Router::post('/merchant/verify/approval-credentials', [VerifyController::class, 'approvalCredentials']);
     Router::post('/merchant/verify/approve', [VerifyController::class, 'approve']);
     Router::post('/merchant/verify/reject', [VerifyController::class, 'reject']);
     Router::post('/merchant/verify/resubmit', [VerifyController::class, 'resubmit']);
@@ -102,6 +103,8 @@ Router::addGroup('/api/v1/admin', static function () {
     Router::post('/merchant/onboarding/send-reminder', [OnboardingController::class, 'sendReminder']);
     Router::post('/merchant/onboarding/note-add', [OnboardingController::class, 'addNote']);
     Router::post('/merchant/onboarding/confirm', [OnboardingController::class, 'confirm']);
+    Router::post('/merchant/onboarding/submit-verification', [OnboardingController::class, 'submitVerification']);
+    Router::post('/merchant/onboarding/kyc-upload', [OnboardingController::class, 'kycUpload']);
     Router::post('/merchant/onboarding/approve', [OnboardingController::class, 'approve']);
     Router::post('/merchant/onboarding/reject', [OnboardingController::class, 'reject']);
 

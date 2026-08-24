@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { message, type TablePaginationConfig } from 'ant-design-vue';
+import { message, Modal, type TablePaginationConfig } from 'ant-design-vue';
 import {
   BankOutlined,
   CheckCircleOutlined,
@@ -11,13 +11,14 @@ import {
   DownloadOutlined,
   EditOutlined,
   EyeOutlined,
+  FileImageOutlined,
+  FilePdfOutlined,
   FileTextOutlined,
   InfoCircleOutlined,
   MenuOutlined,
   PlusOutlined,
   SafetyCertificateOutlined,
   SendOutlined,
-  SyncOutlined,
   UploadOutlined,
   UserOutlined,
 } from '@ant-design/icons-vue';
@@ -33,9 +34,11 @@ import {
   apiOnboardingAddNote,
   apiOnboardingApprove,
   apiOnboardingAssignOps,
+  apiOnboardingSubmitVerification,
   apiOnboardingDetail,
   apiOnboardingKycTemplates,
   apiOnboardingKycTemplateUpdate,
+  apiOnboardingKycUpload,
   apiOnboardingList,
   apiOnboardingReject,
   apiOnboardingSaveAssessment,
@@ -101,6 +104,7 @@ function bizTypeText(type: string): string {
   return hit ? hit.label.replace(/^\S+\s/u, '') : type || '-';
 }
 const RB_KYC_BADGE = computed<Record<number, { text: string; bg: string; color: string; border: string }>>(() => ({
+  0: { text: t('merchant.onboardingPage.kycTodo'), bg: '#f8fafc', color: '#64748b', border: '#e2e8f0' },
   1: { text: t('merchant.onboardingPage.kycVerified'), bg: '#ecfdf5', color: '#059669', border: '#a7f3d0' },
   2: { text: t('merchant.onboardingPage.kycPending'), bg: '#fffbeb', color: '#b54708', border: '#fde68a' },
   3: { text: t('merchant.onboardingPage.kycUnderReview'), bg: '#eff6ff', color: '#1d4ed8', border: '#bfdbfe' },
@@ -166,7 +170,7 @@ async function exportList(): Promise<void> {
   exportCsv(`merchant-onboarding-${Date.now()}.csv`, [
     { key: 'app_no', label: 'Lead ID' },
     { key: 'merchant_name', label: 'Merchant Name' },
-    { key: 'company_name', label: 'Business Name' },
+    { key: 'business_names', label: 'Business Name' },
     { key: 'reg_number', label: 'Reg. Number' },
     { key: 'country', label: 'Country' },
     { key: 'submitted_at', label: 'Submitted' },
@@ -174,19 +178,25 @@ async function exportList(): Promise<void> {
     { key: 'assigned_ops_name', label: 'Assigned Ops' },
   ], data.list.map((row) => ({
     ...row,
+    submitted_at: formatDate(row.submitted_at),
     stage: STAGE_MAP.value[row.stage]?.text ?? row.stage,
   })));
+}
+
+function formatDate(value: unknown): string {
+  const text = String(value ?? '').trim();
+  return text ? text.slice(0, 10) : '-';
 }
 
 const columns = computed(() => [
   { title: t('merchant.onboardingPage.colLeadId'), dataIndex: 'app_no', width: 140 },
   { title: t('merchant.onboardingPage.colMerchantName'), dataIndex: 'merchant_name', width: 200, ellipsis: true },
-  { title: t('merchant.onboardingPage.colBusinessName'), dataIndex: 'company_name', width: 180, ellipsis: true },
+  { title: t('merchant.onboardingPage.colBusinessName'), dataIndex: 'business_names', width: 220, ellipsis: true },
   { title: t('merchant.onboardingPage.colRegNumber'), dataIndex: 'reg_number', width: 140, ellipsis: true },
-  { title: t('merchant.onboardingPage.colSubmitted'), dataIndex: 'submitted_at', width: 165 },
+  { title: t('merchant.onboardingPage.colSubmitted'), dataIndex: 'submitted_at', width: 120 },
   { title: t('merchant.onboardingPage.colStage'), dataIndex: 'stage', width: 160 },
   { title: t('merchant.onboardingPage.colAssignedOps'), dataIndex: 'assigned_ops_name', width: 130 },
-  { title: t('common.action'), key: 'action_col', width: 150, fixed: 'right' as const },
+  { title: t('common.action'), key: 'action_col', width: 72, fixed: 'right' as const },
 ]);
 
 // ---------- 运营专员候选(系统管理员) ----------
@@ -212,6 +222,27 @@ const businesses = ref<TableRow[]>([]);
 const documents = ref<TableRow[]>([]);
 const timeline = ref<TableRow[]>([]);
 const notes = ref<TableRow[]>([]);
+
+/**
+ * 时间线事件来源(对齐原型 §6 Activity Timeline:`oi` 映射)——
+ * system 灰 / admin 蓝 / merchant 绿;actor_type: 1系统 2管理员 3商户
+ */
+function tlSource(actorType: unknown): { label: string; color: string; dot: string } {
+  switch (Number(actorType)) {
+    case 3:
+      return { label: t('merchant.onboardingPage.timelineSourceMerchant'), color: '#059669', dot: '#059669' };
+    case 2:
+      return { label: t('merchant.onboardingPage.timelineSourceAdmin'), color: '#1664FF', dot: '#1664FF' };
+    default:
+      return { label: t('merchant.onboardingPage.system'), color: '#94A3B8', dot: '#E3E8F0' };
+  }
+}
+
+/** 对齐原型:事件展示为 date/type标签/action/by 四要素,date 取日期部分(`YYYY-MM-DD`) */
+function tlDate(datetime: unknown): string {
+  return String(datetime || '').slice(0, 10);
+}
+
 /** 注册企业手风琴展开行 */
 const openBizId = ref(0);
 function toggleBiz(id: number, biz: TableRow): void {
@@ -337,8 +368,13 @@ const previewOpen = ref(false);
 // 注册企业表格当前展开的业务单元(点击展开行时联动 KYC 配置)
 const kycBizId = ref(0);
 const currentBiz = computed<TableRow | null>(() => businesses.value.find((b) => b.id === kycBizId.value) ?? null);
+/** 协助商户 KYC 当前关联的注册商户(点开协助抽屉那一瞬选中的商家) */
+const assistBiz = ref<TableRow | null>(null);
 const assistKycDocs = computed(() => {
-  const docs = templateDocs(selectedTemplate.value);
+  const tpl = assistBiz.value?.kyc_template_id
+    ? templates.value.find((x) => Number(x.id) === Number(assistBiz.value?.kyc_template_id)) ?? selectedTemplate.value
+    : selectedTemplate.value;
+  const docs = templateDocs(tpl);
   return docs.length ? docs : [
     { name: t('merchant.onboardingPage.assistDefaultDocRegistration'), doc_type: 'business_registration', required: true },
     { name: t('merchant.onboardingPage.assistDefaultDocLicense'), doc_type: 'operating_license', required: true },
@@ -347,7 +383,104 @@ const assistKycDocs = computed(() => {
 
 function openAssistKyc(): void {
   kycSetup.submissionMethod = 2;
+  // 关联当前选中的注册商户,后续上传按该商家(biz_unit)隔离
+  assistBiz.value = currentBiz.value;
+  // 已上传文件按当前商家的 doc_type 归位(仅该 biz_unit 下的文档)
+  assistUploads.value = {};
+  const bizId = assistBiz.value ? String(assistBiz.value.id) : '';
+  for (const doc of documents.value) {
+    if (!doc.file_url) continue;
+    const dt = String(doc.doc_type || '');
+    if (!dt) continue;
+    if (bizId && String(doc.biz_unit || '') !== bizId) continue;
+    assistUploads.value[dt] = { ...doc };
+  }
   assistOpen.value = true;
+}
+
+// ---------- 协助商户 KYC:文件上传/删除/提交核验 ----------
+/** 各 doc_type 已上传文件(docType → 文档记录) */
+const assistUploads = ref<Record<string, TableRow>>({});
+/** 上传进行中的 doc_type 集合 */
+const assistUploading = ref<Record<string, boolean>>({});
+/** 隐藏的原生文件选择 input(ref forEach) */
+const assistFileInputs = ref<Record<string, HTMLInputElement | null>>({});
+
+/** 已上传文件数(标题计数联动) */
+const assistUploadedCount = computed(() => Object.keys(assistUploads.value).length);
+
+function assistSelectFile(doc: TableRow): void {
+  assistFileInputs.value[doc.doc_type]?.click();
+}
+
+/** 存储原生 file input 引用(ref 回调,模板 :ref 使用) */
+function assignFileInput(docType: string, el: unknown): void {
+  assistFileInputs.value[docType] = (el as HTMLInputElement | null) ?? null;
+}
+
+function assistFileChanged(e: Event, doc: TableRow): void {
+  const input = e.target as HTMLInputElement;
+  const file = input.files?.[0];
+  input.value = '';
+  if (!file) return;
+  if (!app.value) return;
+  void uploadAssistDoc(file, doc);
+}
+
+async function uploadAssistDoc(file: File, doc: TableRow): Promise<void> {
+  if (!app.value) return;
+  const dt = doc.doc_type;
+  assistUploading.value = { ...assistUploading.value, [dt]: true };
+  try {
+    const res = await apiOnboardingKycUpload(file, app.value.id, dt, assistBiz.value ? String(assistBiz.value.id) : undefined);
+    assistUploads.value = { ...assistUploads.value, [dt]: res };
+    // 同步到 documents,关闭抽屉再打开时能按商家(biz_unit)重新归位
+    const bizId = assistBiz.value ? String(assistBiz.value.id) : '';
+    const merged = { ...res, biz_unit: bizId, name: res.file_name || res.name };
+    const idx = documents.value.findIndex((d) => String(d.doc_type || '') === dt && String(d.biz_unit || '') === bizId);
+    documents.value = idx >= 0
+      ? documents.value.map((d, i) => (i === idx ? { ...merged, id: d.id } : d))
+      : [...documents.value, merged];
+    if (assistBiz.value) {
+      businesses.value = businesses.value.map((biz) =>
+        biz.id === assistBiz.value?.id
+          ? { ...biz, kyc_status: 0, kyc_submitted_at: null, kyc_submitted_by: 0 }
+          : biz,
+      );
+    }
+    message.success(t('merchant.onboardingPage.assistUploadSuccess'));
+  } catch {
+    // 拦截器已提示错误
+  } finally {
+    assistUploading.value = { ...assistUploading.value, [dt]: false };
+  }
+}
+
+function removeAssistDoc(doc: TableRow): void {
+  const dt = doc.doc_type;
+  if (!assistUploads.value[dt]) return;
+  const next = { ...assistUploads.value };
+  delete next[dt];
+  assistUploads.value = next;
+  message.info(t('merchant.onboardingPage.assistUploadRemoved'));
+}
+
+function submitAssistVerification(): void {
+  if (!app.value || !assistBiz.value) return;
+  const applicationId = app.value.id;
+  const businessId = assistBiz.value.id;
+  Modal.confirm({
+    title: t('merchant.onboardingPage.assistSubmitConfirmTitle'),
+    content: t('merchant.onboardingPage.assistSubmitConfirmText'),
+    okText: t('merchant.onboardingPage.assistSubmitVerification'),
+    cancelText: t('common.cancel'),
+    onOk: async () => {
+      await apiOnboardingSubmitVerification(applicationId, businessId);
+      message.success(t('merchant.onboardingPage.assistSubmitSuccess'));
+      await loadDetail(applicationId);
+      await load();
+    },
+  });
 }
 
 /** 展开注册企业行:载入该业务单元的 KYC 配置(企业类型/验证模板/所需文件联动) */
@@ -491,19 +624,11 @@ async function sendReminder(): Promise<void> {
   await loadDetail(app.value.id);
 }
 
-/** 行内发送提醒(原型 refresh-cw 图标,催办写审计时间线,不改变阶段) */
-async function rowRemind(row: TableRow): Promise<void> {
-  try {
-    await apiOnboardingSendReminder(row.id);
-    message.success(t('merchant.onboardingPage.reminderSent'));
-  } catch {
-    message.error(t('merchant.onboardingPage.reminderSent'));
-  }
-}
-
 // ---------- §7 内部备注 ----------
 const noteText = ref('');
 const noteSaving = ref(false);
+/** 有输入内容且可编辑时才允许提交(按钮禁用联动) */
+const canAddNote = computed(() => editable.value && noteText.value.trim().length > 0);
 async function addNote(): Promise<void> {
   if (!app.value) return;
   if (!noteText.value.trim()) {
@@ -533,7 +658,7 @@ async function doApprove(): Promise<void> {
   approveSaving.value = true;
   try {
     const res = await apiOnboardingApprove(approveTarget.value.id);
-    message.success(t('merchant.onboardingPage.approveSuccess', { id: res.merchant_id }));
+    message.success(t('merchant.onboardingPage.approveSuccess', { id: res.merchant_code }));
     approveOpen.value = false;
     drawerOpen.value = false;
     await load();
@@ -575,13 +700,10 @@ async function doReject(): Promise<void> {
 const createOpen = ref(false);
 const createSaving = ref(false);
 const createForm = reactive({
-  merchantName: '',
   companyName: '',
   companyGroupName: '',
   regNumber: '',
   country: '',
-  city: '',
-  address: '',
   businessTypes: [] as string[],
   numBusinesses: 1,
   businesses: [] as {
@@ -594,16 +716,13 @@ const createForm = reactive({
   }[],
 });
 function openCreate(): void {
-  createForm.merchantName = '';
   createForm.companyName = '';
   createForm.companyGroupName = '';
   createForm.regNumber = '';
   createForm.country = '';
-  createForm.city = '';
-  createForm.address = '';
   createForm.businessTypes = [];
   createForm.numBusinesses = 1;
-  createForm.businesses = [];
+  createForm.businesses = [{ businessName: '', businessType: '', city: '', contactName: '', contactPhone: '', contactEmail: '' }];
   createOpen.value = true;
 }
 
@@ -616,25 +735,22 @@ function removeBusinessRow(index: number): void {
 }
 
 async function doCreate(): Promise<void> {
-  if (!createForm.merchantName.trim()) {
-    message.warning(t('merchant.onboardingPage.merchantNameRequired'));
-    return;
-  }
   if (!createForm.companyName.trim()) {
     message.warning(t('merchant.onboardingPage.companyNameRequired'));
     return;
   }
   const validBusinesses = createForm.businesses.filter((b) => b.businessName.trim());
+  if (validBusinesses.length === 0) {
+    message.warning(t('merchant.onboardingPage.businessRequired'));
+    return;
+  }
   createSaving.value = true;
   try {
     await apiOnboardingAdd({
-      merchantName: createForm.merchantName,
       companyName: createForm.companyName,
       companyGroupName: createForm.companyGroupName,
       regNumber: createForm.regNumber,
       country: createForm.country,
-      city: createForm.city,
-      address: createForm.address,
       businessTypes: createForm.businessTypes.join(','),
       numBusinesses: Math.max(1, createForm.numBusinesses, validBusinesses.length),
       businesses: validBusinesses,
@@ -703,10 +819,11 @@ onMounted(() => {
         </template>
         <template v-else-if="column.dataIndex === 'merchant_name'">
           <div style="font-weight: 500">{{ record.merchant_name || record.company_name || '-' }}</div>
-          <div style="font-size: 12px; color: var(--sap-muted)">{{ record.city || record.business_city || record.country || '-' }}</div>
+          <div style="font-size: 12px; color: var(--sap-muted)">{{ record.country || '-' }}</div>
         </template>
-        <template v-else-if="column.dataIndex === 'company_name'">{{ record.company_name || '-' }}</template>
+        <template v-else-if="column.dataIndex === 'business_names'">{{ record.business_names || '-' }}</template>
         <template v-else-if="column.dataIndex === 'reg_number'">{{ record.reg_number || '-' }}</template>
+        <template v-else-if="column.dataIndex === 'submitted_at'">{{ formatDate(record.submitted_at) }}</template>
           <template v-else-if="column.dataIndex === 'stage'">
             <StatusTag :value="record.stage" :map="STAGE_MAP" />
           </template>
@@ -714,44 +831,11 @@ onMounted(() => {
           <span :style="{ color: record.assigned_ops_name ? undefined : 'var(--sap-muted)' }">{{ record.assigned_ops_name || t('merchant.onboardingPage.unassigned') }}</span>
         </template>
         <template v-else-if="column.key === 'action_col'">
-          <!-- 原型图标操作列:pending/resubmission 四个图标按钮,approved/rejected 仅查看 -->
-          <a-space :size="2">
-            <a-tooltip :title="t('common.detail')">
-              <a-button class="row-action-btn" size="small" @click="openDetail(record)">
-                <EyeOutlined />
-              </a-button>
-            </a-tooltip>
-            <a-tooltip :title="t('merchant.onboardingPage.approve')">
-              <a-button
-                v-perm="'merchant:onboarding:approve'"
-                class="row-action-btn row-action-btn--approve"
-                size="small"
-                @click="openApprove(record)"
-              >
-                <CheckCircleOutlined />
-              </a-button>
-            </a-tooltip>
-            <a-tooltip :title="t('merchant.onboardingPage.reject')">
-              <a-button
-                v-perm="'merchant:onboarding:reject'"
-                class="row-action-btn row-action-btn--reject"
-                size="small"
-                @click="openReject(record)"
-              >
-                <CloseCircleOutlined />
-              </a-button>
-            </a-tooltip>
-            <a-tooltip :title="t('merchant.onboardingPage.sendReminder')">
-              <a-button
-                v-perm="'merchant:onboarding:kyc'"
-                class="row-action-btn"
-                size="small"
-                @click="rowRemind(record)"
-              >
-                <SyncOutlined />
-              </a-button>
-            </a-tooltip>
-          </a-space>
+          <a-tooltip :title="t('common.detail')">
+            <a-button class="row-action-btn" size="small" @click="openDetail(record)">
+              <EyeOutlined />
+            </a-button>
+          </a-tooltip>
         </template>
       </template>
     </a-table>
@@ -841,7 +925,7 @@ onMounted(() => {
                 </div>
                 <div class="co-cell">
                   <div class="co-cell-label">{{ t('merchant.onboardingPage.labelMerchantId') }}</div>
-                  <div class="co-cell-value">{{ app.merchant_id > 0 ? `#${app.merchant_id}` : '-' }}</div>
+                  <div class="co-cell-value">{{ app.merchant_code || '-' }}</div>
                 </div>
               </div>
             </div>
@@ -914,27 +998,18 @@ onMounted(() => {
             <a-empty v-else :description="t('merchant.onboardingPage.noBusinesses')" :image="undefined" style="margin: 12px 0" />
           </div>
 
-          <!-- §4 Operations Assessment(原型:同 §2 标题行 + 斜体副标题 + 两列灰底控件;填入项:业务类别/操作员类型/企业数量/预计发布日期/内部备注) -->
+          <!-- §4 Operations Assessment(原型:同 §2 标题行 + 斜体副标题;保留:操作类型/预计发布日期/操作笔记;保存按钮在操作笔记下方) -->
           <div class="oa-section">
             <div class="co-section-heading">
               <SafetyCertificateOutlined class="co-heading-icon" />
               <h4 class="co-heading-text">{{ t('merchant.onboardingPage.opsAssessment') }}</h4>
               <div class="co-heading-line" />
-              <a-button v-perm="'merchant:onboarding:update'" :disabled="!editable" :loading="assessmentSaving" size="small" type="primary" ghost class="oa-save-btn" @click="saveAssessment">{{ t('merchant.onboardingPage.saveAssessment') }}</a-button>
             </div>
             <div class="oa-subtitle">{{ t('merchant.onboardingPage.opsAssessmentSubtitle') }}</div>
             <div class="oa-grid">
               <div class="oa-field">
-                <div class="oa-label">{{ t('merchant.onboardingPage.labelBusinessCategory') }}</div>
-                <a-select v-model:value="assessment.businessTypes" mode="multiple" :disabled="!editable" :placeholder="t('merchant.onboardingPage.selectPlaceholder')" :options="BUSINESS_TYPES" style="width: 100%" />
-              </div>
-              <div class="oa-field">
                 <div class="oa-label">{{ t('merchant.onboardingPage.operatorType') }}</div>
                 <a-select v-model:value="assessment.operatorType" :disabled="!editable" allow-clear :placeholder="t('merchant.onboardingPage.selectPlaceholder')" :options="OPERATOR_TYPES" style="width: 100%" />
-              </div>
-              <div class="oa-field">
-                <div class="oa-label">{{ t('merchant.onboardingPage.labelNumBusinesses') }}</div>
-                <a-input-number v-model:value="assessment.numBusinesses" :min="1" :disabled="!editable" style="width: 100%" />
               </div>
               <div class="oa-field">
                 <div class="oa-label">{{ t('merchant.onboardingPage.expectedLaunchDate') }}</div>
@@ -945,6 +1020,9 @@ onMounted(() => {
               <div class="oa-label">{{ t('merchant.onboardingPage.operationsNotes') }}</div>
               <a-textarea v-model:value="assessment.operationsNotes" :disabled="!editable" :rows="3" :placeholder="t('merchant.onboardingPage.operationsNotesPlaceholder')" />
             </div>
+            <div class="oa-save-row">
+              <a-button v-perm="'merchant:onboarding:update'" :disabled="!editable" :loading="assessmentSaving" type="default" size="small" class="oa-save-btn" @click="saveAssessment">{{ t('merchant.onboardingPage.saveAssessment') }}</a-button>
+            </div>
           </div>
 
           <!-- §5 KYC 设置与访问(原型 KYC SETUP & ACCESS:随注册企业表格选中企业联动,默认第一项) -->
@@ -952,8 +1030,10 @@ onMounted(() => {
             <SafetyCertificateOutlined class="kyc-heading-icon" />
             <span>{{ t('merchant.onboardingPage.kycSetup') }}</span>
           </div>
+          <!-- §5 KYC 主体仅在存在注册商户时展示,否则提示暂无注册商户 -->
+          <template v-if="currentBiz">
           <!-- 当前选中企业(点击上方注册企业表格切换) -->
-          <div v-if="currentBiz" class="kyc-rb-subheader">
+          <div class="kyc-rb-subheader">
             <div class="kyc-rb-card kyc-rb-card--active" @click="openBizId = currentBiz.id">
               <div class="kyc-rb-icon">{{ BIZ_TYPE_EMOJI[currentBiz.business_type] || '🏢' }}</div>
               <div class="kyc-rb-main">
@@ -1066,6 +1146,12 @@ onMounted(() => {
               ><SafetyCertificateOutlined />{{ t('merchant.onboardingPage.methodAssistAction') }}</button>
             </div>
           </div>
+          </template>
+          <!-- 无注册商户空态提示 -->
+          <div v-else class="kyc-empty">
+            <InfoCircleOutlined class="kyc-empty__icon" />
+            <span>{{ t('merchant.onboardingPage.noRegisteredBusiness') }}</span>
+          </div>
           <!-- 预览弹窗(Preview Requirements) -->
           <a-modal
             v-model:open="previewOpen"
@@ -1118,28 +1204,53 @@ onMounted(() => {
             </a-form>
           </a-modal>
 
-          <!-- §6 Activity Timeline -->
-          <a-divider orientation="left">{{ t('merchant.onboardingPage.activityTimeline') }}</a-divider>
-          <a-timeline>
-            <a-timeline-item v-for="ev in timeline" :key="ev.id" :color="ev.is_exception === 1 ? 'red' : 'blue'">
-              <div style="font-weight: 500">{{ ev.action }}</div>
-              <div v-if="ev.note" style="font-size: 12px; color: var(--sap-muted)">{{ ev.note }}</div>
-              <div style="font-size: 12px; color: var(--sap-muted)">{{ ev.operator_name || t('merchant.onboardingPage.system') }} · {{ ev.created_at }}</div>
-            </a-timeline-item>
-          </a-timeline>
-          <a-empty v-if="!timeline.length" :description="t('merchant.onboardingPage.noTimeline')" :image="undefined" style="margin: 12px 0" />
+          <!-- §6 Activity Timeline(标题复用 co-section-heading:灰色图标 + 大写标题 + 右侧延伸线;时间线本体对齐原型左边框竖线/圆点/日期/type标签/action/by) -->
+          <div class="co-section-heading">
+            <ClockCircleOutlined class="co-heading-icon" />
+            <h4 class="co-heading-text">{{ t('merchant.onboardingPage.activityTimeline') }}</h4>
+            <div class="co-heading-line" />
+          </div>
+          <div v-if="timeline.length" class="onb-tl">
+            <div v-for="ev in timeline" :key="ev.id" class="onb-tl-item">
+              <div class="onb-tl-dot" :style="{ background: tlSource(ev.actor_type).dot, boxShadow: `0 0 0 2px ${tlSource(ev.actor_type).dot}` }" />
+              <div class="onb-tl-row">
+                <span class="onb-tl-date">{{ tlDate(ev.created_at) }}</span>
+                <span class="onb-tl-tag" :style="{ color: tlSource(ev.actor_type).color, background: `${tlSource(ev.actor_type).dot}15` }">{{ tlSource(ev.actor_type).label }}</span>
+              </div>
+              <div class="onb-tl-action" :style="ev.is_exception === 1 ? 'color:#dc2626' : ''">{{ ev.note || ev.action }}</div>
+              <div class="onb-tl-by">by {{ ev.operator_name || t('merchant.onboardingPage.system') }}</div>
+            </div>
+          </div>
+          <a-empty v-else :description="t('merchant.onboardingPage.noTimeline')" :image="undefined" style="margin: 12px 0" />
 
           <!-- §7 Internal Notes -->
-          <a-divider orientation="left">{{ t('merchant.onboardingPage.internalNotes') }}</a-divider>
-          <div v-for="note in notes" :key="note.id" style="border: 1px solid var(--sap-border, #e2e8f0); border-radius: 8px; padding: 8px 12px; margin-bottom: 8px">
-            <div style="font-size: 13px">{{ note.note }}</div>
-            <div style="font-size: 12px; color: var(--sap-muted)">{{ note.author_name }} · {{ note.created_at }}</div>
+          <!-- §7 内部笔记(标题复用 co-section-heading + 图标;列表卡片与多行输入对齐原型 ci 组件) -->
+          <div class="co-section-heading">
+            <EditOutlined class="co-heading-icon" />
+            <h4 class="co-heading-text">{{ t('merchant.onboardingPage.internalNotes') }}</h4>
+            <div class="co-heading-line" />
           </div>
-          <a-empty v-if="!notes.length" :description="t('merchant.onboardingPage.noNotes')" :image="undefined" style="margin: 12px 0" />
-          <a-input-group compact style="display: flex; width: 100%">
-            <a-input v-model:value="noteText" :disabled="!editable" style="flex: 1" :placeholder="t('merchant.onboardingPage.notePlaceholder')" @press-enter="addNote" />
-            <a-button v-perm="'merchant:onboarding:update'" :disabled="!editable" :loading="noteSaving" class="kyc-note-btn" @click="addNote">{{ t('merchant.onboardingPage.addNote') }}</a-button>
-          </a-input-group>
+          <div v-if="notes.length" class="onb-notes">
+            <div v-for="note in notes" :key="note.id" class="onb-note">
+              <div class="onb-note__head">
+                <div class="onb-note__avatar">{{ (note.author_name || '?').slice(0, 2).toUpperCase() }}</div>
+                <span class="onb-note__by">{{ note.author_name }}</span>
+                <span class="onb-note__date">{{ note.created_at }}</span>
+              </div>
+              <div class="onb-note__text">{{ note.note }}</div>
+            </div>
+          </div>
+          <a-empty v-else :description="t('merchant.onboardingPage.noNotes')" :image="undefined" style="margin: 12px 0" />
+          <a-textarea
+            v-model:value="noteText"
+            :disabled="!editable"
+            :rows="3"
+            class="onb-note-input"
+            :placeholder="t('merchant.onboardingPage.notePlaceholder')"
+          />
+          <div class="onb-note-actions">
+            <a-button v-perm="'merchant:onboarding:update'" type="primary" :disabled="!canAddNote" :loading="noteSaving" class="kyc-note-btn" @click="addNote"><template #icon><PlusOutlined /></template>{{ t('merchant.onboardingPage.addNote') }}</a-button>
+          </div>
 
         </template>
       </a-spin>
@@ -1162,7 +1273,7 @@ onMounted(() => {
           <span class="assist-kyc-drawer__title-icon"><SafetyCertificateOutlined /></span>
           <div>
             <div class="assist-kyc-drawer__title-main">{{ t('merchant.onboardingPage.assistDrawerTitle') }}</div>
-            <div class="assist-kyc-drawer__title-sub">{{ t('merchant.onboardingPage.assistDrawerSubtitle', { name: currentBiz?.business_name || app?.company_name || '-', operator: app?.assigned_ops_name || t('merchant.onboardingPage.unassigned') }) }}</div>
+            <div class="assist-kyc-drawer__title-sub">{{ t('merchant.onboardingPage.assistDrawerSubtitle', { name: assistBiz?.business_name || app?.company_name || '-', operator: app?.assigned_ops_name || t('merchant.onboardingPage.unassigned') }) }}</div>
           </div>
         </div>
       </template>
@@ -1179,7 +1290,7 @@ onMounted(() => {
       <div class="assist-kyc-form-grid">
         <div class="assist-kyc-field">
           <label>{{ t('merchant.onboardingPage.assistBusinessName') }}</label>
-          <a-input :value="currentBiz?.business_name || app?.company_name" readonly />
+          <a-input :value="assistBiz?.business_name || app?.company_name" readonly />
         </div>
         <div class="assist-kyc-field">
           <label>{{ t('merchant.onboardingPage.assistContactPerson') }}</label>
@@ -1203,7 +1314,7 @@ onMounted(() => {
         <a-textarea :rows="2" :placeholder="t('merchant.onboardingPage.assistOpsNotesPlaceholder')" />
       </div>
 
-      <div class="assist-kyc-section-title assist-kyc-section-title--docs"><FileTextOutlined />{{ t('merchant.onboardingPage.assistDocumentUpload') }}<span>{{ t('merchant.onboardingPage.assistUploadedCount', { count: 0, total: assistKycDocs.length }) }}</span></div>
+      <div class="assist-kyc-section-title assist-kyc-section-title--docs"><FileTextOutlined />{{ t('merchant.onboardingPage.assistDocumentUpload') }}<span>{{ t('merchant.onboardingPage.assistUploadedCount', { count: assistUploadedCount, total: assistKycDocs.length }) }}</span></div>
       <div v-for="doc in assistKycDocs" :key="doc.doc_type" class="assist-kyc-document">
         <div class="assist-kyc-document__head">
           <span class="assist-kyc-document__icon"><FileTextOutlined /></span>
@@ -1215,14 +1326,43 @@ onMounted(() => {
         <div class="assist-kyc-document__controls">
           <div>
             <div class="assist-kyc-document__label">{{ t('merchant.onboardingPage.assistUploadDocument') }}</div>
-            <a-button size="small" class="assist-kyc-document__upload"><template #icon><UploadOutlined /></template>{{ t('merchant.onboardingPage.assistChooseFile') }}</a-button>
+            <a-button
+              size="small"
+              class="assist-kyc-document__upload"
+              :loading="assistUploading[doc.doc_type]"
+              @click="assistSelectFile(doc)"
+            ><template #icon><UploadOutlined /></template>{{ t('merchant.onboardingPage.assistChooseFile') }}</a-button>
+            <input
+              type="file"
+              accept=".pdf,.jpg,.jpeg,.png,.webp"
+              class="assist-kyc-document__file-input"
+              :ref="(el) => assignFileInput(doc.doc_type, el)"
+              @change="assistFileChanged($event, doc)"
+            />
           </div>
           <div>
             <div class="assist-kyc-document__label">{{ t('merchant.onboardingPage.assistSource') }}</div>
             <a-select :value="'ops'" size="small" class="assist-kyc-document__source" :options="[{ value: 'ops', label: t('merchant.onboardingPage.assistSourceOps') }]" />
           </div>
         </div>
-        <div class="assist-kyc-document__empty"><InfoCircleOutlined />{{ t('merchant.onboardingPage.assistNoDocument') }}</div>
+        <template v-if="assistUploads[doc.doc_type]">
+          <div class="assist-kyc-document__uploaded">
+            <div class="assist-kyc-document__uploaded-name">
+              <FilePdfOutlined v-if="(assistUploads[doc.doc_type].file_url || '').toLowerCase().endsWith('.pdf')" />
+              <FileImageOutlined v-else />
+              <span>{{ assistUploads[doc.doc_type].file_name || assistUploads[doc.doc_type].name }}</span>
+            </div>
+            <a-space :size="4">
+              <a-button v-if="assistUploads[doc.doc_type].file_url" size="small" type="link" :href="assistUploads[doc.doc_type].file_url" target="_blank">
+                <template #icon><EyeOutlined /></template>{{ t('merchant.documentsPage.preview') }}
+              </a-button>
+              <a-button size="small" type="link" danger class="assist-kyc-document__remove" @click="removeAssistDoc(doc)">
+                <template #icon><DeleteOutlined /></template>{{ t('common.delete') }}
+              </a-button>
+            </a-space>
+          </div>
+        </template>
+        <div v-else class="assist-kyc-document__empty"><InfoCircleOutlined />{{ t('merchant.onboardingPage.assistNoDocument') }}</div>
       </div>
 
       <div class="assist-kyc-section-title assist-kyc-section-title--confirmation"><UserOutlined />{{ t('merchant.onboardingPage.assistMerchantConfirmation') }}</div>
@@ -1243,7 +1383,7 @@ onMounted(() => {
           <span>{{ t('merchant.onboardingPage.assistingAs', { name: app?.assigned_ops_name || t('merchant.onboardingPage.unassigned') }) }}</span>
           <div>
             <a-button>{{ t('merchant.onboardingPage.assistSaveDraft') }}</a-button>
-            <a-button type="primary" class="assist-kyc-footer__submit"><template #icon><SendOutlined /></template>{{ t('merchant.onboardingPage.assistSubmitVerification') }}</a-button>
+            <a-button type="primary" class="assist-kyc-footer__submit" @click="submitAssistVerification"><template #icon><SendOutlined /></template>{{ t('merchant.onboardingPage.assistSubmitVerification') }}</a-button>
           </div>
         </div>
       </template>
@@ -1254,19 +1394,16 @@ onMounted(() => {
       <a-form layout="vertical">
         <a-row :gutter="12">
           <a-col :span="12">
-            <a-form-item :label="t('merchant.onboardingPage.labelMerchantName')" required>
-              <a-input v-model:value="createForm.merchantName" :placeholder="t('merchant.onboardingPage.merchantNamePlaceholder')" />
-            </a-form-item>
-          </a-col>
-          <a-col :span="12">
-            <a-form-item :label="t('merchant.onboardingPage.labelBusinessName')" required>
+            <a-form-item :label="t('merchant.onboardingPage.labelCompanyName')" required>
               <a-input v-model:value="createForm.companyName" :placeholder="t('merchant.onboardingPage.companyPlaceholder')" />
             </a-form-item>
           </a-col>
+          <a-col :span="12">
+            <a-form-item :label="t('merchant.onboardingPage.labelCompanyGroupName')">
+              <a-input v-model:value="createForm.companyGroupName" :placeholder="t('merchant.onboardingPage.groupPlaceholder')" />
+            </a-form-item>
+          </a-col>
         </a-row>
-        <a-form-item :label="t('merchant.onboardingPage.labelCompanyGroupName')">
-          <a-input v-model:value="createForm.companyGroupName" :placeholder="t('merchant.onboardingPage.groupPlaceholder')" />
-        </a-form-item>
         <a-row :gutter="12">
           <a-col :span="12">
             <a-form-item :label="t('merchant.onboardingPage.labelRegNumber')">
@@ -1276,18 +1413,6 @@ onMounted(() => {
           <a-col :span="12">
             <a-form-item :label="t('merchant.onboardingPage.labelCountry')">
               <a-input v-model:value="createForm.country" :placeholder="t('merchant.onboardingPage.countryPlaceholder')" />
-            </a-form-item>
-          </a-col>
-        </a-row>
-        <a-row :gutter="12">
-          <a-col :span="12">
-            <a-form-item :label="t('merchant.onboardingPage.labelCity')">
-              <a-input v-model:value="createForm.city" :placeholder="t('merchant.onboardingPage.countryPlaceholder')" />
-            </a-form-item>
-          </a-col>
-          <a-col :span="12">
-            <a-form-item :label="t('merchant.onboardingPage.labelAddress')">
-              <a-input v-model:value="createForm.address" />
             </a-form-item>
           </a-col>
         </a-row>
@@ -1309,12 +1434,12 @@ onMounted(() => {
         <div v-for="(biz, idx) in createForm.businesses" :key="idx" style="border: 1px solid var(--sap-border, #e2e8f0); border-radius: 8px; padding: 10px; margin-bottom: 10px">
           <a-row :gutter="8">
             <a-col :span="12">
-              <a-form-item :label="`${t('merchant.onboardingPage.colBusinessName')} *`" style="margin-bottom: 8px">
+              <a-form-item :label="`${t('merchant.onboardingPage.labelRegisteredBusinessName')} *`" style="margin-bottom: 8px">
                 <a-input v-model:value="biz.businessName" :placeholder="t('merchant.onboardingPage.bizNamePlaceholder')" />
               </a-form-item>
             </a-col>
             <a-col :span="12">
-              <a-form-item :label="t('merchant.onboardingPage.bizColType')" style="margin-bottom: 8px">
+              <a-form-item :label="t('merchant.onboardingPage.labelRegisteredBusinessType')" style="margin-bottom: 8px">
                 <a-select v-model:value="biz.businessType" allow-clear :placeholder="t('common.all')" :options="BUSINESS_TYPES" />
               </a-form-item>
             </a-col>
@@ -1324,17 +1449,17 @@ onMounted(() => {
               </a-form-item>
             </a-col>
             <a-col :span="12">
-              <a-form-item :label="t('merchant.onboardingPage.bizContact')" style="margin-bottom: 8px">
+              <a-form-item :label="t('merchant.onboardingPage.labelRegisteredBusinessContact')" style="margin-bottom: 8px">
                 <a-input v-model:value="biz.contactName" />
               </a-form-item>
             </a-col>
             <a-col :span="12">
-              <a-form-item :label="t('merchant.onboardingPage.bizPhone')" style="margin-bottom: 8px">
+              <a-form-item :label="t('merchant.onboardingPage.labelRegisteredBusinessPhone')" style="margin-bottom: 8px">
                 <a-input v-model:value="biz.contactPhone" />
               </a-form-item>
             </a-col>
             <a-col :span="12">
-              <a-form-item :label="t('merchant.onboardingPage.bizEmail')" style="margin-bottom: 8px">
+              <a-form-item :label="t('merchant.onboardingPage.labelRegisteredBusinessEmail')" style="margin-bottom: 8px">
                 <a-input v-model:value="biz.contactEmail" />
               </a-form-item>
             </a-col>
@@ -1687,6 +1812,14 @@ onMounted(() => {
 .oa-notes {
   margin-top: 10px;
 }
+.oa-save-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 12px;
+}
+.oa-save-row .oa-save-btn {
+  min-width: 96px;
+}
 .oa-label {
   display: block;
   margin-bottom: 4px;
@@ -1698,7 +1831,7 @@ onMounted(() => {
 .oa-section :deep(.ant-select-selector),
 .oa-section :deep(.ant-picker),
 .oa-section :deep(.ant-input) {
-  background: #f8fafc;
+  background: #ffffff;
   border: 1px solid #e3e8f0;
   border-radius: 6px;
   font-size: 12px;
@@ -1918,6 +2051,26 @@ onMounted(() => {
 .kyc-heading-icon {
   font-size: 13px;
   color: #94a3b8;
+}
+
+/* 无注册商户时 KYC 设置与访问的空态提示 */
+.kyc-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 10px;
+  margin-bottom: 15px;
+  padding: 22px 12px;
+  border: 1px dashed #e3e8f0;
+  border-radius: 8px;
+  background: #f8fafc;
+  color: #94a3b8;
+  font-size: 12px;
+}
+
+.kyc-empty__icon {
+  font-size: 15px;
 }
 
 /* Registered Businesses 子标题(原型实测:11px/600/字距 0.55px 大写 #475569) */
@@ -2235,6 +2388,7 @@ onMounted(() => {
 /* KYC 提交方法卡片(原型 KYC SUBMISSION METHOD) */
 .kyc-submit-card {
   margin-top: 12px;
+  margin-bottom: 12px;
   padding: 12px 14px;
   border: 1px solid #e3e8f0;
   border-radius: 8px;
@@ -2569,6 +2723,36 @@ onMounted(() => {
   line-height: 14px;
 }
 
+/* 隐藏原生 file input,由「选择文件」按钮代触发 */
+.assist-kyc-document__file-input {
+  display: none;
+}
+
+.assist-kyc-document__uploaded {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 10px;
+  padding: 8px 10px;
+  border: 1px solid #d9f99d;
+  border-radius: 5px;
+  background: #f7fee7;
+}
+
+.assist-kyc-document__uploaded-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  color: #166534;
+  font-size: 11px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .assist-kyc-confirmation {
   margin-top: 12px;
   padding: 16px;
@@ -2837,14 +3021,163 @@ onMounted(() => {
   color: #475569 !important;
 }
 
-/* 添加备注按钮(原型 Add Note) */
+/* 添加笔记按钮(原型 Add Note):enabled 主题蓝主按钮,disabled 走 antd 灰 */
 .kyc-note-btn {
   height: 30px;
   border-radius: 6px;
-  background: #93c5fd !important;
-  border-color: #93c5fd !important;
-  color: #fff !important;
   font-size: 12px;
   font-weight: 600;
+}
+
+.kyc-note-btn:not(:disabled) {
+  background: #1664ff !important;
+  border-color: #1664ff !important;
+  color: #fff !important;
+}
+
+/* §6 Activity Timeline(对齐原型 si 组件:左侧 2px 竖线 + 彩色圆点白光环 + monospace 时间 + type标签 + action + by) */
+.onb-tl {
+  position: relative;
+  margin-top: 10px;
+  margin-left: 5px;
+  margin-bottom: 20px;
+  padding-left: 20px;
+  border-left: 2px solid #e3e8f0;
+}
+
+.onb-tl-item {
+  position: relative;
+  margin-bottom: 18px;
+}
+
+.onb-tl-item:last-child {
+  margin-bottom: 0;
+}
+
+.onb-tl-dot {
+  position: absolute;
+  left: -25px;
+  top: 3px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+}
+
+.onb-tl-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.onb-tl-date {
+  font-size: 10px;
+  font-family: monospace;
+  color: #94a3b8;
+  white-space: nowrap;
+}
+
+.onb-tl-tag {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 0 5px;
+  border-radius: 3px;
+}
+
+.onb-tl-action {
+  font-size: 12px;
+  font-weight: 500;
+  color: #1a2332;
+  margin-top: 4px;
+  word-break: break-word;
+}
+
+.onb-tl-by {
+  font-size: 11px;
+  color: #64748b;
+  margin-top: 3px;
+}
+
+/* §7 内部笔记(对齐原型 ci 组件:卡片列表 + 头像圆首字母 + 多行 textarea 输入) */
+.onb-notes {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+  margin-bottom: 12px;
+}
+
+.onb-note {
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.onb-note__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 5px;
+}
+
+.onb-note__avatar {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #d97706;
+  color: #fff;
+  font-size: 8px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.onb-note__by {
+  font-size: 11px;
+  font-weight: 600;
+  color: #92400e;
+}
+
+.onb-note__date {
+  font-size: 10px;
+  color: #94a3b8;
+  font-family: monospace;
+  white-space: nowrap;
+}
+
+.onb-note__text {
+  font-size: 12px;
+  color: #78350f;
+  line-height: 1.6;
+}
+
+.onb-note-input {
+  width: 100%;
+  font-size: 12px;
+}
+
+.onb-note-input :deep(textarea) {
+  border: 1px solid #e3e8f0 !important;
+  border-radius: 6px !important;
+  padding: 8px 10px !important;
+  box-sizing: border-box;
+  font-family: inherit;
+  line-height: 1.6;
+  color: #1a2332;
+  resize: vertical;
+}
+
+.onb-note-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 8px;
+}
+
+.onb-note-actions .kyc-note-btn {
+  min-width: 88px;
 }
 </style>

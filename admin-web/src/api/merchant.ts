@@ -87,6 +87,23 @@ export function apiOnboardingConfirm(id: number): Promise<null> {
   return post('/admin/merchant/onboarding/confirm', { id });
 }
 
+/** 当前业务单元正式提交核验；上传文件本身只保存草稿，不触发 KYC 状态流转。 */
+export function apiOnboardingSubmitVerification(id: number, businessId: number): Promise<null> {
+  return post('/admin/merchant/onboarding/submit-verification', { id, businessId });
+}
+
+/** 协助商户上传 KYC 文件(multipart:file + id + docType + bizUnit[可选业务单元 id];返回落库的文档记录) */
+export function apiOnboardingKycUpload(file: File, id: number, docType: string, bizUnit?: string): Promise<Row> {
+  const fd = new FormData();
+  fd.append('file', file);
+  fd.append('id', String(id));
+  fd.append('docType', docType);
+  if (bizUnit !== undefined && bizUnit !== '') {
+    fd.append('bizUnit', bizUnit);
+  }
+  return post<Row>('/admin/merchant/onboarding/kyc-upload', fd);
+}
+
 // ---------- Marketplace Ranking(整改 Phase C) ----------
 export function apiRankingListings(params: Record<string, unknown>): Promise<{ list: Row[]; cities: string[] }> {
   return get('/admin/merchant/ranking/list', params);
@@ -297,13 +314,41 @@ export function apiVerifyQueues(): Promise<Record<string, number>> {
   return get('/admin/merchant/verify/queues');
 }
 
-export function apiVerifyDetail(id: number): Promise<{ merchant: Row; documents: Row[]; timeline: Row[] }> {
+export function apiVerifyDetail(id: number): Promise<{
+  merchant: Row;
+  documents: Row[];
+  businesses: Row[];
+  timeline: Row[];
+  resubmission?: { requested_by: string; requested_at: string; note: string; total: number; resubmitted: number } | null;
+  kyc_submission?: { method: string; submitted_by: string; confirmation: string; confirmed_at?: string | null } | null;
+  access_grant?: { access_code: string; generated_at?: string | null; generated_by: string; delivery_status: string; channels: string[] } | null;
+}> {
   return get('/admin/merchant/verify/detail', { id });
 }
 
-/** 通过验证:待审核/待重新提交 → 已启用(返回商户主账号明文密码仅此一次) */
-export function apiVerifyApprove(id: number, remark?: string): Promise<{ username: string; password: string }> {
-  return post('/admin/merchant/verify/approve', { id, remark });
+export interface VerifyApprovalCredentials {
+  access_code: string;
+  one_time_password: string;
+}
+
+/** 为批准弹窗预生成访问码与仅显示一次的初始密码 */
+export function apiVerifyApprovalCredentials(id: number): Promise<VerifyApprovalCredentials> {
+  return post('/admin/merchant/verify/approval-credentials', { id });
+}
+
+/** 通过验证:待审核/待重新提交 → 已启用 */
+export function apiVerifyApprove(data: {
+  id: number;
+  remark?: string;
+  channels: string[];
+  accessCode: string;
+  oneTimePassword: string;
+}): Promise<{ username: string; password: string; one_time_password: string; access_code: string }> {
+  return post('/admin/merchant/verify/approve', data);
+}
+
+export function apiVerifyRegenerateCode(id: number): Promise<{ access_code: string }> {
+  return post('/admin/merchant/verify/regenerate-code', { id });
 }
 
 /** 驳回验证:预置原因码(1-9)必填 + 可选补充说明 */
@@ -384,7 +429,7 @@ export function apiOnboardingAddNote(id: number, note: string): Promise<null> {
 }
 
 /** 入驻通过:转正式商户进入 Pending Verification */
-export function apiOnboardingApprove(id: number): Promise<{ merchant_id: number }> {
+export function apiOnboardingApprove(id: number): Promise<{ merchant_id: number; merchant_code: string }> {
   return post('/admin/merchant/onboarding/approve', { id });
 }
 

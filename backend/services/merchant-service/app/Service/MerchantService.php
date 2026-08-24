@@ -12,15 +12,21 @@ use Hyperf\DbConnection\Db;
 class MerchantService
 {
     /**
-     * 审核通过:置为已启用并生成商户后台主账号(初始密码明文仅返回一次),同时自动创建主门店
+     * 审核通过:置为已启用并生成商户后台主账号(一次性初始密码明文仅返回一次),同时自动创建主门店
      * 同步生成商户门户访问码(access_code,原型 MTRP-{业态}-{6位})与凭证下发渠道记录
-     * @return array{username: string, password: string, access_code: string}
+     * @return array{username: string, password: string, one_time_password: string, access_code: string}
      */
-    public function approve(array $merchant, string $remark, string $channels = ''): array
+    public function approve(
+        array $merchant,
+        string $remark,
+        string $channels = '',
+        string $accessCode = '',
+        string $password = ''
+    ): array
     {
         $username = $this->uniqueUsername((int) $merchant['id']);
-        $password = $this->randomPassword();
-        $accessCode = $this->generateAccessCode((int) $merchant['merchant_type']);
+        $password = $password !== '' ? $password : $this->randomPassword();
+        $accessCode = $accessCode !== '' ? $accessCode : $this->generateAccessCode((int) $merchant['merchant_type']);
         Db::transaction(static function () use ($merchant, $remark, $username, $password, $accessCode, $channels) {
             Db::table('merchant_info')->where('id', $merchant['id'])->update([
                 'status' => 3,
@@ -59,7 +65,12 @@ class MerchantService
                 ]);
             }
         });
-        return ['username' => $username, 'password' => $password, 'access_code' => $accessCode];
+        return [
+            'username' => $username,
+            'password' => $password,
+            'one_time_password' => $password,
+            'access_code' => $accessCode,
+        ];
     }
 
     /** 审核驳回:可修改后重新提交 */
@@ -143,14 +154,34 @@ class MerchantService
         return $code;
     }
 
+    /** @return array{access_code: string, one_time_password: string} */
+    public function generateApprovalCredentials(int $merchantType): array
+    {
+        return [
+            'access_code' => $this->generateAccessCode($merchantType),
+            'one_time_password' => $this->randomPassword(),
+        ];
+    }
+
     /** 随机初始密码:12位含大小写字母数字 */
     private function randomPassword(): string
     {
-        $pool = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKMNPQRSTUVWXYZ23456789';
-        $password = '';
-        for ($i = 0; $i < 12; ++$i) {
-            $password .= $pool[random_int(0, strlen($pool) - 1)];
+        $lower = 'abcdefghjkmnpqrstuvwxyz';
+        $upper = 'ABCDEFGHJKMNPQRSTUVWXYZ';
+        $digits = '23456789';
+        $pool = $lower . $upper . $digits;
+        $chars = [
+            $lower[random_int(0, strlen($lower) - 1)],
+            $upper[random_int(0, strlen($upper) - 1)],
+            $digits[random_int(0, strlen($digits) - 1)],
+        ];
+        while (count($chars) < 12) {
+            $chars[] = $pool[random_int(0, strlen($pool) - 1)];
         }
-        return $password;
+        for ($i = count($chars) - 1; $i > 0; --$i) {
+            $j = random_int(0, $i);
+            [$chars[$i], $chars[$j]] = [$chars[$j], $chars[$i]];
+        }
+        return implode('', $chars);
     }
 }

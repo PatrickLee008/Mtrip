@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS `merchant_application` (
   `id`                  BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '主键',
   `site_id`             BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '所属站点ID',
   `app_no`              VARCHAR(30)  NOT NULL COMMENT '线索编号(APP-20240001)',
+  `merchant_code`       VARCHAR(20)  NULL DEFAULT NULL COMMENT '商户业务编号(MCH-XXXX)',
   `merchant_id`         BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '通过后关联商户ID,0=尚未转商户',
   `company_name`        VARCHAR(100) NOT NULL COMMENT '公司/商户名称',
   `company_group_name`  VARCHAR(100) NOT NULL DEFAULT '' COMMENT '集团名称',
@@ -41,8 +42,11 @@ CREATE TABLE IF NOT EXISTS `merchant_application` (
   `created_at`          DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `updated_at`          DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   `deleted_at`          DATETIME     NULL DEFAULT NULL COMMENT '删除时间(软删)',
+  `active_reg_number`   VARCHAR(50)  GENERATED ALWAYS AS (CASE WHEN `deleted_at` IS NULL AND `reg_number` <> '' THEN `reg_number` ELSE NULL END) STORED COMMENT '有效公司注册号(唯一校验)',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_app_no` (`app_no`),
+  UNIQUE KEY `uk_merchant_code` (`merchant_code`),
+  UNIQUE KEY `uk_active_reg_number` (`active_reg_number`),
   KEY `idx_site_id` (`site_id`),
   KEY `idx_stage` (`stage`),
   KEY `idx_assigned` (`assigned_ops_id`),
@@ -57,7 +61,9 @@ CREATE TABLE IF NOT EXISTS `merchant_application_business` (
   `business_name`  VARCHAR(100) NOT NULL COMMENT '业务/门店名称',
   `business_type`  VARCHAR(30)  NOT NULL DEFAULT '' COMMENT '业态(hotel/restaurant/airline/car_rental/attraction)',
   `city`           VARCHAR(50)  NOT NULL DEFAULT '' COMMENT '所在城市',
-  `kyc_status`     TINYINT      NOT NULL DEFAULT 2 COMMENT 'KYC状态:1已核验 2待提交 3核验中 4已驳回',
+  `kyc_status`     TINYINT      NOT NULL DEFAULT 0 COMMENT 'KYC状态:0待办中 1已验证 2待核验 3审核中 4已驳回',
+  `kyc_submitted_at` DATETIME   NULL DEFAULT NULL COMMENT '业务单元正式提交核验时间',
+  `kyc_submitted_by` BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '提交核验管理员ID',
   `created_at`     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `updated_at`     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   PRIMARY KEY (`id`),
@@ -119,7 +125,7 @@ CREATE TABLE IF NOT EXISTS `merchant_verify_document_revision` (
 -- 存量表增量(守卫式幂等:探测列存在则跳过)
 -- ============================================================
 
--- merchant_info.access_code 商户门户访问码(登录仍走 merchant_admin 账号)
+-- merchant_info.access_code 商户门户访问码(作为 merchant_admin 商户主账号的登录别名,账号实体仍在 merchant_admin)
 SET @col_exists := (SELECT COUNT(*) FROM information_schema.COLUMNS
   WHERE TABLE_SCHEMA = 'mtrip_business' AND TABLE_NAME = 'merchant_info' AND COLUMN_NAME = 'access_code');
 SET @ddl := IF(@col_exists = 0,

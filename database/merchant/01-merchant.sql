@@ -10,6 +10,7 @@ USE `mtrip_business`;
 -- 商户表(严格按文档 5.2.1)
 CREATE TABLE IF NOT EXISTS `merchant_info` (
   `id`                  BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `merchant_code`       VARCHAR(20)  NULL DEFAULT NULL COMMENT '商户业务编号(MCH-XXXX)',
   `site_id`             BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '所属站点ID,0=全局',
   `group_id`            BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '所属集团ID(merchant_group),0=独立商户',
   `merchant_name`       VARCHAR(100) NOT NULL COMMENT '商户全称',
@@ -40,6 +41,7 @@ CREATE TABLE IF NOT EXISTS `merchant_info` (
   `updated_at`          DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   `deleted_at`          DATETIME     NULL DEFAULT NULL COMMENT '删除时间(软删)',
   PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_merchant_code` (`merchant_code`),
   UNIQUE KEY `uk_credit_code` (`credit_code`),
   KEY `idx_site_id` (`site_id`),
   KEY `idx_group_id` (`group_id`),

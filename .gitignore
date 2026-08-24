@@ -49,3 +49,5 @@ web-build/
 .figma-cache/
 
 /.workbuddy
+.reasonix/
+reasonix.toml

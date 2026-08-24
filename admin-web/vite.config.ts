@@ -23,6 +23,11 @@ export default defineConfig({
         target: 'http://127.0.0.1:8081',
         changeOrigin: true,
       },
+      // 上传文件静态访问同样经网关(否则相对 /uploads 预览在 5173 会 404)
+      '/uploads': {
+        target: 'http://127.0.0.1:8081',
+        changeOrigin: true,
+      },
     },
   },
   build: {

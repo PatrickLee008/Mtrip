@@ -75,6 +75,6 @@ export function get<T = unknown>(url: string, params?: Record<string, unknown>):
   return request<T>({ method: 'GET', url, params });
 }
 
-export function post<T = unknown>(url: string, data?: Record<string, unknown>): Promise<T> {
+export function post<T = unknown>(url: string, data?: Record<string, unknown> | FormData): Promise<T> {
   return request<T>({ method: 'POST', url, data });
 }

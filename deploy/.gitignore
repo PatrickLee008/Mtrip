@@ -1,0 +1,3 @@
+# 上传文件共享目录(merchant-service 写入 / gateway 静态服务读取),不入库
+/uploads/
+/kyc/

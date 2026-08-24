@@ -111,6 +111,14 @@ services:
       - ../database/merchant/21-merchant-onboarding-stages-v2.sql:/docker-entrypoint-initdb.d/39c-merchant-onboarding-stages-v2.sql:ro
       # Merchant App M6:商户端通知已读状态
       - ../database/merchant/22-merchant-web-notify-read.sql:/docker-entrypoint-initdb.d/39d-merchant-web-notify-read.sql:ro
+      # 注册业务单元 KYC 状态流转:待办中→待核验→审核中→已验证
+      - ../database/merchant/23-merchant-kyc-status-flow.sql:/docker-entrypoint-initdb.d/39e-merchant-kyc-status-flow.sql:ro
+      # KYC 正式提交边界:上传仅保存草稿,提交核验后才进入待核验
+      - ../database/merchant/24-merchant-kyc-submit-boundary.sql:/docker-entrypoint-initdb.d/39f-merchant-kyc-submit-boundary.sql:ro
+      # 公司注册号有效记录全平台唯一(空值、软删除记录不占用)
+      - ../database/merchant/25-merchant-application-reg-number-unique.sql:/docker-entrypoint-initdb.d/39g-merchant-application-reg-number-unique.sql:ro
+      # 入驻线索创建即生成唯一商户业务编号 MCH-XXXX，并贯穿正式商户
+      - ../database/merchant/26-merchant-code.sql:/docker-entrypoint-initdb.d/39h-merchant-code.sql:ro
       - ../database/order/01-order.sql:/docker-entrypoint-initdb.d/40-order.sql:ro
       - ../database/order/02-verify.sql:/docker-entrypoint-initdb.d/41-verify.sql:ro
       - ../database/finance/01-finance.sql:/docker-entrypoint-initdb.d/50-finance.sql:ro
@@ -226,6 +234,8 @@ services:
       HTTP_PORT: "9505"
     ports:
       - "9505:9505"
+    volumes:
+      - ./uploads:/opt/www/uploads
 
   finance-service:
     <<: *hyperf-common
@@ -268,6 +278,7 @@ services:
     volumes:
       - ./openresty/nginx.conf:/usr/local/openresty/nginx/conf/nginx.conf:ro
       - ./openresty/conf.d:/etc/nginx/conf.d:ro
+      - ./uploads:/usr/local/openresty/nginx/static/uploads:ro
     depends_on:
       - system-service
       - user-service

@@ -17,6 +17,199 @@
 - M2/M3 客房与房量价格首轮已补齐:goods-service 新增 `Merchant/RoomController` 与 `Merchant/AvailabilityController`,路由 `/api/v1/merchant/rooms/*`、`/api/v1/merchant/availability/*`;房型详情字段与房量价格限制字段已补入 `database/goods/01-goods.sql`,存量幂等迁移 `database/goods/06-merchant-room-availability-fields.sql` 已登记 initdb;网关登记 `rooms/availability→goods_service`;前端新增 `api/rooms.ts`、`api/availability.ts`、`views/rooms/index.vue`、`views/availability/index.vue`,按 Hotel Merchant Dashboard 的 RoomsScreen/AvailabilityScreen 复刻列表、全页表单、日历网格、单日抽屉与批量更新;按钮权限 `mch:rooms:*`、`mch:availability:*` 已对齐菜单种子。
 - M5 dashboard 的 `activePromotionCount` 已从占位改为读取当前有效 M8 商家活动;入住率/ADR 仍待 M2/M3 房型与房量价格域完成后回填。
 - 最新验证:`D:\BtSoft\php\81\php.exe -l` 检查新增/修改 PHP 控制器和路由通过;`cd merchant-web; npm run build` 通过(EXIT=0;仅 Vite chunk 体积警告)。服务启停/网关重启仍由用户控制。
+> 最后更新:2026-08-25(验证队列线索编号统一)
+
+## ★ 2026-08-25(验证队列线索编号统一)
+
+- 待核实、重新提交、得到正式认可和已拒绝四个队列共用的验证列表接口批量补充 `application_no`，取正式商户关联的最新有效入驻申请编号。
+- 四个队列表格及 CSV 导出的线索 ID 统一显示 `APP-XXXX`，不再把 `merchant_info.id` 渲染为 `#XX`；关键词搜索同步支持申请编号和商户业务编号。
+- 验证：PHP 语法、admin-web 类型检查与生产构建通过，merchant-service healthz=200；当前待核实/已拒绝记录全部关联真实 APP 编号，得到正式认可中两条未经过入驻流程的历史测试商户显示 `-`，不伪造申请编号。
+
+## ★ 2026-08-25(商户业务编号 MCH-XXXX)
+
+- 入驻线索创建后在同一事务内按申请自增主键生成唯一 `merchant_code`，格式为 `MCH-` + 至少四位序号；编号在申请、待核实、重新提交、批准和拒绝阶段保持不变。
+- `merchant_application.merchant_id` 继续作为批准后关联 `merchant_info.id` 的内部数字外键；`merchant_info.access_code` 继续作为最终批准后生成的门户登录别名，三者不混用。
+- 新增幂等迁移 `26-merchant-code.sql`，回填存量申请并同步已关联正式商户，两个业务表分别建立唯一索引；compose initdb 登记为 `39h`。
+- 入驻与验证详情“商户 ID”改为展示 `merchant_code`，入驻批准响应和提示同步返回该业务编号。
+- 验证：本地库 11 条申请全部回填且 11 个编号互不重复，已关联正式商户编号不一致数为 0；迁移重复执行成功，PHP 语法、admin-web 类型检查与生产构建通过，merchant-service 重启后 healthz=200。
+
+## ★ 2026-08-25(入驻线索术语与列表调整)
+
+- “录入入驻线索”弹窗统一改为“商户入驻线索”；表单术语调整为商户名称、业务类型、业务数量、注册业务和业务名称。
+- 入驻申请表格列统一为商户名称、业务名称、提交日期；业务名称由接口聚合同一线索下全部注册业务并以逗号分隔，提交日期格式化为 `YYYY-MM-DD`。
+- 商户名称下方副标题固定展示录入线索时填写的注册国家/地区，不再被公司城市或首个业务城市覆盖。
+- 列表操作列仅保留详情图标；批准、拒绝、提醒等流程操作继续保留在详情抽屉中。
+
+## ★ 2026-08-25(公司注册号唯一性校验)
+
+- 创建入驻线索时，非空公司注册号按全平台有效线索校验重复；已有同号记录返回 `DATA_CONFLICT` 及“该公司注册号已存在”。空注册号允许多个线索使用，软删除线索不占用注册号。
+- 新增 `25-merchant-application-reg-number-unique.sql`：使用 `active_reg_number` 生成列（有效且非空才取注册号）和唯一索引，避免并发创建绕过应用层校验；已挂载 compose 的 `39g` 初始化序列并应用至本地 MySQL。
+- 修复创建线索 500：事务闭包遗漏捕获 `$regNumber`，使写入值变为 `null` 并触发 `reg_number` 非空约束；现已将该变量加入闭包捕获列表。
+
+## ★ 2026-08-25(录入入驻线索字段收敛)
+
+- “录入入驻线索”公司信息仅保留公司名称、公司/集团名称、公司注册号、注册国家/地区、企业类型和企业数量；移除公司层的商家名称、城市和注册地址。
+- 注册商家区默认展示一条记录，录入商家名称、类型、城市、业务联系人、手机号码和电子邮箱；保存时前后端均要求至少存在一家注册商家。
+- 后端不再要求前端传入独立商家名称，兼容旧请求的同时以公司名称作为线索 `merchant_name` 回退值，保证既有数据结构与列表展示不受影响。
+
+## ★ 2026-08-25(重新提交详情拒绝申请闭环,PRD 模块 11)
+
+- 修复验证页拒绝原因下拉：Ant Design Vue options 由错误的 `{ code, label }` 改为 `{ value, label }`，9 项预置原因均可正确选中并提交；弹窗标题、原因标签和确认按钮统一为“拒绝申请/拒绝原因”。
+- 拒绝成功后关闭弹窗与详情抽屉，自动跳转 `/merchant-verify/rejected`；验证状态卡按 activeTab 重新挂载并立即刷新计数，不再等待 60 秒轮询。
+- 后端继续以 `merchant_info.status=2` 作为已拒绝队列唯一口径，并将对应 `merchant_application_business.kyc_status` 同步为 4；已拒绝详情中的注册商家展示“已驳回”，同时保留拒绝原因码、补充说明、受影响文件快照、时间线和活动记录。
+- 验证：admin-web vue-tsc 与生产构建、VerifyController PHP 语法检查通过，merchant-service 重启且 healthz 正常；本地浏览器确认 9 项拒绝原因可选择，未执行最终拒绝提交，未改变现有商户状态。
+
+## ★ 2026-08-25(重新提交详情底部按钮标准尺寸)
+
+- 重新提交详情三个按钮保留琥珀浅底、玫红浅底和蓝色实底配色及 Sync / CloseCircle / CheckCircle 图标，但移除固定宽高、字号、内边距和圆角覆盖，恢复 Ant Design Vue 默认按钮规格。
+- 按钮组使用默认 8px 间距；样式仍仅作用于重新提交详情，待核实详情现有操作栏不受影响。
+- 验证：admin-web vue-tsc 与生产构建通过；本地浏览器实测按钮为默认 32px 高、14px 字号、4px 圆角和 `4px 15px` 内边距。
+
+## ★ 2026-08-25(重新提交详情操作栏与通知闭环,PRD 模块 11)
+
+- “重新提交”队列的商户验证详情抽屉由 1060px 收窄为 760px，与待核实详情保持一致；全局 Drawer footer 继续绝对定位于底部，内容独立滚动。
+- 重新提交详情底部统一为“请求重新提交 / 拒绝申请 / 批准商户”三个操作：请求操作复用必填补正说明与发送通知弹窗，拒绝操作复用预置理由下拉和可选补充说明，批准操作复用待核实页的访问码、一次性初始密码与凭证交付流程及全部文件批准门禁。
+- `VerifyController::resubmit` 允许状态 0（待核实）和 6（待重新提交）重复发送补正通知；再次通知保持状态 6、刷新审核时间、更新待重交文件并追加时间线与活动记录。
+- 验证：admin-web vue-tsc 与生产构建、backend 270 文件 PHP lint、shared 47 用例/723 断言全部通过；merchant-service 已重启且 healthz 正常。本地浏览器实测抽屉宽度 760px、footer 为 absolute/bottom 0、三个按钮、两类通知/拒绝弹窗和批准门禁正确；未执行真实通知、拒绝或批准提交。
+
+## ★ 2026-08-24(批准商户凭证弹窗与访问权限,PRD 模块 11)
+
+- 待核实详情底部“通过商户”统一改为“批准商户”；批准前按原型展示访问码、仅此一次可见的初始密码、邮件/短信/应用内交付渠道和商户通知预览，必需 KYC 文件未全部批准时不允许打开批准弹窗。
+- 语义统一：`merchant_admin` 仍是账号实体，`merchant_info.access_code` 是商户主账号的登录别名；商户认证兼容“原用户名或访问码 + 初始密码”，不再把访问码误当成另一条账号记录。
+- 新增 `approval-credentials` 预生成接口；最终批准校验访问码、12 位大小写字母数字初始密码及至少一个交付渠道，创建主账号后明文密码仅在本次弹窗可见。
+- 批准写入“商户已批准 / 访问码已生成 / 登录凭证已发送”时间线；详情返回 `access_grant`，已批准侧边栏底部展示访问码、复制/重新生成和生成日期、生成者、发送状态、渠道。
+- 验证：admin-web 与 merchant-web vue-tsc + production build、相关 PHP 语法检查通过；本地浏览器完成弹窗、批准门禁和已批准访问权限区块视觉冒烟。未执行真实批准提交，未改动现有商户状态。
+
+## ★ 2026-08-24(重新提交详情侧边栏原型实现,PRD 模块 11)
+
+- “重新提交”队列详情改为 1060px 专用抽屉布局：顶部展示重新提交请求、请求人、日期、进度与原因，随后展示公司信息和可切换的注册商家表格。
+- 需要重新提交的文件按原型改为左右对照卡片：左侧展示被拒绝的原稿、上传日期、拒绝理由和审核人；右侧展示商户新稿与待审核操作，尚未提交时显示等待回复占位状态。
+- 商家切换会按 `biz_unit` 切换对应文件卡；新稿沿用已有文档版本 `revisions`，提供查看、批准、拒绝操作；未收到真实新稿前底部“确认重新提交”保持禁用。
+- `VerifyController::detail` 补齐申请编号、提交日期和注册国家/地区，供详情抽屉直接展示，不改变现有数据库结构和状态机。
+- 验证：backend 270 文件 PHP lint、shared 47 用例/723 断言、admin-web vue-tsc 与生产构建、client-app typecheck 全部通过；本地浏览器使用实际重新提交数据完成视觉冒烟。
+
+## ★ 2026-08-24(KYC 正式提交边界整改,PRD 模块 11)
+
+- KYC 上传明确为草稿动作：上传或替换文件不再触发“待核验”，已提交后资料发生变化会退回`0待办中`并清除业务单元提交记录。
+- 新增业务单元级 `POST /merchant/onboarding/submit-verification`：按当前商家模板校验全部必需文件，成功后写`2待核验`、`kyc_submitted_at/by`并将申请阶段仅向前推进到 4；多商家分别提交。
+- `approve` 增加门禁：所有注册商家均有明确提交记录后才能转 Pending Verification，并统一进入`3审核中`；文档审核仅允许在待核实阶段执行，全部必需文件批准后进入`1已验证`。
+- 原 `confirm` 保留为独立的“商户确认信息与授权”语义，不再承担提交核验或阶段流转；前端底部“提交核验”改调新接口并携带当前 businessId。
+- 数据库新增并挂载 `24-merchant-kyc-submit-boundary.sql`（compose 39f）；旧逻辑中仅因上传得到的状态 2 保守退回状态 0，迁移已应用到本地 MySQL。
+- 验证：必需文件不齐提交返回 40901；完整资料提交后申请阶段=4、业务状态=2且提交时间/提交人落库；入驻通过门禁返回 40901；冒烟数据已恢复。backend 270 文件 lint、shared 47 用例/723 断言、admin-web build、client-app typecheck、merchant-service healthz 全部通过。
+
+## ★ 2026-08-24(KYC 全流程状态机整改,PRD 模块 11)
+
+- 状态机统一为 `0待办中 → 2待核验 → 3审核中 → 1已验证`（4 保留已驳回）：新建注册商家写 0；显式提交核验写 2；入驻通过转 Pending Verification 时写 3；全部必需文件批准后写 1。
+- `OnboardingController::sendKyc` 的文档占位行改按 `application_id + biz_unit` 隔离，解决多商家申请只为第一个商家生成模板文件的问题；发送请求和上传接口均支持单商家自动归属、多商家必须明确业务单元并校验归属。
+- `VerifyController::detail` 与新增 `syncBusinessKycStatus` 按模板必需 doc_type 和已批准文件实时/持久化状态；单文件批准或驳回后同步徽标，最终商户批准时全量落 1。
+- 最终批准门禁从“所有文档记录 status=1”改为“每个注册商家的全部强制文件已批准”，可选文件不再错误阻塞；非入驻商户保留旧门禁兼容。
+- 前端两页 KYC 徽标补 `待办中`，中文终态统一为`已验证`；验证文件表不再把空 file_url 占位行误判为已上传。
+- 数据库：`09-merchant-application.sql` 默认值改 0；新增并挂载 `23-merchant-kyc-status-flow.sql`（compose 39e），已应用到本地 MySQL，字段默认值=0，存量状态已校正。
+- 门禁：统一 `scripts/check.ps1` 四步全绿（backend 270 文件 PHP lint、shared 47 用例/723 断言、admin-web build、client-app typecheck）；最终 PHP lint、compose config、diff check 通过；merchant-service 已重启且 `/healthz` 返回 ok。
+
+## ★ 2026-08-24(商户验证详情：注册商家展开与 KYC 审批进度)
+
+- 注册商家标题左侧新增 `MenuOutlined`，表格增加右侧展开箭头；点击行同时切换当前商家文件列表并按手风琴展开业务类型、联系人、城市、电话、邮箱，样式复用入驻申请详情。
+- `VerifyController::detail` 的业务单元 KYC 状态改为按必需文件批准数量推导：0 份批准=`待办中`、部分批准=`审核中`、全部必需文件批准=`已核验`；不再以是否上传或是否驳回直接决定业务单元状态。
+- 单文件审核刷新详情时同步更新 `businesses`，KYC 状态徽标无需关闭抽屉即可变化。
+- 门禁：VerifyController PHP 语法检查与 `admin-web npm run build` 通过。
+
+## ★ 2026-08-24(待核实详情：上传日期与操作按钮对齐)
+
+- 文件表上传时间统一通过 `formatUploadDate` 输出 `YYYY-MM-DD`，不再显示时分秒。
+- 操作按钮改为 inline-flex 垂直居中，并对 Ant Design 图标容器同步居中，修复预览按钮文字偏上的显示问题。
+- 门禁：`admin-web npm run build` 通过。
+
+## ★ 2026-08-24(待核实详情：文件表单页无横向滚动)
+
+- 待核实详情的文件表移除 `scroll.x`，启用 fixed table layout；四列压缩为 Document 250 / Status 125 / Uploaded 105 / Actions 220，适配 760px 抽屉。
+- 三个操作按钮保持原型配色，字号缩至 11px、高度 26px、内边距 6px、间距 4px，确保不换行且不出现横向滚动条。
+- 门禁：`admin-web npm run build` 通过。
+
+## ★ 2026-08-24(待核实详情：文件表原型对齐与 KYC 状态修复)
+
+- 文件表移除“待上传文件 / 上传文件名”列，恢复原型四列 `Document / Status / Uploaded / Actions`；文件图标并入 Document 单元格，预览/批准/驳回改为蓝 `#EFF6FF`、绿 `#ECFDF3`、红 `#FFF1F3` 的描边按钮并带对应图标。
+- 根因：`OnboardingController::approve` 在商户进入 Pending Verification 时把所有业务单元写成 `kyc_status=1`（已核验）。修复为初始“核验中”(3)，同时 `VerifyController::detail` 按该业务单元实际上传、驳回与必需文件审核结果动态推导 Pending / Under Review / Verified / Rejected，覆盖历史错误状态。
+- 门禁：两个 PHP 控制器语法检查与 `admin-web npm run build` 通过。
+
+## ★ 2026-08-24(待核实详情：按商家类型展示应交文件)
+
+- `VerifyController::detail` 为每个注册商家附带 `kyc_template_docs`：优先使用业务单元绑定模板，未绑定时按业态取首个启用模板。
+- verify 详情抽屉的已提交文件表改为“模板应交清单 + 同商家 `biz_unit` 上传记录”合并视图：文件图标、待上传文件、上传文件名、状态、上传时间、预览/批准/驳回按钮；未上传资料仍显示，相关操作禁用。
+- 最终核实决定改按当前所选商家的 `已审核数 / 必需模板文件总数` 计算；可选文件仍展示但不阻塞最终决定，状态文案对齐为“已审核 / 等待审核”。
+- 门禁：`php -l backend/services/merchant-service/app/Controller/VerifyController.php` 与 `admin-web npm run build` 通过。
+
+## ★ 2026-08-24(待核实详情抽屉按原型对齐,admin-web)
+
+- `merchant/verify/index.vue` 的详情抽屉按 Pending Verification 原型重排：标题/副标题、Verification Admin Review Mode、公司信息 2+3 列、注册商家表格、KYC Submission Details、提交文件表、最终核实决定与活动时间线。
+- 点击注册商家行仅切换选中态，并按该行 `biz_unit` 立即筛选对应上传文件；不再展开额外业务详情。
+- 复用 verify/detail 已返回的 `kyc_submission`，补齐前端接口类型及中英文文案；最终操作移入 `#footer`，由全局抽屉样式固定在底部。
+- 门禁：`npm run build` 通过（仅保留现有大包体积提示）。
+
+## ★ 2026-08-21(核验详情抽屉:注册商家表格展开详情 + 文件表格 + 最终核实决定)
+
+- verify 详情抽屉在已有「注册商家表格 + 按商家过滤上传文件」基础上增强:
+- **商家表格行点击展开详情**(同入驻申请手风琴 rb-expand):点击行即选中商家(过滤文档)+ 展开业务详情(业态/联系人/城市/电话/邮箱,co-grid 2col)。
+- **文件表格参考原型 Submitted Documents**:列改 Document(name+type)/ Status / Uploaded(uploaded_at)/ Actions(View 预览 file_url + Approve 核验通过绿 + Reject 驳回红 彩色小按钮)。
+- **文件表格下方「最终核实决定」卡**:前有 Verification Admin Review Mode 提示条(浅蓝底标题+说明);卡内副标题按已审核数动态(全通过/有驳回/未审完`已审核 {n}/{total} 份文件 — 请先在做出最终决定前审核所有文件`)+ 动作条(通过/驳回/要求重交/确认重交)。
+- script 加 `reviewedCount`/`finalDecisionSubtitle`(按 verifyDocs 已审 status 1/3 计数);i18n 补 colDocUploaded/docActionView/finalDecision*/reviewMode*(中英)。
+- 门禁:vue-tsc + build 零报错。
+
+## ★ 2026-08-21(核验详情抽屉:注册商家表格 + 按商家显示上传文件,admin-web)
+
+- verify 详情抽屉按原型新增**注册商家表格**(§3)并把上传文件(§4)与所选商家联动:
+- 后端 verify/detail 已返回 `businesses`(merchant_application_business)与 documents(含 `biz_unit`),`apiVerifyDetail` TS 类型补 `businesses`。
+- 前端:verify 页新增 `businesses`/`verifyBizId`/`verifyCurrentBiz`/`verifyDocs`(按 `biz_unit === verifyBizId` 过滤)与 `selectVerifyBiz`;`openDetail` 默认选中第一个商家;表格 rb 风格(表头 #/商家名称/业态/城市/KYC状态 + 行点击高亮 is-open,kubernetes 样式同 onboarding),documents 表 `data-source` 改用 `verifyDocs`,文档标题附当前商家名;无商家显示空态。
+- 常量复用:从 onboarding 复制 `BUSINESS_TYPES`/`BIZ_TYPE_EMOJI`/`bizTypeText`/`RB_KYC_BADGE`。
+- i18n 补 verifyPage `colBizName`/`noRegisteredBusiness`(中英)。
+- 门禁:vue-tsc + build 零报错;detail 冒烟确认 businesses(id16/17)与 documents biz_unit(16/17/'')齐全,按商家过滤可用。
+
+## ★ 2026-08-21(待核实页按原型 Pending Verification 整改,admin-web)
+
+- 当前 `merchant/verify/index.vue`(4 队列:待核实/已通过/已驳回/重交)按原型 Pending Verification 页面整改,数据仍用现有 verify 接口(merchant_info 维度,与 onboarding 独立)。
+- **列表页**:页头(小标题 Merchant Verification + 大标题/副标题 + Export 导出);搜索栏改为关键词 + 国家下拉 + 右侧 `{total} results`;表格改原型 8 列 —— Lead ID(#id 等宽蓝)/ Merchant Name(名+城市副行)/ Business Name(short_name truncate)/ Reg. Number(credit_code 前12位)/ Submitted(等宽)/ **Verification Status**(原型徽章配色:Pending 黄 #B54708/#FFFBEB、Approved 绿 #027A48/#ECFDF3、Rejected 红 #C01048/#FFF1F3、Resubmission 蓝 #1D4ED8/#EFF6FF、Suspended/Closed 灰)/ Assigned Ops(audit_by,未指派置灰)/ Actions(**图标按钮** eye查看/check通过/close驳回/sync重交)。
+- **详情抽屉**:改原型工作台 —— §1 状态卡(商户名 + Verification Status 徽章 + 4格 Lead ID/类型/提交/审核时间)、§2 注册信息(co-section-heading 大写标题 + 2列 descriptions)、§3 已提交文件、§4 活动时间线(复用原型 `.onb-tl` 左侧竖线+圆点白光环+monospace日期+来源标签+action+by,异常标红)、底部动作条右对齐。
+- i18n 补 `colBusiness/colRegNumber/colVerifStatus/colAssignedOps/colCountry/resultCount/exportCsv/unassigned/pageKicker/*Subtitle/registrationInfo`(中英)。
+- 门禁:vue-tsc + build 零报错。
+
+## ★ 2026-08-21(修复:协助 KYC 上传文件重开不显示 / 文件预览 404)
+
+- **上传后重开抽屉看不到文件**:根因是上传成功只改 `assistUploads`,未同步 `documents.value`,重开 `openAssistKyc` 从 `documents.value` 初始化时拿不到新文件。修复:上传成功后按 `doc_type + biz_unit` 在 `documents.value` 覆盖/新增记录。
+- **上传文件无法预览**(图片/PDF):根因是上传文件 URL 是网关相对路径 `/uploads/...`,admin-web dev server(5173)下相对 href/新窗口打开走 5173 → 404。修复:`admin-web/vite.config.ts` server.proxy 新增 `/uploads` → `http://127.0.0.1:8081`(与 `/api` 同 target),生产同源天然可用。
+- 门禁:vue-tsc + build 零报错;dev 起服实测 `/uploads` 代理返回 200(图片可访问),不存在文件 404。
+
+## ★ 2026-08-21(协助商户 KYC 关联所选注册商户,按业务单元隔离)
+
+- onboarding 详情抽屉「协助商户完成 KYC」由"全局模板"整改为**关联当前选中的注册商户**:
+- 后端 `OnboardingController::kycUpload` 新增 `bizUnit`(业务单元 id)可选参数:非空时校验其属于该申请(`merchant_application_business`),资质文档按 `application_id + biz_unit + doc_type` 定位占位行,未命中则新建并落 `biz_unit`;同 docType 不同商家互不覆盖。
+- 前端:`openAssistKyc` 记录所选商家 `assistBiz.value = currentBiz`;`assistKycDocs` 改按该商家的 `kyc_template_id` 对应模板生成文件清单(否则回退依赖签名);`assistUploads` 初始化只归位当前 `biz_unit` 下已上传文档;`uploadAssistDoc` 携带 `bizUnit=selectedBiz.id`;抽屉副标题/业务名称输入框改用 `assistBiz`。
+- `api/merchant.ts` `apiOnboardingKycUpload` 加可选 `bizUnit`(FormData)。
+- 门禁:php -l 全量 + shared 47 用例 + admin-web build 零报错;接口冒烟(同 docType 上传 biz16/biz17 各自新建独立文档行,biz_unit=16/17;非法 bizUnit 40001 拒绝)通过,测试数据已清理。
+
+## ★ 2026-08-21(内部备注 → 内部笔记对齐原型,admin-web)
+
+- onboarding 详情抽屉 §7「内部备注」改「内部笔记」:标题复用 `co-section-heading` 结构(灰色 `co-heading-icon` + 大写标题 + 右侧延伸线),加 `EditOutlined` 小图标。
+- 历史列表按原型 `ci` 组件样式:卡片 `bg:#FFFBEB border:1px solid #FDE68A r8 pad10/12`,头部头像圆(20r #D97706 白字**操作人首字母大写**)+ `by`(11/600 #92400E)+ `date`(10 monospace #94A3B8),正文 12px #78350F lh1.6。
+- **输入组件由单行 `a-input-group` 改为多行 `a-textarea`**(rows 3,圆角6、边框 #E3E8F0、padding 8/10、resize vertical),placeholder 对齐原型「对商户运营与超管可见的内部笔记…」,「添加笔记」按钮右对齐。
+- i18n:zh `internalNotes/noNotes/notePlaceholder/addNote` 改「内部笔记/暂无笔记/…/添加笔记」,en placeholder 改完整文案。
+- 门禁:vue-tsc + build 零报错。
+
+## ★ 2026-08-21(入驻申请详情活动时间线按原型精确对齐,admin-web)
+
+- 按 Figma Make 原型(stir-long-36886628.figma.site)实际抓取 `Merchant Verification & Onboarding` 详情抽屉 **Activity Timeline** 渲染源码(`si` 组件:容器 borderLeft 2px #E3E8F0 + paddingLeft 20;每条 = 绝对定位彩色圆点 width/height 10 `border:2px solid #fff` + `boxShadow:0 0 0 2px dot` 白描边外光环;首行 `monospace` 10px #94A3B8 日期(`YYYY-MM-DD`) + type 标签 `fontSize 10/600` `padding:0 5px` `background:${dot}15`(8%透明底) `borderRadius:3`;次行 action `12/500/#1A2332`;末行 `by xxx` `11/#64748B`)。
+- type 映射(`oi`):`system`→color/dot `#94A3B8`/`#E3E8F0`、`admin`→`#1664FF`/`#1664FF`、`merchant`→`#059669`/`#059669`;前端 `tlSource()` 按 `actor_type`(1 system/2 admin/3 merchant) 返回 `{label,color,dot}`。
+- **彻底移除 Ant Design `a-timeline`**,改自定义 div 复刻原型;不再显示 action 内部英文键(kyc_confirmed/assist_kyc_upload 等),操作描述取 `note || action`,异常事件标红;新增 `tlDate()` 取 `created_at` 日期 `YYYY-MM-DD`。
+- 样式 `.onb-tl` 系在 onboarding/index.vue `<style>` 末尾。
+- 门禁:vue-tsc + build 零报错;detail 接口 data 含 actor_type/note/operator_name/created_at 已实测确认。
+
+## ★ 2026-08-21(协助商户完成 KYC:文件上传 + 提交核验确认,admin-web)
+
+- **需求**:「协助商户完成 KYC」抽屉(admin-web onboarding 页)`assist-kyc-drawer`)接入真实文件上传;点击「提交核验」弹出确认框(文案:此KYC信息由商家代为录入。提交后,必须由授权的验证管理员或超级管理员独立审核相关文件。),确认后调 `confirm` 接口。
+- **后端**:`OnboardingController::kycUpload`(`POST /admin/merchant/onboarding/kyc-upload`,Perm `merchant:onboarding:kyc`):校验扩展名(PDF/图片)+10MB → 本地共享盘落盘 `uploads/kyc/{appId}/{Ym}/{唯一}.{ext}` → `chmod 664`(否则网关 nginx 读不到返回 403)→ 写 system 库 `sys_file`(biz_type=merchant_kyc)→ 更新/新建 `merchant_verify_document`(file_url/file_size/name/status=2)→ 写时间线 `assist_kyc_upload`。配置 `config/autoload/storage.php`(upload_root=/opt/www/uploads,url_prefix=/uploads)。
+- **共享存储**:`deploy/uploads/` 目录,merchant-service 挂 `/opt/www/uploads`(写)、gateway 挂 `/usr/local/openresty/nginx/static/uploads`(只读);**新增 volumes 后必须 `docker compose up -d` 重建,** `restart` 不会应用 compose 变更。
+- **网关** `mtrip.conf` 新增 `location /uploads/`(alias 静态服务 + CORS + try_files)。
+- **前端**:`api/merchant.ts` 加 `apiOnboardingKycUpload`(FormData),`utils/http.ts` 的 `post` 支持 `FormData`;抽屉内「选择文件」按钮(隐藏原生 file input)真实上传,上传中转圈、成功后展示文件名+预览+删除、标题 `assistUploadedCount` 计数联动;「提交核验」走 `Modal.confirm`(指定文案)→ 确认调 `apiOnboardingConfirm` 并刷新。i18n 补 `assistSubmitConfirmTitle/Text/Success`、`assistUploadSuccess/Removed`。
+- **门禁**:php -l 全量通过、shared 47 用例通过、admin-web build 零 TS 报错;端到端冒烟(上传=200 返回 /uploads URL、网关静态访问 200、documents+sys_file 落库、confirm→confirmation_status=1)通过,测试数据已还原。
 
 ## ★ 前端 redesign 进展(2026-08-20,client-app)
 

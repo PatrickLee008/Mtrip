@@ -25,6 +25,22 @@ class MerchantAuthService
     public function login(string $username, string $password, string $ip): array
     {
         $admin = Db::table('merchant_admin')->where('username', $username)->whereNull('deleted_at')->first();
+        // PRD 模块 11:商户可用访问码 + 一次性初始密码登录。访问码是主账号登录别名，账号实体仍为 merchant_admin。
+        if ($admin === null) {
+            $merchantId = (int) (Db::table('merchant_info')
+                ->where('access_code', strtoupper($username))
+                ->where('status', 3)
+                ->whereNull('deleted_at')
+                ->value('id') ?? 0);
+            if ($merchantId > 0) {
+                $admin = Db::table('merchant_admin')
+                    ->where('merchant_id', $merchantId)
+                    ->where('account_type', 2)
+                    ->where('is_owner', 1)
+                    ->whereNull('deleted_at')
+                    ->first();
+            }
+        }
         if ($admin === null) {
             throw new BusinessException(ErrorCode::UNAUTHORIZED, '账号或密码错误');
         }

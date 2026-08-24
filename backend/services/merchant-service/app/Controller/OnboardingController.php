@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Controller;
 
 use Hyperf\DbConnection\Db;
+use Hyperf\HttpMessage\Upload\UploadedFile;
 use Mtrip\Shared\Annotation\Permission;
 use Mtrip\Shared\Constants\ErrorCode;
 use Mtrip\Shared\Context\AdminContext;
@@ -36,7 +37,19 @@ class OnboardingController extends AbstractController
     /** 业态 → merchant_info.merchant_type */
     private const TYPE_MAP = ['hotel' => 1, 'attraction' => 2];
 
-    /** 线索列表:队列/业态/国家/关键词筛选;附首个业务单元名+城市(列表 Business Name / 城市列) */
+    /** 协助商户上传 KYC 文件允许的扩展名(PDF/图片) */
+    private const UPLOAD_ALLOWED_EXT = ['pdf', 'jpg', 'jpeg', 'png', 'webp'];
+
+    /** 协助商户上传单文件大小上限(字节,nginx client_max_body_size=20m) */
+    private const UPLOAD_MAX_SIZE = 10 * 1024 * 1024;
+
+    /** 文件类型映射(mime → sys_file.file_type) */
+    private const UPLOAD_FILE_TYPE = [
+        'pdf' => 2,  // 文档
+        'jpg' => 1, 'jpeg' => 1, 'png' => 1, 'webp' => 1, // 图片
+    ];
+
+    /** 线索列表:队列/业态/国家/关键词筛选;附全部业务名称及首个业务城市 */
     #[Permission('merchant:onboarding:list')]
     public function index(): array
     {
@@ -95,16 +108,20 @@ class OnboardingController extends AbstractController
         $rows = $query->orderByDesc('id')->forPage($page, $pageSize)->get()
             ->map(static fn ($r) => (array) $r)->all();
         $ids = array_column($rows, 'id');
-        $firstBiz = [];
+        $businessNames = [];
         $firstBizCity = [];
         if ($ids !== []) {
             foreach (Db::table('merchant_application_business')->whereIn('application_id', $ids)->orderBy('id')->get() as $biz) {
-                $firstBiz[(int) $biz->application_id] ??= (string) $biz->business_name;
-                $firstBizCity[(int) $biz->application_id] ??= (string) $biz->city;
+                $applicationId = (int) $biz->application_id;
+                $businessName = trim((string) $biz->business_name);
+                if ($businessName !== '') {
+                    $businessNames[$applicationId][] = $businessName;
+                }
+                $firstBizCity[$applicationId] ??= (string) $biz->city;
             }
         }
         foreach ($rows as &$row) {
-            $row['business_name'] = $firstBiz[(int) $row['id']] ?? '';
+            $row['business_names'] = implode(', ', $businessNames[(int) $row['id']] ?? []);
             $row['business_city'] = $firstBizCity[(int) $row['id']] ?? '';
         }
         return Result::page($rows, $total, $page, $pageSize);
@@ -211,29 +228,44 @@ class OnboardingController extends AbstractController
         return Result::success(null, '验证模板已更新');
     }
 
-    /** 录入线索:公司信息 + 可选业务单元数组,初始 New Lead */
+    /** 录入线索:公司信息 + 至少一个注册商家,初始 New Lead */
     #[Permission('merchant:onboarding:create')]
     public function create(): array
     {
         $companyName = $this->requireStr('companyName');
         $siteId = (int) (AdminContext::isSuper() ? $this->intInput('siteId') : AdminContext::siteId());
-        $businesses = (array) $this->input('businesses', []);
+        $merchantName = $this->strInput('merchantName') ?: $companyName;
+        $regNumber = mb_substr($this->strInput('regNumber'), 0, 50);
+        if ($regNumber !== '' && Db::table('merchant_application')
+            ->where('reg_number', $regNumber)
+            ->whereNull('deleted_at')
+            ->exists()) {
+            throw new BusinessException(ErrorCode::DATA_CONFLICT, '该公司注册号已存在');
+        }
+        $businesses = array_values(array_filter((array) $this->input('businesses', []), static function ($business): bool {
+            $business = (array) $business;
+            return trim((string) ($business['businessName'] ?? '')) !== '';
+        }));
+        if ($businesses === []) {
+            throw new BusinessException(ErrorCode::PARAM_ERROR, '请至少录入一家注册商家');
+        }
+        $numBusinesses = max(1, $this->intInput('numBusinesses', count($businesses)), count($businesses));
         $now = date('Y-m-d H:i:s');
 
         $appId = 0;
-        Db::transaction(function () use ($companyName, $siteId, $businesses, $now, &$appId) {
+        Db::transaction(function () use ($companyName, $merchantName, $regNumber, $siteId, $businesses, $numBusinesses, $now, &$appId) {
             $appId = Db::table('merchant_application')->insertGetId([
                 'site_id' => $siteId,
                 'app_no' => $this->nextAppNo(),
-                'merchant_name' => mb_substr($this->strInput('merchantName'), 0, 100),
+                'merchant_name' => mb_substr($merchantName, 0, 100),
                 'company_name' => mb_substr($companyName, 0, 100),
                 'company_group_name' => mb_substr($this->strInput('companyGroupName'), 0, 100),
-                'reg_number' => mb_substr($this->strInput('regNumber'), 0, 50),
+                'reg_number' => $regNumber,
                 'country' => mb_substr($this->strInput('country'), 0, 50),
                 'city' => mb_substr($this->strInput('city'), 0, 50),
                 'address' => mb_substr($this->strInput('address'), 0, 255),
                 'business_types' => mb_substr($this->strInput('businessTypes'), 0, 100),
-                'num_businesses' => max(1, $this->intInput('numBusinesses', 1)),
+                'num_businesses' => $numBusinesses,
                 'stage' => 1,
                 'operator_type' => mb_substr($this->strInput('operatorType'), 0, 30),
                 'expected_launch_date' => $this->strInput('expectedLaunchDate') ?: null,
@@ -241,11 +273,11 @@ class OnboardingController extends AbstractController
                 'submitted_at' => $now,
                 'last_updated_at' => $now,
             ]);
+            Db::table('merchant_application')->where('id', $appId)->update([
+                'merchant_code' => $this->formatMerchantCode($appId),
+            ]);
             foreach ($businesses as $biz) {
                 $biz = (array) $biz;
-                if (trim((string) ($biz['businessName'] ?? '')) === '') {
-                    continue;
-                }
                 Db::table('merchant_application_business')->insert([
                     'site_id' => $siteId,
                     'application_id' => $appId,
@@ -256,7 +288,7 @@ class OnboardingController extends AbstractController
                     'contact_name' => mb_substr((string) ($biz['contactName'] ?? ''), 0, 50),
                     'contact_phone' => $this->encryptField(mb_substr((string) ($biz['contactPhone'] ?? ''), 0, 30)),
                     'contact_email' => mb_substr((string) ($biz['contactEmail'] ?? ''), 0, 100),
-                    'kyc_status' => 2,
+                    'kyc_status' => 0,
                 ]);
             }
         });
@@ -338,6 +370,17 @@ class OnboardingController extends AbstractController
         }
         $kycScope = in_array($this->intInput('kycScope', 1), [1, 2], true) ? $this->intInput('kycScope', 1) : 1;
         $businessId = $this->intInput('businessId');
+        $businessIds = Db::table('merchant_application_business')
+            ->where('application_id', (int) $app['id'])->orderBy('id')->pluck('id')->all();
+        if ($businessId <= 0) {
+            if (count($businessIds) === 1) {
+                $businessId = (int) $businessIds[0];
+            } elseif (count($businessIds) > 1) {
+                throw new BusinessException(ErrorCode::PARAM_ERROR, '多商家申请发送 KYC 请求时必须指定业务单元');
+            }
+        } elseif (! in_array($businessId, array_map('intval', $businessIds), true)) {
+            throw new BusinessException(ErrorCode::PARAM_ERROR, '业务单元不属于该申请');
+        }
         $docs = json_decode((string) $template->docs, true) ?: [];
         $now = date('Y-m-d H:i:s');
 
@@ -353,10 +396,21 @@ class OnboardingController extends AbstractController
             if ($businessId > 0) {
                 Db::table('merchant_application_business')
                     ->where('id', $businessId)->where('application_id', $app['id'])
-                    ->update(['kyc_scope' => $kycScope, 'kyc_template_id' => $templateId]);
+                    ->update([
+                        'kyc_scope' => $kycScope,
+                        'kyc_template_id' => $templateId,
+                        'kyc_status' => 0,
+                        'kyc_submitted_at' => null,
+                        'kyc_submitted_by' => 0,
+                    ]);
             }
-            // 已生成过占位文档则不重复生成(重发 KYC 仅刷新状态)
-            $exists = Db::table('merchant_verify_document')->where('application_id', $app['id'])->whereNull('deleted_at')->exists();
+            // 占位文档按业务单元隔离；同一申请下不同商家可使用不同模板。
+            $bizUnit = $businessId > 0 ? (string) $businessId : '';
+            $exists = Db::table('merchant_verify_document')
+                ->where('application_id', $app['id'])
+                ->where('biz_unit', $bizUnit)
+                ->whereNull('deleted_at')
+                ->exists();
             if (! $exists) {
                 foreach ($docs as $doc) {
                     $doc = (array) $doc;
@@ -364,6 +418,7 @@ class OnboardingController extends AbstractController
                         'site_id' => (int) $app['site_id'],
                         'merchant_id' => 0,
                         'application_id' => (int) $app['id'],
+                        'biz_unit' => $bizUnit,
                         'doc_type' => mb_substr((string) ($doc['doc_type'] ?? ''), 0, 50),
                         'name' => mb_substr((string) ($doc['name'] ?? ''), 0, 100),
                         'status' => 2,
@@ -410,19 +465,34 @@ class OnboardingController extends AbstractController
     {
         $app = $this->findApplication($this->requireId());
         $this->assertEditable($app);
+        $businessCount = Db::table('merchant_application_business')
+            ->where('application_id', (int) $app['id'])->count();
+        $unsubmittedCount = Db::table('merchant_application_business')
+            ->where('application_id', (int) $app['id'])
+            ->where(function ($query) {
+                $query->where('kyc_status', '!=', 2)->orWhereNull('kyc_submitted_at');
+            })->count();
+        if ($businessCount === 0 || $unsubmittedCount > 0) {
+            throw new BusinessException(ErrorCode::DATA_CONFLICT, '所有注册商家完成 KYC 提交核验后才能通过入驻');
+        }
         $regNumber = (string) $app['reg_number'];
         $creditCode = $regNumber !== '' ? $regNumber : (string) $app['app_no'];
         if (Db::table('merchant_info')->where('credit_code', $creditCode)->whereNull('deleted_at')->exists()) {
             throw new BusinessException(ErrorCode::DATA_CONFLICT, '注册号已存在对应商户,不可重复入驻');
         }
 
+        $merchantCode = trim((string) ($app['merchant_code'] ?? ''));
+        if ($merchantCode === '') {
+            $merchantCode = $this->formatMerchantCode((int) $app['id']);
+        }
         $merchantId = 0;
-        Db::transaction(function () use ($app, $creditCode, &$merchantId) {
+        Db::transaction(function () use ($app, $creditCode, $merchantCode, &$merchantId) {
             $template = (int) $app['kyc_template_id'] > 0
                 ? Db::table('merchant_kyc_template')->where('id', $app['kyc_template_id'])->first()
                 : null;
             $bizType = $template ? (string) $template->business_type : explode(',', (string) $app['business_types'])[0];
             $merchantId = Db::table('merchant_info')->insertGetId([
+                'merchant_code' => $merchantCode,
                 'site_id' => (int) $app['site_id'],
                 'merchant_name' => (string) $app['company_name'],
                 'merchant_short_name' => (string) $app['company_name'],
@@ -441,15 +511,19 @@ class OnboardingController extends AbstractController
                 ->update(['merchant_id' => $merchantId]);
             Db::table('merchant_application')->where('id', $app['id'])->update([
                 'stage' => 5,
+                'merchant_code' => $merchantCode,
                 'merchant_id' => $merchantId,
                 'last_updated_at' => date('Y-m-d H:i:s'),
             ]);
             Db::table('merchant_application_business')
                 ->where('application_id', $app['id'])
-                ->update(['kyc_status' => 1]);
+                ->update(['kyc_status' => 3]);
         });
-        $this->pushTimeline($app, 'approved', '入驻通过,转商户 #' . $merchantId . ' 进入待审核');
-        return Result::success(['merchant_id' => $merchantId], '入驻已通过,商户进入待审核');
+        $this->pushTimeline($app, 'approved', '入驻通过,转商户 ' . $merchantCode . ' 进入待审核');
+        return Result::success([
+            'merchant_id' => $merchantId,
+            'merchant_code' => $merchantCode,
+        ], '入驻已通过,商户进入待审核');
     }
 
     /** 入驻驳回:预置原因码 + 补充说明,关闭入驻 */
@@ -473,25 +547,230 @@ class OnboardingController extends AbstractController
         return Result::success(null, '入驻申请已驳回');
     }
 
-    /**
-     * KYC 提交确认(整改 B4,原型 Merchant Confirmation):
-     * 本期为接口契约(merchant-web 端接入时改挂 /api/v1/merchant/* 并换 MerchantAuthMiddleware);
-     * 管理端侧保留入口便于联调,确认后 verify/detail 的 kyc_submission.confirmation 显示 Confirmed
-     */
+    /** 商户确认 KYC 信息与提交授权；与“提交核验”工作流动作相互独立。 */
     #[Permission('merchant:onboarding:update')]
     public function confirm(): array
     {
         $app = $this->findApplication($this->requireId());
-        // 商户确认 KYC 提交 → 进入「等待文件」(stage 4,仅向前推进)
-        $stage = (int) $app['stage'] < 4 ? 4 : (int) $app['stage'];
         Db::table('merchant_application')->where('id', $app['id'])->update([
             'confirmation_status' => 1,
             'confirmed_at' => date('Y-m-d H:i:s'),
-            'stage' => $stage,
             'last_updated_at' => date('Y-m-d H:i:s'),
         ]);
-        $this->pushTimeline($app, 'kyc_confirmed', '商户确认 KYC 提交,进入等待文件');
-        return Result::success(null, '已确认商户 KYC 提交');
+        $this->pushTimeline($app, 'kyc_confirmed', '商户已确认 KYC 信息与提交授权');
+        return Result::success(null, '商户 KYC 确认已记录');
+    }
+
+    /** 当前业务单元正式提交核验：必需文件齐全后，KYC 状态由待办中进入待核验。 */
+    #[Permission('merchant:onboarding:kyc')]
+    public function submitVerification(): array
+    {
+        $app = $this->findApplication($this->requireId());
+        $this->assertEditable($app);
+        $businessId = $this->requireId('businessId');
+        $business = Db::table('merchant_application_business')
+            ->where('id', $businessId)
+            ->where('application_id', (int) $app['id'])
+            ->first();
+        if (! $business) {
+            throw new BusinessException(ErrorCode::PARAM_ERROR, '业务单元不属于该申请');
+        }
+        $business = (array) $business;
+        if ((int) $business['kyc_status'] === 2 && ! empty($business['kyc_submitted_at'])) {
+            return Result::success(null, '该商家 KYC 已提交核验');
+        }
+
+        $templateId = (int) ($business['kyc_template_id'] ?? 0);
+        $template = $templateId > 0
+            ? Db::table('merchant_kyc_template')->where('id', $templateId)->where('status', 1)->first()
+            : Db::table('merchant_kyc_template')
+                ->where('business_type', (string) $business['business_type'])
+                ->where('status', 1)->orderBy('sort')->first();
+        if (! $template) {
+            throw new BusinessException(ErrorCode::DATA_CONFLICT, '当前商家尚未配置有效的 KYC 模板');
+        }
+
+        $templateDocs = json_decode((string) ($template->docs ?? '[]'), true);
+        $requiredDocs = [];
+        foreach (is_array($templateDocs) ? $templateDocs : [] as $doc) {
+            $doc = (array) $doc;
+            $docType = trim((string) ($doc['doc_type'] ?? ''));
+            if ($docType !== '' && (bool) ($doc['required'] ?? true)) {
+                $requiredDocs[$docType] = (string) ($doc['name'] ?? $docType);
+            }
+        }
+        if ($requiredDocs === []) {
+            throw new BusinessException(ErrorCode::DATA_CONFLICT, '当前 KYC 模板未配置必需文件');
+        }
+
+        $uploadedTypes = Db::table('merchant_verify_document')
+            ->where('application_id', (int) $app['id'])
+            ->where('biz_unit', (string) $businessId)
+            ->where('file_url', '!=', '')
+            ->whereNull('deleted_at')
+            ->pluck('doc_type')->all();
+        $missingTypes = array_diff(array_keys($requiredDocs), array_map('strval', $uploadedTypes));
+        if ($missingTypes !== []) {
+            $missingNames = array_map(static fn ($type) => $requiredDocs[$type], $missingTypes);
+            throw new BusinessException(ErrorCode::DATA_CONFLICT, '请先上传全部必需文件：' . implode('、', $missingNames));
+        }
+
+        $now = date('Y-m-d H:i:s');
+        Db::transaction(function () use ($app, $businessId, $now) {
+            Db::table('merchant_application_business')->where('id', $businessId)->update([
+                'kyc_status' => 2,
+                'kyc_submitted_at' => $now,
+                'kyc_submitted_by' => AdminContext::adminId(),
+            ]);
+            Db::table('merchant_application')->where('id', $app['id'])->update([
+                'stage' => max(4, (int) $app['stage']),
+                'last_updated_at' => $now,
+            ]);
+        });
+        $this->pushTimeline($app, 'kyc_submitted', '商家「' . (string) $business['business_name'] . '」已提交核验');
+        return Result::success(null, 'KYC 已提交核验');
+    }
+
+    /**
+     * 协助商户上传 KYC 文件(商户运营代传):
+     * 保存到本地共享存储 → 写系统文件库 sys_file → 落商户资质文档表 merchant_verify_document → 写时间线。
+     * 上传后文件须由授权验证管理员/超管独立审核。
+     */
+    #[Permission('merchant:onboarding:kyc')]
+    public function kycUpload(): array
+    {
+        $app = $this->findApplication($this->requireId());
+        $this->assertEditable($app);
+        $docType = $this->requireStr('docType');
+        // 业务单元维度(协助 KYC 关联所选注册商户);biz_unit 存业务单元 id
+        $bizUnit = $this->strInput('bizUnit', '');
+        if ($bizUnit === '') {
+            $businessIds = Db::table('merchant_application_business')
+                ->where('application_id', (int) $app['id'])->orderBy('id')->pluck('id')->all();
+            if (count($businessIds) === 1) {
+                $bizUnit = (string) $businessIds[0];
+            } elseif (count($businessIds) > 1) {
+                throw new BusinessException(ErrorCode::PARAM_ERROR, '多商家申请上传 KYC 文件时必须指定业务单元');
+            }
+        }
+        if ($bizUnit !== '') {
+            $belongs = Db::table('merchant_application_business')
+                ->where('id', (int) $bizUnit)->where('application_id', (int) $app['id'])->exists();
+            if (! $belongs) {
+                throw new BusinessException(ErrorCode::PARAM_ERROR, '业务单元不属于该申请');
+            }
+            $bizUnit = (string) (int) $bizUnit;
+        }
+
+        /** @var UploadedFile|null $file */
+        $file = $this->request->file('file');
+        if (! $file || ! $file->isValid()) {
+            throw new BusinessException(ErrorCode::PARAM_ERROR, '未接收到有效的上传文件');
+        }
+        $ext = strtolower((string) pathinfo($file->getClientFilename() ?: '', PATHINFO_EXTENSION));
+        if (! in_array($ext, self::UPLOAD_ALLOWED_EXT, true)) {
+            throw new BusinessException(ErrorCode::PARAM_ERROR, '仅支持 PDF/JPG/JPEG/PNG/WebP 文件');
+        }
+        $fileSize = $file->getSize();
+        if ($fileSize > self::UPLOAD_MAX_SIZE) {
+            throw new BusinessException(ErrorCode::PARAM_ERROR, '文件大小不能超过 10MB');
+        }
+        // 先缓存元数据,moveTo 后仍可用(moveTo 会保留元数据,这里显式取一次更稳)
+        $clientName = (string) ($file->getClientFilename() ?? '');
+        $mime = (string) ($file->getMimeType() ?? '');
+
+        // 本地共享存储落盘(路径 uploads/kyc/{applicationId}/{唯一名}.{ext})
+        $uploadRoot = rtrim((string) $this->config->get('storage.upload_root', '/opt/www/uploads'), '/\\');
+        $urlPrefix = rtrim((string) $this->config->get('storage.url_prefix', '/uploads'), '/');
+        $relativeDir = '/kyc/' . (int) $app['id'] . '/' . date('Ym');
+        $realDir = $uploadRoot . $relativeDir;
+        if (! is_dir($realDir) && ! @mkdir($realDir, 0775, true) && ! is_dir($realDir)) {
+            throw new BusinessException(ErrorCode::SERVER_ERROR, '上传目录创建失败,请联系管理员');
+        }
+        $unique = date('His') . '-' . bin2hex(random_bytes(8));
+        $relativePath = $relativeDir . '/' . $unique . '.' . $ext;
+        $realPath = $uploadRoot . $relativePath;
+        $file->moveTo($realPath);
+        if (! is_file($realPath)) {
+            throw new BusinessException(ErrorCode::SERVER_ERROR, '文件保存失败,请联系管理员');
+        }
+        // 容器内以 root 写入默认 600,网关 nginx 用户需读到,统一放宽到 664
+        @chmod($realPath, 0664);
+        $fileUrl = $urlPrefix . $relativePath;
+
+        $docId = 0;
+        $now = date('Y-m-d H:i:s');
+        Db::transaction(function () use (
+            $app, $docType, $bizUnit, $clientName, $mime, $fileUrl, $relativePath, $fileSize, $ext, &$docId, $now
+        ) {
+            // 1) 系统文件库(sys_file)
+            Db::connection('system')->table('sys_file')->insertGetId([
+                'site_id' => (int) $app['site_id'],
+                'storage_id' => 0,
+                'file_name' => mb_substr($clientName, 0, 255),
+                'file_path' => mb_substr($relativePath, 0, 500),
+                'file_url' => mb_substr($fileUrl, 0, 500),
+                'file_type' => self::UPLOAD_FILE_TYPE[$ext] ?? 2,
+                'mime_type' => mb_substr($mime, 0, 100),
+                'file_size' => $fileSize,
+                'biz_type' => 'merchant_kyc',
+                'uploader_id' => AdminContext::adminId(),
+            ]);
+
+            // 2) 资质文档表:按 application + biz_unit + doc_type 定位占位行,未命中则新建
+            $doc = Db::table('merchant_verify_document')
+                ->where('application_id', (int) $app['id'])
+                ->where('biz_unit', $bizUnit)
+                ->where('doc_type', $docType)
+                ->whereNull('deleted_at')
+                ->orderBy('id')
+                ->first();
+            if ($doc) {
+                Db::table('merchant_verify_document')->where('id', (int) $doc->id)->update([
+                    'file_url' => $fileUrl,
+                    'file_size' => (string) $fileSize,
+                    'name' => mb_substr($clientName, 0, 100),
+                    'status' => 2,
+                    'uploaded_at' => $now,
+                    'updated_at' => $now,
+                ]);
+                $docId = (int) $doc->id;
+            } else {
+                $docId = Db::table('merchant_verify_document')->insertGetId([
+                    'site_id' => (int) $app['site_id'],
+                    'merchant_id' => (int) $app['merchant_id'],
+                    'application_id' => (int) $app['id'],
+                    'biz_unit' => $bizUnit,
+                    'doc_type' => mb_substr($docType, 0, 50),
+                    'name' => mb_substr($clientName, 0, 100),
+                    'file_url' => $fileUrl,
+                    'file_size' => (string) $fileSize,
+                    'status' => 2,
+                    'remark' => '协助商户(KYC 代传)',
+                    'uploaded_at' => $now,
+                ]);
+            }
+            // 上传/替换文件属于草稿编辑；已提交资料发生变化时退回待办中，必须重新提交核验。
+            if ($bizUnit !== '') {
+                Db::table('merchant_application_business')
+                    ->where('id', (int) $bizUnit)
+                    ->where('application_id', (int) $app['id'])
+                    ->update([
+                        'kyc_status' => 0,
+                        'kyc_submitted_at' => null,
+                        'kyc_submitted_by' => 0,
+                    ]);
+            }
+        });
+
+        $this->pushTimeline($app, 'assist_kyc_upload', '协助商户上传 KYC 文件:' . $docType);
+        return Result::success([
+            'id' => (int) $docId,
+            'file_url' => $fileUrl,
+            'file_size' => (string) $fileSize,
+            'file_name' => $clientName,
+            'doc_type' => $docType,
+        ], '文件上传成功');
     }
 
     // ── 私有助手 ──────────────────────────────────────────────
@@ -526,6 +805,12 @@ class OnboardingController extends AbstractController
             ++$seq;
         } while (Db::table('merchant_application')->where('app_no', $appNo)->exists());
         return $appNo;
+    }
+
+    /** 商户业务编号:MCH- + 至少4位申请主键,主键序列保证并发唯一 */
+    private function formatMerchantCode(int $applicationId): string
+    {
+        return 'MCH-' . str_pad((string) $applicationId, 4, '0', STR_PAD_LEFT);
     }
 
     /** 写申请维度时间线 */
