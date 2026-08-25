@@ -29,6 +29,11 @@ export type RootStackParamList = {
     /** 是否按缅甸公民价展示 */
     citizen?: boolean;
   };
+  /**
+   * 酒店详情页(Figma 94:438),搜索结果卡的落地页。
+   * 当前是静态页,还没接 `/goods/detail`,故 id 可缺省(演示卡没有真实商品 id)。
+   */
+  HotelDetail: { id?: number } | undefined;
   GoodsList: { goodsType?: number; categoryId?: number; keyword?: string; title?: string };
   GoodsDetail: { id: number };
   OrderList: undefined;

@@ -21,7 +21,8 @@
  * **演示数据**:接口没连通或没返回结果时,列表回落到 `demoResults.ts` —— 设计稿那四张卡的原始数值与文案
  *   (评分 9.3/7.8/4.3、SUMMER PROMO、Long Stay Not Supported、PREFERRED/HIGH DEMAND/BEST SELLER…),
  *   结果头的总数也随之显示演示条数,并在其下给一条可点重试的提示条(请求失败时附带错误原因)。
- *   演示态下 chips / 排序 / 关键词在前端本地生效,点卡片不跳详情、点心只切本地状态。
+ *   演示态下 chips / 排序 / 关键词在前端本地生效,点心只切本地状态;
+ *   点卡片跳酒店详情静态页(`HotelDetail`,同样是设计稿数据,不带商品 id)。
  *
  * 未实现的能力(设计稿有、当前没有对应依赖或接口),一律走 comingSoon:
  *   入住人选择、View map(未引入地图)。
@@ -451,7 +452,8 @@ export default function HotelResultsScreen() {
                       }
                     : undefined
                 }
-                onPress={comingSoon}
+                /* 演示卡没有真实商品 id,跳详情静态页(页面自己用设计稿数据渲染) */
+                onPress={() => navigation.navigate('HotelDetail')}
                 onToggleFavorite={toggleFavorite}
               />
             );

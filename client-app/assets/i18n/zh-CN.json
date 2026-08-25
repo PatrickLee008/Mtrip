@@ -314,6 +314,224 @@
         }
       }
     },
+    "detail": {
+      "tabs": {
+        "overview": "概览",
+        "rooms": "房型",
+        "amenities": "设施",
+        "nearby": "周边景点",
+        "reviews": "评价",
+        "policies": "政策"
+      },
+      "photoCount": "{{index}}/{{total}}",
+      "stats": {
+        "starValue": "{{stars}} 星",
+        "starLabel": "星级",
+        "scoreLabel": "很棒",
+        "bookedLabel": "已预订"
+      },
+      "location": {
+        "title": "酒店位置",
+        "seeMap": "查看地图",
+        "address": "缅甸娘乌 05231,敏南都村附近,蒲甘南明塔楼"
+      },
+      "highlight": {
+        "title": "本次行程亮点",
+        "body": "在这里,舒适与便利兼得:开阔景观、贴心服务,前往当地景点也十分方便,是您旅程的理想落脚点。"
+      },
+      "reasons": {
+        "bestLocation": {
+          "title": "位置绝佳",
+          "desc": "几分钟即达佛塔群"
+        },
+        "greatBreakfast": {
+          "title": "早餐出色",
+          "desc": "地道当地风味"
+        },
+        "largeRooms": {
+          "title": "房间宽敞",
+          "desc": "现代舒适体验"
+        }
+      },
+      "amenities": {
+        "familyFriendly": "亲子友好",
+        "freeBreakfast": "免费早餐",
+        "airportShuttle": "机场接送",
+        "infinityPool": "无边泳池"
+      },
+      "startAt": "起价",
+      "discountToday": "今日立减 {{percent}}%",
+      "chooseRoom": "选择房型",
+      "rooms": {
+        "title": "房型一览",
+        "unit": "单位",
+        "units": {
+          "sqft": "平方英尺",
+          "sqm": "平方米"
+        },
+        "names": {
+          "standard": "标准房",
+          "deluxe": "豪华房",
+          "family": "家庭套房"
+        },
+        "left": "仅剩 {{rooms}} 间",
+        "seeDetails": "查看详情",
+        "guests": "可住 {{guests}} 人",
+        "beds": {
+          "queen": "大床",
+          "king": "特大床"
+        },
+        "bedsMultiple": "{{beds}} 张{{bed}}",
+        "area": "{{area}} {{unit}}",
+        "facilities": {
+          "wifi": "高速无线网",
+          "parking": "停车场",
+          "pool": "室内泳池",
+          "breakfast": "优质早餐"
+        },
+        "perNight": "/ 晚",
+        "select": "选择",
+        "bestseller": "热销"
+      },
+      "amenityGroups": {
+        "essentials": "基础设施",
+        "recreation": "休闲娱乐",
+        "dining": "餐饮"
+      },
+      "amenityList": {
+        "freeWifi": "免费无线网",
+        "airConditioning": "空调",
+        "housekeeping": "每日客房清洁",
+        "outdoorPool": "露天泳池",
+        "spa": "水疗中心",
+        "gym": "健身中心",
+        "restaurant": "主餐厅",
+        "bar": "云端酒廊",
+        "coffee": "咖啡厅"
+      },
+      "longStay": {
+        "title": "长住权益",
+        "benefits": {
+          "freeLaundry": "免费洗衣",
+          "freeUtilities": "水电全包",
+          "kitchen": "独立厨房",
+          "workspace": "办公区",
+          "petFriendly": "可携宠物",
+          "monthlyContract": "月度合约",
+          "noDeposit": "免押金",
+          "flexibleCancellation": "灵活取消"
+        }
+      },
+      "nearby": {
+        "title": "周边位置",
+        "getDirections": "导航前往",
+        "transport": {
+          "airport": {
+            "name": "娘乌机场",
+            "time": "驾车 20 分钟(12 公里)"
+          },
+          "temples": {
+            "name": "蒲甘佛塔群",
+            "time": "驾车 10 分钟(5 公里)"
+          }
+        },
+        "attractions": {
+          "ananda": {
+            "name": "阿难陀寺",
+            "meta": "3.2 公里 • 驾车 8 分钟"
+          },
+          "dhammayangyi": {
+            "name": "达玛央吉佛塔",
+            "meta": "4.5 公里 • 驾车 12 分钟"
+          },
+          "oldBaganMarket": {
+            "name": "老蒲甘市集",
+            "meta": "1.5 公里 • 步行 5 分钟"
+          }
+        }
+      },
+      "reviews": {
+        "basedOn": "来自 {{reviews}} 条评价",
+        "readAll": "查看全部评价",
+        "dimensions": {
+          "cleanliness": "卫生",
+          "service": "服务",
+          "value": "性价比",
+          "comfort": "舒适度"
+        },
+        "aiSummary": "AI 总结",
+        "topPositive": "最多好评",
+        "improvement": "有待改进",
+        "positiveQuote": "「顶楼酒廊的日出景色无可比拟,员工还为我们的周年晚餐费了不少心思。」",
+        "improvementQuote": "「花园区域的无线网信号偶尔不稳,不过房间里一切正常。」"
+      },
+      "policies": {
+        "title": "酒店政策",
+        "booking": {
+          "title": "预订政策",
+          "cancellation": {
+            "title": "取消政策",
+            "body": "入住前 48 小时以上可免费取消;入住前 48 小时内取消将收取首晚房费。"
+          },
+          "prepayment": {
+            "title": "预付政策",
+            "body": "无需押金。信用卡仅用于担保预订,房费在酒店前台一次结清。"
+          }
+        },
+        "taxes": {
+          "title": "税费",
+          "body": "房价不含 5% 政府税与 10% 服务费,退房时一并计入最终账单。"
+        },
+        "checkIn": {
+          "title": "入住",
+          "body": "提前入住视房态而定,可能产生额外费用。"
+        },
+        "checkOut": {
+          "title": "退房",
+          "body": "18:00 前延迟退房按日房价的 50% 收取,18:00 之后按全价收取。"
+        },
+        "requiredDocs": "入住所需证件:",
+        "docs": {
+          "passport": "有效护照 / 缅甸身份证",
+          "bookingConfirmation": "预订确认单"
+        },
+        "extraBeds": {
+          "title": "儿童与加床",
+          "complimentary": "免费",
+          "age0to5": {
+            "label": "0-5 岁儿童",
+            "body": "与现有床位同住免费。"
+          },
+          "age6to12": {
+            "label": "6-12 岁儿童",
+            "body": "需加床(含早餐)。"
+          },
+          "adults": {
+            "label": "13 岁及以上",
+            "body": "每增加一位住客须加床。"
+          }
+        },
+        "pet": {
+          "title": "宠物政策",
+          "body": "为保障全体住客的入住体验,酒店内不允许携带宠物。"
+        },
+        "rules": {
+          "title": "住店规则",
+          "smoking": {
+            "title": "吸烟",
+            "body": "仅限指定吸烟区。房内吸烟收取 200,000 MMK 清洁费。"
+          },
+          "quietHours": {
+            "title": "安静时段",
+            "body": "每日 22:00 至次日 07:00 为安静时段,请勿喧哗。"
+          },
+          "poolHours": {
+            "title": "泳池开放时间",
+            "body": "每日 07:00 至 20:00 开放,请穿着正规泳装。"
+          }
+        }
+      }
+    },
     "filter": {
       "title": "筛选",
       "reset": "重置",

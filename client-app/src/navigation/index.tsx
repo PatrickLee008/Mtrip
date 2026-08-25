@@ -18,6 +18,7 @@ import type { MainTabParamList, RootStackParamList } from '@/navigation/types';
 import GoodsDetailScreen from '@/screens/goods/GoodsDetailScreen';
 import GoodsListScreen from '@/screens/goods/GoodsListScreen';
 import HomeScreen from '@/screens/home/HomeScreen';
+import HotelDetailScreen from '@/screens/hotel/HotelDetailScreen';
 import HotelResultsScreen from '@/screens/hotel/HotelResultsScreen';
 import HotelsScreen from '@/screens/hotel/HotelsScreen';
 import MyPickScreen from '@/screens/mypick/MyPickScreen';
@@ -124,6 +125,12 @@ export default function AppNavigator() {
         <Stack.Screen
           name="HotelResults"
           component={HotelResultsScreen}
+          options={{ title: t('hotels.title'), headerShown: false }}
+        />
+        {/* 详情页自带设计稿顶部栏(返回 / 提醒 / 分享)且图库要铺到状态栏,故关掉 Stack 头 */}
+        <Stack.Screen
+          name="HotelDetail"
+          component={HotelDetailScreen}
           options={{ title: t('hotels.title'), headerShown: false }}
         />
         <Stack.Screen

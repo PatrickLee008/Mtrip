@@ -272,6 +272,43 @@
 - 图标取舍:设计稿的 `fluent:arrow-sort-down-lines-16-filled`(Sort by)与 15px 地图图标暂用项目图标表里同体系的 `filter` / `map` 字形(`map` 本来就在 `HomeIcon.tsx` 的 TODO 顶替名单里),两处代码内已注明。
 - 新增 i18n `hotels.results.*` 中英各 22 键(评价数插值用 `{{reviews}}`、避开 i18next 保留字 `count`)。门禁:`cd client-app; npm run typecheck` 零报错;`scripts/check.ps1` 因本机 `php` 不在 PATH 第 1 步即中断(与本改动无关)。
 
+### ★ 2026-08-25(client-app 酒店详情 Overview,Figma `Hotel Details Overview` node `94:438`)
+
+- 新增 `screens/hotel/HotelDetailScreen.tsx`(路由 `HotelDetail`,`headerShown:false`,页面自带悬浮顶部栏)。**当前是静态页**:所有数值与文案来自设计稿(`screens/hotel/detailDemo.ts` + i18n `hotels.detail.*`),**尚未接 `/goods/detail`**;路由参数 `{ id?: number }` 预留给接接口那一步,现在不传。搜索结果页的演示卡由 `comingSoon` 改为跳这里(演示卡 id 为负、没有真实商品)。
+- 页面结构(自上而下):状态栏黑条(设计稿 `760:10037`,不随内容滚动)→ 图库 402x300 + 悬浮顶部栏(返回/提醒/分享,渐变自上而下主色 50%→透明,同搜索结果页)→ Main(px16 / 区块间距 24):标题卡 `703:3010` → 二级导航 `222:1216`(**吸顶**)→ 三宫格 `222:1421` → Hotel Location `361:1427` → Highlight `1671:2058` → Why Guests Choose `94:528` 三条 → 设施标签 `222:1355` 两行两列;固定底部价格栏 `222:2514` + 客服悬浮球 `1671:2310`。
+- **吸顶用 `ScrollView` 的 `stickyHeaderIndices`**,所以二级导航必须是 ScrollView 的直接子节点 —— 设计稿 Main 的 24 间距改由各块自己的 `paddingTop` 承担,导航块另给页面底色(否则滚动时内容会从透明处透出来)。
+- 新增 `components/hotel/HotelGallery.tsx`:整屏宽 `pagingEnabled` 横滑 + 底部渐变(`react-native-svg` 画,自下而上黑 60%→50% 处透明)+ 左下圆点条 / 右下张数胶囊。**设计稿计数写的是 `2/12`,但只导出了 3 张图**,页面按实际张数算,不硬写 12。设计稿的 `backdrop-blur` RN 无原生等价,只保留半透明底色(同搜索结果页顶部栏的处理)。
+- 新增 `components/hotel/HotelDetailTabs.tsx`(泛型页签,横滑,选中项主色文字 + 2px 主色下划线)。**只有 Overview 有内容**,点其余五个页签走 `comingSoon`;See Map / 提醒 / 分享 / 客服 / Choose my room 同样走 `comingSoon`。
+- **图标全部换成设计稿导出的 SVG path**(不再手抄):`HomeIcon.tsx` 新增 12 枚 —— `imageCopy / like / bed / food / share / chatFilled / bellOutline / locationOutline` 与四枚设施标签 `familyFriendly / breakfast / airportShuttle / pool`;并把 TODO 名单里的 **`map` 从 24 网格顶替替换为真字形 `fluent:map-16-filled`**(搜索结果页「View map」与 My Pick 预订卡跟着一起变准)。设计稿 40px 的 map/bed 与 20px 是同字形放大,复用同一条 path。`star / arrowLeft` 字形与设计稿一致,直接复用。
+- **`HomeIcon` 新增 `width` / `height` 两个可选属性**(缺省仍取 `size`):四枚设施标签字形不是正方形(15.375x15 / 11.25x15 / 16.5x10.5 / 15x13.5),只传 `size` 会把它们拉成正方。
+- 图库素材导出到 `assets/images/temp/hotel/`(3 张 512x512 PNG,已按 magic bytes 复核格式),引用走 `assets/tempImages.ts` 的 `TEMP_HOTEL_GALLERY`,登记在 `assets/images/temp/README.md`。
+- 文案取舍:设计稿标题 `Highlight for your tirp` 是拼写笔误,词条按正确英文写作 `Highlights for your trip`(同筛选面板 Show Resluts 的处理);酒店名/地址复用搜索结果演示卡的 `hotels.results.demo.heritageBagan.*`(设计稿就是同一家酒店)。
+- 新增 i18n `hotels.detail.*` 中英各 26 键。门禁:`cd client-app; npm run typecheck` 零报错;`scripts/check.ps1` 因本机 `php` 不在 PATH 第 1 步即中断(与本改动无关,本次未改任何 PHP)。
+
+### ★ 2026-08-25(client-app 酒店详情其余五个页签,Figma `Hotel Details` node `759:9776`)
+
+- 设计稿这个 section 下是**六张独立的稿**,共用同一套壳(图库 / 顶部栏 / 标题卡 / 二级导航 / 底部价格栏),只有 Main 里的内容列不同。落地成**一个页面 + 六个页签内容组件**,`HotelDetailScreen` 只留壳与 `renderTab()` 分发:
+  Overview `94:438` → `HotelOverviewTab`(本次从页面里拆出来,内容未动)/ Rooms `222:1428` → `HotelRoomsTab` + `HotelRoomCard` /
+  Amenities `222:2539` → `HotelAmenitiesTab` / **Nearby Attraction** `222:2758`(设计稿名 Hotel Details Location)→ `HotelNearbyTab` /
+  Reviews `222:2978` → `HotelReviewsTab` / Policies `222:3189` → `HotelPoliciesTab`。二级导航的 `comingSoon` 拦截去掉,六个页签都能切。
+- 六张稿反复用同一套卡壳(`--tab` 底 / 1px `--secondary` 描边 / 圆角 32 / padding 24 / Effect/DS 投影)与两三种标题字号,收敛到 `components/hotel/detailShared.ts`(`panel` / `panelPlain` / `sectionTitle` / `panelTitle` / `panelTitleDark` / `body` + `DETAIL_DIVIDER`),五个页签不再各抄一遍。
+- **底部价格栏在 Rooms 页签隐藏** —— 设计稿 `222:2529` 是 `hidden` 的(每张房型卡自带 Select 按钮);页面的滚动底部留白与客服悬浮球位置都跟着这个开关走。客服悬浮球设计稿只画在 Overview / Rooms 两张稿上,但它是全局入口,六个页签都保留(唯一一处刻意偏离设计稿,代码内已注明)。
+- 各页签落地要点:
+  - **Rooms**:三张房型卡(封面 192 高,上压主色渐变条 = Bestseller 胶囊 + 收藏心,下压圆点条 + 右侧 360°/全景/张数三枚胶囊;正文为标题+余量胶囊 / 三格参数 / 上下夹分隔线的设施小格 / 价格 + Select)。设计稿页头有个 `Unit Sq Ft ⇄` 切换,但两种单位之间**没有换算依据**(设计稿自己 Standard/Deluxe 写 sq Ft、Family 写 sqm,数值也对不上),故单位按每张卡的原值展示、切换按钮走 comingSoon。360°/全景两枚按钮对应设计稿的 VR View / 3d View 二级页,未实现故走 comingSoon;设计稿只有前两张卡带这两枚,第三张只有张数胶囊,按 `DETAIL_ROOMS[].viewer` 区分。
+  - **房型卡正文透底修正(2026-08-25 追加)**:正文那段原先不带底色、靠卡片那层的 `--tab` 透出来,封面图又是 `absoluteFill` 摆在只有定高、没有 `overflow:hidden` 的容器里 —— 一旦有东西漏出封面那 192,底部的划线价 /「/ night」这类浅色字就直接压在图上看不清。改成:封面容器加 `overflow:'hidden'` 且图片走正常流(`width/height:'100%'`,不再 `absoluteFill`),正文自带不透明 `colors.surface` 底色。顺带修掉渐变 id 的碰撞 —— 原先拿房型名派生 id(`name.replace(/\W/g,'')`),**中文名全是 `\W`、过滤后是空串,同屏三张卡撞成同一个 id**,改成由页签传 `gradientKey={room.key}`(稳定且是 ASCII)。
+  - **房型卡样式二次校准(2026-08-25 追加)**,四处照导出资产改正:①收藏心两态设计稿都是**白色**(fluent:heart-12-filled / -regular),原先误用了 `colors.hot` 红;②参数行与设施行的**图标是实色 `#191A25`**(比同排 `--text-2` 文字深一档),原先跟文字同色;③设施行上下两条线取 Line 3 的实际描边 **`#D9E1FB`(= `--secondary`)**,不是通用的 `rgba(196,197,215,0.3)` 浅灰;④设施小格图标尺寸不统一(wifi 那枚 16、其余 20),改为随 `ROOM_FACILITY_ICONS` 的 `size` 走,不再在组件里按图标名硬判断。
+  - **Amenities**:三张卡 —— 分组设施清单(ESSENTIALS / RECREATION / DINING 各 3 条)、`Stay Longer, Save More` 折扣阶梯(7/14/30/90 晚 → 5/10/25/40%,非当前档设计稿是 50% 透明度)、`Long Stay Benefits` 8 条(设计稿有三条用粗体,按原样保留)。前两块的标题复用了已有的 `hotels.stayLonger` / `hotels.nights`。
+  - **Nearby**:标题行 + Get Directions、地图、交通耗时卡两条、景点横滑卡三张。**地图在设计稿里就是一张去饱和的静态截图**,项目未接地图 SDK,这里同样用静态图,点击走 comingSoon。
+  - **Reviews**:总分 8.8(Inter 700/60)+ EXCELLENT 胶囊 + 评价数、Read All Reviews 描边按钮、四条维度进度条、AI Summary 两张引述卡(主色 10% / `--tertiary` #EC1317 10% 底)。**注意设计稿两套评分口径并存**:总分是 10 分制(8.8),维度分是 5 分制(4.9/4.8/4.6/4.7),进度按 5 分制折算 —— 按设计稿原样展示,接真实数据时要先统一口径。引文设计稿是 Inter Italic,`@expo-google-fonts/inter` 无斜体字重,同顶部栏积分那处的处理(`fontStyle: 'italic'`)。
+  - **Policies**:页头大图 + 预订政策(取消 / 预付 / Taxes & Fees 提示块)+ 入住/退房两张纯白卡(时间 Inter 700/48,入住卡下方带分隔线与必备证件)+ 加床政策三行(免费绿胶囊 / 价格)+ 宠物政策 + 住店规则三张小卡。设计稿加床价写的是「Ks 35,000」,与底栏的「MMK」不是同一种写法,页面统一走 `formatMoney` + 站点币种,不硬写。
+- **图标又全部换成设计稿导出的 SVG path**:`HomeIcon.tsx` 新增 33 枚(swapUnit / view360 / panorama / guests / bedSize / roomArea / locationRegular / parking / swimmingPool / arrowUpRight / airplane / temple / aiSparkle / thumbUp / thumbDown / wifiFilled / airConditioning / housekeeping / outdoorPool / spa / gym / restaurant / bar / coffee / bookingPolicy / checkInArrow / checkOutArrow / children / paw / propertyRules / noSmoking / quietHours / poolHours),并把 TODO 名单里剩下的 **check / heart / heartFilled 三枚 24 网格顶替换成真字形**(fluent:checkmark-12-filled / heart-12-regular / heart-12-filled)——**TODO 现在只剩 `motorcycle` 一枚**。设计稿 40px 与 20px 的 map/bed/food 是同字形放大,复用同一条 path,不重复入表。
+- **设计稿的一处字形错配照原样保留**:房型卡设施小格第一格文案是「High Speed Wifi」,但设计稿给它配的节点是 `fluent:location-16-regular`(定位针)。按「图标一律用导出资产、不自己改画」的规矩原样用,图标名取 `locationRegular` 并在 `HomeIcon.tsx` 与 `detailDemo.ts` 都注明了,将来设计稿改了直接换 `ROOM_FACILITY_ICONS.wifi` 即可。
+- 素材落到 `assets/images/temp/hotel/`:3 张房型封面 + 地图 + 政策页头(512×512 PNG)+ 3 张景点缩略图(**实为 JPEG,已按 magic bytes 复核并存成 `.jpg`**,128×128 对应 64pt 展示框),引用统一走 `assets/tempImages.ts` 的 `TEMP_ROOM_COVERS` / `TEMP_NEARBY_MAP` / `TEMP_ATTRACTION_COVERS` / `TEMP_POLICIES_HEADER`,并登记进 `assets/images/temp/README.md`。
+- 演示数据全部进 `screens/hotel/detailDemo.ts`(房型 / 设施分组 / 长住阶梯与权益 / 交通与景点 / 评分维度 / 入退房 / 加床 / 住店规则),接 `/goods/detail` 时逐项替换即可,页签组件不动。
+- 新增 i18n `hotels.detail.{rooms,amenityGroups,amenityList,longStay,nearby,reviews,policies}` 中英各约 100 键;同时把上一条里 `stats.starValue` 的插值键从 `{{count}}` 改成 `{{stars}}` —— **`count` 是 i18next 保留字会触发复数查找**,本仓库既有约定就是避开它(见搜索结果页的 `{{reviews}}` / 筛选面板的 `{{total}}`),新增词条一律遵守。
+- 设计稿里另有几张**二级页**不属于页签,本次未实现:Rooms Details `281:1041`、Reviews Page `1133:2998`、Map Location `864:1775`、Property Preview `412:2023`、VR View `445:1555`、3d View `446:2011`。
+- 门禁:`cd client-app; npm run typecheck` 零报错;`npx expo export -p web` 打包通过、11 张临时素材全部进包(验证产物已删)。`scripts/check.ps1` 因本机 `php` 不在 PATH 第 1 步即中断(与本改动无关,本次未改任何 PHP)。
+
 > 最后更新:2026-08-16(商户验证模块原型对齐整改 + 中英文国际化补齐,见下方「★ 商户验证原型对齐整改」)
 >
 > ⚠ 2026-08-20:此前基于 Figma 原型(stir-long v4.2.1)的商户管理整改已判定不符合正式 PRD(《mTrip_Super_Admin_Portal_PRD_Enterprise_v1.0_中文版.md》/《mTrip_Merchant App PRD_v1.0_中文版.md》),相关需求文档与整改清单已删除;商户验证与审批将按新 PRD 重新整改,方案见 docs/redesign/商户验证与审批整改方案.md。

@@ -17,6 +17,26 @@
 | `restaurant-golden-mandalay.jpg` | 512×279 | 322×128 | 收藏餐厅卡 1 | 后端暂无餐饮品类 |
 | `restaurant-shwe-flower.jpg` | 512×279 | 322×128 | 收藏餐厅卡 2 | 同上 |
 
+## hotel/ —— 酒店详情六个页签(设计稿节点 `759:9776` Hotel Details)
+
+| 文件 | 设计稿节点 | 素材像素 | 展示框 | 用在哪 | 将来由谁替代 |
+| --- | --- | --- | --- | --- | --- |
+| `detail-resort-view.png` | `94:900` | 512×512 | 402×300 | Overview 图库第 1 张 | `/goods/detail` 的图集字段 |
+| `detail-room-interior.png` | `94:902` | 512×512 | 402×300 | Overview 图库第 2 张 | 同上 |
+| `detail-dining-view.png` | `94:904` | 512×512 | 402×300 | Overview 图库第 3 张 | 同上 |
+| `room-standard.png` | `222:1600` | 512×512 | 370×192 | Rooms 房型卡 1(Standard Room) | 房型接口的房型图 |
+| `room-deluxe.png` | `222:1625` | 512×512 | 370×192 | Rooms 房型卡 2(Deluxe Room) | 同上 |
+| `room-family.png` | `222:1650` | 512×512 | 370×192 | Rooms 房型卡 3(Family Suite) | 同上 |
+| `nearby-map.png` | `222:2920` | 512×512 | 370×256 | Nearby 地图占位 | 接入地图 SDK 后按坐标实时渲染 |
+| `attraction-ananda.jpg` | `222:2943` | 128×128 | 64×64 | Nearby 景点卡 1 | 周边景点接口 |
+| `attraction-dhammayangyi.jpg` | `222:2951` | 128×128 | 64×64 | Nearby 景点卡 2 | 同上 |
+| `attraction-market.jpg` | `222:2959` | 128×128 | 64×64 | Nearby 景点卡 3 | 同上 |
+| `policies-header.png` | `222:3505` | 512×512 | 370×192 | Policies 页头大图 | `/goods/detail` 的图集字段 |
+
+设计稿的图库计数写的是 `2/12`(共 12 张),但只导出了 3 张;Overview 图库按实际张数显示计数,不硬写 12。
+房型卡的计数设计稿同样是 `2/12`,但每个房型只导出了封面一张,那里沿用设计稿文案。
+三张景点缩略图实为 JPEG(见下方「已知问题」),已按真实格式存成 `.jpg`。
+
 ## home/ —— 首页(设计稿节点 `81:2464`)
 
 | 文件 | 设计稿节点 | 素材像素 | 展示框 | 用在哪 |

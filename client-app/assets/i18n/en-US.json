@@ -314,6 +314,224 @@
         }
       }
     },
+    "detail": {
+      "tabs": {
+        "overview": "Overview",
+        "rooms": "Rooms",
+        "amenities": "Amenities",
+        "nearby": "Nearby Attraction",
+        "reviews": "Reviews",
+        "policies": "Policies"
+      },
+      "photoCount": "{{index}}/{{total}}",
+      "stats": {
+        "starValue": "{{stars}} Star",
+        "starLabel": "Rating",
+        "scoreLabel": "Excellent",
+        "bookedLabel": "Booked"
+      },
+      "location": {
+        "title": "Hotel Location",
+        "seeMap": "See Map",
+        "address": "Bagan Nan Myint Tower, Near, Min Nanthu Village, Nyaung-U 05231, Myanmar (Burma)"
+      },
+      "highlight": {
+        "title": "Highlights for your trip",
+        "body": "Experience the charm of our hotel, where comfort meets convenience. Enjoy stunning views, exceptional service, and easy access to local attractions, making it the perfect base for your adventures."
+      },
+      "reasons": {
+        "bestLocation": {
+          "title": "Best Location",
+          "desc": "Minutes from the temples"
+        },
+        "greatBreakfast": {
+          "title": "Great Breakfast",
+          "desc": "Authentic local dishes"
+        },
+        "largeRooms": {
+          "title": "Large Rooms",
+          "desc": "Modern luxury comfort"
+        }
+      },
+      "amenities": {
+        "familyFriendly": "Family Friendly",
+        "freeBreakfast": "Free Breakfast",
+        "airportShuttle": "Airport Shuttle",
+        "infinityPool": "Infinity Pool"
+      },
+      "startAt": "Start at",
+      "discountToday": "-{{percent}}% TODAY",
+      "chooseRoom": "Choose my room",
+      "rooms": {
+        "title": "Room Explorer",
+        "unit": "Unit",
+        "units": {
+          "sqft": "Sq Ft",
+          "sqm": "sqm"
+        },
+        "names": {
+          "standard": "Standard Room",
+          "deluxe": "Deluxe Room",
+          "family": "Family Suite"
+        },
+        "left": "{{rooms}} Left",
+        "seeDetails": "See Details",
+        "guests": "{{guests}} Guests",
+        "beds": {
+          "queen": "Queen",
+          "king": "King"
+        },
+        "bedsMultiple": "{{beds}} {{bed}}",
+        "area": "{{area}} {{unit}}",
+        "facilities": {
+          "wifi": "High Speed Wifi",
+          "parking": "Parking",
+          "pool": "Indoor Pool",
+          "breakfast": "Good Breakfast"
+        },
+        "perNight": "/ night",
+        "select": "Select",
+        "bestseller": "Bestseller"
+      },
+      "amenityGroups": {
+        "essentials": "Essentials",
+        "recreation": "Recreation",
+        "dining": "Dining"
+      },
+      "amenityList": {
+        "freeWifi": "Free WiFi",
+        "airConditioning": "Air Conditioning",
+        "housekeeping": "Daily Housekeeping",
+        "outdoorPool": "Outdoor Pool",
+        "spa": "Wellness Spa",
+        "gym": "Gym Center",
+        "restaurant": "Main Restaurant",
+        "bar": "Sky Lounge Bar",
+        "coffee": "Coffee House"
+      },
+      "longStay": {
+        "title": "Long Stay Benefits",
+        "benefits": {
+          "freeLaundry": "Free Laundry",
+          "freeUtilities": "Free Utilities",
+          "kitchen": "Kitchen",
+          "workspace": "Workspace",
+          "petFriendly": "Pet Friendly",
+          "monthlyContract": "Monthly Contract",
+          "noDeposit": "No Deposit",
+          "flexibleCancellation": "Flexible Cancellation"
+        }
+      },
+      "nearby": {
+        "title": "Nearby Location",
+        "getDirections": "Get Directions",
+        "transport": {
+          "airport": {
+            "name": "Nyaung-U Airport",
+            "time": "20 mins drive (12 km)"
+          },
+          "temples": {
+            "name": "Bagan Temples",
+            "time": "10 mins drive (5 km)"
+          }
+        },
+        "attractions": {
+          "ananda": {
+            "name": "Ananda Temple",
+            "meta": "3.2 km • 8m drive"
+          },
+          "dhammayangyi": {
+            "name": "Dhammayangyi Temple",
+            "meta": "4.5 km • 12m drive"
+          },
+          "oldBaganMarket": {
+            "name": "Old Bagan Market",
+            "meta": "1.5 km • 5m walk"
+          }
+        }
+      },
+      "reviews": {
+        "basedOn": "Based on {{reviews}} reviews",
+        "readAll": "Read All Reviews",
+        "dimensions": {
+          "cleanliness": "Cleanliness",
+          "service": "Service",
+          "value": "Value",
+          "comfort": "Comfort"
+        },
+        "aiSummary": "AI Summary",
+        "topPositive": "Top positive",
+        "improvement": "Room for improvement",
+        "positiveQuote": "\"The sunrise views from the rooftop lounge are unmatched. Staff went above and beyond for our anniversary dinner.\"",
+        "improvementQuote": "\"WiFi signal can be a bit patchy in the garden areas, though it works perfectly in the rooms.\""
+      },
+      "policies": {
+        "title": "Hotel Policies",
+        "booking": {
+          "title": "Booking Policies",
+          "cancellation": {
+            "title": "Cancellation",
+            "body": "Free cancellation up to 48 hours before arrival. Cancellations made within 48 hours of check-in will incur a charge of the first night's stay."
+          },
+          "prepayment": {
+            "title": "Prepayment",
+            "body": "No deposit required. Your credit card will be used to guarantee the booking and full payment will be settled at the property."
+          }
+        },
+        "taxes": {
+          "title": "Taxes & Fees",
+          "body": "Rates exclude 5% government tax and 10% service charge. These will be added to your final bill upon check-out."
+        },
+        "checkIn": {
+          "title": "Check-in",
+          "body": "Early check-in is subject to availability and may incur additional charges."
+        },
+        "checkOut": {
+          "title": "Check-out",
+          "body": "Late check-out up to 18:00 is charged at 50% of the daily rate. Full rate applies after 18:00."
+        },
+        "requiredDocs": "Required Documents:",
+        "docs": {
+          "passport": "Valid Passport / NRC",
+          "bookingConfirmation": "Booking Confirmation"
+        },
+        "extraBeds": {
+          "title": "Children & Extra Beds",
+          "complimentary": "Complimentary",
+          "age0to5": {
+            "label": "Children aged 0-5",
+            "body": "Stay for free when using existing bedding."
+          },
+          "age6to12": {
+            "label": "Children aged 6-12",
+            "body": "Extra bed required (includes breakfast)."
+          },
+          "adults": {
+            "label": "Adults (13+)",
+            "body": "Extra bed mandatory for additional guests."
+          }
+        },
+        "pet": {
+          "title": "Pet Policy",
+          "body": "To maintain the comfort of all guests, pets are not allowed in the property."
+        },
+        "rules": {
+          "title": "Property Rules",
+          "smoking": {
+            "title": "Smoking",
+            "body": "Designated smoking areas only. 200,000 MMK cleaning fee for room smoking."
+          },
+          "quietHours": {
+            "title": "Quiet Hours",
+            "body": "Please respect quiet hours from 22:00 to 07:00 daily."
+          },
+          "poolHours": {
+            "title": "Pool Hours",
+            "body": "Open from 07:00 to 20:00. Proper swimwear required."
+          }
+        }
+      }
+    },
     "filter": {
       "title": "Filter By",
       "reset": "Reset",

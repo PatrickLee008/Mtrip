@@ -25,6 +25,35 @@ export const TEMP_RESTAURANT_COVERS: Record<string, ImageSourcePropType> = {
   shweFlower: require('../../assets/images/temp/mypick/restaurant-shwe-flower.jpg'),
 };
 
+/* ------------------------------------------------------------------ 酒店详情 */
+
+/** 酒店详情图库(设计稿 94:897 Hero Section / Gallery,展示框 402x300),顺序即设计稿顺序 */
+export const TEMP_HOTEL_GALLERY: ImageSourcePropType[] = [
+  require('../../assets/images/temp/hotel/detail-resort-view.png'),
+  require('../../assets/images/temp/hotel/detail-room-interior.png'),
+  require('../../assets/images/temp/hotel/detail-dining-view.png'),
+];
+
+/** 房型页三张房型卡封面(设计稿 222:1594,展示框 370x192),键为 DETAIL_ROOMS 的 key */
+export const TEMP_ROOM_COVERS: Record<string, ImageSourcePropType> = {
+  standard: require('../../assets/images/temp/hotel/room-standard.png'),
+  deluxe: require('../../assets/images/temp/hotel/room-deluxe.png'),
+  family: require('../../assets/images/temp/hotel/room-family.png'),
+};
+
+/** 周边页地图占位图(设计稿 222:2920,展示框 370x256;未接地图 SDK 前是静态图) */
+export const TEMP_NEARBY_MAP: ImageSourcePropType = require('../../assets/images/temp/hotel/nearby-map.png');
+
+/** 周边景点卡缩略图(设计稿 222:2942 等,展示框 64x64),键为 DETAIL_ATTRACTIONS 的 key */
+export const TEMP_ATTRACTION_COVERS: Record<string, ImageSourcePropType> = {
+  ananda: require('../../assets/images/temp/hotel/attraction-ananda.jpg'),
+  dhammayangyi: require('../../assets/images/temp/hotel/attraction-dhammayangyi.jpg'),
+  oldBaganMarket: require('../../assets/images/temp/hotel/attraction-market.jpg'),
+};
+
+/** 政策页页头大图(设计稿 222:3504,展示框 370x192) */
+export const TEMP_POLICIES_HEADER: ImageSourcePropType = require('../../assets/images/temp/hotel/policies-header.png');
+
 /* ---------------------------------------------------------------------- 首页 */
 
 /** 热门目的地兜底卡,键为 DESTINATIONS 的 key(展示框 280x192) */
