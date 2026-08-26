@@ -1,14 +1,16 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue';
+import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { message } from 'ant-design-vue';
-import { ReloadOutlined, SearchOutlined, CheckCircleOutlined, CloseCircleOutlined, EyeOutlined, SyncOutlined, DownloadOutlined, FileTextOutlined, MenuOutlined, DownOutlined, UserOutlined, PaperClipOutlined, ClockCircleOutlined, KeyOutlined, CopyOutlined, MailOutlined, MessageOutlined, BellOutlined } from '@ant-design/icons-vue';
+import { CheckCircleOutlined, CloseCircleOutlined, EyeOutlined, SyncOutlined, DownloadOutlined, FileTextOutlined, MenuOutlined, DownOutlined, UserOutlined, PaperClipOutlined, ClockCircleOutlined, KeyOutlined, CopyOutlined, MailOutlined, MessageOutlined, BellOutlined } from '@ant-design/icons-vue';
 import PageContainer from '@/components/PageContainer.vue';
 import StatusTag from '@/components/StatusTag.vue';
 import MerchantVerifyNav from '@/components/MerchantVerifyNav.vue';
+import SearchFilterBar, { type FilterConfig } from '@/components/SearchFilterBar.vue';
 import { useTable, type TableRow } from '@/composables/useTable';
 import type { StatusItem } from '@/components/StatusTag.vue';
+import type { TablePaginationConfig } from 'ant-design-vue';
 import { exportCsv } from '@/utils/exportCsv';
 import {
   apiVerifyApprove,
@@ -44,12 +46,12 @@ function tabFromPath(path: string): string {
 }
 const activeTab = computed(() => tabFromPath(route.path));
 
-/** 页头大标题(原型:Pending Verification / Approved / Rejected / Resubmission) */
+/** 页头大标题(原型 figma.site 实测:Pending Verification / Approved Applications / Rejected Applications / Resubmitted Applications) */
 const PAGE_TITLE_KEY: Record<string, string> = {
-  pending: 'merchant.verifyPage.queuePending',
-  approved: 'merchant.verifyPage.queueApproved',
-  rejected: 'merchant.verifyPage.queueRejected',
-  resubmission: 'merchant.verifyPage.queueResubmission',
+  pending: 'merchant.verifyPage.titlePending',
+  approved: 'merchant.verifyPage.titleApproved',
+  rejected: 'merchant.verifyPage.titleRejected',
+  resubmission: 'merchant.verifyPage.titleResubmission',
 };
 /** 页头副标题 */
 const PAGE_SUBTITLE_KEY: Record<string, string> = {
@@ -58,7 +60,7 @@ const PAGE_SUBTITLE_KEY: Record<string, string> = {
   rejected: 'merchant.verifyPage.rejectedSubtitle',
   resubmission: 'merchant.verifyPage.resubmissionSubtitle',
 };
-const pageTitle = computed(() => t(PAGE_TITLE_KEY[activeTab.value] ?? 'merchant.verifyPage.queuePending'));
+const pageTitle = computed(() => t(PAGE_TITLE_KEY[activeTab.value] ?? 'merchant.verifyPage.titlePending'));
 const pageSubtitle = computed(() => t(PAGE_SUBTITLE_KEY[activeTab.value] ?? 'merchant.verifyPage.pendingSubtitle'));
 
 /** 导出当前筛选结果 */
@@ -90,11 +92,55 @@ const REJECT_REASONS = computed(() =>
   [1, 2, 3, 4, 5, 6, 7, 8, 9].map((value) => ({ value, label: t(`merchant.rejectReasons.r${value}`) })),
 );
 
-const { loading, list, total, query, load, search, reset, pagination } = useTable(apiVerifyList, {
+const { loading, list, query, load, search, pagination } = useTable(apiVerifyList, {
   tab: activeTab.value,
   keyword: '',
-  category: undefined,
-  city: '',
+  category: '',
+  country: '',
+});
+
+// 搜索筛选条(SearchFilterBar:关键词 + 业态/国家下拉筛选,筛选变化自动触发搜索)
+const sfbFilters = reactive<Record<string, string | number | undefined>>({ category: undefined, country: undefined });
+const COUNTRY_OPTIONS = ['Myanmar', 'Thailand', 'China', 'Singapore'];
+const SEARCH_FILTERS = computed<FilterConfig[]>(() => [
+  {
+    key: 'category',
+    label: t('merchant.verifyPage.filterCategory'),
+    allLabel: t('merchant.verifyPage.allCategories'),
+    options: [
+      { value: 'hotel', label: t('merchant.onboardingPage.bizHotel') },
+      { value: 'restaurant', label: t('merchant.onboardingPage.bizRestaurant') },
+      { value: 'airline', label: t('merchant.onboardingPage.bizAirline') },
+      { value: 'car_rental', label: t('merchant.onboardingPage.bizCarRental') },
+      { value: 'attraction', label: t('merchant.onboardingPage.bizAttraction') },
+    ],
+  },
+  {
+    key: 'country',
+    label: 'Country',
+    allLabel: 'All Countries',
+    options: COUNTRY_OPTIONS.map((c) => ({ label: c, value: c })),
+  },
+]);
+/** 搜索/筛选变化:同步筛选值到查询条件并从第一页重查 */
+function handleSfbSearch(): void {
+  query.category = String(sfbFilters.category ?? '');
+  query.country = String(sfbFilters.country ?? '');
+  search();
+}
+
+// 表格分页(原型实测:左侧总览文案 + 右侧按钮组,无条数选择器/快速跳转)
+const tablePagination = computed<TablePaginationConfig>(() => {
+  const base = pagination.value;
+  return {
+    ...base,
+    showSizeChanger: false,
+    showQuickJumper: false,
+    showTotal: (count: number, range?: [number, number]) => {
+      const [from, to] = range ?? [0, 0];
+      return t('merchant.verifyPage.paginationInfo', { from, to, total: count });
+    },
+  };
 });
 
 // 路由切换(不同状态页)→ 同步 tab 并从第一页重查
@@ -491,49 +537,39 @@ onMounted(() => {
 
 <template>
   <PageContainer>
-    <!-- 页头(严格对齐原型:小标题 uppercase 11/500/#94A3B8 + 大标题 18/700/#1A2332 + 副标题 13/#94A3B8;在卡片导航上方) -->
+    <!-- 页头(严格对齐原型 2026-08-25 figma.site 实测:eyebrow 11px/500/#94A3B8 字距 0.05em 大写 → 4px → 主标题 18px/700/#1A2332 行高 27px → 2px → 副标题 13px/400/#94A3B8 行高 19.5px;在卡片导航上方) -->
     <div style="display: flex; align-items: center; justify-content: space-between; margin: 0 0 16px">
       <div>
-        <div style="font-size: 11px; color: #94a3b8; font-weight: 500; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.05em">{{ t('merchant.verifyPage.pageKicker') }}</div>
-        <h1 class="verify-page-title" style="font-size: 18px; font-weight: 700; color: #1a2332">{{ pageTitle }}</h1>
-        <p style="font-size: 13px; color: #94a3b8; margin-top: 2px">{{ pageSubtitle }}</p>
+        <div class="verify-eyebrow">{{ t('merchant.verifyPage.pageKicker') }}</div>
+        <h1 class="verify-page-title">{{ pageTitle }}</h1>
+        <p class="verify-subtitle">{{ pageSubtitle }}</p>
       </div>
       <a-button class="verify-export-btn" @click="doExport"><template #icon><DownloadOutlined /></template>{{ t('merchant.verifyPage.exportCsv') }}</a-button>
     </div>
 
     <MerchantVerifyNav :key="activeTab" :active="activeTab" />
 
-    <a-card :bordered="false" class="mtrip-card-shadow" style="margin-bottom: 16px">
-      <a-form layout="inline">
-        <a-form-item :label="t('merchant.verifyPage.keywordLabel')">
-          <a-input v-model:value="query.keyword" allow-clear :placeholder="t('merchant.verifyPage.keywordPlaceholder')" style="width: 200px" @press-enter="search" />
-        </a-form-item>
-        <a-form-item :label="t('merchant.verifyPage.colCountry')">
-          <a-select v-model:value="query.city" allow-clear :placeholder="t('common.all')" style="width: 140px">
-            <a-select-option value="中国">中国</a-select-option>
-            <a-select-option value="缅甸">缅甸</a-select-option>
-          </a-select>
-        </a-form-item>
-        <a-form-item>
-          <a-space>
-            <a-button type="primary" @click="search"><template #icon><SearchOutlined /></template>{{ t('common.search') }}</a-button>
-            <a-button @click="reset"><template #icon><ReloadOutlined /></template>{{ t('common.reset') }}</a-button>
-          </a-space>
-        </a-form-item>
-        <div style="margin-left: auto; align-self: center; font-size: 12px; color: #64748b">{{ t('merchant.verifyPage.resultCount', { total: total }) }}</div>
-      </a-form>
-    </a-card>
+    <!-- 搜索筛选条(SearchFilterBar:关键词 + 业态/国家筛选 + 结果数摘要) -->
+    <SearchFilterBar
+      v-model="query.keyword"
+      v-model:filter-values="sfbFilters"
+      :filters="SEARCH_FILTERS"
+      :placeholder="t('merchant.verifyPage.keywordPlaceholder')"
+      :total="pagination.total"
+      :result-label="t('merchant.verifyPage.resultCount')"
+      @search="handleSfbSearch"
+    />
 
-    <a-card :bordered="false" class="mtrip-card-shadow">
-      <a-table
-        :columns="columns"
-        :data-source="list"
-        :loading="loading"
-        :pagination="pagination"
-        row-key="id"
-        size="middle"
-        :scroll="{ x: 1260 }"
-      >
+    <a-table
+      class="verify-pagination"
+      :columns="columns"
+      :data-source="list"
+      :loading="loading"
+      :pagination="tablePagination"
+      row-key="id"
+      size="middle"
+      :scroll="{ x: 1340 }"
+    >
         <template #bodyCell="{ column, record }">
           <template v-if="column.dataIndex === 'application_no'">
             <span style="font-weight: 500; font-family: monospace; color: #2563eb">{{ record.application_no || '-' }}</span>
@@ -583,7 +619,6 @@ onMounted(() => {
           </template>
         </template>
       </a-table>
-    </a-card>
 
     <!-- 验证详情抽屉 -->
     <a-drawer v-model:open="drawerOpen" :width="760" :class="{ 'resubmission-drawer': activeTab === 'resubmission' }">
@@ -936,9 +971,28 @@ onMounted(() => {
 </template>
 
 <style scoped lang="less">
-/* 页头大标题:取消全局对 h1 的 margin-top:0 覆盖,恢复默认顶部间距(仅当前页面标题) */
+/* 页头标题区(原型 2026-08-25 figma.site 实测,与 Onboarding 页 ob-* 完全一致) */
+.verify-eyebrow {
+  margin-bottom: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 16.5px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #94a3b8;
+}
 .verify-page-title {
-  margin-top: revert;
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 27px;
+  color: #1a2332;
+}
+.verify-subtitle {
+  margin: 2px 0 0;
+  font-size: 13px;
+  line-height: 19.5px;
+  color: #94a3b8;
 }
 
 /* 页头 Export 按钮(原型:height 34 / 13px / #475569 / 边框 #E3E8F0 / 白底, hover #F8FAFC) */
@@ -1932,5 +1986,62 @@ onMounted(() => {
     border-right: 0;
     border-bottom: 1px solid #e3e8f0;
   }
+}
+
+/* 分页栏(与 Onboarding 页 ob-pagination 完全一致:灰底 #FAFBFC + 顶边线 + 28×28 按钮 + 激活态 #1664FF) */
+.verify-pagination :deep(.ant-pagination) {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  margin: 0;
+  padding: 12px 16px;
+  background: #fafbfc;
+  border-top: 1px solid #f1f5f9;
+}
+.verify-pagination :deep(.ant-pagination-total-text) {
+  margin-right: auto;
+  font-size: 12px;
+  line-height: 25px;
+  color: #94a3b8;
+}
+.verify-pagination :deep(.ant-pagination-prev),
+.verify-pagination :deep(.ant-pagination-next) {
+  min-width: 28px;
+  height: 28px;
+  line-height: 28px;
+}
+.verify-pagination :deep(.ant-pagination-prev .ant-pagination-item-link),
+.verify-pagination :deep(.ant-pagination-next .ant-pagination-item-link) {
+  min-width: 28px;
+  height: 28px;
+  line-height: 28px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  font-size: 12px;
+  color: #94a3b8;
+}
+.verify-pagination :deep(.ant-pagination-prev.ant-pagination-disabled .ant-pagination-item-link),
+.verify-pagination :deep(.ant-pagination-next.ant-pagination-disabled .ant-pagination-item-link) {
+  color: #cbd5e1;
+}
+.verify-pagination :deep(.ant-pagination-item) {
+  min-width: 28px;
+  height: 28px;
+  line-height: 28px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  font-size: 12px;
+}
+.verify-pagination :deep(.ant-pagination-item a) {
+  color: #1a2332;
+}
+.verify-pagination :deep(.ant-pagination-item-active) {
+  background: #1664ff;
+}
+.verify-pagination :deep(.ant-pagination-item-active a) {
+  color: #fff;
+  font-weight: 600;
 }
 </style>

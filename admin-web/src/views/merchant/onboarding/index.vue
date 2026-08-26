@@ -1904,13 +1904,13 @@ onMounted(() => {
   }
 }
 
-/* 页面标题区(原型实测 localhost:8443:eyebrow 11px/500/字距 0.55px 大写 #94A3B8 → 4px → 主标题 18px/700 #1A2332 → 2px → 描述 13px/400 #94A3B8) */
+/* 页面标题区(原型 2026-08-25 figma.site 实测:eyebrow 11px/500/字距 0.05em 大写 #94A3B8 → 4px → 主标题 18px/700 行高 27px #1A2332 → 2px → 描述 13px/400 行高 19.5px #94A3B8) */
 .ob-eyebrow {
   margin-bottom: 4px;
   font-size: 11px;
   font-weight: 500;
   line-height: 16.5px;
-  letter-spacing: 0.55px;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
   color: #94a3b8;
 }

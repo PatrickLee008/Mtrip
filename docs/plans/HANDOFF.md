@@ -17,6 +17,24 @@
 - M2/M3 客房与房量价格首轮已补齐:goods-service 新增 `Merchant/RoomController` 与 `Merchant/AvailabilityController`,路由 `/api/v1/merchant/rooms/*`、`/api/v1/merchant/availability/*`;房型详情字段与房量价格限制字段已补入 `database/goods/01-goods.sql`,存量幂等迁移 `database/goods/06-merchant-room-availability-fields.sql` 已登记 initdb;网关登记 `rooms/availability→goods_service`;前端新增 `api/rooms.ts`、`api/availability.ts`、`views/rooms/index.vue`、`views/availability/index.vue`,按 Hotel Merchant Dashboard 的 RoomsScreen/AvailabilityScreen 复刻列表、全页表单、日历网格、单日抽屉与批量更新;按钮权限 `mch:rooms:*`、`mch:availability:*` 已对齐菜单种子。
 - M5 dashboard 的 `activePromotionCount` 已从占位改为读取当前有效 M8 商家活动;入住率/ADR 仍待 M2/M3 房型与房量价格域完成后回填。
 - 最新验证:`D:\BtSoft\php\81\php.exe -l` 检查新增/修改 PHP 控制器和路由通过;`cd merchant-web; npm run build` 通过(EXIT=0;仅 Vite chunk 体积警告)。服务启停/网关重启仍由用户控制。
+> 最后更新:2026-08-26(商户验证页搜索栏与表格风格统一)
+
+## ★ 2026-08-26(商户验证页搜索栏与表格风格统一)
+
+- 验证四队列页(待核实/重新提交/得到正式认可的/已拒绝)搜索栏由旧的 `a-card` + `a-form inline` 改为与入职页一致的 `SearchFilterBar` 组件(关键词输入 + 业态下拉 + 国家下拉 + 右侧结果数摘要),筛选变化自动触发搜索。
+- 表格移除 `a-card` 包裹,直接渲染(全局 `.ant-table-wrapper` 样式已提供边框与圆角),分页栏新增 `verify-pagination` 类,样式与入职页 `ob-pagination` 完全一致(灰底 #FAFBFC + 顶边线 + 28×28 按钮 + 激活态 #1664FF)。
+- 新增 `merchant.verifyPage.paginationInfo/filterCategory/allCategories/keywordPlaceholder` 词条;移除旧的 `keywordLabel/keywordPlaceholder`(与 `onboardingPage` 重复)。
+- 验证:admin-web vue-tsc 通过;本地 5173 逐页实测搜索栏/表格/分页栏样式全部对齐入职页,无控制台报错。
+
+> 最后更新:2026-08-25(商户验证页面标题原型对齐)
+
+## ★ 2026-08-25(商户验证页面标题原型对齐)
+
+- 按线上原型(https://stir-long-36886628.figma.site/) Browser 实测,统一商户验证下五个页面(入职/待核实/重新提交/得到正式认可的/已拒绝)页头标题区为三段式:eyebrow 11px/500/#94A3B8/字距 0.05em/大写 → 4px → 主标题 18px/700/#1A2332/行高 27px → 2px → 副标题 13px/400/#94A3B8/行高 19.5px。
+- 验证四队列页(`merchant/verify/index.vue`)原用内联样式且行高继承浏览器默认 1.15,导致行距与原型不符;改为 `verify-eyebrow / verify-page-title / verify-subtitle` 类并显式声明行高与 margin(4px/2px),移除 `margin-top: revert` 写法。
+- 页头主标题词条改为与原型一致:新增 `merchant.verifyPage.titlePending/titleApproved/titleRejected/titleResubmission`(英文:Pending Verification / Approved Applications / Rejected Applications / Resubmitted Applications),不再复用导航卡片共用的 `queue*` 词条;入职页中文标题改为“入职”、副标题改为“商户运营部门正在接收新的潜在客户。”。
+- 验证:admin-web vue-tsc 通过;本地 5173 逐页 getComputedStyle 实测五页标题区样式与文案全部对齐原型,无控制台报错。
+
 > 最后更新:2026-08-25(验证队列线索编号统一)
 
 ## ★ 2026-08-25(验证队列线索编号统一)
