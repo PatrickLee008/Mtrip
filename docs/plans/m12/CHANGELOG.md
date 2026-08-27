@@ -3,6 +3,36 @@
 > 用于PRD模块12商户管理整改的本地Git追溯。代码未完成不能标记功能已验收。
 > 提交内以阶段ID定位，最终commit哈希由交付回执记录，不把自身哈希写入自身提交。
 
+## S4本地里程碑提交（2026-08-28）
+
+- 用户明确授权本次S4代码提交；仅本地提交，不推送，不自动延伸至S5及后续阶段。
+- 标题：feat(merchant): 完成 M12 S4 账号安全与模拟登录并修复商户看板。
+- 范围：S4交付清单58个文件，加看板StatsController、m12-dashboard.php及商户端模块13计划，去重共61个文件；包含后续看板修复和测试记录。
+- 排除原goods-service ReviewController修改、start.bat、stop.bat及两份未跟踪中文PRD；5个文件SHA-256复核未变。
+- 沿用最近已完成的314项集成、58用例/858断言、双端构建结果；提交前另核对清单、暂存范围与diff空白检查。不将真实扫码、完整UI或生产部署未验项标记为通过。
+- 提交哈希由Git日志和提交回执记录。下文及S4交付报告的“未提交”、HEAD=232fd3e和58文件清单为原交付快照，本次提交增加看板修复范围。
+
+## S4后续修复 — 2026-08-28 — 商户看板内部错误（未提交）
+
+- 根因1：存量库漏执行marketing/07，缺优惠券merchant_id；已执行既有迁移补字段/索引并重复验证，不变更历史券归属。
+- 根因2：真实看板查询的两处groupByRaw不被已安装Hyperf支持；改为groupBy(Db::raw(...))，只修改商户StatsController两行。
+- 新增真实controller集成14项，覆盖促销归属/有效期和非零订单按日金额；原S4的中间件测试不能替代该业务查询，本次已补测试入口及测试库迁移。
+- 完整集成314项、共享58用例/858断言通过；订单服务已重启，夹具已清理。未暂存/提交/推送，S4交付报告保留为当时的300项/58文件快照。
+- 本次8个文件：README.md、docs/plans/README.md、docs/plans/HANDOFF.md、docs/plans/13-商家端merchant-web落地.md、docs/plans/m12/CHANGELOG.md、scripts/test-m12.ps1、backend/services/order-service/app/Controller/Merchant/StatsController.php、backend/services/order-service/test/m12-dashboard.php。
+- 未改平台统计接口的同类调用；未执行浏览器登录态端到端验收。
+
+## S4 — 2026-08-28 — 账号级2FA与真实模拟登录（未提交）
+
+- 基线：dev / 232fd3e（S3本地提交）；S4没有add/commit/push。
+- PRD映射：R12-2FA、R12-IMPERSONATE、相关活动与凭证安全；遵循D6、G2/G4，酒店优先。
+- 账号独立Google Authenticator、5分钟challenge、重放/冷却/并发防护、仅超管定向重置、账号版本使旧会话失效。
+- 60秒一次性兑换与30分钟只读代入、双端提示/退出、当前超管与目标权限复核、actor/target/session审计；不开放集团全域或安全/财务写入。
+- 普通核验详情/历史导出访问码脱敏，模块11受控交付例外保留；认证字段和日志屏蔽。
+- 30迁移及compose39l；重复执行通过，八服务重启健康；9个真实账号未绑定/重置，旧商户JWT会失效，下次需独立注册。
+- 92项S4＋208项既有集成共300项通过；305 PHP文件、58单测/858断言、双端构建及client类型检查通过。
+- 本地匿名页面冒烟通过；在线原型仍超时，真实扫码和完整UI待验。5个用户原有文件哈希不变。
+- 文件清单、部署和未验项：[05-s4-delivery.md](./05-s4-delivery.md)。下一开发阶段S5；本阶段不实现餐厅、排名、合规或外部服务商。
+
 ## S3本地里程碑提交（2026-08-27）
 
 - 用户明确授权本次S3代码提交，不推送；不自动延伸到后续阶段。

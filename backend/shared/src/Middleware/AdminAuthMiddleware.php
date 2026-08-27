@@ -36,6 +36,8 @@ class AdminAuthMiddleware implements MiddlewareInterface
             throw new BusinessException(ErrorCode::SERVER_ERROR, 'JWT 密钥未配置');
         }
         $claims = JwtHelper::verify($token, $secret);
+        // Legacy platform tokens have no audience; merchant/challenge tokens must never enter admin APIs.
+        if (isset($claims['aud']) && $claims['aud'] !== 'admin') throw new BusinessException(ErrorCode::UNAUTHORIZED);
 
         AdminContext::set([
             'admin_id' => (int) ($claims['admin_id'] ?? 0),

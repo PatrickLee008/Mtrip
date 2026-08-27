@@ -22,6 +22,8 @@ use Mtrip\Shared\Support\Result;
  */
 class MerchantController extends AbstractController
 {
+    #[\Hyperf\Di\Annotation\Inject]
+    protected \Hyperf\HttpServer\Contract\ResponseInterface $response;
     #[Inject]
     protected MerchantService $service;
 
@@ -238,78 +240,24 @@ class MerchantController extends AbstractController
         return Result::success($this->statusService->change($this->requireId(), 'activate', $this->request->all(), $this->clientIp()));
     }
 
-    /**
-     * 重置商户 2FA(PRD 模块 12 账户安全):置 two_fa_status=需要重置、失效现有绑定、
-     * 生成新设置密钥(加密存储,供商户下次登录注册流程消费);管理端不展示二维码/密钥
-     */
     #[Permission('merchant:list:2fa')]
     public function resetTwoFa(): array
     {
-        $merchant = $this->findScoped($this->requireId());
-        Db::table('merchant_info')->where('id', $merchant['id'])->update([
-            'two_fa_enabled' => 0,
-            'two_fa_method' => '',
-            'two_fa_status' => 2,
-            'two_fa_secret_enc' => $this->encryptField($this->generateBase32Secret()),
-            'two_fa_last_reset_at' => date('Y-m-d H:i:s'),
-        ]);
-        $this->pushActivityLog($merchant, 'profile_update', '重置商户 2FA(需重新注册 Google Authenticator)');
-        return Result::success(null, '2FA 已重置,商户下次登录需重新注册 Google Authenticator');
+        (new \App\Service\MerchantAccountSecurityService())->reset($this->requireId('merchantId'), $this->requireId('accountId'), $this->requireId('expectedVersion'), $this->requireStr('reason'));
+        return Result::success(null, '2FA已重置，目标账号下次登录需重新注册');
     }
 
-    /**
-     * 开始代入会话(整改 B2,原型 Start Impersonation Session):
-     * 原因必选(4 类预置 + Other),全程审计;同商户同操作人仅允许一个进行中会话
-     */
     #[Permission('merchant:list:impersonate')]
-    public function impersonateStart(): array
+    public function impersonateStart(): \Psr\Http\Message\ResponseInterface
     {
-        $merchant = $this->findScoped($this->requireId('merchantId'));
-        if ((int) $merchant['status'] === 5) {
-            throw new BusinessException(ErrorCode::DATA_CONFLICT, '已注销商户不可代入');
-        }
-        $reason = $this->strInput('reason');
-        if (! in_array($reason, ['technical_support', 'booking_investigation', 'payment_investigation', 'customer_complaint', 'other'], true)) {
-            throw new BusinessException(ErrorCode::PARAM_ERROR, '请选择代入原因');
-        }
-        $active = Db::table('merchant_impersonation_session')
-            ->where('merchant_id', $merchant['id'])
-            ->where('operator_id', AdminContext::adminId())
-            ->where('status', 1)->exists();
-        if ($active) {
-            throw new BusinessException(ErrorCode::DATA_CONFLICT, '该商户存在进行中的代入会话');
-        }
-        $sessionKey = 'IMP-' . strtoupper(substr(bin2hex(random_bytes(6)), 0, 8)) . '-' . time();
-        $sessionId = Db::table('merchant_impersonation_session')->insertGetId([
-            'site_id' => (int) $merchant['site_id'],
-            'merchant_id' => (int) $merchant['id'],
-            'operator_id' => AdminContext::adminId(),
-            'operator_name' => AdminContext::adminName(),
-            'reason' => $reason,
-            'session_key' => $sessionKey,
-            'status' => 1,
-        ]);
-        $this->pushActivityLog($merchant, 'impersonation', '代入会话开始:' . $reason);
-        return Result::success(['session_id' => $sessionId, 'session_key' => $sessionKey], '代入会话已开始,所有操作将记录审计');
+        return $this->response->json(Result::success((new \App\Service\MerchantImpersonationService())->start($this->requireId('merchantId'), $this->requireId('accountId'), $this->requireStr('reason'))))->withHeader('Cache-Control', 'no-store');
     }
 
-    /** 结束代入会话(整改 B2):结束该商户所有进行中会话,写 end 审计 */
     #[Permission('merchant:list:impersonate')]
     public function impersonateEnd(): array
     {
-        $merchantId = $this->intInput('merchantId');
-        if ($merchantId <= 0) {
-            $merchantId = $this->requireId('id');
-        }
-        $merchant = $this->findScoped($merchantId);
-        $updated = Db::table('merchant_impersonation_session')
-            ->where('merchant_id', $merchant['id'])->where('status', 1)
-            ->update(['status' => 2, 'ended_at' => date('Y-m-d H:i:s')]);
-        if ($updated <= 0) {
-            throw new BusinessException(ErrorCode::DATA_CONFLICT, '没有进行中的代入会话');
-        }
-        $this->pushActivityLog($merchant, 'impersonation', '代入会话结束');
-        return Result::success(null, '代入会话已结束');
+        (new \App\Service\MerchantImpersonationService())->end($this->requireId('sessionId'));
+        return Result::success(null, '代为登录会话已结束');
     }
 
     /** 新增商户(平台代录入,进入待审核) */
@@ -614,22 +562,7 @@ class MerchantController extends AbstractController
         ]);
     }
 
-    /** 生成 Base32 2FA 设置密钥(供商户注册流程消费,管理端不展示) */
-    private function generateBase32Secret(int $bytes = 20): string
-    {
-        $alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
-        $bits = '';
-        foreach (str_split(random_bytes($bytes)) as $ch) {
-            $bits .= str_pad(decbin(ord($ch)), 8, '0', STR_PAD_LEFT);
-        }
-        $secret = '';
-        foreach (str_split($bits, 5) as $chunk) {
-            if (strlen($chunk) === 5) {
-                $secret .= $alphabet[bindec($chunk)];
-            }
-        }
-        return $secret;
-    }
+
 
     /** 收集可选编辑字段(snake_case 列 ← 驼峰入参) */
     private function collectFields(): array

@@ -2,6 +2,21 @@
  * 中文语言包:只维护有中文翻译的词条,未翻译的 key 自动回退到 en-US
  */
 export default {
+  security: {
+  "enroll": "注册 Google 身份验证器",
+  "verify": "验证身份验证器代码",
+  "manualKey": "手动设置密钥",
+  "keepPrivate": "请在 Google Authenticator 中扫码或输入密钥，不要向客服提供此密钥。本次登录验证5分钟内有效。",
+  "code": "六位动态验证码",
+  "codeRequired": "请输入六位身份验证器验证码",
+  "back": "返回登录",
+  "supportEnded": "代为登录会话已结束或不可用",
+  "supportStarting": "正在进入代为登录会话",
+  "supportReturn": "请返回管理后台发起新的会话。",
+  "supportBanner": "代为登录：{actor} 正在查看 {account}",
+  "supportReadOnly": "只读支持模式，最长30分钟。安全、财务和经营写操作均被禁止，访问全程审计。",
+  "endSupport": "退出代为登录"
+},
   merchantStatus: { suspended: '商户已暂停：停止接收新预订及未支付订单付款；仍可处理已确认订单与售后。' },
   common: {
     home: '首页',

@@ -52,6 +52,7 @@ export interface MerchantProfile {
   /** 当前主体名称(集团/商户/门店) */
   subjectName: string;
   bookingRestricted?: boolean;
+  impersonation?: { sessionId: number; actorName: string; expiresAt: string };
   permissions: string[];
   lastLoginAt: string;
 }

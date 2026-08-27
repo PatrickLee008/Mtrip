@@ -40,6 +40,7 @@ class RequestLogMiddleware implements MiddlewareInterface
         $start = microtime(true);
         $method = strtoupper($request->getMethod());
         $path = $request->getUri()->getPath();
+        $sensitive = str_contains($path, '/auth/') || str_contains($path, '/merchant/impersonate/') || str_contains($path, '/reset-2fa');
 
         try {
             $response = $handler->handle($request);
@@ -49,14 +50,14 @@ class RequestLogMiddleware implements MiddlewareInterface
                 $method,
                 $path,
                 $e::class,
-                $e->getMessage(),
+                $sensitive ? '[protected authentication error]' : $e->getMessage(),
                 $e->getFile(),
                 $e->getLine(),
                 (int) round((microtime(true) - $start) * 1000)
             ), [
                 'params' => $this->requestParams($request),
                 'ip' => $this->clientIp($request),
-                'trace' => $e->getTraceAsString(),
+                'trace' => $sensitive ? '[protected authentication trace]' : $e->getTraceAsString(),
             ]);
             throw $e;
         }
@@ -65,7 +66,7 @@ class RequestLogMiddleware implements MiddlewareInterface
         $status = $response->getStatusCode();
         $context = [
             'params' => $this->requestParams($request),
-            'response' => str_ends_with($path, '/merchant/document/download') ? '[protected document]' : mb_substr((string) $response->getBody(), 0, self::MAX_BODY_LEN),
+            'response' => $sensitive || str_ends_with($path, '/merchant/document/download') ? '[protected response]' : mb_substr((string) json_encode(MaskHelper::maskParams((array) json_decode((string) $response->getBody(), true)), JSON_UNESCAPED_UNICODE), 0, self::MAX_BODY_LEN),
             'ip' => $this->clientIp($request),
         ];
 
@@ -82,13 +83,14 @@ class RequestLogMiddleware implements MiddlewareInterface
     /** 合并 query 与 body 参数并脱敏截断;body 非 JSON 时回退原始串 */
     private function requestParams(ServerRequestInterface $request): string
     {
+        if (str_contains($request->getUri()->getPath(), '/auth/') || str_contains($request->getUri()->getPath(), '/merchant/impersonate/')) return '[protected authentication params]';
         $params = array_merge(
             (array) $request->getQueryParams(),
             (array) $request->getParsedBody()
         );
         if ($params === []) {
             $raw = (string) $request->getBody();
-            return $raw === '' ? '' : mb_substr($raw, 0, self::MAX_BODY_LEN);
+            return $raw === '' ? '' : '[unparsed body omitted]';
         }
         return mb_substr(
             (string) json_encode(MaskHelper::maskParams($params), JSON_UNESCAPED_UNICODE),

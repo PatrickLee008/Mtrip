@@ -6,6 +6,24 @@
  * - 命名空间:common(通用) / app(应用) / menu(菜单) / status(状态) / 模块名(各业务模块)
  */
 export default {
+  merchantSecurity: {
+  "account": "Login account",
+  "type": "Account type",
+  "type1": "Group",
+  "type2": "Merchant",
+  "type3": "Store",
+  "status0": "Not enrolled",
+  "status1": "Active",
+  "status2": "Reset required",
+  "hint": "Each login account has an independent authenticator. Administrators cannot view setup keys or QR codes.",
+  "superOnly": "Only authorized super administrators may access account security.",
+  "reason": "Reset reason",
+  "reasonRequired": "A reset reason is required",
+  "resetConfirm": "Reset 2FA for {name}? Existing sessions and the old authenticator will be invalidated. Other accounts are unaffected.",
+  "supportHint": "Select an account for read-only support (30 minutes). Group-wide access and all write operations are blocked.",
+  "portalMissing": "Configure a trusted HTTPS VITE_MERCHANT_PORTAL_URL before starting support sessions.",
+  "popupBlocked": "Allow the merchant portal popup and try again."
+},
   merchantDirectory: {
     title: 'Merchant directory', subtitle: 'Manage merchant profiles, hotel businesses and property links',
     commission: 'Commission (%)', settlement: 'Settlement cycle', monthly: 'Monthly', archived: 'Archived property',

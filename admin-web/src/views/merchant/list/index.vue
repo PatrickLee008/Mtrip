@@ -3,6 +3,7 @@ import { computed, onMounted, reactive, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { Modal, message } from 'ant-design-vue';
 import { BellOutlined, LoginOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons-vue';
+import AccountSecurityPanel from '@/components/merchant/AccountSecurityPanel.vue';
 import MerchantPropertyPanel from '@/components/merchant/MerchantPropertyPanel.vue';
 import PageContainer from '@/components/PageContainer.vue';
 import SiteTreeSelect from '@/components/SiteTreeSelect.vue';
@@ -21,7 +22,7 @@ import {
   apiMerchantCommission,
   apiMerchantDetail,
   apiMerchantList,
-  apiMerchantReset2Fa,
+
 
   apiMerchantUpdate,
 } from '@/api/merchant';
@@ -138,22 +139,7 @@ function openImpersonate(row: TableRow): void {
 
 
 
-// ---------- 重置 2FA(整改 B3) ----------
-function confirmReset2Fa(): void {
-  if (!detail.value) {
-    return;
-  }
-  Modal.confirm({
-    title: t('merchant.profile.reset2Fa'),
-    content: t('merchant.profile.reset2FaConfirm', { name: detail.value.merchant_name || '' }),
-    okText: t('merchant.profile.reset2Fa'),
-    async onOk() {
-      await apiMerchantReset2Fa(detail.value!.id);
-      message.success(t('merchant.profile.reset2FaSuccess'));
-      await openDetail(detail.value!);
-    },
-  });
-}
+
 
 const accountColumns = computed(() => [
   { title: t('common.name'), dataIndex: 'bank_name' },
@@ -455,6 +441,7 @@ onMounted(() => {
             </a-tooltip>
             <a-tooltip :title="t('merchant.impersonate.title')">
               <a-button
+                v-if="isSuper"
                 v-perm="'merchant:list:impersonate'"
                 type="link"
                 size="small"
@@ -514,23 +501,7 @@ onMounted(() => {
           <MerchantPropertyPanel :merchant="detail" :applications="detailApplications" :businesses="detailBusinesses"
             :properties="detailProperties" :group="detailGroup" @changed="statusChanged" />
 
-          <!-- 账户安全(整改 A3/B3) -->
-          <a-divider orientation="left">{{ t('merchant.profile.accountSecurity') }}</a-divider>
-          <a-descriptions :column="2" size="small" bordered>
-            <a-descriptions-item :label="t('merchant.profile.merchantAccessCode')" :span="2">
-              {{ detail.access_code_configured ? t('merchantDirectory.configured') : t('merchantDirectory.notConfigured') }}
-            </a-descriptions-item>
-            <a-descriptions-item :label="t('merchant.profile.twoFaStatus')">
-              <a-tag :color="detail.two_fa_enabled === 1 ? 'success' : 'default'">
-                {{ detail.two_fa_enabled === 1 ? t('merchant.profile.twoFaEnabled') : t('merchant.profile.twoFaDisabled') }}
-              </a-tag>
-            </a-descriptions-item>
-            <a-descriptions-item :label="t('merchant.profile.twoFaMethod')">{{ detail.two_fa_enabled === 1 ? detail.two_fa_method || '-' : '-' }}</a-descriptions-item>
-            <a-descriptions-item :label="t('merchant.profile.twoFaEnrolled')">{{ detail.two_fa_enrolled_at || '-' }}</a-descriptions-item>
-            <a-descriptions-item :label="t('merchant.profile.twoFaLastReset')">{{ detail.two_fa_last_reset_at || '-' }}</a-descriptions-item>
-          </a-descriptions>
-          <div style="font-size: 12px; color: #64748b; margin: 8px 0">{{ t('merchant.profile.reset2FaHint') }}</div>
-          <a-button v-perm="'merchant:list:2fa'" size="small" @click="confirmReset2Fa">{{ t('merchant.profile.reset2Fa') }}</a-button>
+          <AccountSecurityPanel :merchant-id="detail.id" :access-configured="!!detail.access_code_configured" />
 
           <!-- 月度绩效(整改 A3) -->
           <a-divider orientation="left">{{ t('merchant.profile.monthlyPerformance') }}</a-divider>
@@ -555,7 +526,7 @@ onMounted(() => {
           <div style="display: flex; gap: 8px; margin-top: 16px">
             <MerchantStatusActions :merchant="detail" @changed="statusChanged" />
             <a-button v-perm="'merchant:list:notify'" @click="openNotify(detail)">{{ t('merchant.notifyPage.title') }}</a-button>
-            <a-button v-perm="'merchant:list:impersonate'" @click="openImpersonate(detail)">{{ t('merchant.impersonate.start') }}</a-button>
+            <a-button v-if="isSuper" v-perm="'merchant:list:impersonate'" @click="openImpersonate(detail)">{{ t('merchant.impersonate.start') }}</a-button>
           </div>
 
           <template v-if="detail.legal_id_images?.length">

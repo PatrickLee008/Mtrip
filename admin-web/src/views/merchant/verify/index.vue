@@ -869,8 +869,8 @@ onMounted(() => {
               <div class="co-heading-line" />
             </div>
             <div class="merchant-access-code-row">
-              <div class="merchant-access-code"><KeyOutlined /><strong>{{ accessGrant.access_code }}</strong></div>
-              <a-button @click="copyCredential(accessGrant.access_code)"><template #icon><CopyOutlined /></template>{{ t('merchant.verifyPage.credentialCopy') }}</a-button>
+              <div class="merchant-access-code"><KeyOutlined /><strong>{{ t('merchantDirectory.configured') }}</strong></div>
+
               <a-button v-perm="'merchant:verify:regencode'" :loading="regenerateSaving" @click="regenerateAccessCode"><template #icon><SyncOutlined /></template>{{ t('merchant.verifyPage.accessCodeRegenerate') }}</a-button>
             </div>
             <div class="merchant-access-grant-card">

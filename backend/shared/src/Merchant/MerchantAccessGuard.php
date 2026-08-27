@@ -71,6 +71,10 @@ final class MerchantAccessGuard
                 throw new BusinessException(ErrorCode::UNAUTHORIZED, '账号授权范围已变更，请重新登录');
             }
         }
+        if ((int) ($claims['auth_version'] ?? 0) !== (int) $account->auth_version
+            || (! isset($claims['impersonation_session_id']) && ((int) $account->two_fa_status !== 1 || ($claims['amr'] ?? '') !== 'totp'))) {
+            throw new BusinessException(ErrorCode::UNAUTHORIZED, '账号认证已失效，请重新登录并完成2FA');
+        }
         self::assertSubject((array) $account);
     }
 

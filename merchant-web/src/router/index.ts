@@ -2,6 +2,7 @@ import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
 
 /** 静态路由:登录、错误页;'/' 由动态路由注入后重定向 */
 export const staticRoutes: RouteRecordRaw[] = [
+  { path: '/support-session', name: 'SupportExchange', component: () => import('@/views/support-session/index.vue'), meta: { public: true } },
   {
     path: '/login',
     name: 'Login',

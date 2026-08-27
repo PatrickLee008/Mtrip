@@ -1,6 +1,6 @@
 import axios, { type AxiosRequestConfig } from 'axios';
 import { message } from 'ant-design-vue';
-import { getToken, clearAuth } from '@/utils/auth';
+import { getToken, clearAuth, isSupportSession } from '@/utils/auth';
 import type { ApiResult } from '@/api/types';
 
 /** 业务错误(code!=0),拦截器已弹出提示 */
@@ -30,7 +30,9 @@ instance.interceptors.request.use((config) => {
 function handleBizResult(result: ApiResult): void {
   // 40101 未登录 / 40102 token过期 → 清理并跳登录(已在登录页则不重复跳转)
   if (result.code === 40101 || result.code === 40102) {
+    const support = isSupportSession();
     clearAuth();
+    if (support) { window.location.replace('/support-session'); return; }
     message.warning(result.message || '登录已失效,请重新登录');
     if (!window.location.pathname.startsWith('/login')) {
       window.location.href = '/login';

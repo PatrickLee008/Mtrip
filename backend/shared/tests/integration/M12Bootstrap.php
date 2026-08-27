@@ -39,6 +39,20 @@ function setRequest(array $input): void
     Hyperf\Context\Context::destroy('http.request.parsedData');
     Hyperf\Context\RequestContext::set((new Hyperf\HttpMessage\Server\Request('POST', '/m12-test'))->withParsedBody($input));
 }
+/** Test-only login adapter for pre-S4 regression fixtures. Never used in application code. */
+function merchantFixtureLogin(object $auth, string $username, string $password, string $ip): array
+{
+    $pending = $auth->login($username, $password, $ip);
+    $security = new \App\Service\MerchantAccountSecurityService();
+    $claims = \Mtrip\Shared\Support\JwtHelper::verify($pending['challengeToken'], (string) \Hyperf\Config\config('mtrip.jwt_secret'));
+    $account = (array) \Hyperf\DbConnection\Db::table('merchant_admin')->where('id', $claims['admin_id'])->first();
+    $secret = $pending['requiresEnrollment'] ? $security->setup($pending['challengeToken'])['manualKey']
+        : \Mtrip\Shared\Support\CryptoHelper::decrypt($account['two_fa_secret_enc'], (string) \Hyperf\Config\config('mtrip.aes_key'));
+    // S1/S3 may log the same synthetic account in twice within 30s; replay itself is tested separately in S4.
+    \Hyperf\DbConnection\Db::table('merchant_admin')->where('id', $account['id'])->update(['last_accepted_totp_step' => -1]);
+    return $security->verify($pending['challengeToken'], \Mtrip\Shared\Merchant\Totp::code($secret, intdiv(time(), 30)), $ip);
+}
+
 function merchantFixture(int $site = 991, int $status = 3): int
 {
     return (int) Hyperf\DbConnection\Db::table('merchant_info')->insertGetId([

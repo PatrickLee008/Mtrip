@@ -63,8 +63,10 @@ export function apiMerchantActivate(id: number): Promise<null> {
 }
 
 /** 重置商户 2FA(整改 B3):商户下次登录需重新绑定 */
-export function apiMerchantReset2Fa(id: number): Promise<null> {
-  return post('/admin/merchant/reset-2fa', { id });
+export interface SecurityAccount { id: number; username: string; real_name: string; account_type: number; status: number; two_fa_status: number; two_fa_method: string; two_fa_enrolled_at: string | null; two_fa_last_reset_at: string | null; auth_version: number }
+export function apiMerchantSecurityAccounts(merchantId: number): Promise<SecurityAccount[]> { return get('/admin/merchant/security/accounts', { merchantId }); }
+export function apiMerchantReset2Fa(data: { merchantId: number; accountId: number; expectedVersion: number; reason: string }): Promise<null> {
+  return post('/admin/merchant/reset-2fa', data);
 }
 
 /** 发送商户通知(整改 B1):分类/标题/正文/深链/渠道/定时 */
@@ -90,16 +92,13 @@ export function apiMerchantNotifyTemplates(merchantId?: number): Promise<Row[]> 
 }
 
 /** 开始代入会话(整改 B2):原因必选,全程审计 */
-export function apiMerchantImpersonateStart(
-  merchantId: number,
-  reason: string,
-): Promise<{ session_id: number; session_key: string }> {
-  return post('/admin/merchant/impersonate/start', { merchantId, reason });
+export function apiMerchantImpersonateStart(merchantId: number, accountId: number, reason: string): Promise<{ session_id: number; session_key: string; exchangeCode: string; expiresAt: string }> {
+  return post('/admin/merchant/impersonate/start', { merchantId, accountId, reason });
 }
 
 /** 结束代入会话(整改 B2) */
-export function apiMerchantImpersonateEnd(merchantId: number): Promise<null> {
-  return post('/admin/merchant/impersonate/end', { merchantId });
+export function apiMerchantImpersonateEnd(sessionId: number): Promise<null> {
+  return post('/admin/merchant/impersonate/end', { sessionId });
 }
 
 /** KYC 提交确认(整改 B4,接口契约;merchant-web 接入另行排期) */

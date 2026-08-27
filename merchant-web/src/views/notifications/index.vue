@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useUserStore } from '@/stores/user';
 import { useRouter } from 'vue-router';
 import { get } from '@/utils/http';
 const router = useRouter();
@@ -90,7 +91,7 @@ async function markRead(row?: MerchantNotification): Promise<void> {
 async function openDetail(row: MerchantNotification): Promise<void> {
   detail.value = row;
   detailOpen.value = true;
-  if (!row.is_read) {
+  if (!row.is_read && !useUserStore().profile?.impersonation) {
     await apiNotificationRead(row.id);
     row.is_read = true;
     row.read_at = new Date().toISOString().slice(0, 19).replace('T', ' ');

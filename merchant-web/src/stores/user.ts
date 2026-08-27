@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia';
-import { apiLogin, apiLogout, apiMenus, type MenusResult } from '@/api/auth';
+import { apiLogin, apiLogout, apiMenus, type MenusResult, type LoginResult, type ChallengeResult } from '@/api/auth';
 import type { MerchantProfile, MenuNode } from '@/api/types';
-import { clearAuth, getToken, setToken } from '@/utils/auth';
+import { clearAuth, getToken, setToken, setSupportToken } from '@/utils/auth';
 
 interface UserState {
   token: string;
@@ -30,11 +30,13 @@ export const useUserStore = defineStore('user', {
     accountType: (state) => state.profile?.accountType ?? 0,
   },
   actions: {
-    async login(username: string, password: string): Promise<void> {
-      const { token, admin } = await apiLogin(username, password);
-      this.token = token;
-      this.profile = admin;
-      setToken(token);
+    async login(username: string, password: string): Promise<ChallengeResult> { return apiLogin(username, password); },
+    acceptSession(result: LoginResult, support = false): void {
+      this.token = result.token;
+      this.profile = result.admin;
+      this.routesLoaded = false;
+      this.menus = []; this.perms = [];
+      if (support) setSupportToken(result.token); else setToken(result.token);
     },
     async loadMenus(): Promise<MenusResult> {
       const result = await apiMenus();
@@ -52,8 +54,9 @@ export const useUserStore = defineStore('user', {
       } catch {
         // 登出失败不阻断本地清理
       }
-      this.$reset();
       clearAuth();
+      this.$reset();
+      this.token = '';
     },
   },
 });

@@ -116,7 +116,7 @@ class AccountController extends AbstractController
         }
         $next = (int) $account['status'] === 1 ? 2 : 1;
         Db::transaction(function () use ($account, $next) {
-            Db::table('merchant_admin')->where('id', $account['id'])->update(['status' => $next]);
+            Db::table('merchant_admin')->where('id', $account['id'])->update(['status' => $next, 'auth_version' => Db::raw('auth_version + 1'), 'challenge_hash' => null, 'pending_secret_enc' => '']);
             \App\Service\MerchantActivityService::changed((int) $account['id'], $next === 1 ? 'enabled' : 'disabled', $this->clientIp());
         });
         return Result::success(['status' => $next], $next === 1 ? '账号已启用' : '账号已禁用');
@@ -132,7 +132,7 @@ class AccountController extends AbstractController
             throw new BusinessException(ErrorCode::PARAM_ERROR, '密码至少8位且需包含字母和数字');
         }
         Db::transaction(function () use ($account, $password) {
-            Db::table('merchant_admin')->where('id', $account['id'])->update(['password' => password_hash($password, PASSWORD_BCRYPT)]);
+            Db::table('merchant_admin')->where('id', $account['id'])->update(['password' => password_hash($password, PASSWORD_BCRYPT), 'auth_version' => Db::raw('auth_version + 1'), 'challenge_hash' => null, 'pending_secret_enc' => '']);
             \App\Service\MerchantActivityService::changed((int) $account['id'], 'password_reset', $this->clientIp());
         });
         return Result::success(null, '密码已重置');

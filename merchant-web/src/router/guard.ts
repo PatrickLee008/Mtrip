@@ -1,7 +1,7 @@
 import type { Router } from 'vue-router';
 import { useUserStore } from '@/stores/user';
 import { apiMe } from '@/api/auth';
-import { clearAuth } from '@/utils/auth';
+import { clearAuth, isSupportSession } from '@/utils/auth';
 import { installDynamicRoutes } from './dynamic';
 import { resolveMenuTitle } from '@/locales/menuI18n';
 
@@ -22,7 +22,7 @@ export function setupRouterGuard(router: Router): void {
     }
 
     if (!userStore.isLogin) {
-      return { path: '/login', query: { redirect: to.fullPath } };
+      return isSupportSession() ? { path: '/support-session' } : { path: '/login', query: { redirect: to.fullPath } };
     }
 
     // 刷新页面后恢复用户信息与动态路由
@@ -39,9 +39,10 @@ export function setupRouterGuard(router: Router): void {
       } catch {
         // 接口失败(如 token 失效/限流):必须清除本地登录态后再去登录页,
         // 否则 /login 会因 isLogin 仍为 true 被弹回首页,形成导航死循环狂刷接口
+        const support = isSupportSession();
         clearAuth();
         userStore.$reset();
-        return { path: '/login' };
+        return { path: support ? '/support-session' : '/login' };
       }
     }
 

@@ -3,6 +3,16 @@
 > 参考 admin-web 从零搭建平行的 merchant-web(Vue3+Vite+TS+antdv),为商户账号(`merchant_admin`,account_type 1集团/2商户/3门店)落地一套完整仿 admin 的动态 RBAC:独立四表菜单/角色,登录按 `account_type` 下发菜单树+权限集,接口权限继续由 `#[Permission]` 注解按 `perm_key` 联动(与前端 `v-perm` 同一把钥匙)。
 > 承接 12-商家账号体系.md 的二期清单。
 
+## 2026-08-28 商户工作台服务器内部错误修复
+
+- 现象：GET `/api/v1/merchant/stats/dashboard`服务器内部错误。日志先报`Unknown column merchant_id`；本地开发库及隔离库缺marketing/07迁移。
+- 数据修复：执行已有`database/marketing/07-merchant-promotion-owner.sql`，补两个归属字段及索引，重复执行通过。compose本已有初始化挂载；存量数据库不会靠重启MySQL重新执行初始化脚本，需要显式执行增量迁移。未删除数据，未把历史平台券猜测分配给商户。
+- 继续执行真实查询还发现趋势使用已安装Hyperf不支持的`groupByRaw`。仅修改StatsController两处为`groupBy(Db::raw('DATE(pay_time)'))`，SQL按日分组口径保持不变。
+- 新增`order-service/test/m12-dashboard.php`实际查询回归；scripts/test-m12.ps1显式升级测试库优惠券结构并加入看板测试。14项覆盖空数据、完整响应、7日趋势、非零金额与取消/其他商户排除、促销固定/相对有效期、草稿/暂停/结束/删除/未来/过期排除、集团站点与黑名单过滤、门店/空授权不越权。
+- 结果：14项看板＋300项既有集成＝314项通过；58单测/858断言、两个变更PHP语法通过；订单服务重启后healthz正常。测试订单及优惠券夹具已清理。
+- 复测入口：`scripts/test-m12.ps1`。原始失败及回归日志在本任务work/dashboard-before.log、work/dashboard-regression.log；本次仅保存表结构快照，不是业务数据备份。
+- 不涉及前端改动；未进行浏览器登录态端到端验收。平台AdminStatsController存在同类方法调用，另行记录未改，不声称已修复平台统计。Git未暂存、未提交、未推送。
+
 ## 架构结论
 - 三前端三账号体系独立:admin-web(`sys_admin`) / merchant-web(`merchant_admin`×3类型) / supplier-web(未来)。merchant-web 是"一个前端三种视图",按 `account_type` 裁剪菜单与数据范围。
 - 菜单/权限完全 DB 驱动(不复用平台 `sys_menu`),弃用 `merchant_admin.role_perms` JSON 隐式方案,改用四表 RBAC;`role_perms` 列保留不再写入。

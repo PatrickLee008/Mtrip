@@ -10,6 +10,7 @@ import {
   LogoutOutlined,
 } from '@ant-design/icons-vue';
 import { useUserStore } from '@/stores/user';
+import SupportBanner from '@/components/SupportBanner.vue';
 import AppHeader from './components/AppHeader.vue';
 import SideMenu from './components/SideMenu.vue';
 
@@ -65,7 +66,9 @@ function onLogout(): void {
     title: t('header.logoutConfirm'),
     okType: 'danger',
     onOk: async () => {
+      const support = !!userStore.profile?.impersonation;
       await userStore.logout();
+      if (support) { window.location.replace('/support-session'); return; }
       window.location.href = '/login';
     },
   });
@@ -175,6 +178,7 @@ function onLogout(): void {
       </a-layout-header>
       <!-- 内容区域(多页签已移除:直接渲染当前路由页面) -->
       <a-layout-content class="layout-content">
+        <SupportBanner />
         <a-alert v-if="userStore.profile?.bookingRestricted" :message="t('merchantStatus.suspended')" type="warning" show-icon />
         <router-view />
       </a-layout-content>

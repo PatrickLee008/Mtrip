@@ -104,7 +104,7 @@ try {
     $service->change($id, 'suspend', command($id));
     $auth = new App\Service\Merchant\MerchantAuthService();
     foreach ([$account['username'], $alias] as $username) {
-        $login = $auth->login($username, 'M12-Only-Test-Password', '127.0.0.1');
+        $login = merchantFixtureLogin($auth, $username, 'M12-Only-Test-Password', '127.0.0.1');
         check($login['admin']['bookingRestricted'] === true, 'T24/T29 suspended login including access_status=0');
     }
     $claims = JwtHelper::verify($login['token'], (string) $config->get('mtrip.jwt_secret'));

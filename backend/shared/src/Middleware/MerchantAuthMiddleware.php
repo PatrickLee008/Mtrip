@@ -45,6 +45,16 @@ class MerchantAuthMiddleware implements MiddlewareInterface
 
         \Mtrip\Shared\Merchant\MerchantAccessGuard::assertSession($claims);
         $permissions = (array) ($claims['permissions'] ?? []);
+        $support = null;
+        if (isset($claims['impersonation_session_id'])) {
+            $support = \Mtrip\Shared\Merchant\MerchantImpersonationGuard::assertSession($claims);
+            $permissions = \Mtrip\Shared\Merchant\MerchantImpersonationGuard::permissions($claims);
+            $allowed = \Mtrip\Shared\Merchant\MerchantImpersonationGuard::allowed(strtoupper($request->getMethod()), $request->getUri()->getPath());
+            \Mtrip\Shared\Merchant\MerchantImpersonationGuard::audit($support, $allowed ? 'request' : 'denied', $request->getMethod() . ' ' . $request->getUri()->getPath());
+            if (! $allowed) throw new BusinessException(ErrorCode::FORBIDDEN, '代为登录为只读支持模式，禁止安全、财务及经营写操作');
+        } elseif (($claims['amr'] ?? '') !== 'totp') {
+            throw new BusinessException(ErrorCode::UNAUTHORIZED);
+        }
 
         MerchantContext::set([
             'admin_id' => (int) ($claims['admin_id'] ?? 0),
@@ -58,7 +68,14 @@ class MerchantAuthMiddleware implements MiddlewareInterface
             'permissions' => $permissions,
         ]);
 
-        // 透明复用平台 #[Permission] 注解:商户主账号 is_owner 不等于平台超管,is_super 恒 false
+        if ($support !== null) {
+            MerchantContext::set(array_merge(MerchantContext::get(), [
+                'actor_admin_id' => (int) $support['operator_id'], 'impersonation_session_id' => (int) $support['id'],
+                'impersonation' => ['sessionId' => (int) $support['id'], 'actorName' => $support['operator_name'], 'expiresAt' => str_replace(' ', 'T', $support['expires_at']) . 'Z'],
+            ]));
+        }
+
+        // 透明复用平台权限，但商户主账号不等于平台超级管理员。
         AdminContext::set([
             'admin_id' => (int) ($claims['admin_id'] ?? 0),
             'admin_name' => (string) ($claims['admin_name'] ?? ''),
@@ -67,7 +84,17 @@ class MerchantAuthMiddleware implements MiddlewareInterface
             'permissions' => $permissions,
         ]);
 
-        $response = $handler->handle($request);
+        try {
+            $response = $handler->handle($request);
+        } catch (\Throwable $e) {
+            if ($support !== null) \Mtrip\Shared\Merchant\MerchantImpersonationGuard::audit($support, 'request_failed', $request->getMethod() . ' ' . $request->getUri()->getPath());
+            throw $e;
+        }
+        if ($support !== null) {
+            $payload = json_decode((string) $response->getBody(), true);
+            \Mtrip\Shared\Merchant\MerchantImpersonationGuard::audit($support, 'response', 'HTTP ' . $response->getStatusCode() . ' code=' . (string) ($payload['code'] ?? 'unknown'));
+            return $response->withHeader('Cache-Control', 'no-store');
+        }
         $path = $request->getUri()->getPath();
         if (in_array(strtoupper($request->getMethod()), ['POST', 'PUT', 'PATCH', 'DELETE'], true)
             && preg_match('#^/api/v1/merchant/(order|rooms|availability|promotions|reviews|goods|store|role)/#', $path)) {

@@ -3,6 +3,21 @@
  * 覆盖:通用/状态/登录/菜单/头部/工作台/子账号/角色/门店/订单/商品/错误页
  */
 export default {
+  security: {
+  "enroll": "Set up Google Authenticator",
+  "verify": "Verify authenticator code",
+  "manualKey": "Manual setup key",
+  "keepPrivate": "Scan locally or enter this key in Google Authenticator. Never share it with support. This login step expires in five minutes.",
+  "code": "Six-digit code",
+  "codeRequired": "Enter a six-digit authenticator code",
+  "back": "Back to sign in",
+  "supportEnded": "Support session ended or unavailable",
+  "supportStarting": "Opening support session",
+  "supportReturn": "Return to the admin portal to start a new session.",
+  "supportBanner": "Support mode: {actor} viewing {account}",
+  "supportReadOnly": "Read-only, up to 30 minutes. Security, financial and operational changes are blocked and access is audited.",
+  "endSupport": "End support session"
+},
   merchantStatus: { suspended: 'Your merchant is suspended: new bookings and unpaid booking payments are blocked. You can still manage confirmed bookings and after-sales.' },
   common: {
     home: 'Home',

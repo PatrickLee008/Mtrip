@@ -18,21 +18,32 @@ use Mtrip\Shared\Support\Result;
  */
 class AuthController extends AbstractController
 {
+    #[\Hyperf\Di\Annotation\Inject]
+    protected \Hyperf\HttpServer\Contract\ResponseInterface $response;
     #[Inject]
     protected MerchantAuthService $authService;
 
-    public function login(): array
+    public function login(): \Psr\Http\Message\ResponseInterface
     {
         $data = $this->authService->login(
             $this->requireStr('username'),
             $this->requireStr('password'),
             $this->clientIp()
         );
-        return Result::success($data, '登录成功');
+        return $this->response->json(Result::success($data, '请完成身份验证器验证'))->withHeader('Cache-Control', 'no-store');
     }
 
     public function logout(): array
     {
+        $sessionId = (int) (MerchantContext::get()['impersonation_session_id'] ?? 0);
+        if ($sessionId > 0) {
+            (new \App\Service\MerchantImpersonationService())->end($sessionId, true);
+        } else {
+            Db::transaction(function () {
+                Db::table('merchant_admin')->where('id', MerchantContext::adminId())->update(['auth_version' => Db::raw('auth_version + 1'), 'challenge_hash' => null, 'pending_secret_enc' => '']);
+                \App\Service\MerchantActivityService::changed(MerchantContext::adminId(), 'logout', $this->clientIp());
+            });
+        }
         return Result::success(null, '已退出登录');
     }
 
@@ -43,16 +54,24 @@ class AuthController extends AbstractController
         if ($admin === null) {
             throw new BusinessException(ErrorCode::UNAUTHORIZED, '账号不存在或已删除');
         }
-        return Result::success($this->authService->profile((array) $admin));
+        $profile = $this->authService->profile((array) $admin);
+        if (isset(MerchantContext::get()['impersonation_session_id'])) {
+            $profile['isOwner'] = false;
+            $profile['permissions'] = [];
+            $profile['impersonation'] = MerchantContext::get()['impersonation'];
+        }
+        return Result::success($profile);
     }
 
     public function menus(): array
     {
-        return Result::success($this->authService->menus(
-            MerchantContext::adminId(),
-            MerchantContext::accountType(),
-            MerchantContext::isOwner()
-        ));
+        $data = $this->authService->menus(MerchantContext::adminId(), MerchantContext::accountType(), MerchantContext::isOwner());
+        if (isset(MerchantContext::get()['impersonation_session_id'])) {
+            $allowed = ['dashboard/index', 'order/index', 'rooms/index', 'availability/index', 'promotions/index', 'reviews/index', 'notifications/index'];
+            $data['menus'] = array_values(array_filter($data['menus'], static fn ($row) => in_array($row['component'], $allowed, true)));
+            $data['perms'] = [];
+        }
+        return Result::success($data);
     }
 
     public function updatePassword(): array

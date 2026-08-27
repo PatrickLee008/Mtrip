@@ -38,7 +38,7 @@ async function endImpersonation(): Promise<void> {
   if (!impersonationStore.active) {
     return;
   }
-  await apiMerchantImpersonateEnd(impersonationStore.active.merchantId);
+  await apiMerchantImpersonateEnd(impersonationStore.active.sessionId);
   message.success(t('merchant.impersonate.ended'));
   impersonationStore.end();
 }

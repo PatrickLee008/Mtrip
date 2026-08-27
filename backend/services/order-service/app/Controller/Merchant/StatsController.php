@@ -149,7 +149,7 @@ class StatsController extends AbstractAdminController
             ->whereIn('merchant_id', $merchantIds)
             ->whereIn('order_status', [1, 2, 3])
             ->whereBetween('pay_time', ["{$startDate} 00:00:00", "{$endDate} 23:59:59"])
-            ->groupByRaw('DATE(pay_time)')
+            ->groupBy(Db::raw('DATE(pay_time)'))
             ->selectRaw('DATE(pay_time) AS day, COUNT(*) AS booking_count, COALESCE(SUM(pay_amount),0) AS sales_amount')
             ->pluck('sales_amount', 'day')
             ->all();
@@ -159,7 +159,7 @@ class StatsController extends AbstractAdminController
             ->whereIn('merchant_id', $merchantIds)
             ->whereIn('order_status', [1, 2, 3])
             ->whereBetween('pay_time', ["{$startDate} 00:00:00", "{$endDate} 23:59:59"])
-            ->groupByRaw('DATE(pay_time)')
+            ->groupBy(Db::raw('DATE(pay_time)'))
             ->selectRaw('DATE(pay_time) AS day, COUNT(*) AS booking_count')
             ->pluck('booking_count', 'day')
             ->all();

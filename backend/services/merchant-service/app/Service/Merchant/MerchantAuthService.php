@@ -5,12 +5,12 @@ declare(strict_types=1);
 namespace App\Service\Merchant;
 
 use App\Support\MenuTreeHelper;
-use Carbon\Carbon;
+
 use Hyperf\DbConnection\Db;
 use Mtrip\Shared\Constants\ErrorCode;
 use Mtrip\Shared\Exception\BusinessException;
 use Mtrip\Shared\Support\JwtHelper;
-use Mtrip\Shared\Merchant\MerchantAccessGuard;
+
 
 use function Hyperf\Config\config;
 
@@ -21,7 +21,7 @@ use function Hyperf\Config\config;
 class MerchantAuthService
 {
     /**
-     * 账号密码登录:校验账号与所属主体状态,签发商户端 JWT
+     * 密码验证只签发受限challenge，完成2FA后才能获得商户业务JWT。
      */
     public function login(string $username, string $password, string $ip): array
     {
@@ -47,45 +47,34 @@ class MerchantAuthService
         }
         $admin = (array) $admin;
 
-        if ((int) $admin['status'] !== 1) {
-            throw new BusinessException(ErrorCode::FORBIDDEN, '账号已禁用,请联系管理员');
-        }
-        if (! password_verify($password, (string) $admin['password'])) {
-            throw new BusinessException(ErrorCode::UNAUTHORIZED, '账号或密码错误');
-        }
+        return (new \App\Service\MerchantAccountSecurityService())->begin((int) $admin['id'], $password);
+    }
 
-        MerchantAccessGuard::assertSubject($admin);
-        $subjectName = $this->subjectName($admin);
-
-        Db::transaction(function () use ($admin, $ip) {
-            Db::table('merchant_admin')->where('id', $admin['id'])->update(['last_login_at' => Carbon::now()->toDateTimeString()]);
-            \App\Service\MerchantActivityService::account($admin, 'login', $ip);
-        });
-
-        $accountType = (int) $admin['account_type'];
-        $isOwner = (int) $admin['is_owner'] === 1;
-        // JWT 权限集合 = 可访问菜单的全部 perm_key(含目录/页面/按钮),供后端 #[Permission] 校验
-        $permissions = $isOwner
-            ? $this->allPermsForType($accountType)
-            : $this->collectPermissions((int) $admin['id']);
-
-        $token = JwtHelper::issue([
-            'admin_id' => (int) $admin['id'],
-            'admin_name' => $admin['real_name'] !== '' ? $admin['real_name'] : $admin['username'],
-            'site_id' => (int) $admin['site_id'],
-            'aud' => 'merchant',
-            'account_type' => $accountType,
-            'group_id' => (int) $admin['group_id'],
-            'merchant_id' => (int) $admin['merchant_id'],
-            'store_id' => (int) $admin['store_id'],
-            'is_owner' => $isOwner,
-            'permissions' => $permissions,
-        ], (string) config('mtrip.jwt_secret'), (int) config('mtrip.jwt_ttl', 7200));
-
-        return [
-            'token' => $token,
-            'admin' => $this->profile($admin, $subjectName, $permissions),
+    /** Only called after a consumed 2FA challenge or a validated one-time support exchange. */
+    public function issueSession(array $admin, array $support = []): array
+    {
+        $permissions = $this->profile($admin)['permissions'];
+        $claims = [
+            'admin_id' => (int) $admin['id'], 'admin_name' => $admin['real_name'] ?: $admin['username'],
+            'site_id' => (int) $admin['site_id'], 'aud' => 'merchant',
+            'account_type' => (int) $admin['account_type'], 'group_id' => (int) $admin['group_id'],
+            'merchant_id' => (int) $admin['merchant_id'], 'store_id' => (int) $admin['store_id'],
+            'is_owner' => (int) $admin['is_owner'] === 1, 'permissions' => $permissions,
+            'auth_version' => (int) $admin['auth_version'], 'amr' => $support === [] ? 'totp' : 'support',
         ];
+        $ttl = (int) config('mtrip.jwt_ttl', 7200);
+        if ($support !== []) {
+            $claims['actor_admin_id'] = (int) $support['operator_id'];
+            $claims['impersonation_session_id'] = (int) $support['id'];
+            $ttl = max(1, strtotime($support['expires_at'] . ' UTC') - time());
+        }
+        $profile = $this->profile($admin, null, $permissions);
+        if ($support !== []) {
+            $profile['isOwner'] = false;
+            $profile['permissions'] = [];
+            $profile['impersonation'] = ['sessionId' => (int) $support['id'], 'actorName' => $support['operator_name'], 'expiresAt' => str_replace(' ', 'T', $support['expires_at']) . 'Z'];
+        }
+        return ['token' => JwtHelper::issue($claims, (string) config('mtrip.jwt_secret'), $ttl), 'admin' => $profile];
     }
 
     /**
@@ -146,18 +135,13 @@ class MerchantAuthService
      */
     public function updatePassword(int $adminId, string $oldPassword, string $newPassword): void
     {
-        $admin = Db::table('merchant_admin')->where('id', $adminId)->whereNull('deleted_at')->first();
-        if ($admin === null) {
-            throw new BusinessException(ErrorCode::NOT_FOUND, '账号不存在');
-        }
-        if (! password_verify($oldPassword, (string) $admin->password)) {
-            throw new BusinessException(ErrorCode::PARAM_ERROR, '原密码错误');
-        }
         if (strlen($newPassword) < 8 || ! preg_match('/[A-Za-z]/', $newPassword) || ! preg_match('/\d/', $newPassword)) {
             throw new BusinessException(ErrorCode::PARAM_ERROR, '密码至少8位且需包含字母和数字');
         }
-        Db::transaction(function () use ($adminId, $newPassword, $admin) {
-            Db::table('merchant_admin')->where('id', $adminId)->update(['password' => password_hash($newPassword, PASSWORD_BCRYPT)]);
+        Db::transaction(function () use ($adminId, $oldPassword, $newPassword) {
+            $admin = Db::table('merchant_admin')->where('id', $adminId)->whereNull('deleted_at')->lockForUpdate()->first();
+            if (! $admin || ! password_verify($oldPassword, (string) $admin->password)) throw new BusinessException(ErrorCode::PARAM_ERROR, '原密码错误');
+            Db::table('merchant_admin')->where('id', $adminId)->update(['password' => password_hash($newPassword, PASSWORD_BCRYPT), 'auth_version' => Db::raw('auth_version + 1'), 'challenge_hash' => null, 'pending_secret_enc' => '']);
             \App\Service\MerchantActivityService::account((array) $admin, 'password_changed');
         });
     }

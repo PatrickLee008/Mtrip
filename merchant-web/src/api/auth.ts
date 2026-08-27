@@ -2,6 +2,12 @@ import { get, post, request } from '@/utils/http';
 import { encryptPayload, LOGIN_AES_KEY } from '@/utils/crypto';
 import type { MerchantProfile, MenuNode } from '@/api/types';
 
+export interface ChallengeResult { challengeToken: string; requiresEnrollment: boolean; expiresIn: number }
+export interface SetupResult { manualKey: string; otpauthUri: string }
+export function apiTwoFaSetup(challengeToken: string): Promise<SetupResult> { return post('/merchant/auth/2fa/setup', { challengeToken }); }
+export function apiTwoFaVerify(challengeToken: string, twoFaCode: string): Promise<LoginResult> { return post('/merchant/auth/2fa/verify', { challengeToken, twoFaCode }); }
+export function apiSupportExchange(exchangeCode: string): Promise<LoginResult> { return post('/merchant/auth/impersonation/exchange', { exchangeCode }); }
+
 export interface LoginResult {
   token: string;
   admin: MerchantProfile;
@@ -12,17 +18,9 @@ export interface MenusResult {
   perms: string[];
 }
 
-export function apiLogin(username: string, password: string): Promise<LoginResult> {
-  // 登录参数 AES 加密传输(VITE_LOGIN_AES_KEY 未配置时回退明文,需后端关闭强制加密)
-  if (!LOGIN_AES_KEY) {
-    return post<LoginResult>('/merchant/auth/login', { username, password });
-  }
-  return request<LoginResult>({
-    method: 'POST',
-    url: '/merchant/auth/login',
-    data: { payload: encryptPayload({ username, password }, LOGIN_AES_KEY) },
-    headers: { 'X-Encrypted': '1' },
-  });
+export function apiLogin(username: string, password: string): Promise<ChallengeResult> {
+  if (!LOGIN_AES_KEY) return post('/merchant/auth/login', { username, password });
+  return request({ method: 'POST', url: '/merchant/auth/login', data: { payload: encryptPayload({ username, password }, LOGIN_AES_KEY) }, headers: { 'X-Encrypted': '1' } });
 }
 
 export function apiLogout(): Promise<null> {

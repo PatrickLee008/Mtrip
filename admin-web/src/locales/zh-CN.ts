@@ -4,6 +4,24 @@
  * - 与 en-US 的 key 路径保持完全一致
  */
 export default {
+  merchantSecurity: {
+  "account": "登录账号",
+  "type": "账号类型",
+  "type1": "集团",
+  "type2": "商户",
+  "type3": "门店",
+  "status0": "未注册",
+  "status1": "活跃",
+  "status2": "需要重置",
+  "hint": "每个登录账号独立绑定身份验证器，管理员无法查看设置密钥或二维码。",
+  "superOnly": "仅授权超级管理员可访问账号安全管理。",
+  "reason": "重置原因",
+  "reasonRequired": "请填写重置原因",
+  "resetConfirm": "确定重置 {name} 的2FA？原身份验证器与现有会话将失效，不影响其他账号。",
+  "supportHint": "请选择具体账号进入30分钟只读支持会话，禁止集团级访问及所有写操作。",
+  "portalMissing": "请先配置可信HTTPS商户门户地址 VITE_MERCHANT_PORTAL_URL。",
+  "popupBlocked": "请允许打开商户门户弹窗后重试。"
+},
   merchantDirectory: {
     title: '商户目录', subtitle: '管理商户档案、酒店业务及物业关联',
     commission: '佣金比例 (%)', settlement: '结算周期', monthly: '月结', archived: '已归档物业',

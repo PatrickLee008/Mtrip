@@ -50,6 +50,7 @@ Router::addGroup('/api/v1/admin', static function () {
     Router::post('/merchant/activate', [MerchantController::class, 'activate']);
     Router::post('/merchant/reactivate', [MerchantController::class, 'reactivate']);
     Router::get('/merchant/status-history', [MerchantController::class, 'statusHistory']);
+    Router::get('/merchant/security/accounts', [\App\Controller\MerchantSecurityController::class, 'accounts']);
     Router::post('/merchant/reset-2fa', [MerchantController::class, 'resetTwoFa']);
     Router::post('/merchant/impersonate/start', [MerchantController::class, 'impersonateStart']);
     Router::post('/merchant/impersonate/end', [MerchantController::class, 'impersonateEnd']);
@@ -182,10 +183,14 @@ Router::addGroup('/api/v1/admin/compliance', static function () {
 // ============================================================
 // 登录(组外,免鉴权)
 Router::post('/api/v1/merchant/auth/login', [MerchantAuthController::class, 'login']);
+Router::post('/api/v1/merchant/auth/2fa/setup', [\App\Controller\MerchantSecurityController::class, 'setup']);
+Router::post('/api/v1/merchant/auth/2fa/verify', [\App\Controller\MerchantSecurityController::class, 'verify']);
+Router::post('/api/v1/merchant/auth/impersonation/exchange', [\App\Controller\MerchantSecurityController::class, 'exchange']);
 
 Router::addGroup('/api/v1/merchant', static function () {
     // ---------- 登录态 ----------
     Router::post('/auth/logout', [MerchantAuthController::class, 'logout']);
+    Router::post('/auth/impersonation/end', [MerchantAuthController::class, 'logout']);
     Router::get('/auth/me', [MerchantAuthController::class, 'me']);
     Router::get('/auth/menus', [MerchantAuthController::class, 'menus']);
     Router::post('/auth/password', [MerchantAuthController::class, 'updatePassword']);

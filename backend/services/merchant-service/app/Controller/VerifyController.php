@@ -156,7 +156,7 @@ class VerifyController extends AbstractController
             ? $this->decryptField((string) $merchant['contact_phone'])
             : MaskHelper::mobile($this->decryptField((string) $merchant['contact_phone']));
         $merchant['legal_id_card'] = MaskHelper::idCard($this->decryptField((string) $merchant['legal_id_card']));
-        unset($merchant['legal_id_images'], $merchant['deleted_at'], $merchant['contact_phone_index']);
+        unset($merchant['legal_id_images'], $merchant['deleted_at'], $merchant['contact_phone_index'], $merchant['two_fa_secret_enc']);
         $merchant['two_fa_status'] = (int) ($merchant['two_fa_status'] ?? 0);
         $merchant['access_status'] = (int) ($merchant['access_status'] ?? 0);
 
@@ -276,7 +276,11 @@ class VerifyController extends AbstractController
         $timeline = Db::table('merchant_verify_timeline')
             ->where('merchant_id', $merchant['id'])
             ->orderByDesc('id')->limit(100)->get()
-            ->map(static fn ($r) => (array) $r)->all();
+            ->map(static function ($row) {
+                $row = (array) $row;
+                if (in_array($row['action'], ['access_code_generated', 'code_regenerated'], true)) $row['note'] = 'Access code configured';
+                return $row;
+            })->all();
 
         $accessGrant = null;
         if ((string) ($merchant['access_code'] ?? '') !== '') {
@@ -291,7 +295,7 @@ class VerifyController extends AbstractController
                 ->orderByDesc('id')->first();
             $channelText = (string) ($deliveryLog->channels ?? $merchant['credential_channels'] ?? '');
             $accessGrant = [
-                'access_code' => (string) $merchant['access_code'],
+                'access_code_configured' => true,
                 'generated_at' => $generationLog->created_at ?? $merchant['audit_time'] ?? null,
                 'generated_by' => (string) ($generationLog->operator_name ?? ''),
                 'delivery_status' => $deliveryLog !== null ? 'sent' : 'generated',
@@ -300,7 +304,7 @@ class VerifyController extends AbstractController
         }
 
         return Result::success([
-            'merchant' => $merchant,
+            'merchant' => array_diff_key($merchant, array_flip(['access_code', 'two_fa_secret_enc'])),
             'documents' => $documents,
             'businesses' => $businesses,
             'timeline' => $timeline,
@@ -380,7 +384,7 @@ class VerifyController extends AbstractController
         }
         $this->pushAccessCodeLog($merchant, 'generate', $channels);
         $this->pushTimeline($merchant, 'approved', $remark !== '' ? $remark : '商户已批准');
-        $this->pushTimeline($merchant, 'access_code_generated', $account['access_code']);
+        $this->pushTimeline($merchant, 'access_code_generated', 'Access code configured');
         $this->pushTimeline($merchant, 'credentials_sent', 'via ' . $channels);
         $this->pushActivity($merchant, 'verification', '商户已批准并发送登录凭证');
         return Result::success($account, '商户已批准,登录凭证已生成');
@@ -503,7 +507,7 @@ class VerifyController extends AbstractController
         $code = $this->service->generateAccessCode((int) $merchant['merchant_type']);
         Db::table('merchant_info')->where('id', $merchant['id'])->update(['access_code' => $code]);
         $this->pushAccessCodeLog($merchant, 'regenerate', '');
-        $this->pushTimeline($merchant, 'code_regenerated', $code);
+        $this->pushTimeline($merchant, 'code_regenerated', 'Access code configured');
         $this->pushActivity($merchant, 'verification', '重新生成商户访问码');
         return Result::success(['access_code' => $code], '访问码已重新生成');
     }

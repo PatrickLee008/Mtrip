@@ -24,6 +24,7 @@ class GroupService
         if ($owner) {
             Db::table('merchant_admin')->where('id', $owner->id)->update([
                 'password' => password_hash($password, PASSWORD_BCRYPT),
+                'auth_version' => Db::raw('auth_version + 1'), 'challenge_hash' => null, 'pending_secret_enc' => '',
                 'status' => 1,
             ]);
             return ['username' => (string) $owner->username, 'password' => $password, 'created' => false];

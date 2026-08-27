@@ -62,8 +62,9 @@ function onLogout(): void {
     title: t('header.logoutConfirm'),
     okType: 'danger',
     onOk: async () => {
+      const support = !!userStore.profile?.impersonation;
       await userStore.logout();
-      window.location.href = '/login';
+      window.location.href = support ? '/support-session' : '/login';
     },
   });
 }
@@ -168,7 +169,7 @@ onMounted(() => {
       </span>
       <template #overlay>
         <a-menu>
-          <a-menu-item key="password" @click="pwdOpen = true">
+          <a-menu-item v-if="!userStore.profile?.impersonation" key="password" @click="pwdOpen = true">
             <LockOutlined /> {{ t('header.changePassword') }}
           </a-menu-item>
           <a-menu-divider />

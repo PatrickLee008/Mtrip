@@ -46,6 +46,7 @@ class MerchantActivityController extends AbstractController
         $total = (clone $q)->count();
         $list = $q->orderByDesc('id')->forPage($export ? 1 : $page, $pageSize)->get()->map(static function ($row) use ($source, $description, $actor) {
             $row = (array) $row;
+            if ($source === 'verification' && in_array($row['action'] ?? '', ['access_code_generated', 'code_regenerated'], true)) $row[$description] = 'Access code configured';
             return ['id' => $row['id'], 'merchant_id' => $row['merchant_id'], 'created_at' => $row['created_at'],
                 'activity_type' => $source, 'description' => (string) ($row[$description] ?? ''), 'performed_by' => (string) ($row[$actor] ?? ''),
                 'performed_by_id' => $row['actor_id'] ?? $row['operator_id'] ?? null, 'actor_type' => $row['actor_type'] ?? 'legacy',

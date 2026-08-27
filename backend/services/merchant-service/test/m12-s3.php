@@ -177,11 +177,11 @@ try {
     s3Actor();
     $accountIds[] = $account = (int) Db::table('merchant_admin')->insertGetId(['site_id' => 991, 'merchant_id' => $id, 'account_type' => 2, 'username' => 's3-' . bin2hex(random_bytes(6)), 'password' => password_hash('S3-test-secret123', PASSWORD_BCRYPT), 'is_owner' => 1, 'status' => 1]);
     $auth = new \App\Service\Merchant\MerchantAuthService();
-    $auth->login((string) Db::table('merchant_admin')->where('id', $account)->value('username'), 'S3-test-secret123', '127.0.0.1');
+    merchantFixtureLogin($auth, (string) Db::table('merchant_admin')->where('id', $account)->value('username'), 'S3-test-secret123', '127.0.0.1');
     $login = Db::table('merchant_activity_log')->where('target_account_id', $account)->where('activity_type', 'login')->first();
     check($login && $login->actor_type === 'merchant' && (int) $login->performed_by_id === $account, 'S3 login actor belongs to actual merchant account');
     $auth->updatePassword($account, 'S3-test-secret123', 'S3-next-secret456');
-    check(Db::table('merchant_activity_log')->where('target_account_id', $account)->where('activity_type', 'account_change')->count() === 1, 'S3 password change audited without secret');
+    check(Db::table('merchant_activity_log')->where('target_account_id', $account)->where('activity_type', 'account_change')->where('description', 'like', '%: password_changed')->count() === 1, 'S3 password change audited without secret');
     check(!str_contains(json_encode(Db::table('merchant_activity_log')->where('merchant_id', $id)->get()->all()), 'secret123'), 'S3 secrets absent from activity logs');
     $historyController = $container->get(\App\Controller\MerchantActivityController::class);
     Db::table('merchant_warning')->insert(['site_id' => 991, 'merchant_id' => $id, 'reason' => 'S3 synthetic warning', 'issued_by' => 'Test reviewer']);
@@ -196,7 +196,7 @@ try {
     s3Actor(false, 992, ['merchant:activity:list', 'platform:warning:list']);
     check(s3Call($historyController, 'history', ['source' => 'warning', 'merchantId' => $id, 'siteId' => 991])['total'] === 0, 'S3 warning history cross-site isolation');
     s3Actor();
-    $loggedIn = $auth->login((string) Db::table('merchant_admin')->where('id', $account)->value('username'), 'S3-next-secret456', '127.0.0.1');
+    $loggedIn = merchantFixtureLogin($auth, (string) Db::table('merchant_admin')->where('id', $account)->value('username'), 'S3-next-secret456', '127.0.0.1');
     $middleware = new \Mtrip\Shared\Middleware\MerchantAuthMiddleware($config);
     $request = (new \Hyperf\HttpMessage\Server\Request('POST', '/api/v1/merchant/rooms/update'))->withHeader('Authorization', 'Bearer ' . $loggedIn['token']);
     $success = new class implements \Psr\Http\Server\RequestHandlerInterface {

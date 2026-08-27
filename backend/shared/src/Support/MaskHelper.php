@@ -79,6 +79,9 @@ class MaskHelper
     {
         $defaults = [
             'password', 'pwd', 'secret', 'client_secret', 'token', 'access_key', 'secret_key',
+            'otp', 'twofacode', 'two_fa_code', 'challengetoken', 'challenge_token', 'accesscode', 'access_code',
+            'onetimepassword', 'one_time_password', 'manualkey', 'manual_key', 'otpauthuri', 'otpauth_uri',
+            'exchangecode', 'exchange_code', 'two_fa_secret_enc', 'pending_secret_enc', 'oldpassword', 'newpassword',
             'mobile', 'phone', 'email', 'id_card', 'idcard', 'bank_card', 'card_no', 'real_name',
         ];
         $keys = array_map('strtolower', array_merge($defaults, $sensitiveKeys));
