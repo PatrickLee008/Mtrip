@@ -119,6 +119,8 @@ services:
       - ../database/merchant/25-merchant-application-reg-number-unique.sql:/docker-entrypoint-initdb.d/39g-merchant-application-reg-number-unique.sql:ro
       # 入驻线索创建即生成唯一商户业务编号 MCH-XXXX，并贯穿正式商户
       - ../database/merchant/26-merchant-code.sql:/docker-entrypoint-initdb.d/39h-merchant-code.sql:ro
+      - ../database/merchant/27-merchant-status.sql:/docker-entrypoint-initdb.d/39i-merchant-status.sql:ro
+      - ../database/merchant/28-merchant-directory-property.sql:/docker-entrypoint-initdb.d/39j-merchant-directory-property.sql:ro
       - ../database/order/01-order.sql:/docker-entrypoint-initdb.d/40-order.sql:ro
       - ../database/order/02-verify.sql:/docker-entrypoint-initdb.d/41-verify.sql:ro
       - ../database/finance/01-finance.sql:/docker-entrypoint-initdb.d/50-finance.sql:ro

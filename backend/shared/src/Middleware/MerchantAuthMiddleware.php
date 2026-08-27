@@ -43,6 +43,7 @@ class MerchantAuthMiddleware implements MiddlewareInterface
             throw new BusinessException(ErrorCode::UNAUTHORIZED);
         }
 
+        \Mtrip\Shared\Merchant\MerchantAccessGuard::assertSession($claims);
         $permissions = (array) ($claims['permissions'] ?? []);
 
         MerchantContext::set([

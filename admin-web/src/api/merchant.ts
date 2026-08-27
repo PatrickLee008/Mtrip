@@ -4,12 +4,30 @@ import type { PageData } from '@/api/types';
 /** 商户/供应商管理接口(merchant-service /api/v1/admin/*) */
 type Row = Record<string, any>;
 
+export type MerchantStatusAction = 'suspend' | 'activate' | 'reactivate' | 'blacklist' | 'unblacklist';
+export function apiMerchantStatusChange(action: MerchantStatusAction, data: {
+  id: number; note: string; expectedVersion: number; requestId: string; suspendedUntil?: string; evidence?: string;
+}): Promise<Row> {
+  return post(`/admin/merchant/${action}`, data);
+}
+export function apiMerchantStatusHistory(params: Record<string, unknown>): Promise<PageData<Row>> {
+  return get('/admin/merchant/status-history', params);
+}
+
 // ---------- 商户(文档 6.4.2) ----------
 export function apiMerchantList(params: Record<string, unknown>): Promise<PageData<Row>> {
   return get<PageData<Row>>('/admin/merchant/list', params);
 }
 
-export function apiMerchantDetail(id: number): Promise<{ merchant: Row; accounts: Row[]; admins: Row[] }> {
+export function apiMerchantPropertyHistory(params: Record<string, unknown>): Promise<PageData<Row>> {
+  return get('/admin/merchant/property/history', params);
+}
+
+export function apiMerchantPropertyBind(data: { merchantId: number; businessId: number; storeId: number; expectedVersion: number; countryCode: string; cityKey: string; note: string }): Promise<Row> {
+  return post('/admin/merchant/property/bind', data);
+}
+
+export function apiMerchantDetail(id: number): Promise<{ merchant: Row; accounts: Row[]; admins: Row[]; applications: Row[]; businesses: Row[]; properties: Row[]; group: Row | null }> {
   return get('/admin/merchant/detail', { id });
 }
 

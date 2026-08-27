@@ -17,6 +17,7 @@ use Hyperf\Di\Annotation\Inject;
 use Mtrip\Shared\Constants\ErrorCode;
 use Mtrip\Shared\Context\UserContext;
 use Mtrip\Shared\Exception\BusinessException;
+use Mtrip\Shared\Merchant\MerchantAccessGuard;
 use Mtrip\Shared\Support\CryptoHelper;
 use Mtrip\Shared\Support\MaskHelper;
 use Mtrip\Shared\Support\OrderNoGenerator;
@@ -107,6 +108,13 @@ class OrderController extends AbstractController
             $quantity, $dates, $useDate, $endDate, $orderNo, $contactName, $contactPhone,
             $isCitizen, $couponId, $guests, $remark
         ) {
+            MerchantAccessGuard::lockBookable([$goods], $siteId);
+            MerchantAccessGuard::lockGoods([$goods], $siteId);
+            $sku = (array) Db::table($orderType === 1 ? 'hotel_room_type' : 'ticket_type')
+                ->where('id', $skuId)->where('goods_id', $goodsId)->where('status', 1)->whereNull('deleted_at')->lockForUpdate()->first();
+            if ($sku === []) {
+                throw new BusinessException(ErrorCode::DATA_CONFLICT, '房型/票种已停售');
+            }
             [$totalAmount, $changes] = $this->stockService->lock(
                 $siteId, $goodsId, $orderType, $skuId, $sku, $dates, $quantity, $isCitizen
             );
@@ -180,8 +188,20 @@ class OrderController extends AbstractController
             throw new BusinessException(ErrorCode::PARAM_ERROR, '支付方式不正确');
         }
 
-        $result = Db::transaction(function () use ($orderId, $payMethod) {
+        $snapshot = Db::table('order_main')->where('id', $orderId)->where('site_id', $this->requireSiteId())
+            ->where('user_id', UserContext::userId())->whereNull('deleted_at')->first();
+        if (! $snapshot) {
+            throw new BusinessException(ErrorCode::NOT_FOUND, '订单不存在');
+        }
+        $snapshot = (array) $snapshot;
+        $result = Db::transaction(function () use ($orderId, $payMethod, $snapshot) {
+            MerchantAccessGuard::lockBookable([$snapshot], (int) $snapshot['site_id']);
             $order = $this->lockOwnOrder($orderId);
+            foreach (['merchant_id', 'site_id', 'order_type', 'supplier_id'] as $field) {
+                if ((int) $order[$field] !== (int) $snapshot[$field]) {
+                    throw new BusinessException(ErrorCode::DATA_CONFLICT, '订单归属已变更');
+                }
+            }
             if ((int) $order['order_status'] !== 0) {
                 throw new BusinessException(ErrorCode::DATA_CONFLICT, '订单不是待支付状态');
             }

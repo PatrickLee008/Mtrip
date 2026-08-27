@@ -175,6 +175,7 @@ function onLogout(): void {
       </a-layout-header>
       <!-- 内容区域(多页签已移除:直接渲染当前路由页面) -->
       <a-layout-content class="layout-content">
+        <a-alert v-if="userStore.profile?.bookingRestricted" :message="t('merchantStatus.suspended')" type="warning" show-icon />
         <router-view />
       </a-layout-content>
     </a-layout>

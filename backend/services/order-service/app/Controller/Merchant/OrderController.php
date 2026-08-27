@@ -15,7 +15,7 @@ use Mtrip\Shared\Support\Result;
 
 /**
  * 商户端订单与核销:数据范围强制 MerchantContext 商户集合
- * 集团→本集团绑定商户全部订单;商户/门店→本商户订单
+ * 集团→可访问的绑定商户订单；商户→本商户订单；门店在订单归属模型补齐前不开放。
  */
 class OrderController extends AbstractAdminController
 {
@@ -103,7 +103,9 @@ class OrderController extends AbstractAdminController
     private function applyMerchantScope($query): void
     {
         $merchantIds = MerchantContext::scopeMerchantIds();
-        $query->whereIn('merchant_id', $merchantIds === [] ? [0] : $merchantIds);
+        // 订单尚无门店归属字段，不能把商户全集授权给门店账号。
+        $query->where('site_id', MerchantContext::siteId());
+        $query->whereIn('merchant_id', MerchantContext::scopeStoreId() !== null ? [] : $merchantIds);
     }
 
     private function findScoped(int $id): array
@@ -137,7 +139,7 @@ class OrderController extends AbstractAdminController
 
     private function assertMerchantScope(int $merchantId): void
     {
-        if (! in_array($merchantId, MerchantContext::scopeMerchantIds(), true)) {
+        if (MerchantContext::scopeStoreId() !== null || ! in_array($merchantId, MerchantContext::scopeMerchantIds(), true)) {
             throw new BusinessException(ErrorCode::NO_DATA_PERMISSION);
         }
     }

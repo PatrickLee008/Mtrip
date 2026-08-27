@@ -3,6 +3,7 @@
  * 覆盖:通用/状态/登录/菜单/头部/工作台/子账号/角色/门店/订单/商品/错误页
  */
 export default {
+  merchantStatus: { suspended: 'Your merchant is suspended: new bookings and unpaid booking payments are blocked. You can still manage confirmed bookings and after-sales.' },
   common: {
     home: 'Home',
     search: 'Search',

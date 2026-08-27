@@ -96,26 +96,32 @@ class MerchantContext
     /**
      * 当前账号可操作的商户ID集合(数据范围核心):
      * - 集团(1):本集团下全部绑定商户
-     * - 商户(2)/门店(3):仅本商户
-     * 返回空数组表示无任何可见商户(应拦截为空结果)。
+     * - 商户(2):仅本商户；门店(3):无商户级资源授权，门店资源须另按scopeStoreId过滤。
+     * 无授权返回[-1]，避免旧调用者把空集合回退为[0]而泄露独立供应商资源。
      */
     public static function scopeMerchantIds(): array
     {
         $type = self::accountType();
+        if ($type === 3) {
+            // 现有商品/订单无store_id，不能将同商户的其他物业授权给门店账号。
+            return [-1];
+        }
         if ($type === 1) {
             $groupId = self::groupId();
             if ($groupId <= 0) {
-                return [];
+                return [-1];
             }
             return Db::table('merchant_info')
-                ->where('group_id', $groupId)
+                ->where('group_id', $groupId)->where('site_id', self::siteId())
+                ->whereIn('status', [3, 4])
+                ->whereNotIn('id', Db::table('merchant_blacklist')->where('status', 1)->select('merchant_id'))
                 ->whereNull('deleted_at')
                 ->pluck('id')
                 ->map(fn ($id) => (int) $id)
-                ->all();
+                ->all() ?: [-1];
         }
         $merchantId = self::merchantId();
-        return $merchantId > 0 ? [$merchantId] : [];
+        return $merchantId > 0 ? [$merchantId] : [-1];
     }
 
     /**

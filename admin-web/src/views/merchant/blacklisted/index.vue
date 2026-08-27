@@ -1,13 +1,14 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { message } from 'ant-design-vue';
+
 import { BellOutlined, LoginOutlined, ReloadOutlined } from '@ant-design/icons-vue';
 import PageContainer from '@/components/PageContainer.vue';
 import { useTable, type TableRow } from '@/composables/useTable';
-import { apiMerchantBlacklistList, apiMerchantUnblacklist } from '@/api/merchant';
+import { apiMerchantBlacklistList } from '@/api/merchant';
 import NotifyDrawer from '@/components/merchant/NotifyDrawer.vue';
 import ImpersonateModal from '@/components/merchant/ImpersonateModal.vue';
+import MerchantStatusActions from '@/components/merchant/MerchantStatusActions.vue';
 
 /** 黑名单商户(Super Admin Portal 模块 03) */
 const { t } = useI18n();
@@ -25,10 +26,8 @@ const columns = computed(() => [
   { title: t('common.action'), key: 'action_col', width: 120, fixed: 'right' as const },
 ]);
 
-async function remove(row: TableRow): Promise<void> {
-  await apiMerchantUnblacklist(row.merchant_id);
-  message.success(t('tip.saveSuccess'));
-  await load();
+function statusTarget(row: TableRow): TableRow {
+  return { ...row, id: row.merchant_id, status: 4, is_blacklisted: true };
 }
 
 const notifyOpen = ref(false);
@@ -60,9 +59,7 @@ onMounted(() => { void load(); });
       <a-table :columns="columns" :data-source="list" :loading="loading" :pagination="pagination" row-key="id" size="middle" :scroll="{ x: 1050 }">
         <template #bodyCell="{ column, record }">
           <template v-if="column.key === 'action_col'">
-            <a-popconfirm title="Remove from blacklist?" @confirm="remove(record)">
-              <a-button v-perm="'merchant:list:status'" type="link" size="small" style="color: var(--sap-success)">Remove</a-button>
-            </a-popconfirm>
+            <MerchantStatusActions :merchant="statusTarget(record)" @changed="load" />
             <a-tooltip :title="t('merchant.notifyPage.title')">
               <a-button v-perm="'merchant:list:notify'" type="link" size="small" @click="openNotify(record)"><template #icon><BellOutlined /></template></a-button>
             </a-tooltip>

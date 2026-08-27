@@ -152,6 +152,7 @@ class OnboardingController extends AbstractController
                 $r = (array) $r;
                 // 手机号加密存储,详情接口解密后明文返回(入驻阶段需完整联系方式跟进线索)
                 $r['contact_phone'] = $this->decryptField((string) ($r['contact_phone'] ?? ''));
+                unset($r['contact_phone_index']);
                 return $r;
             })->all();
         $documents = Db::table('merchant_verify_document')
@@ -287,6 +288,7 @@ class OnboardingController extends AbstractController
                     'kyc_scope' => in_array((int) ($biz['kycScope'] ?? 1), [1, 2], true) ? (int) ($biz['kycScope'] ?? 1) : 1,
                     'contact_name' => mb_substr((string) ($biz['contactName'] ?? ''), 0, 50),
                     'contact_phone' => $this->encryptField(mb_substr((string) ($biz['contactPhone'] ?? ''), 0, 30)),
+                    'contact_phone_index' => \Mtrip\Shared\Merchant\MerchantPhoneIndex::hash(mb_substr((string) ($biz['contactPhone'] ?? ''), 0, 30), $this->aesKey()),
                     'contact_email' => mb_substr((string) ($biz['contactEmail'] ?? ''), 0, 100),
                     'kyc_status' => 0,
                 ]);

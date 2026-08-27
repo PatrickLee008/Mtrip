@@ -40,12 +40,16 @@ Router::addGroup('/api/v1/admin', static function () {
     // ---------- 商户管理(11 接口,文档 6.4.2) ----------
     Router::get('/merchant/list', [MerchantController::class, 'index']);
     Router::get('/merchant/detail', [MerchantController::class, 'detail']);
+    Router::post('/merchant/property/bind', [\App\Controller\MerchantPropertyController::class, 'bind']);
+    Router::get('/merchant/property/history', [\App\Controller\MerchantPropertyController::class, 'history']);
     Router::post('/merchant/add', [MerchantController::class, 'create']);
     Router::post('/merchant/update', [MerchantController::class, 'update']);
     Router::post('/merchant/audit', [MerchantController::class, 'audit']);
     Router::post('/merchant/toggle-status', [MerchantController::class, 'toggleStatus']);
     Router::post('/merchant/suspend', [MerchantController::class, 'suspend']);
     Router::post('/merchant/activate', [MerchantController::class, 'activate']);
+    Router::post('/merchant/reactivate', [MerchantController::class, 'reactivate']);
+    Router::get('/merchant/status-history', [MerchantController::class, 'statusHistory']);
     Router::post('/merchant/reset-2fa', [MerchantController::class, 'resetTwoFa']);
     Router::post('/merchant/impersonate/start', [MerchantController::class, 'impersonateStart']);
     Router::post('/merchant/impersonate/end', [MerchantController::class, 'impersonateEnd']);

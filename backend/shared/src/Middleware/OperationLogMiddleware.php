@@ -65,8 +65,9 @@ class OperationLogMiddleware implements MiddlewareInterface
                 'status_code' => $response->getStatusCode(),
                 'created_at' => date('Y-m-d H:i:s'),
             ]);
-        } catch (\Throwable) {
-            // 日志写入失败不影响业务响应
+        } catch (\Throwable $e) {
+            // 不输出SQL/请求参数，避免日志异常暴露敏感数据。M12强审计在业务事务中另存。
+            error_log('operation_audit_write_failed path=' . $request->getUri()->getPath() . ' exception=' . $e::class);
         }
 
         return $response;

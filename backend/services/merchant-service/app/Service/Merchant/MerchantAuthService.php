@@ -10,6 +10,7 @@ use Hyperf\DbConnection\Db;
 use Mtrip\Shared\Constants\ErrorCode;
 use Mtrip\Shared\Exception\BusinessException;
 use Mtrip\Shared\Support\JwtHelper;
+use Mtrip\Shared\Merchant\MerchantAccessGuard;
 
 use function Hyperf\Config\config;
 
@@ -29,7 +30,7 @@ class MerchantAuthService
         if ($admin === null) {
             $merchantId = (int) (Db::table('merchant_info')
                 ->where('access_code', strtoupper($username))
-                ->where('status', 3)
+                ->whereIn('status', [3, 4])
                 ->whereNull('deleted_at')
                 ->value('id') ?? 0);
             if ($merchantId > 0) {
@@ -53,7 +54,8 @@ class MerchantAuthService
             throw new BusinessException(ErrorCode::UNAUTHORIZED, '账号或密码错误');
         }
 
-        $subjectName = $this->assertSubjectActive($admin);
+        MerchantAccessGuard::assertSubject($admin);
+        $subjectName = $this->subjectName($admin);
 
         Db::table('merchant_admin')->where('id', $admin['id'])
             ->update(['last_login_at' => Carbon::now()->toDateTimeString()]);
@@ -105,6 +107,7 @@ class MerchantAuthService
             'subjectName' => $subjectName,
             'permissions' => $permissions,
             'lastLoginAt' => (string) ($admin['last_login_at'] ?? ''),
+            'bookingRestricted' => $accountType !== 1 && (int) Db::table('merchant_info')->where('id', $admin['merchant_id'])->value('status') === 4,
         ];
     }
 
@@ -206,45 +209,8 @@ class MerchantAuthService
             ->toArray();
     }
 
-    /**
-     * 校验账号所属主体(集团/商户/门店)状态,返回主体展示名称
-     */
-    private function assertSubjectActive(array $admin): string
-    {
-        return match ((int) $admin['account_type']) {
-            1 => $this->assertGroupActive((int) $admin['group_id']),
-            3 => $this->assertStoreActive((int) $admin['store_id']),
-            default => $this->assertMerchantActive((int) $admin['merchant_id']),
-        };
-    }
 
-    private function assertGroupActive(int $groupId): string
-    {
-        $group = Db::table('merchant_group')->where('id', $groupId)->whereNull('deleted_at')->first();
-        if ($group === null || (int) $group->status !== 1) {
-            throw new BusinessException(ErrorCode::FORBIDDEN, '所属集团已停用');
-        }
-        return (string) $group->group_name;
-    }
 
-    private function assertMerchantActive(int $merchantId): string
-    {
-        $merchant = Db::table('merchant_info')->where('id', $merchantId)->whereNull('deleted_at')->first();
-        if ($merchant === null || ! in_array((int) $merchant->status, [1, 3], true)) {
-            throw new BusinessException(ErrorCode::FORBIDDEN, '所属商户未启用或已停用');
-        }
-        return (string) $merchant->merchant_name;
-    }
-
-    private function assertStoreActive(int $storeId): string
-    {
-        $store = Db::table('merchant_store')->where('id', $storeId)->whereNull('deleted_at')->first();
-        if ($store === null || (int) $store->status !== 1) {
-            throw new BusinessException(ErrorCode::FORBIDDEN, '所属门店已停业');
-        }
-        $this->assertMerchantActive((int) $store->merchant_id);
-        return (string) $store->store_name;
-    }
 
     /** 账号主体名称(用于顶栏展示) */
     private function subjectName(array $admin): string

@@ -38,7 +38,7 @@ MTrip/
 | 08 | [08-部署与网关.md](./08-部署与网关.md) | docker-compose/OpenResty/联调验证 | 部分完成(08-6 启动验证已通过,08-7 联调待执行) | 80% |
 | 09 | [09-移动端微服务.md](./09-移动端微服务.md) | C端 /api/v1/app/* 接口(user/goods/order等) | 已完成(联调归模块07/08) | 100% |
 | 10 | [10-移动端App框架.md](./10-移动端App框架.md) | client-app Expo51+RN+TS 多端工程 | 已完成(冒烟联调归模块08) | 100% |
-| 15 | [15-M12-merchant-management.md](./15-M12-merchant-management.md) | PRD模块12商户管理：酒店/餐厅、状态、账号安全、证件、排名及合规 | 阶段0设计交付，待用户确认；业务编码未开始 | S0 |
+| 15 | [15-M12-merchant-management.md](./15-M12-merchant-management.md) | PRD模块12：酒店优先的商户管理，餐厅延期 | S2目录/档案/物业关联核心测试通过；Git由用户操作 | S2 |
 
 ## 实施顺序(首期里程碑)
 

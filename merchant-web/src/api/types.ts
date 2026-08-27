@@ -51,6 +51,7 @@ export interface MerchantProfile {
   isOwner: boolean;
   /** 当前主体名称(集团/商户/门店) */
   subjectName: string;
+  bookingRestricted?: boolean;
   permissions: string[];
   lastLoginAt: string;
 }

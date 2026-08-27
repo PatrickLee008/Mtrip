@@ -2,6 +2,7 @@
  * 中文语言包:只维护有中文翻译的词条,未翻译的 key 自动回退到 en-US
  */
 export default {
+  merchantStatus: { suspended: '商户已暂停：停止接收新预订及未支付订单付款；仍可处理已确认订单与售后。' },
   common: {
     home: '首页',
     search: '查询',

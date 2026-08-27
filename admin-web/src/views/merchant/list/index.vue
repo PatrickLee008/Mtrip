@@ -2,25 +2,27 @@
 import { computed, onMounted, reactive, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { Modal, message } from 'ant-design-vue';
-import { BellOutlined, CopyOutlined, LoginOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons-vue';
+import { BellOutlined, LoginOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons-vue';
+import MerchantPropertyPanel from '@/components/merchant/MerchantPropertyPanel.vue';
 import PageContainer from '@/components/PageContainer.vue';
 import SiteTreeSelect from '@/components/SiteTreeSelect.vue';
 import StatusTag from '@/components/StatusTag.vue';
 import NotifyDrawer from '@/components/merchant/NotifyDrawer.vue';
 import ImpersonateModal from '@/components/merchant/ImpersonateModal.vue';
+import MerchantStatusActions from '@/components/merchant/MerchantStatusActions.vue';
 import { useTable, type TableRow } from '@/composables/useTable';
 import { useUserStore } from '@/stores/user';
 import type { StatusItem } from '@/components/StatusTag.vue';
 import {
   apiMerchantAdd,
-  apiMerchantActivate,
+
   apiMerchantAudit,
   apiMerchantClose,
   apiMerchantCommission,
   apiMerchantDetail,
   apiMerchantList,
   apiMerchantReset2Fa,
-  apiMerchantSuspend,
+
   apiMerchantUpdate,
 } from '@/api/merchant';
 import { exportCsv } from '@/utils/exportCsv';
@@ -56,6 +58,7 @@ const STATUS_MAP = computed<Record<number, StatusItem>>(() => ({
   3: { text: t('status.enabled'), color: 'success' },
   4: { text: t('status.disabled'), color: 'default' },
   5: { text: t('common.delete'), color: 'default' },
+  6: { text: t('merchantDirectory.kycResubmit'), color: 'warning' },
 }));
 const TYPE_TEXT = computed<Record<number, string>>(() => ({
   1: t('goods.common.typeHotel'),
@@ -63,21 +66,19 @@ const TYPE_TEXT = computed<Record<number, string>>(() => ({
   3: t('merchant.title'),
 }));
 
-const { loading, list, query, load, search, reset } = useTable(apiMerchantList, {
-  merchantName: '',
-  merchantType: undefined,
-  status: undefined,
-  siteId: 0,
+const { loading, list, query, load, search, reset, pagination } = useTable(apiMerchantList, {
+  keyword: '', category: undefined, status: undefined, siteId: 0,
+  country: '', city: '', registeredFrom: '', registeredTo: '', sortField: 'registeredAt', sortOrder: 'desc',
 });
 
 const columns = computed(() => [
-  { title: t('common.id'), dataIndex: 'id', width: 70 },
+  { title: t('merchant.profile.merchantId'), dataIndex: 'merchant_code', width: 125 },
   { title: t('merchant.listPage.name'), dataIndex: 'merchant_name', width: 200, ellipsis: true },
   { title: t('common.type'), dataIndex: 'merchant_type', width: 100 },
   { title: t('merchant.listPage.contact'), dataIndex: 'contact_name', width: 100 },
   { title: t('merchant.listPage.phone'), dataIndex: 'contact_phone', width: 130 },
-  { title: t('merchant.title') + '(%)', dataIndex: 'commission_rate', width: 90 },
-  { title: t('merchant.listPage.code'), dataIndex: 'settlement_cycle', width: 90 },
+  { title: t('merchantDirectory.commission'), dataIndex: 'commission_rate', width: 100 },
+  { title: t('merchantDirectory.settlement'), dataIndex: 'settlement_cycle', width: 100 },
   { title: t('merchant.listPage.status'), dataIndex: 'status', width: 90 },
   { title: t('common.createdAt'), dataIndex: 'created_at', width: 165 },
   { title: t('common.action'), key: 'action_col', width: 300, fixed: 'right' as const },
@@ -89,7 +90,10 @@ const detailLoading = ref(false);
 const detail = ref<TableRow | null>(null);
 const detailAccounts = ref<TableRow[]>([]);
 const detailAdmins = ref<TableRow[]>([]);
-const copied = ref(false);
+const detailApplications = ref<TableRow[]>([]);
+const detailBusinesses = ref<TableRow[]>([]);
+const detailProperties = ref<TableRow[]>([]);
+const detailGroup = ref<TableRow | null>(null);
 
 async function openDetail(row: TableRow): Promise<void> {
   drawerOpen.value = true;
@@ -99,58 +103,21 @@ async function openDetail(row: TableRow): Promise<void> {
     detail.value = data.merchant;
     detailAccounts.value = data.accounts;
     detailAdmins.value = data.admins;
+    detailApplications.value = data.applications;
+    detailBusinesses.value = data.businesses;
+    detailProperties.value = data.properties;
+    detailGroup.value = data.group;
   } finally {
     detailLoading.value = false;
   }
 }
 
-function copyCode(): void {
-  if (!detail.value?.access_code) {
-    return;
-  }
-  void navigator.clipboard.writeText(detail.value.access_code).then(() => {
-    copied.value = true;
-    setTimeout(() => {
-      copied.value = false;
-    }, 2000);
-  });
+
+
+async function statusChanged(): Promise<void> {
+  await load();
+  if (drawerOpen.value && detail.value) await openDetail(detail.value);
 }
-
-// ---------- 暂停 / 恢复(整改 A4:带原因,阻止新预订,不影响已确认订单) ----------
-const suspendOpen = ref(false);
-const suspendSaving = ref(false);
-const suspendReason = ref('');
-
-function openSuspend(row: TableRow): void {
-  suspendTarget.value = row;
-  suspendReason.value = '';
-  suspendOpen.value = true;
-}
-
-async function doSuspend(): Promise<void> {
-  if (!detail.value && !suspendTarget.value) {
-    return;
-  }
-  const id = suspendTarget.value?.id ?? detail.value?.id;
-  if (!suspendReason.value.trim()) {
-    message.warning(t('common.required'));
-    return;
-  }
-  suspendSaving.value = true;
-  try {
-    await apiMerchantSuspend(id, suspendReason.value);
-    message.success(t('merchant.profile.suspendSuccess'));
-    suspendOpen.value = false;
-    await load();
-    if (drawerOpen.value && detail.value) {
-      await openDetail(detail.value);
-    }
-  } finally {
-    suspendSaving.value = false;
-  }
-}
-
-const suspendTarget = ref<TableRow | null>(null);
 
 // ---------- 发送通知 / 代入(整改 B1/B2) ----------
 const notifyOpen = ref(false);
@@ -169,21 +136,7 @@ function openImpersonate(row: TableRow): void {
   impersonateOpen.value = true;
 }
 
-function confirmActivate(row: TableRow): void {
-  Modal.confirm({
-    title: t('merchant.profile.activate'),
-    content: t('merchant.profile.activateConfirm', { name: row.merchant_name || '' }),
-    okText: t('merchant.profile.activate'),
-    async onOk() {
-      await apiMerchantActivate(row.id);
-      message.success(t('merchant.profile.activateSuccess'));
-      await load();
-      if (drawerOpen.value) {
-        await openDetail(row);
-      }
-    },
-  });
-}
+
 
 // ---------- 重置 2FA(整改 B3) ----------
 function confirmReset2Fa(): void {
@@ -391,19 +344,35 @@ onMounted(() => {
 
 <template>
   <PageContainer>
+    <div class="directory-heading">
+      <div><h1>{{ t('merchantDirectory.title') }}</h1><p>{{ t('merchantDirectory.subtitle') }}</p></div>
+      <a-button @click="exportList">{{ t('common.export') }}</a-button>
+    </div>
+    <a-alert type="info" show-icon :message="t('merchantDirectory.filterHint')" style="margin-bottom: 12px" />
     <a-card :bordered="false" class="mtrip-card-shadow" style="margin-bottom: 16px">
-      <template #extra>
-        <a-button type="link" style="color: #1664ff" @click="exportList">{{ t('common.export') }}</a-button>
-      </template>
       <a-form layout="inline">
-        <a-form-item :label="t('merchant.listPage.name')">
-          <a-input v-model:value="query.merchantName" allow-clear :placeholder="t('common.pleaseInput')" style="width: 180px" @press-enter="search" />
+        <a-form-item :label="t('common.search')">
+          <a-input v-model:value="query.keyword" allow-clear :maxlength="100" :placeholder="t('merchantDirectory.keyword')" style="width: 300px" @press-enter="search" />
         </a-form-item>
         <a-form-item :label="t('common.type')">
-          <a-select v-model:value="query.merchantType" allow-clear :placeholder="t('common.all')" style="width: 120px">
-            <a-select-option :value="1">{{ TYPE_TEXT[1] }}</a-select-option>
-            <a-select-option :value="2">{{ TYPE_TEXT[2] }}</a-select-option>
-            <a-select-option :value="3">{{ TYPE_TEXT[3] }}</a-select-option>
+          <a-select v-model:value="query.category" allow-clear :placeholder="t('common.all')" style="width: 120px">
+            <a-select-option value="hotel">{{ TYPE_TEXT[1] }}</a-select-option>
+          </a-select>
+        </a-form-item>
+        <a-form-item :label="t('merchantDirectory.country')"><a-input v-model:value="query.country" allow-clear :maxlength="2" placeholder="MM" style="width: 90px" /></a-form-item>
+        <a-form-item :label="t('merchantDirectory.city')"><a-input v-model:value="query.city" allow-clear style="width: 150px" /></a-form-item>
+        <a-form-item :label="t('merchantDirectory.registeredFrom')"><a-date-picker v-model:value="query.registeredFrom" value-format="YYYY-MM-DD" /></a-form-item>
+        <a-form-item :label="t('merchantDirectory.registeredTo')"><a-date-picker v-model:value="query.registeredTo" value-format="YYYY-MM-DD" /></a-form-item>
+        <a-form-item :label="t('merchantDirectory.sort')">
+          <a-select v-model:value="query.sortField" style="width: 140px">
+            <a-select-option value="registeredAt">{{ t('common.createdAt') }}</a-select-option>
+            <a-select-option value="merchantName">{{ t('merchant.listPage.name') }}</a-select-option>
+            <a-select-option value="lastLoginAt">{{ t('merchant.profile.lastLogin') }}</a-select-option>
+            <a-select-option value="id">ID</a-select-option>
+          </a-select>
+          <a-select v-model:value="query.sortOrder" style="width: 90px">
+            <a-select-option value="desc">{{ t('merchantDirectory.desc') }}</a-select-option>
+            <a-select-option value="asc">{{ t('merchantDirectory.asc') }}</a-select-option>
           </a-select>
         </a-form-item>
         <a-form-item :label="t('merchant.listPage.status')">
@@ -413,6 +382,8 @@ onMounted(() => {
             <a-select-option :value="3">{{ STATUS_MAP[3].text }}</a-select-option>
             <a-select-option :value="4">{{ STATUS_MAP[4].text }}</a-select-option>
             <a-select-option :value="5">{{ STATUS_MAP[5].text }}</a-select-option>
+            <a-select-option :value="6">{{ STATUS_MAP[6].text }}</a-select-option>
+            <a-select-option value="blacklisted">{{ t('merchantStatus.blacklisted') }}</a-select-option>
           </a-select>
         </a-form-item>
         <a-form-item v-if="isSuper" :label="t('common.site')">
@@ -430,23 +401,26 @@ onMounted(() => {
     <a-table
       :columns="columns"
       :data-source="list"
+      :pagination="pagination"
       :loading="loading"
       row-key="id"
       size="middle"
       :scroll="{ x: 1400 }"
     >
       <template #bodyCell="{ column, record }">
-        <template v-if="column.dataIndex === 'merchant_type'">
+        <template v-if="column.dataIndex === 'merchant_code'">{{ record.merchant_code || '#' + record.id }}</template>
+        <template v-else-if="column.dataIndex === 'merchant_type'">
           {{ TYPE_TEXT[record.merchant_type] ?? record.merchant_type }}
         </template>
         <template v-else-if="column.dataIndex === 'settlement_cycle'">
-          {{ record.settlement_cycle === 30 ? t('common.all') : `T+${record.settlement_cycle}` }}
+          {{ record.settlement_cycle === 30 ? t('merchantDirectory.monthly') : 'T+' + record.settlement_cycle }}
         </template>
         <template v-else-if="column.dataIndex === 'status'">
-          <StatusTag :value="record.status" :map="STATUS_MAP" />
+          <a-tag v-if="record.is_blacklisted" color="error">{{ t('merchantStatus.blacklisted') }}</a-tag>
+          <StatusTag v-else :value="record.status" :map="STATUS_MAP" />
         </template>
         <template v-else-if="column.key === 'action_col'">
-          <a-space :size="0">
+          <a-space :size="0" wrap>
             <a-button type="link" size="small" @click="openDetail(record)">{{ t('common.detail') }}</a-button>
             <a-button
               v-if="record.status !== 5"
@@ -470,22 +444,7 @@ onMounted(() => {
               size="small"
               @click="openCommission(record)"
             >{{ t('config.pay.feeRate') }}</a-button>
-            <a-button
-              v-if="record.status === 3"
-              v-perm="'merchant:list:status'"
-              type="link"
-              size="small"
-              danger
-              @click="openSuspend(record)"
-            >{{ t('merchant.profile.suspend') }}</a-button>
-            <a-button
-              v-if="record.status === 4"
-              v-perm="'merchant:list:status'"
-              type="link"
-              size="small"
-              style="color: #059669"
-              @click="confirmActivate(record)"
-            >{{ t('merchant.profile.activate') }}</a-button>
+            <MerchantStatusActions :merchant="record" @changed="statusChanged" />
             <a-tooltip :title="t('merchant.notifyPage.title')">
               <a-button
                 v-perm="'merchant:list:notify'"
@@ -528,7 +487,8 @@ onMounted(() => {
               <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap">
                 <span style="font-size: 16px; font-weight: 700; color: #1a2332">{{ detail.merchant_name }}</span>
                 <a-tag v-if="detail.is_vip === 1" color="gold">VIP</a-tag>
-                <StatusTag :value="detail.status" :map="STATUS_MAP" />
+                <a-tag v-if="detail.is_blacklisted" color="error">{{ t('merchantStatus.blacklisted') }}</a-tag>
+                <StatusTag v-else :value="detail.status" :map="STATUS_MAP" />
               </div>
               <div style="font-size: 12px; color: #64748b; margin-top: 4px">{{ detail.merchant_short_name || detail.credit_code }}</div>
               <div style="font-size: 11px; color: #94a3b8; margin-top: 4px">{{ TYPE_TEXT[detail.merchant_type] ?? detail.merchant_type }}</div>
@@ -537,7 +497,7 @@ onMounted(() => {
 
           <!-- 字段网格 -->
           <a-descriptions :column="2" size="small" bordered style="margin-bottom: 16px">
-            <a-descriptions-item :label="t('merchant.profile.merchantId')">{{ detail.id }}</a-descriptions-item>
+            <a-descriptions-item :label="t('merchant.profile.merchantId')">{{ detail.merchant_code || '#' + detail.id }}</a-descriptions-item>
             <a-descriptions-item :label="t('merchant.profile.regNo')">{{ detail.credit_code || '-' }}</a-descriptions-item>
             <a-descriptions-item :label="t('merchant.profile.owner')">{{ detail.legal_person || '-' }}</a-descriptions-item>
             <a-descriptions-item :label="t('merchant.profile.commissionPlan')">
@@ -551,16 +511,14 @@ onMounted(() => {
             <a-descriptions-item :label="t('merchant.profile.lastLogin')">{{ detail.last_login_at || '-' }}</a-descriptions-item>
           </a-descriptions>
 
+          <MerchantPropertyPanel :merchant="detail" :applications="detailApplications" :businesses="detailBusinesses"
+            :properties="detailProperties" :group="detailGroup" @changed="statusChanged" />
+
           <!-- 账户安全(整改 A3/B3) -->
           <a-divider orientation="left">{{ t('merchant.profile.accountSecurity') }}</a-divider>
           <a-descriptions :column="2" size="small" bordered>
             <a-descriptions-item :label="t('merchant.profile.merchantAccessCode')" :span="2">
-              <a-space>
-                <code style="font-weight: 600">{{ detail.access_code || '-' }}</code>
-                <a-button v-if="detail.access_code" type="link" size="small" @click="copyCode">
-                  <template #icon><CopyOutlined /></template>{{ copied ? t('merchant.profile.copied') : t('merchant.profile.copy') }}
-                </a-button>
-              </a-space>
+              {{ detail.access_code_configured ? t('merchantDirectory.configured') : t('merchantDirectory.notConfigured') }}
             </a-descriptions-item>
             <a-descriptions-item :label="t('merchant.profile.twoFaStatus')">
               <a-tag :color="detail.two_fa_enabled === 1 ? 'success' : 'default'">
@@ -595,12 +553,7 @@ onMounted(() => {
 
           <!-- 底部动作(整改 A4) -->
           <div style="display: flex; gap: 8px; margin-top: 16px">
-            <a-button v-if="detail.status === 3" v-perm="'merchant:list:status'" danger @click="openSuspend(detail)">
-              {{ t('merchant.profile.suspend') }}
-            </a-button>
-            <a-button v-if="detail.status === 4" v-perm="'merchant:list:status'" type="primary" ghost @click="confirmActivate(detail)">
-              {{ t('merchant.profile.activate') }}
-            </a-button>
+            <MerchantStatusActions :merchant="detail" @changed="statusChanged" />
             <a-button v-perm="'merchant:list:notify'" @click="openNotify(detail)">{{ t('merchant.notifyPage.title') }}</a-button>
             <a-button v-perm="'merchant:list:impersonate'" @click="openImpersonate(detail)">{{ t('merchant.impersonate.start') }}</a-button>
           </div>
@@ -776,31 +729,17 @@ onMounted(() => {
       <a-textarea v-model:value="closeRemark" :rows="3" :placeholder="t('common.required')" />
     </a-modal>
 
-    <!-- 暂停商户(整改 A4:必填原因,阻止新预订) -->
-    <a-modal
-      v-model:open="suspendOpen"
-      :title="`${t('merchant.profile.suspend')}:${suspendTarget?.merchant_name ?? detail?.merchant_name ?? ''}`"
-      width="480px"
-      :confirm-loading="suspendSaving"
-      :ok-text="t('merchant.profile.suspend')"
-      :ok-button-props="{ danger: true }"
-      @ok="doSuspend"
-    >
-      <a-alert
-        :message="t('merchant.profile.suspendConfirm', { name: suspendTarget?.merchant_name ?? detail?.merchant_name ?? '' })"
-        type="warning"
-        show-icon
-        style="margin: 8px 0 16px"
-      />
-      <a-form layout="vertical">
-        <a-form-item :label="`${t('merchant.profile.suspendReason')} *`">
-          <a-textarea v-model:value="suspendReason" :rows="3" :placeholder="t('common.required')" />
-        </a-form-item>
-      </a-form>
-    </a-modal>
+
 
     <!-- 发送通知抽屉 / 代入弹窗(整改 B1/B2) -->
     <NotifyDrawer v-model:open="notifyOpen" :merchant="notifyTarget" @sent="load" />
     <ImpersonateModal v-model:open="impersonateOpen" :merchant="impersonateTarget" />
   </PageContainer>
 </template>
+
+<style scoped>
+.directory-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 20px; }
+.directory-heading h1 { font-size: 18px; line-height: 27px; color: #1a2332; font-weight: 700; margin: 0 0 2px; }
+.directory-heading p { font-size: 13px; color: #94a3b8; margin: 0; }
+:deep(.ant-form-inline) { row-gap: 12px; }
+</style>

@@ -156,7 +156,7 @@ class VerifyController extends AbstractController
             ? $this->decryptField((string) $merchant['contact_phone'])
             : MaskHelper::mobile($this->decryptField((string) $merchant['contact_phone']));
         $merchant['legal_id_card'] = MaskHelper::idCard($this->decryptField((string) $merchant['legal_id_card']));
-        unset($merchant['legal_id_images'], $merchant['deleted_at']);
+        unset($merchant['legal_id_images'], $merchant['deleted_at'], $merchant['contact_phone_index']);
         $merchant['two_fa_status'] = (int) ($merchant['two_fa_status'] ?? 0);
         $merchant['access_status'] = (int) ($merchant['access_status'] ?? 0);
 
@@ -224,6 +224,7 @@ class VerifyController extends AbstractController
                 ->map(function ($r) {
                     $r = (array) $r;
                     $r['contact_phone'] = MaskHelper::mobile($this->decryptField((string) ($r['contact_phone'] ?? '')));
+                    unset($r['contact_phone_index']);
                     return $r;
                 })->all();
             // 核验侧边栏需要展示所选业务单元的完整应交文件清单，不能仅依赖已创建的上传记录。
@@ -737,50 +738,17 @@ class VerifyController extends AbstractController
     }
 
     /** 拉黑商户:记录黑名单 + 商户置暂停(status=4);区分「暂停」与「拉黑」 */
-    #[Permission('merchant:list:status')]
+    #[Permission('merchant:status:blacklist')]
     public function blacklist(): array
     {
-        $merchant = $this->findMerchant($this->requireId());
-        if ((int) $merchant['status'] === 5) {
-            throw new BusinessException(ErrorCode::DATA_CONFLICT, '已注销商户不可拉黑');
-        }
-        $reason = $this->requireStr('reason');
-        $evidence = $this->strInput('evidence');
-        Db::transaction(function () use ($merchant, $reason, $evidence) {
-            Db::table('merchant_blacklist')->insert([
-                'site_id' => (int) $merchant['site_id'],
-                'merchant_id' => (int) $merchant['id'],
-                'reason' => mb_substr($reason, 0, 255),
-                'evidence' => mb_substr($evidence, 0, 500),
-                'operator_id' => AdminContext::adminId(),
-                'operator_name' => AdminContext::adminName(),
-                'status' => 1,
-            ]);
-            Db::table('merchant_info')->where('id', $merchant['id'])->update(['status' => 4]);
-        });
-        $this->pushTimeline($merchant, 'blacklisted', $reason, 2, true);
-        $this->pushActivity($merchant, 'blacklist', '商户已拉黑:' . $reason);
-        return Result::success(null, '商户已拉黑');
+        return Result::success((new \App\Service\MerchantStatusService())->change($this->requireId(), 'blacklist', $this->request->all(), $this->clientIp()));
     }
 
-    /** 移出黑名单:失效黑名单记录 + 商户恢复启用 */
-    #[Permission('merchant:list:status')]
+    /** 移出黑名单后保持暂停，须由超管另行激活。 */
+    #[Permission('merchant:status:unblacklist')]
     public function unblacklist(): array
     {
-        $merchant = $this->findMerchant($this->requireId());
-        Db::transaction(function () use ($merchant) {
-            Db::table('merchant_blacklist')
-                ->where('merchant_id', $merchant['id'])->where('status', 1)
-                ->update([
-                    'status' => 2,
-                    'removed_at' => date('Y-m-d H:i:s'),
-                    'removed_by' => AdminContext::adminId(),
-                ]);
-            Db::table('merchant_info')->where('id', $merchant['id'])->update(['status' => 3]);
-        });
-        $this->pushTimeline($merchant, 'unblacklisted', '');
-        $this->pushActivity($merchant, 'reactivation', '商户移出黑名单并恢复启用');
-        return Result::success(null, '已移出黑名单');
+        return Result::success((new \App\Service\MerchantStatusService())->change($this->requireId(), 'unblacklist', $this->request->all(), $this->clientIp()));
     }
 
     /**

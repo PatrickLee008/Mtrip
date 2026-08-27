@@ -7,7 +7,7 @@ namespace App\Service;
 use Hyperf\DbConnection\Db;
 
 /**
- * 商户状态流转服务:审核通过生成主账号与主门店 / 驳回 / 启停联动商品 / 注销
+ * 商户审核与注销服务；经营状态变化统一由MerchantStatusService负责。
  */
 class MerchantService
 {
@@ -84,25 +84,7 @@ class MerchantService
         ]);
     }
 
-    /**
-     * 启停切换:禁用时联动下架该商户全部在售商品并停用子账号登录
-     * @return int 联动下架商品数
-     */
-    public function toggle(array $merchant): int
-    {
-        $disable = (int) $merchant['status'] === 3;
-        return (int) Db::transaction(static function () use ($merchant, $disable) {
-            Db::table('merchant_info')->where('id', $merchant['id'])
-                ->update(['status' => $disable ? 4 : 3]);
-            if (! $disable) {
-                return 0;
-            }
-            return Db::table('goods_info')
-                ->where('merchant_id', $merchant['id'])->where('status', 3)
-                ->whereNull('deleted_at')
-                ->update(['status' => 4]);
-        });
-    }
+
 
     /**
      * 注销商户(终态):下架全部商品、停用全部子账号、门店联动停业

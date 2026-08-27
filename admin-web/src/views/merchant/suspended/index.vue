@@ -1,15 +1,16 @@
 <script setup lang="ts">
 import { computed, onMounted } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { message } from 'ant-design-vue';
+
 import { BellOutlined, LoginOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons-vue';
 import PageContainer from '@/components/PageContainer.vue';
 import StatusTag from '@/components/StatusTag.vue';
 import NotifyDrawer from '@/components/merchant/NotifyDrawer.vue';
 import ImpersonateModal from '@/components/merchant/ImpersonateModal.vue';
+import MerchantStatusActions from '@/components/merchant/MerchantStatusActions.vue';
 import { useTable, type TableRow } from '@/composables/useTable';
 import type { StatusItem } from '@/components/StatusTag.vue';
-import { apiMerchantActivate, apiMerchantList } from '@/api/merchant';
+import { apiMerchantList } from '@/api/merchant';
 import { ref } from 'vue';
 
 /** 已暂停商户(Super Admin Portal 模块 03),固定 status=4(已禁用/暂停) */
@@ -23,6 +24,7 @@ const TYPE_TEXT: Record<number, string> = { 1: 'Hotel', 2: 'Scenic', 3: 'Composi
 
 const { loading, list, query, load, search, reset, pagination } = useTable(apiMerchantList, {
   status: 4,
+  excludeBlacklisted: 1,
   merchantName: '',
 });
 
@@ -36,11 +38,7 @@ const columns = computed(() => [
   { title: t('common.action'), key: 'action_col', width: 130, fixed: 'right' as const },
 ]);
 
-async function reactivate(row: TableRow): Promise<void> {
-  await apiMerchantActivate(row.id);
-  message.success(t('merchant.profile.activateSuccess'));
-  await load();
-}
+
 
 const notifyOpen = ref(false);
 const notifyTarget = ref<TableRow | null>(null);
@@ -83,9 +81,7 @@ onMounted(() => { void load(); });
           <template v-if="column.dataIndex === 'merchant_type'">{{ TYPE_TEXT[record.merchant_type] ?? record.merchant_type }}</template>
           <template v-else-if="column.dataIndex === 'status'"><StatusTag :value="record.status" :map="STATUS_MAP" /></template>
           <template v-else-if="column.key === 'action_col'">
-            <a-popconfirm v-if="record.status === 4" title="Reactivate this merchant?" @confirm="reactivate(record)">
-              <a-button v-perm="'merchant:list:status'" type="link" size="small" style="color: var(--sap-success)">Reactivate</a-button>
-            </a-popconfirm>
+            <MerchantStatusActions :merchant="record" @changed="load" />
             <a-tooltip :title="t('merchant.notifyPage.title')">
               <a-button v-perm="'merchant:list:notify'" type="link" size="small" @click="openNotify(record)"><template #icon><BellOutlined /></template></a-button>
             </a-tooltip>

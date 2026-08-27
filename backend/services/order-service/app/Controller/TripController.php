@@ -15,6 +15,7 @@ use Hyperf\Di\Annotation\Inject;
 use Mtrip\Shared\Constants\ErrorCode;
 use Mtrip\Shared\Context\UserContext;
 use Mtrip\Shared\Exception\BusinessException;
+use Mtrip\Shared\Merchant\MerchantAccessGuard;
 use Mtrip\Shared\Support\CryptoHelper;
 use Mtrip\Shared\Support\OrderNoGenerator;
 use Mtrip\Shared\Support\Result;
@@ -63,6 +64,18 @@ class TripController extends AbstractController
 
         $tripNo = OrderNoGenerator::orderNo($siteId);
         $result = Db::transaction(function () use ($siteId, $userId, $prepared, $couponId, $tripNo) {
+            $goods = array_column($prepared, 'goods');
+            MerchantAccessGuard::lockBookable($goods, $siteId);
+            MerchantAccessGuard::lockGoods($goods, $siteId);
+            // 商品行已按ID排序锁定；同商品的库存请求串行，不改变用户预订顺序及券分摊顺序。
+            foreach ($prepared as &$item) {
+                $item['sku'] = (array) Db::table('hotel_room_type')->where('id', $item['skuId'])
+                    ->where('goods_id', $item['goodsId'])->where('status', 1)->whereNull('deleted_at')->lockForUpdate()->first();
+                if ($item['sku'] === []) {
+                    throw new BusinessException(ErrorCode::DATA_CONFLICT, '房型已停售');
+                }
+            }
+            unset($item);
             // 1) 逐项锁库存 + 计长住,得到各项净额
             $legs = [];
             $tripTotal = 0.0;
@@ -164,8 +177,18 @@ class TripController extends AbstractController
             throw new BusinessException(ErrorCode::PARAM_ERROR, '支付方式不正确');
         }
 
-        $snap = Db::transaction(function () use ($tripId, $payMethod) {
-            $trip = Db::table('order_trip')->where('id', $tripId)
+        $siteId = $this->requireSiteId();
+        $tripSnapshot = Db::table('order_trip')->where('id', $tripId)->where('site_id', $siteId)
+            ->where('user_id', UserContext::userId())->whereNull('deleted_at')->first();
+        if (! $tripSnapshot) {
+            throw new BusinessException(ErrorCode::NOT_FOUND, 'Trip不存在');
+        }
+        $snapshots = Db::table('order_main')->where('trip_id', $tripId)->where('site_id', $siteId)
+            ->where('user_id', UserContext::userId())->whereNull('deleted_at')->orderBy('id')->get()
+            ->map(static fn ($row) => (array) $row)->all();
+        $snap = Db::transaction(function () use ($tripId, $payMethod, $siteId, $snapshots) {
+            MerchantAccessGuard::lockBookable($snapshots, $siteId);
+            $trip = Db::table('order_trip')->where('id', $tripId)->where('site_id', $siteId)
                 ->where('user_id', UserContext::userId())->whereNull('deleted_at')
                 ->lockForUpdate()->first();
             if (! $trip) {
@@ -175,6 +198,20 @@ class TripController extends AbstractController
             if ((int) $trip['pay_status'] !== 0) {
                 throw new BusinessException(ErrorCode::DATA_CONFLICT, 'Trip 不是待支付状态');
             }
+            $bookings = Db::table('order_main')->where('trip_id', $tripId)->whereNull('deleted_at')->orderBy('id')->lockForUpdate()->get();
+            if ($bookings->count() === 0 || $bookings->count() !== count($snapshots) || $bookings->count() !== (int) $trip['booking_count']) {
+                throw new BusinessException(ErrorCode::DATA_CONFLICT, 'Trip预订已变更');
+            }
+            foreach ($bookings as $index => $booking) {
+                foreach (['id', 'merchant_id', 'site_id', 'user_id', 'order_type', 'supplier_id'] as $field) {
+                    if ((int) $booking->{$field} !== (int) $snapshots[$index][$field]) {
+                        throw new BusinessException(ErrorCode::DATA_CONFLICT, 'Trip预订归属已变更');
+                    }
+                }
+                if ((int) $booking->order_status !== 0) {
+                    throw new BusinessException(ErrorCode::DATA_CONFLICT, 'Trip包含非待支付预订');
+                }
+            }
             Db::table('order_trip')->where('id', $tripId)->update([
                 'pay_status' => 1,
                 'pay_method' => $payMethod,
@@ -182,8 +219,7 @@ class TripController extends AbstractController
                 'pay_time' => date('Y-m-d H:i:s'),
             ]);
 
-            $bookings = Db::table('order_main')->where('trip_id', $tripId)
-                ->where('order_status', 0)->whereNull('deleted_at')->get();
+
             $codes = [];
             $firstBookingId = 0;
             foreach ($bookings as $b) {
