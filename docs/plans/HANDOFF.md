@@ -2,6 +2,17 @@
 
 > 用途:当 AI 会话上下文超限需要新开会话时,新会话**第一步读取本文件**即可接手全部工作。
 > 维护约定:每完成一个模块或阶段性节点,同步更新本文件的「当前进度」与「下一步」两节。
+
+## ★ 2026-08-27：PRD模块12商户管理阶段0设计交付
+
+- 本任务需求基线为中文Super Admin Portal PRD模块12＋用户D1～D8决策，不套用下文历史Consumer阶段的完成度判断。
+- 入口：[15-M12-merchant-management.md](./15-M12-merchant-management.md)；技术设计：[m12/00-design.md](./m12/00-design.md)；第一批任务/用例：[m12/01-tasks-and-tests.md](./m12/01-tasks-and-tests.md)；日志：[m12/CHANGELOG.md](./m12/CHANGELOG.md)。
+- 阶段0只完成代码/数据库只读核验和设计文档，未执行业务编码、迁移或服务重启；需要用户确认技术设计后才开始阶段1。
+- 关键发现：餐厅已有入驻KYC但缺正式展示链路；单笔订单和Trip都需商户状态守卫；现有2FA归属商户主体而非登录账号；access_status实际表示2FA设置状态。
+- 验证：check.ps1四步通过（277 PHP文件、47测试/723断言、admin-web build、client-app typecheck）；merchant-web类型检查及构建复核通过，保留已有大chunk警告。
+- 用户已授权本模块由助手维护每阶段本地Git提交/日志，不自动push；本任务以此替代下文历史“用户统一commit”约定，不改其他任务流程。
+- 原有ReviewController.php修改、start/stop脚本及两份未跟踪中文PRD保留且不提交。
+
 > 最后更新:2026-08-23(merchant-web M2/M3 客房与房量价格首轮补齐,见下方「★ merchant-web 进展」)
 
 ## ★ merchant-web 进展(2026-08-23)
@@ -421,6 +432,8 @@ Mtrip 海外旅游 SaaS 平台:后端 Hyperf 3.1 微服务(backend/)+ 平台管�
 
 ## 2. 当前进度(与 docs/plans/README.md 保持一致)
 
+本任务新增进度：PRD模块12商户管理S0设计已交付、待用户确认，S1～S7均未开始。详见模块15计划文件；下表是历史底座状态，不能当作模块12已验收。
+
 | 模块 | 状态 |
 |------|------|
 | 01 backend/shared 共享组件包 | 100%(单测于模块08-8 补齐:26 用例全过,修复 2 个 bug) |
@@ -466,6 +479,8 @@ Mtrip 海外旅游 SaaS 平台:后端 Hyperf 3.1 微服务(backend/)+ 平台管�
 - **多语言**(vue-i18n,默认/fallback 均 en-US):en-US.ts 为全量词条源,zh-CN.ts 只维护已翻译部分;菜单三字段 `menu_name`(中文)/`menu_name_en`(英文回退)/`i18n_key`(词条 key,目录与页面必填、按钮不占词条);显示名统一走 `locales/menuI18n.ts` 的 `resolveMenuTitle/menuTitle`(i18n_key 命中→t(key),未命中→非中文环境用英文名、中文用中文名);扩展新语言只需前端加语言包+SUPPORTED_LOCALES,菜单数据与后端零改动;详细规范见 `docs/guides/standards/README.md`。
 
 ## 6. 下一步(模块08 部署与网关联调,任务清单见 docs/plans/08-部署与网关.md)
+
+本任务下一步：先确认m12/00-design.md的G1餐厅最小链路、G2重置2FA授权、G3未支付订单付款、G4访问码交付边界；再按S1-01开始。未确认前不改业务代码、不执行迁移。以下模块08内容为历史任务背景。
 
 模块06/07 已收官,以下为沉淀的关键结论(模块08 仍需使用):
 

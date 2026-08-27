@@ -80,6 +80,8 @@ cd ../admin-web && npm install && npm run dev    # http://localhost:5173,接口�
 
 ## 当前状态(2026-07)
 
+补充(2026-08-27)：Super Admin Portal PRD模块12商户管理已完成阶段0核验与技术设计交付，业务编码尚未开始，等待用户确认设计边界。入口：[15-M12-merchant-management.md](docs/plans/15-M12-merchant-management.md)。本任务由助手负责按阶段进行本地Git提交，不自动推送远端。
+
 模块 01~07、09、10 已完成;模块 08(部署与网关)完成 80%——deploy 基础设施、权限键统一与 **08-6 部署后四步验证(2026-07-30 全部通过:11 容器全 Up、八服务 healthz ok、网关 8081 无签名 401、.env 注入生效)** 已落地,剩余 08-7 全链路联调待执行,清单见 [docs/plans/08-部署与网关.md](docs/plans/08-部署与网关.md)。
 
 补充(2026-08-23):商家端 `merchant-web` 已完成全局样式同步与 M5/M6/M8/M9/M10 首轮页面/接口增量,详见 [docs/plans/13-商家端merchant-web落地.md](docs/plans/13-商家端merchant-web落地.md)、[docs/plans/实现方案-Merchant-全模块差距与样式同步.md](docs/plans/实现方案-Merchant-全模块差距与样式同步.md) 与 [docs/plans/实现方案-Merchant-M8-营销活动.md](docs/plans/实现方案-Merchant-M8-营销活动.md)。
