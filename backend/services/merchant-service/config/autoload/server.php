@@ -35,7 +35,9 @@ return [
         'max_request' => (int) env('MAX_REQUEST', 10000),
         'max_request_grace' => 200,
         'socket_buffer_size' => 2 * 1024 * 1024,
-        'buffer_output_size' => 2 * 1024 * 1024,
+        // KYC uploads allow 10MB; JSON download envelopes contain base64 (~13.4MB).
+        'package_max_length' => 16 * 1024 * 1024,
+        'buffer_output_size' => 16 * 1024 * 1024,
     ],
     'callbacks' => [
         Event::ON_WORKER_START => [Hyperf\Framework\Bootstrap\WorkerStartCallback::class, 'onWorkerStart'],

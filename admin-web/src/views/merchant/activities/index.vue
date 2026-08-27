@@ -8,6 +8,8 @@ import { useTable, type TableRow } from '@/composables/useTable';
 import type { StatusItem } from '@/components/StatusTag.vue';
 import { apiMerchantActivities } from '@/api/merchant';
 import { exportCsv } from '@/utils/exportCsv';
+import { get } from '@/utils/http';
+const exporting = ref(false);
 
 /**
  * 商户活动审计(Super Admin Portal 模块 03 Merchant Activities)
@@ -25,6 +27,8 @@ const ACT_STATUS = computed<Record<number, StatusItem>>(() => ({
 const ACT_TYPES = [
   'login',
   'profile_update',
+  'account_change',
+  'operation',
   'suspension',
   'reactivation',
   'document_upload',
@@ -37,6 +41,7 @@ const ACT_TYPES = [
 ] as const;
 
 function typeLabel(type: string): string {
+  if (['status', 'compliance', 'verification', 'warning'].includes(type)) return t(`merchant.s3.sources.${type}`);
   const key = `merchant.activitiesPage.type${type.replace(/(^|_)(\w)/g, (_m, _p, c) => c.toUpperCase())}`;
   const label = t(key);
   return label === key ? type : label;
@@ -46,7 +51,9 @@ function typeLabel(type: string): string {
 const stats = ref<Record<string, number>>({});
 
 async function fetchActivities(params: Record<string, unknown>): Promise<{ list: TableRow[]; total: number; page: number; pageSize: number }> {
-  const data = await apiMerchantActivities(params);
+  const data = params.source && params.source !== 'activity'
+    ? await get<{ list: TableRow[]; total: number; page: number; pageSize: number; stats?: Record<string, number> }>('/admin/merchant/activities/history', params)
+    : await apiMerchantActivities(params);
   if (data.stats) {
     stats.value = data.stats;
   }
@@ -54,6 +61,7 @@ async function fetchActivities(params: Record<string, unknown>): Promise<{ list:
 }
 
 const { loading, list, query, search, reset, pagination, load } = useTable(fetchActivities, {
+  source: 'activity',
   keyword: '',
   activityType: '',
   dateRange: '',
@@ -101,7 +109,18 @@ function openDetail(row: TableRow): void {
 
 /** 导出当前筛选结果(整改 D2) */
 async function exportList(): Promise<void> {
-  const data = await apiMerchantActivities({ ...query, page: 1, pageSize: 200 });
+  if (exporting.value) return;
+  exporting.value = true;
+  const data: { list: TableRow[] } = { list: [] };
+  const filters = { ...query };
+  let snapshotId = 0;
+  let beforeId: number | null = null;
+  try {
+    do {
+      const batch: { list: TableRow[]; snapshotId: number; nextBeforeId: number | null } = await get(filters.source === 'activity' ? '/admin/merchant/activities' : '/admin/merchant/activities/history', { ...filters, export: 1, pageSize: 200, snapshotId, beforeId });
+      data.list.push(...batch.list);
+      snapshotId = batch.snapshotId; beforeId = batch.nextBeforeId;
+    } while (beforeId !== null);
   exportCsv(`merchant-activities-${Date.now()}.csv`, [
     { key: 'created_at', label: 'Activity Time' },
     { key: 'merchant_name', label: 'Merchant' },
@@ -111,10 +130,11 @@ async function exportList(): Promise<void> {
     { key: 'ip_address', label: 'IP Address' },
     { key: 'status', label: 'Status' },
   ], data.list.map((row) => ({
-    ...row,
+    ...Object.fromEntries(Object.entries(row).map(([key, value]) => [key, typeof value === 'string' && /^[\s]*[=+@-]/.test(value) ? `'${value}` : value])),
     activity_type: typeLabel(row.activity_type),
     status: ACT_STATUS.value[row.status]?.text ?? row.status,
   })));
+  } finally { exporting.value = false; }
 }
 
 onMounted(() => {
@@ -132,13 +152,17 @@ onMounted(() => {
         <div style="font-size: 18px; font-weight: 700; color: #1a2332">{{ t('merchant.activitiesPage.title') }}</div>
         <div style="font-size: 12px; color: #64748b">{{ t('merchant.activitiesPage.pageDesc') }}</div>
       </div>
-      <a-button type="link" style="color: #1664ff" @click="exportList">
+      <a-button v-perm="'merchant:activity:export'" :loading="exporting" type="link" style="color: #1664ff" @click="exportList">
         <template #icon><ReloadOutlined /></template>{{ t('common.export') }}
       </a-button>
     </div>
 
+    <a-select v-model:value="query.source" style="width: 240px; margin-bottom: 16px" @change="search">
+      <a-select-option v-for="source in ['activity', 'status', 'verification', 'warning', 'compliance']" :key="source" :value="source">{{ t(`merchant.s3.sources.${source}`) }}</a-select-option>
+    </a-select>
+    <a-alert v-if="query.source !== 'activity'" :message="t('merchant.s3.historySourceNotice')" type="info" style="margin-bottom: 16px" />
     <!-- 活动类型 chip 计数条 -->
-    <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px">
+    <div v-if="query.source === 'activity'" style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px">
       <div
         v-for="chip in CHIP_TYPES"
         :key="chip.key"
@@ -220,7 +244,7 @@ onMounted(() => {
         <a-alert
           :type="drawerRow.status === 1 ? 'success' : drawerRow.status === 2 ? 'error' : 'warning'"
           show-icon
-          :message="`${typeLabel(drawerRow.activity_type)} · ${drawerRow.status === 1 ? t('merchant.activitiesPage.statusSuccess') : drawerRow.status === 2 ? t('merchant.activitiesPage.statusFailed') : t('merchant.activitiesPage.statusPending')}`"
+          :message="`${typeLabel(drawerRow.activity_type)} · ${drawerRow.status === null ? '-' : ACT_STATUS[drawerRow.status]?.text ?? '-'}`"
           style="margin-bottom: 16px"
         />
         <a-descriptions :column="1" size="small" bordered>
@@ -229,7 +253,8 @@ onMounted(() => {
           <a-descriptions-item :label="t('merchant.activitiesPage.colMerchant')">{{ drawerRow.merchant_name }} (#{{ drawerRow.merchant_id }})</a-descriptions-item>
           <a-descriptions-item :label="t('merchant.activitiesPage.colType')">{{ typeLabel(drawerRow.activity_type) }}</a-descriptions-item>
           <a-descriptions-item :label="t('merchant.activitiesPage.colDescription')">{{ drawerRow.description || '-' }}</a-descriptions-item>
-          <a-descriptions-item :label="t('merchant.activitiesPage.colPerformedBy')">{{ drawerRow.performed_by || '-' }}</a-descriptions-item>
+          <a-descriptions-item :label="t('merchant.activitiesPage.colPerformedBy')">{{ drawerRow.performed_by || '-' }} · {{ drawerRow.actor_type }} #{{ drawerRow.performed_by_id ?? '-' }}</a-descriptions-item>
+          <a-descriptions-item :label="t('merchant.s3.target')">{{ drawerRow.entity_type || drawerRow.source || '-' }} #{{ drawerRow.entity_id ?? drawerRow.id }}</a-descriptions-item>
           <a-descriptions-item :label="t('merchant.activitiesPage.colIp')">{{ drawerRow.ip_address || '-' }}</a-descriptions-item>
           <a-descriptions-item :label="t('merchant.activitiesPage.colStatus')">
             <StatusTag :value="drawerRow.status" :map="ACT_STATUS" />

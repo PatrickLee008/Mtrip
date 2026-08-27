@@ -528,52 +528,10 @@ class VerifyController extends AbstractController
     }
 
     /** 逐份文档核验:action=verify 核验通过 / reject 驳回(必填原因) */
-    #[Permission('merchant:verify:doc')]
+    #[Permission(['merchant:verify:doc', 'merchant:document:verify'])]
     public function docReview(): array
     {
-        $docId = $this->requireId('docId');
-        $doc = Db::table('merchant_verify_document')->where('id', $docId)->whereNull('deleted_at')->first();
-        if (! $doc) {
-            throw new BusinessException(ErrorCode::NOT_FOUND, '文档不存在');
-        }
-        $doc = (array) $doc;
-        $this->assertSiteScope((int) $doc['site_id']);
-        // 入驻阶段文档 merchant_id=0(application 维度),仅正式商户文档需 findMerchant
-        $merchant = ['id' => (int) $doc['merchant_id'], 'site_id' => (int) $doc['site_id'], 'merchant_name' => (string) ($doc['name'] ?? '')];
-        if ((int) $doc['merchant_id'] > 0) {
-            $merchant = $this->findMerchant((int) $doc['merchant_id']);
-        }
-        $applicationId = (int) ($doc['application_id'] ?? 0);
-        if ($applicationId > 0 && (int) $doc['merchant_id'] === 0) {
-            throw new BusinessException(ErrorCode::DATA_CONFLICT, '入驻申请进入待核实阶段后才能审核 KYC 文件');
-        }
-
-        $action = $this->strInput('action');
-        if ($action === 'verify') {
-            Db::table('merchant_verify_document')->where('id', $docId)->update([
-                'status' => 1,
-                'reviewer_id' => AdminContext::adminId(),
-                'reviewer_name' => AdminContext::adminName(),
-                'last_verified_at' => date('Y-m-d H:i:s'),
-                'reject_reason' => '',
-            ]);
-            $this->syncBusinessKycStatus($applicationId, (string) ($doc['biz_unit'] ?? ''));
-            $this->pushTimeline($merchant, 'doc_verified', (string) $doc['name'], 2, false, $applicationId);
-            return Result::success(null, '文档已核验通过');
-        }
-        if ($action === 'reject') {
-            $reason = $this->requireStr('reason');
-            Db::table('merchant_verify_document')->where('id', $docId)->update([
-                'status' => 3,
-                'reviewer_id' => AdminContext::adminId(),
-                'reviewer_name' => AdminContext::adminName(),
-                'reject_reason' => mb_substr($reason, 0, 255),
-            ]);
-            $this->syncBusinessKycStatus($applicationId, (string) ($doc['biz_unit'] ?? ''));
-            $this->pushTimeline($merchant, 'doc_rejected', $doc['name'] . ':' . $reason, 2, true, $applicationId);
-            return Result::success(null, '文档已驳回');
-        }
-        throw new BusinessException(ErrorCode::PARAM_ERROR, '参数 action 仅支持 verify/reject');
+        return Result::success((new \App\Service\MerchantDocumentService())->review($this->requireId('docId'), $this->request->all()));
     }
 
     /**
@@ -584,7 +542,8 @@ class VerifyController extends AbstractController
     public function documents(): array
     {
         [$page, $pageSize] = $this->pageParams();
-        $query = Db::table('merchant_verify_document')->whereNull('deleted_at');
+        $approvedIds = Db::table('merchant_info')->whereIn('status', [3, 4])->whereNull('deleted_at')->select('id');
+        $query = Db::table('merchant_verify_document')->whereNull('deleted_at')->whereIn('merchant_id', $approvedIds);
         $this->applySiteScope($query);
         if (($mid = $this->intInput('merchantId')) > 0) {
             $query->where('merchant_id', $mid);
@@ -612,14 +571,14 @@ class VerifyController extends AbstractController
             ->map(static fn ($r) => (array) $r)->all();
 
         // 统计卡(不受 keyword/status/docType 过滤影响,仅站点口径,可作点击入口)
-        $statsQuery = Db::table('merchant_verify_document')->whereNull('deleted_at');
+        $statsQuery = Db::table('merchant_verify_document')->whereNull('deleted_at')->whereIn('merchant_id', $approvedIds);
         $this->applySiteScope($statsQuery);
         $grouped = [];
         foreach ($statsQuery->selectRaw('status, count(*) as cnt')->groupBy('status')->get() as $row) {
             $grouped[(int) $row->status] = (int) $row->cnt;
         }
         $stats = [
-            'total' => (int) (clone $statsQuery)->count(),
+            'total' => array_sum($grouped),
             'verified' => $grouped[1] ?? 0,
             'pending' => $grouped[2] ?? 0,
             'expired' => $grouped[4] ?? 0,
@@ -632,6 +591,8 @@ class VerifyController extends AbstractController
         $now = time();
         foreach ($list as &$row) {
             $row['merchant_name'] = (string) ($names[$row['merchant_id']] ?? '');
+            $row['has_file'] = $row['file_url'] !== '';
+            unset($row['file_url']);
             $row['expiring_soon'] = 0;
             if (! empty($row['expiry_date'])) {
                 $ts = strtotime((string) $row['expiry_date']);
@@ -655,86 +616,14 @@ class VerifyController extends AbstractController
     #[Permission('merchant:doc:list')]
     public function documentDetail(): array
     {
-        $docId = $this->requireId('docId');
-        $doc = Db::table('merchant_verify_document')->where('id', $docId)->whereNull('deleted_at')->first();
-        if (! $doc) {
-            throw new BusinessException(ErrorCode::NOT_FOUND, '文档不存在');
-        }
-        $doc = (array) $doc;
-        $this->assertSiteScope((int) $doc['site_id']);
-        // 入驻阶段文档 merchant_id=0(application 维度),仅正式商户文档需 findMerchant
-        $merchant = ['id' => (int) $doc['merchant_id'], 'site_id' => (int) $doc['site_id'], 'merchant_name' => (string) ($doc['name'] ?? '')];
-        if ((int) $doc['merchant_id'] > 0) {
-            $merchant = $this->findMerchant((int) $doc['merchant_id']);
-        }
-        $applicationId = (int) ($doc['application_id'] ?? 0);
-        $doc['merchant_name'] = $merchant['merchant_name'];
-
-        // 核验历史:上传 → 重交版本 → 核验通过/驳回 → 过期(时间线由文档本身字段+重交版本合成)
-        $history = [];
-        if (! empty($doc['uploaded_at'])) {
-            $history[] = ['date' => $doc['uploaded_at'], 'action' => 'Document uploaded', 'by' => 'Merchant', 'note' => 'Initial submission'];
-        }
-        $revisions = Db::table('merchant_verify_document_revision')
-            ->where('doc_id', $docId)->orderBy('version')->get();
-        foreach ($revisions as $rev) {
-            $history[] = [
-                'date' => (string) $rev->uploaded_at,
-                'action' => 'Document resubmitted',
-                'by' => 'Merchant',
-                'note' => 'Version ' . (int) $rev->version,
-            ];
-        }
-        if (! empty($doc['last_verified_at'])) {
-            $history[] = [
-                'date' => $doc['last_verified_at'],
-                'action' => 'Document verified',
-                'by' => $doc['reviewer_name'] !== '' ? $doc['reviewer_name'] : 'Reviewer',
-                'note' => 'All details confirmed valid',
-            ];
-        }
-        if ($doc['reject_reason'] !== '') {
-            $history[] = [
-                'date' => (string) $doc['updated_at'],
-                'action' => 'Document rejected',
-                'by' => $doc['reviewer_name'] !== '' ? $doc['reviewer_name'] : 'Reviewer',
-                'note' => (string) $doc['reject_reason'],
-            ];
-        }
-        if ((int) $doc['status'] === 4) {
-            $history[] = [
-                'date' => (string) $doc['updated_at'],
-                'action' => 'Document expired',
-                'by' => 'System',
-                'note' => '',
-            ];
-        }
-
-        return Result::success(['document' => $doc, 'history' => $history]);
+        return \Hyperf\Support\make(MerchantDocumentController::class)->history();
     }
 
     /** 文档级要求重交(模块 03 Merchant Documents):文档置「需重交」+ 原因 + 审计 */
-    #[Permission('merchant:verify:resubmit')]
+    #[Permission('merchant:document:verify')]
     public function documentResubmit(): array
     {
-        $docId = $this->requireId('docId');
-        $doc = Db::table('merchant_verify_document')->where('id', $docId)->whereNull('deleted_at')->first();
-        if (! $doc) {
-            throw new BusinessException(ErrorCode::NOT_FOUND, '文档不存在');
-        }
-        $doc = (array) $doc;
-        $this->assertSiteScope((int) $doc['site_id']);
-        $merchant = $this->findMerchant((int) $doc['merchant_id']);
-        $reason = $this->requireStr('reason');
-
-        Db::table('merchant_verify_document')->where('id', $docId)->update([
-            'status' => 5,
-            'reject_reason' => mb_substr($reason, 0, 255),
-            'resubmit_required_at' => date('Y-m-d H:i:s'),
-        ]);
-        $this->pushTimeline($merchant, 'resubmit_requested', $doc['name'] . ':' . $reason);
-        $this->pushActivity($merchant, 'verification', '要求文档重新提交:' . $doc['name']);
-        return Result::success(null, '已通知商户重新提交文档');
+        return Result::success((new \App\Service\MerchantDocumentService())->resubmit($this->requireId('docId'), $this->request->all()));
     }
 
     /** 拉黑商户:记录黑名单 + 商户置暂停(status=4);区分「暂停」与「拉黑」 */
@@ -799,8 +688,16 @@ class VerifyController extends AbstractController
                 }
             });
         }
+        $export = $this->intInput('export') === 1;
+        $snapshot = $this->intInput('snapshotId');
+        if ($export) {
+            if (! AdminContext::hasPermission('merchant:activity:export')) throw new BusinessException(ErrorCode::FORBIDDEN);
+            $snapshot = $snapshot ?: (int) (clone $query)->max('id');
+            $query->where('id', '<=', $snapshot);
+            if ($this->intInput('beforeId') > 0) $query->where('id', '<', $this->intInput('beforeId'));
+        }
         $total = (clone $query)->count();
-        $list = $query->orderByDesc('id')->forPage($page, $pageSize)->get()
+        $list = $query->orderByDesc('id')->forPage($export ? 1 : $page, $pageSize)->get()
             ->map(static fn ($r) => (array) $r)->all();
 
         // 活动类型计数条(仅站点口径,不受筛选影响)
@@ -810,7 +707,7 @@ class VerifyController extends AbstractController
         foreach ($statsQuery->selectRaw('activity_type, count(*) as cnt')->groupBy('activity_type')->get() as $row) {
             $grouped[(string) $row->activity_type] = (int) $row->cnt;
         }
-        $stats = ['total' => (int) (clone $statsQuery)->count()];
+        $stats = ['total' => array_sum($grouped)];
         foreach (['login', 'suspension', 'verification', 'warning', 'document_upload', 'profile_update'] as $chipType) {
             $stats[$chipType] = $grouped[$chipType] ?? 0;
         }
@@ -829,6 +726,8 @@ class VerifyController extends AbstractController
             'page' => $page,
             'pageSize' => $pageSize,
             'stats' => $stats,
+            'snapshotId' => $snapshot,
+            'nextBeforeId' => $export && count($list) === $pageSize ? (int) $list[count($list) - 1]['id'] : null,
         ]);
     }
 

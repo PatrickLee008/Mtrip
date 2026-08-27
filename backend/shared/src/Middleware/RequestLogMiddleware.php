@@ -65,7 +65,7 @@ class RequestLogMiddleware implements MiddlewareInterface
         $status = $response->getStatusCode();
         $context = [
             'params' => $this->requestParams($request),
-            'response' => mb_substr((string) $response->getBody(), 0, self::MAX_BODY_LEN),
+            'response' => str_ends_with($path, '/merchant/document/download') ? '[protected document]' : mb_substr((string) $response->getBody(), 0, self::MAX_BODY_LEN),
             'ip' => $this->clientIp($request),
         ];
 

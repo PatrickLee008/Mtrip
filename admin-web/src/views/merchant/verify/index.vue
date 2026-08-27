@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { openMerchantDocument } from '@/utils/merchantDocument';
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
@@ -486,7 +487,7 @@ async function markResubmitted(row: TableRow): Promise<void> {
 
 // ---------- 文档核验 ----------
 async function verifyDoc(row: TableRow): Promise<void> {
-  await apiVerifyDocReview({ docId: row.id, action: 'verify' });
+  await apiVerifyDocReview({ docId: row.id, action: 'verify', expectedVersion: row.document_version });
   message.success(t('merchant.verifyPage.docVerifySuccess'));
   await refreshDocs();
 }
@@ -507,7 +508,7 @@ async function doDocReject(): Promise<void> {
   }
   docRejectSaving.value = true;
   try {
-    await apiVerifyDocReview({ docId: docTarget.value.id, action: 'reject', reason: docRejectReason.value });
+    await apiVerifyDocReview({ docId: docTarget.value.id, action: 'reject', reason: docRejectReason.value, expectedVersion: docTarget.value.document_version });
     message.success(t('merchant.verifyPage.docRejectSuccess'));
     docRejectOpen.value = false;
     await refreshDocs();
@@ -757,7 +758,7 @@ onMounted(() => {
               <div class="resub-document-card__compare">
                 <div class="resub-document-card__original">
                   <span class="resub-status resub-status--rejected"><CloseCircleOutlined />{{ t('merchant.verifyPage.resubOriginalRejected') }}</span>
-                  <a v-if="item.upload.file_url" class="resub-file resub-file--original" :href="item.upload.file_url" target="_blank">
+                  <a v-if="item.upload.file_url" class="resub-file resub-file--original" @click="openMerchantDocument(item.upload.id)">
                     <FileTextOutlined />
                     <span><strong>{{ documentFileName(item.upload) }}</strong><small>{{ t('merchant.verifyPage.colDocUploaded') }}：{{ formatUploadDate(item.upload.uploaded_at) }}</small></span>
                   </a>
@@ -770,12 +771,12 @@ onMounted(() => {
                 <div class="resub-document-card__replacement">
                   <template v-if="item.revision">
                     <span class="resub-status resub-status--review"><SyncOutlined />{{ t('merchant.verifyPage.resubNewAwaitingReview') }}</span>
-                    <a class="resub-file resub-file--replacement" :href="item.revision.file_url" target="_blank">
+                    <a class="resub-file resub-file--replacement" @click="openMerchantDocument(item.upload.id, item.revision.id)">
                       <FileTextOutlined />
                       <span><strong>{{ documentFileName(item.revision) }}</strong><small>{{ t('merchant.verifyPage.colDocUploaded') }}：{{ formatUploadDate(item.revision.uploaded_at) }}</small></span>
                     </a>
                     <div class="resub-document-card__actions">
-                      <a-button class="verify-doc-action verify-doc-action--preview" size="small" :href="item.revision.file_url" target="_blank"><template #icon><EyeOutlined /></template>{{ t('merchant.verifyPage.docActionView') }}</a-button>
+                      <a-button class="verify-doc-action verify-doc-action--preview" size="small" @click="openMerchantDocument(item.upload.id, item.revision.id)"><template #icon><EyeOutlined /></template>{{ t('merchant.verifyPage.docActionView') }}</a-button>
                       <a-button v-perm="'merchant:verify:doc'" class="verify-doc-action verify-doc-action--approve" size="small" :disabled="item.upload.status === 1" @click="verifyDoc(item.upload)"><template #icon><CheckCircleOutlined /></template>{{ t('merchant.verifyPage.docActionApprove') }}</a-button>
                       <a-button v-perm="'merchant:verify:doc'" class="verify-doc-action verify-doc-action--reject" size="small" :disabled="item.upload.status === 3" @click="openDocReject(item.upload)"><template #icon><CloseCircleOutlined /></template>{{ t('merchant.verifyPage.docActionReject') }}</a-button>
                     </div>
@@ -825,7 +826,7 @@ onMounted(() => {
               <template v-else-if="column.dataIndex === 'uploaded_at'">{{ formatUploadDate(record.upload?.uploaded_at) }}</template>
               <template v-else-if="column.key === 'doc_action'">
                 <a-space :size="4">
-                  <a-button class="verify-doc-action verify-doc-action--preview" size="small" :disabled="!record.upload?.file_url" :href="record.upload?.file_url" target="_blank"><template #icon><EyeOutlined /></template>{{ t('merchant.verifyPage.docActionPreview') }}</a-button>
+                  <a-button class="verify-doc-action verify-doc-action--preview" size="small" :disabled="!record.upload?.file_url" @click="openMerchantDocument(record.upload.id)"><template #icon><EyeOutlined /></template>{{ t('merchant.verifyPage.docActionPreview') }}</a-button>
                   <a-button v-perm="'merchant:verify:doc'" class="verify-doc-action verify-doc-action--approve" size="small" :disabled="!record.upload || record.upload.status === 1" @click="record.upload && verifyDoc(record.upload)"><template #icon><CheckCircleOutlined /></template>{{ t('merchant.verifyPage.docActionApprove') }}</a-button>
                   <a-button v-perm="'merchant:verify:doc'" class="verify-doc-action verify-doc-action--reject" size="small" :disabled="!record.upload || record.upload.status === 3" @click="record.upload && openDocReject(record.upload)"><template #icon><CloseCircleOutlined /></template>{{ t('merchant.verifyPage.docActionReject') }}</a-button>
                 </a-space>

@@ -16,7 +16,10 @@ Assert-Exit 'schema clone'
 $migration = (Get-Content (Join-Path $repo 'database/merchant/28-merchant-directory-property.sql') -Raw -Encoding utf8).Replace('mtrip_business', 'mtrip_m12_s1_test').Replace('mtrip_system', 'mtrip_m12_s1_test')
 $migration | docker exec -i mtrip-mysql-1 sh -c 'MYSQL_PWD=$MYSQL_ROOT_PASSWORD exec mysql -uroot --batch --default-character-set=utf8mb4'
 Assert-Exit 'S2 test schema migration'
-foreach ($entry in @(@('merchant', 'm12-status.php'), @('order', 'm12-orders.php'), @('merchant', 'm12-directory.php'))) {
+$s3Migration = (Get-Content (Join-Path $repo 'database/merchant/29-merchant-documents-notifications.sql') -Raw -Encoding utf8).Replace('mtrip_business', 'mtrip_m12_s1_test').Replace('mtrip_system', 'mtrip_m12_s1_test')
+$s3Migration | docker exec -i mtrip-mysql-1 sh -c 'MYSQL_PWD=$MYSQL_ROOT_PASSWORD exec mysql -uroot --batch --default-character-set=utf8mb4'
+Assert-Exit 'S3 test schema migration'
+foreach ($entry in @(@('merchant', 'm12-status.php'), @('order', 'm12-orders.php'), @('merchant', 'm12-directory.php'), @('merchant', 'm12-s3.php'))) {
     $service = $entry[0]
     $file = $entry[1]
     $containerName = "mtrip-$service-service-1"

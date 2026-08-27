@@ -57,8 +57,10 @@ class MerchantAuthService
         MerchantAccessGuard::assertSubject($admin);
         $subjectName = $this->subjectName($admin);
 
-        Db::table('merchant_admin')->where('id', $admin['id'])
-            ->update(['last_login_at' => Carbon::now()->toDateTimeString()]);
+        Db::transaction(function () use ($admin, $ip) {
+            Db::table('merchant_admin')->where('id', $admin['id'])->update(['last_login_at' => Carbon::now()->toDateTimeString()]);
+            \App\Service\MerchantActivityService::account($admin, 'login', $ip);
+        });
 
         $accountType = (int) $admin['account_type'];
         $isOwner = (int) $admin['is_owner'] === 1;
@@ -154,8 +156,10 @@ class MerchantAuthService
         if (strlen($newPassword) < 8 || ! preg_match('/[A-Za-z]/', $newPassword) || ! preg_match('/\d/', $newPassword)) {
             throw new BusinessException(ErrorCode::PARAM_ERROR, '密码至少8位且需包含字母和数字');
         }
-        Db::table('merchant_admin')->where('id', $adminId)
-            ->update(['password' => password_hash($newPassword, PASSWORD_BCRYPT)]);
+        Db::transaction(function () use ($adminId, $newPassword, $admin) {
+            Db::table('merchant_admin')->where('id', $adminId)->update(['password' => password_hash($newPassword, PASSWORD_BCRYPT)]);
+            \App\Service\MerchantActivityService::account((array) $admin, 'password_changed');
+        });
     }
 
     /**

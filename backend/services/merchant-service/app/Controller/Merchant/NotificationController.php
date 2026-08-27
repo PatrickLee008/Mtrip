@@ -5,95 +5,83 @@ declare(strict_types=1);
 namespace App\Controller\Merchant;
 
 use App\Controller\AbstractController;
+use App\Service\MerchantNotificationService;
+use Hyperf\Database\Query\Builder;
 use Hyperf\DbConnection\Db;
 use Mtrip\Shared\Annotation\Permission;
+use Mtrip\Shared\Constants\ErrorCode;
 use Mtrip\Shared\Context\MerchantContext;
+use Mtrip\Shared\Exception\BusinessException;
 use Mtrip\Shared\Support\Result;
 
-/**
- * 商户端通知中心(Merchant App M6)。
- * 读取平台写入的 merchant_notify,并在商户账号维度记录已读状态。
- */
+/** Delivered in-app messages only; read state belongs to a login account. */
 class NotificationController extends AbstractController
 {
-    /** 通知列表:关键词/分类/已读状态筛选 */
+    private function query(): Builder
+    {
+        return Db::table('merchant_notify as n')->whereIn('n.merchant_id', MerchantContext::scopeMerchantIds() ?: [0])
+            ->where('n.status', 1)->whereRaw("FIND_IN_SET('inapp', n.channels)")
+            ->where('n.send_at', '<=', gmdate('Y-m-d H:i:s'))
+            ->leftJoin('merchant_notify_read as r', static function ($join) {
+                $join->on('r.notify_id', '=', 'n.id')->where('r.account_id', '=', MerchantContext::adminId());
+            });
+    }
+
     public function index(): array
     {
         [$page, $pageSize] = $this->pageParams();
-        $query = Db::table('merchant_notify')
-            ->whereIn('merchant_id', $this->scopeMerchantIds());
-
-        if (($keyword = $this->strInput('keyword')) !== '') {
-            $query->where(static function ($q) use ($keyword) {
-                $q->where('title', 'like', "%{$keyword}%")
-                    ->orWhere('message', 'like', "%{$keyword}%");
-            });
-        }
-        if (($category = $this->strInput('category')) !== '') {
-            $query->where('category', $category);
-        }
-        $isRead = $this->input('isRead');
-        if ($isRead !== null && $isRead !== '') {
-            ((int) $isRead) === 1 ? $query->whereNotNull('read_at') : $query->whereNull('read_at');
-        }
-
-        $total = (clone $query)->count();
-        $list = $query->orderByDesc('send_at')->orderByDesc('id')
-            ->forPage($page, $pageSize)
-            ->get()
-            ->map(static function ($row) {
-                $row = (array) $row;
-                $row['is_read'] = $row['read_at'] !== null;
-                return $row;
-            })
-            ->all();
-
-        return Result::page($list, $total, $page, $pageSize);
+        $q = $this->query();
+        if (($keyword = $this->strInput('keyword')) !== '') $q->where(static function ($q) use ($keyword) {
+            $q->where('n.title', 'like', "%{$keyword}%")->orWhere('n.message', 'like', "%{$keyword}%");
+        });
+        if (($category = $this->strInput('category')) !== '') $q->where('n.category', $category);
+        $read = $this->input('isRead');
+        if ($read !== null && $read !== '') (int) $read === 1 ? $q->whereNotNull('r.read_at') : $q->whereNull('r.read_at');
+        $total = (clone $q)->count();
+        $rows = $q->select('n.*', 'r.read_at as account_read_at')->orderByDesc('n.send_at')->orderByDesc('n.id')->forPage($page, $pageSize)->get()->map(static function ($r) {
+            $row = (array) $r;
+            $row['is_read'] = $row['account_read_at'] !== null;
+            $row['read_at'] = $row['account_read_at'];
+            unset($row['account_read_at'], $row['read_by'], $row['payload_hash'], $row['request_id']);
+            return $row;
+        })->all();
+        return Result::page($rows, $total, $page, $pageSize);
     }
 
-    /** 顶部铃铛/页面统计 */
     public function summary(): array
     {
-        $base = Db::table('merchant_notify')->whereIn('merchant_id', $this->scopeMerchantIds());
-        $categoryRows = (clone $base)
-            ->groupBy('category')
-            ->selectRaw('category, COUNT(*) AS cnt')
-            ->pluck('cnt', 'category')
-            ->all();
-        $categories = [];
-        foreach ($categoryRows as $category => $count) {
-            $categories[(string) $category] = (int) $count;
-        }
-
-        return Result::success([
-            'total' => (clone $base)->count(),
-            'unread' => (clone $base)->whereNull('read_at')->count(),
-            'categories' => $categories,
-        ]);
+        $q = $this->query();
+        return Result::success(['total' => (clone $q)->count(), 'unread' => (clone $q)->whereNull('r.read_at')->count(),
+            'categories' => (clone $q)->selectRaw('n.category, COUNT(*) AS cnt')->groupBy('n.category')->pluck('cnt', 'category')->all()]);
     }
 
-    /** 标记单条或全部通知已读 */
     #[Permission('mch:notifications:read')]
     public function read(): array
     {
-        $id = $this->intInput('id');
-        $query = Db::table('merchant_notify')
-            ->whereIn('merchant_id', $this->scopeMerchantIds())
-            ->whereNull('read_at');
-        if ($id > 0) {
-            $query->where('id', $id);
-        }
-        $query->update([
-            'read_at' => date('Y-m-d H:i:s'),
-            'read_by' => MerchantContext::adminId(),
-        ]);
-
-        return Result::success(null, '已标记为已读');
+        $q = $this->query();
+        if ($this->intInput('id') > 0) $q->where('n.id', $this->intInput('id'));
+        // Keyset batches avoid loading an entire mailbox, insertIgnore makes concurrent reads idempotent.
+        $after = 0;
+        do {
+            $ids = (clone $q)->where('n.id', '>', $after)->whereNull('r.read_at')->orderBy('n.id')->limit(200)->pluck('n.id')->all();
+            foreach ($ids as $id) Db::table('merchant_notify_read')->insertOrIgnore(['notify_id' => $id, 'account_id' => MerchantContext::adminId()]);
+            if ($ids !== []) $after = (int) end($ids);
+        } while (count($ids) === 200);
+        return Result::success();
     }
 
-    private function scopeMerchantIds(): array
+    public function destination(): array
     {
-        $ids = MerchantContext::scopeMerchantIds();
-        return $ids === [] ? [0] : $ids;
+        $row = $this->query()->where('n.id', $this->requireId())->select('n.*')->first();
+        if (! $row) throw new BusinessException(ErrorCode::NOT_FOUND);
+        $type = (string) $row->deep_link_type;
+        $value = (string) $row->deep_link_value;
+        (new MerchantNotificationService())->validateLink((int) $row->merchant_id, (int) $row->site_id, $type, $value);
+        $path = match ($type) {
+            'booking_detail' => '/order', 'promotion' => '/promotions', 'wallet' => '/earnings',
+            'user_profile' => '/settings', 'page' => $value, default => '',
+        };
+        // Destination pages/API retain their own role and resource checks.
+        return Result::success(['path' => $path, 'query' => in_array($type, ['booking_detail', 'promotion'], true) ? ['notificationTarget' => $value] : []]);
     }
 }

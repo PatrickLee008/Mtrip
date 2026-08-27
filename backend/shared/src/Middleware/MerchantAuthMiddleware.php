@@ -67,6 +67,28 @@ class MerchantAuthMiddleware implements MiddlewareInterface
             'permissions' => $permissions,
         ]);
 
-        return $handler->handle($request);
+        $response = $handler->handle($request);
+        $path = $request->getUri()->getPath();
+        if (in_array(strtoupper($request->getMethod()), ['POST', 'PUT', 'PATCH', 'DELETE'], true)
+            && preg_match('#^/api/v1/merchant/(order|rooms|availability|promotions|reviews|goods|store|role)/#', $path)) {
+            $result = json_decode((string) $response->getBody(), true);
+            if ($response->getStatusCode() < 400 && ($result['code'] ?? null) === 0) {
+                try {
+                    \Hyperf\DbConnection\Db::table('merchant_activity_log')->insert([
+                        'site_id' => MerchantContext::siteId(), 'merchant_id' => MerchantContext::merchantId(),
+                        'activity_type' => 'operation', 'description' => mb_substr($request->getMethod() . ' ' . $path, 0, 255),
+                        'performed_by' => MerchantContext::adminName(), 'performed_by_id' => MerchantContext::adminId(),
+                        'actor_type' => 'merchant', 'target_account_id' => MerchantContext::adminId(),
+                        'entity_type' => MerchantContext::accountType() === 1 ? 'group' : 'account',
+                        'entity_id' => MerchantContext::accountType() === 1 ? MerchantContext::groupId() : MerchantContext::adminId(),
+                    ]);
+                } catch (\Throwable $e) {
+                    // Supplemental cross-domain request audit; business-domain histories remain authoritative.
+                    // Do not turn a committed business action into a retryable error or log request secrets.
+                    error_log('merchant_operation_audit_failed path=' . $path . ' exception=' . $e::class);
+                }
+            }
+        }
+        return $response;
     }
 }

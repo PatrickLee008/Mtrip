@@ -313,6 +313,7 @@ export default {
     },
   },
   notifications: {
+    openDestination: '查看相关内容',
     title: '通知中心',
     subtitle: '查看运营消息、预订提醒、结算更新与平台公告。',
     titleColumn: '通知',

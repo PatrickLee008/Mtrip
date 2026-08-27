@@ -77,7 +77,11 @@ class AccountController extends AbstractController
             'is_owner' => 0,
             'status' => 1,
         ];
-        $id = (int) Db::table('merchant_admin')->insertGetId($data);
+        $id = Db::transaction(function () use ($data) {
+            $id = (int) Db::table('merchant_admin')->insertGetId($data);
+            \App\Service\MerchantActivityService::changed($id, 'created', $this->clientIp());
+            return $id;
+        });
         return Result::success(['id' => $id], '子账号创建成功');
     }
 
@@ -94,7 +98,10 @@ class AccountController extends AbstractController
             $data['mobile'] = $this->encryptField($mobile);
         }
         if ($data !== []) {
-            Db::table('merchant_admin')->where('id', $account['id'])->update($data);
+            Db::transaction(function () use ($account, $data) {
+                Db::table('merchant_admin')->where('id', $account['id'])->update($data);
+                \App\Service\MerchantActivityService::changed((int) $account['id'], 'profile_updated', $this->clientIp());
+            });
         }
         return Result::success(null, '子账号更新成功');
     }
@@ -108,7 +115,10 @@ class AccountController extends AbstractController
             throw new BusinessException(ErrorCode::DATA_CONFLICT, '主账号不可停用');
         }
         $next = (int) $account['status'] === 1 ? 2 : 1;
-        Db::table('merchant_admin')->where('id', $account['id'])->update(['status' => $next]);
+        Db::transaction(function () use ($account, $next) {
+            Db::table('merchant_admin')->where('id', $account['id'])->update(['status' => $next]);
+            \App\Service\MerchantActivityService::changed((int) $account['id'], $next === 1 ? 'enabled' : 'disabled', $this->clientIp());
+        });
         return Result::success(['status' => $next], $next === 1 ? '账号已启用' : '账号已禁用');
     }
 
@@ -121,8 +131,10 @@ class AccountController extends AbstractController
         if (strlen($password) < 8 || ! preg_match('/[A-Za-z]/', $password) || ! preg_match('/\d/', $password)) {
             throw new BusinessException(ErrorCode::PARAM_ERROR, '密码至少8位且需包含字母和数字');
         }
-        Db::table('merchant_admin')->where('id', $account['id'])
-            ->update(['password' => password_hash($password, PASSWORD_BCRYPT)]);
+        Db::transaction(function () use ($account, $password) {
+            Db::table('merchant_admin')->where('id', $account['id'])->update(['password' => password_hash($password, PASSWORD_BCRYPT)]);
+            \App\Service\MerchantActivityService::changed((int) $account['id'], 'password_reset', $this->clientIp());
+        });
         return Result::success(null, '密码已重置');
     }
 

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { openMerchantDocument } from '@/utils/merchantDocument';
 import { computed, onMounted, reactive, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { message, Modal, type TablePaginationConfig } from 'ant-design-vue';
@@ -1353,7 +1354,7 @@ onMounted(() => {
               <span>{{ assistUploads[doc.doc_type].file_name || assistUploads[doc.doc_type].name }}</span>
             </div>
             <a-space :size="4">
-              <a-button v-if="assistUploads[doc.doc_type].file_url" size="small" type="link" :href="assistUploads[doc.doc_type].file_url" target="_blank">
+              <a-button v-if="assistUploads[doc.doc_type].file_url" size="small" type="link" @click="openMerchantDocument(assistUploads[doc.doc_type].id)">
                 <template #icon><EyeOutlined /></template>{{ t('merchant.documentsPage.preview') }}
               </a-button>
               <a-button size="small" type="link" danger class="assist-kyc-document__remove" @click="removeAssistDoc(doc)">

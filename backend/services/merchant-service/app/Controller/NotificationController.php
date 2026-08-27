@@ -18,58 +18,19 @@ use Mtrip\Shared\Support\Result;
  */
 class NotificationController extends AbstractController
 {
-    /** 通知分类(原型抽屉下拉) */
-    private const CATEGORIES = ['booking', 'promotion', 'rewards', 'wallet', 'refund', 'account', 'security', 'support', 'system'];
 
-    /** 下发渠道(原型卡片多选) */
-    private const CHANNELS = ['push', 'inapp', 'email', 'sms'];
 
-    /** 深链类型(原型 Deep Link / Destination) */
-    private const DEEP_LINK_TYPES = ['booking_detail', 'wallet', 'promotion', 'coupon', 'user_profile', 'external_url', 'none'];
-
-    /** 发送通知:写记录 + 审计 */
+    /** Only configured transports may be requested; delivery and audit share a transaction. */
     #[Permission('merchant:list:notify')]
     public function send(): array
     {
-        $merchant = $this->findMerchant($this->requireId('merchantId'));
-        $category = $this->strInput('category', 'system');
-        if (! in_array($category, self::CATEGORIES, true)) {
-            throw new BusinessException(ErrorCode::PARAM_ERROR, '通知分类不合法');
-        }
-        $title = $this->requireStr('title');
-        $message = $this->requireStr('message');
-        $deepLinkType = $this->strInput('deepLinkType', 'none');
-        if (! in_array($deepLinkType, self::DEEP_LINK_TYPES, true)) {
-            throw new BusinessException(ErrorCode::PARAM_ERROR, '深链类型不合法');
-        }
-        $channels = array_values(array_intersect(self::CHANNELS, (array) $this->input('channels', [])));
-        if ($channels === []) {
-            throw new BusinessException(ErrorCode::PARAM_ERROR, '请至少选择一个下发渠道');
-        }
-        $sendType = $this->intInput('sendType', 1);
-        $sendAt = $this->strInput('sendAt');
-        if ($sendType === 2 && ($sendAt === '' || strtotime($sendAt) === false)) {
-            throw new BusinessException(ErrorCode::PARAM_ERROR, '定时发送需选择有效时间');
-        }
+        return Result::success((new \App\Service\MerchantNotificationService())->send($this->requireId('merchantId'), $this->request->all()));
+    }
 
-        Db::table('merchant_notify')->insert([
-            'site_id' => (int) $merchant['site_id'],
-            'merchant_id' => (int) $merchant['id'],
-            'category' => $category,
-            'title' => mb_substr($title, 0, 200),
-            'message' => mb_substr($message, 0, 1000),
-            'deep_link_type' => $deepLinkType,
-            'deep_link_value' => mb_substr($this->strInput('deepLinkValue'), 0, 500),
-            'channels' => implode(',', $channels),
-            'send_type' => $sendType,
-            'send_at' => $sendType === 2 ? $sendAt : date('Y-m-d H:i:s'),
-            'status' => 1,
-            'operator_id' => AdminContext::adminId(),
-            'operator_name' => AdminContext::adminName(),
-        ]);
-
-        $this->pushActivity($merchant, '发送商户通知:' . $category . ':' . $title);
-        return Result::success(null, '通知已发送');
+    #[Permission('merchant:list:notify')]
+    public function channels(): array
+    {
+        return Result::success(\App\Service\MerchantNotificationService::CHANNELS);
     }
 
     /** 通知记录列表(站点/商户筛选) */
@@ -85,6 +46,13 @@ class NotificationController extends AbstractController
         $total = (clone $query)->count();
         $list = $query->orderByDesc('id')->forPage($page, $pageSize)->get()
             ->map(static fn ($r) => (array) $r)->all();
+        $ids = array_column($list, 'id');
+        $deliveries = $ids === [] ? [] : Db::table('merchant_notify_delivery')->whereIn('notify_id', $ids)->get()->groupBy('notify_id')->all();
+        foreach ($list as &$row) {
+            $row['deliveries'] = isset($deliveries[$row['id']]) ? $deliveries[$row['id']]->all() : [];
+            unset($row['payload_hash']);
+        }
+        unset($row);
         return Result::page($list, $total, $page, $pageSize);
     }
 
@@ -93,7 +61,8 @@ class NotificationController extends AbstractController
     public function templates(): array
     {
         $query = Db::table('notify_template')->where('status', 1);
-        $siteId = AdminContext::scopeSiteId($this->intInput('siteId'));
+        $merchant = $this->intInput('merchantId') > 0 ? $this->findMerchant($this->intInput('merchantId')) : null;
+        $siteId = $merchant ? (int) $merchant['site_id'] : AdminContext::scopeSiteId($this->intInput('siteId'));
         if ($siteId !== null && $siteId > 0) {
             $query->where(function ($q) use ($siteId) {
                 $q->where('site_id', 0)->orWhere('site_id', $siteId);
@@ -117,18 +86,5 @@ class NotificationController extends AbstractController
         return $merchant;
     }
 
-    /** 写商户活动日志 */
-    private function pushActivity(array $merchant, string $desc, int $status = 1): void
-    {
-        Db::table('merchant_activity_log')->insert([
-            'site_id' => (int) $merchant['site_id'],
-            'merchant_id' => (int) $merchant['id'],
-            'activity_type' => 'notification',
-            'description' => mb_substr($desc, 0, 255),
-            'performed_by' => AdminContext::adminName() ?: 'Admin',
-            'performed_by_id' => AdminContext::adminId(),
-            'ip_address' => $this->clientIp(),
-            'status' => $status,
-        ]);
-    }
+
 }

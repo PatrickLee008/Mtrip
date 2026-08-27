@@ -78,13 +78,15 @@ export function apiMerchantNotifySend(data: {
   channels: string[];
   sendType?: number;
   sendAt?: string;
-}): Promise<null> {
+  requestId: string;
+  templateId?: number;
+}): Promise<{ id: number; deliveries: Row[] }> {
   return post('/admin/merchant/notification/send', data);
 }
 
 /** 通知模板(Use Template 自动填充) */
-export function apiMerchantNotifyTemplates(): Promise<Row[]> {
-  return get('/admin/merchant/notification/templates');
+export function apiMerchantNotifyTemplates(merchantId?: number): Promise<Row[]> {
+  return get('/admin/merchant/notification/templates', { merchantId });
 }
 
 /** 开始代入会话(整改 B2):原因必选,全程审计 */
@@ -384,7 +386,7 @@ export function apiVerifyResubmitReceived(id: number): Promise<null> {
 }
 
 /** 逐份文档核验:action=verify|reject(reject 必填 reason) */
-export function apiVerifyDocReview(data: { docId: number; action: string; reason?: string }): Promise<null> {
+export function apiVerifyDocReview(data: { docId: number; action: string; reason?: string; expectedVersion: number }): Promise<null> {
   return post('/admin/merchant/verify/doc-review', data);
 }
 
@@ -463,13 +465,13 @@ export function apiMerchantDocuments(
 }
 
 /** 文档详情(含核验历史时间线) */
-export function apiMerchantDocumentDetail(docId: number): Promise<{ document: Row; history: Row[] }> {
+export function apiMerchantDocumentDetail(docId: number): Promise<{ document: Row; history: Row[]; revisions: Row[] }> {
   return get('/admin/merchant/document/detail', { docId });
 }
 
 /** 文档级要求重交(6 项预置原因之一) */
-export function apiMerchantDocumentResubmit(docId: number, reason: string): Promise<null> {
-  return post('/admin/merchant/document/resubmit', { docId, reason });
+export function apiMerchantDocumentResubmit(docId: number, reason: string, expectedVersion: number): Promise<null> {
+  return post('/admin/merchant/document/resubmit', { docId, reason, expectedVersion });
 }
 
 export function apiMerchantBlacklist(id: number, reason: string, evidence?: string): Promise<null> {

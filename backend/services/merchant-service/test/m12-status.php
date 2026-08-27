@@ -164,6 +164,8 @@ try {
     check(MerchantContext::scopeMerchantIds() === [-1], 'T27 empty group scope never falls back to merchant_id=0');
     echo "M12 STATUS INTEGRATION PASSED\n";
 } finally {
+    $noticeIds = $ids ? Db::table('merchant_notify')->whereIn('merchant_id', $ids)->pluck('id')->all() : [];
+    if ($noticeIds) foreach (['merchant_notify_read', 'merchant_notify_delivery'] as $table) Db::table($table)->whereIn('notify_id', $noticeIds)->delete();
     foreach ($triggers as [$table, $constraint]) Db::unprepared("ALTER TABLE {$table} DROP CHECK {$constraint}");
     foreach (['merchant_notify', 'merchant_activity_log', 'merchant_status_history', 'merchant_blacklist', 'merchant_admin', 'goods_info'] as $table) {
         Db::table($table)->whereIn('merchant_id', $ids)->delete();

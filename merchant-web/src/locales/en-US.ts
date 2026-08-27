@@ -314,6 +314,7 @@ export default {
     },
   },
   notifications: {
+    openDestination: 'View related content',
     title: 'Notifications',
     subtitle: 'Review operational messages, booking alerts, settlement updates, and platform announcements.',
     titleColumn: 'Notification',

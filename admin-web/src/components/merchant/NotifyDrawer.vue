@@ -4,6 +4,8 @@ import { useI18n } from 'vue-i18n';
 import { Modal, message } from 'ant-design-vue';
 import { apiMerchantNotifySend, apiMerchantNotifyTemplates } from '@/api/merchant';
 import type { TableRow } from '@/composables/useTable';
+import { get } from '@/utils/http';
+import type { Dayjs } from 'dayjs';
 
 /**
  * 发送商户通知抽屉(整改 B1,原型 Send Notification 抽屉 540px)
@@ -23,7 +25,11 @@ const { t } = useI18n();
 
 const CATEGORIES = ['booking', 'promotion', 'rewards', 'wallet', 'refund', 'account', 'security', 'support', 'system'] as const;
 const CHANNELS = ['push', 'inapp', 'email', 'sms'] as const;
-const DEEP_LINKS = ['booking_detail', 'wallet', 'promotion', 'coupon', 'user_profile', 'external_url', 'none'] as const;
+const DEEP_LINKS = ['booking_detail', 'wallet', 'promotion', 'user_profile', 'page', 'none'] as const;
+const availableChannels = ref<Record<string, boolean>>({ inapp: true });
+const requestId = ref('');
+const schedule = ref<Dayjs>();
+const notifications = ref<TableRow[]>([]);
 
 const form = reactive({
   category: 'system',
@@ -31,7 +37,7 @@ const form = reactive({
   message: '',
   deepLinkType: 'none',
   deepLinkValue: '',
-  channels: ['inapp', 'email'] as string[],
+  channels: ['inapp'] as string[],
   sendType: 1,
   sendAt: '',
 });
@@ -51,19 +57,25 @@ watch(
       message: '',
       deepLinkType: 'none',
       deepLinkValue: '',
-      channels: ['inapp', 'email'],
+      channels: ['inapp'],
       sendType: 1,
       sendAt: '',
     });
     templateId.value = undefined;
+    requestId.value = crypto.randomUUID();
+    schedule.value = undefined;
     try {
-      templates.value = await apiMerchantNotifyTemplates();
+      availableChannels.value = await get('/admin/merchant/notification/channels');
+      const history = await get<{ list: TableRow[] }>('/admin/merchant/notification/list', { merchantId: props.merchant.id });
+      notifications.value = history.list;
+      templates.value = await apiMerchantNotifyTemplates(props.merchant.id);
     } catch {
       templates.value = [];
     }
   },
 );
 
+watch(() => form.deepLinkType, () => { form.deepLinkValue = ''; }, { flush: 'sync' });
 function applyTemplate(id: number | undefined): void {
   const tp = templates.value.find((x) => x.id === id);
   if (tp) {
@@ -75,6 +87,7 @@ function applyTemplate(id: number | undefined): void {
   }
 }
 
+watch(() => JSON.stringify([form, templateId.value, schedule.value?.toISOString()]), () => { requestId.value = crypto.randomUUID(); }, { flush: 'sync' });
 function preview(): void {
   Modal.info({
     title: form.title || t('merchant.notifyPage.previewNoTitle'),
@@ -106,9 +119,10 @@ async function send(): Promise<void> {
       deepLinkValue: form.deepLinkValue,
       channels: form.channels,
       sendType: form.sendType,
-      sendAt: form.sendType === 2 ? form.sendAt : undefined,
+      sendAt: form.sendType === 2 ? schedule.value?.toISOString() : undefined,
+      requestId: requestId.value, templateId: templateId.value,
     });
-    message.success(t('merchant.notifyPage.sent'));
+    message.success(t(form.sendType === 2 ? 'merchant.s3.scheduled' : 'merchant.notifyPage.sent'));
     emit('update:open', false);
     emit('sent');
   } finally {
@@ -124,7 +138,7 @@ async function send(): Promise<void> {
     :width="540"
     @update:open="emit('update:open', $event)"
   >
-    <a-form layout="vertical">
+    <a-alert type="info" show-icon :message="t('merchant.s3.inappOnly')" style="margin-bottom: 16px" /><a-form layout="vertical">
       <a-form-item :label="t('merchant.notifyPage.recipient')">
         <a-input :value="merchant ? `${merchant.merchant_name} (#${merchant.id})` : ''" disabled />
       </a-form-item>
@@ -149,7 +163,7 @@ async function send(): Promise<void> {
           <a-select v-model:value="form.deepLinkType">
             <a-select-option v-for="d in DEEP_LINKS" :key="d" :value="d">{{ t(`merchant.notifyPage.link.${d}`) }}</a-select-option>
           </a-select>
-          <a-input v-if="form.deepLinkType !== 'none'" v-model:value="form.deepLinkValue" :placeholder="t('merchant.notifyPage.deepLinkValuePlaceholder')" />
+          <a-input v-if="['booking_detail', 'promotion', 'page'].includes(form.deepLinkType)" v-model:value="form.deepLinkValue" :placeholder="t('merchant.notifyPage.deepLinkValuePlaceholder')" />
         </a-space>
       </a-form-item>
       <a-form-item :label="`${t('merchant.notifyPage.channel')} *`">
@@ -159,10 +173,10 @@ async function send(): Promise<void> {
             :key="ch"
             class="channel-card"
             :class="{ active: form.channels.includes(ch) }"
-            @click="form.channels = form.channels.includes(ch) ? form.channels.filter((x) => x !== ch) : [...form.channels, ch]"
+            @click="availableChannels[ch] && (form.channels = form.channels.includes(ch) ? form.channels.filter((x) => x !== ch) : [...form.channels, ch])"
           >
-            <input v-model="form.channels" type="checkbox" :value="ch" style="display: none" />
-            <span>{{ t(`merchant.notifyPage.channelName.${ch}`) }}</span>
+            <input v-model="form.channels" type="checkbox" :value="ch" :disabled="!availableChannels[ch]" style="display: none" />
+            <span>{{ t(`merchant.notifyPage.channelName.${ch}`) }} {{ availableChannels[ch] ? '' : t('merchant.s3.unconfigured') }}</span>
           </label>
         </div>
       </a-form-item>
@@ -173,13 +187,17 @@ async function send(): Promise<void> {
         </a-radio-group>
         <a-date-picker
           v-if="form.sendType === 2"
-          v-model:value="form.sendAt"
+          v-model:value="schedule"
           show-time
           style="width: 100%"
           :placeholder="t('merchant.notifyPage.schedulePlaceholder')"
         />
       </a-form-item>
     </a-form>
+    <a-divider>{{ t('merchant.s3.deliveryHistory') }}</a-divider>
+    <a-list :data-source="notifications" size="small"><template #renderItem="{ item }"><a-list-item>
+      <div>{{ item.title }} · {{ item.send_at }}<div v-for="delivery in item.deliveries" :key="delivery.id">{{ delivery.channel }}: {{ t(`merchant.s3.delivery.${delivery.status}`) }}</div><span v-if="!item.deliveries?.length">{{ t('merchant.s3.legacyDelivery') }}</span></div>
+    </a-list-item></template></a-list>
     <template #footer>
       <div style="display: flex; gap: 8px; justify-content: flex-end">
         <a-button @click="emit('update:open', false)">{{ t('merchant.notifyPage.cancel') }}</a-button>

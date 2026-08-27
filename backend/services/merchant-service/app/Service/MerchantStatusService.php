@@ -111,14 +111,19 @@ class MerchantStatusService
                 'site_id' => $merchant->site_id, 'merchant_id' => $merchantId,
                 'activity_type' => $action === 'suspend' ? 'suspension' : ($action === 'blacklist' ? 'blacklist' : 'reactivation'),
                 'description' => mb_substr($description, 0, 255), 'performed_by' => $actor['name'],
-                'performed_by_id' => $actor['id'], 'ip_address' => mb_substr($actor['ip'], 0, 45), 'created_at' => $now,
+                'performed_by_id' => $actor['id'], 'actor_type' => $actor['type'], 'entity_type' => 'merchant_status', 'entity_id' => $historyId,
+                'ip_address' => mb_substr($actor['ip'], 0, 45), 'created_at' => $now,
             ]);
             // 真实站内投递和强审计与状态同库同事务；外部服务商未配置，不报告已发送。
-            Db::table('merchant_notify')->insert([
+            $notificationId = (int) Db::table('merchant_notify')->insertGetId([
                 'site_id' => $merchant->site_id, 'merchant_id' => $merchantId, 'category' => 'account',
                 'title' => 'Merchant status updated / 商户状态变更', 'message' => $description,
-                'channels' => 'inapp', 'status' => 1, 'send_type' => 1, 'send_at' => $now,
+                'channels' => 'inapp', 'status' => 1, 'send_type' => 1, 'send_at' => $now, 'delivered_at' => $now,
                 'operator_id' => $actor['id'], 'operator_name' => $actor['name'], 'created_at' => $now,
+            ]);
+            Db::table('merchant_notify_delivery')->insert([
+                'notify_id' => $notificationId, 'channel' => 'inapp', 'status' => 'delivered',
+                'attempts' => 1, 'scheduled_at' => $now, 'delivered_at' => $now, 'receipt' => 'inapp:' . $notificationId,
             ]);
             return $result;
         });

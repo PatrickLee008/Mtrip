@@ -1761,6 +1761,18 @@ export default {
     },
   },
   merchant: {
+    s3: {
+      target: 'Related entity',
+      sources: { activity: 'Activity and admin actions', status: 'Suspension and status history', verification: 'Onboarding and verification', warning: 'Warning history', compliance: 'Compliance history' },
+      historySourceNotice: 'Read-only source records. Append-only compliance enforcement and notifications are completed in S6; missing past events are not fabricated.',
+      replace: 'Replace', replaceRequired: 'Select a file and enter a replacement reason', maxFile: 'Maximum file size is 10MB', replaceConfirm: 'Replace the current document?',
+      pendingNotice: 'The new version requires review. Previous files and decisions remain available; merchant operating status is unchanged.', replaced: 'New version uploaded for review', file: 'Document file', reason: 'Replacement reason',
+      historyNotice: 'Legacy snapshots are not a complete event history. New actions are recorded individually. Initial version status and later review events are shown separately.', legacy: 'Legacy revision',
+      scheduled: 'Notification scheduled, not yet delivered', unconfigured: ' (Not configured)', inappOnly: 'Only in-app delivery is enabled. Email, SMS and push await provider integration.', page: 'In-app page',
+      deliveryHistory: 'Recent notification deliveries', legacyDelivery: 'Legacy record without verified channel receipts', destination: 'View related content',
+      delivery: { delivered: 'Delivered in-app', scheduled: 'Scheduled', failed: 'Failed' },
+      events: { replace: 'Replacement uploaded', verify: 'Approved', reject: 'Rejected', resubmit: 'Resubmission requested', expire: 'Expired', download: 'File accessed', upload: 'Draft uploaded' },
+    },
     title: 'Merchant',
     list: 'Merchants',
     account: 'Accounts',
@@ -2380,6 +2392,8 @@ export default {
       },
     },
     activitiesPage: {
+      typeOperation: 'Operational action',
+      typeAccountChange: 'Account changes',
       subtitle: 'MERCHANT MANAGEMENT',
       title: 'Merchant Activities',
       pageDesc: 'Audit log of all merchant and administrator actions across the platform',

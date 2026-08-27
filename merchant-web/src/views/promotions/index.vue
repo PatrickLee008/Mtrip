@@ -1,5 +1,9 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue';
+import { computed, onMounted, reactive, ref, watch } from 'vue';
+import { useRoute } from 'vue-router';
+const route = useRoute();
+const notificationDetail = ref<MerchantPromotion | null>(null);
+const notificationOpen = ref(false);
 import dayjs, { type Dayjs } from 'dayjs';
 import { message } from 'ant-design-vue';
 import {
@@ -255,6 +259,12 @@ function money(value: number): string {
   return `THB ${Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
+watch(() => route.query.notificationTarget, async (value) => {
+  if (typeof value === 'string' && /^[1-9]\d*$/.test(value)) {
+    notificationDetail.value = await apiPromotionDetail(Number(value));
+    notificationOpen.value = true;
+  }
+}, { immediate: true });
 onMounted(() => {
   void Promise.all([refreshAll(), loadGoodsOptions()]);
 });
@@ -438,6 +448,10 @@ onMounted(() => {
           <a-textarea v-model:value="form.remark" :rows="3" :placeholder="t('promotions.remarkPlaceholder')" />
         </a-form-item>
       </a-form>
+    </a-modal>
+    <a-modal v-model:open="notificationOpen" :title="notificationDetail?.coupon_name" :footer="null">
+      <p>{{ notificationDetail?.remark }}</p>
+      <p>{{ notificationDetail?.valid_start }} — {{ notificationDetail?.valid_end }}</p>
     </a-modal>
   </PageContainer>
 </template>

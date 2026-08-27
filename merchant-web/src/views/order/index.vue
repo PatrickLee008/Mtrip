@@ -1,5 +1,7 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
+import { useRoute } from 'vue-router';
+const route = useRoute();
 import { message } from 'ant-design-vue';
 import { CheckCircleOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons-vue';
 import { useI18n } from 'vue-i18n';
@@ -96,6 +98,9 @@ async function openDetail(row: TableRow): Promise<void> {
   }
 }
 
+watch(() => route.query.notificationTarget, (value) => {
+  if (typeof value === 'string' && /^[1-9]\d*$/.test(value)) void openDetail({ id: Number(value) });
+}, { immediate: true });
 onMounted(() => {
   void load();
 });

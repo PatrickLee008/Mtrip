@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, onBeforeUnmount, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { Modal, message } from 'ant-design-vue';
 import {
@@ -21,6 +21,28 @@ import {
   apiVerifyDocReview,
 } from '@/api/merchant';
 import { exportCsv } from '@/utils/exportCsv';
+import { openMerchantDocument, fetchMerchantDocument } from '@/utils/merchantDocument';
+const previewUrl = ref('');
+const previewMime = ref('');
+const previewLoading = ref(false);
+function clearPreview(): void { if (previewUrl.value) URL.revokeObjectURL(previewUrl.value); previewUrl.value = ''; }
+async function previewFile(): Promise<void> {
+  const id = docDetail.value?.id;
+  if (!id) return;
+  previewLoading.value = true;
+  try {
+    const file = await fetchMerchantDocument(id);
+    if (!drawerOpen.value || docDetail.value?.id !== id) return;
+    clearPreview(); previewUrl.value = URL.createObjectURL(file.blob); previewMime.value = file.blob.type;
+  } finally { previewLoading.value = false; }
+}
+onBeforeUnmount(clearPreview);
+import DocumentReplaceModal from '@/components/merchant/DocumentReplaceModal.vue';
+const replaceOpen = ref(false);
+const replaceTarget = ref<TableRow | null>(null);
+const docRevisions = ref<TableRow[]>([]);
+function replaceDoc(row: TableRow): void { replaceTarget.value = row; replaceOpen.value = true; }
+async function replaced(): Promise<void> { drawerOpen.value = false; await load(); }
 
 /**
  * 商户资质文档库(Super Admin Portal 模块 03 Merchant Documents)
@@ -115,6 +137,7 @@ const drawerLoading = ref(false);
 const drawerTab = ref<'preview' | 'history'>('preview');
 const docDetail = ref<TableRow | null>(null);
 const docHistory = ref<TableRow[]>([]);
+watch([drawerOpen, () => docDetail.value?.id], clearPreview);
 
 async function openPreview(row: TableRow): Promise<void> {
   drawerOpen.value = true;
@@ -124,6 +147,7 @@ async function openPreview(row: TableRow): Promise<void> {
     const data = await apiMerchantDocumentDetail(row.id);
     docDetail.value = data.document;
     docHistory.value = data.history;
+    docRevisions.value = data.revisions;
   } finally {
     drawerLoading.value = false;
   }
@@ -135,13 +159,7 @@ function openHistory(row: TableRow): void {
   });
 }
 
-function downloadDoc(row: TableRow): void {
-  if (row.file_url) {
-    window.open(row.file_url, '_blank');
-  } else {
-    message.info(t('merchant.documentsPage.notVerified'));
-  }
-}
+function downloadDoc(row: TableRow): void { void openMerchantDocument(row.id); }
 
 /** 导出当前筛选结果(整改 D2,分页上限 200) */
 async function exportList(): Promise<void> {
@@ -169,7 +187,7 @@ function confirmVerify(row: TableRow): void {
     content: t('merchant.documentsPage.verifyConfirm', { doc: row.name || docTypeLabel(row.doc_type) }),
     okText: t('merchant.documentsPage.verify'),
     async onOk() {
-      await apiVerifyDocReview({ docId: row.id, action: 'verify' });
+      await apiVerifyDocReview({ docId: row.id, action: 'verify', expectedVersion: row.document_version });
       message.success(t('merchant.documentsPage.verifySuccess'));
       await load();
     },
@@ -181,6 +199,8 @@ const resubOpen = ref(false);
 const resubSaving = ref(false);
 const resubTarget = ref<TableRow | null>(null);
 const resubReason = ref('');
+const resubMode = ref<'resubmit' | 'reject'>('resubmit');
+function openReject(row: TableRow): void { openResub(row); resubMode.value = 'reject'; }
 
 const RESUB_REASONS = computed(() => [
   { key: 'resubR1', label: t('merchant.documentsPage.resubR1') },
@@ -192,6 +212,7 @@ const RESUB_REASONS = computed(() => [
 ]);
 
 function openResub(row: TableRow): void {
+  resubMode.value = 'resubmit';
   resubTarget.value = row;
   resubReason.value = '';
   resubOpen.value = true;
@@ -207,8 +228,12 @@ async function doResub(): Promise<void> {
   }
   resubSaving.value = true;
   try {
-    await apiMerchantDocumentResubmit(resubTarget.value.id, resubReason.value);
-    message.success(t('merchant.documentsPage.resubSuccess'));
+    if (resubMode.value === 'reject') {
+      await apiVerifyDocReview({ docId: resubTarget.value.id, action: 'reject', reason: resubReason.value, expectedVersion: resubTarget.value.document_version });
+    } else {
+      await apiMerchantDocumentResubmit(resubTarget.value.id, resubReason.value, resubTarget.value.document_version);
+    }
+    message.success(t(resubMode.value === 'reject' ? 'merchant.verifyPage.docRejectSuccess' : 'merchant.documentsPage.resubSuccess'));
     resubOpen.value = false;
     await load();
   } finally {
@@ -320,25 +345,27 @@ onMounted(() => {
                 <a-button type="link" size="small" @click="openPreview(record)"><template #icon><EyeOutlined /></template></a-button>
               </a-tooltip>
               <a-tooltip :title="t('merchant.documentsPage.download')">
-                <a-button type="link" size="small" @click="downloadDoc(record)"><template #icon><DownloadOutlined /></template></a-button>
+                <a-button v-perm="'merchant:document:download'" type="link" size="small" @click="downloadDoc(record)"><template #icon><DownloadOutlined /></template></a-button>
               </a-tooltip>
               <a-tooltip :title="t('merchant.documentsPage.history')">
                 <a-button type="link" size="small" @click="openHistory(record)"><template #icon><HistoryOutlined /></template></a-button>
               </a-tooltip>
               <a-tooltip :title="t('merchant.documentsPage.verify')">
                 <a-button
-                  v-if="record.status === 2 || record.status === 4"
-                  v-perm="'merchant:verify:doc'"
+                  v-if="record.status === 2"
+                  v-perm="'merchant:document:verify'"
                   type="link"
                   size="small"
                   style="color: #059669"
                   @click="confirmVerify(record)"
                 ><template #icon><SyncOutlined /></template></a-button>
               </a-tooltip>
+              <a-button v-if="record.status === 2" v-perm="'merchant:document:verify'" type="link" danger size="small" @click="openReject(record)">{{ t('merchant.verifyPage.docRejected') }}</a-button>
+              <a-button v-perm="'merchant:document:replace'" type="link" size="small" @click="replaceDoc(record)">{{ t('merchant.s3.replace') }}</a-button>
               <a-tooltip :title="t('merchant.documentsPage.resubmit')">
                 <a-button
                   v-if="record.status !== 5"
-                  v-perm="'merchant:verify:resubmit'"
+                  v-perm="'merchant:document:verify'"
                   type="link"
                   size="small"
                   style="color: #d97706"
@@ -398,20 +425,23 @@ onMounted(() => {
               <div style="display: flex; align-items: center; gap: 12px; border: 1px solid #e3e8f0; border-radius: 8px; padding: 14px; margin-bottom: 16px">
                 <div style="width: 40px; height: 48px; border: 1px solid #dbe3ef; border-radius: 4px; display: flex; align-items: center; justify-content: center; color: #ef4444; font-weight: 700; font-size: 12px; flex-shrink: 0">PDF</div>
                 <div style="flex: 1; min-width: 0">
-                  <div style="font-weight: 600; word-break: break-all">{{ docDetail.file_url ? docDetail.file_url.split('/').pop() : docDetail.name }}</div>
+                  <div style="font-weight: 600; word-break: break-all">{{ docDetail.name }}</div>
                   <div style="font-size: 12px; color: #64748b; margin-top: 2px">
                     {{ t('merchant.documentsPage.fileSize') }} {{ docDetail.file_size || '-' }} · PDF
                   </div>
                 </div>
-                <a-button v-if="docDetail.file_url" :href="docDetail.file_url" target="_blank" size="small">
+                <a-button v-if="docDetail.has_file" v-perm="'merchant:document:download'" @click="downloadDoc(docDetail)" size="small">
                   <template #icon><DownloadOutlined /></template>{{ t('merchant.documentsPage.download') }}
                 </a-button>
               </div>
 
+              <a-button v-if="docDetail.has_file" v-perm="'merchant:document:download'" :loading="previewLoading" style="margin-bottom: 12px" @click="previewFile">{{ t('merchant.documentsPage.preview') }}</a-button>
+              <iframe v-if="previewUrl && previewMime === 'application/pdf'" :src="previewUrl" :title="docDetail.name" style="width: 100%; height: 420px; border: 0" />
+              <img v-else-if="previewUrl && previewMime.startsWith('image/')" :src="previewUrl" :alt="docDetail.name" style="max-width: 100%" />
               <a-descriptions :column="1" size="small" bordered>
                 <a-descriptions-item :label="t('merchant.documentsPage.documentType')">{{ docTypeLabel(docDetail.doc_type) }}</a-descriptions-item>
                 <a-descriptions-item :label="t('merchant.documentsPage.merchant')">{{ docDetail.merchant_name }} (#{{ docDetail.merchant_id }})</a-descriptions-item>
-                <a-descriptions-item :label="t('merchant.documentsPage.fileName')">{{ docDetail.file_url ? docDetail.file_url.split('/').pop() : '-' }}</a-descriptions-item>
+                <a-descriptions-item :label="t('merchant.documentsPage.fileName')">{{ docDetail.name }}</a-descriptions-item>
                 <a-descriptions-item :label="t('merchant.documentsPage.uploadedDate')">{{ docDetail.uploaded_at || '-' }}</a-descriptions-item>
                 <a-descriptions-item :label="t('merchant.documentsPage.expiryDate')">{{ docDetail.expiry_date || '-' }}</a-descriptions-item>
                 <a-descriptions-item :label="t('merchant.documentsPage.lastVerified')">{{ docDetail.last_verified_at || t('merchant.documentsPage.notVerified') }}</a-descriptions-item>
@@ -421,14 +451,21 @@ onMounted(() => {
 
             <a-tab-pane key="history" :tab="t('merchant.documentsPage.historyTitle')">
               <div style="font-size: 12px; color: #64748b; margin-bottom: 14px">{{ t('merchant.documentsPage.historyDesc') }}</div>
+              <a-alert type="info" :message="t('merchant.s3.historyNotice')" style="margin-bottom: 12px" />
+              <a-list :data-source="docRevisions" size="small">
+                <template #renderItem="{ item }"><a-list-item>
+                  <span>{{ item.lifecycle_version === null ? t('merchant.s3.legacy') : `v${item.lifecycle_version}` }} · {{ item.file_name || item.source }} · {{ item.uploaded_at }}</span>
+                  <a-button v-if="item.has_file" v-perm="'merchant:document:download'" type="link" @click="openMerchantDocument(docDetail.id, item.id)">{{ t('merchant.documentsPage.download') }}</a-button>
+                </a-list-item></template>
+              </a-list>
               <a-timeline>
                 <a-timeline-item v-for="(item, idx) in docHistory" :key="idx">
                   <div style="display: flex; align-items: center; gap: 8px">
-                    <span style="font-weight: 600">{{ item.action }}</span>
-                    <span style="font-size: 11px; color: #94a3b8">{{ item.by }}</span>
+                    <span style="font-weight: 600">v{{ item.version }} · {{ t(`merchant.s3.events.${item.action}`) }}</span>
+                    <span style="font-size: 11px; color: #94a3b8">{{ item.actor_name }}</span>
                   </div>
-                  <div v-if="item.note" style="font-size: 12px; color: #64748b">{{ item.note }}</div>
-                  <div style="font-size: 11px; color: #94a3b8">{{ item.date }}</div>
+                  <div v-if="item.reason" style="font-size: 12px; color: #64748b">{{ item.reason }}</div>
+                  <div style="font-size: 11px; color: #94a3b8">{{ item.created_at }}</div>
                 </a-timeline-item>
               </a-timeline>
             </a-tab-pane>
@@ -437,15 +474,16 @@ onMounted(() => {
       </a-spin>
     </a-drawer>
 
+    <DocumentReplaceModal v-model:open="replaceOpen" :document="replaceTarget" @saved="replaced" />
     <!-- 要求重交弹窗 -->
     <a-modal
       v-model:open="resubOpen"
-      :title="t('merchant.documentsPage.resubModalTitle')"
+      :title="t(resubMode === 'reject' ? 'merchant.verifyPage.docRejected' : 'merchant.documentsPage.resubModalTitle')"
       :confirm-loading="resubSaving"
-      :ok-text="t('merchant.verifyPage.sendNotification')"
+      :ok-text="t(resubMode === 'reject' ? 'common.confirm' : 'merchant.verifyPage.sendNotification')"
       @ok="doResub"
     >
-      <p style="margin: 8px 0 12px">
+      <p v-if="resubMode === 'resubmit'" style="margin: 8px 0 12px">
         {{ t('merchant.documentsPage.resubNotifyText', {
           name: resubTarget?.merchant_name ?? '',
           doc: resubTarget ? resubTarget.name || docTypeLabel(resubTarget.doc_type) : '',

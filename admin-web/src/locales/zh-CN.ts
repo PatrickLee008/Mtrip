@@ -1733,6 +1733,18 @@ export default {
     },
   },
   merchant: {
+    s3: {
+      target: '关联对象',
+      sources: { activity: '商户活动与管理员操作', status: '暂停及状态历史', verification: '入驻及核验历史', warning: '警告历史', compliance: '合规历史' },
+      historySourceNotice: '以下为原始业务记录，只读展示；警告/合规追加式执行与通知联动在S6完成，不将旧记录补造成完整审计。',
+      replace: '替换', replaceRequired: '请选择文件并填写替换原因', maxFile: '文件不能超过10MB', replaceConfirm: '确认替换当前证件？',
+      pendingNotice: '新版本进入待审核；旧文件及历史审核结果保留，不自动变更商户经营状态。', replaced: '新版本已上传，等待审核', file: '证件文件', reason: '替换原因',
+      historyNotice: '历史快照不代表完整的过去事件；新操作逐条留存。版本初始审核状态与后续审核事件分别展示。', legacy: '旧历史版本',
+      scheduled: '通知已排期，尚未投递', unconfigured: '（未配置）', inappOnly: '当前仅支持站内通知；邮件、短信和Push待服务商接入后开放。', page: '应用内页面',
+      deliveryHistory: '最近通知投递记录', legacyDelivery: '历史记录，无可核实的渠道回执', destination: '查看相关内容',
+      delivery: { delivered: '已投递站内信', scheduled: '等待定时投递', failed: '投递失败' },
+      events: { replace: '替换上传', verify: '审核通过', reject: '审核拒绝', resubmit: '要求重新提交', expire: '证件到期', download: '查看/下载文件', upload: '草稿上传' },
+    },
     title: '商家',
     list: '商家列表',
     account: '商家账户',
@@ -2351,6 +2363,8 @@ export default {
       },
     },
     activitiesPage: {
+      typeOperation: '经营操作',
+      typeAccountChange: '账户变更',
       subtitle: '商户管理',
       title: '商户活动',
       pageDesc: '平台全部商户与管理员操作的审计日志',

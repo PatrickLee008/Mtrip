@@ -86,10 +86,15 @@ Router::addGroup('/api/v1/admin', static function () {
     Router::post('/merchant/verify/doc-review', [VerifyController::class, 'docReview']);
     Router::get('/merchant/documents', [VerifyController::class, 'documents']);
     Router::get('/merchant/document/detail', [VerifyController::class, 'documentDetail']);
+    Router::post('/merchant/document/replace', [\App\Controller\MerchantDocumentController::class, 'replace']);
+    Router::post('/merchant/document/review', [\App\Controller\MerchantDocumentController::class, 'review']);
+    Router::get('/merchant/document/download', [\App\Controller\MerchantDocumentController::class, 'download']);
+    Router::get('/merchant/notification/channels', [NotificationController::class, 'channels']);
     Router::post('/merchant/document/resubmit', [VerifyController::class, 'documentResubmit']);
     Router::post('/merchant/blacklist', [VerifyController::class, 'blacklist']);
     Router::post('/merchant/unblacklist', [VerifyController::class, 'unblacklist']);
     Router::get('/merchant/activities', [VerifyController::class, 'activities']);
+    Router::get('/merchant/activities/history', [\App\Controller\MerchantActivityController::class, 'history']);
     Router::get('/merchant/blacklist-list', [VerifyController::class, 'blacklistList']);
     Router::post('/merchant/verify/regenerate-code', [VerifyController::class, 'regenerateCode']);
 
@@ -214,6 +219,7 @@ Router::addGroup('/api/v1/merchant', static function () {
     // ---------- 通知中心(Merchant App M6) ----------
     Router::get('/notifications/list', [MerchantNotificationController::class, 'index']);
     Router::get('/notifications/summary', [MerchantNotificationController::class, 'summary']);
+    Router::get('/notifications/destination', [MerchantNotificationController::class, 'destination']);
     Router::post('/notifications/read', [MerchantNotificationController::class, 'read']);
 }, [
     'middleware' => [MerchantAuthMiddleware::class, OperationLogMiddleware::class],

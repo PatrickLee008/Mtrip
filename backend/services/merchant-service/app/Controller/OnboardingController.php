@@ -725,10 +725,15 @@ class OnboardingController extends AbstractController
                 ->where('biz_unit', $bizUnit)
                 ->where('doc_type', $docType)
                 ->whereNull('deleted_at')
-                ->orderBy('id')
+                ->orderBy('id')->lockForUpdate()
                 ->first();
+            $documents = new \App\Service\MerchantDocumentService();
             if ($doc) {
+                if ($documents->approved((array) $doc)) throw new BusinessException(ErrorCode::DATA_CONFLICT, '已批准商户请使用证件替换流程');
+                $documents->snapshot((array) $doc);
                 Db::table('merchant_verify_document')->where('id', (int) $doc->id)->update([
+                    'document_version' => (int) $doc->document_version + 1,
+                    'reviewer_id' => 0, 'reviewer_name' => '', 'reject_reason' => '', 'last_verified_at' => null,
                     'file_url' => $fileUrl,
                     'file_size' => (string) $fileSize,
                     'name' => mb_substr($clientName, 0, 100),
@@ -752,6 +757,9 @@ class OnboardingController extends AbstractController
                     'uploaded_at' => $now,
                 ]);
             }
+            $savedDoc = (array) Db::table('merchant_verify_document')->where('id', $docId)->first();
+            $documents->snapshot($savedDoc, 'onboarding_draft', hash_file('sha256', $documents->localPath($fileUrl)));
+            $documents->event($savedDoc, 'upload', 'Module11 draft upload; verification submission is still required');
             // 上传/替换文件属于草稿编辑；已提交资料发生变化时退回待办中，必须重新提交核验。
             if ($bizUnit !== '') {
                 Db::table('merchant_application_business')

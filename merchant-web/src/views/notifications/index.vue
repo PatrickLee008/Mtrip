@@ -1,4 +1,12 @@
 <script setup lang="ts">
+import { useRouter } from 'vue-router';
+import { get } from '@/utils/http';
+const router = useRouter();
+async function openDestination(): Promise<void> {
+  if (!detail.value) return;
+  const result = await get<{ path: string; query: Record<string, string> }>('/merchant/notifications/destination', { id: detail.value.id });
+  if (result.path) { detailOpen.value = false; await router.push({ path: result.path, query: result.query }); }
+}
 import { computed, onMounted, ref } from 'vue';
 import { message } from 'ant-design-vue';
 import { BellOutlined, CheckCircleOutlined, EyeOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons-vue';
@@ -194,6 +202,7 @@ onMounted(() => {
         </a-descriptions>
         <div class="notice-message">{{ detail.message }}</div>
       </template>
+      <a-button v-if="detail && detail.deep_link_type !== 'none'" type="primary" @click="openDestination">{{ t('notifications.openDestination') }}</a-button>
     </a-drawer>
   </PageContainer>
 </template>
