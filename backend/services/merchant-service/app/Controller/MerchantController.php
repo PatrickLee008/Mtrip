@@ -54,7 +54,7 @@ class MerchantController extends AbstractController
             $phoneIndex = \Mtrip\Shared\Merchant\MerchantPhoneIndex::hash($keyword, $this->aesKey());
             $query->where(function ($q) use ($keyword, $like, $phoneIndex, $businesses, $properties) {
                 $q->where('m.merchant_name', 'like', $like)->orWhere('m.merchant_code', 'like', $like)
-                    ->orWhere('m.contact_email', 'like', $like);
+                    ->orWhere('m.contact_email', 'like', $like)->orWhere('m.credit_code', 'like', $like);
                 if (ctype_digit($keyword) && strlen($keyword) < 19) {
                     $q->orWhere('m.id', (int) $keyword);
                 }
@@ -75,19 +75,32 @@ class MerchantController extends AbstractController
         }
         $category = $this->strInput('category');
         if ($category !== '') {
-            if ($category !== 'hotel') {
-                throw new BusinessException(ErrorCode::PARAM_ERROR, '当前仅开放酒店类别');
+            if (! in_array($category, ['hotel', 'restaurant', 'airline', 'car_rental', 'attraction'], true)) {
+                throw new BusinessException(ErrorCode::PARAM_ERROR, '业务类型无效');
             }
-            $query->where(function ($q) use ($businesses, $properties) {
-                $q->addWhereExistsQuery((clone $businesses)->where('b.business_type', 'hotel'))
-                    ->addWhereExistsQuery((clone $properties)->where('s.business_type', 'hotel'), 'or')
-                    ->orWhere(function ($legacy) use ($businesses) {
-                        $legacy->where('m.merchant_type', 1)->addWhereExistsQuery(clone $businesses, 'and', true);
+            $applications = Db::table('merchant_application as a')->whereNull('a.deleted_at')
+                ->whereColumn('a.merchant_id', 'm.id')->whereColumn('a.site_id', 'm.site_id');
+            $query->where(function ($q) use ($businesses, $applications, $category) {
+                $q->addWhereExistsQuery((clone $applications)->whereRaw('FIND_IN_SET(?, REPLACE(a.business_types, \' \', \'\')) > 0', [$category]))
+                    ->addWhereExistsQuery((clone $businesses)->where('b.business_type', $category), 'or');
+                if (in_array($category, ['hotel', 'attraction'], true)) {
+                    $q->orWhere(function ($legacy) use ($applications, $category) {
+                        $legacy->where('m.merchant_type', $category === 'hotel' ? 1 : 2)
+                            ->addWhereExistsQuery(clone $applications, 'and', true);
                     });
+                }
             });
         }
         $blacklist = Db::table('merchant_blacklist as bl')->whereColumn('bl.merchant_id', 'm.id')
             ->where('bl.status', 1);
+        // 卡片统计保留同一站点范围，独立于分页和当前状态选择。
+        $statsQuery = clone $query;
+        $stats = [
+            'total' => (clone $statsQuery)->count(),
+            'active' => (clone $statsQuery)->where('m.status', 3)->addWhereExistsQuery(clone $blacklist, 'and', true)->count(),
+            'suspended' => (clone $statsQuery)->where('m.status', 4)->addWhereExistsQuery(clone $blacklist, 'and', true)->count(),
+            'blacklisted' => (clone $statsQuery)->addWhereExistsQuery(clone $blacklist)->count(),
+        ];
         $status = $this->input('status');
         if ($status === 'blacklisted') {
             $query->addWhereExistsQuery(clone $blacklist);
@@ -123,7 +136,7 @@ class MerchantController extends AbstractController
         $groupId = $this->input('groupId');
         if ($groupId !== null && $groupId !== '') $query->where('m.group_id', (int) $groupId);
         if ($this->intInput('unboundOnly') === 1) $query->where('m.group_id', 0)->whereIn('m.status', [3, 4]);
-        $sorts = ['id' => 'm.id', 'merchantName' => 'm.merchant_name', 'registeredAt' => 'm.created_at', 'lastLoginAt' => 'm.last_login_at'];
+        $sorts = ['id' => 'm.id', 'merchantName' => 'm.merchant_name', 'registeredAt' => 'm.created_at', 'lastLoginAt' => 'last_login_at'];
         $sort = $this->strInput('sortField', 'id');
         $order = strtolower($this->strInput('sortOrder', 'desc'));
         if (! isset($sorts[$sort]) || ! in_array($order, ['asc', 'desc'], true)) {
@@ -133,9 +146,12 @@ class MerchantController extends AbstractController
         $query->select(array_map(static fn ($col) => 'm.' . $col, [
             'id', 'merchant_code', 'site_id', 'group_id', 'merchant_name', 'merchant_short_name',
             'merchant_type', 'credit_code', 'legal_person', 'contact_name', 'contact_phone',
-            'contact_email', 'address', 'remark', 'commission_rate', 'settlement_cycle', 'status',
-            'status_version', 'suspended_until', 'reactivation_requires_super', 'created_at', 'last_login_at',
-        ]))->selectSub((clone $blacklist)->selectRaw('COUNT(*)'), 'is_blacklisted');
+            'contact_email', 'address', 'remark', 'commission_rate', 'commission_plan', 'settlement_cycle', 'status',
+            'status_version', 'suspended_until', 'reactivation_requires_super', 'created_at',
+        ]))->selectSub((clone $blacklist)->selectRaw('COUNT(*)'), 'is_blacklisted')
+            ->selectSub(Db::table('merchant_admin as login')->whereNull('login.deleted_at')
+                ->whereColumn('login.merchant_id', 'm.id')->whereColumn('login.site_id', 'm.site_id')
+                ->selectRaw("NULLIF(GREATEST(COALESCE(MAX(login.last_login_at), ''), COALESCE(m.last_login_at, '')), '')"), 'last_login_at');
         $query->orderBy($sorts[$sort], $order);
         if ($sort !== 'id') $query->orderBy('m.id', $order);
         $list = $query->forPage($page, $pageSize)->get()->map(function ($row) {
@@ -144,7 +160,41 @@ class MerchantController extends AbstractController
             $row['is_blacklisted'] = (bool) $row['is_blacklisted'];
             return $row;
         })->all();
-        return Result::page($list, $total, $page, $pageSize);
+        $result = Result::page($this->directoryFields($list), $total, $page, $pageSize);
+        $result['data']['stats'] = $stats;
+        return $result;
+    }
+
+    /** 入驻申请及业务单元是真实业态来源；老商户无申请时才回退旧分类。 */
+    private function directoryFields(array $rows): array
+    {
+        if ($rows === []) return [];
+        $applications = Db::table('merchant_application as a')
+            ->join('merchant_info as m', 'm.id', '=', 'a.merchant_id')
+            ->whereColumn('a.site_id', 'm.site_id')->whereNull('a.deleted_at')
+            ->whereIn('a.merchant_id', array_column($rows, 'id'))
+            ->leftJoin('merchant_application_business as b', function ($join) {
+                $join->on('b.application_id', '=', 'a.id')->on('b.site_id', '=', 'a.site_id');
+            })->get(['a.merchant_id', 'a.business_types', 'b.business_type']);
+        $types = [];
+        foreach ($applications as $app) {
+            $types[$app->merchant_id] ??= [];
+            foreach (explode(',', $app->business_types . ',' . ($app->business_type ?? '')) as $type) {
+                if (trim($type) !== '') $types[$app->merchant_id][trim($type)] = true;
+            }
+        }
+        foreach ($rows as &$row) {
+            $row['business_types'] = isset($types[$row['id']]) ? array_keys($types[$row['id']])
+                : match ((int) $row['merchant_type']) { 1 => ['hotel'], 2 => ['attraction'], default => [] };
+            sort($row['business_types']);
+            $row['verification_status'] = match ((int) $row['status']) {
+                0 => 'pending', 6 => 'resubmission', 2 => 'rejected', 1, 3, 4 => 'approved', default => 'unknown',
+            };
+            $row['account_status'] = $row['is_blacklisted'] ? 'blacklisted' : match ((int) $row['status']) {
+                3 => 'active', 4 => 'suspended', 5 => 'closed', default => 'inactive',
+            };
+        }
+        return $rows;
     }
 
     /** 商户详情:含结算账户与主账号;敏感字段脱敏(超管可见明文手机号) */
@@ -160,11 +210,13 @@ class MerchantController extends AbstractController
         $merchant = array_intersect_key($merchant, array_flip([
             'id', 'merchant_code', 'site_id', 'group_id', 'merchant_name', 'merchant_short_name', 'merchant_type',
             'credit_code', 'legal_person', 'legal_id_card', 'contact_name', 'contact_phone', 'contact_email',
-            'address', 'commission_rate', 'settlement_cycle', 'status', 'status_version', 'suspended_until',
+            'address', 'remark', 'commission_rate', 'commission_plan', 'settlement_cycle', 'status', 'status_version', 'suspended_until',
             'reactivation_requires_super', 'created_at', 'updated_at', 'last_login_at', 'is_blacklisted',
             'is_vip', 'two_fa_enabled', 'two_fa_method', 'two_fa_enrolled_at', 'two_fa_last_reset_at',
             'two_fa_status', 'access_status', 'access_code_configured',
         ]));
+
+        $merchant = $this->directoryFields([$merchant])[0];
 
         // 账户安全字段(整改 A3/B3,2FA 字段来自 10-merchant-account-security.sql)
         $merchant['two_fa_enabled'] = (int) ($merchant['two_fa_enabled'] ?? 0);
@@ -200,6 +252,8 @@ class MerchantController extends AbstractController
             ->where('site_id', $merchant['site_id'])->whereNull('deleted_at')->orderBy('id')
             ->get(['id', 'app_no', 'company_name', 'company_group_name', 'reg_number', 'country', 'submitted_at'])
             ->map(static fn ($row) => (array) $row)->all();
+        $loginTimes = array_filter(array_merge([$merchant['last_login_at']], array_column($admins, 'last_login_at')));
+        $merchant['last_login_at'] = $loginTimes === [] ? null : max($loginTimes);
         $businesses = Db::table('merchant_application_business')
             ->whereIn('application_id', array_column($applications, 'id'))->where('site_id', $merchant['site_id'])->orderBy('id')
             ->get(['id', 'application_id', 'business_name', 'business_type', 'city', 'kyc_status', 'contact_name', 'contact_phone', 'contact_email'])
@@ -379,11 +433,16 @@ class MerchantController extends AbstractController
             throw new BusinessException(ErrorCode::PARAM_ERROR, '抽佣比例须为 0-100');
         }
         $cycle = $this->intInput('settlementCycle', (int) $merchant['settlement_cycle']);
+        $plan = $this->input('commissionPlan') === null ? $merchant['commission_plan'] : $this->strInput('commissionPlan');
+        if ($plan !== null && ! in_array($plan, ['vip', 'premium', 'standard'], true)) {
+            throw new BusinessException(ErrorCode::PARAM_ERROR, '佣金计划仅支持VIP、Premium、Standard');
+        }
         if (! in_array($cycle, [7, 15, 30], true)) {
             throw new BusinessException(ErrorCode::PARAM_ERROR, '结算周期仅支持 T+7 / T+15 / 30(月结)');
         }
         Db::table('merchant_info')->where('id', $merchant['id'])->update([
             'commission_rate' => $rate,
+            'commission_plan' => $plan,
             'settlement_cycle' => $cycle,
         ]);
         return Result::success(null, '佣金设置已更新');

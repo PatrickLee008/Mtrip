@@ -76,7 +76,7 @@ INSERT IGNORE INTO `sys_menu` (`id`,`parent_id`,`menu_name`,`menu_name_en`,`perm
 
 -- ================= 300 商户管理 =================
 INSERT IGNORE INTO `sys_menu` (`id`,`parent_id`,`menu_name`,`menu_name_en`,`i18n_key`,`perm_key`,`menu_type`,`route_path`,`component`,`icon`,`sort`) VALUES
-(301,300,'全部商户','All Merchants','menu.merchantList','merchant:list:list',2,'/merchant/list','merchant/list/index','',1),
+(301,300,'所有商户','All Merchants','menu.merchantList','merchant:list:list',2,'/merchant/list','merchant/list/index','',1),
 (302,300,'商户文档','Merchant Documents','','merchant:doc:list',2,'/merchant/documents','merchant/documents/index','',2),
 (303,300,'已暂停','Suspended','','merchant:list:list',2,'/merchant/suspended','merchant/suspended/index','',3),
 (304,300,'黑名单','Blacklisted','','merchant:list:list',2,'/merchant/blacklisted','merchant/blacklisted/index','',4),

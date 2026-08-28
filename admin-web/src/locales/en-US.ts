@@ -83,7 +83,11 @@ export default {
   "popupBlocked": "Allow the merchant portal popup and try again."
 },
   merchantDirectory: {
-    title: 'Merchant directory', subtitle: 'Manage merchant profiles, hotel businesses and property links',
+    title: 'All Merchants', subtitle: 'Manage platform merchants, commissions, and account access',
+    merchantName: 'Merchant Name', allMerchants: 'Total Merchants', accountStatus: 'Account Status', allStatuses: 'All Account Statuses', allTypes: 'All Types',
+    active: 'Active', suspended: 'Suspended', blacklisted: 'Blacklisted Merchants', inactive: 'Inactive', closed: 'Closed',
+    vip: 'VIP', premium: 'Premium', standard: 'Standard', unconfigured: 'Not configured', unknown: 'Unknown',
+    verification: 'Verification', pending: 'Pending Verification', approved: 'Approved', rejected: 'Rejected', resubmission: 'Resubmission',
     commission: 'Commission (%)', settlement: 'Settlement cycle', monthly: 'Monthly', archived: 'Archived property',
     history: 'Property link history', version: 'Version', before: 'Before', after: 'After',
     "keyword": "Name / ID / full phone / email / business name",
@@ -280,8 +284,8 @@ export default {
     marketingActivity: 'Activities',
     marketingBanner: 'Banners',
     marketingPoints: 'Points',
-    merchant: 'Merchant',
-    merchantList: 'Merchants',
+    merchant: 'Merchant Management',
+    merchantList: 'All Merchants',
     merchantAccount: 'Accounts',
     merchantPerm: 'Permissions',
     merchantStats: 'Stats',

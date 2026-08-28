@@ -3,7 +3,8 @@ import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { Modal, message } from 'ant-design-vue';
-import { BellOutlined, LoginOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons-vue';
+import { BellOutlined, LoginOutlined, EyeOutlined, DownloadOutlined, ExclamationCircleOutlined } from '@ant-design/icons-vue';
+import SearchFilterBar, { type FilterConfig } from '@/components/SearchFilterBar.vue';
 import AccountSecurityPanel from '@/components/merchant/AccountSecurityPanel.vue';
 import ComplianceLinks from '@/components/merchant/ComplianceLinks.vue';
 import MerchantPropertyPanel from '@/components/merchant/MerchantPropertyPanel.vue';
@@ -42,56 +43,90 @@ watch(() => route.query.merchantId, openLinkedMerchant);
 const userStore = useUserStore();
 const isSuper = userStore.profile?.isSuper === true;
 
-/** 导出当前筛选结果(整改 D2) */
-async function exportList(): Promise<void> {
-  const data = await apiMerchantList({ ...query, page: 1, pageSize: 200 });
-  exportCsv(`merchants-${Date.now()}.csv`, [
-    { key: 'id', label: 'ID' },
-    { key: 'merchant_name', label: 'Merchant' },
-    { key: 'merchant_type', label: 'Type' },
-    { key: 'contact_name', label: 'Contact' },
-    { key: 'contact_phone', label: 'Phone' },
-    { key: 'commission_rate', label: 'Commission %' },
-    { key: 'status', label: 'Status' },
-    { key: 'created_at', label: 'Created At' },
-  ], data.list.map((row) => ({
-    ...row,
-    merchant_type: TYPE_TEXT.value[row.merchant_type] ?? row.merchant_type,
-    status: STATUS_MAP.value[row.status]?.text ?? row.status,
-  })));
-}
-
-const STATUS_MAP = computed<Record<number, StatusItem>>(() => ({
-  0: { text: t('status.pending'), color: 'warning' },
-  2: { text: t('common.failed'), color: 'error' },
-  3: { text: t('status.enabled'), color: 'success' },
-  4: { text: t('status.disabled'), color: 'default' },
-  5: { text: t('common.delete'), color: 'default' },
-  6: { text: t('merchantDirectory.kycResubmit'), color: 'warning' },
-}));
 const TYPE_TEXT = computed<Record<number, string>>(() => ({
-  1: t('goods.common.typeHotel'),
-  2: t('goods.common.typeTicket'),
-  3: t('merchant.title'),
+  1: t('goods.common.typeHotel'), 2: t('goods.common.typeTicket'), 3: t('merchant.title'),
 }));
-
-const { loading, list, query, load, search, reset, pagination } = useTable(apiMerchantList, {
-  keyword: '', category: undefined, status: undefined, siteId: 0,
-  country: '', city: '', registeredFrom: '', registeredTo: '', sortField: 'registeredAt', sortOrder: 'desc',
-});
-
+const STATUS_MAP = computed<Record<number, StatusItem>>(() => ({
+  0: { text: t('merchantDirectory.pending'), color: 'warning' },
+  1: { text: t('merchantDirectory.inactive'), color: 'default' },
+  2: { text: t('merchantDirectory.rejected'), color: 'error' },
+  3: { text: t('merchantDirectory.active'), color: 'success' },
+  4: { text: t('merchantDirectory.suspended'), color: 'error' },
+  5: { text: t('merchantDirectory.closed'), color: 'default' },
+  6: { text: t('merchantDirectory.resubmission'), color: 'processing' },
+}));
+const businessOptions = computed(() => [
+  { value: 'hotel', label: t('merchant.onboardingPage.bizHotel') },
+  { value: 'restaurant', label: t('merchant.onboardingPage.bizRestaurant') },
+  { value: 'airline', label: t('merchant.onboardingPage.bizAirline') },
+  { value: 'car_rental', label: t('merchant.onboardingPage.bizCarRental') },
+  { value: 'attraction', label: t('merchant.onboardingPage.bizAttraction') },
+]);
+function businessText(row: TableRow): string {
+  return (row.business_types ?? []).map((type: string) => businessOptions.value.find((x) => x.value === type)?.label ?? type).join(' / ') || '—';
+}
+function planText(plan: string | null): string {
+  return t(`merchantDirectory.${plan || 'unconfigured'}`);
+}
+const planColors: Record<string, string> = { vip: 'gold', premium: 'purple', standard: 'default' };
+const statusColors: Record<string, string> = {
+  active: 'success', suspended: 'error', blacklisted: 'error', approved: 'success',
+  pending: 'warning', rejected: 'error', resubmission: 'processing',
+};
+const counts = ref<Record<string, number>>({});
+const { loading, list, query, load, search, pagination } = useTable(async (params) => {
+  const data = await apiMerchantList(params);
+  counts.value = data.stats;
+  return data;
+}, { keyword: '', category: '', status: '', sortField: 'registeredAt', sortOrder: 'desc' });
+const filterValues = ref<Record<string, string | number | undefined>>({ category: undefined, status: undefined });
+const filterKey = ref(0);
+const cards = computed(() => [
+  { key: 'total', label: t('merchantDirectory.allMerchants'), status: '' },
+  { key: 'active', label: t('merchantDirectory.active'), status: '3' },
+  { key: 'suspended', label: t('merchantDirectory.suspended'), status: '4' },
+  { key: 'blacklisted', label: t('merchantDirectory.blacklisted'), status: 'blacklisted' },
+]);
+const filters = computed<FilterConfig[]>(() => [
+  { key: 'status', label: t('merchantDirectory.accountStatus'), allLabel: t('merchantDirectory.allStatuses'),
+    options: cards.value.slice(1).map((card) => ({ value: card.status, label: card.label })) },
+  { key: 'category', label: t('common.type'), allLabel: t('merchantDirectory.allTypes'), options: businessOptions.value },
+]);
+function searchFilters(): void {
+  query.status = filterValues.value.status ?? '';
+  query.category = filterValues.value.category ?? '';
+  search();
+}
+function selectCard(status: string): void {
+  filterValues.value = { ...filterValues.value, status: status || undefined };
+  // SearchFilterBar keeps a local draft; a card change refreshes the external filter selection.
+  filterKey.value += 1;
+  searchFilters();
+}
+const tablePagination = computed(() => ({
+  ...pagination.value, showQuickJumper: false, showSizeChanger: false,
+  showTotal: (total: number, range: [number, number]) => t('merchant.verifyPage.paginationInfo', { from: range[0], to: range[1], total }),
+}));
 const columns = computed(() => [
   { title: t('merchant.profile.merchantId'), dataIndex: 'merchant_code', width: 125 },
-  { title: t('merchant.listPage.name'), dataIndex: 'merchant_name', width: 200, ellipsis: true },
-  { title: t('common.type'), dataIndex: 'merchant_type', width: 100 },
-  { title: t('merchant.listPage.contact'), dataIndex: 'contact_name', width: 100 },
-  { title: t('merchant.listPage.phone'), dataIndex: 'contact_phone', width: 130 },
-  { title: t('merchantDirectory.commission'), dataIndex: 'commission_rate', width: 100 },
-  { title: t('merchantDirectory.settlement'), dataIndex: 'settlement_cycle', width: 100 },
-  { title: t('merchant.listPage.status'), dataIndex: 'status', width: 90 },
-  { title: t('common.createdAt'), dataIndex: 'created_at', width: 165 },
-  { title: t('common.action'), key: 'action_col', width: 300, fixed: 'right' as const },
+  { title: t('merchantDirectory.merchantName'), dataIndex: 'merchant_name', width: 220 },
+  { title: t('common.type'), dataIndex: 'business_types', width: 150 },
+  { title: t('merchant.profile.commissionPlan'), dataIndex: 'commission_plan', width: 125 },
+  { title: t('merchantDirectory.verification'), dataIndex: 'verification_status', width: 130 },
+  { title: t('merchantDirectory.accountStatus'), dataIndex: 'account_status', width: 125 },
+  { title: t('merchant.profile.lastLogin'), dataIndex: 'last_login_at', width: 170 },
+  { title: t('common.action'), key: 'action_col', width: 150, fixed: 'right' as const },
 ]);
+async function exportList(): Promise<void> {
+  const data = await apiMerchantList({ ...query, page: 1, pageSize: 200 });
+  exportCsv(`merchants-${Date.now()}.csv`, columns.value.filter((col) => col.dataIndex).map((col) => ({
+    key: col.dataIndex!, label: col.title,
+  })), data.list.map((row) => ({
+    ...row, business_types: businessText(row), commission_plan: planText(row.commission_plan),
+    verification_status: t(`merchantDirectory.${row.verification_status}`),
+    account_status: t(`merchantDirectory.${row.account_status}`),
+  })));
+}
 
 // ---------- 详情抽屉 ----------
 const drawerOpen = ref(false);
@@ -224,7 +259,7 @@ async function saveMerchant(): Promise<void> {
       message.success(t('tip.saveSuccess'));
     }
     modalOpen.value = false;
-    await load();
+    await statusChanged();
   } finally {
     modalSaving.value = false;
   }
@@ -263,7 +298,7 @@ async function doAudit(): Promise<void> {
     } else {
       message.success(t('goods.audit.auditModal.successReject'));
     }
-    await load();
+    await statusChanged();
   } finally {
     auditSaving.value = false;
   }
@@ -273,11 +308,12 @@ async function doAudit(): Promise<void> {
 const commissionOpen = ref(false);
 const commissionSaving = ref(false);
 const commissionTarget = ref<TableRow | null>(null);
-const commissionForm = reactive({ commissionRate: 0, settlementCycle: 15 });
+const commissionForm = reactive({ commissionRate: 0, settlementCycle: 15, commissionPlan: 'standard' });
 
 function openCommission(row: TableRow): void {
   commissionTarget.value = row;
   Object.assign(commissionForm, {
+    commissionPlan: row.commission_plan || 'standard',
     commissionRate: Number(row.commission_rate ?? 0),
     settlementCycle: Number(row.settlement_cycle ?? 15),
   });
@@ -293,7 +329,7 @@ async function saveCommission(): Promise<void> {
     await apiMerchantCommission({ id: commissionTarget.value.id, ...commissionForm });
     message.success(t('tip.saveSuccess'));
     commissionOpen.value = false;
-    await load();
+    await statusChanged();
   } finally {
     commissionSaving.value = false;
   }
@@ -325,7 +361,7 @@ async function doClose(): Promise<void> {
     await apiMerchantClose(closeTarget.value.id, closeRemark.value);
     message.success(t('common.delete'));
     closeOpen.value = false;
-    await load();
+    await statusChanged();
   } finally {
     closeSaving.value = false;
   }
@@ -340,131 +376,48 @@ onMounted(() => {
 <template>
   <PageContainer>
     <div class="directory-heading">
-      <div><h1>{{ t('merchantDirectory.title') }}</h1><p>{{ t('merchantDirectory.subtitle') }}</p></div>
-      <a-button @click="exportList">{{ t('common.export') }}</a-button>
+      <div>
+        <div class="directory-eyebrow">{{ t('menu.merchant') }}</div>
+        <h1>{{ t('merchantDirectory.title') }}</h1>
+        <p>{{ t('merchantDirectory.subtitle') }}</p>
+      </div>
+      <a-button class="directory-export" @click="exportList"><template #icon><DownloadOutlined /></template>{{ t('common.export') }}</a-button>
     </div>
-    <a-alert type="info" show-icon :message="t('merchantDirectory.filterHint')" style="margin-bottom: 12px" />
-    <a-card :bordered="false" class="mtrip-card-shadow" style="margin-bottom: 16px">
-      <a-form layout="inline">
-        <a-form-item :label="t('common.search')">
-          <a-input v-model:value="query.keyword" allow-clear :maxlength="100" :placeholder="t('merchantDirectory.keyword')" style="width: 300px" @press-enter="search" />
-        </a-form-item>
-        <a-form-item :label="t('common.type')">
-          <a-select v-model:value="query.category" allow-clear :placeholder="t('common.all')" style="width: 120px">
-            <a-select-option value="hotel">{{ TYPE_TEXT[1] }}</a-select-option>
-          </a-select>
-        </a-form-item>
-        <a-form-item :label="t('merchantDirectory.country')"><a-input v-model:value="query.country" allow-clear :maxlength="2" placeholder="MM" style="width: 90px" /></a-form-item>
-        <a-form-item :label="t('merchantDirectory.city')"><a-input v-model:value="query.city" allow-clear style="width: 150px" /></a-form-item>
-        <a-form-item :label="t('merchantDirectory.registeredFrom')"><a-date-picker v-model:value="query.registeredFrom" value-format="YYYY-MM-DD" /></a-form-item>
-        <a-form-item :label="t('merchantDirectory.registeredTo')"><a-date-picker v-model:value="query.registeredTo" value-format="YYYY-MM-DD" /></a-form-item>
-        <a-form-item :label="t('merchantDirectory.sort')">
-          <a-select v-model:value="query.sortField" style="width: 140px">
-            <a-select-option value="registeredAt">{{ t('common.createdAt') }}</a-select-option>
-            <a-select-option value="merchantName">{{ t('merchant.listPage.name') }}</a-select-option>
-            <a-select-option value="lastLoginAt">{{ t('merchant.profile.lastLogin') }}</a-select-option>
-            <a-select-option value="id">ID</a-select-option>
-          </a-select>
-          <a-select v-model:value="query.sortOrder" style="width: 90px">
-            <a-select-option value="desc">{{ t('merchantDirectory.desc') }}</a-select-option>
-            <a-select-option value="asc">{{ t('merchantDirectory.asc') }}</a-select-option>
-          </a-select>
-        </a-form-item>
-        <a-form-item :label="t('merchant.listPage.status')">
-          <a-select v-model:value="query.status" allow-clear :placeholder="t('common.all')" style="width: 120px">
-            <a-select-option :value="0">{{ STATUS_MAP[0].text }}</a-select-option>
-            <a-select-option :value="2">{{ STATUS_MAP[2].text }}</a-select-option>
-            <a-select-option :value="3">{{ STATUS_MAP[3].text }}</a-select-option>
-            <a-select-option :value="4">{{ STATUS_MAP[4].text }}</a-select-option>
-            <a-select-option :value="5">{{ STATUS_MAP[5].text }}</a-select-option>
-            <a-select-option :value="6">{{ STATUS_MAP[6].text }}</a-select-option>
-            <a-select-option value="blacklisted">{{ t('merchantStatus.blacklisted') }}</a-select-option>
-          </a-select>
-        </a-form-item>
-        <a-form-item v-if="isSuper" :label="t('common.site')">
-          <SiteTreeSelect v-model:value="query.siteId" allow-all style="width: 160px" />
-        </a-form-item>
-        <a-form-item>
-          <a-space>
-            <a-button type="primary" @click="search"><template #icon><SearchOutlined /></template>{{ t('common.search') }}</a-button>
-            <a-button @click="reset"><template #icon><ReloadOutlined /></template>{{ t('common.reset') }}</a-button>
-          </a-space>
-        </a-form-item>
-      </a-form>
-    </a-card>
-
-    <a-table
-      :columns="columns"
-      :data-source="list"
-      :pagination="pagination"
-      :loading="loading"
-      row-key="id"
-      size="middle"
-      :scroll="{ x: 1400 }"
-    >
+    <div class="directory-cards">
+      <button v-for="card in cards" :key="card.key" type="button" class="directory-card"
+        :class="{ 'is-selected': query.status === card.status, 'is-blacklisted': card.key === 'blacklisted' }"
+        :aria-pressed="query.status === card.status" @click="selectCard(card.status)">
+        <span><ExclamationCircleOutlined v-if="card.key === 'blacklisted'" /> {{ card.label }}</span>
+        <strong>{{ counts[card.key] ?? '—' }}</strong>
+      </button>
+    </div>
+    <SearchFilterBar :key="filterKey" v-model="query.keyword" v-model:filter-values="filterValues"
+      :filters="filters" :placeholder="t('merchantDirectory.keyword')" :total="pagination.total"
+      :result-label="t('merchant.verifyPage.resultCount')" @search="searchFilters" />
+    <a-table class="directory-table" :columns="columns" :data-source="list" :pagination="tablePagination"
+      :loading="loading" row-key="id" size="middle" :scroll="{ x: 1195 }">
       <template #bodyCell="{ column, record }">
-        <template v-if="column.dataIndex === 'merchant_code'">{{ record.merchant_code || '#' + record.id }}</template>
-        <template v-else-if="column.dataIndex === 'merchant_type'">
-          {{ TYPE_TEXT[record.merchant_type] ?? record.merchant_type }}
+        <template v-if="column.dataIndex === 'merchant_code'">
+          <a class="directory-code" @click="openDetail(record)">{{ record.merchant_code || '#' + record.id }}</a>
         </template>
-        <template v-else-if="column.dataIndex === 'settlement_cycle'">
-          {{ record.settlement_cycle === 30 ? t('merchantDirectory.monthly') : 'T+' + record.settlement_cycle }}
+        <template v-else-if="column.dataIndex === 'merchant_name'">
+          <div class="directory-name">{{ record.merchant_name }}</div>
+          <div v-if="record.merchant_short_name" class="directory-secondary">{{ record.merchant_short_name }}</div>
         </template>
-        <template v-else-if="column.dataIndex === 'status'">
-          <a-tag v-if="record.is_blacklisted" color="error">{{ t('merchantStatus.blacklisted') }}</a-tag>
-          <StatusTag v-else :value="record.status" :map="STATUS_MAP" />
+        <template v-else-if="column.dataIndex === 'business_types'">{{ businessText(record) }}</template>
+        <template v-else-if="column.dataIndex === 'commission_plan'">
+          <a-tag :color="planColors[record.commission_plan]">{{ planText(record.commission_plan) }}</a-tag>
         </template>
+        <template v-else-if="column.dataIndex === 'verification_status' || column.dataIndex === 'account_status'">
+          <a-tag :color="statusColors[record[column.dataIndex]]">{{ t(`merchantDirectory.${record[column.dataIndex]}`) }}</a-tag>
+        </template>
+        <template v-else-if="column.dataIndex === 'last_login_at'"><span class="directory-secondary">{{ record.last_login_at || '—' }}</span></template>
         <template v-else-if="column.key === 'action_col'">
-          <a-space :size="0" wrap>
-            <a-button type="link" size="small" @click="openDetail(record)">{{ t('common.detail') }}</a-button>
-            <a-button
-              v-if="record.status !== 5"
-              v-perm="'merchant:list:edit'"
-              type="link"
-              size="small"
-              @click="openEdit(record)"
-            >{{ t('common.edit') }}</a-button>
-            <a-button
-              v-if="record.status === 0"
-              v-perm="'merchant:list:audit'"
-              type="link"
-              size="small"
-              style="color: var(--mtrip-warning, #faad14)"
-              @click="openAudit(record)"
-            >{{ t('goods.audit.columns.pass') }}</a-button>
-            <a-button
-              v-if="record.status === 3 || record.status === 4"
-              v-perm="'merchant:list:edit'"
-              type="link"
-              size="small"
-              @click="openCommission(record)"
-            >{{ t('config.pay.feeRate') }}</a-button>
-            <MerchantStatusActions :merchant="record" @changed="statusChanged" />
-            <a-tooltip :title="t('merchant.notifyPage.title')">
-              <a-button
-                v-perm="'merchant:list:notify'"
-                type="link"
-                size="small"
-                @click="openNotify(record)"
-              ><template #icon><BellOutlined /></template></a-button>
-            </a-tooltip>
-            <a-tooltip :title="t('merchant.impersonate.title')">
-              <a-button
-                v-if="isSuper"
-                v-perm="'merchant:list:impersonate'"
-                type="link"
-                size="small"
-                @click="openImpersonate(record)"
-              ><template #icon><LoginOutlined /></template></a-button>
-            </a-tooltip>
-            <a-button
-              v-if="record.status !== 5"
-              v-perm="'merchant:list:delete'"
-              type="link"
-              size="small"
-              danger
-              @click="openClose(record)"
-            >{{ t('common.delete') }}</a-button>
+          <a-space :size="4" class="directory-actions">
+            <a-tooltip :title="t('common.detail')"><a-button type="text" size="small" :aria-label="t('common.detail')" @click="openDetail(record)"><template #icon><EyeOutlined /></template></a-button></a-tooltip>
+            <a-tooltip :title="t('merchant.notifyPage.title')"><a-button v-perm="'merchant:list:notify'" type="text" size="small" :aria-label="t('merchant.notifyPage.title')" @click="openNotify(record)"><template #icon><BellOutlined /></template></a-button></a-tooltip>
+            <a-tooltip :title="t('merchant.impersonate.start')"><a-button v-if="isSuper" v-perm="'merchant:list:impersonate'" type="text" size="small" :aria-label="t('merchant.impersonate.start')" @click="openImpersonate(record)"><template #icon><LoginOutlined /></template></a-button></a-tooltip>
+            <MerchantStatusActions :merchant="record" suspend-icon-only @changed="statusChanged" />
           </a-space>
         </template>
       </template>
@@ -487,7 +440,7 @@ onMounted(() => {
                 <StatusTag v-else :value="detail.status" :map="STATUS_MAP" />
               </div>
               <div style="font-size: 12px; color: #64748b; margin-top: 4px">{{ detail.merchant_short_name || detail.credit_code }}</div>
-              <div style="font-size: 11px; color: #94a3b8; margin-top: 4px">{{ TYPE_TEXT[detail.merchant_type] ?? detail.merchant_type }}</div>
+              <div style="font-size: 11px; color: #94a3b8; margin-top: 4px">{{ businessText(detail) }}</div>
             </div>
           </div>
 
@@ -497,8 +450,11 @@ onMounted(() => {
             <a-descriptions-item :label="t('merchant.profile.regNo')">{{ detail.credit_code || '-' }}</a-descriptions-item>
             <a-descriptions-item :label="t('merchant.profile.owner')">{{ detail.legal_person || '-' }}</a-descriptions-item>
             <a-descriptions-item :label="t('merchant.profile.commissionPlan')">
-              {{ detail.commission_rate != null ? `${detail.commission_rate}%` : '-' }}
+              {{ planText(detail.commission_plan) }}
             </a-descriptions-item>
+            <a-descriptions-item :label="t('merchantDirectory.commission')">{{ detail.commission_rate }}%</a-descriptions-item>
+            <a-descriptions-item :label="t('merchantDirectory.verification')">{{ t(`merchantDirectory.${detail.verification_status}`) }}</a-descriptions-item>
+            <a-descriptions-item :label="t('merchantDirectory.accountStatus')">{{ t(`merchantDirectory.${detail.account_status}`) }}</a-descriptions-item>
             <a-descriptions-item :label="t('merchant.listPage.email')">{{ detail.contact_email || '-' }}</a-descriptions-item>
             <a-descriptions-item :label="t('merchant.listPage.phone')">{{ detail.contact_phone || '-' }}</a-descriptions-item>
             <a-descriptions-item :label="t('merchant.profile.bankName')">{{ detailAccounts[0]?.bank_name || '-' }}</a-descriptions-item>
@@ -532,8 +488,12 @@ onMounted(() => {
             </a-col>
           </a-row>
 
-          <!-- 底部动作(整改 A4) -->
-          <div style="display: flex; gap: 8px; margin-top: 16px">
+          <!-- 完整操作放在详情中；列表仅保留四个图标入口。 -->
+          <div class="directory-detail-actions">
+            <a-button v-if="detail.status !== 5" v-perm="'merchant:list:edit'" @click="openEdit(detail)">{{ t('common.edit') }}</a-button>
+            <a-button v-if="detail.status === 0" v-perm="'merchant:list:audit'" @click="openAudit(detail)">{{ t('goods.audit.columns.pass') }}</a-button>
+            <a-button v-if="[3, 4].includes(detail.status)" v-perm="'merchant:list:edit'" @click="openCommission(detail)">{{ t('merchant.profile.commissionPlan') }}</a-button>
+            <a-button v-if="detail.status !== 5" v-perm="'merchant:list:delete'" danger @click="openClose(detail)">{{ t('common.delete') }}</a-button>
             <MerchantStatusActions :merchant="detail" @changed="statusChanged" />
             <a-button v-perm="'merchant:list:notify'" @click="openNotify(detail)">{{ t('merchant.notifyPage.title') }}</a-button>
             <a-button v-if="isSuper" v-perm="'merchant:list:impersonate'" @click="openImpersonate(detail)">{{ t('merchant.impersonate.start') }}</a-button>
@@ -672,20 +632,25 @@ onMounted(() => {
     <!-- 费率配置 -->
     <a-modal
       v-model:open="commissionOpen"
-      :title="`${t('config.pay.feeRate')}:${commissionTarget?.merchant_name ?? ''}`"
+      :title="`${t('merchant.profile.commissionPlan')}:${commissionTarget?.merchant_name ?? ''}`"
       width="420px"
       :confirm-loading="commissionSaving"
       @ok="saveCommission"
     >
       <a-form :label-col="{ style: { width: '90px' } }" style="margin-top: 16px">
+        <a-form-item :label="t('merchant.profile.commissionPlan')" required>
+          <a-select v-model:value="commissionForm.commissionPlan">
+            <a-select-option v-for="plan in ['vip', 'premium', 'standard']" :key="plan" :value="plan">{{ planText(plan) }}</a-select-option>
+          </a-select>
+        </a-form-item>
         <a-form-item :label="t('config.pay.feeRate')" required>
           <a-input-number v-model:value="commissionForm.commissionRate" :min="0" :max="100" :step="0.1" addon-after="%" style="width: 100%" />
         </a-form-item>
-        <a-form-item :label="t('merchant.listPage.code')" required>
+        <a-form-item :label="t('merchantDirectory.settlement')" required>
           <a-radio-group v-model:value="commissionForm.settlementCycle">
             <a-radio :value="7">T+7</a-radio>
             <a-radio :value="15">T+15</a-radio>
-            <a-radio :value="30">{{ t('common.all') }}</a-radio>
+            <a-radio :value="30">{{ t('merchantDirectory.monthly') }}</a-radio>
           </a-radio-group>
         </a-form-item>
       </a-form>
@@ -719,8 +684,29 @@ onMounted(() => {
 </template>
 
 <style scoped>
-.directory-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 20px; }
+.directory-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 16px; }
 .directory-heading h1 { font-size: 18px; line-height: 27px; color: #1a2332; font-weight: 700; margin: 0 0 2px; }
 .directory-heading p { font-size: 13px; color: #94a3b8; margin: 0; }
-:deep(.ant-form-inline) { row-gap: 12px; }
+.directory-eyebrow { margin-bottom: 4px; font-size: 11px; font-weight: 500; line-height: 16.5px; letter-spacing: .05em; text-transform: uppercase; color: #94a3b8; }
+.directory-heading p { line-height: 19.5px; }
+.directory-export { height: 34px; font-size: 13px; color: #475569; border-color: #e3e8f0; }
+.directory-cards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 20px; }
+.directory-card { text-align: left; padding: 14px 16px; background: #fff; border: 1px solid #e3e8f0; border-radius: 8px; cursor: pointer; color: #94a3b8; font-size: 12px; }
+.directory-card strong { display: block; margin-top: 8px; font-size: 24px; line-height: 30px; font-weight: 600; color: #1a2332; }
+.directory-card.is-blacklisted { color: #ef4444; background: #fff7f7; border-color: #fecaca; }
+.directory-card.is-blacklisted strong { color: #ef4444; }
+.directory-card.is-selected { border-color: #2563eb; box-shadow: 0 0 0 1px #2563eb; }
+.directory-card:focus-visible { outline: 2px solid #2563eb; outline-offset: 3px; }
+.directory-code { font-family: monospace; color: #2563eb; }
+.directory-name { font-weight: 600; color: #1a2332; }
+.directory-secondary { color: #94a3b8; font-size: 12px; }
+.directory-actions :deep(.ant-btn) { color: #94a3b8; width: 26px; height: 26px; padding: 0; }
+.directory-actions :deep(.ant-btn:hover:not(:disabled)) { color: #2563eb; background: #eff6ff; }
+.directory-actions :deep(.ant-btn:disabled) { color: #cbd5e1; }
+.directory-detail-actions { display: flex; gap: 8px; margin-top: 16px; flex-wrap: wrap; }
+.directory-table :deep(.ant-table) { border: 1px solid #e3e8f0; border-radius: 8px; overflow: hidden; }
+.directory-table :deep(.ant-table-thead > tr > th) { font-size: 12px; color: #64748b; background: #f8fafc; }
+.directory-table :deep(.ant-tag) { border: none; font-size: 11px; }
+.directory-table :deep(.ant-pagination-total-text) { margin-right: auto; color: #94a3b8; }
+@media (max-width: 900px) { .directory-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 </style>

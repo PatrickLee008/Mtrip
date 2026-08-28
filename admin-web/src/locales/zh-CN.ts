@@ -81,7 +81,11 @@ export default {
   "popupBlocked": "请允许打开商户门户弹窗后重试。"
 },
   merchantDirectory: {
-    title: '商户目录', subtitle: '管理商户档案、酒店业务及物业关联',
+    title: '所有商户', subtitle: '管理平台商户、佣金计划和账户访问权限',
+    merchantName: '商户名称', allMerchants: '全部商户', accountStatus: '账户状态', allStatuses: '全部账户状态', allTypes: '全部类型',
+    active: '活动中', suspended: '已暂停', blacklisted: '黑名单商户', inactive: '未启用', closed: '已注销',
+    vip: 'VIP', premium: '优质', standard: '标准', unconfigured: '未配置', unknown: '未知',
+    verification: '验证状态', pending: '待验证', approved: '已通过', rejected: '已拒绝', resubmission: '待重新提交',
     commission: '佣金比例 (%)', settlement: '结算周期', monthly: '月结', archived: '已归档物业',
     history: '物业关联历史', version: '版本', before: '变更前', after: '变更后',
     "keyword": "名称 / ID / 完整电话号码 / 邮箱 / 业务名称",
@@ -277,8 +281,8 @@ export default {
     marketingActivity: '限时活动',
     marketingBanner: '首页推荐',
     marketingPoints: '积分活动',
-    merchant: '商家',
-    merchantList: '商家列表',
+    merchant: '商户管理',
+    merchantList: '所有商户',
     merchantAccount: '商家账户',
     merchantPerm: '商户权限',
     merchantStats: '商家统计',

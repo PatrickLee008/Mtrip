@@ -67,7 +67,7 @@ try {
     check(requestCall($directory, 'index', ['keyword' => '123456789', 'siteId' => 991])['total'] === 0, 'S2 no partial phone search');
     check(requestCall($directory, 'index', ['keyword' => '%', 'siteId' => 991])['total'] === 0, 'S2 literal percent does not match all');
     check(requestCall($directory, 'index', ['keyword' => 'S2 Alpha', 'registeredFrom' => '2026-01-15', 'registeredTo' => '2026-01-15'])['total'] === 1, 'S2 inclusive registration end date');
-    foreach ([['registeredFrom' => '2026-02-30'], ['registeredFrom' => '2026-02-02', 'registeredTo' => '2026-02-01'], ['sortField' => 'id desc;DROP'], ['sortOrder' => 'bad'], ['status' => 'garbage'], ['category' => 'restaurant']] as $invalid) {
+    foreach ([['registeredFrom' => '2026-02-30'], ['registeredFrom' => '2026-02-02', 'registeredTo' => '2026-02-01'], ['sortField' => 'id desc;DROP'], ['sortOrder' => 'bad'], ['status' => 'garbage'], ['category' => 'invalid']] as $invalid) {
         rejects(40001, fn () => requestCall($directory, 'index', $invalid), 'S2 reject invalid filter');
     }
     s2Actor(false, 991);

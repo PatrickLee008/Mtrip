@@ -2,12 +2,13 @@
 import { computed, reactive, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { Modal, message } from 'ant-design-vue';
+import { PauseCircleOutlined } from '@ant-design/icons-vue';
 import dayjs, { type Dayjs } from 'dayjs';
 import { useUserStore } from '@/stores/user';
 import { useTable, type TableRow } from '@/composables/useTable';
 import { apiMerchantDetail, apiMerchantStatusChange, apiMerchantStatusHistory, type MerchantStatusAction } from '@/api/merchant';
 
-const props = defineProps<{ merchant: TableRow }>();
+const props = defineProps<{ merchant: TableRow; suspendIconOnly?: boolean }>();
 const emit = defineEmits<{ changed: [] }>();
 const { t } = useI18n();
 const userStore = useUserStore();
@@ -91,7 +92,10 @@ function localTime(value: string | null): string {
 </script>
 
 <template>
-  <a-space :size="0" wrap>
+  <a-tooltip v-if="suspendIconOnly" :title="t('merchantStatus.suspend')">
+    <a-button v-perm="'merchant:status:suspend'" type="text" size="small" :aria-label="t('merchantStatus.suspend')" :disabled="merchant.status !== 3 || !!merchant.is_blacklisted" @click="show('suspend')"><template #icon><PauseCircleOutlined /></template></a-button>
+  </a-tooltip>
+  <a-space v-else :size="0" wrap>
     <a-button v-if="merchant.status === 3 && !merchant.is_blacklisted" v-perm="'merchant:status:suspend'" type="link" size="small" danger @click="show('suspend')">{{ t('merchantStatus.suspend') }}</a-button>
     <a-button v-if="merchant.status === 4 && !merchant.is_blacklisted && !Number(merchant.reactivation_requires_super)" v-perm="'merchant:status:activate'" type="link" size="small" @click="show('activate')">{{ t('merchantStatus.activate') }}</a-button>
     <a-button v-if="isSuper && merchant.status === 4 && !merchant.is_blacklisted && Number(merchant.reactivation_requires_super)" v-perm="'merchant:status:reactivate'" type="link" size="small" @click="show('reactivate')">{{ t('merchantStatus.reactivate') }}</a-button>

@@ -15,8 +15,8 @@ export function apiMerchantStatusHistory(params: Record<string, unknown>): Promi
 }
 
 // ---------- 商户(文档 6.4.2) ----------
-export function apiMerchantList(params: Record<string, unknown>): Promise<PageData<Row>> {
-  return get<PageData<Row>>('/admin/merchant/list', params);
+export function apiMerchantList(params: Record<string, unknown>): Promise<PageData<Row> & { stats: Record<string, number> }> {
+  return get('/admin/merchant/list', params);
 }
 
 export function apiMerchantPropertyHistory(params: Record<string, unknown>): Promise<PageData<Row>> {
@@ -128,6 +128,7 @@ export function apiOnboardingKycUpload(file: File, id: number, docType: string, 
 
 export function apiMerchantCommission(data: {
   id: number;
+  commissionPlan?: string;
   commissionRate: number;
   settlementCycle: number;
 }): Promise<null> {

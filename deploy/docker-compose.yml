@@ -124,6 +124,7 @@ services:
       - ../database/merchant/29-merchant-documents-notifications.sql:/docker-entrypoint-initdb.d/39k-merchant-documents-notifications.sql:ro
       - ../database/merchant/30-merchant-account-security.sql:/docker-entrypoint-initdb.d/39l-merchant-account-security.sql:ro
       - ../database/merchant/31-merchant-marketplace.sql:/docker-entrypoint-initdb.d/39m-merchant-marketplace.sql:ro
+      - ../database/merchant/33-merchant-directory-plan.sql:/docker-entrypoint-initdb.d/39n-merchant-directory-plan.sql:ro
       - ../database/order/01-order.sql:/docker-entrypoint-initdb.d/40-order.sql:ro
       - ../database/order/02-verify.sql:/docker-entrypoint-initdb.d/41-verify.sql:ro
       - ../database/finance/01-finance.sql:/docker-entrypoint-initdb.d/50-finance.sql:ro
