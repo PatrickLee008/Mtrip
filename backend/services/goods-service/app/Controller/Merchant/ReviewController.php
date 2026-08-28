@@ -153,7 +153,7 @@ class ReviewController extends AbstractAdminController
         return $ids === [] ? [0] : $ids;
     }
 
-    private function jsonDecode(mixed $value): array
+    protected function jsonDecode(mixed $value): array
     {
         if (is_array($value)) {
             return $value;

@@ -1,0 +1,112 @@
+# S7 only: compose with explicit base and --project-name mtrip-s7. No development override.
+services:
+  mysql:
+    ports: !override []
+  redis:
+    ports: !override []
+  system-service:
+    image: mtrip-system-service:latest
+    ports: !override []
+    restart: "no"
+    environment:
+      MTRIP_S7_ISOLATED: "1"
+      WORKER_NUM: "1"
+    volumes: !override
+      - ../backend/services/system-service/app:/opt/www/app:ro
+      - ../backend/services/system-service/config:/opt/www/config:ro
+      - ../backend/shared/src:/shared/src:ro
+  user-service:
+    image: mtrip-user-service:latest
+    ports: !override []
+    restart: "no"
+    environment:
+      MTRIP_S7_ISOLATED: "1"
+      WORKER_NUM: "1"
+    volumes: !override
+      - ../backend/services/user-service/app:/opt/www/app:ro
+      - ../backend/services/user-service/config:/opt/www/config:ro
+      - ../backend/shared/src:/shared/src:ro
+  goods-service:
+    image: mtrip-goods-service:latest
+    ports: !override []
+    restart: "no"
+    environment:
+      MTRIP_S7_ISOLATED: "1"
+      WORKER_NUM: "1"
+    volumes: !override
+      - ../backend/services/goods-service/app:/opt/www/app:ro
+      - ../backend/services/goods-service/config:/opt/www/config:ro
+      - ../backend/shared/src:/shared/src:ro
+  order-service:
+    image: mtrip-order-service:latest
+    ports: !override []
+    restart: "no"
+    environment:
+      MTRIP_S7_ISOLATED: "1"
+      WORKER_NUM: "1"
+    volumes: !override
+      - ../backend/services/order-service/app:/opt/www/app:ro
+      - ../backend/services/order-service/config:/opt/www/config:ro
+      - ../backend/shared/src:/shared/src:ro
+  merchant-service:
+    image: mtrip-merchant-service:latest
+    # Rebuild annotation proxies from mounted source/config, not stale proxies embedded in the image.
+    tmpfs:
+      - /opt/www/runtime
+    ports: !override []
+    restart: "no"
+    environment:
+      MTRIP_S7_ISOLATED: "1"
+      WORKER_NUM: "1"
+    volumes: !override
+      - ../backend/services/merchant-service/app:/opt/www/app:ro
+      - ../backend/services/merchant-service/config:/opt/www/config:ro
+      - ../backend/shared/src:/shared/src:ro
+      - s7-uploads:/opt/www/uploads
+  finance-service:
+    image: mtrip-finance-service:latest
+    ports: !override []
+    restart: "no"
+    environment:
+      MTRIP_S7_ISOLATED: "1"
+      WORKER_NUM: "1"
+    volumes: !override
+      - ../backend/services/finance-service/app:/opt/www/app:ro
+      - ../backend/services/finance-service/config:/opt/www/config:ro
+      - ../backend/shared/src:/shared/src:ro
+  marketing-service:
+    image: mtrip-marketing-service:latest
+    ports: !override []
+    restart: "no"
+    environment:
+      MTRIP_S7_ISOLATED: "1"
+      WORKER_NUM: "1"
+    volumes: !override
+      - ../backend/services/marketing-service/app:/opt/www/app:ro
+      - ../backend/services/marketing-service/config:/opt/www/config:ro
+      - ../backend/shared/src:/shared/src:ro
+  payment-service:
+    image: mtrip-payment-service:latest
+    ports: !override []
+    restart: "no"
+    environment:
+      MTRIP_S7_ISOLATED: "1"
+      WORKER_NUM: "1"
+    volumes: !override
+      - ../backend/services/payment-service/app:/opt/www/app:ro
+      - ../backend/services/payment-service/config:/opt/www/config:ro
+      - ../backend/shared/src:/shared/src:ro
+  gateway:
+    ports: !override ["127.0.0.1:8181:80"]
+    networks: [default, s7-ui]
+    volumes: !override
+      - ./openresty/nginx.conf:/usr/local/openresty/nginx/conf/nginx.conf:ro
+      - ./openresty/conf.d:/etc/nginx/conf.d:ro
+      - s7-uploads:/usr/local/openresty/nginx/static/uploads:ro
+volumes:
+  s7-uploads:
+networks:
+  default:
+    internal: true
+  # Only the gateway joins the host-facing bridge; databases and business services stay internal.
+  s7-ui:

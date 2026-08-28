@@ -92,12 +92,17 @@ try {
     rejects(40302, fn () => $service->execute('resolve', $resolve), 'S6 case ID cross-site rejected');
     rejects(40302, fn () => $service->execute('revoke', $revoke), 'S6 warning ID cross-site rejected');
     rejects(40301, fn () => $rules->save(['id' => $r['id'], 'expectedVersion' => 4, 'note' => 'forged'], 'publish'), 'S6 central rule publishing super only');
+    foreach (['warnings', 'violations', 'complianceHistory'] as $method) {
+        rejects(40301, fn () => $ctl->$method(), 'S7 permission aspect enforces list permission ' . $method);
+    }
+    // Site-isolation checks need explicit read permission after the HTTP aspect is registered.
+    AdminContext::set(['admin_id' => 908, 'site_id' => 992, 'is_super' => false, 'permissions' => ['platform:rule:list', 'platform:warning:list', 'platform:violation:list', 'platform:compliance:list']]);
     setRequest(['merchantId' => $m, 'siteId' => 991]);
     check($ctl->warnings()['data']['total'] === 0 && $ctl->violations()['data']['total'] === 0 && $ctl->complianceHistory()['data']['total'] === 0, 'S6 all lists enforce actor site');
     setRequest([]);
     $global = array_values(array_filter($ctl->rules()['data']['list'], fn ($x) => $x['id'] == $r['id']))[0];
     check($global['body'] === $draft['body'] && $global['scheduled_at'] === null && $global['exception_merchant_ids'] === [], 'S6 global published read excludes draft and future changes');
-    AdminContext::set(['admin_id' => 908, 'site_id' => 0, 'is_super' => false]);
+    AdminContext::set(['admin_id' => 908, 'site_id' => 0, 'is_super' => false, 'permissions' => ['platform:compliance:list']]);
     setRequest(['merchantId' => $m]);
     check($ctl->complianceHistory()['data']['total'] === 0, 'S6 site zero does not imply super');
     AdminContext::set($super);

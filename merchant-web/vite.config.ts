@@ -21,7 +21,7 @@ export default defineConfig({
     proxy: {
       // 开发环境转发到本地网关(OpenResty,deploy/docker-compose 默认 8081)
       '/api': {
-        target: 'http://127.0.0.1:8081',
+        target: process.env.MTRIP_DEV_GATEWAY || 'http://127.0.0.1:8081',
         changeOrigin: true,
       },
     },

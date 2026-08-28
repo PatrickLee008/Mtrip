@@ -360,7 +360,7 @@ onMounted(() => {
                   @click="confirmVerify(record)"
                 ><template #icon><SyncOutlined /></template></a-button>
               </a-tooltip>
-              <a-button v-if="record.status === 2" v-perm="'merchant:document:verify'" type="link" danger size="small" @click="openReject(record)">{{ t('merchant.verifyPage.docRejected') }}</a-button>
+              <a-button v-if="record.status === 2" v-perm="'merchant:document:verify'" type="link" danger size="small" @click="openReject(record)">{{ t('merchant.verifyPage.docRejectModalTitle') }}</a-button>
               <a-button v-perm="'merchant:document:replace'" type="link" size="small" @click="replaceDoc(record)">{{ t('merchant.s3.replace') }}</a-button>
               <a-tooltip :title="t('merchant.documentsPage.resubmit')">
                 <a-button
