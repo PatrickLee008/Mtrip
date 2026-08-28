@@ -26,7 +26,13 @@ const historyColumns = computed(() => [
 ]);
 const target = ref<TableRow | null>(null);
 const form = reactive({ storeId: 0, expectedVersion: 0, countryCode: '', cityKey: '', note: '' });
-const hotels = computed(() => props.businesses.filter(b => b.business_type === 'hotel'));
+const businessTypes = computed<Record<string, string>>(() => ({
+  hotel: t('merchant.onboardingPage.bizHotel'),
+  restaurant: t('merchant.onboardingPage.bizRestaurant'),
+  airline: t('merchant.onboardingPage.bizAirline'),
+  car_rental: t('merchant.onboardingPage.bizCarRental'),
+  attraction: t('merchant.onboardingPage.bizAttraction'),
+}));
 const unlinkedStores = computed(() => props.properties.filter(s => !s.source_business_id));
 const choices = computed(() => [
   { value: 0, label: t('merchantDirectory.createProperty') },
@@ -61,6 +67,7 @@ async function save(): Promise<void> {
 const businessColumns = computed(() => [
   { title: t('common.id'), dataIndex: 'id', width: 65 },
   { title: t('merchantDirectory.business'), dataIndex: 'business_name' },
+  { title: t('common.type'), dataIndex: 'business_type', width: 100 },
   { title: t('merchantDirectory.kyc'), key: 'kyc', width: 105 },
   { title: t('merchantDirectory.property'), key: 'property' },
   { title: t('common.action'), key: 'action', width: 100 },
@@ -76,14 +83,15 @@ const businessColumns = computed(() => [
     </a-descriptions-item>
   </a-descriptions>
   <a-alert v-if="!applications.length" type="info" show-icon :message="t('merchantDirectory.noApplication')" style="margin-top: 12px" />
-  <a-divider orientation="left">{{ t('merchantDirectory.hotelProperties') }}</a-divider>
+  <a-divider orientation="left">{{ t('merchantDirectory.businessProperties') }}</a-divider>
   <a-button type="link" @click="showHistory">{{ t('merchantDirectory.history') }}</a-button>
   <a-alert type="info" show-icon :message="t('merchantDirectory.mappingHint')" style="margin-bottom: 12px" />
-  <a-table :columns="businessColumns" :data-source="hotels" row-key="id" size="small" :pagination="false" :scroll="{ x: 570 }">
+  <a-table :columns="businessColumns" :data-source="businesses" row-key="id" size="small" :pagination="false" :scroll="{ x: 670 }">
     <template #bodyCell="{ column, record }">
       <template v-if="column.key === 'kyc'">
         <a-tag :color="record.kyc_status === 1 ? 'success' : 'warning'">{{ t('merchantDirectory.kyc' + record.kyc_status) }}</a-tag>
       </template>
+      <template v-else-if="column.dataIndex === 'business_type'">{{ businessTypes[record.business_type] || record.business_type || '-' }}</template>
       <template v-else-if="column.dataIndex === 'business_name'">
         <div>{{ record.business_name }}</div>
         <div class="property-muted">{{ record.city || '-' }} · {{ record.contact_name || '-' }}</div>
@@ -95,16 +103,16 @@ const businessColumns = computed(() => [
           <a-tag v-if="linked(record)?.deleted_at">{{ t('merchantDirectory.archived') }}</a-tag>
           <div class="property-muted">{{ linked(record)?.country_code }} / {{ linked(record)?.city_key }}</div>
         </template>
-        <a-tag v-else color="warning">{{ t('merchantDirectory.unmapped') }}</a-tag>
+        <a-tag v-else-if="record.business_type === 'hotel'" color="warning">{{ t('merchantDirectory.unmapped') }}</a-tag>
+        <span v-else class="property-muted">{{ t('merchantDirectory.notApplicable') }}</span>
       </template>
       <template v-else-if="column.key === 'action'">
-        <a-button v-if="record.kyc_status === 1 && !linked(record)?.deleted_at && [3, 4].includes(Number(merchant.status))" v-perm="'merchant:property:bind'" size="small" type="link" @click="edit(record)">
+        <a-button v-if="record.business_type === 'hotel' && record.kyc_status === 1 && !linked(record)?.deleted_at && [3, 4].includes(Number(merchant.status))" v-perm="'merchant:property:bind'" size="small" type="link" @click="edit(record)">
           {{ linked(record) ? t('common.edit') : t('merchantDirectory.bind') }}
         </a-button>
       </template>
     </template>
   </a-table>
-  <a-alert v-if="businesses.length > hotels.length" type="info" :message="t('merchantDirectory.deferred', { count: businesses.length - hotels.length })" style="margin-top: 12px" />
   <div v-if="unlinkedStores.length" style="margin-top: 12px">
     <div>{{ t('merchantDirectory.legacyStores') }}</div>
     <a-tag v-for="store in unlinkedStores" :key="store.id" style="margin-top: 8px">#{{ store.id }} {{ store.store_name }}</a-tag>
