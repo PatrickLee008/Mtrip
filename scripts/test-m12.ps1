@@ -26,7 +26,10 @@ Assert-Exit 'S4 test schema migration'
 $promotionMigration = (Get-Content (Join-Path $repo 'database/marketing/07-merchant-promotion-owner.sql') -Raw -Encoding utf8).Replace('mtrip_business', 'mtrip_m12_s1_test')
 $promotionMigration | docker exec -i mtrip-mysql-1 sh -c 'MYSQL_PWD=$MYSQL_ROOT_PASSWORD exec mysql -uroot --batch --default-character-set=utf8mb4'
 Assert-Exit 'merchant promotion test schema migration'
-foreach ($entry in @(@('merchant', 'm12-status.php'), @('order', 'm12-orders.php'), @('order', 'm12-dashboard.php'), @('merchant', 'm12-directory.php'), @('merchant', 'm12-s3.php'), @('merchant', 'm12-s4.php'))) {
+$s5Migration = (Get-Content (Join-Path $repo 'database/merchant/31-merchant-marketplace.sql') -Raw -Encoding utf8).Replace('mtrip_business', 'mtrip_m12_s1_test')
+$s5Migration | docker exec -i mtrip-mysql-1 sh -c 'MYSQL_PWD=$MYSQL_ROOT_PASSWORD exec mysql -uroot --batch --default-character-set=utf8mb4'
+Assert-Exit 'S5 test schema migration'
+foreach ($entry in @(@('merchant', 'm12-status.php'), @('order', 'm12-orders.php'), @('order', 'm12-dashboard.php'), @('merchant', 'm12-directory.php'), @('merchant', 'm12-s3.php'), @('merchant', 'm12-s4.php'), @('merchant', 'm12-s5.php'), @('goods', 'm12-marketplace.php'))) {
     $service = $entry[0]
     $file = $entry[1]
     $containerName = "mtrip-$service-service-1"

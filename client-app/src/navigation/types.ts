@@ -20,6 +20,8 @@ export type RootStackParamList = {
   Hotels: undefined;
   /** 酒店搜索结果页(Figma 1695:6325),酒店搜索页 Search 的落地页 */
   HotelResults: {
+    countryCode?: string;
+    cityKey?: string;
     keyword?: string;
     /** YYYY-MM-DD */
     checkIn?: string;

@@ -66,8 +66,7 @@ export interface GoodsItem {
   minPriceCitizen?: number;
   /**
    * 评分与评价数:设计稿搜索结果卡有「Rating: 9.3 (1,230 Review)」一行,
-   * 但 /app/goods/list 目前不下发(只有详情接口的 reviewSummary),故为可选,
-   * 拿不到时卡片不渲染这一行。
+   * 酒店市场列表从真实已显示评价聚合；其他商品/旧响应没有时不渲染。
    */
   rating?: number;
   reviewCount?: number;

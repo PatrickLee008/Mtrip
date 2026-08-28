@@ -3,27 +3,26 @@
  *
  * 结构与设计稿一致:搜索 → 快捷入口(一行 4 项)→ 促销卡 → 会员卡 →
  * 热门目的地 → 限时特惠 → 酒店特惠 → 餐饮 → 本地体验 → 杂志流。
- * 其中「热门目的地」取接口 hot、「酒店特惠」取接口 recommend,其余区块暂用 homeSections.ts 的静态数据。
+ * 热门目的地与酒店推荐读取 S5 已发布数据；其余区块暂用 homeSections.ts 的静态数据。
  *
  * 设计稿里 visible:false 的区块不实现:筛选 chips(Multi Booking / Long Stay)、热门路线、
  * 旅行协助九宫格、快捷入口第二行、杂志流第二篇(Mohinga)。
  */
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { RefreshControl, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
 
-import { fetchHome } from '@/api/goods';
+import { fetchHome, type MarketplaceDestination } from '@/api/goods';
 import {
-  TEMP_DESTINATION_COVERS,
   TEMP_DINING_COVERS,
   TEMP_EXPERIENCE_COVERS,
   TEMP_MAGAZINE_COVERS,
   TEMP_SPECIAL_DEAL_COVER,
 } from '@/assets/tempImages';
-import { LoadingView } from '@/components/common/StateViews';
+import { LoadingView, EmptyView } from '@/components/common/StateViews';
 import DestinationCard, { DESTINATION_CARD_WIDTH } from '@/components/home/DestinationCard';
 import DiningCard, { DINING_CARD_WIDTH } from '@/components/home/DiningCard';
 import ExperienceCard from '@/components/home/ExperienceCard';
@@ -39,7 +38,6 @@ import StayCard, { STAY_CARD_WIDTH } from '@/components/home/StayCard';
 import { GOODS_TYPE } from '@/config/global';
 import { PAGE_PADDING, SECTION_GAP, colors } from '@/config/theme';
 import {
-  DESTINATIONS,
   DINING_ITEMS,
   EXPERIENCES,
   MAGAZINE_ITEMS,
@@ -68,25 +66,29 @@ export default function HomeScreen() {
 
   const [keyword, setKeyword] = useState('');
   const [recommend, setRecommend] = useState<GoodsItem[]>([]);
-  const [hot, setHot] = useState<GoodsItem[]>([]);
+  const [destinations, setDestinations] = useState<MarketplaceDestination[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const loadVersion = useRef(0);
 
   const load = useCallback(
     async (isRefresh = false) => {
+      const version = ++loadVersion.current;
+      if (!isRefresh) { setLoading(true); setRecommend([]); setDestinations([]); }
       if (isRefresh) setRefreshing(true);
       try {
         const data = await fetchHome();
+        if (version !== loadVersion.current) return;
         setRecommend(data.recommend);
-        setHot(data.hot);
+        setDestinations(data.destinations);
       } catch (e) {
+        if (version !== loadVersion.current) return;
         // 接口失败只影响 06/08 两个区块,静态区块照常展示
         setRecommend([]);
-        setHot([]);
+        setDestinations([]);
         if (isRefresh) showToast(e instanceof Error ? e.message : 'Error');
       } finally {
-        setLoading(false);
-        setRefreshing(false);
+        if (version === loadVersion.current) { setLoading(false); setRefreshing(false); }
       }
     },
     [showToast],
@@ -94,6 +96,7 @@ export default function HomeScreen() {
 
   useEffect(() => {
     void load();
+    return () => { loadVersion.current++; };
   }, [load, siteId]);
 
   // 首次进入若无站点快照,拉取默认站点配置(货币/时区/语言)
@@ -169,7 +172,6 @@ export default function HomeScreen() {
         <View>
           <SectionHeader
             title={t('home.destinations.title')}
-            onSeeAll={() => goList(undefined, t('home.destinations.title'))}
           />
           <ScrollView
             horizontal
@@ -179,26 +181,11 @@ export default function HomeScreen() {
             snapToInterval={DESTINATION_CARD_WIDTH + 16}
             decelerationRate="fast"
           >
-            {hot.length > 0
-              ? hot.map((g) => (
-                  <DestinationCard
-                    key={g.id}
-                    name={g.goods_name}
-                    desc={g.goods_brief}
-                    uri={g.cover_image}
-                    onPress={() => goDetail(g)}
-                  />
-                ))
-              : DESTINATIONS.map((d) => (
-                  <DestinationCard
-                    key={d.key}
-                    name={t(`home.destinations.${d.key}.name`)}
-                    desc={t(`home.destinations.${d.key}.desc`)}
-                    category={t(`home.destinations.${d.key}.category`)}
-                    coverSource={TEMP_DESTINATION_COVERS[d.key]}
-                    onPress={comingSoon}
-                  />
-                ))}
+            {destinations.map((d) => (
+              <DestinationCard key={d.id} name={d.name} desc={d.tagline} uri={d.image_url}
+                onPress={() => navigation.navigate('HotelResults', { countryCode: d.country_code, cityKey: d.city_key })} />
+            ))}
+            {destinations.length === 0 ? <EmptyView /> : null}
           </ScrollView>
         </View>
 

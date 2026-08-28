@@ -47,7 +47,7 @@ import { useTranslation } from 'react-i18next';
 
 import { fetchGoodsList, type GoodsSortBy } from '@/api/goods';
 import { addFavorite, fetchFavoriteList, removeFavorite } from '@/api/user';
-import { LoadingView } from '@/components/common/StateViews';
+import { LoadingView, EmptyView, ErrorView } from '@/components/common/StateViews';
 import HomeIcon from '@/components/home/HomeIcon';
 import DatePickerSheet, {
   DateRangeValue,
@@ -63,15 +63,7 @@ import { GOODS_TYPE } from '@/config/global';
 import { PAGE_PADDING, colors, radius, shadows } from '@/config/theme';
 import { fonts } from '@/config/typography';
 import type { RootStackParamList } from '@/navigation/types';
-import {
-  DEMO_BADGE,
-  DEMO_COVERS,
-  DEMO_KEY_BY_ID,
-  DEMO_PROMO,
-  DEMO_RATING_TIER,
-  queryDemoResults,
-  type DemoKey,
-} from '@/screens/hotel/demoResults';
+
 import { useCommonStore } from '@/store/commonStore';
 import { useUserStore } from '@/store/userStore';
 import type { GoodsItem } from '@/types/models';
@@ -134,6 +126,7 @@ export default function HotelResultsScreen() {
   const [hasMore, setHasMore] = useState(false);
   const pageRef = useRef(1);
   const busyRef = useRef(false);
+  const loadVersion = useRef(0);
 
   const [favorites, setFavorites] = useState<number[]>([]);
 
@@ -142,6 +135,8 @@ export default function HotelResultsScreen() {
   const query = useMemo(
     () => ({
       goodsType: GOODS_TYPE.HOTEL,
+      countryCode: params?.countryCode,
+      cityKey: params?.cityKey,
       keyword: applied.keyword || undefined,
       sortBy,
       reviewScore: chips.includes('rating4') ? 4 : undefined,
@@ -149,41 +144,50 @@ export default function HotelResultsScreen() {
       breakfast: chips.includes('breakfast') ? 1 : undefined,
       amenities: chips.includes('freeWifi') ? WIFI_AMENITY : undefined,
     }),
-    [applied.keyword, chips, sortBy],
+    [applied.keyword, chips, sortBy, params?.countryCode, params?.cityKey],
   );
 
   const load = useCallback(
     async (page: number, mode: 'init' | 'refresh' | 'more') => {
       if (busyRef.current) return;
+      const version = loadVersion.current;
       busyRef.current = true;
       if (mode === 'init') setLoading(true);
       if (mode === 'refresh') setRefreshing(true);
       if (mode === 'more') setLoadingMore(true);
       try {
         const data = await fetchGoodsList({ ...query, page, pageSize: PAGE_SIZE });
+        if (version !== loadVersion.current) return;
         pageRef.current = page;
         setItems((prev) => (page === 1 ? data.list : [...prev, ...data.list]));
         setTotal(data.total);
         setHasMore(page * data.pageSize < data.total);
         setError('');
       } catch (e) {
+        if (version !== loadVersion.current) return;
         if (page === 1) {
           setItems([]);
           setTotal(0);
         }
         setError(e instanceof Error ? e.message : 'Error');
       } finally {
-        busyRef.current = false;
-        setLoading(false);
-        setRefreshing(false);
-        setLoadingMore(false);
+        if (version === loadVersion.current) {
+          busyRef.current = false;
+          setLoading(false);
+          setRefreshing(false);
+          setLoadingMore(false);
+        }
       }
     },
     [query],
   );
 
   useEffect(() => {
+    loadVersion.current++;
+    busyRef.current = false;
+    setItems([]);
     void load(1, 'init');
+    return () => { loadVersion.current++; };
   }, [load]);
 
   /* 收藏态:登录后拉一次,未登录时点心跳登录页 */
@@ -198,13 +202,7 @@ export default function HotelResultsScreen() {
   }, [isLogin]);
 
   const toggleFavorite = (goods: GoodsItem) => {
-    /* 演示卡(id 取负数)没有真实商品,只切本地状态 */
-    if (goods.id < 0) {
-      setFavorites((prev) =>
-        prev.includes(goods.id) ? prev.filter((id) => id !== goods.id) : [...prev, goods.id],
-      );
-      return;
-    }
+
     if (!isLogin) {
       navigation.navigate('Login');
       return;
@@ -247,22 +245,8 @@ export default function HotelResultsScreen() {
     });
   };
 
-  /**
-   * 演示数据:接口没连通或没有结果时,先用设计稿那四张卡把页面撑起来。
-   * 关键词匹配要用译文,故把「名称 + 地址」喂给 queryDemoResults。
-   */
-  const demoText = useCallback(
-    (key: DemoKey) =>
-      `${t(`hotels.results.demo.${key}.name`)} ${t(`hotels.results.demo.${key}.address`)}`,
-    [t],
-  );
-  const demoItems = useMemo(
-    () => queryDemoResults({ chips, keyword: applied.keyword, sortBy, textOf: demoText }),
-    [chips, applied.keyword, sortBy, demoText],
-  );
-  const showDemo = !loading && items.length === 0;
-  const data = loading ? [] : showDemo ? demoItems : items;
-  const shownTotal = showDemo ? demoItems.length : total;
+  const data = loading ? [] : items;
+  const shownTotal = total;
 
   const header = (
     <View>
@@ -391,19 +375,7 @@ export default function HotelResultsScreen() {
           </Pressable>
         </View>
 
-        {/* 演示数据提示:点一下重试真实请求 */}
-        {showDemo ? (
-          <Pressable
-            style={({ pressed }) => [styles.demoNotice, pressed && styles.pressed]}
-            onPress={() => void load(1, 'init')}
-          >
-            {/* 请求失败时把原因一并带出来,别让演示数据把错误盖掉 */}
-            <Text style={styles.demoNoticeText}>
-              {error ? `${t('hotels.results.demoNotice')} · ${error}` : t('hotels.results.demoNotice')}
-            </Text>
-            <Text style={styles.demoNoticeLink}>{t('common.retry')}</Text>
-          </Pressable>
-        ) : null}
+
       </View>
     </View>
   );
@@ -415,50 +387,11 @@ export default function HotelResultsScreen() {
           data={data}
           keyExtractor={(item) => String(item.id)}
           ListHeaderComponent={header}
-          renderItem={({ item }) => {
-            /* 演示卡(id 取负数)的名称/地址/促销/徽章全部照设计稿回填,真实数据一律走接口字段 */
-            const key = item.id < 0 ? DEMO_KEY_BY_ID[item.id] : undefined;
-            if (!key) {
-              return (
-                <HotelResultCard
-                  goods={item}
-                  favorite={favorites.includes(item.id)}
-                  citizen={applied.citizen}
-                  onPress={(g) => navigation.navigate('GoodsDetail', { id: g.id })}
-                  onToggleFavorite={toggleFavorite}
-                />
-              );
-            }
-            const tier = DEMO_RATING_TIER[key];
-            const badge = DEMO_BADGE[key];
-            const promo = DEMO_PROMO[key];
-            return (
-              <HotelResultCard
-                goods={{
-                  ...item,
-                  goods_name: t(`hotels.results.demo.${key}.name`),
-                  address: t(`hotels.results.demo.${key}.address`),
-                }}
-                coverSource={DEMO_COVERS[key]}
-                favorite={favorites.includes(item.id)}
-                citizen={applied.citizen}
-                ratingTier={tier ? t(`hotels.results.${tier}`) : null}
-                badge={badge ? { text: t(badge.textKey), tone: badge.tone } : null}
-                promo={
-                  promo
-                    ? {
-                        strike: promo.strike,
-                        tags: promo.tags?.map((tag) => ({ text: t(tag.textKey), tone: tag.tone })),
-                      }
-                    : undefined
-                }
-                /* 演示卡没有真实商品 id,跳详情静态页(页面自己用设计稿数据渲染) */
-                onPress={() => navigation.navigate('HotelDetail')}
-                onToggleFavorite={toggleFavorite}
-              />
-            );
-          }}
-          ListEmptyComponent={loading ? <LoadingView /> : null}
+          renderItem={({ item }) => (
+            <HotelResultCard goods={item} favorite={favorites.includes(item.id)} citizen={applied.citizen}
+              onPress={(g) => navigation.navigate('GoodsDetail', { id: g.id })} onToggleFavorite={toggleFavorite} />
+          )}
+          ListEmptyComponent={loading ? <LoadingView /> : error ? <ErrorView message={error} onRetry={() => void load(1, 'init')} /> : <EmptyView />}
           ListFooterComponent={
             items.length > 0 ? (
               <Text style={styles.footerText}>
@@ -700,29 +633,6 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     letterSpacing: 0.14,
     color: colors.textSoft,
-  },
-  demoNotice: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 8,
-    marginTop: -12,
-    padding: 12,
-    borderRadius: radius.btn,
-    backgroundColor: colors.tintBg,
-  },
-  demoNoticeText: {
-    flexShrink: 1,
-    fontFamily: fonts.inter,
-    fontSize: 12,
-    lineHeight: 16,
-    color: colors.textSoft,
-  },
-  demoNoticeLink: {
-    fontFamily: fonts.interSemi,
-    fontSize: 12,
-    lineHeight: 16,
-    color: colors.primary,
   },
 
   mapBtn: { flexDirection: 'row', alignItems: 'center', gap: 4 },

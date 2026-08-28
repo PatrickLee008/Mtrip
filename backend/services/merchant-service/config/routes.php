@@ -56,6 +56,10 @@ Router::addGroup('/api/v1/admin', static function () {
     Router::post('/merchant/impersonate/end', [MerchantController::class, 'impersonateEnd']);
     // ---------- Marketplace Ranking(整改 Phase C,前缀沿用 merchant 网关零改动) ----------
     Router::get('/merchant/ranking/list', [RankingController::class, 'listings']);
+    Router::get('/merchant/ranking/candidates', [RankingController::class, 'candidates']);
+    Router::get('/merchant/ranking/preview', [RankingController::class, 'preview']);
+    Router::post('/merchant/ranking/listing/add', [RankingController::class, 'addListing']);
+    Router::post('/merchant/ranking/property-display', [RankingController::class, 'propertyDisplay']);
     Router::post('/merchant/ranking/save-order', [RankingController::class, 'saveOrder']);
     Router::post('/merchant/ranking/pin', [RankingController::class, 'pin']);
     Router::post('/merchant/ranking/publish', [RankingController::class, 'publish']);

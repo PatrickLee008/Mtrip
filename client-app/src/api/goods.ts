@@ -6,7 +6,8 @@ import { get } from '@/api/request';
 import type { PageData, PageParams } from '@/api/types';
 import type { CalendarDay, GoodsCategory, GoodsDetail, GoodsItem } from '@/types/models';
 
-export function fetchHome(): Promise<{ recommend: GoodsItem[]; hot: GoodsItem[] }> {
+export interface MarketplaceDestination { id: number; name: string; tagline: string; image_url: string; country_code: string; city_key: string; region: string }
+export function fetchHome(): Promise<{ recommend: GoodsItem[]; hot: GoodsItem[]; destinations: MarketplaceDestination[] }> {
   return get('/api/v1/app/goods/home');
 }
 
@@ -27,6 +28,8 @@ export type GoodsSortBy =
   | 'distance';
 
 export interface GoodsListParams extends PageParams {
+  countryCode?: string;
+  cityKey?: string;
   goodsType?: number;
   categoryId?: number;
   keyword?: string;

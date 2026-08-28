@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue';
+import { computed, onMounted, reactive, ref, watch } from 'vue';
+import { useRoute } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { Modal, message } from 'ant-design-vue';
 import { BellOutlined, LoginOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons-vue';
@@ -29,6 +30,12 @@ import {
 import { exportCsv } from '@/utils/exportCsv';
 
 const { t } = useI18n();
+const route = useRoute();
+function openLinkedMerchant() {
+  const id = Number(route.query.merchantId);
+  if (Number.isSafeInteger(id) && id > 0) void openDetail({ id });
+}
+watch(() => route.query.merchantId, openLinkedMerchant);
 
 /** 商户列表:入驻审核/费率配置/启停/注销(文档 6.4.2;状态机 0→3/2,3⇄4,5终态) */
 const userStore = useUserStore();
@@ -325,6 +332,7 @@ async function doClose(): Promise<void> {
 
 onMounted(() => {
   void load();
+  openLinkedMerchant();
 });
 </script>
 

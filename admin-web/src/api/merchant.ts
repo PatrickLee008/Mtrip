@@ -124,46 +124,7 @@ export function apiOnboardingKycUpload(file: File, id: number, docType: string, 
 }
 
 // ---------- Marketplace Ranking(整改 Phase C) ----------
-export function apiRankingListings(params: Record<string, unknown>): Promise<{ list: Row[]; cities: string[] }> {
-  return get('/admin/merchant/ranking/list', params);
-}
 
-export function apiRankingSaveOrder(items: { id: number; rank: number; featured: number }[]): Promise<null> {
-  return post('/admin/merchant/ranking/save-order', { items });
-}
-
-export function apiRankingPin(id: number, pinned: number): Promise<null> {
-  return post('/admin/merchant/ranking/pin', { id, pinned });
-}
-
-export function apiRankingPublish(): Promise<null> {
-  return post('/admin/merchant/ranking/publish');
-}
-
-export function apiRankingHistory(params: Record<string, unknown>): Promise<PageData<Row>> {
-  return get('/admin/merchant/ranking/history', params);
-}
-
-export function apiRankingDestinations(params: Record<string, unknown>): Promise<{ list: Row[]; regions: string[] }> {
-  return get('/admin/merchant/ranking/destinations', params);
-}
-
-export function apiRankingDestinationAdd(data: {
-  name: string;
-  region: string;
-  tagline?: string;
-  imageUrl?: string;
-}): Promise<{ id: number }> {
-  return post('/admin/merchant/ranking/destination/add', data);
-}
-
-export function apiRankingDestinationUpdate(data: Record<string, unknown>): Promise<null> {
-  return post('/admin/merchant/ranking/destination/update', data);
-}
-
-export function apiRankingDestinationPin(id: number, pinned: number): Promise<null> {
-  return post('/admin/merchant/ranking/destination/pin', { id, pinned });
-}
 
 export function apiMerchantCommission(data: {
   id: number;

@@ -29,6 +29,16 @@ abstract class AbstractController
         return (int) $this->request->input($key, $default);
     }
 
+    /** Numeric filter inputs used by hotel price/rating/distance queries. */
+    protected function floatInput(string $key, float $default = 0.0): float
+    {
+        $value = $this->request->input($key, $default);
+        if (! is_numeric($value) || ! is_finite((float) $value)) {
+            throw new BusinessException(ErrorCode::PARAM_ERROR, "参数 {$key} 必须为有效数值");
+        }
+        return (float) $value;
+    }
+
     protected function strInput(string $key, string $default = ''): string
     {
         return trim((string) $this->request->input($key, $default));

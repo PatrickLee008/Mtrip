@@ -9,6 +9,7 @@ use Mtrip\Shared\Constants\ErrorCode;
 use Mtrip\Shared\Context\UserContext;
 use Mtrip\Shared\Exception\BusinessException;
 use Mtrip\Shared\Support\Result;
+use Mtrip\Shared\Merchant\MarketplaceReader;
 
 /**
  * C端商品接口:首页聚合/分类树/列表搜索/详情/价格库存日历
@@ -32,11 +33,9 @@ class GoodsController extends AbstractController
             ->where('status', 3)
             ->whereNull('deleted_at');
 
-        $recommend = $base()->where('is_recommend', 1)
-            ->orderByDesc('sort_weight')->orderByDesc('id')
-            ->limit(8)->get(self::LIST_FIELDS)
-            ->map($this->rowWithPrice())->all();
+        $recommend = array_slice(MarketplaceReader::published($siteId, 'listing'), 0, 8);
         $hot = $base()->where('is_hot', 1)
+            ->where('goods_type', '<>', 1)
             ->orderByDesc('sales_count')->orderByDesc('id')
             ->limit(8)->get(self::LIST_FIELDS)
             ->map($this->rowWithPrice())->all();
@@ -44,6 +43,7 @@ class GoodsController extends AbstractController
         return Result::success([
             'recommend' => $recommend,
             'hot' => $hot,
+            'destinations' => MarketplaceReader::published($siteId, 'destination'),
         ]);
     }
 
@@ -112,16 +112,33 @@ class GoodsController extends AbstractController
         if ($starLevel > 0) {
             $query->where('star_level', $starLevel);
         }
+        // All hotel discovery uses published, live-qualified properties. Tickets keep their existing path.
+        $ranked = MarketplaceReader::published($siteId, 'listing', $this->strInput('countryCode'), $this->strInput('cityKey'));
+        $rankedIds = array_map('intval', array_column($ranked, 'id'));
+        $query->where(static fn ($q) => $q->where('goods_type', '<>', 1)->orWhereIn('id', $rankedIds));
         // 可配置筛选(PRD 模块3):价格区间/设施/含早/免费取消/评分下限
         $this->applyFilters($query);
 
         // 可配置排序(PRD 模块3):default/price_asc/price_desc/star/rating/sales/new/distance
-        $this->applySort($query, $this->strInput('sortBy'));
+        $sort = $this->strInput('sortBy');
+        if ($goodsType === 1 && in_array($sort, ['', 'default'], true) && $rankedIds !== []) {
+            $query->orderByRaw('FIELD(id,' . implode(',', array_fill(0, count($rankedIds), '?')) . ')', $rankedIds);
+        } else {
+            $this->applySort($query, $sort);
+            $query->orderBy('id');
+        }
 
         $total = (clone $query)->count();
         $list = $query->forPage($page, $pageSize)
             ->get(self::LIST_FIELDS)
             ->map($this->rowWithPrice())->all();
+        $rankedById = array_column($ranked, null, 'id');
+        foreach ($list as &$row) {
+            if (isset($rankedById[$row['id']])) {
+                $row = array_replace($row, array_intersect_key($rankedById[$row['id']], array_flip(['rating', 'reviewCount', 'is_recommend', 'pinned', 'featured', 'country_code', 'city_key'])));
+            }
+        }
+        unset($row);
         return Result::page($list, $total, $page, $pageSize);
     }
 
@@ -141,6 +158,9 @@ class GoodsController extends AbstractController
             throw new BusinessException(ErrorCode::NOT_FOUND, '商品不存在或已下架');
         }
         $goods = (array) $goods;
+        if ((int) $goods['goods_type'] === 1 && ! in_array($id, array_map('intval', array_column(MarketplaceReader::published($siteId, 'listing'), 'id')), true)) {
+            throw new BusinessException(ErrorCode::NOT_FOUND, '酒店尚未发布或已失去展示资格');
+        }
         foreach (['images', 'facilities'] as $jsonField) {
             $goods[$jsonField] = $goods[$jsonField] ? json_decode((string) $goods[$jsonField], true) : [];
         }
