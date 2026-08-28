@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
+import { useRoute } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { EyeOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons-vue';
 import PageContainer from '@/components/PageContainer.vue';
@@ -17,6 +18,7 @@ const exporting = ref(false);
  * 活动类型 chip 计数条(可点击过滤) + 关键词/类型/日期/管理员/商户筛选 + 详情抽屉
  */
 const { t } = useI18n();
+const route = useRoute();
 
 const ACT_STATUS = computed<Record<number, StatusItem>>(() => ({
   1: { text: t('merchant.activitiesPage.statusSuccess'), color: 'success' },
@@ -41,6 +43,7 @@ const ACT_TYPES = [
 ] as const;
 
 function typeLabel(type: string): string {
+  if (type === 'warning_events') return t('complianceS6.warningEvents');
   if (['status', 'compliance', 'verification', 'warning'].includes(type)) return t(`merchant.s3.sources.${type}`);
   const key = `merchant.activitiesPage.type${type.replace(/(^|_)(\w)/g, (_m, _p, c) => c.toUpperCase())}`;
   const label = t(key);
@@ -61,7 +64,8 @@ async function fetchActivities(params: Record<string, unknown>): Promise<{ list:
 }
 
 const { loading, list, query, search, reset, pagination, load } = useTable(fetchActivities, {
-  source: 'activity',
+  source: ['compliance', 'warning_events'].includes(String(route.query.source)) ? String(route.query.source) : 'activity',
+  merchantId: Number(route.query.merchantId) || undefined,
   keyword: '',
   activityType: '',
   dateRange: '',
@@ -78,6 +82,13 @@ const CHIP_TYPES = computed(() => [
   { key: 'document_upload', label: t('merchant.activitiesPage.typeDocumentUpload'), count: stats.value.document_upload ?? 0 },
   { key: 'profile_update', label: t('merchant.activitiesPage.typeProfileUpdate'), count: stats.value.profile_update ?? 0 },
 ]);
+
+watch(() => route.fullPath, () => {
+  if (route.path !== '/merchant/activities') return;
+  query.source = ['compliance', 'warning_events'].includes(String(route.query.source)) ? String(route.query.source) : 'activity';
+  query.merchantId = Number(route.query.merchantId) || undefined;
+  search();
+});
 
 const activeChip = ref<string>('');
 
@@ -158,7 +169,7 @@ onMounted(() => {
     </div>
 
     <a-select v-model:value="query.source" style="width: 240px; margin-bottom: 16px" @change="search">
-      <a-select-option v-for="source in ['activity', 'status', 'verification', 'warning', 'compliance']" :key="source" :value="source">{{ t(`merchant.s3.sources.${source}`) }}</a-select-option>
+      <a-select-option v-for="source in ['activity', 'status', 'verification', 'warning', 'warning_events', 'compliance']" :key="source" :value="source">{{ source === 'warning_events' ? t('complianceS6.warningEvents') : t(`merchant.s3.sources.${source}`) }}</a-select-option>
     </a-select>
     <a-alert v-if="query.source !== 'activity'" :message="t('merchant.s3.historySourceNotice')" type="info" style="margin-bottom: 16px" />
     <!-- 活动类型 chip 计数条 -->
@@ -196,6 +207,7 @@ onMounted(() => {
         <a-form-item :label="t('merchant.activitiesPage.adminLabel')">
           <a-input v-model:value="query.admin" allow-clear :placeholder="t('merchant.activitiesPage.colPerformedBy')" style="width: 140px" @press-enter="search" />
         </a-form-item>
+        <a-form-item :label="t('complianceS6.merchantId')"><a-input-number v-model:value="query.merchantId" :min="1" /></a-form-item>
         <a-form-item :label="t('merchant.activitiesPage.merchantLabel')">
           <a-input v-model:value="query.merchant" allow-clear :placeholder="t('merchant.activitiesPage.colMerchant')" style="width: 160px" @press-enter="search" />
         </a-form-item>

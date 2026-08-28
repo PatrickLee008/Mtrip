@@ -3,7 +3,9 @@
  * - 缺失的 key 会自动回退到 en-US(英文);有需要中文的 key 维护在此
  * - 与 en-US 的 key 路径保持完全一致
  */
+import complianceS6 from './compliance/zh-CN';
 export default {
+  complianceS6,
   marketplace: {
     title: "市场排名管理",
     rule: "仅酒店物业 · 置顶优先于精选、普通 · 各市场独立发布",

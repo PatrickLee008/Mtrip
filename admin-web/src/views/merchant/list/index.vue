@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n';
 import { Modal, message } from 'ant-design-vue';
 import { BellOutlined, LoginOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons-vue';
 import AccountSecurityPanel from '@/components/merchant/AccountSecurityPanel.vue';
+import ComplianceLinks from '@/components/merchant/ComplianceLinks.vue';
 import MerchantPropertyPanel from '@/components/merchant/MerchantPropertyPanel.vue';
 import PageContainer from '@/components/PageContainer.vue';
 import SiteTreeSelect from '@/components/SiteTreeSelect.vue';
@@ -510,6 +511,7 @@ onMounted(() => {
             :properties="detailProperties" :group="detailGroup" @changed="statusChanged" />
 
           <AccountSecurityPanel :merchant-id="detail.id" :access-configured="!!detail.access_code_configured" />
+          <ComplianceLinks :merchant-id="detail.id" />
 
           <!-- 月度绩效(整改 A3) -->
           <a-divider orientation="left">{{ t('merchant.profile.monthlyPerformance') }}</a-divider>

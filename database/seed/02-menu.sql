@@ -189,6 +189,7 @@ INSERT IGNORE INTO `sys_menu` (`id`,`parent_id`,`menu_name`,`menu_name_en`,`perm
 (70101,701,'保存规则','Save','platform:rule:save',3,1),
 (70102,701,'发布下线','Publish/Unpublish','platform:rule:publish',3,2),
 (70201,702,'处置违规','Handle','platform:violation:handle',3,1),
+(70202,702,'登记违规','Record violation','platform:violation:record',3,2),
 (70301,703,'签发警告','Issue','platform:warning:issue',3,1),
 (70302,703,'吊销警告','Revoke','platform:warning:revoke',3,2);
 

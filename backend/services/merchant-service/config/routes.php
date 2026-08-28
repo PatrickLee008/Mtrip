@@ -168,10 +168,12 @@ Router::addGroup('/api/v1/admin', static function () {
 // ============================================================
 Router::addGroup('/api/v1/admin/compliance', static function () {
     Router::get('/rule/list', [PlatformRuleController::class, 'rules']);
+    Router::get('/rule/history', [PlatformRuleController::class, 'ruleHistory']);
     Router::post('/rule/save', [PlatformRuleController::class, 'ruleSave']);
     Router::post('/rule/publish', [PlatformRuleController::class, 'rulePublish']);
     Router::post('/rule/delete', [PlatformRuleController::class, 'ruleDelete']);
     Router::get('/violation/list', [PlatformRuleController::class, 'violations']);
+    Router::post('/violation/record', [PlatformRuleController::class, 'violationRecord']);
     Router::post('/violation/handle', [PlatformRuleController::class, 'violationHandle']);
     Router::get('/warning/list', [PlatformRuleController::class, 'warnings']);
     Router::post('/warning/issue', [PlatformRuleController::class, 'warningIssue']);

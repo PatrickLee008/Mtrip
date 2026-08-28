@@ -5,7 +5,9 @@
  * - 中文翻译在 zh-CN 中按需提供;zh-CN 缺失的 key 自动回退到本文件
  * - 命名空间:common(通用) / app(应用) / menu(菜单) / status(状态) / 模块名(各业务模块)
  */
+import complianceS6 from './compliance/en-US';
 export default {
+  complianceS6,
   marketplace: {
     title: "Marketplace ranking",
     rule: "Hotel properties only · pinned > featured > normal · each market is published separately",

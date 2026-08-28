@@ -161,6 +161,7 @@ services:
       - ../database/system/08-helpcenter.sql:/docker-entrypoint-initdb.d/99c-helpcenter.sql:ro
       # 平台规则与合规(模块08)+ 促销独立实体(模块05)
       - ../database/merchant/08-compliance.sql:/docker-entrypoint-initdb.d/99d-compliance.sql:ro
+      - ../database/merchant/32-merchant-compliance.sql:/docker-entrypoint-initdb.d/99d1-merchant-compliance.sql:ro
       - ../database/marketing/06-promotion-extras.sql:/docker-entrypoint-initdb.d/99e-promotion-extras.sql:ro
       - ../database/marketing/07-merchant-promotion-owner.sql:/docker-entrypoint-initdb.d/99e1-merchant-promotion-owner.sql:ro
       # 平台特性开关(模块11)

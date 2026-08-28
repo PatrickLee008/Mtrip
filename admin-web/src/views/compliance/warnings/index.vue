@@ -1,108 +1,52 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
+import { useRoute } from 'vue-router';
 import { useI18n } from 'vue-i18n';
-import { message } from 'ant-design-vue';
-import { PlusOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons-vue';
 import PageContainer from '@/components/PageContainer.vue';
 import StatusTag from '@/components/StatusTag.vue';
+import ComplianceFilters from '@/components/merchant/ComplianceFilters.vue';
+import ComplianceLinks from '@/components/merchant/ComplianceLinks.vue';
+import ComplianceActionModal from '@/components/merchant/ComplianceActionModal.vue';
 import { useTable, type TableRow } from '@/composables/useTable';
-import type { StatusItem } from '@/components/StatusTag.vue';
-import { apiWarnings, apiWarningIssue, apiWarningRevoke } from '@/api/compliance';
-
-/** 商户警告(Super Admin Portal 模块 08) */
+import { useCompliancePresentation } from '@/composables/useCompliancePresentation';
+import { apiWarnings } from '@/api/compliance';
 const { t } = useI18n();
-
-const LEVEL: Record<number, string> = { 1: '1st Warning', 2: '2nd Warning', 3: '3rd Warning' };
-const W_STATUS: Record<number, StatusItem> = {
-  1: { text: 'Active', color: 'success' }, 2: { text: 'Revoked', color: 'default' },
-};
-
-const { loading, list, query, load, search, reset, pagination } = useTable(apiWarnings, {
-  merchantId: undefined,
-});
-
+const route = useRoute();
+const { warningStatus } = useCompliancePresentation();
+const { list, loading, query, load, search, reset, pagination } = useTable(apiWarnings, { merchantId: Number(route.query.merchantId) || undefined, siteId: undefined, keyword: '', category: undefined, status: undefined });
+watch(() => route.query.merchantId, (id) => { query.merchantId = Number(id) || undefined; search(); });
 const columns = computed(() => [
-  { title: t('common.id'), dataIndex: 'id', width: 70 },
-  { title: 'Merchant', dataIndex: 'merchant_name', width: 180, ellipsis: true },
-  { title: 'Reason', dataIndex: 'reason', ellipsis: true },
-  { title: 'Level', dataIndex: 'level', width: 120 },
-  { title: 'Issued By', dataIndex: 'issued_by', width: 120 },
-  { title: 'Expires', dataIndex: 'expires_at', width: 120 },
-  { title: 'Status', dataIndex: 'status', width: 100 },
-  { title: t('common.action'), key: 'action_col', width: 100, fixed: 'right' as const },
+  { title: t('common.id'), dataIndex: 'id', width: 70 }, { title: t('complianceS6.merchant'), dataIndex: 'merchant_name', width: 180 },
+  { title: t('complianceS6.reason'), dataIndex: 'reason', width: 260 }, { title: t('complianceS6.level'), dataIndex: 'level', width: 90 },
+  { title: t('complianceS6.category'), dataIndex: 'category_code', width: 100 }, { title: t('complianceS6.status'), dataIndex: 'status', width: 100 },
+  { title: t('complianceS6.expires'), dataIndex: 'expires_at', width: 130 }, { title: t('complianceS6.reviewer'), dataIndex: 'issued_by', width: 130 },
+  { title: t('complianceS6.created'), dataIndex: 'created_at', width: 165 }, { title: t('common.action'), key: 'actions', width: 220, fixed: 'right' as const },
 ]);
-
-const modalOpen = ref(false);
-const saving = ref(false);
-const form = reactive({ merchantId: undefined as number | undefined, reason: '', level: 1, expiresAt: '' });
-function openIssue(): void {
-  Object.assign(form, { merchantId: undefined, reason: '', level: 1, expiresAt: '' });
-  modalOpen.value = true;
-}
-async function issue(): Promise<void> {
-  if (!form.merchantId || !form.reason.trim()) { message.warning('Merchant ID and reason are required'); return; }
-  saving.value = true;
-  try {
-    await apiWarningIssue({ ...form });
-    message.success('Warning issued');
-    modalOpen.value = false;
-    await load();
-  } finally { saving.value = false; }
-}
-async function revoke(row: TableRow): Promise<void> {
-  await apiWarningRevoke(row.id);
-  message.success(t('tip.saveSuccess'));
-  await load();
-}
-
-onMounted(() => { void load(); });
+const selected = ref<TableRow>({});
+const open = ref(false);
+function revoke(row: TableRow): void { selected.value = row; open.value = true; }
+onMounted(load);
 </script>
-
 <template>
   <PageContainer>
-    <a-card :bordered="false" class="mtrip-card-shadow" style="margin-bottom: 16px">
-      <a-form layout="inline">
-        <a-form-item label="Merchant ID"><a-input-number v-model:value="query.merchantId" :min="1" style="width: 130px" /></a-form-item>
-        <a-form-item>
-          <a-space>
-            <a-button type="primary" @click="search"><template #icon><SearchOutlined /></template>{{ t('common.search') }}</a-button>
-            <a-button @click="reset"><template #icon><ReloadOutlined /></template>{{ t('common.reset') }}</a-button>
-          </a-space>
-        </a-form-item>
-      </a-form>
-    </a-card>
-
+    <ComplianceLinks :merchant-id="query.merchantId" />
+    <router-link v-perm="'merchant:activity:list'" :to="{ path: '/merchant/activities', query: { source: 'warning_events', merchantId: query.merchantId } }" style="display: block; margin-bottom: 16px">{{ t('complianceS6.warningEvents') }}</router-link>
+    <a-alert :message="t('complianceS6.immutable')" type="info" style="margin-bottom: 16px" />
+    <ComplianceFilters :query="query" @search="search" @reset="reset"><a-form-item :label="t('complianceS6.status')"><a-select v-model:value="query.status" allow-clear style="width: 130px"><a-select-option v-for="n in [1, 2, 3]" :key="n" :value="n">{{ warningStatus[n].text }}</a-select-option></a-select></a-form-item></ComplianceFilters>
     <a-card :bordered="false" class="mtrip-card-shadow">
-      <template #extra>
-        <a-button v-perm="'platform:warning:issue'" type="primary" @click="openIssue"><template #icon><PlusOutlined /></template>Issue Warning</a-button>
-      </template>
-      <a-table :columns="columns" :data-source="list" :loading="loading" :pagination="pagination" row-key="id" size="middle" :scroll="{ x: 1000 }">
+      <a-table :columns="columns" :data-source="list" :loading="loading" :pagination="pagination" row-key="id" size="middle" :scroll="{ x: 1550 }">
+        <template #expandedRowRender="{ record }"><p>{{ t('complianceS6.caseId') }}: {{ record.violation_id || t('complianceS6.legacy') }} · {{ t('complianceS6.ruleVersion') }}: {{ record.rule_revision_id || '-' }}</p><p style="white-space: pre-wrap">{{ record.reason }}</p></template>
         <template #bodyCell="{ column, record }">
-          <template v-if="column.dataIndex === 'level'">{{ LEVEL[record.level] ?? record.level }}</template>
-          <template v-else-if="column.dataIndex === 'status'"><StatusTag :value="record.status" :map="W_STATUS" /></template>
-          <template v-else-if="column.key === 'action_col'">
-            <a-popconfirm v-if="record.status === 1" title="Revoke this warning?" @confirm="revoke(record)">
-              <a-button v-perm="'platform:warning:revoke'" type="link" size="small" danger>Revoke</a-button>
-            </a-popconfirm>
-            <span v-else style="color: var(--sap-muted)">-</span>
-          </template>
+          <template v-if="column.dataIndex === 'merchant_name'">{{ record.merchant_name }} #{{ record.merchant_id }}</template>
+          <template v-else-if="column.dataIndex === 'status'"><StatusTag :value="record.status" :map="warningStatus" /></template>
+          <template v-else-if="column.dataIndex === 'category_code'">{{ record.category_code ? t(`complianceS6.categories.${record.category_code}`) : t('complianceS6.legacy') }}</template>
+          <template v-else-if="column.key === 'actions'"><a-space>
+            <a-button v-if="Number(record.status) !== 2" v-perm="'platform:warning:revoke'" type="link" danger @click="revoke(record)">{{ t('complianceS6.actions.revoke') }}</a-button>
+            <router-link v-perm="'platform:compliance:list'" :to="{ path: '/compliance/history', query: { merchantId: record.merchant_id, warningId: record.id } }">{{ t('complianceS6.history') }}</router-link>
+          </a-space></template>
         </template>
       </a-table>
     </a-card>
-
-    <a-modal v-model:open="modalOpen" title="Issue Warning" :confirm-loading="saving" @ok="issue">
-      <a-form :label-col="{ style: { width: '110px' } }" style="margin-top: 12px">
-        <a-form-item label="Merchant ID" required><a-input-number v-model:value="form.merchantId" :min="1" style="width: 100%" /></a-form-item>
-        <a-form-item label="Reason" required><a-textarea v-model:value="form.reason" :rows="3" /></a-form-item>
-        <a-form-item label="Level">
-          <a-select v-model:value="form.level">
-            <a-select-option :value="1">1st Warning</a-select-option>
-            <a-select-option :value="2">2nd Warning</a-select-option>
-            <a-select-option :value="3">3rd Warning</a-select-option>
-          </a-select>
-        </a-form-item>
-        <a-form-item label="Expires"><a-input v-model:value="form.expiresAt" placeholder="YYYY-MM-DD" /></a-form-item>
-      </a-form>
-    </a-modal>
+    <ComplianceActionModal v-model:open="open" action="revoke" :row="selected" @changed="load" />
   </PageContainer>
 </template>
