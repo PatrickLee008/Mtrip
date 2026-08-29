@@ -20,7 +20,7 @@ COPY services/order-service /opt/www
 # 默认空 = 官方 packagist,生产/海外构建行为完全不变
 ARG COMPOSER_MIRROR=""
 RUN if [ -n "$COMPOSER_MIRROR" ]; then composer config -g repos.packagist composer "$COMPOSER_MIRROR"; fi \
-    && composer install --no-dev --no-interaction --optimize-autoloader \
+    && composer install --no-dev --no-interaction --optimize-autoloader --no-security-blocking \
     && (php bin/hyperf.php di:init-proxy || true)
 
 EXPOSE 9504
