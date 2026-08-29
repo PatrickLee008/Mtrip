@@ -1,6 +1,8 @@
 # Mtrip 部署与重启操作指南
 
 > 适用环境:Windows Docker Desktop 本地联调 | 所有命令在 `deploy/` 目录下执行(PowerShell)
+>
+> Linux / macOS / Git Bash / WSL 环境可用封装脚本 `deploy/mtrip.sh` 代替下列命令(语义一致),用法见 `deploy/使用说明.md`。
 
 ## 1. 首次启动 / 完整重建
 

@@ -16,7 +16,11 @@ WORKDIR /opt/www
 COPY shared /shared
 COPY services/goods-service /opt/www
 
-RUN composer install --no-dev --no-interaction --optimize-autoloader \
+# 国内网络构建加速:COMPOSER_MIRROR 非空时切换 packagist 镜像源(dist 包不再回源 GitHub)
+# 默认空 = 官方 packagist,生产/海外构建行为完全不变
+ARG COMPOSER_MIRROR=""
+RUN if [ -n "$COMPOSER_MIRROR" ]; then composer config -g repos.packagist composer "$COMPOSER_MIRROR"; fi \
+    && composer install --no-dev --no-interaction --optimize-autoloader \
     && (php bin/hyperf.php di:init-proxy || true)
 
 EXPOSE 9503

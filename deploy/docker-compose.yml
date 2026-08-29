@@ -3,6 +3,11 @@
 # 网关入口:http://localhost:8081(/api/v1/admin/* 与 /api/v1/app/* 统一分发;8080 易被占用)
 name: mtrip
 
+# composer 拉包镜像源(构建期生效):国内网络设 .env 的 COMPOSER_MIRROR=https://mirrors.aliyun.com/composer/
+# 留空 = 官方 packagist(海外/生产构建保持原行为)
+x-build-args: &build-args
+  COMPOSER_MIRROR: ${COMPOSER_MIRROR:-}
+
 x-hyperf-common: &hyperf-common
   restart: unless-stopped
   environment: &hyperf-env
@@ -109,6 +114,7 @@ services:
     build:
       context: ../backend
       dockerfile: services/system-service/Dockerfile
+      args: *build-args
     environment:
       <<: *hyperf-env
       HTTP_PORT: "9501"
@@ -120,6 +126,7 @@ services:
     build:
       context: ../backend
       dockerfile: services/user-service/Dockerfile
+      args: *build-args
     environment:
       <<: *hyperf-env
       HTTP_PORT: "9502"
@@ -131,6 +138,7 @@ services:
     build:
       context: ../backend
       dockerfile: services/goods-service/Dockerfile
+      args: *build-args
     environment:
       <<: *hyperf-env
       HTTP_PORT: "9503"
@@ -142,6 +150,7 @@ services:
     build:
       context: ../backend
       dockerfile: services/order-service/Dockerfile
+      args: *build-args
     environment:
       <<: *hyperf-env
       HTTP_PORT: "9504"
@@ -153,6 +162,7 @@ services:
     build:
       context: ../backend
       dockerfile: services/merchant-service/Dockerfile
+      args: *build-args
     environment:
       <<: *hyperf-env
       HTTP_PORT: "9505"
@@ -164,6 +174,7 @@ services:
     build:
       context: ../backend
       dockerfile: services/finance-service/Dockerfile
+      args: *build-args
     environment:
       <<: *hyperf-env
       HTTP_PORT: "9506"
@@ -175,6 +186,7 @@ services:
     build:
       context: ../backend
       dockerfile: services/marketing-service/Dockerfile
+      args: *build-args
     environment:
       <<: *hyperf-env
       HTTP_PORT: "9507"
@@ -186,6 +198,7 @@ services:
     build:
       context: ../backend
       dockerfile: services/payment-service/Dockerfile
+      args: *build-args
     environment:
       <<: *hyperf-env
       HTTP_PORT: "9508"
