@@ -17,6 +17,7 @@ services:
       - ../backend/services/system-service/app:/opt/www/app
       - ../backend/services/system-service/config:/opt/www/config
       - ./logs/system-service:/opt/www/runtime/logs
+      - ./uploads:/opt/www/uploads
       - *shared-src
 
   user-service:

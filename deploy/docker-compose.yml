@@ -167,6 +167,7 @@ services:
       - ../database/marketing/07-merchant-promotion-owner.sql:/docker-entrypoint-initdb.d/99e1-merchant-promotion-owner.sql:ro
       # 平台特性开关(模块11)
       - ../database/system/09-feature-flag.sql:/docker-entrypoint-initdb.d/99f-feature-flag.sql:ro
+      - ../database/system/10-storage-aliyun-resource.sql:/docker-entrypoint-initdb.d/99g-storage-aliyun-resource.sql:ro
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-p${MYSQL_ROOT_PASSWORD:-root@2026}"]
       interval: 5s
@@ -197,6 +198,8 @@ services:
       HTTP_PORT: "9501"
     ports:
       - "9501:9501"
+    volumes:
+      - ./uploads:/opt/www/uploads
 
   user-service:
     <<: *hyperf-common

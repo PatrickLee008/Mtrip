@@ -6,6 +6,8 @@
 > 范围:本方案覆盖 **数据结构 / 后端应用 / 业务逻辑 / 管理端配置**;client-app 移动端作为 API 消费方,不在本方案展开。
 > 状态:待评审 | 编写:2026-08-01
 
+> 2026-08-30 admin-web 动态主题/公共资源补充：`views/cops/theme/index.vue` 的主题资源编辑由 JSON 文本框改为控件化编辑，弹窗 1180px、资源区一行三列；缩略图接入公共资源弹窗选择/上传。system-service 补文件树/上传/目录新增/目录删除接口和 `sys_file_dir`，`FileResourceManager` 支持图片、文档、视频、音频资源，`FileResourcePicker` 支持单选/多选及不限/仅图片/仅视频/图片+视频等类型限制；存储配置新增阿里云 OSS driver=`aliyun` 与 endpoint；接口仍提交兼容的 `assets` 对象。PHP lint、`npm run build`、compose config 通过，本地迁移和服务重建已执行。
+
 ---
 
 ## 1. 重新定基(Re-baseline)

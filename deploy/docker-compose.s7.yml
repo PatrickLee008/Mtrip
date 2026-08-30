@@ -15,6 +15,7 @@ services:
       - ../backend/services/system-service/app:/opt/www/app:ro
       - ../backend/services/system-service/config:/opt/www/config:ro
       - ../backend/shared/src:/shared/src:ro
+      - s7-uploads:/opt/www/uploads
   user-service:
     image: mtrip-user-service:latest
     ports: !override []

@@ -34,6 +34,19 @@ export const apiStorageToggleStatus = (id: number) => post<{ status: number }>('
 
 // ---------- 文件库 ----------
 export const apiFileList = (params: Params) => get<PageData<Row>>('/admin/sys/file/list', params);
+export const apiFileTree = (params: Params) => get<Row[]>('/admin/sys/file/tree', params);
+export const apiFileDirSave = (data: Params) => post<Row>('/admin/sys/file/dir/save', data);
+export const apiFileDirDelete = (data: Params) => post<null>('/admin/sys/file/dir/delete', data);
+export function apiFileUpload(file: File, params: Params = {}): Promise<Row> {
+  const fd = new FormData();
+  fd.append('file', file);
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== '') {
+      fd.append(key, String(value));
+    }
+  });
+  return post<Row>('/admin/sys/file/upload', fd);
+}
 export const apiFileDelete = (id: number) => post<null>('/admin/sys/file/delete', { id });
 
 // ---------- 支付渠道 ----------

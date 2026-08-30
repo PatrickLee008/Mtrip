@@ -18,7 +18,7 @@ import {
   apiStorageUpdate,
 } from '@/api/config';
 
-/** 文件存储:存储配置(S3/R2/本地,密钥掩码回显、留空保留原值)+ 文件库 */
+/** 文件存储:存储配置(S3/R2/本地/阿里云OSS,密钥掩码回显、留空保留原值)+ 文件库 */
 const userStore = useUserStore();
 const isSuper = userStore.profile?.isSuper === true;
 const { t } = useI18n();
@@ -27,6 +27,7 @@ const activeTab = ref('storage');
 const DRIVER_TEXT = computed<Record<string, string>>(() => ({
   s3: t('config.storage.typeS3'),
   r2: t('config.storage.typeR2'),
+  aliyun: t('config.storage.typeAliyun'),
   local: t('config.storage.typeLocal'),
 }));
 
@@ -39,6 +40,7 @@ const storageColumns = computed(() => [
   { title: t('config.storage.channelType'), dataIndex: 'driver', width: 130 },
   { title: t('config.storage.bucket'), dataIndex: 'bucket', width: 140, ellipsis: true },
   { title: t('config.storage.region'), dataIndex: 'region', width: 110 },
+  { title: t('config.storage.endpoint'), dataIndex: 'endpoint', width: 180, ellipsis: true },
   { title: t('config.storage.cdnDomain'), dataIndex: 'cdn_domain', ellipsis: true },
   { title: t('config.storage.publicRead'), dataIndex: 'is_default', width: 70 },
   { title: t('common.status'), dataIndex: 'status', width: 80 },
@@ -55,6 +57,7 @@ const form = reactive({
   region: '',
   accessKey: '',
   secretKey: '',
+  endpoint: '',
   cdnDomain: '',
   pathPrefix: '',
   expireDays: 0,
@@ -72,6 +75,7 @@ function openCreate(): void {
     region: '',
     accessKey: '',
     secretKey: '',
+    endpoint: '',
     cdnDomain: '',
     pathPrefix: '',
     expireDays: 0,
@@ -92,6 +96,7 @@ function openEdit(row: TableRow): void {
     // 密钥后端掩码回显,编辑时留空表示保留原值
     accessKey: '',
     secretKey: '',
+    endpoint: row.endpoint ?? '',
     cdnDomain: row.cdn_domain ?? '',
     pathPrefix: row.path_prefix ?? '',
     expireDays: row.expire_days ?? 0,
@@ -157,6 +162,7 @@ const FILE_TYPE = computed<Record<number, string>>(() => ({
   2: t('config.storage.library.fileType2'),
   3: t('config.storage.library.fileType3'),
   4: t('config.storage.library.fileType4'),
+  5: t('config.storage.library.fileType5'),
 }));
 
 async function removeFile(row: TableRow): Promise<void> {
@@ -200,6 +206,7 @@ onMounted(() => {
                 <a-select v-model:value="storage.query.driver" allow-clear :placeholder="t('common.all')" style="width: 150px">
                   <a-select-option value="s3">{{ t('config.storage.typeS3') }}</a-select-option>
                   <a-select-option value="r2">{{ t('config.storage.typeR2') }}</a-select-option>
+                  <a-select-option value="aliyun">{{ t('config.storage.typeAliyun') }}</a-select-option>
                   <a-select-option value="local">{{ t('config.storage.typeLocal') }}</a-select-option>
                 </a-select>
               </a-form-item>
@@ -228,7 +235,7 @@ onMounted(() => {
             :pagination="storage.pagination.value"
             row-key="id"
             size="middle"
-            :scroll="{ x: 1200 }"
+            :scroll="{ x: 1380 }"
           >
             <template #bodyCell="{ column, record }">
               <template v-if="column.dataIndex === 'driver'">
@@ -282,6 +289,7 @@ onMounted(() => {
                   <a-select-option :value="1">{{ FILE_TYPE[1] }}</a-select-option>
                   <a-select-option :value="2">{{ FILE_TYPE[2] }}</a-select-option>
                   <a-select-option :value="3">{{ FILE_TYPE[3] }}</a-select-option>
+                  <a-select-option :value="5">{{ FILE_TYPE[5] }}</a-select-option>
                   <a-select-option :value="4">{{ FILE_TYPE[4] }}</a-select-option>
                 </a-select>
               </a-form-item>
@@ -351,6 +359,7 @@ onMounted(() => {
               <a-select v-model:value="form.driver">
                 <a-select-option value="s3">{{ t('config.storage.typeS3') }}</a-select-option>
                 <a-select-option value="r2">{{ t('config.storage.typeR2') }}</a-select-option>
+                <a-select-option value="aliyun">{{ t('config.storage.typeAliyun') }}</a-select-option>
                 <a-select-option value="local">{{ t('config.storage.typeLocal') }}</a-select-option>
               </a-select>
             </a-form-item>
@@ -364,6 +373,11 @@ onMounted(() => {
             <a-col :span="12">
               <a-form-item :label="t('config.storage.region')">
                 <a-input v-model:value="form.region" :placeholder="t('config.storage.regionPlaceholder')" />
+              </a-form-item>
+            </a-col>
+            <a-col :span="24">
+              <a-form-item :label="t('config.storage.endpoint')">
+                <a-input v-model:value="form.endpoint" :placeholder="form.driver === 'aliyun' ? 'oss-cn-hangzhou.aliyuncs.com' : t('config.storage.endpointPlaceholder')" />
               </a-form-item>
             </a-col>
             <a-col :span="12">

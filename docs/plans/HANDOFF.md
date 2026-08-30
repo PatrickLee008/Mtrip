@@ -1,5 +1,11 @@
 # 会话交接文档(HANDOFF)
 
+## ★ 2026-08-30：admin-web 主题资源可视化编辑 + 公共资源库
+
+`cops/theme` 主题编辑弹窗由原始 JSON 文本框改为控件化资源编辑：常用资源支持启动页图、Logo、首页头图 URL 输入及导航强调色、主品牌色、页面背景色取色；未知 assets 键保留为扩展资源键值行，保存时仍按原接口提交 `assets` 对象。弹窗已放大至 1180px，主题资源区桌面端一行三列展示，列表新增资源数量与颜色标签；缩略图字段保留手输 URL，并接入公共资源库选择/上传图片。
+
+文件存储补充：system-service 新增 `config/autoload/storage.php`，`sys_storage` 支持 `aliyun` 驱动及 `endpoint` 字段，存储配置页新增阿里云 OSS 选项；公共文件接口补 `/admin/sys/file/tree|upload|dir/save|dir/delete`，`list` 支持目录过滤、多文件类型过滤并返回上传人，`delete` 对 local 共享卷和 aliyun OSS 同步删除实际资源；上传支持图片、文档、视频、音频，local 写 `/opt/www/uploads`，aliyun 走 OSS REST PUT。新增 `sys_file_dir` 支持空目录维护；新增 `FileResourceManager` 公共组件（左侧目录树、右侧文件列表、根/子目录维护、上传/查看/单选/多选/删除）和 `FileResourcePicker` 弹窗组件，选择器可限制不限/仅图片/仅视频/图片+视频等类型，`cops/theme` 缩略图使用单选图片模式。`deploy/docker-compose*.yml` 已给 system-service 挂载 uploads，并登记 `database/system/10-storage-aliyun-resource.sql`；补齐存储按钮权限种子。验证：改动 PHP 文件 `php -l` 通过，`cd admin-web && npm run build` 通过，`docker compose -f deploy/docker-compose.yml config` 通过，本地 MySQL 迁移和 system-service 重建已执行；仅保留既有大 chunk 警告。未执行 Git 暂存/提交/推送。
+
 ## ★ 2026-08-29：餐厅资料展示（最新进度，未提交）
 
 用户要求已有餐厅业务数据不再隐藏。商户详情取消酒店过滤、增加业务类型列，展示所有注册业务资料和KYC；餐厅无物业关联时显示“不适用”，不开放酒店专用关联动作。后端、数据库结构、餐厅商品/订单/排名运营均未改。admin构建及Browser酒店/餐厅同表、餐厅无关联按钮、酒店关联弹窗验证通过；隔离S7临时餐厅31已精确清理，未动真实商户，未重跑全量后端回归。详情见[m12/09-all-merchants-ui.md](./m12/09-all-merchants-ui.md)追加整改。本轮无Git写操作，旧授权不延续。

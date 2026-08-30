@@ -116,6 +116,10 @@ Router::addGroup('/api/v1/admin', static function () {
     Router::post('/sys/storage/delete', [StorageController::class, 'delete']);
     Router::post('/sys/storage/toggle-status', [StorageController::class, 'toggleStatus']);
     Router::get('/sys/file/list', [FileController::class, 'index']);
+    Router::get('/sys/file/tree', [FileController::class, 'tree']);
+    Router::post('/sys/file/dir/save', [FileController::class, 'saveDir']);
+    Router::post('/sys/file/dir/delete', [FileController::class, 'deleteDir']);
+    Router::post('/sys/file/upload', [FileController::class, 'upload']);
     Router::post('/sys/file/delete', [FileController::class, 'delete']);
 
     // ---------- 模块8 支付渠道配置 ----------

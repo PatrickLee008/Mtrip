@@ -51,6 +51,7 @@ MTrip/
 
 | 日期 | 变更内容 |
 |------|---------|
+| 2026-08-30 | admin-web `cops/theme` 主题资源编辑器改为可视化控件模式，弹窗 1180px、资源卡一行三列，缩略图接入公共资源弹窗；新增 `FileResourceManager`/`FileResourcePicker` 公共组件（左侧目录树、右侧文件列表、根/子目录维护、上传/查看/单选/多选/删除、限定不限/图片/视频/图片+视频等类型），system-service 补 `/admin/sys/file/tree|upload|dir/save|dir/delete` 并增强 list/delete（多类型过滤、local/aliyun 同步删除实际资源），支持图片/文档/视频/音频资源；存储配置新增阿里云 OSS 驱动与 endpoint，新增 `sys_file_dir` 与 `10-storage-aliyun-resource.sql` 并登记 initdb，compose 给 system-service 挂 uploads。PHP lint、admin-web build、compose config、本地迁移和服务重建通过。 |
 | 2026-08-27 | PRD模块12商户管理阶段0：完成Git/代码/数据库只读核验、八项决策映射、技术设计和第一批36项验收用例；发现餐厅展示链路缺口、单笔/Trip双下单入口和账号级2FA缺失。check.ps1四步及商户端构建复核通过。仅文档提交，不修改业务代码/数据；设计G1～G4待用户确认。 |
 | 2026-08-26 | 商户验证四队列页(待核实/重新提交/得到正式认可的/已拒绝)搜索栏与表格风格统一为入职页口径:搜索栏改用 `SearchFilterBar` 组件(关键词+业态+国家下拉),表格移除 `a-card` 包裹,分页栏新增 `verify-pagination` 类(灰底 #FAFBFC + 28×28 按钮 + 激活态 #1664FF)。 |
 | 2026-08-25 | 商户验证五个页面（入职/待核实/重新提交/得到正式认可的/已拒绝）页头标题区按线上原型实测统一为三段式（eyebrow 11px/500/#94A3B8 大写 + 主标题 18px/700/#1A2332 + 副标题 13px/#94A3B8，行高 1.5、行距 4px/2px）；验证四队列页从内联样式改为命名类并修正行高；页头主标题新增专用词条对齐原型文案（Approved Applications 等），入职页中文标题改为“入职”。 |

@@ -35,8 +35,23 @@ class SecretField
         }
         try {
             return MaskHelper::secret(CryptoHelper::decrypt($encrypted, (string) config('mtrip.aes_key')));
-        } catch (\Throwable) {
+        } catch (\Throwable $e) {
             return '******';
+        }
+    }
+
+    /**
+     * 解密密钥供服务端调用第三方接口;解密失败时返回空串。
+     */
+    public static function plain(string $encrypted): string
+    {
+        if ($encrypted === '') {
+            return '';
+        }
+        try {
+            return CryptoHelper::decrypt($encrypted, (string) config('mtrip.aes_key'));
+        } catch (\Throwable $e) {
+            return '';
         }
     }
 }

@@ -13,16 +13,19 @@ use Mtrip\Shared\Exception\BusinessException;
 use Mtrip\Shared\Support\Result;
 
 /**
- * 模块7 文件存储配置:多驱动(s3/r2/local),AK/SK AES加密存储、返回脱敏
+ * 模块7 文件存储配置:多驱动(s3/r2/local/aliyun),AK/SK AES加密存储、返回脱敏
  */
 class StorageController extends AbstractController
 {
-    private const DRIVERS = ['s3', 'r2', 'local'];
+    private const DRIVERS = ['s3', 'r2', 'local', 'aliyun'];
 
     public function index(): array
     {
         [$page, $pageSize] = $this->pageParams();
         $query = (new SysStorage())->newSiteQuery($this->intInput('siteId') ?: null);
+        if (($storageName = $this->strInput('storageName')) !== '') {
+            $query->where('storage_name', 'like', "%{$storageName}%");
+        }
         if (($driver = $this->strInput('driver')) !== '') {
             $query->where('driver', $driver);
         }
@@ -90,11 +93,12 @@ class StorageController extends AbstractController
     {
         $driver = $this->strInput('driver', (string) ($storage->driver ?? 's3'));
         if (! in_array($driver, self::DRIVERS, true)) {
-            throw new BusinessException(ErrorCode::PARAM_ERROR, '存储驱动仅支持 s3/r2/local');
+            throw new BusinessException(ErrorCode::PARAM_ERROR, '存储驱动仅支持 s3/r2/local/aliyun');
         }
         $storage->driver = $driver;
         $storage->bucket = $this->strInput('bucket', (string) $storage->bucket);
         $storage->region = $this->strInput('region', (string) $storage->region);
+        $storage->endpoint = $this->strInput('endpoint', (string) ($storage->endpoint ?? ''));
         $storage->access_key = SecretField::keep($this->strInput('accessKey'), (string) $storage->access_key);
         $storage->secret_key = SecretField::keep($this->strInput('secretKey'), (string) $storage->secret_key);
         $storage->cdn_domain = $this->strInput('cdnDomain', (string) $storage->cdn_domain);

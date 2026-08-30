@@ -299,6 +299,11 @@ INSERT IGNORE INTO `sys_menu` (`id`,`parent_id`,`menu_name`,`menu_name_en`,`perm
 (130101,1301,'编辑参数','Edit','config:global:edit',3,1),
 (130201,1302,'新增站点','Add Site','config:site:add',3,1),
 (130202,1302,'编辑站点','Edit Site','config:site:edit',3,2),
+(130301,1303,'新增存储','Add Storage','config:storage:add',3,1),
+(130302,1303,'编辑存储','Edit Storage','config:storage:edit',3,2),
+(130303,1303,'启用禁用','Enable/Disable','config:storage:status',3,3),
+(130304,1303,'删除存储/文件','Delete Storage/File','config:storage:delete',3,4),
+(130305,1303,'上传文件','Upload File','config:storage:upload',3,5),
 (130901,1309,'保存开关','Save','config:feature:save',3,1),
 (131001,1310,'保存配置','Save','goods:filter:save',3,1);
 

@@ -35,7 +35,9 @@ return [
         'max_request' => (int) env('MAX_REQUEST', 10000),
         'max_request_grace' => 200,
         'socket_buffer_size' => 2 * 1024 * 1024,
-        'buffer_output_size' => 2 * 1024 * 1024,
+        // 公共资源支持图片/文档/视频/音频上传,上限与 FileController 保持一致。
+        'package_max_length' => 110 * 1024 * 1024,
+        'buffer_output_size' => 16 * 1024 * 1024,
     ],
     'callbacks' => [
         Event::ON_WORKER_START => [Hyperf\Framework\Bootstrap\WorkerStartCallback::class, 'onWorkerStart'],
