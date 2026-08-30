@@ -1,6 +1,8 @@
 # Mtrip 部署与重启操作指南
 
 > 适用环境:Windows Docker Desktop 本地联调 | 所有命令在 `deploy/` 目录下执行(PowerShell)
+>
+> **不想装 Docker Desktop?** 用 WSL2 + 原生 docker-ce 的免授权方案,从零搭建见 [`WSL2-部署说明.md`](WSL2-部署说明.md)(改用 `mtrip.sh` 代替 `.bat`)。
 
 ## 1. 首次启动 / 完整重建
 
