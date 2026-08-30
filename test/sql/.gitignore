@@ -1,0 +1,2 @@
+# 校验样本含明文 MTRIP_AES_KEY,勿提交
+.verify_manifest.json
