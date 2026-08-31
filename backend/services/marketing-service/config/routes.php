@@ -7,12 +7,12 @@ declare(strict_types=1);
  * 活动/Banner/积分商城归后续迭代;本期落地优惠券模板 + 领券记录
  */
 
-use App\Controller\AffiliateController;
-use App\Controller\CampaignController;
-use App\Controller\PromotionController;
-use App\Controller\CouponController;
-use App\Controller\LongstayController;
-use App\Controller\MarketingController;
+use App\Controller\Admin\AffiliateController;
+use App\Controller\Admin\CampaignController;
+use App\Controller\Admin\CouponController;
+use App\Controller\Admin\LongstayController;
+use App\Controller\Admin\PromotionController;
+use App\Controller\App\MarketingController;
 use App\Controller\Merchant\PromotionController as MerchantPromotionController;
 use Hyperf\HttpServer\Router\Router;
 use Mtrip\Shared\Middleware\AdminAuthMiddleware;

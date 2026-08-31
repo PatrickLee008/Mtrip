@@ -2,7 +2,7 @@
 declare(strict_types=1);
 require __DIR__ . '/M12Bootstrap.php';
 
-use App\Controller\GoodsController;
+use App\Controller\App\GoodsController;
 use Hyperf\DbConnection\Db;
 use Mtrip\Shared\Context\UserContext;
 use Mtrip\Shared\Merchant\MarketplaceReader;

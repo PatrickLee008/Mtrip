@@ -10,6 +10,11 @@ use Hyperf\Di\Annotation\Inject;
 use Mtrip\Shared\Annotation\Permission;
 use Mtrip\Shared\Support\Result;
 
+/**
+ * 跨端共用控制器(admin + merchant),故留在 Controller 根目录,不入端子目录:
+ * - 总平台 admin:/api/v1/admin/merchant/security/accounts、reset-2fa
+ * - 商户端 merchant:/api/v1/merchant/auth/2fa/setup|verify、impersonation/exchange
+ */
 class MerchantSecurityController extends AbstractController
 {
     #[\Hyperf\Di\Annotation\Inject]

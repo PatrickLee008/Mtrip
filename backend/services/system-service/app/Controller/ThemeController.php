@@ -13,8 +13,9 @@ use Mtrip\Shared\Exception\BusinessException;
 use Mtrip\Shared\Support\Result;
 
 /**
- * C端动态主题(/api/v1/app/theme/*,无需登录):
- * App 启动/前台切换时拉取当前生效主题;无生效主题回退默认主题(PRD 模块15)
+ * 跨端共用控制器(app + admin),故留在 Controller 根目录,不入端子目录:
+ * - C端 app:/api/v1/app/theme/active(无需登录,App 启动/切换拉取当前生效主题,回退默认主题,PRD 模块15)
+ * - 总平台 admin:/api/v1/admin/config/theme/*(主题增删改查)
  */
 class ThemeController extends AbstractController
 {

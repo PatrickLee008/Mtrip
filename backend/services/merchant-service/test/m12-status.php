@@ -126,20 +126,20 @@ try {
     foreach (['suspend', 'activate', 'toggleStatus'] as $method) {
         actor();
         setRequest(array_replace(command($id), ['id' => $id]));
-        $response = $container->get(App\Controller\MerchantController::class)->{$method}();
+        $response = $container->get(App\Controller\Admin\MerchantController::class)->{$method}();
         check($response['code'] === 0, 'T30 legacy controller delegates ' . $method);
     }
     foreach (['blacklist', 'unblacklist'] as $method) {
         actor();
         setRequest(array_replace(command($id), ['id' => $id]));
-        check($container->get(App\Controller\VerifyController::class)->{$method}()['code'] === 0, 'T30 legacy verify delegates ' . $method);
+        check($container->get(App\Controller\Admin\VerifyController::class)->{$method}()['code'] === 0, 'T30 legacy verify delegates ' . $method);
     }
     actor(false, 991, ['merchant:status:activate', 'merchant:status:suspend', 'merchant:status:reactivate']);
     setRequest(array_replace(command($id), ['id' => $id]));
-    rejects(40301, fn () => $container->get(App\Controller\MerchantController::class)->toggleStatus(), 'T30 toggle cannot bypass super reactivation');
+    rejects(40301, fn () => $container->get(App\Controller\Admin\MerchantController::class)->toggleStatus(), 'T30 toggle cannot bypass super reactivation');
     actor(false, 992, ['merchant:status:history']);
     setRequest(['id' => $id]);
-    rejects(40302, fn () => $container->get(App\Controller\MerchantController::class)->statusHistory(), 'T07 history cross-site');
+    rejects(40302, fn () => $container->get(App\Controller\Admin\MerchantController::class)->statusHistory(), 'T07 history cross-site');
     actor();
     $service->change($id, 'reactivate', command($id));
     $before = Db::table('merchant_status_history')->where('merchant_id', $id)->count();

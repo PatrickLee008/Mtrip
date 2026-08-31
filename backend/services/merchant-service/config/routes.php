@@ -8,25 +8,25 @@ declare(strict_types=1);
  * 按钮级权限由控制器 #[Permission] 注解校验
  */
 
-use App\Controller\GroupController;
+use App\Controller\Admin\GroupController;
+use App\Controller\Admin\MerchantController;
+use App\Controller\Admin\NotificationController;
+use App\Controller\Admin\OnboardingController;
+use App\Controller\Admin\PlatformRuleController;
+use App\Controller\Admin\RankingController;
+use App\Controller\Admin\StoreController;
+use App\Controller\Admin\SupplierController;
+use App\Controller\Admin\VerifyController;
 use App\Controller\Merchant\AccountController as MerchantAccountController;
 use App\Controller\Merchant\AuthController as MerchantAuthController;
 use App\Controller\Merchant\NotificationController as MerchantNotificationController;
 use App\Controller\Merchant\RoleController as MerchantRoleController;
 use App\Controller\Merchant\StoreController as MerchantStoreController;
-use App\Controller\MerchantController;
-use App\Controller\NotificationController;
-use App\Controller\OnboardingController;
-use App\Controller\RankingController;
-use App\Controller\StoreController;
-use App\Controller\PlatformRuleController;
-use App\Controller\VerifyController;
 use App\Controller\Supplier\AccountController as SupplierAccountController;
 use App\Controller\Supplier\AuthController as SupplierAuthController;
 use App\Controller\Supplier\GoodsController as SupplierGoodsController;
 use App\Controller\Supplier\RoleController as SupplierRoleController;
 use App\Controller\Supplier\SettleController as SupplierSettleController;
-use App\Controller\SupplierController;
 use Hyperf\HttpServer\Router\Router;
 use Mtrip\Shared\Middleware\AdminAuthMiddleware;
 use Mtrip\Shared\Middleware\MerchantAuthMiddleware;
@@ -40,8 +40,8 @@ Router::addGroup('/api/v1/admin', static function () {
     // ---------- 商户管理(11 接口,文档 6.4.2) ----------
     Router::get('/merchant/list', [MerchantController::class, 'index']);
     Router::get('/merchant/detail', [MerchantController::class, 'detail']);
-    Router::post('/merchant/property/bind', [\App\Controller\MerchantPropertyController::class, 'bind']);
-    Router::get('/merchant/property/history', [\App\Controller\MerchantPropertyController::class, 'history']);
+    Router::post('/merchant/property/bind', [\App\Controller\Admin\MerchantPropertyController::class, 'bind']);
+    Router::get('/merchant/property/history', [\App\Controller\Admin\MerchantPropertyController::class, 'history']);
     Router::post('/merchant/add', [MerchantController::class, 'create']);
     Router::post('/merchant/update', [MerchantController::class, 'update']);
     Router::post('/merchant/audit', [MerchantController::class, 'audit']);
@@ -94,15 +94,15 @@ Router::addGroup('/api/v1/admin', static function () {
     Router::post('/merchant/verify/doc-review', [VerifyController::class, 'docReview']);
     Router::get('/merchant/documents', [VerifyController::class, 'documents']);
     Router::get('/merchant/document/detail', [VerifyController::class, 'documentDetail']);
-    Router::post('/merchant/document/replace', [\App\Controller\MerchantDocumentController::class, 'replace']);
-    Router::post('/merchant/document/review', [\App\Controller\MerchantDocumentController::class, 'review']);
-    Router::get('/merchant/document/download', [\App\Controller\MerchantDocumentController::class, 'download']);
+    Router::post('/merchant/document/replace', [\App\Controller\Admin\MerchantDocumentController::class, 'replace']);
+    Router::post('/merchant/document/review', [\App\Controller\Admin\MerchantDocumentController::class, 'review']);
+    Router::get('/merchant/document/download', [\App\Controller\Admin\MerchantDocumentController::class, 'download']);
     Router::get('/merchant/notification/channels', [NotificationController::class, 'channels']);
     Router::post('/merchant/document/resubmit', [VerifyController::class, 'documentResubmit']);
     Router::post('/merchant/blacklist', [VerifyController::class, 'blacklist']);
     Router::post('/merchant/unblacklist', [VerifyController::class, 'unblacklist']);
     Router::get('/merchant/activities', [VerifyController::class, 'activities']);
-    Router::get('/merchant/activities/history', [\App\Controller\MerchantActivityController::class, 'history']);
+    Router::get('/merchant/activities/history', [\App\Controller\Admin\MerchantActivityController::class, 'history']);
     Router::get('/merchant/blacklist-list', [VerifyController::class, 'blacklistList']);
     Router::post('/merchant/verify/regenerate-code', [VerifyController::class, 'regenerateCode']);
 

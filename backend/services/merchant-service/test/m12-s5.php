@@ -3,7 +3,7 @@ declare(strict_types=1);
 require __DIR__ . '/M12Bootstrap.php';
 
 use App\Service\MarketplaceService;
-use App\Controller\RankingController;
+use App\Controller\Admin\RankingController;
 use Hyperf\DbConnection\Db;
 use Mtrip\Shared\Context\AdminContext;
 use Mtrip\Shared\Merchant\MarketplaceReader as Reader;

@@ -14,7 +14,7 @@ use App\Controller\Admin\AdminGoodsController;
 use App\Controller\Admin\AdminReviewController;
 use App\Controller\Admin\AdminSkuController;
 use App\Controller\Admin\AdminStockController;
-use App\Controller\GoodsController;
+use App\Controller\App\GoodsController;
 use App\Controller\Merchant\AvailabilityController as MerchantAvailabilityController;
 use App\Controller\Merchant\GoodsController as MerchantGoodsController;
 use App\Controller\Merchant\ReviewController as MerchantReviewController;

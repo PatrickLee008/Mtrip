@@ -5,9 +5,9 @@ declare(strict_types=1);
 require __DIR__ . '/M12Bootstrap.php';
 
 use App\Controller\Merchant\NotificationController as Inbox;
-use App\Controller\MerchantDocumentController;
-use App\Controller\NotificationController;
-use App\Controller\VerifyController;
+use App\Controller\Admin\MerchantDocumentController;
+use App\Controller\Admin\NotificationController;
+use App\Controller\Admin\VerifyController;
 use App\Service\MerchantDocumentService;
 use App\Service\MerchantNotificationService;
 use Hyperf\DbConnection\Db;
@@ -183,7 +183,7 @@ try {
     $auth->updatePassword($account, 'S3-test-secret123', 'S3-next-secret456');
     check(Db::table('merchant_activity_log')->where('target_account_id', $account)->where('activity_type', 'account_change')->where('description', 'like', '%: password_changed')->count() === 1, 'S3 password change audited without secret');
     check(!str_contains(json_encode(Db::table('merchant_activity_log')->where('merchant_id', $id)->get()->all()), 'secret123'), 'S3 secrets absent from activity logs');
-    $historyController = $container->get(\App\Controller\MerchantActivityController::class);
+    $historyController = $container->get(\App\Controller\Admin\MerchantActivityController::class);
     Db::table('merchant_warning')->insert(['site_id' => 991, 'merchant_id' => $id, 'reason' => 'S3 synthetic warning', 'issued_by' => 'Test reviewer']);
     Db::table('compliance_history')->insert(['site_id' => 991, 'merchant_id' => $id, 'event' => 'S3 synthetic compliance', 'reviewer' => 'Test reviewer']);
     Db::table('merchant_verify_timeline')->insert(['site_id' => 991, 'merchant_id' => $id, 'action' => 'S3 synthetic action', 'note' => 'S3 synthetic verification']);

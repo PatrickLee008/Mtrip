@@ -3,8 +3,8 @@ declare(strict_types=1);
 
 require __DIR__ . '/M12Bootstrap.php';
 
-use App\Controller\MerchantController;
-use App\Controller\MerchantPropertyController;
+use App\Controller\Admin\MerchantController;
+use App\Controller\Admin\MerchantPropertyController;
 use App\Service\MerchantPhoneIndexService;
 use Hyperf\DbConnection\Db;
 use Mtrip\Shared\Context\AdminContext;
@@ -89,9 +89,9 @@ try {
     $encoded = json_encode($profile);
     check(!str_contains($encoded, 'NEVER-EXPOSE') && !str_contains($encoded, 'contact_phone_index') && !array_key_exists('access_code', $profile['merchant']), 'S2 profile credentials and hashes hidden');
     check($profile['merchant']['access_code_configured'] === true && count($profile['businesses']) === 4 && count($profile['applications']) === 1, 'S2 profile aggregates company and KYC sources');
-    $onboarding = requestCall($container->get(\App\Controller\OnboardingController::class), 'detail', ['id' => $app]);
+    $onboarding = requestCall($container->get(\App\Controller\Admin\OnboardingController::class), 'detail', ['id' => $app]);
     check(!str_contains(json_encode($onboarding), 'contact_phone_index'), 'S2 legacy onboarding does not expose phone index');
-    $verify = requestCall($container->get(\App\Controller\VerifyController::class), 'detail', ['id' => $id]);
+    $verify = requestCall($container->get(\App\Controller\Admin\VerifyController::class), 'detail', ['id' => $id]);
     check(!str_contains(json_encode($verify), 'contact_phone_index'), 'S2 legacy verification does not expose phone index');
     $listRow = requestCall($directory, 'index', ['keyword' => 'S2 Alpha'])['list'][0];
     check(!array_key_exists('access_code', $listRow) && !array_key_exists('two_fa_secret_enc', $listRow), 'S2 directory credential whitelist');

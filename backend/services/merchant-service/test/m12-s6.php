@@ -4,8 +4,8 @@ require __DIR__ . '/M12Bootstrap.php';
 
 use App\Service\MerchantComplianceService;
 use App\Service\PlatformRuleService;
-use App\Controller\PlatformRuleController;
-use App\Controller\MerchantActivityController;
+use App\Controller\Admin\PlatformRuleController;
+use App\Controller\Admin\MerchantActivityController;
 use Hyperf\DbConnection\Db;
 use Mtrip\Shared\Context\AdminContext;
 

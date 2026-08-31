@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 require __DIR__ . '/M12Bootstrap.php';
 
-use App\Controller\OrderController;
-use App\Controller\TripController;
+use App\Controller\App\OrderController;
+use App\Controller\App\TripController;
 use Hyperf\DbConnection\Db;
 use Mtrip\Shared\Context\AdminContext;
 use Mtrip\Shared\Context\MerchantContext;

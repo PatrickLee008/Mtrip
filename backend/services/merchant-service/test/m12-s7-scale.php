@@ -4,8 +4,8 @@ declare(strict_types=1);
 if (getenv('MTRIP_S7_ISOLATED') !== '1') throw new RuntimeException('Dedicated S7 container required');
 require __DIR__ . '/M12Bootstrap.php'; // Enforces the dedicated integration database.
 
-use App\Controller\MerchantController;
-use App\Controller\MerchantActivityController;
+use App\Controller\Admin\MerchantController;
+use App\Controller\Admin\MerchantActivityController;
 use Hyperf\DbConnection\Db;
 use Mtrip\Shared\Context\AdminContext;
 

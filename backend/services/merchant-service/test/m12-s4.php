@@ -246,13 +246,13 @@ try {
     foreach (['access_code_generated', 'code_regenerated'] as $action) Db::table('merchant_verify_timeline')->insert(['site_id' => 991, 'merchant_id' => $extraMerchant, 'action' => $action, 'note' => 'S4-HISTORICAL-SECRET', 'operator_name' => 'Fixture']);
     Db::table('merchant_info')->where('id', $extraMerchant)->update(['access_code' => 'S4-HISTORICAL-SECRET']);
     setRequest(['id' => $extraMerchant]);
-    $detail = $container->get(\App\Controller\VerifyController::class)->detail()['data'];
+    $detail = $container->get(\App\Controller\Admin\VerifyController::class)->detail()['data'];
     check(!str_contains(json_encode($detail), 'S4-HISTORICAL-SECRET') && $detail['access_grant']['access_code_configured'], 'S4 normal verification detail masks current and historical access codes');
     setRequest(['source' => 'verification', 'merchantId' => $extraMerchant, 'export' => 1]);
-    $history = $container->get(\App\Controller\MerchantActivityController::class)->history()['data'];
+    $history = $container->get(\App\Controller\Admin\MerchantActivityController::class)->history()['data'];
     check(!str_contains(json_encode($history), 'S4-HISTORICAL-SECRET') && count($history['list']) === 2, 'S4 verification history export masks legacy access codes');
     setRequest(['id' => $extraMerchant, 'reason' => 'No account selected']);
-    rejects(40001, fn () => $container->get(\App\Controller\MerchantController::class)->resetTwoFa(), 'S4 reset controller requires explicit target account');
+    rejects(40001, fn () => $container->get(\App\Controller\Admin\MerchantController::class)->resetTwoFa(), 'S4 reset controller requires explicit target account');
     $revoked = $support->start($extraMerchant, $extra, 'Authority revoked before exchange');
     Db::connection('system')->table('sys_admin')->where('id', $operators[0])->update(['is_super' => 0]);
     rejects(40301, fn () => $support->exchange($revoked['exchangeCode']), 'S4 exchange rechecks current super authority');

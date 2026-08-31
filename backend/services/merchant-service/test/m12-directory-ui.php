@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 require __DIR__ . '/M12Bootstrap.php';
 
-use App\Controller\MerchantController;
+use App\Controller\Admin\MerchantController;
 use Hyperf\DbConnection\Db;
 use Mtrip\Shared\Context\AdminContext;
 

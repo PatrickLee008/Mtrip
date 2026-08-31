@@ -1,0 +1,863 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Controller\Admin;
+
+use App\Controller\AbstractController;
+
+use App\Service\MerchantService;
+use Hyperf\DbConnection\Db;
+use Hyperf\Di\Annotation\Inject;
+use Mtrip\Shared\Annotation\Permission;
+use Mtrip\Shared\Constants\ErrorCode;
+use Mtrip\Shared\Context\AdminContext;
+use Mtrip\Shared\Exception\BusinessException;
+use Mtrip\Shared\Support\MaskHelper;
+use Mtrip\Shared\Support\Result;
+
+/**
+ * 商户验证工作流(Super Admin Portal / Phase 1)
+ * 设计源:docs/redesign/super-admin-portal/modules/02-merchant-verification.md
+ *
+ * 状态机(merchant_info.status):
+ *   0待审核 →(通过)3已启用 /(驳回)2审核驳回 /(要求重交)6待重新提交
+ *   6/2 商户编辑后回到 0(见 MerchantController::update);3 ⇄ 4暂停;拉黑另记 merchant_blacklist
+ * 每个写动作写入 merchant_verify_timeline(审计)+ merchant_activity_log(活动)。
+ */
+class VerifyController extends AbstractController
+{
+    #[Inject]
+    protected MerchantService $service;
+
+    /** tab → merchant_info.status 集合 */
+    private const TAB_STATUS = [
+        'pending' => [0],
+        'approved' => [3],
+        'rejected' => [2],
+        'resubmission' => [6],
+    ];
+
+    /** 预置驳回原因(原型 Reject Application 弹窗 9 项,码值前后端对齐) */
+    public const REJECT_REASONS = [
+        1 => 'Expired business registration',
+        2 => 'Invalid or missing operating license',
+        3 => 'Incomplete documentation',
+        4 => 'Identity verification failed',
+        5 => 'Business does not meet platform requirements',
+        6 => 'Premises / fleet documents invalid',
+        7 => 'Insurance or safety certification missing',
+        8 => 'Suspected fraudulent application',
+        9 => 'Duplicate merchant account',
+    ];
+
+    /** 验证工单列表:按 tab(pending/approved/rejected/resubmission)分状态 */
+    #[Permission('merchant:list:audit')]
+    public function index(): array
+    {
+        [$page, $pageSize] = $this->pageParams();
+        $tab = $this->strInput('tab', 'pending');
+        $statuses = self::TAB_STATUS[$tab] ?? self::TAB_STATUS['pending'];
+
+        $query = Db::table('merchant_info')->whereNull('deleted_at')->whereIn('status', $statuses);
+        $this->applySiteScope($query);
+        if (($kw = $this->strInput('keyword')) !== '') {
+            $appMerchantIds = Db::table('merchant_application')
+                ->whereNull('deleted_at')
+                ->where('merchant_id', '>', 0)
+                ->where('app_no', 'like', "%{$kw}%")
+                ->pluck('merchant_id')->all();
+            $query->where(function ($q) use ($kw, $appMerchantIds) {
+                $q->where('merchant_name', 'like', "%{$kw}%")
+                    ->orWhere('merchant_code', 'like', "%{$kw}%")
+                    ->orWhere('credit_code', 'like', "%{$kw}%")
+                    ->orWhere('contact_name', 'like', "%{$kw}%")
+                    ->orWhere('contact_email', 'like', "%{$kw}%")
+                    ->orWhere('address', 'like', "%{$kw}%");
+                if ($appMerchantIds !== []) {
+                    $q->orWhereIn('id', $appMerchantIds);
+                }
+            });
+        }
+        $type = $this->intInput('merchantType');
+        if ($type <= 0) {
+            $type = $this->intInput('category');
+        }
+        if ($type > 0) {
+            $query->where('merchant_type', $type);
+        }
+        if (($city = $this->strInput('city')) !== '') {
+            $query->where('address', 'like', "%{$city}%");
+        }
+        $regStart = $this->strInput('regDateStart');
+        if ($regStart !== '') {
+            $query->where('created_at', '>=', $regStart . ' 00:00:00');
+        }
+        $regEnd = $this->strInput('regDateEnd');
+        if ($regEnd !== '') {
+            $query->where('created_at', '<=', $regEnd . ' 23:59:59');
+        }
+        $total = (clone $query)->count();
+        $list = $query->orderByDesc('id')->forPage($page, $pageSize)
+            ->get(['id', 'site_id', 'merchant_name', 'merchant_short_name', 'merchant_type', 'credit_code', 'legal_person', 'contact_name', 'contact_phone', 'contact_email', 'address', 'status', 'audit_remark', 'audit_by', 'audit_time', 'created_at'])
+            ->map(function ($row) {
+                $row = (array) $row;
+                $row['contact_phone'] = MaskHelper::mobile($this->decryptField((string) $row['contact_phone']));
+                return $row;
+            })->all();
+        $merchantIds = array_column($list, 'id');
+        $applicationNos = [];
+        if ($merchantIds !== []) {
+            foreach (Db::table('merchant_application')
+                ->whereIn('merchant_id', $merchantIds)
+                ->whereNull('deleted_at')
+                ->orderByDesc('id')
+                ->get(['merchant_id', 'app_no']) as $application) {
+                $applicationNos[(int) $application->merchant_id] ??= (string) $application->app_no;
+            }
+        }
+        foreach ($list as &$row) {
+            $row['application_no'] = $applicationNos[(int) $row['id']] ?? '';
+        }
+        unset($row);
+        return Result::page($list, $total, $page, $pageSize);
+    }
+
+    /**
+     * 五队列汇总数量(正式 PRD 模块 11):入驻中/待验证/重新提交/已批准/已拒绝
+     * 入驻中=merchant_application.stage 1-4;其余=merchant_info.status(0/6/3/2);站点口径
+     */
+    #[Permission('merchant:list:audit')]
+    public function queues(): array
+    {
+        $siteId = AdminContext::scopeSiteId($this->intInput('siteId'));
+
+        $appQuery = Db::table('merchant_application')->whereNull('deleted_at')->whereIn('stage', [1, 2, 3, 4]);
+        $merchantQuery = Db::table('merchant_info')->whereNull('deleted_at');
+        if ($siteId !== null && $siteId > 0) {
+            $appQuery->where('site_id', $siteId);
+            $merchantQuery->where('site_id', $siteId);
+        }
+
+        $counts = [
+            'onboarding' => (int) (clone $appQuery)->count(),
+            'pending' => (int) (clone $merchantQuery)->where('status', 0)->count(),
+            'resubmission' => (int) (clone $merchantQuery)->where('status', 6)->count(),
+            'approved' => (int) (clone $merchantQuery)->where('status', 3)->count(),
+            'rejected' => (int) (clone $merchantQuery)->where('status', 2)->count(),
+        ];
+        return Result::success($counts);
+    }
+
+    /** 验证详情:商户核心 + 资质文档(含重交版本) + 时间线 + 门禁统计 + 重交/KYC提交信息 */
+    #[Permission('merchant:list:audit')]
+    public function detail(): array
+    {
+        $merchant = $this->findMerchant($this->requireId());
+        $merchant['contact_phone'] = AdminContext::isSuper()
+            ? $this->decryptField((string) $merchant['contact_phone'])
+            : MaskHelper::mobile($this->decryptField((string) $merchant['contact_phone']));
+        $merchant['legal_id_card'] = MaskHelper::idCard($this->decryptField((string) $merchant['legal_id_card']));
+        unset($merchant['legal_id_images'], $merchant['deleted_at'], $merchant['contact_phone_index'], $merchant['two_fa_secret_enc']);
+        $merchant['two_fa_status'] = (int) ($merchant['two_fa_status'] ?? 0);
+        $merchant['access_status'] = (int) ($merchant['access_status'] ?? 0);
+
+        $documents = Db::table('merchant_verify_document')
+            ->where('merchant_id', $merchant['id'])->whereNull('deleted_at')
+            ->orderBy('id')->get()
+            ->map(static fn ($r) => (array) $r)->all();
+        // 逐文档挂载重交版本(Original vs Resubmitted 对比视图)
+        $docIds = array_column($documents, 'id');
+        $revByDoc = [];
+        if ($docIds !== []) {
+            foreach (Db::table('merchant_verify_document_revision')->whereIn('doc_id', $docIds)->orderByDesc('version')->get() as $rev) {
+                $revByDoc[(int) $rev->doc_id][] = (array) $rev;
+            }
+        }
+        foreach ($documents as &$doc) {
+            $doc['revisions'] = $revByDoc[(int) $doc['id']] ?? [];
+        }
+        unset($doc);
+
+        // 最终决策门禁:reviewed = 已给出通过/驳回结论的文档数
+        $totalCount = count($documents);
+        $reviewedCount = count(array_filter($documents, static fn ($d) => in_array((int) $d['status'], [1, 3], true)));
+
+        // 重交信息块:最近一次重交请求 + 需重交文档进度
+        $resubmission = null;
+        $lastReq = Db::table('merchant_verify_timeline')
+            ->where('merchant_id', $merchant['id'])->where('action', 'resubmit_requested')
+            ->orderByDesc('id')->first();
+        if ($lastReq !== null) {
+            $needDocs = array_filter($documents, static fn ($d) => (int) $d['status'] === 5 || $d['revisions'] !== []);
+            $resubmission = [
+                'requested_by' => (string) $lastReq->operator_name,
+                'requested_at' => (string) $lastReq->created_at,
+                'note' => (string) $lastReq->note,
+                'total' => count($needDocs),
+                'resubmitted' => count(array_filter($needDocs, static fn ($d) => $d['revisions'] !== [])),
+            ];
+        }
+
+        // KYC 提交信息(经入驻申请带入;非入驻渠道商户不展示)
+        $kycSubmission = null;
+        $businesses = [];
+        $rejectedDocIds = [];
+        $application = Db::table('merchant_application')
+            ->where('merchant_id', $merchant['id'])->whereNull('deleted_at')->first();
+        if ($application !== null) {
+            $merchant['application_no'] = (string) $application->app_no;
+            $merchant['application_submitted_at'] = $application->submitted_at ?? null;
+            $merchant['country'] = (string) ($application->country ?? '');
+            $selfService = (int) $application->submission_method === 1;
+            $uploaded = array_filter($documents, static fn ($d) => $d['file_url'] !== '');
+            // 确认状态优先取显式确认位(整改 B4);兼容旧数据按文档上传齐全推导
+            $confirmed = (int) $application->confirmation_status === 1
+                || (count($uploaded) === $totalCount && $totalCount > 0);
+            $kycSubmission = [
+                'method' => $selfService ? 'Self-Service' : 'Assisted',
+                'submitted_by' => $selfService ? 'Merchant' : 'Admin',
+                'confirmation' => $confirmed ? 'Confirmed' : 'Pending',
+                'confirmed_at' => $application->confirmed_at ?? null,
+            ];
+            // 业务单元(PRD:公司级信息 + 业务级联系/城市/KYC 状态)
+            $businesses = Db::table('merchant_application_business')
+                ->where('application_id', $application->id)->orderBy('id')->get()
+                ->map(function ($r) {
+                    $r = (array) $r;
+                    $r['contact_phone'] = MaskHelper::mobile($this->decryptField((string) ($r['contact_phone'] ?? '')));
+                    unset($r['contact_phone_index']);
+                    return $r;
+                })->all();
+            // 核验侧边栏需要展示所选业务单元的完整应交文件清单，不能仅依赖已创建的上传记录。
+            $templates = Db::table('merchant_kyc_template')->where('status', 1)->orderBy('sort')->get()
+                ->map(static fn ($r) => (array) $r)->all();
+            $templatesById = [];
+            $templatesByType = [];
+            foreach ($templates as $template) {
+                $templatesById[(int) $template['id']] = $template;
+                $templatesByType[$template['business_type']] ??= $template;
+            }
+            foreach ($businesses as &$business) {
+                $template = $templatesById[(int) ($business['kyc_template_id'] ?? 0)]
+                    ?? $templatesByType[$business['business_type'] ?? '']
+                    ?? null;
+                $templateDocs = $template ? json_decode((string) ($template['docs'] ?? '[]'), true) : [];
+                $business['kyc_template_docs'] = is_array($templateDocs) ? $templateDocs : [];
+                $businessDocs = array_values(array_filter($documents, static fn ($doc) =>
+                    (string) ($doc['biz_unit'] ?? '') === (string) $business['id']));
+                $uploadedDocs = array_values(array_filter($businessDocs, static fn ($doc) =>
+                    (string) ($doc['file_url'] ?? '') !== ''));
+                $requiredTypes = array_values(array_filter(array_map(static fn ($doc) =>
+                    ($doc['required'] ?? true) !== false ? (string) ($doc['doc_type'] ?? '') : '', $business['kyc_template_docs'])));
+                $requiredDocs = $requiredTypes === [] ? $uploadedDocs : array_values(array_filter($uploadedDocs, static fn ($doc) =>
+                    in_array((string) ($doc['doc_type'] ?? ''), $requiredTypes, true)));
+                $approvedTypes = array_values(array_unique(array_filter(array_map(static fn ($doc) =>
+                    (int) ($doc['status'] ?? 0) === 1 ? (string) ($doc['doc_type'] ?? '') : '', $requiredDocs))));
+                $totalRequired = $requiredTypes === [] ? count(array_unique(array_column($uploadedDocs, 'doc_type'))) : count($requiredTypes);
+                $approvedCount = $requiredTypes === []
+                    ? count($approvedTypes)
+                    : count(array_intersect($requiredTypes, $approvedTypes));
+                $allRequiredVerified = $totalRequired > 0 && $approvedCount === $totalRequired;
+                // 商户整体被拒绝后，注册商家同步显示已驳回；其余正式验证阶段按审批进度显示。
+                $business['kyc_status'] = (int) $merchant['status'] === 2
+                    ? 4
+                    : ($allRequiredVerified ? 1 : 3);
+            }
+            unset($business);
+            // 拒绝快照:标记受影响文件
+            if (! empty($application->rejected_doc_ids)) {
+                $rejectedDocIds = array_map('intval', json_decode((string) $application->rejected_doc_ids, true) ?: []);
+            }
+        }
+        foreach ($documents as &$doc) {
+            $doc['was_rejected'] = in_array((int) $doc['id'], $rejectedDocIds, true) ? 1 : 0;
+        }
+        unset($doc);
+
+        $timeline = Db::table('merchant_verify_timeline')
+            ->where('merchant_id', $merchant['id'])
+            ->orderByDesc('id')->limit(100)->get()
+            ->map(static function ($row) {
+                $row = (array) $row;
+                if (in_array($row['action'], ['access_code_generated', 'code_regenerated'], true)) $row['note'] = 'Access code configured';
+                return $row;
+            })->all();
+
+        $accessGrant = null;
+        if ((string) ($merchant['access_code'] ?? '') !== '') {
+            $generationLog = Db::table('merchant_access_code_log')
+                ->where('merchant_id', $merchant['id'])
+                ->whereIn('action', ['generate', 'regenerate'])
+                ->orderByDesc('id')->first();
+            $deliveryLog = Db::table('merchant_access_code_log')
+                ->where('merchant_id', $merchant['id'])
+                ->whereIn('action', ['generate', 'resend'])
+                ->where('channels', '!=', '')
+                ->orderByDesc('id')->first();
+            $channelText = (string) ($deliveryLog->channels ?? $merchant['credential_channels'] ?? '');
+            $accessGrant = [
+                'access_code_configured' => true,
+                'generated_at' => $generationLog->created_at ?? $merchant['audit_time'] ?? null,
+                'generated_by' => (string) ($generationLog->operator_name ?? ''),
+                'delivery_status' => $deliveryLog !== null ? 'sent' : 'generated',
+                'channels' => array_values(array_filter(explode(',', $channelText))),
+            ];
+        }
+
+        return Result::success([
+            'merchant' => array_diff_key($merchant, array_flip(['access_code', 'two_fa_secret_enc'])),
+            'documents' => $documents,
+            'businesses' => $businesses,
+            'timeline' => $timeline,
+            'review' => ['total' => $totalCount, 'reviewed' => $reviewedCount],
+            'resubmission' => $resubmission,
+            'kyc_submission' => $kycSubmission,
+            'access_grant' => $accessGrant,
+        ]);
+    }
+
+    /** 批准弹窗预生成访问码与一次性初始密码,最终批准时再次校验并落库 */
+    #[Permission('merchant:verify:approve')]
+    public function approvalCredentials(): array
+    {
+        $merchant = $this->findMerchant($this->requireId());
+        if (! in_array((int) $merchant['status'], [0, 6], true)) {
+            throw new BusinessException(ErrorCode::DATA_CONFLICT, '仅待审核/待重新提交商户可生成批准凭证');
+        }
+        return Result::success($this->service->generateApprovalCredentials((int) $merchant['merchant_type']));
+    }
+
+    /** 通过验证:待审核/待重新提交 → 已启用(生成商户主账号+访问码);未核验文档存在时门禁拦截 */
+    #[Permission('merchant:verify:approve')]
+    public function approve(): array
+    {
+        $merchant = $this->findMerchant($this->requireId());
+        if (! in_array((int) $merchant['status'], [0, 6], true)) {
+            throw new BusinessException(ErrorCode::DATA_CONFLICT, '仅待审核/待重新提交商户可通过');
+        }
+        // 最终决策门禁:入驻商户按每个业务单元的强制 KYC 要求判断；非入驻商户回退旧文档门禁。
+        $applicationId = (int) (Db::table('merchant_application')
+            ->where('merchant_id', $merchant['id'])->whereNull('deleted_at')->value('id') ?? 0);
+        $businessIds = $applicationId > 0
+            ? Db::table('merchant_application_business')->where('application_id', $applicationId)->pluck('id')->all()
+            : [];
+        if ($businessIds !== []) {
+            foreach ($businessIds as $businessId) {
+                $this->syncBusinessKycStatus($applicationId, (string) $businessId);
+            }
+            $pendingBusinesses = Db::table('merchant_application_business')
+                ->where('application_id', $applicationId)->where('kyc_status', '!=', 1)->count();
+            if ($pendingBusinesses > 0) {
+                throw new BusinessException(ErrorCode::DATA_CONFLICT, sprintf('还有 %d 个注册商家的强制文件未全部核验通过', $pendingBusinesses));
+            }
+        } else {
+            $pendingDocs = Db::table('merchant_verify_document')
+                ->where('merchant_id', $merchant['id'])->whereNull('deleted_at')
+                ->where('status', '!=', 1)->count();
+            if ($pendingDocs > 0) {
+                throw new BusinessException(ErrorCode::DATA_CONFLICT, sprintf('还有 %d 份文档未核验通过,请先完成逐份核验再做最终决定', $pendingDocs));
+            }
+        }
+        $remark = $this->strInput('remark');
+        $channels = implode(',', array_intersect(['email', 'sms', 'inapp'], (array) $this->input('channels', [])));
+        if ($channels === '') {
+            throw new BusinessException(ErrorCode::PARAM_ERROR, '请至少选择一个凭证交付渠道');
+        }
+        $accessCode = strtoupper($this->strInput('accessCode'));
+        $oneTimePassword = $this->strInput('oneTimePassword');
+        if (! preg_match('/^MTRP-(HOTEL|ATTRACTION|TRAVEL)-[A-Z2-9]{6}$/', $accessCode)) {
+            throw new BusinessException(ErrorCode::PARAM_ERROR, '商户访问码格式无效,请重新打开批准弹窗');
+        }
+        if (strlen($oneTimePassword) !== 12
+            || ! preg_match('/[A-Z]/', $oneTimePassword)
+            || ! preg_match('/[a-z]/', $oneTimePassword)
+            || ! preg_match('/\d/', $oneTimePassword)) {
+            throw new BusinessException(ErrorCode::PARAM_ERROR, '一次性初始密码格式无效,请重新打开批准弹窗');
+        }
+        if (Db::table('merchant_info')->where('access_code', $accessCode)->where('id', '!=', $merchant['id'])->exists()) {
+            throw new BusinessException(ErrorCode::DATA_CONFLICT, '商户访问码已被占用,请重新打开批准弹窗');
+        }
+        $account = $this->service->approve($merchant, $remark, $channels, $accessCode, $oneTimePassword);
+        if ($applicationId > 0) {
+            Db::table('merchant_application_business')
+                ->where('application_id', $applicationId)
+                ->update(['kyc_status' => 1]);
+        }
+        $this->pushAccessCodeLog($merchant, 'generate', $channels);
+        $this->pushTimeline($merchant, 'approved', $remark !== '' ? $remark : '商户已批准');
+        $this->pushTimeline($merchant, 'access_code_generated', 'Access code configured');
+        $this->pushTimeline($merchant, 'credentials_sent', 'via ' . $channels);
+        $this->pushActivity($merchant, 'verification', '商户已批准并发送登录凭证');
+        return Result::success($account, '商户已批准,登录凭证已生成');
+    }
+
+    /** 驳回验证:预置原因码(1-9)必填 + 可选补充说明 → 审核驳回(商户可修改重提) */
+    #[Permission('merchant:verify:reject')]
+    public function reject(): array
+    {
+        $merchant = $this->findMerchant($this->requireId());
+        if (! in_array((int) $merchant['status'], [0, 6], true)) {
+            throw new BusinessException(ErrorCode::DATA_CONFLICT, '仅待审核/待重新提交商户可驳回');
+        }
+        $reasonCode = $this->intInput('reasonCode');
+        if (! isset(self::REJECT_REASONS[$reasonCode])) {
+            throw new BusinessException(ErrorCode::PARAM_ERROR, '请选择驳回原因');
+        }
+        $note = $this->strInput('note') ?: $this->strInput('reason');
+        $reasonText = self::REJECT_REASONS[$reasonCode];
+        $reason = $note !== '' ? $reasonText . ' | ' . $note : $reasonText;
+        $this->service->reject($merchant, $reason);
+        // 拒绝快照:受影响文件(未通过)ID 列表(PRD:被拒绝申请保留受影响文件)
+        $failedDocs = Db::table('merchant_verify_document')
+            ->where('merchant_id', $merchant['id'])->whereNull('deleted_at')
+            ->where('status', '!=', 1)->pluck('id')->all();
+        $applicationId = (int) (Db::table('merchant_application')
+            ->where('merchant_id', $merchant['id'])->whereNull('deleted_at')->value('id') ?? 0);
+        if ($applicationId > 0) {
+            Db::table('merchant_application')->where('id', $applicationId)
+                ->update(['rejected_doc_ids' => json_encode($failedDocs)]);
+            Db::table('merchant_application_business')->where('application_id', $applicationId)
+                ->update(['kyc_status' => 4]);
+        }
+        Db::table('merchant_info')->where('id', $merchant['id'])->update(['reject_reason_code' => $reasonCode]);
+        $this->pushTimeline($merchant, 'rejected', $reason, 2, true);
+        $this->pushActivity($merchant, 'verification', '商户验证驳回:' . $reason);
+        return Result::success(null, '已驳回,商户可修改后重新提交');
+    }
+
+    /** 请求重新提交:待审核/待重新提交均可发送补正通知,状态保持/转为待重新提交 */
+    #[Permission('merchant:verify:resubmit')]
+    public function resubmit(): array
+    {
+        $merchant = $this->findMerchant($this->requireId());
+        if (! in_array((int) $merchant['status'], [0, 6], true)) {
+            throw new BusinessException(ErrorCode::DATA_CONFLICT, '仅待审核/待重新提交商户可请求重新提交');
+        }
+        $comment = $this->requireStr('comment');
+        Db::table('merchant_info')->where('id', $merchant['id'])->update([
+            'status' => 6,
+            'audit_remark' => mb_substr($comment, 0, 500),
+            'audit_by' => AdminContext::adminId(),
+            'audit_time' => date('Y-m-d H:i:s'),
+        ]);
+        // 已驳回文档转「需重交」,商户重交后新增 revision 并回到待审(详情对比视图数据源)
+        Db::table('merchant_verify_document')
+            ->where('merchant_id', $merchant['id'])->whereNull('deleted_at')->where('status', 3)
+            ->update(['status' => 5, 'resubmit_required_at' => date('Y-m-d H:i:s')]);
+        $this->pushTimeline($merchant, 'resubmit_requested', $comment);
+        $this->pushActivity($merchant, 'verification', '请求重新提交:' . $comment);
+        return Result::success(null, '已通知商户重新提交');
+    }
+
+    /** 确认商户已重新提交文件(重交闭环):需重交文档全部补齐后,商户回到待验证队列 */
+    #[Permission('merchant:verify:resubmit')]
+    public function resubmitReceived(): array
+    {
+        $merchant = $this->findMerchant($this->requireId());
+        if ((int) $merchant['status'] !== 6) {
+            throw new BusinessException(ErrorCode::DATA_CONFLICT, '仅重新提交队列商户可确认重交');
+        }
+        $now = date('Y-m-d H:i:s');
+        $docs = Db::table('merchant_verify_document')
+            ->where('merchant_id', $merchant['id'])->whereNull('deleted_at')->where('status', 5)->get()
+            ->map(static fn ($r) => (array) $r)->all();
+        Db::transaction(function () use ($merchant, $docs, $now) {
+            foreach ($docs as $doc) {
+                $version = (int) $doc['revision_count'] + 1;
+                Db::table('merchant_verify_document_revision')->insert([
+                    'site_id' => (int) $doc['site_id'],
+                    'doc_id' => (int) $doc['id'],
+                    'merchant_id' => (int) $merchant['id'],
+                    'version' => $version,
+                    'file_url' => '',
+                    'file_size' => '',
+                    'status' => 2,
+                    'reject_reason' => '',
+                    'reviewer_name' => '',
+                    'uploaded_at' => $now,
+                ]);
+                Db::table('merchant_verify_document')->where('id', $doc['id'])->update([
+                    'status' => 2,
+                    'revision_count' => $version,
+                    'resubmit_required_at' => null,
+                    'last_verified_at' => null,
+                    'reviewer_id' => 0,
+                    'reviewer_name' => '',
+                ]);
+            }
+            Db::table('merchant_info')->where('id', $merchant['id'])->update([
+                'status' => 0,
+                'audit_remark' => '',
+                'audit_by' => AdminContext::adminId(),
+                'audit_time' => $now,
+            ]);
+        });
+        $this->pushTimeline($merchant, 'resubmit_received', '商户已重新提交文件,回到待验证', 2, false, (int) ($merchant['application_id'] ?? 0));
+        $this->pushActivity($merchant, 'verification', '确认商户重新提交,回到待验证');
+        return Result::success(null, '已确认重交,商户回到待验证');
+    }
+
+    /** 重新生成商户门户访问码(原型 Approved 详情 Regenerate 按钮) */
+    #[Permission('merchant:verify:regencode')]
+    public function regenerateCode(): array
+    {
+        $merchant = $this->findMerchant($this->requireId());
+        if ((int) $merchant['status'] !== 3) {
+            throw new BusinessException(ErrorCode::DATA_CONFLICT, '仅已启用商户可重新生成访问码');
+        }
+        $code = $this->service->generateAccessCode((int) $merchant['merchant_type']);
+        Db::table('merchant_info')->where('id', $merchant['id'])->update(['access_code' => $code]);
+        $this->pushAccessCodeLog($merchant, 'regenerate', '');
+        $this->pushTimeline($merchant, 'code_regenerated', 'Access code configured');
+        $this->pushActivity($merchant, 'verification', '重新生成商户访问码');
+        return Result::success(['access_code' => $code], '访问码已重新生成');
+    }
+
+    /** 重新发送商户访问码(PRD 模块 11:查看/复制/重新发送/重新生成,权限+审计) */
+    #[Permission('merchant:verify:resend')]
+    public function resendCode(): array
+    {
+        $merchant = $this->findMerchant($this->requireId());
+        if ((int) $merchant['status'] !== 3) {
+            throw new BusinessException(ErrorCode::DATA_CONFLICT, '仅已启用商户可重新发送访问码');
+        }
+        $channels = implode(',', array_intersect(['email', 'sms', 'inapp'], (array) $this->input('channels', [])));
+        if ($channels === '') {
+            throw new BusinessException(ErrorCode::PARAM_ERROR, '请至少选择一个下发渠道');
+        }
+        Db::table('merchant_info')->where('id', $merchant['id'])->update(['credential_channels' => $channels]);
+        $this->pushAccessCodeLog($merchant, 'resend', $channels);
+        $this->pushTimeline($merchant, 'code_resent', 'via ' . $channels);
+        $this->pushActivity($merchant, 'verification', '重新发送访问码:via ' . $channels);
+        return Result::success(null, '访问码已重新发送');
+    }
+
+    /** 逐份文档核验:action=verify 核验通过 / reject 驳回(必填原因) */
+    #[Permission(['merchant:verify:doc', 'merchant:document:verify'])]
+    public function docReview(): array
+    {
+        return Result::success((new \App\Service\MerchantDocumentService())->review($this->requireId('docId'), $this->request->all()));
+    }
+
+    /**
+     * 商户文档库(模块 03 Merchant Documents):跨商户文档列表 + 状态/类型/关键词筛选
+     * 返回 data 含 stats(五张统计卡:total/verified/pending/expired/resubmission,站点口径)
+     */
+    #[Permission('merchant:doc:list')]
+    public function documents(): array
+    {
+        [$page, $pageSize] = $this->pageParams();
+        $approvedIds = Db::table('merchant_info')->whereIn('status', [3, 4])->whereNull('deleted_at')->select('id');
+        $query = Db::table('merchant_verify_document')->whereNull('deleted_at')->whereIn('merchant_id', $approvedIds);
+        $this->applySiteScope($query);
+        if (($mid = $this->intInput('merchantId')) > 0) {
+            $query->where('merchant_id', $mid);
+        }
+        $status = $this->input('status');
+        if ($status !== null && $status !== '') {
+            $query->where('status', (int) $status);
+        }
+        if (($docType = $this->strInput('docType')) !== '') {
+            $query->where('doc_type', $docType);
+        }
+        if (($kw = $this->strInput('keyword')) !== '') {
+            $kwMerchantIds = Db::table('merchant_info')
+                ->where('merchant_name', 'like', "%{$kw}%")->pluck('id')->all();
+            $query->where(function ($q) use ($kw, $kwMerchantIds) {
+                $q->where('name', 'like', "%{$kw}%")
+                    ->orWhere('doc_type', 'like', "%{$kw}%");
+                if ($kwMerchantIds !== []) {
+                    $q->orWhereIn('merchant_id', $kwMerchantIds);
+                }
+            });
+        }
+        $total = (clone $query)->count();
+        $list = $query->orderByDesc('id')->forPage($page, $pageSize)->get()
+            ->map(static fn ($r) => (array) $r)->all();
+
+        // 统计卡(不受 keyword/status/docType 过滤影响,仅站点口径,可作点击入口)
+        $statsQuery = Db::table('merchant_verify_document')->whereNull('deleted_at')->whereIn('merchant_id', $approvedIds);
+        $this->applySiteScope($statsQuery);
+        $grouped = [];
+        foreach ($statsQuery->selectRaw('status, count(*) as cnt')->groupBy('status')->get() as $row) {
+            $grouped[(int) $row->status] = (int) $row->cnt;
+        }
+        $stats = [
+            'total' => array_sum($grouped),
+            'verified' => $grouped[1] ?? 0,
+            'pending' => $grouped[2] ?? 0,
+            'expired' => $grouped[4] ?? 0,
+            'resubmission' => $grouped[5] ?? 0,
+        ];
+
+        // 补充商户名与临期标记(≤30 天且未过期 → expiring soon)
+        $ids = array_column($list, 'merchant_id');
+        $names = $ids === [] ? [] : Db::table('merchant_info')->whereIn('id', $ids)->pluck('merchant_name', 'id')->all();
+        $now = time();
+        foreach ($list as &$row) {
+            $row['merchant_name'] = (string) ($names[$row['merchant_id']] ?? '');
+            $row['has_file'] = $row['file_url'] !== '';
+            unset($row['file_url']);
+            $row['expiring_soon'] = 0;
+            if (! empty($row['expiry_date'])) {
+                $ts = strtotime((string) $row['expiry_date']);
+                if ($ts !== false && $ts >= $now && $ts - $now <= 30 * 86400) {
+                    $row['expiring_soon'] = 1;
+                }
+            }
+        }
+        unset($row);
+
+        return Result::success([
+            'list' => $list,
+            'total' => $total,
+            'page' => $page,
+            'pageSize' => $pageSize,
+            'stats' => $stats,
+        ]);
+    }
+
+    /** 文档详情(模块 03 Merchant Documents):文档元信息 + 核验历史时间线 */
+    #[Permission('merchant:doc:list')]
+    public function documentDetail(): array
+    {
+        return \Hyperf\Support\make(MerchantDocumentController::class)->history();
+    }
+
+    /** 文档级要求重交(模块 03 Merchant Documents):文档置「需重交」+ 原因 + 审计 */
+    #[Permission('merchant:document:verify')]
+    public function documentResubmit(): array
+    {
+        return Result::success((new \App\Service\MerchantDocumentService())->resubmit($this->requireId('docId'), $this->request->all()));
+    }
+
+    /** 拉黑商户:记录黑名单 + 商户置暂停(status=4);区分「暂停」与「拉黑」 */
+    #[Permission('merchant:status:blacklist')]
+    public function blacklist(): array
+    {
+        return Result::success((new \App\Service\MerchantStatusService())->change($this->requireId(), 'blacklist', $this->request->all(), $this->clientIp()));
+    }
+
+    /** 移出黑名单后保持暂停，须由超管另行激活。 */
+    #[Permission('merchant:status:unblacklist')]
+    public function unblacklist(): array
+    {
+        return Result::success((new \App\Service\MerchantStatusService())->change($this->requireId(), 'unblacklist', $this->request->all(), $this->clientIp()));
+    }
+
+    /**
+     * 商户活动审计(模块 03 Merchant Activities):类型/日期/管理员/商户/关键词筛选
+     * 返回 data 含 stats(活动类型计数条:total/login/suspension/verification/warning/document_upload/profile_update,站点口径)
+     */
+    #[Permission('merchant:activity:list')]
+    public function activities(): array
+    {
+        [$page, $pageSize] = $this->pageParams();
+        $query = Db::table('merchant_activity_log');
+        $this->applySiteScope($query);
+        if (($mid = $this->intInput('merchantId')) > 0) {
+            $query->where('merchant_id', $mid);
+        }
+        if (($type = $this->strInput('activityType')) !== '') {
+            $query->where('activity_type', $type);
+        }
+        if (($admin = $this->strInput('admin')) !== '') {
+            $query->where('performed_by', $admin);
+        }
+        if (($merchant = $this->strInput('merchant')) !== '') {
+            $merchantIds = Db::table('merchant_info')
+                ->where('merchant_name', 'like', "%{$merchant}%")->pluck('id')->all();
+            $query->whereIn('merchant_id', $merchantIds === [] ? [0] : $merchantIds);
+        }
+        $dateRange = $this->strInput('dateRange');
+        if ($dateRange !== '') {
+            $days = match ($dateRange) {
+                'today' => 0,
+                '7d' => 7,
+                '30d' => 30,
+                default => -1,
+            };
+            if ($days >= 0) {
+                $from = $days === 0 ? date('Y-m-d 00:00:00') : date('Y-m-d H:i:s', strtotime("-{$days} days"));
+                $query->where('created_at', '>=', $from);
+            }
+        }
+        if (($kw = $this->strInput('keyword')) !== '') {
+            $kwMerchantIds = Db::table('merchant_info')
+                ->where('merchant_name', 'like', "%{$kw}%")->pluck('id')->all();
+            $query->where(function ($q) use ($kw, $kwMerchantIds) {
+                $q->where('description', 'like', "%{$kw}%")
+                    ->orWhere('performed_by', 'like', "%{$kw}%");
+                if ($kwMerchantIds !== []) {
+                    $q->orWhereIn('merchant_id', $kwMerchantIds);
+                }
+            });
+        }
+        $export = $this->intInput('export') === 1;
+        $snapshot = $this->intInput('snapshotId');
+        if ($export) {
+            if (! AdminContext::hasPermission('merchant:activity:export')) throw new BusinessException(ErrorCode::FORBIDDEN);
+            $snapshot = $snapshot ?: (int) (clone $query)->max('id');
+            $query->where('id', '<=', $snapshot);
+            if ($this->intInput('beforeId') > 0) $query->where('id', '<', $this->intInput('beforeId'));
+        }
+        $total = (clone $query)->count();
+        $list = $query->orderByDesc('id')->forPage($export ? 1 : $page, $pageSize)->get()
+            ->map(static fn ($r) => (array) $r)->all();
+
+        // 活动类型计数条(仅站点口径,不受筛选影响)
+        $statsQuery = Db::table('merchant_activity_log');
+        $this->applySiteScope($statsQuery);
+        $grouped = [];
+        foreach ($statsQuery->selectRaw('activity_type, count(*) as cnt')->groupBy('activity_type')->get() as $row) {
+            $grouped[(string) $row->activity_type] = (int) $row->cnt;
+        }
+        $stats = ['total' => array_sum($grouped)];
+        foreach (['login', 'suspension', 'verification', 'warning', 'document_upload', 'profile_update'] as $chipType) {
+            $stats[$chipType] = $grouped[$chipType] ?? 0;
+        }
+
+        // 补充商户名
+        $ids = array_column($list, 'merchant_id');
+        $names = $ids === [] ? [] : Db::table('merchant_info')->whereIn('id', $ids)->pluck('merchant_name', 'id')->all();
+        foreach ($list as &$row) {
+            $row['merchant_name'] = (string) ($names[$row['merchant_id']] ?? '');
+        }
+        unset($row);
+
+        return Result::success([
+            'list' => $list,
+            'total' => $total,
+            'page' => $page,
+            'pageSize' => $pageSize,
+            'stats' => $stats,
+            'snapshotId' => $snapshot,
+            'nextBeforeId' => $export && count($list) === $pageSize ? (int) $list[count($list) - 1]['id'] : null,
+        ]);
+    }
+
+    /** 黑名单商户列表(模块 03 Blacklisted):活跃黑名单记录 + 商户名 */
+    #[Permission('merchant:list:list')]
+    public function blacklistList(): array
+    {
+        [$page, $pageSize] = $this->pageParams();
+        $query = Db::table('merchant_blacklist')->where('status', 1);
+        $siteId = AdminContext::scopeSiteId($this->intInput('siteId'));
+        if ($siteId !== null && $siteId > 0) {
+            $query->where('site_id', $siteId);
+        }
+        $total = (clone $query)->count();
+        $rows = $query->orderByDesc('id')->forPage($page, $pageSize)->get()
+            ->map(static fn ($r) => (array) $r)->all();
+        $ids = array_column($rows, 'merchant_id');
+        $names = $ids === [] ? [] : Db::table('merchant_info')->whereIn('id', $ids)->pluck('merchant_name', 'id')->all();
+        foreach ($rows as &$row) {
+            $row['merchant_name'] = (string) ($names[$row['merchant_id']] ?? '');
+        }
+        return Result::page($rows, $total, $page, $pageSize);
+    }
+
+    // ── 私有助手 ──────────────────────────────────────────────
+
+    /** 取商户并校验站点数据权限 */
+    private function findMerchant(int $id): array
+    {
+        $merchant = Db::table('merchant_info')->where('id', $id)->whereNull('deleted_at')->first();
+        if (! $merchant) {
+            throw new BusinessException(ErrorCode::NOT_FOUND, '商户不存在');
+        }
+        $merchant = (array) $merchant;
+        $this->assertSiteScope((int) $merchant['site_id']);
+        return $merchant;
+    }
+
+    /**
+     * 同步业务单元 KYC 状态：入驻阶段 0待办/2待核验；正式验证阶段 3审核中/1已验证。
+     */
+    private function syncBusinessKycStatus(int $applicationId, string $bizUnit): void
+    {
+        $businessId = (int) $bizUnit;
+        if ($applicationId <= 0 || $businessId <= 0) {
+            return;
+        }
+        $application = Db::table('merchant_application')->where('id', $applicationId)->first();
+        $business = Db::table('merchant_application_business')
+            ->where('id', $businessId)->where('application_id', $applicationId)->first();
+        if (! $application || ! $business) {
+            return;
+        }
+
+        $uploadedDocs = Db::table('merchant_verify_document')
+            ->where('application_id', $applicationId)
+            ->where('biz_unit', (string) $businessId)
+            ->where('file_url', '!=', '')
+            ->whereNull('deleted_at')
+            ->get()->map(static fn ($row) => (array) $row)->all();
+
+        if ((int) $application->stage < 5) {
+            return;
+        } else {
+            $template = (int) ($business->kyc_template_id ?? 0) > 0
+                ? Db::table('merchant_kyc_template')->where('id', $business->kyc_template_id)->where('status', 1)->first()
+                : Db::table('merchant_kyc_template')
+                    ->where('business_type', $business->business_type)->where('status', 1)->orderBy('sort')->first();
+            $templateDocs = $template ? json_decode((string) ($template->docs ?? '[]'), true) : [];
+            $requiredTypes = array_values(array_filter(array_map(static fn ($doc) =>
+                ($doc['required'] ?? true) !== false ? (string) ($doc['doc_type'] ?? '') : '', is_array($templateDocs) ? $templateDocs : [])));
+            $approvedTypes = array_values(array_unique(array_map(static fn ($doc) =>
+                (int) ($doc['status'] ?? 0) === 1 ? (string) ($doc['doc_type'] ?? '') : '', $uploadedDocs)));
+            $approvedTypes = array_values(array_filter($approvedTypes));
+            $allRequiredVerified = $requiredTypes !== []
+                ? count(array_intersect($requiredTypes, $approvedTypes)) === count($requiredTypes)
+                : $uploadedDocs !== [] && count($approvedTypes) === count(array_unique(array_column($uploadedDocs, 'doc_type')));
+            $status = $allRequiredVerified ? 1 : 3;
+        }
+
+        Db::table('merchant_application_business')->where('id', $businessId)->update(['kyc_status' => $status]);
+    }
+
+    /** 写审核时间线 */
+    private function pushTimeline(array $merchant, string $action, string $note = '', int $actorType = 2, bool $exception = false, int $applicationId = 0): void
+    {
+        Db::table('merchant_verify_timeline')->insert([
+            'site_id' => (int) $merchant['site_id'],
+            'merchant_id' => (int) $merchant['id'],
+            'application_id' => $applicationId,
+            'action' => $action,
+            'actor_type' => $actorType,
+            'operator_id' => AdminContext::adminId(),
+            'operator_name' => AdminContext::adminName(),
+            'note' => mb_substr($note, 0, 500),
+            'is_exception' => $exception ? 1 : 0,
+        ]);
+    }
+
+    /** 写商户活动日志 */
+    private function pushActivity(array $merchant, string $type, string $desc, int $status = 1): void
+    {
+        Db::table('merchant_activity_log')->insert([
+            'site_id' => (int) $merchant['site_id'],
+            'merchant_id' => (int) $merchant['id'],
+            'activity_type' => $type,
+            'description' => mb_substr($desc, 0, 255),
+            'performed_by' => AdminContext::adminName() ?: 'Admin',
+            'performed_by_id' => AdminContext::adminId(),
+            'ip_address' => $this->clientIp(),
+            'status' => $status,
+        ]);
+    }
+
+    /** 写访问码操作日志(PRD 模块 11:访问码操作必须记录审计) */
+    private function pushAccessCodeLog(array $merchant, string $action, string $channels): void
+    {
+        Db::table('merchant_access_code_log')->insert([
+            'site_id' => (int) $merchant['site_id'],
+            'merchant_id' => (int) $merchant['id'],
+            'action' => $action,
+            'channels' => $channels,
+            'operator_id' => AdminContext::adminId(),
+            'operator_name' => AdminContext::adminName(),
+        ]);
+    }
+}

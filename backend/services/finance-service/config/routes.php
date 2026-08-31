@@ -7,11 +7,11 @@ declare(strict_types=1);
  * 结算单自动生成 / finance_flow 月分表路由归模块08 定时任务
  */
 
-use App\Controller\AccountEntryController;
-use App\Controller\FinanceController;
+use App\Controller\Admin\AccountEntryController;
+use App\Controller\Admin\FinanceController;
+use App\Controller\Admin\SettleController;
+use App\Controller\Admin\WithdrawController;
 use App\Controller\Merchant\EarningsController as MerchantEarningsController;
-use App\Controller\SettleController;
-use App\Controller\WithdrawController;
 use Hyperf\HttpServer\Router\Router;
 use Mtrip\Shared\Middleware\AdminAuthMiddleware;
 use Mtrip\Shared\Middleware\MerchantAuthMiddleware;
