@@ -69,7 +69,124 @@
     }
   },
   "promotions": {
-    "empty": "No promotions right now"
+    "empty": "No promotions right now",
+    "title": "Promotion Center",
+    "howToUse": "How To Use",
+    "tabs": {
+      "promotions": "Promotions",
+      "coupons": "Coupons"
+    },
+    "campaign": {
+      "category": "Hotel Booking",
+      "name": "Summer Hotel Sale",
+      "desc": "Save up to MMK 100,000 on your next stay.",
+      "periodLabel": "Campaign period",
+      "period": "01 Jul 2026 - 31 Jul 2026",
+      "cta": "Book Hotels Now"
+    },
+    "sections": {
+      "weekly": "Weekly Promotions",
+      "monthly": "Monthly Promotions",
+      "hotel": "Hotel Coupons"
+    },
+    "coupon": {
+      "categories": {
+        "hotels": "Hotels",
+        "food": "Food Order",
+        "ride": "Ride"
+      },
+      "badges": {
+        "newUser": "New User",
+        "newUserExclusive": "New User Exclusive",
+        "limited": "Limited",
+        "popular": "Popular"
+      },
+      "actions": {
+        "claim": "Claim",
+        "expired": "Expired",
+        "use": "Use Now"
+      },
+      "expiry": "Exp {{date}}",
+      "codeLabel": "Coupon code",
+      "copy": "Copy code",
+      "copied": "Coupon code copied",
+      "claimed": "Claimed"
+    },
+    "items": {
+      "hotelSave": {
+        "title": "MMK 30,000 OFF",
+        "desc": "Minimum spend MMK 300,000"
+      },
+      "freeDelivery": {
+        "title": "Free Delivery",
+        "desc": "First 3 Orders"
+      },
+      "rideOff": {
+        "title": "10% Off",
+        "desc": "On weekend ride only"
+      },
+      "hotelWeekend": {
+        "title": "10% Off",
+        "desc": "On weekend stay only"
+      }
+    },
+    "about": {
+      "title": "About the Campaign",
+      "body": "Book your favorite hotels during the campaign period and enjoy exclusive discounts with mTrip coupons. Claim your coupons now and they will be automatically applied during checkout when your booking meets the promotion requirements."
+    },
+    "terms": {
+      "title": "Terms & Conditions",
+      "items": {
+        "claimFirst": "Coupon must be claimed before use.",
+        "onePerBooking": "One coupon may be used per booking.",
+        "noCash": "Coupon cannot be exchanged for cash.",
+        "periodOnly": "Coupons are valid only during the campaign period.",
+        "selectedHotels": "Coupons may be limited to selected hotels.",
+        "minimumSpend": "Minimum booking amount may apply.",
+        "availability": "Coupons are subject to availability.",
+        "mtripRights": "mTrip reserves the right to modify or end the promotion without prior notice."
+      }
+    },
+    "howToUseSheet": {
+      "title": "How To Use Your Coupons",
+      "steps": {
+        "claim": "Claim a coupon from the Promotion Center or add a promo code.",
+        "choose": "Choose an eligible hotel.",
+        "checkout": "Your coupon will be applied automatically at checkout if the booking meets the promotion requirements."
+      },
+      "close": "Close"
+    },
+    "claimAlert": {
+      "title": "Coupon Claim",
+      "desc": "Claim coupon can be view and used in Coupons Tab.",
+      "close": "Close"
+    },
+    "promoCode": {
+      "title": "Have a promo code?",
+      "subtitle": "Enter promo code",
+      "placeholder": "abcdef123",
+      "add": "Add",
+      "more": "Get More Coupons",
+      "invalid": "Promo code not recognised"
+    },
+    "myCoupons": {
+      "title": "My Coupons",
+      "empty": "No coupons claimed yet"
+    },
+    "detail": {
+      "title": "Coupon Details",
+      "amount": "MMK 20,000",
+      "off": "OFF",
+      "descriptionTitle": "Promotion description",
+      "body": "Save MMK 20,000 when booking eligible hotels with a minimum spend requirement. Treat yourself to a luxurious staycation or plan your next epicurean getaway.",
+      "terms": {
+        "onePerBooking": "One coupon per booking.",
+        "noCombine": "Cannot be combined with other promotional offers or coupons.",
+        "periodOnly": "Valid only during the current campaign period.",
+        "elitePartners": "Applicable to selected elite hotel partners only."
+      },
+      "cta": "Use Coupon Now"
+    }
   },
   "home": {
     "searchPlaceholder": "Search anything...",
@@ -238,7 +355,279 @@
     "mobilePlaceholder": "9xxxxxxxx",
     "passwordPlaceholder": "Enter your password",
     "rememberMe": "Remember me",
-    "orLoginWith": "Or login with"
+    "orLoginWith": "Or login with",
+    "emailPlaceholder": "name@example.com",
+    "confirmPasswordPlaceholder": "Confirm your password",
+    "agreePrefix": "I agree to the ",
+    "terms": "Terms & Conditions",
+    "agreeAnd": " and ",
+    "privacyPolicy": "Privacy Policy",
+    "invalidEmail": "Invalid email address",
+    "passwordMismatch": "The two passwords do not match",
+    "agreeRequired": "Please agree to the Terms & Conditions and Privacy Policy",
+    "agreeSuffix": ""
+  },
+  "more": {
+    "rewards": "You have {{count}} exclusive rewards",
+    "version": "Version {{version}}",
+    "wallet": {
+      "title": "mTrip Wallet",
+      "balanceLabel": "Available Balance",
+      "topUp": "Top Up"
+    },
+    "menu": {
+      "account": {
+        "title": "Account",
+        "desc": "Settings, Security, Payments"
+      },
+      "referral": {
+        "title": "Referral",
+        "desc": "Invite Friends, Earn Rewards"
+      },
+      "accessibility": {
+        "title": "Accessibility Mode",
+        "desc": "Turn on lite mode"
+      },
+      "guide": {
+        "title": "Guide",
+        "desc": "See videos and guides"
+      },
+      "about": {
+        "title": "About",
+        "desc": "About mTrip"
+      },
+      "terms": {
+        "title": "Terms and Conditions",
+        "desc": "Legal & Privacy"
+      },
+      "faq": {
+        "title": "FAQ",
+        "desc": "Frequently asked question"
+      },
+      "rate": {
+        "title": "Rate this app",
+        "desc": "Feedback & Rating"
+      },
+      "orders": {
+        "desc": "Bookings and payments"
+      },
+      "site": {
+        "desc": "Choose a site"
+      },
+      "language": {
+        "desc": "App display language"
+      }
+    },
+    "account": {
+      "title": "Account",
+      "notSet": "Not set",
+      "choose": "Choose",
+      "manage": "Manage",
+      "personal": {
+        "title": "Personal Info",
+        "displayName": "Display Name",
+        "gender": "Gender",
+        "city": "City Of Residence",
+        "traveler": "Save Traveler"
+      },
+      "security": {
+        "title": "Account Security",
+        "email": "Linked email",
+        "phone": "Linked Phone",
+        "password": "Reset Password"
+      },
+      "payment": {
+        "title": "Payment",
+        "banking": "Banking",
+        "bankingDesc": "Manage card and banks",
+        "pin": "Security PIN Code"
+      }
+    },
+    "travelers": {
+      "title": "Traveler",
+      "guest": "Guest",
+      "selectGuest": "Select Guest ({{count}}/{{max}})",
+      "addGuest": "Add New Guest",
+      "done": "Done",
+      "maxReached": "You can select up to {{max}} guests"
+    },
+    "editEmail": {
+      "title": "Edit Email",
+      "desc": "Your account is currently linked with an email address. If you wish to change it to a new email address, you will need to verify your identity.",
+      "sendCode": "Send Verification Code"
+    },
+    "referral": {
+      "title": "Refer & Earn",
+      "bannerTitle": "Invite Friends\nEarn Rewards Together.",
+      "bannerDesc": "Earn 50,000 MMK after your friend completes their first hotel booking on mTrip.",
+      "totalRewards": "Total Rewards Earned",
+      "stats": {
+        "invited": "Friends Invited",
+        "pending": "Pending",
+        "rewarded": "Rewarded"
+      },
+      "codeLabel": "Your Referral Code",
+      "linkLabel": "Your Referral Link",
+      "copy": "Copy",
+      "copied": "Copied to clipboard",
+      "how": {
+        "title": "How Referral Works",
+        "rulesTitle": "Reward Rules",
+        "steps": {
+          "invite": {
+            "title": "Invite Your Friend",
+            "desc": "Share your referral link or referral code using any social media platform."
+          },
+          "join": {
+            "title": "Friend Joins mTrip",
+            "desc": "Your friend signs up using your referral link or enters your referral code during registration."
+          },
+          "book": {
+            "title": "Book a Hotel",
+            "desc": "Your friend completes their first hotel booking on mTrip."
+          },
+          "stay": {
+            "title": "Complete the Stay",
+            "desc": "The booking must be successfully completed. Cancelled bookings are not eligible."
+          },
+          "reward": {
+            "title": "Receive Your Reward",
+            "desc": "Your reward will be automatically credited to your mTrip Wallet."
+          }
+        },
+        "rules": {
+          "firstBooking": "Only the first completed hotel booking is eligible.",
+          "noCancelled": "Cancelled or refunded bookings are not eligible.",
+          "afterStay": "Rewards are credited after the stay is completed.",
+          "toWallet": "Rewards are deposited into your mTrip Wallet.",
+          "campaignTerms": "Referral rewards are subject to campaign terms and conditions."
+        }
+      },
+      "status": {
+        "title": "Referral Status",
+        "empty": "Nothing here yet",
+        "tabs": {
+          "pending": "Pending",
+          "rewarded": "Rewarded"
+        },
+        "desc": {
+          "waitingBooking": "Registered. Waiting for first booking.",
+          "waitingStay": "Hotel booked. Waiting for stay completion.",
+          "rewarded": "Reward credited to your wallet."
+        },
+        "progress": {
+          "invited": "Invited",
+          "registered": "Registered",
+          "book": "Book",
+          "stay": "Stay",
+          "reward": "Reward"
+        }
+      }
+    },
+    "guides": {
+      "title": "Tutorials & Guides",
+      "tabs": {
+        "tutorials": "Tutorials",
+        "guides": "Guides"
+      },
+      "duration": "{{minutes}} min",
+      "videos": {
+        "booking": {
+          "title": "Watch the Hotel Booking Guide",
+          "desc": "How to book a hotel"
+        },
+        "register": {
+          "title": "Create an account",
+          "desc": "How to register an account"
+        },
+        "cancel": {
+          "title": "Cancel a booking",
+          "desc": "How to cancel my booking"
+        }
+      },
+      "articles": {
+        "hotelBooking": "Hotel Booking Guide",
+        "payment": "Payment Guide",
+        "cancellation": "Cancellation Guide"
+      }
+    },
+    "legal": {
+      "title": "Terms & Conditions",
+      "sections": {
+        "useOfService": {
+          "title": "Use of Service",
+          "body": "Welcome to MyanmarTrip. By accessing or using our application, you agree to be bound by these Terms and Conditions. These terms apply to all visitors, users, and others who access or use the Service.",
+          "bullets": {
+            "age": "You must be at least 18 years old to use this Service.",
+            "confidentiality": "You are responsible for maintaining the confidentiality of your account.",
+            "legalUse": "You agree not to use the Service for any illegal or unauthorized purpose."
+          }
+        },
+        "bookingPolicy": {
+          "title": "Booking Policy",
+          "body": "All bookings made through MyanmarTrip are subject to availability and the specific terms provided by our local partners (hotels, tour operators, transportation services).",
+          "bullets": {
+            "confirmedOnPayment": "A booking is only confirmed once full or partial payment is received, as specified during checkout.",
+            "intermediary": "MyanmarTrip acts as an intermediary and is not liable for service failures by third-party providers."
+          }
+        },
+        "payment": {
+          "title": "Payment & Refunds",
+          "body": "We process payments securely. Refund policies vary depending on the specific service booked and the timing of the cancellation."
+        },
+        "responsibilities": {
+          "title": "User Responsibilities",
+          "body": "While traveling in Myanmar, users are expected to respect local laws, customs, and cultural heritage sites.",
+          "bullets": {
+            "visa": "Ensure you hold a valid visa and travel documents.",
+            "healthSafety": "Comply with local health and safety regulations.",
+            "dressCode": "Dress appropriately when visiting religious sites (shoulders and knees covered)."
+          }
+        },
+        "privacy": {
+          "title": "Privacy Policy",
+          "body": "Your privacy is important to us. Our Privacy Policy explains how we collect, use, and protect your personal data when you use MyanmarTrip. By using our Service, you agree to the collection and use of information in accordance with this policy."
+        }
+      },
+      "refund": {
+        "title": "Standard Cancellation Timeline:",
+        "over14": "More than 14 days before start:",
+        "days7to14": "7-14 days before start:",
+        "under7": "Less than 7 days:",
+        "amount": "{{percent}} Refund",
+        "none": "No Refund"
+      }
+    }
+  },
+  "notifications": {
+    "title": "Notifications",
+    "empty": "No notifications yet",
+    "tabs": {
+      "system": "System",
+      "booking": "Booking"
+    },
+    "items": {
+      "version12": {
+        "title": "New Version Available",
+        "body": "Version 1.2 is live now"
+      },
+      "version11": {
+        "title": "New Version Available",
+        "body": "Version 1.1 is live now"
+      },
+      "bookingConfirmed": {
+        "title": "Booking confirmed",
+        "body": "Your booking at Hotel Mindama has been confirmed and attachments are sent via email."
+      },
+      "bookingCancelled": {
+        "title": "Booking Cancelled",
+        "body": "Your booking at Hotel Mindama was cancelled."
+      }
+    }
+  },
+  "splash": {
+    "chooseLanguage": "Choose a language to continue",
+    "continue": "Continue"
   },
   "hotels": {
     "title": "Hotel & Homestay",

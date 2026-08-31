@@ -133,7 +133,9 @@ export default function MyPickScreen() {
       <HomeHeader
         points={profile?.points ?? 0}
         onPressPoints={requireLogin}
-        onPressMessage={requireLogin}
+        onPressMessage={() =>
+          isLogin ? navigation.navigate('Notifications') : navigation.navigate('Login')
+        }
       />
 
       <ScrollView

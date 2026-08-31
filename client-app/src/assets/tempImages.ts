@@ -78,6 +78,24 @@ export const TEMP_EXPERIENCE_COVERS: Record<string, ImageSourcePropType> = {
   sunsetBoat: require('../../assets/images/temp/home/experience-sunset-boat.png'),
 };
 
+/* ------------------------------------------------------------------ 优惠中心 */
+
+/** 活动横幅底图(设计稿 1389:2772,展示框 370x274) */
+export const TEMP_CAMPAIGN_BANNER: ImageSourcePropType = require('../../assets/images/temp/promotion/campaign-banner.jpg');
+
+/* -------------------------------------------------------------------- 更多 */
+
+/**
+ * Refer & Earn 页头图(设计稿 1687:4208,展示框 370x274)
+ * —— 与优惠页活动横幅是**同一张图**(md5 一致),不重复入包
+ */
+export const TEMP_REFERRAL_BANNER: ImageSourcePropType = TEMP_CAMPAIGN_BANNER;
+
+/** 教程视频封面(设计稿 2206:7835,展示框 322x160);设计稿三张卡用的是同一张图 */
+export const TEMP_GUIDE_THUMBNAIL: ImageSourcePropType = require('../../assets/images/temp/more/guide-thumbnail.jpg');
+
+/* ---------------------------------------------------------------------- 首页 */
+
 /** 杂志流封面,键为 MAGAZINE_ITEMS 的项(展示框 370x192) */
 export const TEMP_MAGAZINE_COVERS: Record<string, ImageSourcePropType> = {
   pagodaTips: require('../../assets/images/temp/home/magazine-pagoda-tips.png'),

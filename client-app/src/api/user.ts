@@ -10,6 +10,12 @@ export function apiRegister(params: {
   mobile: string;
   password: string;
   nickname?: string;
+  /**
+   * 注册页(Figma 505:1498)有邮箱栏,`user_info.email` 列也在,
+   * 但 user-service AuthController::register 目前只读 mobile/password/nickname/referralCode,
+   * 这里先按设计稿把值传上去,后端补上入参即可落库,无需再动前端
+   */
+  email?: string;
 }): Promise<AuthResult> {
   // 敏感接口:请求体 AES 加密传输
   return postEncrypted<AuthResult>('/api/v1/app/auth/register', params);

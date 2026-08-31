@@ -41,6 +41,22 @@ export type RootStackParamList = {
   OrderList: undefined;
   OrderConfirm: { goodsId: number; skuId: number };
   OrderDetail: { orderId: number };
+  /**
+   * 优惠券详情(Figma 1625:2009),优惠中心的券卡落地页。
+   * 当前是静态页(后端无优惠券接口),故不带参数。
+   */
+  CouponDetail: undefined;
+  /* ---- 「更多」section(Figma 1695:5951)的子页,全部无参数(当前都是静态页) ---- */
+  /** 通知(Figma 1770:3863),首页 / 我的精选顶部栏铃铛的落地页 */
+  Notifications: undefined;
+  Account: undefined;
+  Travelers: undefined;
+  EditEmail: undefined;
+  Referral: undefined;
+  ReferralStatus: undefined;
+  HowReferralWorks: undefined;
+  Guides: undefined;
+  LegalTerms: undefined;
   Login: undefined;
   Register: undefined;
 };

@@ -16,6 +16,8 @@ interface CommonState {
   clearToast: () => void;
 
   lang: Lang;
+  /** 用户是否手选过语言(false = 首次进入,开屏后要弹语言选择) */
+  langChosen: boolean;
   hydrate: () => Promise<void>;
   setLang: (lang: Lang) => Promise<void>;
 
@@ -31,15 +33,16 @@ export const useCommonStore = create<CommonState>((set) => ({
   clearToast: () => set({ toastMessage: '' }),
 
   lang: 'en-US',
+  langChosen: false,
   async hydrate() {
     const saved = (await storage.getString(STORAGE_KEYS.LANG)) as Lang | null;
     if (saved && SUPPORTED_LANGS.includes(saved)) {
-      set({ lang: saved });
+      set({ lang: saved, langChosen: true });
     }
   },
   async setLang(lang) {
     await storage.setString(STORAGE_KEYS.LANG, lang);
-    set({ lang });
+    set({ lang, langChosen: true });
   },
 
   gdprAccepted: false,

@@ -11,6 +11,9 @@ export const STORAGE_KEYS = {
   GDPR: 'mtrip:gdpr-consent',
 } as const;
 
+/** App 版本号(与 app.json / package.json 的 version 保持一致,展示在「更多」页底部) */
+export const APP_VERSION = '1.0.0';
+
 /** 请求超时(ms) */
 export const REQUEST_TIMEOUT = 15000;
 
@@ -41,9 +44,11 @@ export const ORDER_STATUS_I18N: Record<number, string> = {
 /** 商品类型:1酒店 2门票 */
 export const GOODS_TYPE = { HOTEL: 1, TICKET: 2 } as const;
 
-/** 支持语言 */
-export const SUPPORTED_LANGS = ['zh-CN', 'en-US'] as const;
+/** 支持语言(顺序 = 开屏语言选择页的展示顺序,见 Figma Splash 2163:8057) */
+export const SUPPORTED_LANGS = ['en-US', 'my-MM', 'zh-CN'] as const;
 export type Lang = (typeof SUPPORTED_LANGS)[number];
+/** 取不到系统语言时的兜底语言 */
+export const FALLBACK_LANG: Lang = 'en-US';
 
 /** 货币符号(多币种展示,站点 currency 驱动) */
 export const CURRENCY_SYMBOLS: Record<string, string> = {

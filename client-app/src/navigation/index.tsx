@@ -21,10 +21,20 @@ import HomeScreen from '@/screens/home/HomeScreen';
 import HotelDetailScreen from '@/screens/hotel/HotelDetailScreen';
 import HotelResultsScreen from '@/screens/hotel/HotelResultsScreen';
 import HotelsScreen from '@/screens/hotel/HotelsScreen';
+import AccountScreen from '@/screens/more/AccountScreen';
+import EditEmailScreen from '@/screens/more/EditEmailScreen';
+import GuidesScreen from '@/screens/more/GuidesScreen';
+import HowReferralWorksScreen from '@/screens/more/HowReferralWorksScreen';
+import LegalTermsScreen from '@/screens/more/LegalTermsScreen';
+import ReferralScreen from '@/screens/more/ReferralScreen';
+import ReferralStatusScreen from '@/screens/more/ReferralStatusScreen';
+import TravelersScreen from '@/screens/more/TravelersScreen';
 import MyPickScreen from '@/screens/mypick/MyPickScreen';
+import NotificationScreen from '@/screens/notification/NotificationScreen';
 import OrderConfirmScreen from '@/screens/order/OrderConfirmScreen';
 import OrderDetailScreen from '@/screens/order/OrderDetailScreen';
 import OrderListScreen from '@/screens/order/OrderListScreen';
+import CouponDetailScreen from '@/screens/promotions/CouponDetailScreen';
 import PromotionsScreen from '@/screens/promotions/PromotionsScreen';
 import SiteSelectScreen from '@/screens/site/SiteSelectScreen';
 import LoginScreen from '@/screens/user/LoginScreen';
@@ -96,10 +106,11 @@ function MainTabs() {
         component={MyPickScreen}
         options={{ title: t('tab.myPick'), headerShown: false }}
       />
+      {/* 优惠中心自带设计稿顶部栏(Promotion Center),隐藏 Tab 导航头 */}
       <Tab.Screen
         name="PromotionsTab"
         component={PromotionsScreen}
-        options={{ title: t('tab.promotions') }}
+        options={{ title: t('tab.promotions'), headerShown: false }}
       />
       <Tab.Screen name="MoreTab" component={MineScreen} options={{ title: t('tab.more') }} />
     </Tab.Navigator>
@@ -158,7 +169,60 @@ export default function AppNavigator() {
           component={OrderDetailScreen}
           options={{ title: t('order.detailTitle') }}
         />
-        {/* 登录页按设计稿自带顶部栏(返回 / Sign Up)且插画要铺到状态栏,故关掉 Stack 头 */}
+        {/* 通知页与「更多」子页共用同一套顶部栏,同样关掉 Stack 头 */}
+        <Stack.Screen
+          name="Notifications"
+          component={NotificationScreen}
+          options={{ title: t('notifications.title'), headerShown: false }}
+        />
+        {/* 「更多」section 的子页都自带设计稿顶部栏(返回 + 标题),统一关掉 Stack 头 */}
+        <Stack.Screen
+          name="Account"
+          component={AccountScreen}
+          options={{ title: t('more.account.title'), headerShown: false }}
+        />
+        <Stack.Screen
+          name="Travelers"
+          component={TravelersScreen}
+          options={{ title: t('more.travelers.title'), headerShown: false }}
+        />
+        <Stack.Screen
+          name="EditEmail"
+          component={EditEmailScreen}
+          options={{ title: t('more.editEmail.title'), headerShown: false }}
+        />
+        <Stack.Screen
+          name="Referral"
+          component={ReferralScreen}
+          options={{ title: t('more.referral.title'), headerShown: false }}
+        />
+        <Stack.Screen
+          name="ReferralStatus"
+          component={ReferralStatusScreen}
+          options={{ title: t('more.referral.status.title'), headerShown: false }}
+        />
+        <Stack.Screen
+          name="HowReferralWorks"
+          component={HowReferralWorksScreen}
+          options={{ title: t('more.referral.how.title'), headerShown: false }}
+        />
+        <Stack.Screen
+          name="Guides"
+          component={GuidesScreen}
+          options={{ title: t('more.guides.title'), headerShown: false }}
+        />
+        <Stack.Screen
+          name="LegalTerms"
+          component={LegalTermsScreen}
+          options={{ title: t('more.legal.title'), headerShown: false }}
+        />
+        {/* 券详情自带设计稿顶部栏(返回 / Coupon Details) */}
+        <Stack.Screen
+          name="CouponDetail"
+          component={CouponDetailScreen}
+          options={{ title: t('promotions.detail.title'), headerShown: false }}
+        />
+        {/* 登录/注册页按设计稿自带顶部栏(返回 / Sign Up|Sign In)且插画要铺到状态栏,故关掉 Stack 头 */}
         <Stack.Screen
           name="Login"
           component={LoginScreen}
@@ -167,7 +231,7 @@ export default function AppNavigator() {
         <Stack.Screen
           name="Register"
           component={RegisterScreen}
-          options={{ title: t('user.registerTitle') }}
+          options={{ title: t('user.registerTitle'), headerShown: false }}
         />
       </Stack.Navigator>
     </NavigationContainer>

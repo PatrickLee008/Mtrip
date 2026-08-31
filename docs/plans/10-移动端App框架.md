@@ -79,3 +79,31 @@ Expo 51 / TypeScript / Zustand / React Navigation 6 / Axios / i18next + react-i1
   底部价格栏在 Rooms 页签隐藏(设计稿 222:2529 是 hidden 的,每张房型卡自带 Select)。
   仍是静态页;地图、Read All Reviews、房型 See Details/Select、面积单位切换等一律 comingSoon。
   完整记录见 HANDOFF「★ 2026-08-25(酒店详情其余五个页签)」。
+- 2026-08-31:注册页 `screens/user/RegisterScreen.tsx` 按 Figma `Signup` node `505:1498` 重做,
+  与登录页共用版式(主色底 + 插画 + 顶部栏 + 白色表单卡),字段改为手机号(+95)/邮箱/密码/确认密码 + 条款勾选,
+  删掉设计稿没有的昵称栏(后端 nickname 为空会自动取「User+手机后四位」);Register 路由关掉 Stack 头。
+  邮箱栏后端注册接口暂不接收,按选填处理并照常上送;完整记录见 HANDOFF「★ 2026-08-31(注册页)」。
+- 2026-08-31:新增开屏页 `screens/splash/SplashScreen.tsx`(Figma `Splash` node `452:2190` + `2163:8057`),
+  由 `App.tsx` 按 boot → language → app 三段驱动,取代原来的 `LoadingView`;
+  **首次进入**(本地没存过语言)开屏后弹语言选择卡,默认选中系统语言(`utils/locale.ts` + expo-localization,取不到回落 en-US)。
+  新增缅甸语 `assets/i18n/my-MM.json`(**机器翻译,待母语者复核**),`SUPPORTED_LANGS` 扩为 en-US / my-MM / zh-CN。
+  完整记录见 HANDOFF「★ 2026-08-31(开屏与语言选择)」。
+- 2026-08-31:优惠中心 `screens/promotions/PromotionsScreen.tsx` 按 Figma `Promotion` node `1633:3300` 重做
+  (原为 EmptyView 占位),落成「一个壳 + 两个页签(优惠活动 / 我的优惠券)+ 两个弹层」,
+  另加券详情页 `screens/promotions/CouponDetailScreen.tsx`(路由 `CouponDetail`)。
+  新增 `components/promotion/*`(CouponCard / PromoTabs / CampaignBanner / CampaignOverview /
+  PromoDialog / promoShared);**当前是静态页**,后端无活动与优惠券接口,数据走
+  `screens/promotions/promoSections.ts`,领取只弹设计稿的成功提示,其余动作一律 comingSoon。
+  完整记录见 HANDOFF「★ 2026-08-31(优惠中心)」。
+- 2026-08-31:「更多」页 `screens/user/MineScreen.tsx` 按 Figma section `More` `1695:5951` 重做,
+  并补齐 8 个子页(`screens/more/*`:Account / Travelers / EditEmail / Referral / ReferralStatus /
+  HowReferralWorks / Guides / LegalTerms,均新增 Stack 路由)。新增 `components/more/*`
+  (MenuLink / MorePageLayout / ReferralStatsCard / LanguageDialog / moreShared)。
+  **除资料与余额外都是静态页**(后端无钱包/推荐/教程/条款接口),数据走 `screens/more/moreDemo.ts`;
+  语言切换/GDPR/站点/订单这些设计稿没有、但项目已有的功能收进「更多」页新增的第三张卡。
+  完整记录见 HANDOFF「★ 2026-08-31(更多与子页)」。
+- 2026-08-31:新增通知页 `screens/notification/NotificationScreen.tsx`(Figma section `1770:3863`,
+  System / Booking 两个页签),路由 `Notifications`;首页与「我的精选」顶部栏的铃铛由 comingSoon 改跳这里。
+  同批把反复出现四次的分段页签抽成 `components/common/SegmentedTabs.tsx`(优惠中心 / 推荐明细 /
+  教程与指南 / 通知共用)。**静态页**:App 侧没有消息接口,数据走 `screens/notification/notificationDemo.ts`。
+  完整记录见 HANDOFF「★ 2026-08-31(通知页)」。

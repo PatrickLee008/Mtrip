@@ -446,6 +446,81 @@ S6已实现并通过核心验证，见[m12/07-s6-delivery.md](./m12/07-s6-delive
 - 设计稿里另有几张**二级页**不属于页签,本次未实现:Rooms Details `281:1041`、Reviews Page `1133:2998`、Map Location `864:1775`、Property Preview `412:2023`、VR View `445:1555`、3d View `446:2011`。
 - 门禁:`cd client-app; npm run typecheck` 零报错;`npx expo export -p web` 打包通过、11 张临时素材全部进包(验证产物已删)。`scripts/check.ps1` 因本机 `php` 不在 PATH 第 1 步即中断(与本改动无关,本次未改任何 PHP)。
 
+### ★ 2026-08-31(client-app 注册页,Figma `Signup` node `505:1498`)
+
+- 设计稿的 Signup 与 Login `505:1293` 是同一套壳(主色底 + 插画铺底 + 顶部栏 + logo/标语 + 白色表单卡 + 分隔线 + 三方登录),因此 `RegisterScreen.tsx` 直接沿用登录页的实测取值(插画 w150.41%/h46.55%/left-18.49%/top16.66%、Main pt68 pb20 px16、卡片 `--tab` 圆角 32 padding 24 gap 8、输入框 `#EFF4FF` 高 52 圆角 12 gap 16、CTA py16、三方按钮高 48 px31 描边 `--secondary`),不再重推一遍。
+- 字段按设计稿改为四栏:手机号(+95 区号 + 竖线)、**邮箱**、密码、确认密码(后两栏各自带眼睛切换),下面是「I agree to the Terms & Conditions and Privacy Policy」勾选行(Inter Medium 12/17.5,正文 `#575E72`、链接 `#204DDA`)。**删掉了原注册页的昵称栏** —— 设计稿没有,且后端 `nickname` 为空时会落成「User+手机号后四位」。
+- **GDPR 授权由隐式改显式**:原来「注册即视为同意」,现在必须勾选条款才能提交,勾选后成功注册再写 `setGdprConsent(true)`;原页尾那段 `user.gdprTip` 随之删掉(登录页仍保留)。
+- 两处刻意偏离设计稿,代码内已注明:①设计稿 CTA 文案写的是「Login」(注册页上显然是笔误),这里用 `user.register`「Sign up」;②右上角链接用 `user.loginTitle`「Sign In」,与登录页右上角「Sign Up」对称。分隔线文案照设计稿仍是「OR LOGIN WITH」(复用既有 `user.orLoginWith`)。
+- **邮箱栏后端接不上**:`user_info.email` 列在,但 user-service `AuthController::register` 只读 mobile/password/nickname/referralCode。故按「选填 + 填了才校验格式」处理,值照常经 `apiRegister({..., email})` 上送(后端忽略未知入参),`api/user.ts` 与页面注释都标了这件事 —— 后端补一行 `strInput('email')` 即可落库,前端不用再动。`userStore.register` 的第三参由 `nickname?: string` 改为 `{ nickname?, email? }`。
+- 未实现的能力一律走 `home.comingSoon`:区号选择(固定 +95)、三方登录、Terms & Conditions / Privacy Policy 详情页。
+- 图标只缺一枚:`HomeIcon` 新增 `mail`(fluent:mail-20-filled,viewBox `0 0 20 20`,path 取自设计稿导出的 SVG,未手抄);phone / lock / eyeOff / checkbox / checkboxIndeterminate / arrowLeft / chevronDown 与三方品牌标(`SocialIcon`)、插画/logo PNG 全部复用登录页既有资产,**没有新增图片素材**。
+- `navigation/index.tsx` 给 `Register` 补 `headerShown: false`(与 Login 一致),否则设计稿自带的顶部栏会和 Stack 头叠两层。
+- 新增 i18n `user.{emailPlaceholder,confirmPasswordPlaceholder,agreePrefix,terms,agreeAnd,privacyPolicy,invalidEmail,passwordMismatch,agreeRequired}` 中英各 9 键。
+- 门禁:`cd client-app; npm run typecheck` 零报错(仅改 client-app,未动任何 PHP)。
+
+### ★ 2026-08-31(client-app 开屏与首次语言选择,Figma `Splash` node `452:2190` / `2163:8057`)
+
+- 设计稿这个 section 下是**两张同底稿**:`452:2190` 纯开屏(主色底 + 居中 logo + 底部两条波浪),`2163:8057` 在同一张底上加了标语与语言选择卡。落地成**一个 `screens/splash/SplashScreen.tsx` + 一个 `picker` 开关**,不做成两个页面/两条路由 —— 它在导航之前,由 `App.tsx` 直接渲染。
+- `App.tsx` 改成三段状态机 `boot → language → app`,取代原来的 `LoadingView`:
+  `boot` 期间跑 `bootstrapStores()`,并保证开屏**最少停留 `MIN_SPLASH_MS = 1200ms`**(引导比这快时补 sleep,避免 logo 一闪而过);字体没加载完也停在 `boot`(纯开屏没有文字,可以先出图)。
+  语言已存 → 直接 `app`;没存过 → `language`。`StatusBar` 在非 app 阶段切 `light`(开屏是深底)。
+- **语言优先级改为「用户手选 > 系统语言 > en-US」**。首次进入不静默套用系统语言,而是把系统语言作为**默认选中项**弹卡,按 Continue 才 `setLang` 落本地。`commonStore` 为此新增 `langChosen`(hydrate 时本地有值 / setLang 后置 true),这是「是否首次」的唯一判据 —— 不能用 `lang` 判,它有默认值 `'en-US'` 恒为真。
+- 系统语言探测走**新装的 `expo-localization`**(`npx expo install`,SDK 51 → 15.0.3,已自动登记 config plugin),封装在 `utils/locale.ts`:按 `getLocales()` 的偏好顺序,先整标签精确匹配再按 ISO 639-1 语言码映射(en→en-US、my→my-MM、zh→zh-CN,简繁不分),整段 try/catch,取不到一律回落 `FALLBACK_LANG = 'en-US'`(原生模块在未重建的 dev client 里可能不可用)。
+- **新增缅甸语 `assets/i18n/my-MM.json`,382 键与 en-US 逐键对齐(脚本比对 missing/extra 均为空)。⚠ 译文是机器生成的,上线前必须找母语者复核**;静态文案里的数字统一用阿拉伯数字(与插值进来的运行时数据保持一致,不混缅数字)。`SUPPORTED_LANGS` 扩为 `['en-US','my-MM','zh-CN']`(顺序 = 设计稿三行顺序),`i18n/index.ts` 注册第三份资源,`MineScreen` 的 `LANG_LABELS` 补 `မြန်မာ`。
+- 顺带修了一处**拼接句在缅甸语里语序不成立**的问题:注册页的「I agree to the *Terms* and *Privacy Policy*」是四段拼接,缅甸语的「同意」必须落句尾,故新增 `user.agreeSuffix`(中英为空串,缅文为「 ကို သဘောတူပါသည်」),`RegisterScreen` 末尾多渲染一段。
+- 另修 `SiteSelectScreen`:切站点原先无条件用站点默认语言覆盖当前语言,与「手选优先」的约定冲突(以前不明显,现在语言是用户开屏时明确选的)。改为**只在 `!langChosen` 时**才联动。
+- **设计稿的国旗与文案对错了位**(第一行「Choose English」配的是缅甸国旗、第二行缅甸文配的是英美国旗),这里按语言正确配对(English→英美、မြန်မာ→缅甸、中文→中国),行序仍按设计稿。三面旗是设计稿导出的 PNG,落在 `assets/images/splash/flag-{en,my,zh}.png`;**logo 直接复用登录页的 `login/logo-badge.png`** —— 开屏 logo 框虽是 286×211,但内部图片的裁切比例(180.6% / 245.45% / -40.3% / -72.73%)与登录页 100×74 那枚完全一致,是同一张资产的不同尺寸。
+- 波浪两条是 SVG,path 内联进 `SplashWaves`(白色 `fillOpacity 0.1`)。设计稿画布宽 402,组件按 `屏宽/402` 等比放大定位;第二条设计稿写的是 `rotate180 + scaleY(-1)`,净效果等于 `scaleX(-1)`,RN 里直接写后者。
+- 语言行的文案**不走 i18n**(选语言时用户还没定语言,三行必须永远同时可读),用设计稿原文硬编码;标题与 Continue 则用 `t(key, { lng: selected })` 跟着当前选中项**预览**,点哪个语言就先看到哪个语言,但不改全局语言。
+- 勾选框颜色照导出资产取:选中 `#4169ED`,未选 `#191A25`(注意与登录页「记住我」的未选态 `--secondary` 不同,这张稿就是深色)。
+- `app.json` 的原生 `splash.backgroundColor` 由 `#1668dc` 改成主色 `#4169ED`,免得原生开屏与 JS 开屏之间闪一下色差。
+- 门禁:`cd client-app; npm run typecheck` 零报错;`npx expo export -p web` 打包通过,三面国旗均进包(验证产物 dist 已删)。未动任何 PHP。
+
+### ★ 2026-08-31(client-app 优惠中心,Figma `Promotion` node `1633:3300`)
+
+- 设计稿这个 section 下有五张稿:`1325:2123` 优惠活动(3151 高的长页)、`1429:2110` 我的优惠券、`1625:2009` 券详情、`1626:3207` 使用说明弹层、`1627:3239` 领券成功弹层。落成 **「一个壳 + 两个页签内容组件 + 一个通用弹层」+ 独立的券详情页**:`PromotionsScreen`(顶部栏 + `PromoTabs` + 分发)/ `PromotionsTab` / `CouponsTab` / `PromoDialog`,券详情走新路由 `CouponDetail`。原 `PromotionsScreen` 是 `EmptyView` 占位,整页替换。
+- **优惠券卡收敛成一个 `components/promotion/CouponCard.tsx`** —— 设计稿三段列表共 9 张卡加上「我的优惠券」里那张,全是同一张卡换数据:左侧 100 宽主色块(品类图标 + 大写文案,右边 1px 白色虚线)、右侧三行(券码 / 标题+副标题 / 有效期+按钮)、卡上下各嵌一枚 31 的圆形缺口。缺口在设计稿里是 `Ellipse 24`(纯色圆,填 `#EBF0FF` = 页面底色),代码里用 `View` + `borderRadius` 画并靠卡的 `overflow:'hidden'` 裁成半圆,**没有导出成资产**。卡按设计稿给了 `minHeight: 128`,内容比这矮时左色块靠它撑住等高。
+- 角标三种配色照设计稿分开:新用户 → 主色、新用户专享/热门 → `--tertiary` `#EC1317`(= `colors.hot`)、限量 → `--orange`。按钮三态:Claim(主色白字)/ Use Now(同)/ Expired(无底色、`--text-2`、禁点)。
+- 几张内容卡(活动概览 / 关于本活动 / 条款与条件 / 促销码 / 券详情)是同一套壳(`--tab` 底 + 1px `--secondary` + 圆角 32 + DS_AG 投影),连同两种标题、圆点列表、主色 CTA 一起收敛到 `components/promotion/promoShared.ts`,五处不再各抄一遍 —— 与酒店详情的 `detailShared.ts` 同一做法。
+- **静态页**:后端没有活动/优惠券接口(marketing-service 与 payment-service 都没有对应路由),内容全部来自 `screens/promotions/promoSections.ts`(三段券 + 已领券 + 券详情 + 条款键序),文案进 i18n(`promotions.*` 中英缅各 78 键,三份仍逐键对齐、共 455 键)。交互:**「领取」按设计稿弹一次成功提示**,「立即使用」/ 促销码 Add / 券详情的 Use Coupon Now 一律 `comingSoon`;「Book Hotels Now」跳已有的 `Hotels` 路由;「Get More Coupons」切回优惠活动页签。
+- 券详情的复制券码是真能用的:为此装了 **`expo-clipboard`**(`npx expo install`,SDK 51 → 7.0.x)。这是本次唯一新增依赖;不装的话这枚按钮只能退化成 comingSoon,与它旁边就是券码的场景不相称。
+- 图标新增 8 枚进 `HomeIcon`(`calendar2` / `building` / `ticketDiagonal` / `ticketDiagonal20` / `clock` / `carProfile` / `checkmarkCircle` / `copy`),path 全部取自设计稿导出的 SVG。**`ticketDiagonal`(16 的字形)与 `ticketDiagonal20` 比例不同,不能互相顶替**,故分两枚入表;品类 Food 复用了已有的 `food`(同一 fluent:food-16-filled 字形的放大版),不重复入表。`copy` 是非正方(14.167×16.667),用 `width/height` 传。
+- 素材只多了一张:活动横幅底图 `assets/images/temp/promotion/campaign-banner.jpg`(**Figma 返回的实为 JPEG,已按 magic bytes 复核改扩展名**,512×279 → 展示框 370×274),引用走 `assets/tempImages.ts` 的 `TEMP_CAMPAIGN_BANNER`,并登记进 `assets/images/temp/README.md`。横幅的图片裁切按设计稿折算成百分比(`137.4% × 129.9%`,偏移 `-18.7% / -26.8%`),这样任意屏宽下裁切一致。
+- 两处补设计稿没画的东西,代码内已注明:①两张弹层稿是独立画板、**没画遮罩**,这里补了一层黑 25%(弹层浮在长列表上没遮罩分不清层级,取值与 App 其它半透明层一致);②横幅品类胶囊与设计稿一样要 6px 背景模糊,RN 无原生 `backdrop-blur`(未引入 expo-blur),只保留底色 —— 与登录页返回按钮同一处理。
+- 导航:`PromotionsTab` 补 `headerShown: false`(页面自带「Promotion Center」顶部栏),新增 `CouponDetail` 路由同样关掉 Stack 头。
+- 设计稿里另有几处**隐藏图层**未实现,属设计稿自身的备选:Tab Navigation 的第三个页签、Section - Filter Chips、券详情页的 Verification Status 浮条。
+- 门禁:`cd client-app; npm run typecheck` 零报错;`npx expo export -p web` 打包通过、横幅图进包(验证产物 dist 已删)。未动任何 PHP。
+
+### ★ 2026-08-31(client-app「更多」及其子页,Figma section `More` `1695:5951`)
+
+- 用户给的链接是页面根 `0:1`(整张 Mobile 画布),不是具体屏。先用 `get_metadata` 列出页面下的 16 个 section,定位到 **`1695:5951` "More"**,其下 12 张稿 = 主页 + 7 个子页 + 4 个状态/变体。下次遇到只给 `0:1` 的链接可以照这个路子找。
+- **主页 `1690:4642`**:`MineScreen` 整页替换(原来是一张自制设置页)。结构:mTrip 字标顶部栏 → 资料卡(头像 + 姓名/邮箱 + 编辑钮 + 会员胶囊行)→ 渐变钱包卡(余额 + Top Up)→ 菜单卡一(Account / Referral / Accessibility Mode 开关)→ 菜单卡二(Guide / About / Terms / FAQ / Rate this app)→ 版本号。
+- **设计稿没有、但项目已有的功能没有丢**:多站点切换、多语言、GDPR 授权状态、订单入口这四项在设计稿里不存在,统一收进「更多」页**新增的第三张卡**(样式与前两张一致),下面跟一枚描边的退出按钮。语言行点开一个 `LanguageDialog`(复用开屏语言选择页的选项行样式),不再是原来那排小按钮。**这是本次唯一一处主动加内容的地方**,代码与文档都注明了。
+- 8 个子页全部落地(`screens/more/*`,均新增 Stack 路由、`headerShown: false`):
+  - **Account `1797:3913`** —— Personal Info / Account Security / Payment 三张分组卡。
+  - **Travelers `1797:4324`** —— 「Select Guest (n/3)」选择卡,行内含编辑与勾选。
+  - **EditEmail `1797:4630`** —— 注意这张稿的**图层名仍叫 Traveler,内容却是换绑邮箱**(复制页面时没改名),按内容命名为 EditEmail。
+  - **Refer & Earn `1687:4120`** / **Referral Status `1690:5296`** / **How Referral Work `1690:5735`** —— 统计卡抽成 `ReferralStatsCard` 两页共用;明细卡的五格进度(邀请→注册→下单→入住→奖励)按 `doneUntil` 决定打勾 / info / 空心圆。
+  - **Guides `2206:7544` + `2206:7891`** —— 两张稿是同一页的 Tutorials / Guides 两个页签,合成一页。
+  - **LegalTerms `1697:7249`** —— 五节条款,第 3 节挂退款时间表(主色 10% 底)。
+- **静态页边界**:后端只有资料(`/app/user/me`)与余额;钱包/充值、推荐码与推荐统计、教程内容、条款正文、性别/常住城市/换绑/常用旅客/银行卡/支付 PIN **都没有接口**。这些值取 `screens/more/moreDemo.ts` 的设计稿数据,动作一律 comingSoon;只有推荐码/链接的复制是真的(走已装的 `expo-clipboard`)。**注意 user-service 里其实有 referral 的写入侧**(注册时 `setupReferral` 生成本人推荐码、绑定推荐人),缺的只是查询侧的 App 接口 —— 补上 `/app/user/referral` 一类的读接口就能把这三页接活。
+- 图标新增 21 枚进 `HomeIcon`(info / person / personSmall / personEdit / medalStar / wallet / wallet20 / plus / chevronRight / people / peopleAdd / accessibility / questionCircle / bookInfo / bookQuestion / shieldTask / shieldKeyhole / renameA / personQuestion / viewDesktopMobile / play),path 全部取自导出的 SVG。**几组同名不同字形的都分开入表**:`chevronRight`(7.4×12)与已有的 `chevronDown`(12×7.4)不是同一字形、不能靠旋转顶替;`wallet`(15.833×15)与 `wallet20`(20)、`person`(44)与 `personSmall`(16)同理。可复用的没有重复入表:Rate this app 用已有的 `star`、City Of Residence 用已有的 `map`、Traveler 的关闭叉与筛选面板的 `close` 是同一条 path。
+- 素材只多了一张教程视频封面(`assets/images/temp/more/guide-thumbnail.jpg`,512×279 JPEG)。**Refer & Earn 的头图与优惠页活动横幅是同一张图(md5 一致),不重复入包**,`TEMP_REFERRAL_BANNER` 直接指向 `TEMP_CAMPAIGN_BANNER`。顺带记一条坑:该节点用 `get_design_context` 拿到的导出件是 709 字节的**空白 PNG**,真图要用 `download_assets` 取 `rawImages` —— 已写进 `assets/images/temp/README.md`。
+- 三处刻意偏离,代码内已注明:①教程卡标题设计稿用 Plus Jakarta Sans,App 只装了 Outfit / Inter,用 Outfit 600 顶替,不为一处标题再引一套字体;②条款页尾部有一枚**未具名的 CTA**(`1697:7517/7520`,文案没标),含义不明,未实现 —— 这是只读的法律文本页,顶部返回即可;③版本号设计稿写死「Version 2.4.1 (Build 892)」,这里改成读 `config/global.ts` 的 `APP_VERSION`(= 1.0.0),不带 build 号(项目没有构建号)。
+- 新增 i18n `more.*` 中英缅各 128 键,三份仍逐键对齐(共 583 键)。`utils/format.ts` 加了 `formatAmount`(只要数字、不带币种符号)—— 钱包卡与推荐统计卡把币种与数字分开排版,`formatMoney` 给不了。
+- 门禁:`cd client-app; npm run typecheck` 零报错;`npx expo export -p web` 打包通过、教程封面进包(dist 已删)。未动任何 PHP。
+
+### ★ 2026-08-31(client-app 通知页,Figma section `1770:3863`)
+
+- 这个 section(设计稿里没具名,叫 "Section 9")下是**两张 Notification 稿**:`1685:3607` System 与 `1685:3881` Booking,只有列表内容不同,故落成一页 + 分段页签 `screens/notification/NotificationScreen.tsx`,路由 `Notifications`。顶部栏与「更多」子页同款,直接复用 `MorePageLayout`。
+- 通知卡沿用全站同一套卡壳,只有三处自己的取值:标题 Inter 600/16(系统与「Booking confirmed」走主色,**「Booking Cancelled」走 `--tertiary` `#EC1317`**),正文用的是 **Outfit 600/16**(不是正文常用的 Inter,设计稿如此),未读点是 10 的主色圆压在卡右上(设计稿 `left340/top23`,换算成 padding 内的右上角)。未读点用 `View` + `borderRadius` 画 —— 导出件就是一个纯色 `circle`,没必要当资产。
+- **顺手做了一次收敛**:这已经是同一枚 `Tab Navigation` 第四次出现(优惠中心 `1390:2921` / 推荐明细 `1690:5543` / 教程与指南 `2206:7881` / 通知 `1685:3610`,四处取值完全一致),抽成 `components/common/SegmentedTabs.tsx`;`PromoTabs` 改为薄封装,教程页与推荐明细页删掉各自的行内副本。样式值原样搬迁,视觉无变化。
+- **静态页**:App 侧没有消息接口(只有 merchant-service 有商户通知路由,user / order 服务都没有),四条通知取 `screens/notification/notificationDemo.ts`;点卡片只做**本页面内**的已读态,不发请求。接口就绪后把 `NOTIFICATIONS` 换成列表返回值即可,组件不动。
+- 首页与「我的精选」顶部栏的铃铛原先是 `comingSoon`,现在改跳通知页(未登录仍先跳登录)。
+- 新增 i18n `notifications.*` 中英缅各 12 键,三份仍逐键对齐(共 595 键)。
+- 门禁:`cd client-app; npm run typecheck` 零报错;`npx expo export -p web` 打包通过(dist 已删)。无新增素材与依赖,未动任何 PHP。
+
 > 最后更新:2026-08-16(商户验证模块原型对齐整改 + 中英文国际化补齐,见下方「★ 商户验证原型对齐整改」)
 >
 > ⚠ 2026-08-20:此前基于 Figma 原型(stir-long v4.2.1)的商户管理整改已判定不符合正式 PRD(《mTrip_Super_Admin_Portal_PRD_Enterprise_v1.0_中文版.md》/《mTrip_Merchant App PRD_v1.0_中文版.md》),相关需求文档与整改清单已删除;商户验证与审批将按新 PRD 重新整改,方案见 docs/redesign/商户验证与审批整改方案.md。

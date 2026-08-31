@@ -88,6 +88,16 @@ cd ../admin-web && npm install && npm run dev    # http://localhost:5173,接口�
 
 ## 当前状态(2026-07)
 
+client-app 通知页（2026-08-31）：按 Figma section `1770:3863` 新增 `screens/notification/NotificationScreen.tsx`（System / Booking 两个页签，路由 `Notifications`），首页与「我的精选」顶部栏的铃铛由 comingSoon 改跳这里。同批把出现四次的分段页签抽成 `components/common/SegmentedTabs.tsx`（优惠中心 / 推荐明细 / 教程 / 通知共用）。**静态页**——App 侧没有消息接口，数据走 `notificationDemo.ts`。`npm run typecheck` 零报错、`expo export -p web` 打包通过；未执行 Git 操作。
+
+client-app「更多」及其子页（2026-08-31）：按 Figma section `More` `1695:5951` 重做 `screens/user/MineScreen.tsx`，并补齐 8 个子页（`screens/more/*`：Account / Travelers / EditEmail / Referral / ReferralStatus / HowReferralWorks / Guides / LegalTerms，均新增 Stack 路由）。新增 `components/more/*` 与 21 枚设计稿图标。**除资料与余额外都是静态页**——后端没有钱包/推荐查询/教程/条款接口，数据走 `screens/more/moreDemo.ts`，动作 comingSoon（推荐码复制是真的）。设计稿没有的多站点/多语言/GDPR/订单入口收进「更多」页新增的第三张卡，功能未丢。`npm run typecheck` 零报错、`expo export -p web` 打包通过；未执行 Git 操作。
+
+client-app 优惠中心（2026-08-31）：按 Figma `M-Trip / Promotion` node `1633:3300` 重做 `screens/promotions/PromotionsScreen.tsx`（原为占位空页），落成「一个壳 + 两个页签（优惠活动 / 我的优惠券）+ 使用说明与领券成功两个弹层」，并新增券详情页与 `CouponDetail` 路由。优惠券卡、内容卡壳、页签等收敛到 `components/promotion/*`；`HomeIcon` 新增 8 枚设计稿图标，新增依赖 `expo-clipboard`（券码复制）。**当前是静态页**：后端无活动/优惠券接口，数据走 `screens/promotions/promoSections.ts`，「领取」弹设计稿提示、其余动作 comingSoon。`npm run typecheck` 零报错、`expo export -p web` 打包通过；未执行 Git 操作。
+
+client-app 开屏与首次语言选择（2026-08-31）：按 Figma `M-Trip / Splash` node `452:2190` + `2163:8057` 新增 `screens/splash/SplashScreen.tsx`，`App.tsx` 改为 boot → language → app 三段驱动（开屏最少停留 1.2s，取代原 `LoadingView`）。**首次进入**弹语言选择卡，默认选中系统语言（新装 expo-localization，取不到回落 en-US），选定后写本地不再出现。新增缅甸语 `assets/i18n/my-MM.json`（382 键与 en-US 逐键对齐，**机器翻译，上线前需母语者复核**），`SUPPORTED_LANGS` 扩为 en-US / my-MM / zh-CN。`npm run typecheck` 零报错、`expo export -p web` 打包通过；未执行 Git 操作。
+
+client-app 注册页重做（2026-08-31）：按 Figma `M-Trip / Signup` node `505:1498` 重做 `screens/user/RegisterScreen.tsx`，与登录页同一套版式（主色底 + 插画 + 顶部栏 + 白色表单卡）。表单改为手机号(+95)/邮箱/密码/确认密码 + 条款勾选，删掉设计稿没有的昵称栏；`HomeIcon` 新增 `mail`（fluent:mail-20-filled 导出 path）。邮箱值已上送但 user-service `AuthController::register` 暂未接收该入参，落库需后端补一行。`npm run typecheck` 零报错；未执行 Git 操作。
+
 S6 Git补充（2026-08-28）：用户已单次授权S6清单32文件本地提交，不推送；标题、范围及验证见[阶段日志](docs/plans/m12/CHANGELOG.md)。下方S6“未提交”为开发交付快照，后续Git操作仍需单独授权。
 
 S6更新（2026-08-28）：规则版本/草稿发布隔离、不可覆盖的合规与警告历史、暂停/复核恢复、分级权限及事务内站内通知已实现；S1—S6隔离回归470项通过，313 PHP/58共享用例858断言/admin构建/client类型检查通过。32迁移本地重复验证；四个空数据页面及弹窗、中英切换已检查，完整有数据UI和生产上线待S7验收。详见[阶段6交付](docs/plans/m12/07-s6-delivery.md)。基线da15250，本阶段未暂存/提交/推送。

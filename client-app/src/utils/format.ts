@@ -15,6 +15,19 @@ export function formatMoney(amount: number | string, currency = 'EUR'): string {
   return dec ? `${symbol}${withComma}.${dec}` : `${symbol}${withComma}`;
 }
 
+/**
+ * 只要数字部分的金额(千分位,币种小数位规则同 formatMoney)
+ * 用于设计稿把币种码与数字分开排版的地方(如「更多」页的钱包卡:MMK / 250,000)
+ */
+export function formatAmount(amount: number | string, currency = 'EUR'): string {
+  const value = typeof amount === 'string' ? Number(amount) : amount;
+  if (!Number.isFinite(value)) return '-';
+  const digits = ZERO_DECIMAL_CURRENCIES.includes(currency) ? 0 : 2;
+  const [int, dec] = value.toFixed(digits).split('.');
+  const withComma = int.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  return dec ? `${withComma}.${dec}` : withComma;
+}
+
 /** 日期:2026-07-28 或含时间 */
 export function formatDate(input?: string | number | Date | null, withTime = false): string {
   if (!input) return '-';

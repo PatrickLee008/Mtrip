@@ -69,7 +69,124 @@
     }
   },
   "promotions": {
-    "empty": "暂无优惠活动"
+    "empty": "暂无优惠活动",
+    "title": "优惠中心",
+    "howToUse": "使用说明",
+    "tabs": {
+      "promotions": "优惠活动",
+      "coupons": "我的优惠券"
+    },
+    "campaign": {
+      "category": "酒店预订",
+      "name": "夏日酒店特惠",
+      "desc": "下次入住最高可省 MMK 100,000。",
+      "periodLabel": "活动期间",
+      "period": "2026年7月1日 - 2026年7月31日",
+      "cta": "立即订酒店"
+    },
+    "sections": {
+      "weekly": "每周优惠",
+      "monthly": "每月优惠",
+      "hotel": "酒店优惠券"
+    },
+    "coupon": {
+      "categories": {
+        "hotels": "酒店",
+        "food": "外卖",
+        "ride": "打车"
+      },
+      "badges": {
+        "newUser": "新用户",
+        "newUserExclusive": "新用户专享",
+        "limited": "限量",
+        "popular": "热门"
+      },
+      "actions": {
+        "claim": "领取",
+        "expired": "已过期",
+        "use": "立即使用"
+      },
+      "expiry": "有效期至 {{date}}",
+      "codeLabel": "优惠码",
+      "copy": "复制优惠码",
+      "copied": "优惠码已复制",
+      "claimed": "已领取"
+    },
+    "items": {
+      "hotelSave": {
+        "title": "立减 MMK 30,000",
+        "desc": "满 MMK 300,000 可用"
+      },
+      "freeDelivery": {
+        "title": "免配送费",
+        "desc": "前 3 单可用"
+      },
+      "rideOff": {
+        "title": "9 折",
+        "desc": "仅限周末打车"
+      },
+      "hotelWeekend": {
+        "title": "9 折",
+        "desc": "仅限周末入住"
+      }
+    },
+    "about": {
+      "title": "活动说明",
+      "body": "在活动期间预订心仪酒店,使用 mTrip 优惠券即可享受专属折扣。立即领券,下单时若订单满足活动条件,系统会自动为你抵扣。"
+    },
+    "terms": {
+      "title": "条款与条件",
+      "items": {
+        "claimFirst": "优惠券须先领取后使用。",
+        "onePerBooking": "每笔订单限用一张优惠券。",
+        "noCash": "优惠券不可兑换现金。",
+        "periodOnly": "优惠券仅在活动期间内有效。",
+        "selectedHotels": "优惠券可能仅适用于指定酒店。",
+        "minimumSpend": "可能设有最低消费金额要求。",
+        "availability": "优惠券数量有限,领完即止。",
+        "mtripRights": "mTrip 保留调整或提前结束本活动的权利,恕不另行通知。"
+      }
+    },
+    "howToUseSheet": {
+      "title": "优惠券怎么用",
+      "steps": {
+        "claim": "在优惠中心领取优惠券,或手动添加优惠码。",
+        "choose": "选择参与活动的酒店。",
+        "checkout": "下单时订单若满足活动条件,优惠券会自动抵扣。"
+      },
+      "close": "关闭"
+    },
+    "claimAlert": {
+      "title": "领取成功",
+      "desc": "已领取的优惠券可在「我的优惠券」中查看和使用。",
+      "close": "关闭"
+    },
+    "promoCode": {
+      "title": "有优惠码?",
+      "subtitle": "输入优惠码",
+      "placeholder": "abcdef123",
+      "add": "添加",
+      "more": "获取更多优惠券",
+      "invalid": "优惠码无效"
+    },
+    "myCoupons": {
+      "title": "我的优惠券",
+      "empty": "还没有领取优惠券"
+    },
+    "detail": {
+      "title": "优惠券详情",
+      "amount": "MMK 20,000",
+      "off": "立减",
+      "descriptionTitle": "活动介绍",
+      "body": "预订指定酒店并满足最低消费即可立减 MMK 20,000。犒赏自己一次奢享入住,或规划下一场美食之旅。",
+      "terms": {
+        "onePerBooking": "每笔订单限用一张。",
+        "noCombine": "不可与其他优惠或优惠券叠加使用。",
+        "periodOnly": "仅在本期活动期间内有效。",
+        "elitePartners": "仅适用于指定的精选合作酒店。"
+      },
+      "cta": "立即使用"
+    }
   },
   "home": {
     "searchPlaceholder": "想去哪里?",
@@ -238,7 +355,279 @@
     "mobilePlaceholder": "9xxxxxxxx",
     "passwordPlaceholder": "请输入密码",
     "rememberMe": "记住我",
-    "orLoginWith": "或使用以下方式登录"
+    "orLoginWith": "或使用以下方式登录",
+    "emailPlaceholder": "name@example.com",
+    "confirmPasswordPlaceholder": "请再次输入密码",
+    "agreePrefix": "我已阅读并同意",
+    "terms": "服务条款",
+    "agreeAnd": "和",
+    "privacyPolicy": "隐私政策",
+    "invalidEmail": "邮箱格式不正确",
+    "passwordMismatch": "两次输入的密码不一致",
+    "agreeRequired": "请先同意服务条款与隐私政策",
+    "agreeSuffix": ""
+  },
+  "more": {
+    "rewards": "你有 {{count}} 项专属权益",
+    "version": "版本 {{version}}",
+    "wallet": {
+      "title": "mTrip 钱包",
+      "balanceLabel": "可用余额",
+      "topUp": "充值"
+    },
+    "menu": {
+      "account": {
+        "title": "账号",
+        "desc": "设置、安全、支付"
+      },
+      "referral": {
+        "title": "推荐有奖",
+        "desc": "邀请好友,一起赚奖励"
+      },
+      "accessibility": {
+        "title": "无障碍模式",
+        "desc": "开启轻量模式"
+      },
+      "guide": {
+        "title": "使用指南",
+        "desc": "查看视频与图文教程"
+      },
+      "about": {
+        "title": "关于",
+        "desc": "关于 mTrip"
+      },
+      "terms": {
+        "title": "条款与条件",
+        "desc": "法律与隐私"
+      },
+      "faq": {
+        "title": "常见问题",
+        "desc": "常见问题解答"
+      },
+      "rate": {
+        "title": "给应用评分",
+        "desc": "反馈与评分"
+      },
+      "orders": {
+        "desc": "订单与支付"
+      },
+      "site": {
+        "desc": "选择站点"
+      },
+      "language": {
+        "desc": "应用显示语言"
+      }
+    },
+    "account": {
+      "title": "账号",
+      "notSet": "未设置",
+      "choose": "去选择",
+      "manage": "管理",
+      "personal": {
+        "title": "个人资料",
+        "displayName": "昵称",
+        "gender": "性别",
+        "city": "常住城市",
+        "traveler": "常用旅客"
+      },
+      "security": {
+        "title": "账号安全",
+        "email": "绑定邮箱",
+        "phone": "绑定手机",
+        "password": "重置密码"
+      },
+      "payment": {
+        "title": "支付",
+        "banking": "银行卡",
+        "bankingDesc": "管理银行卡与账户",
+        "pin": "支付密码"
+      }
+    },
+    "travelers": {
+      "title": "常用旅客",
+      "guest": "旅客",
+      "selectGuest": "选择同行人({{count}}/{{max}})",
+      "addGuest": "新增旅客",
+      "done": "完成",
+      "maxReached": "最多可选 {{max}} 位同行人"
+    },
+    "editEmail": {
+      "title": "换绑邮箱",
+      "desc": "你的账号当前已绑定邮箱。如需更换为新邮箱,需要先验证身份。",
+      "sendCode": "发送验证码"
+    },
+    "referral": {
+      "title": "推荐有奖",
+      "bannerTitle": "邀请好友\n一起赚取奖励",
+      "bannerDesc": "好友在 mTrip 完成首笔酒店订单后,你可获得 50,000 MMK 奖励。",
+      "totalRewards": "累计获得奖励",
+      "stats": {
+        "invited": "已邀请",
+        "pending": "待结算",
+        "rewarded": "已到账"
+      },
+      "codeLabel": "你的推荐码",
+      "linkLabel": "你的推荐链接",
+      "copy": "复制",
+      "copied": "已复制到剪贴板",
+      "how": {
+        "title": "推荐规则",
+        "rulesTitle": "奖励规则",
+        "steps": {
+          "invite": {
+            "title": "邀请好友",
+            "desc": "把你的推荐链接或推荐码分享到任意社交平台。"
+          },
+          "join": {
+            "title": "好友注册",
+            "desc": "好友通过你的推荐链接注册,或在注册时填写你的推荐码。"
+          },
+          "book": {
+            "title": "完成首单",
+            "desc": "好友在 mTrip 完成第一笔酒店订单。"
+          },
+          "stay": {
+            "title": "完成入住",
+            "desc": "订单需真实完成,已取消的订单不计入。"
+          },
+          "reward": {
+            "title": "获得奖励",
+            "desc": "奖励会自动发放到你的 mTrip 钱包。"
+          }
+        },
+        "rules": {
+          "firstBooking": "仅好友首笔已完成的酒店订单计入。",
+          "noCancelled": "已取消或已退款的订单不计入。",
+          "afterStay": "奖励在入住完成后发放。",
+          "toWallet": "奖励将发放到你的 mTrip 钱包。",
+          "campaignTerms": "推荐奖励以当期活动条款为准。"
+        }
+      },
+      "status": {
+        "title": "推荐明细",
+        "empty": "暂无记录",
+        "tabs": {
+          "pending": "待结算",
+          "rewarded": "已到账"
+        },
+        "desc": {
+          "waitingBooking": "已注册,等待首笔订单。",
+          "waitingStay": "已下单,等待完成入住。",
+          "rewarded": "奖励已发放到钱包。"
+        },
+        "progress": {
+          "invited": "已邀请",
+          "registered": "已注册",
+          "book": "已下单",
+          "stay": "已入住",
+          "reward": "已奖励"
+        }
+      }
+    },
+    "guides": {
+      "title": "教程与指南",
+      "tabs": {
+        "tutorials": "视频教程",
+        "guides": "图文指南"
+      },
+      "duration": "{{minutes}} 分钟",
+      "videos": {
+        "booking": {
+          "title": "观看酒店预订教程",
+          "desc": "如何预订酒店"
+        },
+        "register": {
+          "title": "注册账号",
+          "desc": "如何注册账号"
+        },
+        "cancel": {
+          "title": "取消订单",
+          "desc": "如何取消我的订单"
+        }
+      },
+      "articles": {
+        "hotelBooking": "酒店预订指南",
+        "payment": "支付指南",
+        "cancellation": "取消与退款指南"
+      }
+    },
+    "legal": {
+      "title": "条款与条件",
+      "sections": {
+        "useOfService": {
+          "title": "服务使用",
+          "body": "欢迎使用 MyanmarTrip。访问或使用本应用即表示你同意受本条款与条件约束。本条款适用于所有访问或使用本服务的访客与用户。",
+          "bullets": {
+            "age": "你须年满 18 周岁方可使用本服务。",
+            "confidentiality": "你需自行妥善保管账号信息。",
+            "legalUse": "你同意不将本服务用于任何非法或未经授权的用途。"
+          }
+        },
+        "bookingPolicy": {
+          "title": "预订政策",
+          "body": "通过 MyanmarTrip 提交的所有预订均以库存情况以及本地合作方(酒店、旅行社、交通服务商)的具体条款为准。",
+          "bullets": {
+            "confirmedOnPayment": "订单需按结算时的要求支付全款或部分款项后方为确认。",
+            "intermediary": "MyanmarTrip 作为居间平台,不对第三方服务商的履约失败承担责任。"
+          }
+        },
+        "payment": {
+          "title": "支付与退款",
+          "body": "我们以安全方式处理支付。退款政策依所订服务类型与取消时间而定。"
+        },
+        "responsibilities": {
+          "title": "用户责任",
+          "body": "在缅甸旅行期间,用户应尊重当地法律、习俗与文化遗产场所。",
+          "bullets": {
+            "visa": "请确保持有有效签证与旅行证件。",
+            "healthSafety": "请遵守当地卫生与安全规定。",
+            "dressCode": "进入宗教场所时请着装得体(遮盖肩部与膝盖)。"
+          }
+        },
+        "privacy": {
+          "title": "隐私政策",
+          "body": "我们重视你的隐私。隐私政策说明了在你使用 MyanmarTrip 时,我们如何收集、使用与保护你的个人数据。使用本服务即表示你同意按该政策收集与使用相关信息。"
+        }
+      },
+      "refund": {
+        "title": "标准取消时间表:",
+        "over14": "开始前 14 天以上:",
+        "days7to14": "开始前 7-14 天:",
+        "under7": "开始前不足 7 天:",
+        "amount": "退款 {{percent}}",
+        "none": "不予退款"
+      }
+    }
+  },
+  "notifications": {
+    "title": "通知",
+    "empty": "暂无通知",
+    "tabs": {
+      "system": "系统",
+      "booking": "订单"
+    },
+    "items": {
+      "version12": {
+        "title": "有新版本可用",
+        "body": "版本 1.2 已发布"
+      },
+      "version11": {
+        "title": "有新版本可用",
+        "body": "版本 1.1 已发布"
+      },
+      "bookingConfirmed": {
+        "title": "预订已确认",
+        "body": "你在 Hotel Mindama 的预订已确认,相关凭证已发送至邮箱。"
+      },
+      "bookingCancelled": {
+        "title": "预订已取消",
+        "body": "你在 Hotel Mindama 的预订已取消。"
+      }
+    }
+  },
+  "splash": {
+    "chooseLanguage": "请选择语言以继续",
+    "continue": "继续"
   },
   "hotels": {
     "title": "酒店与民宿",

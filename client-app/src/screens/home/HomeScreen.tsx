@@ -144,7 +144,7 @@ export default function HomeScreen() {
       <HomeHeader
         points={profile?.points ?? 0}
         onPressPoints={() => (isLogin ? comingSoon() : navigation.navigate('Login'))}
-        onPressMessage={() => (isLogin ? comingSoon() : navigation.navigate('Login'))}
+        onPressMessage={() => (isLogin ? navigation.navigate('Notifications') : navigation.navigate('Login'))}
       />
 
       <ScrollView

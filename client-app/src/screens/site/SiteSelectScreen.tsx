@@ -41,9 +41,10 @@ export default function SiteSelectScreen() {
     setSwitching(site.id);
     try {
       await switchSite(site.id);
-      // 站点默认语言在支持范围内时联动 i18n
+      // 站点默认语言在支持范围内时联动 i18n;
+      // 但用户在开屏语言选择页(或「我的」里)手选过就不再覆盖 —— 手选优先级高于站点默认
       const lang = site.language as Lang;
-      if (SUPPORTED_LANGS.includes(lang)) {
+      if (!useCommonStore.getState().langChosen && SUPPORTED_LANGS.includes(lang)) {
         await setLang(lang);
         changeLanguage(lang);
       }

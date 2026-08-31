@@ -16,7 +16,11 @@ interface UserState {
   /** App 启动时从本地恢复登录态 */
   hydrate: () => Promise<void>;
   login: (mobile: string, password: string) => Promise<void>;
-  register: (mobile: string, password: string, nickname?: string) => Promise<void>;
+  register: (
+    mobile: string,
+    password: string,
+    extra?: { nickname?: string; email?: string },
+  ) => Promise<void>;
   logout: () => Promise<void>;
   /** 仅清本地(401 时由请求层调用) */
   clearLocal: () => void;
@@ -44,8 +48,8 @@ export const useUserStore = create<UserState>((set, get) => ({
     set({ token: result.token, profile: result.user, isLogin: true });
   },
 
-  async register(mobile, password, nickname) {
-    const result = await apiRegister({ mobile, password, nickname });
+  async register(mobile, password, extra) {
+    const result = await apiRegister({ mobile, password, ...extra });
     await applyAuth(result);
     set({ token: result.token, profile: result.user, isLogin: true });
   },
