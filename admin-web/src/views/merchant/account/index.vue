@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, reactive, ref } from 'vue';
+import { computed, onMounted, reactive, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { message } from 'ant-design-vue';
 import { PlusOutlined } from '@ant-design/icons-vue';
@@ -26,6 +26,11 @@ async function searchMerchant(keyword: string): Promise<void> {
     searching.value = false;
   }
 }
+
+// 空关键词预载首页商户,否则不打字点开下拉恒为空
+onMounted(() => {
+  void searchMerchant('');
+});
 
 // ---------- 账户列表 ----------
 const loading = ref(false);
@@ -72,7 +77,7 @@ const form = reactive({
 
 function openCreate(): void {
   if (!merchantId.value) {
-    message.warning(t('merchant.accountPage.merchant'));
+    message.warning(t('common.pleaseSelect') + t('merchant.accountPage.merchant'));
     return;
   }
   editingId.value = 0;

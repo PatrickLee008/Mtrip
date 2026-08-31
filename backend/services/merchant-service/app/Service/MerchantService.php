@@ -145,25 +145,9 @@ class MerchantService
         ];
     }
 
-    /** 随机初始密码:12位含大小写字母数字 */
+    /** 随机初始密码:12位,保证含大小写字母与数字(见 PasswordGenerator) */
     private function randomPassword(): string
     {
-        $lower = 'abcdefghjkmnpqrstuvwxyz';
-        $upper = 'ABCDEFGHJKMNPQRSTUVWXYZ';
-        $digits = '23456789';
-        $pool = $lower . $upper . $digits;
-        $chars = [
-            $lower[random_int(0, strlen($lower) - 1)],
-            $upper[random_int(0, strlen($upper) - 1)],
-            $digits[random_int(0, strlen($digits) - 1)],
-        ];
-        while (count($chars) < 12) {
-            $chars[] = $pool[random_int(0, strlen($pool) - 1)];
-        }
-        for ($i = count($chars) - 1; $i > 0; --$i) {
-            $j = random_int(0, $i);
-            [$chars[$i], $chars[$j]] = [$chars[$j], $chars[$i]];
-        }
-        return implode('', $chars);
+        return \App\Support\PasswordGenerator::random();
     }
 }

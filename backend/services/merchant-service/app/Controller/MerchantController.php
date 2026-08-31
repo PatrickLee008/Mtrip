@@ -6,6 +6,7 @@ namespace App\Controller;
 
 use App\Service\MerchantService;
 use App\Service\MerchantStatusService;
+use App\Support\MerchantModule;
 use Hyperf\DbConnection\Db;
 use Hyperf\Di\Annotation\Inject;
 use Mtrip\Shared\Annotation\Permission;
@@ -148,6 +149,8 @@ class MerchantController extends AbstractController
             'merchant_type', 'credit_code', 'legal_person', 'contact_name', 'contact_phone',
             'contact_email', 'address', 'remark', 'commission_rate', 'commission_plan', 'settlement_cycle', 'status',
             'status_version', 'suspended_until', 'reactivation_requires_super', 'created_at',
+            // 编辑弹窗从列表行回填,缺列会把商户已配置的配额悄悄改回默认 3
+            'sub_account_limit',
         ]))->selectSub((clone $blacklist)->selectRaw('COUNT(*)'), 'is_blacklisted')
             ->selectSub(Db::table('merchant_admin as login')->whereNull('login.deleted_at')
                 ->whereColumn('login.merchant_id', 'm.id')->whereColumn('login.site_id', 'm.site_id')
@@ -213,7 +216,7 @@ class MerchantController extends AbstractController
             'address', 'remark', 'commission_rate', 'commission_plan', 'settlement_cycle', 'status', 'status_version', 'suspended_until',
             'reactivation_requires_super', 'created_at', 'updated_at', 'last_login_at', 'is_blacklisted',
             'is_vip', 'two_fa_enabled', 'two_fa_method', 'two_fa_enrolled_at', 'two_fa_last_reset_at',
-            'two_fa_status', 'access_status', 'access_code_configured',
+            'two_fa_status', 'access_status', 'access_code_configured', 'sub_account_limit',
         ]));
 
         $merchant = $this->directoryFields([$merchant])[0];
@@ -274,6 +277,7 @@ class MerchantController extends AbstractController
             'merchant' => $merchant, 'accounts' => $accounts, 'admins' => $admins,
             'applications' => $applications, 'businesses' => $businesses, 'properties' => $properties,
             'group' => $group === null ? null : (array) $group,
+            'modules' => MerchantModule::granted((int) $merchant['id']),
         ]);
     }
 
@@ -295,10 +299,21 @@ class MerchantController extends AbstractController
     }
 
     #[Permission('merchant:list:2fa')]
-    public function resetTwoFa(): array
+    /**
+     * 重置 2FA 并同时重置登录密码,返回一次性明文供管理员转达。
+     * 响应带 no-store:明文只在这一次响应里出现,不可被缓存或回退取回。
+     */
+    public function resetTwoFa(): \Psr\Http\Message\ResponseInterface
     {
-        (new \App\Service\MerchantAccountSecurityService())->reset($this->requireId('merchantId'), $this->requireId('accountId'), $this->requireId('expectedVersion'), $this->requireStr('reason'));
-        return Result::success(null, '2FA已重置，目标账号下次登录需重新注册');
+        $credentials = (new \App\Service\MerchantAccountSecurityService())->reset(
+            $this->requireId('merchantId'),
+            $this->requireId('accountId'),
+            $this->requireId('expectedVersion'),
+            $this->requireStr('reason')
+        );
+        return $this->response
+            ->json(Result::success($credentials, '2FA与登录密码已重置，请立即转达新密码；目标账号下次登录需重新注册验证器'))
+            ->withHeader('Cache-Control', 'no-store');
     }
 
     #[Permission('merchant:list:impersonate')]
@@ -446,6 +461,50 @@ class MerchantController extends AbstractController
             'settlement_cycle' => $cycle,
         ]);
         return Result::success(null, '佣金设置已更新');
+    }
+
+    /** 功能模块授权现状:全部可选模块 + 该商户已开通模块 */
+    public function modules(): array
+    {
+        $merchant = $this->findScoped($this->requireId('merchantId'));
+        $granted = MerchantModule::granted((int) $merchant['id']);
+        return Result::success([
+            'available' => array_map(
+                static fn (string $key, string $name) => ['key' => $key, 'name' => $name],
+                array_keys(MerchantModule::CATALOG),
+                array_values(MerchantModule::CATALOG)
+            ),
+            'granted' => $granted,
+            // 从未授权过 = 历史商户,当前按全模块可见;保存一次后即转为显式管控
+            'unmanaged' => $granted === [],
+        ]);
+    }
+
+    /** 覆盖式保存功能模块授权(酒店/餐饮…);清空=收回全部业务模块,仅留公共菜单 */
+    #[Permission('merchant:list:module')]
+    public function moduleGrant(): array
+    {
+        $merchant = $this->findScoped($this->requireId('merchantId'));
+        $modules = MerchantModule::sanitize((array) $this->input('modules', []));
+        $adminId = AdminContext::adminId();
+        Db::transaction(static function () use ($merchant, $modules, $adminId) {
+            Db::table('merchant_module_grant')->where('merchant_id', $merchant['id'])->delete();
+            if ($modules !== []) {
+                Db::table('merchant_module_grant')->insert(array_map(
+                    static fn (string $key) => [
+                        'site_id' => (int) $merchant['site_id'],
+                        'merchant_id' => (int) $merchant['id'],
+                        'module_key' => $key,
+                        'granted_by' => $adminId,
+                    ],
+                    $modules
+                ));
+            }
+        });
+        // 授权变更影响 JWT 里的 permissions 快照,踢下线强制重新登录取新权限
+        Db::table('merchant_admin')->where('merchant_id', $merchant['id'])->whereNull('deleted_at')
+            ->update(['auth_version' => Db::raw('auth_version + 1')]);
+        return Result::success(['granted' => $modules], '功能模块已更新,商户需重新登录生效');
     }
 
     /** 结算账户列表(账号脱敏) */
@@ -657,6 +716,14 @@ class MerchantController extends AbstractController
         }
         if ($this->input('latitude') !== null) {
             $data['latitude'] = $this->floatInput('latitude');
+        }
+        // 子账号配额(不含主账号);0=不允许建子账号,上限 50 防误填
+        if ($this->input('subAccountLimit') !== null) {
+            $limit = $this->intInput('subAccountLimit');
+            if ($limit < 0 || $limit > 50) {
+                throw new BusinessException(ErrorCode::PARAM_ERROR, '子账号上限取值 0-50');
+            }
+            $data['sub_account_limit'] = $limit;
         }
         return $data;
     }

@@ -206,6 +206,8 @@ export default {
     pwdRule: 'At least 8 chars with letters and digits',
     assignRole: 'Assign Roles',
     statusToggle: 'Enable/Disable',
+    quota: 'Sub-accounts {used}/{limit}',
+    quotaFull: 'Sub-account limit reached ({limit}). Contact the platform to raise it.',
   },
   role: {
     roleName: 'Role Name',

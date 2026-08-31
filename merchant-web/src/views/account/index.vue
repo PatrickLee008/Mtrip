@@ -9,6 +9,7 @@ import { useTable, type TableRow } from '@/composables/useTable';
 import {
   apiAccountAdd,
   apiAccountList,
+  apiAccountQuota,
   apiAccountResetPassword,
   apiAccountToggleStatus,
   apiAccountUpdate,
@@ -34,6 +35,13 @@ const columns = [
   { title: t('common.operation'), key: 'action', width: 220, fixed: 'right' as const },
 ];
 
+// ---------- 子账号配额(平台配置,主账号不占额) ----------
+const quota = reactive({ limit: 0, used: 0, remaining: 0 });
+
+async function loadQuota(): Promise<void> {
+  Object.assign(quota, await apiAccountQuota());
+}
+
 // ---------- 新增/编辑 ----------
 const modalOpen = ref(false);
 const modalSaving = ref(false);
@@ -41,6 +49,10 @@ const editingId = ref(0);
 const form = reactive({ username: '', password: '', realName: '', mobile: '' });
 
 function openCreate(): void {
+  if (quota.remaining <= 0) {
+    message.warning(t('account.quotaFull', { limit: quota.limit }));
+    return;
+  }
   editingId.value = 0;
   Object.assign(form, { username: '', password: '', realName: '', mobile: '' });
   modalOpen.value = true;
@@ -76,6 +88,7 @@ async function saveAccount(): Promise<void> {
     message.success(t('common.saveSuccess'));
     modalOpen.value = false;
     void load();
+    void loadQuota();
   } finally {
     modalSaving.value = false;
   }
@@ -143,6 +156,7 @@ async function saveGrant(): Promise<void> {
 
 onMounted(() => {
   void load();
+  void loadQuota();
 });
 </script>
 
@@ -171,9 +185,14 @@ onMounted(() => {
     <a-card :bordered="false" class="mtrip-card-shadow">
       <template #title>{{ t('menu.account') }}</template>
       <template #extra>
-        <a-button v-perm="'mch:account:add'" type="primary" @click="openCreate">
-          <template #icon><PlusOutlined /></template>{{ t('account.addTitle') }}
-        </a-button>
+        <a-space>
+          <span style="color: #94a3b8; font-size: 12px">
+            {{ t('account.quota', { used: quota.used, limit: quota.limit }) }}
+          </span>
+          <a-button v-perm="'mch:account:add'" type="primary" :disabled="quota.remaining <= 0" @click="openCreate">
+            <template #icon><PlusOutlined /></template>{{ t('account.addTitle') }}
+          </a-button>
+        </a-space>
       </template>
       <a-table
         :columns="columns"

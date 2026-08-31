@@ -56,14 +56,9 @@ class StoreService
         return $username;
     }
 
-    /** 随机初始密码:12位含大小写字母数字 */
+    /** 随机初始密码:12位,保证含大小写字母与数字(见 PasswordGenerator) */
     private function randomPassword(): string
     {
-        $pool = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKMNPQRSTUVWXYZ23456789';
-        $password = '';
-        for ($i = 0; $i < 12; ++$i) {
-            $password .= $pool[random_int(0, strlen($pool) - 1)];
-        }
-        return $password;
+        return \App\Support\PasswordGenerator::random();
     }
 }

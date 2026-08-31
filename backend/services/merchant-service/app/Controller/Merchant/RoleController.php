@@ -42,10 +42,12 @@ class RoleController extends AbstractController
     /** 可分配菜单树(本 account_type 可见的全部菜单) */
     public function menuTree(): array
     {
-        $rows = array_map(static fn ($r) => (array) $r, Db::table('merchant_menu')
+        $query = Db::table('merchant_menu')
             ->where('status', 1)->whereNull('deleted_at')
             ->whereRaw('FIND_IN_SET(?, account_scope)', [MerchantContext::accountType()])
-            ->orderBy('sort')->orderBy('id')->get()->all());
+            ->orderBy('sort')->orderBy('id');
+        $this->applyModuleScope($query);
+        $rows = array_map(static fn ($r) => (array) $r, $query->get()->all());
         return Result::success(MenuTreeHelper::build($rows));
     }
 
@@ -123,10 +125,11 @@ class RoleController extends AbstractController
         $role = $this->findScopedRole($this->requireId());
         $this->assertEditable($role);
         $menuIds = array_values(array_unique(array_map('intval', (array) $this->input('menuIds', []))));
-        // 只接受本 account_type 可见的菜单,越权ID直接过滤
-        $allowed = Db::table('merchant_menu')->where('status', 1)->whereNull('deleted_at')
-            ->whereRaw('FIND_IN_SET(?, account_scope)', [MerchantContext::accountType()])
-            ->pluck('id')->map(static fn ($id) => (int) $id)->all();
+        // 只接受本 account_type 可见、且本商户已开通模块内的菜单,越权ID直接过滤
+        $allowedQuery = Db::table('merchant_menu')->where('status', 1)->whereNull('deleted_at')
+            ->whereRaw('FIND_IN_SET(?, account_scope)', [MerchantContext::accountType()]);
+        $this->applyModuleScope($allowedQuery);
+        $allowed = $allowedQuery->pluck('id')->map(static fn ($id) => (int) $id)->all();
         $menuIds = array_values(array_intersect($menuIds, $allowed));
         Db::transaction(static function () use ($role, $menuIds) {
             Db::table('merchant_role_menu')->where('role_id', $role['id'])->delete();
@@ -172,6 +175,16 @@ class RoleController extends AbstractController
         $ids = Db::table('merchant_admin_role')->where('admin_id', $account['id'])
             ->pluck('role_id')->map(static fn ($id) => (int) $id)->all();
         return Result::success(['roleIds' => $ids]);
+    }
+
+    /** 施加本商户功能模块可见性(公共菜单恒放行);集团账号与未做模块管控的商户不裁剪 */
+    private function applyModuleScope(Builder $query): void
+    {
+        \App\Service\Merchant\MerchantAuthService::applyModuleScope(
+            $query,
+            MerchantContext::accountType(),
+            MerchantContext::merchantId()
+        );
     }
 
     /** 本主体、本 account_type 可见角色(内置 + 自定义) */

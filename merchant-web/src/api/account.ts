@@ -17,6 +17,11 @@ export function apiAccountList(params: Record<string, unknown>): Promise<PageDat
   return get('/merchant/account/list', params);
 }
 
+/** 子账号配额(平台在商户/集团上配置,主账号不占额) */
+export function apiAccountQuota(): Promise<{ limit: number; used: number; remaining: number }> {
+  return get('/merchant/account/quota');
+}
+
 export function apiAccountAdd(data: Record<string, unknown>): Promise<{ id: number }> {
   return post('/merchant/account/add', data);
 }

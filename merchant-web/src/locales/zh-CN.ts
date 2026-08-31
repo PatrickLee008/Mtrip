@@ -205,6 +205,8 @@ export default {
     pwdRule: '至少 8 位，需含字母和数字',
     assignRole: '分配角色',
     statusToggle: '启用/禁用',
+    quota: '子账号 {used}/{limit}',
+    quotaFull: '子账号数量已达上限（{limit} 个），如需增加请联系平台',
   },
   role: {
     roleName: '角色名称',

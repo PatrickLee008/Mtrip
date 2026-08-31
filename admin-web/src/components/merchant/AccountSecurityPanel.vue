@@ -26,6 +26,15 @@ async function load(): Promise<void> {
 }
 watch(() => props.merchantId, load, { immediate: true });
 function openReset(account: SecurityAccount): void { target.value = account; reason.value = ''; }
+
+// 重置结果:明文密码仅此一次返回,关闭即不可再取回
+const credentials = ref<{ username: string; password: string } | null>(null);
+
+async function copyCredential(value: string): Promise<void> {
+  await navigator.clipboard.writeText(value);
+  message.success(t('merchantSecurity.credentialCopied'));
+}
+
 function confirm(): void {
   const account = target.value;
   if (!account || !reason.value.trim()) { message.warning(t('merchantSecurity.reasonRequired')); return; }
@@ -34,9 +43,9 @@ function confirm(): void {
     async onOk() {
       busy.value = true;
       try {
-        await apiMerchantReset2Fa({ merchantId: props.merchantId, accountId: account.id, expectedVersion: account.auth_version, reason: reason.value.trim() });
+        const result = await apiMerchantReset2Fa({ merchantId: props.merchantId, accountId: account.id, expectedVersion: account.auth_version, reason: reason.value.trim() });
         target.value = null;
-        message.success(t('merchant.profile.reset2FaSuccess'));
+        credentials.value = result;
         await load();
       } finally { busy.value = false; }
     },
@@ -63,6 +72,34 @@ function confirm(): void {
   <a-alert v-else :message="t('merchantSecurity.superOnly')" type="info" />
   <a-modal :open="!!target" :title="t('merchant.profile.reset2Fa')" :confirm-loading="busy" @cancel="target = null" @ok="confirm">
     <p>{{ target?.username }}</p>
+    <a-alert :message="t('merchantSecurity.resetIncludesPassword')" type="warning" show-icon style="margin-bottom: 12px" />
     <a-form layout="vertical"><a-form-item :label="t('merchantSecurity.reason')" required><a-textarea v-model:value="reason" :maxlength="200" /></a-form-item></a-form>
+  </a-modal>
+
+  <!-- 重置结果:明文密码仅此一次可见,不提供"取消",避免误以为可以放弃后重看 -->
+  <a-modal
+    :open="!!credentials"
+    :title="t('merchantSecurity.resetDoneTitle')"
+    :closable="false"
+    :mask-closable="false"
+    :cancel-button-props="{ style: { display: 'none' } }"
+    :ok-text="t('merchantSecurity.credentialAcknowledge')"
+    @ok="credentials = null"
+  >
+    <a-alert :message="t('merchantSecurity.credentialVisibleOnce')" type="warning" show-icon style="margin-bottom: 16px" />
+    <a-descriptions :column="1" bordered size="small">
+      <a-descriptions-item :label="t('merchantSecurity.account')">
+        <a-typography-text copyable>{{ credentials?.username }}</a-typography-text>
+      </a-descriptions-item>
+      <a-descriptions-item :label="t('merchantSecurity.newPassword')">
+        <a-space>
+          <strong style="font-family: monospace; font-size: 15px; letter-spacing: 1px">{{ credentials?.password }}</strong>
+          <a-button size="small" @click="credentials && copyCredential(credentials.password)">
+            {{ t('merchantSecurity.credentialCopy') }}
+          </a-button>
+        </a-space>
+      </a-descriptions-item>
+    </a-descriptions>
+    <p style="margin: 12px 0 0; color: #64748b; font-size: 12px">{{ t('merchantSecurity.resetDoneHint') }}</p>
   </a-modal>
 </template>

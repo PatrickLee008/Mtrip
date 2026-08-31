@@ -27,7 +27,7 @@ export function apiMerchantPropertyBind(data: { merchantId: number; businessId: 
   return post('/admin/merchant/property/bind', data);
 }
 
-export function apiMerchantDetail(id: number): Promise<{ merchant: Row; accounts: Row[]; admins: Row[]; applications: Row[]; businesses: Row[]; properties: Row[]; group: Row | null }> {
+export function apiMerchantDetail(id: number): Promise<{ merchant: Row; accounts: Row[]; admins: Row[]; applications: Row[]; businesses: Row[]; properties: Row[]; group: Row | null; modules: string[] }> {
   return get('/admin/merchant/detail', { id });
 }
 
@@ -65,7 +65,8 @@ export function apiMerchantActivate(id: number): Promise<null> {
 /** 重置商户 2FA(整改 B3):商户下次登录需重新绑定 */
 export interface SecurityAccount { id: number; username: string; real_name: string; account_type: number; status: number; two_fa_status: number; two_fa_method: string; two_fa_enrolled_at: string | null; two_fa_last_reset_at: string | null; auth_version: number }
 export function apiMerchantSecurityAccounts(merchantId: number): Promise<SecurityAccount[]> { return get('/admin/merchant/security/accounts', { merchantId }); }
-export function apiMerchantReset2Fa(data: { merchantId: number; accountId: number; expectedVersion: number; reason: string }): Promise<null> {
+/** 重置 2FA 并同时重置登录密码;明文密码仅此一次返回,关闭弹窗后无法再取回 */
+export function apiMerchantReset2Fa(data: { merchantId: number; accountId: number; expectedVersion: number; reason: string }): Promise<{ username: string; password: string }> {
   return post('/admin/merchant/reset-2fa', data);
 }
 
@@ -133,6 +134,20 @@ export function apiMerchantCommission(data: {
   settlementCycle: number;
 }): Promise<null> {
   return post('/admin/merchant/commission', data);
+}
+
+/** 功能模块授权现状:available 全部可选,granted 已开通,unmanaged=从未授权(当前按全开通) */
+export function apiMerchantModules(merchantId: number): Promise<{
+  available: { key: string; name: string }[];
+  granted: string[];
+  unmanaged: boolean;
+}> {
+  return get('/admin/merchant/modules', { merchantId });
+}
+
+/** 覆盖式保存功能模块授权;保存后商户需重新登录生效 */
+export function apiMerchantModuleGrant(merchantId: number, modules: string[]): Promise<{ granted: string[] }> {
+  return post('/admin/merchant/module-grant', { merchantId, modules });
 }
 
 export function apiMerchantAccounts(merchantId: number): Promise<Row[]> {

@@ -52,10 +52,23 @@ class AccountController extends AbstractController
         return Result::page($list, $total, $page, $pageSize);
     }
 
+    /** 子账号配额(管理端在商户/集团上配置,默认 3;主账号不占额) */
+    public function quota(): array
+    {
+        return Result::success($this->quotaInfo());
+    }
+
     /** 新增子账号(is_owner=0,与主账号同主体、同 account_type) */
     #[Permission('mch:account:add')]
     public function create(): array
     {
+        $quota = $this->quotaInfo();
+        if ($quota['remaining'] <= 0) {
+            throw new BusinessException(
+                ErrorCode::DATA_CONFLICT,
+                "子账号数量已达上限({$quota['limit']}个),如需增加请联系平台"
+            );
+        }
         $username = $this->requireStr('username');
         if (Db::table('merchant_admin')->where('username', $username)->exists()) {
             throw new BusinessException(ErrorCode::DATA_CONFLICT, '登录账号已存在');
@@ -136,6 +149,20 @@ class AccountController extends AbstractController
             \App\Service\MerchantActivityService::changed((int) $account['id'], 'password_reset', $this->clientIp());
         });
         return Result::success(null, '密码已重置');
+    }
+
+    /**
+     * 子账号配额:上限取所属主体的 sub_account_limit(集团→merchant_group,商户/门店→merchant_info),
+     * 已用只数 is_owner=0 的同主体账号(主账号不占额)。主体行缺失时回落到默认 3。
+     */
+    private function quotaInfo(): array
+    {
+        $raw = MerchantContext::accountType() === 1
+            ? Db::table('merchant_group')->where('id', MerchantContext::groupId())->value('sub_account_limit')
+            : Db::table('merchant_info')->where('id', MerchantContext::merchantId())->value('sub_account_limit');
+        $limit = $raw === null ? 3 : max(0, (int) $raw);
+        $used = $this->scopedQuery()->where('is_owner', 0)->count();
+        return ['limit' => $limit, 'used' => $used, 'remaining' => max(0, $limit - $used)];
     }
 
     /** 同主体、同 account_type 的账号查询 */

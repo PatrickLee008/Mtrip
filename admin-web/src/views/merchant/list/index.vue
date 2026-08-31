@@ -25,8 +25,8 @@ import {
   apiMerchantCommission,
   apiMerchantDetail,
   apiMerchantList,
-
-
+  apiMerchantModuleGrant,
+  apiMerchantModules,
   apiMerchantUpdate,
 } from '@/api/merchant';
 import { exportCsv } from '@/utils/exportCsv';
@@ -138,6 +138,7 @@ const detailApplications = ref<TableRow[]>([]);
 const detailBusinesses = ref<TableRow[]>([]);
 const detailProperties = ref<TableRow[]>([]);
 const detailGroup = ref<TableRow | null>(null);
+const detailModules = ref<string[]>([]);
 
 async function openDetail(row: TableRow): Promise<void> {
   drawerOpen.value = true;
@@ -151,8 +152,46 @@ async function openDetail(row: TableRow): Promise<void> {
     detailBusinesses.value = data.businesses;
     detailProperties.value = data.properties;
     detailGroup.value = data.group;
+    detailModules.value = data.modules ?? [];
   } finally {
     detailLoading.value = false;
+  }
+}
+
+// ---------- 功能模块授权 ----------
+const moduleOpen = ref(false);
+const moduleSaving = ref(false);
+const moduleTarget = ref<TableRow | null>(null);
+const moduleAvailable = ref<{ key: string; name: string }[]>([]);
+const moduleChecked = ref<string[]>([]);
+const moduleUnmanaged = ref(false);
+
+/** 模块名优先走词条,缺词条时回落后端返回的中文名,再回落 key */
+function moduleLabel(key: string): string {
+  const entry = t(`merchant.modulePage.modules.${key}`);
+  if (entry !== `merchant.modulePage.modules.${key}`) return entry;
+  return moduleAvailable.value.find((m) => m.key === key)?.name ?? key;
+}
+
+async function openModules(row: TableRow): Promise<void> {
+  moduleTarget.value = row;
+  moduleOpen.value = true;
+  const data = await apiMerchantModules(row.id);
+  moduleAvailable.value = data.available;
+  moduleChecked.value = [...data.granted];
+  moduleUnmanaged.value = data.unmanaged;
+}
+
+async function saveModules(): Promise<void> {
+  if (!moduleTarget.value) return;
+  moduleSaving.value = true;
+  try {
+    await apiMerchantModuleGrant(moduleTarget.value.id, moduleChecked.value);
+    message.success(t('merchant.modulePage.saved'));
+    moduleOpen.value = false;
+    await statusChanged();
+  } finally {
+    moduleSaving.value = false;
   }
 }
 
@@ -217,6 +256,7 @@ const form = reactive({
   address: '',
   remark: '',
   siteId: 0,
+  subAccountLimit: 3,
 });
 
 function openEdit(row: TableRow): void {
@@ -236,6 +276,7 @@ function openEdit(row: TableRow): void {
     address: row.address ?? '',
     remark: row.remark ?? '',
     siteId: row.site_id ?? 0,
+    subAccountLimit: row.sub_account_limit ?? 3,
   });
   modalOpen.value = true;
 }
@@ -424,7 +465,7 @@ onMounted(() => {
     </a-table>
 
     <!-- 详情抽屉 -->
-    <a-drawer v-model:open="drawerOpen" :title="detail ? `${t('merchant.profile.merchantId')}: ${detail.merchant_name}` : t('common.detail')" width="720">
+    <a-drawer v-model:open="drawerOpen" :title="detail ? `${t('merchant.profile.merchantId')}: ${detail.merchant_name}` : t('common.detail')" width="1100">
       <a-spin :spinning="detailLoading">
         <template v-if="detail">
           <!-- 头部卡(整改 A3,原型 §3.5.5) -->
@@ -445,7 +486,7 @@ onMounted(() => {
           </div>
 
           <!-- 字段网格 -->
-          <a-descriptions :column="2" size="small" bordered style="margin-bottom: 16px">
+          <a-descriptions :column="3" size="small" bordered style="margin-bottom: 16px">
             <a-descriptions-item :label="t('merchant.profile.merchantId')">{{ detail.merchant_code || '#' + detail.id }}</a-descriptions-item>
             <a-descriptions-item :label="t('merchant.profile.regNo')">{{ detail.credit_code || '-' }}</a-descriptions-item>
             <a-descriptions-item :label="t('merchant.profile.owner')">{{ detail.legal_person || '-' }}</a-descriptions-item>
@@ -497,7 +538,21 @@ onMounted(() => {
             <MerchantStatusActions :merchant="detail" @changed="statusChanged" />
             <a-button v-perm="'merchant:list:notify'" @click="openNotify(detail)">{{ t('merchant.notifyPage.title') }}</a-button>
             <a-button v-if="isSuper" v-perm="'merchant:list:impersonate'" @click="openImpersonate(detail)">{{ t('merchant.impersonate.start') }}</a-button>
+            <a-button v-perm="'merchant:list:module'" @click="openModules(detail)">{{ t('merchant.modulePage.title') }}</a-button>
           </div>
+
+          <a-divider orientation="left">{{ t('merchant.modulePage.title') }}</a-divider>
+          <a-descriptions :column="2" size="small" bordered>
+            <a-descriptions-item :label="t('merchant.modulePage.granted')">
+              <a-space v-if="detailModules.length" wrap>
+                <a-tag v-for="key in detailModules" :key="key" color="processing">{{ moduleLabel(key) }}</a-tag>
+              </a-space>
+              <a-tag v-else color="default">{{ t('merchant.modulePage.unmanaged') }}</a-tag>
+            </a-descriptions-item>
+            <a-descriptions-item :label="t('merchant.listPage.subAccountLimit')">
+              {{ detail.sub_account_limit ?? 3 }}
+            </a-descriptions-item>
+          </a-descriptions>
 
           <template v-if="detail.legal_id_images?.length">
             <a-divider orientation="left">{{ t('goods.common.images') }}</a-divider>
@@ -594,6 +649,11 @@ onMounted(() => {
               <SiteTreeSelect v-model:value="form.siteId" />
             </a-form-item>
           </a-col>
+          <a-col :span="12">
+            <a-form-item :label="t('merchant.listPage.subAccountLimit')" :help="t('merchant.listPage.subAccountLimitHelp')">
+              <a-input-number v-model:value="form.subAccountLimit" :min="0" :max="50" style="width: 100%" />
+            </a-form-item>
+          </a-col>
           <a-col :span="24">
             <a-form-item :label="t('common.address')">
               <a-input v-model:value="form.address" />
@@ -606,6 +666,31 @@ onMounted(() => {
           </a-col>
         </a-row>
       </a-form>
+    </a-modal>
+
+    <!-- 功能模块授权 -->
+    <a-modal
+      v-model:open="moduleOpen"
+      :title="t('merchant.modulePage.title')"
+      width="520px"
+      :confirm-loading="moduleSaving"
+      @ok="saveModules"
+    >
+      <a-alert
+        v-if="moduleUnmanaged"
+        type="info"
+        show-icon
+        :message="t('merchant.modulePage.unmanagedTip')"
+        style="margin-bottom: 16px"
+      />
+      <a-checkbox-group v-model:value="moduleChecked" style="width: 100%">
+        <a-space direction="vertical" style="width: 100%">
+          <a-checkbox v-for="mod in moduleAvailable" :key="mod.key" :value="mod.key">
+            {{ moduleLabel(mod.key) }}
+          </a-checkbox>
+        </a-space>
+      </a-checkbox-group>
+      <a-alert type="warning" show-icon :message="t('merchant.modulePage.relogin')" style="margin-top: 16px" />
     </a-modal>
 
     <!-- 入驻审核 -->

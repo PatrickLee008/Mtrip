@@ -54,9 +54,11 @@ function s4Account(int $merchant, int $site = 991, int $type = 2, int $group = 0
     global $accounts;
     return $accounts[] = (int) Db::table('merchant_admin')->insertGetId(['site_id' => $site, 'merchant_id' => $merchant, 'group_id' => $group, 'store_id' => $store, 'account_type' => $type, 'username' => 's4-' . bin2hex(random_bytes(6)), 'password' => password_hash('S4-fixture-password123', PASSWORD_BCRYPT), 'real_name' => 'S4 Account', 'status' => 1, 'is_owner' => 1]);
 }
-function s4Login(int $id): array {
+function s4Login(int $id): array { return s4LoginWith($id, 'S4-fixture-password123'); }
+/** 重置会换掉密码,之后必须用返回的新明文登录 */
+function s4LoginWith(int $id, string $password): array {
     global $auth;
-    return $auth->login((string) Db::table('merchant_admin')->where('id', $id)->value('username'), 'S4-fixture-password123', '127.0.0.1');
+    return $auth->login((string) Db::table('merchant_admin')->where('id', $id)->value('username'), $password, '127.0.0.1');
 }
 function s4Claims(string $token): array { global $config; return JwtHelper::verify($token, (string) $config->get('mtrip.jwt_secret')); }
 function s4Code(string $secret): string { return Totp::code($secret, intdiv(time(), 30)); }
@@ -116,23 +118,30 @@ try {
     rejects(40302, fn () => $security->reset($merchant, $other, 1, 'Security reset'), 'S4 reset account ownership');
     rejects(40001, fn () => $security->reset($merchant, $one, 1, ' '), 'S4 reset reason required');
     rejects(40901, fn () => $security->reset($merchant, $one, 99, 'Security reset'), 'S4 stale reset version rejected');
-    $security->reset($merchant, $one, 1, 'Lost authenticator');
+    $priorHash = (string) Db::table('merchant_admin')->where('id', $one)->value('password');
+    $resetCredentials = $security->reset($merchant, $one, 1, 'Lost authenticator');
     $reset = (array) Db::table('merchant_admin')->where('id', $one)->first();
     check($reset['two_fa_status'] === 2 && $reset['two_fa_secret_enc'] === '' && $reset['pending_secret_enc'] === '' && $reset['auth_version'] === 2, 'S4 reset clears old and pending secrets and increments account version');
+    check($reset['password'] !== $priorHash && password_verify($resetCredentials['password'], $reset['password']), 'S4 reset rotates login password to the returned plaintext');
+    check($resetCredentials['username'] === $reset['username'], 'S4 reset returns the target username');
+    check(preg_match('/[a-z]/', $resetCredentials['password']) && preg_match('/[A-Z]/', $resetCredentials['password']) && preg_match('/\d/', $resetCredentials['password']) && strlen($resetCredentials['password']) >= 12, 'S4 reset password satisfies merchant password policy');
+    rejects(40101, fn () => s4Login($one), 'S4 reset invalidates the old password');
     rejects(40101, fn () => s4Request($session['token']), 'S4 reset invalidates target account old JWT');
     check(s4Request($secondSession['token'])['context']['admin_id'] === $two, 'S4 reset preserves other account JWT');
     s4Actor();
     $listing = $security->accounts($merchant);
     check(!str_contains(json_encode($listing), 'secret') && !str_contains(json_encode($listing), 'password'), 'S4 admin account list excludes secret and password');
-    $resetLogin = s4Login($one); $resetSetup = $security->setup($resetLogin['challengeToken']);
+    $resetLogin = s4LoginWith($one, $resetCredentials['password']); $resetSetup = $security->setup($resetLogin['challengeToken']);
     check($resetLogin['requiresEnrollment'] && $resetSetup['manualKey'] !== $setup['manualKey'], 'S4 reset forces fresh independent enrollment');
     Db::table('merchant_admin')->where('id', $one)->update(['last_accepted_totp_step' => -1]);
     check(s4Parallel(['--verify', $resetLogin['challengeToken'], s4Code($resetSetup['manualKey'])]) === ['denied', 'ok'], 'S4 concurrent OTP completion has one winner');
     $fault = 's4_audit_' . bin2hex(random_bytes(4));
-    Db::unprepared("ALTER TABLE merchant_activity_log ADD CONSTRAINT {$fault} CHECK (description <> '2FA reset: fault-injection')");
+    Db::unprepared("ALTER TABLE merchant_activity_log ADD CONSTRAINT {$fault} CHECK (description <> '2FA + password reset: fault-injection')");
+    $beforeFault = (string) Db::table('merchant_admin')->where('id', $one)->value('password');
     try { $security->reset($merchant, $one, 2, 'fault-injection'); throw new RuntimeException('Expected audit failure'); }
     catch (\Hyperf\Database\Exception\QueryException $e) {}
     check(Db::table('merchant_admin')->where('id', $one)->value('auth_version') === 2, 'S4 audit failure rolls back reset');
+    check((string) Db::table('merchant_admin')->where('id', $one)->value('password') === $beforeFault, 'S4 audit failure also rolls back the password rotation');
     Db::unprepared("ALTER TABLE merchant_activity_log DROP CHECK {$fault}"); $fault = null;
     $group = $groups[] = (int) Db::table('merchant_group')->insertGetId(['site_id' => 991, 'group_name' => 'S4 test group', 'contact_name' => 'Fixture', 'contact_phone' => '', 'status' => 1]);
     Db::table('merchant_info')->where('id', $merchant)->update(['group_id' => $group]);
@@ -146,7 +155,8 @@ try {
     $storeAccount = s4Account($merchant, 991, 3, 0, $store);
     check(s4Login($storeAccount)['requiresEnrollment'], 'S4 store account independently requires enrollment');
     Db::table('merchant_info')->where('id', $merchant)->update(['status' => 4, 'access_code' => 'S4-ACCESS-ALIAS']);
-    check($auth->login('S4-ACCESS-ALIAS', 'S4-fixture-password123', '')['challengeToken'] !== '', 'S4 suspended access-code login still requires 2FA');
+    // 访问码解析到本商户主账号(is_owner=1 中 id 最小者)= $one,其密码已被前面的重置轮换
+    check($auth->login('S4-ACCESS-ALIAS', $resetCredentials['password'], '')['challengeToken'] !== '', 'S4 suspended access-code login still requires 2FA');
     s4Actor(false);
     rejects(40301, fn () => $support->start($merchant, $one, 'Support investigation'), 'S4 only super can impersonate');
     s4Actor();

@@ -65,7 +65,12 @@ class AuthController extends AbstractController
 
     public function menus(): array
     {
-        $data = $this->authService->menus(MerchantContext::adminId(), MerchantContext::accountType(), MerchantContext::isOwner());
+        $data = $this->authService->menus(
+            MerchantContext::adminId(),
+            MerchantContext::accountType(),
+            MerchantContext::isOwner(),
+            MerchantContext::merchantId()
+        );
         if (isset(MerchantContext::get()['impersonation_session_id'])) {
             $allowed = ['dashboard/index', 'order/index', 'rooms/index', 'availability/index', 'promotions/index', 'reviews/index', 'notifications/index'];
             $data['menus'] = array_values(array_filter($data['menus'], static fn ($row) => in_array($row['component'], $allowed, true)));

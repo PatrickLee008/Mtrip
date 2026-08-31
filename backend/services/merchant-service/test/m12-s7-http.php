@@ -65,11 +65,12 @@ function api(string $path, ?array $data = null, string $token = '', int $expecte
     return $r['json']['data'] ?? null;
 }
 function rid(): string { return 's7-' . bin2hex(random_bytes(12)); }
-function login(string $name, bool $admin = false): array {
-    return api('/api/v1/' . ($admin ? 'admin' : 'merchant') . '/auth/login', ['username' => $name, 'password' => PASSWORD], '', 0, true);
+/** $password 为 null 时用夹具默认密码;重置 2FA 会换密码,之后须传返回的新明文 */
+function login(string $name, bool $admin = false, ?string $password = null): array {
+    return api('/api/v1/' . ($admin ? 'admin' : 'merchant') . '/auth/login', ['username' => $name, 'password' => $password ?? PASSWORD], '', 0, true);
 }
-function enroll(string $name): array {
-    $challenge = login($name);
+function enroll(string $name, ?string $password = null): array {
+    $challenge = login($name, false, $password);
     check($challenge['requiresEnrollment'] && !isset($challenge['token']), 'password alone cannot issue business session');
     $setup = api('/api/v1/merchant/auth/2fa/setup', ['challengeToken' => $challenge['challengeToken']]);
     check(strlen($setup['manualKey']) === 32 && str_starts_with($setup['otpauthUri'], 'otpauth://totp/'), 'authenticator-compatible enrollment');
@@ -144,10 +145,12 @@ api('/api/v1/merchant/auth/2fa/setup', ['challengeToken' => $returning['challeng
 api('/api/v1/merchant/auth/2fa/verify', ['challengeToken' => $returning['challengeToken'], 'twoFaCode' => $usedCode], '', 40001);
 $reset = ['merchantId' => $m, 'accountId' => $fixture['accounts']['one']['id'], 'expectedVersion' => 1, 'reason' => 'S7 lost authenticator'];
 api('/api/v1/admin/merchant/reset-2fa', $reset, $ops, 40301);
-api('/api/v1/admin/merchant/reset-2fa', $reset, $super);
+$resetCredentials = api('/api/v1/admin/merchant/reset-2fa', $reset, $super);
+check(($resetCredentials['username'] ?? '') === $fixture['accounts']['one']['name'] && strlen($resetCredentials['password'] ?? '') >= 12, 'reset returns one-time credentials for the target account');
+api('/api/v1/merchant/auth/login', ['username' => $fixture['accounts']['one']['name'], 'password' => PASSWORD], '', 40101, true);
 api('/api/v1/merchant/auth/me', null, $one, 40101);
 api('/api/v1/merchant/auth/me', null, $two);
-[$one, $newSecret] = enroll($fixture['accounts']['one']['name']);
+[$one, $newSecret] = enroll($fixture['accounts']['one']['name'], $resetCredentials['password']);
 check($secret !== $newSecret, 'reset creates fresh secret');
 $security = api('/api/v1/admin/merchant/security/accounts?merchantId=' . $m, null, $super);
 check(!str_contains(json_encode($security), 'secret') && !str_contains(json_encode($security), 'password'), 'admin account list never exposes secrets');

@@ -82,6 +82,8 @@ services:
       - ../database/merchant/06-supplier-rbac.sql:/docker-entrypoint-initdb.d/25-supplier-rbac.sql:ro
       - ../database/seed/04-merchant-menu.sql:/docker-entrypoint-initdb.d/26-seed-merchant-menu.sql:ro
       - ../database/seed/05-supplier-menu.sql:/docker-entrypoint-initdb.d/27-seed-supplier-menu.sql:ro
+      # 商户内置角色预设(运营/客服),须在 26-seed-merchant-menu 之后
+      - ../database/seed/06-merchant-role-preset.sql:/docker-entrypoint-initdb.d/27a-seed-merchant-role-preset.sql:ro
       # 商户验证工作流(Super Admin Portal Phase 1,依赖 20-merchant 基础表)
       - ../database/merchant/07-verify-workflow.sql:/docker-entrypoint-initdb.d/28-merchant-verify-workflow.sql:ro
       # 商户入驻流水线(原型对齐整改,依赖 28 的 doc/timeline 表 ALTER)
@@ -125,6 +127,8 @@ services:
       - ../database/merchant/30-merchant-account-security.sql:/docker-entrypoint-initdb.d/39l-merchant-account-security.sql:ro
       - ../database/merchant/31-merchant-marketplace.sql:/docker-entrypoint-initdb.d/39m-merchant-marketplace.sql:ro
       - ../database/merchant/33-merchant-directory-plan.sql:/docker-entrypoint-initdb.d/39n-merchant-directory-plan.sql:ro
+      - ../database/merchant/34-merchant-sub-account-limit.sql:/docker-entrypoint-initdb.d/39o-merchant-sub-account-limit.sql:ro
+      - ../database/merchant/35-merchant-module-grant.sql:/docker-entrypoint-initdb.d/39p-merchant-module-grant.sql:ro
       - ../database/order/01-order.sql:/docker-entrypoint-initdb.d/40-order.sql:ro
       - ../database/order/02-verify.sql:/docker-entrypoint-initdb.d/41-verify.sql:ro
       - ../database/finance/01-finance.sql:/docker-entrypoint-initdb.d/50-finance.sql:ro

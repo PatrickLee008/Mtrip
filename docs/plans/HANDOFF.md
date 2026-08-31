@@ -542,6 +542,21 @@ Mtrip 海外旅游 SaaS 平台:后端 Hyperf 3.1 微服务(backend/)+ 平台管�
 
 本任务最新进度：PRD模块12商户管理S0设计及S1～S4核心开发测试已完成；S5～S7尚未开始。S4真实扫码和完整UI、S3完整上传及模块11端到端未验，详见模块15计划及阶段交付报告；下表为历史底座状态。
 
+**商户账号体系三期(2026-08-31)**:补齐平台对商户的三项管控,详见 [12-商家账号体系.md](./12-商家账号体系.md)「三期任务清单」。
+- **功能模块授权**:新表 `merchant_module_grant` + `merchant_menu.module_key`(''=公共菜单)。可见性口径 ——
+  商户**无授权行 = 全模块开通**(向后兼容,存量商户不受影响),有授权行则只见公共菜单 + 已授权模块;
+  集团账号(account_type=1)恒不裁剪。裁剪同时作用于菜单树**和** JWT 里的 `permissions` 快照
+  (`MerchantAuthService::applyModuleScope`,三处调用),只过滤菜单会留下越权接口。
+  管理端保存授权后会 `auth_version + 1` 踢该商户全部账号下线以刷新快照。
+- **内置角色预设**:补 `merchant_ops`(商户运营人员)/`merchant_cs`(商户客服)。
+  **按 role_code 判存在插入,不硬编码自增 ID** —— 04 号种子里 1/2/3 是硬编码的,
+  存量库的 4/5 很可能已被商户自建角色占用。
+- **子账号配额**:`merchant_info`/`merchant_group` 加 `sub_account_limit`(默认 3,不含主账号),
+  管理端在商户编辑表单配置,商户端 `GET /merchant/account/quota` 读取并在用满时禁用新增。
+- 顺带修复 admin-web `views/merchant/account/index.vue` 商户下拉未预载(只在 `@search` 触发)导致恒为空。
+- ⚠️ 本机(Linux)`php` 是 **PHP 7.x**,`php -l` 会把全仓 `match`/构造器属性提升/联合类型全部误报为语法错,
+  **不能用作 lint 依据**;需在装有 PHP 8 的机器或容器内跑 `scripts/check.ps1`。
+
 | 模块 | 状态 |
 |------|------|
 | 01 backend/shared 共享组件包 | 100%(单测于模块08-8 补齐:26 用例全过,修复 2 个 bug) |
@@ -587,6 +602,17 @@ Mtrip 海外旅游 SaaS 平台:后端 Hyperf 3.1 微服务(backend/)+ 平台管�
 - **多语言**(vue-i18n,默认/fallback 均 en-US):en-US.ts 为全量词条源,zh-CN.ts 只维护已翻译部分;菜单三字段 `menu_name`(中文)/`menu_name_en`(英文回退)/`i18n_key`(词条 key,目录与页面必填、按钮不占词条);显示名统一走 `locales/menuI18n.ts` 的 `resolveMenuTitle/menuTitle`(i18n_key 命中→t(key),未命中→非中文环境用英文名、中文用中文名);扩展新语言只需前端加语言包+SUPPORTED_LOCALES,菜单数据与后端零改动;详细规范见 `docs/guides/standards/README.md`。
 
 ## 6. 下一步(模块08 部署与网关联调,任务清单见 docs/plans/08-部署与网关.md)
+
+商户账号体系三期下一步(2026-08-31,按优先级):
+1. **先验库**:`select id,menu_name,perm_key,account_scope from merchant_menu where id in (200,201,202);`
+   与 `select id,role_name,role_code from merchant_role;`。若为空,说明库建于二期脚本落地之前
+   —— merchant-web「组织与权限」菜单看不到就是这个原因,按 12 号计划「升级说明」补跑脚本。
+2. 增量执行 34/35/02-menu/06-role-preset 四个脚本,重启 merchant-service 与 gateway。
+3. 在装有 PHP 8 的环境跑 `scripts/check.ps1`(本机 PHP 7.x 无法 lint,见第 2 节说明)。
+4. 端到端验:管理端授权某商户只开"餐饮"→ 该商户主账号重新登录后应看不到「客房管理」「房量与价格」;
+   子账号建到第 4 个应被配额拦截;新预设角色应出现在商户端角色列表且不可编辑(内置)。
+5. 遗留决策见 12 号计划「遗留」节:restaurant 尚无专属菜单、运营/客服预设只覆盖商户账号类型、
+   `MerchantService::approve` 尚未按入驻业态自动写入模块授权。
 
 本任务下一步：用户审阅S4交付并补真实扫码和完整UI验收；下一开发阶段S5为酒店真实排名、消费者端展示和热门目的地。HEAD=232fd3e；S4不执行Git操作，之前的S3单次提交授权不延续。以下模块08内容为历史任务背景。
 

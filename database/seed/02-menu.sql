@@ -101,6 +101,7 @@ INSERT IGNORE INTO `sys_menu` (`id`,`parent_id`,`menu_name`,`menu_name_en`,`perm
 (30112,301,'黑名单后重新激活','Reactivate after blacklist','merchant:status:reactivate',3,12),
 (30113,301,'商户状态历史','Merchant status history','merchant:status:history',3,13),
 (30114,301,'关联酒店物业','Link hotel property','merchant:property:bind',3,14),
+(30115,301,'功能模块授权','Grant modules','merchant:list:module',3,15),
 (30201,302,'替换证件','Replace Document','merchant:document:replace',3,1),
 (30202,302,'审核证件','Review Document','merchant:document:verify',3,2),
 (30203,302,'下载证件','Download Document','merchant:document:download',3,3),

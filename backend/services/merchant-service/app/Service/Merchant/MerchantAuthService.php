@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace App\Service\Merchant;
 
 use App\Support\MenuTreeHelper;
+use App\Support\MerchantModule;
 
+use Hyperf\Database\Query\Builder;
 use Hyperf\DbConnection\Db;
 use Mtrip\Shared\Constants\ErrorCode;
 use Mtrip\Shared\Exception\BusinessException;
@@ -85,7 +87,10 @@ class MerchantAuthService
         $accountType = (int) $admin['account_type'];
         $isOwner = (int) $admin['is_owner'] === 1;
         $subjectName ??= $this->subjectName($admin);
-        $permissions ??= ($isOwner ? $this->allPermsForType($accountType) : $this->collectPermissions((int) $admin['id']));
+        $merchantId = (int) $admin['merchant_id'];
+        $permissions ??= ($isOwner
+            ? $this->allPermsForType($accountType, $merchantId)
+            : $this->collectPermissions((int) $admin['id'], $accountType, $merchantId));
         return [
             'id' => (int) $admin['id'],
             'username' => $admin['username'],
@@ -105,13 +110,14 @@ class MerchantAuthService
     /**
      * 动态菜单:按 account_type + 角色返回可见菜单树(目录+页面)与按钮权限集合
      */
-    public function menus(int $adminId, int $accountType, bool $isOwner): array
+    public function menus(int $adminId, int $accountType, bool $isOwner, int $merchantId = 0): array
     {
         $query = Db::table('merchant_menu')
             ->where('status', 1)
             ->whereNull('deleted_at')
             ->whereRaw('FIND_IN_SET(?, account_scope)', [$accountType])
             ->orderBy('sort')->orderBy('id');
+        self::applyModuleScope($query, $accountType, $merchantId);
         if (! $isOwner) {
             $menuIds = $this->grantedMenuIds($adminId);
             $query->whereIn('id', $menuIds === [] ? [0] : $menuIds);
@@ -166,9 +172,9 @@ class MerchantAuthService
     /**
      * 聚合子账号全部权限标识(含目录/页面/按钮 perm_key,供后端接口鉴权)
      */
-    public function collectPermissions(int $adminId): array
+    public function collectPermissions(int $adminId, int $accountType = 0, int $merchantId = 0): array
     {
-        return Db::table('merchant_admin_role as ar')
+        $query = Db::table('merchant_admin_role as ar')
             ->join('merchant_role as r', 'r.id', '=', 'ar.role_id')
             ->join('merchant_role_menu as rm', 'rm.role_id', '=', 'r.id')
             ->join('merchant_menu as m', 'm.id', '=', 'rm.menu_id')
@@ -176,25 +182,39 @@ class MerchantAuthService
             ->where('r.status', 1)
             ->whereNull('r.deleted_at')
             ->whereNull('m.deleted_at')
-            ->where('m.perm_key', '<>', '')
-            ->distinct()
-            ->pluck('m.perm_key')
-            ->toArray();
+            ->where('m.perm_key', '<>', '');
+        self::applyModuleScope($query, $accountType, $merchantId, 'm.');
+        return $query->distinct()->pluck('m.perm_key')->toArray();
     }
 
     /**
      * 指定账号类型可见的全部权限标识(主账号放行用)
      */
-    public function allPermsForType(int $accountType): array
+    public function allPermsForType(int $accountType, int $merchantId = 0): array
     {
-        return Db::table('merchant_menu')
+        $query = Db::table('merchant_menu')
             ->where('status', 1)
             ->whereNull('deleted_at')
             ->where('perm_key', '<>', '')
-            ->whereRaw('FIND_IN_SET(?, account_scope)', [$accountType])
-            ->distinct()
-            ->pluck('perm_key')
-            ->toArray();
+            ->whereRaw('FIND_IN_SET(?, account_scope)', [$accountType]);
+        self::applyModuleScope($query, $accountType, $merchantId);
+        return $query->distinct()->pluck('perm_key')->toArray();
+    }
+
+    /**
+     * 施加功能模块可见性:公共菜单(module_key='')恒放行,业务菜单需商户已获授权。
+     * 商户无任何授权行 → 不裁剪(向后兼容);集团账号(accountType=1)→ 不裁剪。
+     */
+    public static function applyModuleScope(Builder $query, int $accountType, int $merchantId, string $prefix = ''): void
+    {
+        $modules = MerchantModule::visibleModules($accountType, $merchantId);
+        if ($modules === null) {
+            return;
+        }
+        $column = $prefix . 'module_key';
+        $query->where(static function (Builder $q) use ($column, $modules) {
+            $q->where($column, '')->orWhereIn($column, $modules);
+        });
     }
 
 

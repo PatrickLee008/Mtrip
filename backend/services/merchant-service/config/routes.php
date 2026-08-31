@@ -74,6 +74,9 @@ Router::addGroup('/api/v1/admin', static function () {
     Router::post('/merchant/commission', [MerchantController::class, 'commission']);
     Router::get('/merchant/account', [MerchantController::class, 'accounts']);
     Router::post('/merchant/account-save', [MerchantController::class, 'saveAccount']);
+    // 功能模块授权(酒店/餐饮…):决定商户端 merchant-web 可见的业务菜单
+    Router::get('/merchant/modules', [MerchantController::class, 'modules']);
+    Router::post('/merchant/module-grant', [MerchantController::class, 'moduleGrant']);
     Router::post('/merchant/close', [MerchantController::class, 'close']);
     Router::get('/merchant/statistics', [MerchantController::class, 'statistics']);
     Router::get('/merchant/statement', [MerchantController::class, 'statement']);
@@ -203,6 +206,7 @@ Router::addGroup('/api/v1/merchant', static function () {
 
     // ---------- 子账号管理 ----------
     Router::get('/account/list', [MerchantAccountController::class, 'index']);
+    Router::get('/account/quota', [MerchantAccountController::class, 'quota']);
     Router::post('/account/add', [MerchantAccountController::class, 'create']);
     Router::post('/account/update', [MerchantAccountController::class, 'update']);
     Router::post('/account/toggle-status', [MerchantAccountController::class, 'toggleStatus']);

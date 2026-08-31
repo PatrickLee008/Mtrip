@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Service;
 
 use App\Service\Merchant\MerchantAuthService;
+use App\Support\PasswordGenerator;
 use Hyperf\DbConnection\Db;
 use Mtrip\Shared\Constants\ErrorCode;
 use Mtrip\Shared\Context\AdminContext;
@@ -81,17 +82,27 @@ class MerchantAccountSecurityService
         return $result;
     }
 
-    public function reset(int $merchantId, int $accountId, int $expectedVersion, string $reason): void
+    /**
+     * 重置账号安全状态:清空 2FA 注册 + 重置登录密码为随机明文。
+     *
+     * 两者必须一起做 —— 只重置 2FA 时管理员仍无法帮回一个忘记密码的商户,
+     * 而登录第一步(begin)校验的就是密码,过不了这步根本走不到重新注册验证器。
+     *
+     * @return array{username:string,password:string} 明文密码仅此一次返回,不落库不入日志
+     */
+    public function reset(int $merchantId, int $accountId, int $expectedVersion, string $reason): array
     {
         $this->assertSuper();
         $reason = trim($reason);
         if ($reason === '' || mb_strlen($reason) > 200) throw new BusinessException(ErrorCode::PARAM_ERROR, '请填写200字以内的重置原因');
-        Db::transaction(function () use ($merchantId, $accountId, $expectedVersion, $reason) {
+        return Db::transaction(function () use ($merchantId, $accountId, $expectedVersion, $reason) {
             $merchant = $this->merchant($merchantId);
             $account = $this->scopedAccounts($merchant)->where('id', $accountId)->lockForUpdate()->first();
             if (! $account) throw new BusinessException(ErrorCode::NO_DATA_PERMISSION, '账号不属于所选商户或集团');
             if ((int) $account->auth_version !== $expectedVersion) throw new BusinessException(ErrorCode::DATA_CONFLICT, '账号安全状态已变更，请刷新');
+            $password = PasswordGenerator::random();
             Db::table('merchant_admin')->where('id', $accountId)->update([
+                'password' => password_hash($password, PASSWORD_BCRYPT),
                 'two_fa_status' => 2, 'two_fa_method' => '', 'two_fa_secret_enc' => '', 'pending_secret_enc' => '',
                 'two_fa_enrolled_at' => null, 'two_fa_last_reset_at' => gmdate('Y-m-d H:i:s'),
                 'auth_version' => $expectedVersion + 1, 'last_accepted_totp_step' => -1,
@@ -99,12 +110,14 @@ class MerchantAccountSecurityService
             ]);
             Db::table('merchant_activity_log')->insert([
                 'site_id' => $account->site_id, 'merchant_id' => $account->merchant_id,
-                'activity_type' => 'account_change', 'description' => '2FA reset: ' . $reason,
+                // 只记事由,绝不记明文密码 —— 活动日志商户侧可见
+                'activity_type' => 'account_change', 'description' => '2FA + password reset: ' . $reason,
                 'performed_by_id' => AdminContext::adminId(), 'performed_by' => AdminContext::adminName(),
                 'actor_type' => 'admin', 'target_account_id' => $accountId,
                 'entity_type' => (int) $account->account_type === 1 ? 'group' : 'account',
                 'entity_id' => (int) $account->account_type === 1 ? $account->group_id : $accountId,
             ]);
+            return ['username' => (string) $account->username, 'password' => $password];
         });
     }
 
