@@ -276,8 +276,9 @@ class OnboardingController extends AbstractController
                 'submitted_at' => $now,
                 'last_updated_at' => $now,
             ]);
+            $merchantCode = $this->nextMerchantCode();
             Db::table('merchant_application')->where('id', $appId)->update([
-                'merchant_code' => $this->formatMerchantCode($appId),
+                'merchant_code' => $merchantCode,
             ]);
             foreach ($businesses as $biz) {
                 $biz = (array) $biz;
@@ -486,11 +487,11 @@ class OnboardingController extends AbstractController
         }
 
         $merchantCode = trim((string) ($app['merchant_code'] ?? ''));
-        if ($merchantCode === '') {
-            $merchantCode = $this->formatMerchantCode((int) $app['id']);
-        }
         $merchantId = 0;
-        Db::transaction(function () use ($app, $creditCode, $merchantCode, &$merchantId) {
+        Db::transaction(function () use ($app, $creditCode, &$merchantCode, &$merchantId) {
+            if ($merchantCode === '' || Db::table('merchant_info')->where('merchant_code', $merchantCode)->exists()) {
+                $merchantCode = $this->nextMerchantCode();
+            }
             $template = (int) $app['kyc_template_id'] > 0
                 ? Db::table('merchant_kyc_template')->where('id', $app['kyc_template_id'])->first()
                 : null;
@@ -819,10 +820,24 @@ class OnboardingController extends AbstractController
         return $appNo;
     }
 
-    /** 商户业务编号:MCH- + 至少4位申请主键,主键序列保证并发唯一 */
-    private function formatMerchantCode(int $applicationId): string
+    /** 商户业务编号:MCH- + 至少4位全局序号,序列表行锁保证并发唯一 */
+    private function nextMerchantCode(): string
     {
-        return 'MCH-' . str_pad((string) $applicationId, 4, '0', STR_PAD_LEFT);
+        Db::table('merchant_code_sequence')->insertOrIgnore([
+            'id' => 1,
+            'next_value' => 1,
+        ]);
+        $sequence = Db::table('merchant_code_sequence')->where('id', 1)->lockForUpdate()->first();
+        $nextValue = max(1, (int) $sequence->next_value);
+        do {
+            $merchantCode = 'MCH-' . str_pad((string) $nextValue, 4, '0', STR_PAD_LEFT);
+            ++$nextValue;
+        } while (
+            Db::table('merchant_application')->where('merchant_code', $merchantCode)->exists()
+            || Db::table('merchant_info')->where('merchant_code', $merchantCode)->exists()
+        );
+        Db::table('merchant_code_sequence')->where('id', 1)->update(['next_value' => $nextValue]);
+        return $merchantCode;
     }
 
     /** 写申请维度时间线 */

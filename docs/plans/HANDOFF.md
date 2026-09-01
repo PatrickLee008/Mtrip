@@ -1,5 +1,12 @@
 # 会话交接文档(HANDOFF)
 
+### ★ 2026-09-02(商户业务编号跨表唯一性修复)
+
+- 根因：`merchant_application` 与 `merchant_info` 是两张独立自增表，旧实现却直接以申请主键生成 `MCH-XXXX`；申请 `id=1020` 审批时与既有正式商户 `MCH-1020` 冲突，触发 `merchant_info.uk_merchant_code` 唯一键并返回 500。
+- 修复：新增 `merchant_code_sequence` 单行序列表，创建线索时在事务中使用 `FOR UPDATE` 行锁取得全局序号，并同时检查申请表和正式商户表；审批存量申请时若原编号已被占用，在同一事务中自动分配新编号并回写申请。
+- 迁移：`database/merchant/38-merchant-code-sequence.sql`，compose initdb 登记为 `39q-merchant-code-sequence.sql`；存量库需用 `scripts/db-apply.ps1` 增量应用。
+- 验证：迁移连续执行两次成功；在数据库外层回滚事务中，`APP-20260019` 审批由冲突的 `MCH-1020` 自动改为 `MCH-5019`，随后新建线索分配 `MCH-5020`，测试结束后真实申请仍保持 stage 4 / merchant_id 0；merchant-service healthz 正常，`scripts/check.ps1` 四项全绿。
+
 ### ★ 2026-09-01(订房第 1 步:去掉多余的日期选择弹层)
 
 - 第 1 步本来就有一张**常驻的 `BookingCalendar`**,顶部摘要卡的日期胶囊却还能点开 `DatePickerSheet`(设计稿 1675:6806)—— 同一件事两个入口,弹层还会盖住下面那张日历。已把摘要卡的日期区改成纯展示:`BookingSummaryBar` 去掉 `onPressDates` 与外层 `Pressable`,`BookingStepDates` 移除 `DatePickerSheet` 与 `pickerOpen` 状态。`DatePickerSheet` 组件本身保留 —— 酒店搜索页与搜索结果页仍在用。
@@ -475,7 +482,7 @@ S6已实现并通过核心验证，见[m12/07-s6-delivery.md](./m12/07-s6-delive
 
 ## ★ 2026-08-25(商户业务编号 MCH-XXXX)
 
-- 入驻线索创建后在同一事务内按申请自增主键生成唯一 `merchant_code`，格式为 `MCH-` + 至少四位序号；编号在申请、待核实、重新提交、批准和拒绝阶段保持不变。
+- 入驻线索创建后在同一事务内生成唯一 `merchant_code`，格式为 `MCH-` + 至少四位序号；当前由 `merchant_code_sequence` 在申请表与正式商户表之间全局分配，编号在申请、待核实、重新提交、批准和拒绝阶段保持不变。
 - `merchant_application.merchant_id` 继续作为批准后关联 `merchant_info.id` 的内部数字外键；`merchant_info.access_code` 继续作为最终批准后生成的门户登录别名，三者不混用。
 - 新增幂等迁移 `26-merchant-code.sql`，回填存量申请并同步已关联正式商户，两个业务表分别建立唯一索引；compose initdb 登记为 `39h`。
 - 入驻与验证详情“商户 ID”改为展示 `merchant_code`，入驻批准响应和提示同步返回该业务编号。
