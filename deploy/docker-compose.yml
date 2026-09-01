@@ -153,6 +153,7 @@ services:
       - ../database/marketing/03-consumer-funding.sql:/docker-entrypoint-initdb.d/93-consumer-funding.sql:ro
       - ../database/finance/02-consumer-account-entry.sql:/docker-entrypoint-initdb.d/94-consumer-account-entry.sql:ro
       - ../database/user/08-consumer-chat.sql:/docker-entrypoint-initdb.d/95-consumer-chat.sql:ro
+      - ../database/user/10-chat-booking-link.sql:/docker-entrypoint-initdb.d/95a-chat-booking-link.sql:ro
       - ../database/order/04-consumer-trip.sql:/docker-entrypoint-initdb.d/96-consumer-trip.sql:ro
       - ../database/goods/05-merchant-review-flag.sql:/docker-entrypoint-initdb.d/96a-merchant-review-flag.sql:ro
       - ../database/goods/06-merchant-room-availability-fields.sql:/docker-entrypoint-initdb.d/96b-merchant-room-availability-fields.sql:ro
@@ -176,6 +177,9 @@ services:
       # Merchant App M4 酒店预订管理(预订字段/时间线/备注/同步表 + 预订菜单权限)
       - ../database/order/05-merchant-booking.sql:/docker-entrypoint-initdb.d/99h-merchant-booking.sql:ro
       - ../database/merchant/36-merchant-booking-menu.sql:/docker-entrypoint-initdb.d/99i-merchant-booking-menu.sql:ro
+      - ../database/merchant/37-merchant-booking-message.sql:/docker-entrypoint-initdb.d/99j-merchant-booking-message.sql:ro
+      # order_main.guests 列类型修正(JSON → TEXT,存的是 AES 密文)
+      - ../database/order/06-guests-column-type-fix.sql:/docker-entrypoint-initdb.d/99k-guests-column-type-fix.sql:ro
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-p${MYSQL_ROOT_PASSWORD:-root@2026}"]
       interval: 5s

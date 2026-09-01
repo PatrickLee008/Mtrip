@@ -26,6 +26,10 @@ MTrip/
 
 ## 模块进度总览
 
+2026-09-01更新：修复客户端真实酒店卡不进入酒店详情真实 Rooms 的问题。真实酒店搜索结果现在携带 `id` 跳 `HotelDetail` 并拉 `/app/goods/detail` 渲染真实房型，演示卡仍保留静态稿；同时补跑漏执行的 `database/goods/07-room-review-workflow.sql`，本地房型已回填为 `status=1/publish_status=2/approved_version=1`。排查确认当前本地新增酒店仍在 `site_id=0` 且未发布 marketplace，客户端默认站点 1 按设计仍不会展示该数据，需站点一致并发布排名后才会出现在 C 端。详见[模块10](./10-移动端App框架.md)。
+
+2026-09-01热修复：定位 merchant Booking Management 报 `Unknown column 'booking_status'` 为存量 MySQL 数据卷未执行 M4 增量 SQL；已补跑 `database/order/05-merchant-booking.sql`、`database/merchant/36-merchant-booking-menu.sql`、`database/merchant/37-merchant-booking-message.sql` 与 `database/user/10-chat-booking-link.sql`，并将后两份漏挂脚本登记到 `deploy/docker-compose.yml` initdb，复查 `order_main.booking_status` 与 `chat_conversation.order_id` 已落库。详见[方案文档](./实现方案-Merchant-M4-酒店预订管理.md)。
+
 2026-09-01计划：新增 [Merchant App M4 酒店预订管理实现方案](./实现方案-Merchant-M4-酒店预订管理.md)。方案严格映射 Merchant PRD 模块 4、场景 3 和验收标准，明确本期不接真实支付渠道，使用现有模拟支付结果完成预订状态联动；Booking Management 页面、详情面板和操作弹窗必须严格按在线原型实现并进行登录态截图对比。当前仅完成计划，未修改业务代码，关键 No-show、人工确认、房号和改单规则待确认后实施。
 
 2026-09-01修复：房型图片上传后文件权限为 `600`，导致 OpenResty 静态服务返回 403。goods-service 上传成功后现统一设置 `0644`，存量房型图片也已修复；真实新上传测试确认经网关与 merchant-web 代理均返回 `200 image/*`。详见[商户端落地记录](./13-商家端merchant-web落地.md)。本次用户已授权随 M2 房型交付本地提交，不推送。
@@ -66,6 +70,8 @@ MTrip/
 
 | 日期 | 变更内容 |
 |------|---------|
+| 2026-09-01 | client-app 酒店详情接真实房型：真实搜索结果卡改跳 `HotelDetail({id})`，详情页拉 `/app/goods/detail` 渲染标题、图库、起价和 Rooms，房型 Select 接真实下单确认；补跑房型审核流迁移 `goods/07`。同时确认当前本地数据仍因 `site_id=0` 与 marketplace 未发布被 C 端过滤。 |
+| 2026-09-01 | 热修复 merchant Booking Management `booking_status` 缺列：存量 MySQL 卷未重放 M4 增量 SQL，已补跑 `order/05`、`merchant/36`、`merchant/37`、`user/10` 并复查字段；同时补登记 `deploy/docker-compose.yml` initdb 中遗漏的住客消息两份 SQL，避免全新环境漏执行。 |
 | 2026-09-01 | Merchant App M4 酒店预订管理全部 7 个阶段完成：数据库迁移与回填、生命周期服务（确认/入住/退房/取消/No-show/退款+库存联动+10分钟过期任务）、商户 API 16 端点（22 项端到端）、Booking Management 原型 UI（真实登录态截图验收）、通知/住客消息/同步框架（23 项端到端）。阶段 6 完成 PermissionAspect 平台级修复（补 `#[Aspect]` + 8 服务显式注册，此前全平台 `#[Permission]` 注解静默失效）与跨端回归；check.ps1 四项全绿，仅既有大 chunk 警告。详见[方案文档](./实现方案-Merchant-M4-酒店预订管理.md)。 |
 | 2026-09-01 | 新增 Merchant App M4 酒店预订管理开发计划：本期不接真实支付，使用模拟支付结果打通预订生命周期；UI 必须严格按在线原型实现并完成登录态截图对比；数据、接口、状态机、权限、通知、同步框架、阶段任务和测试矩阵已列明，关键业务决策待确认。 |
 | 2026-09-01 | merchant-web 注册业务切换与菜单上下文整改：移除左上角 3 酒店＋2 餐厅原型假数据，菜单接口返回当前账号真实已验证注册业务；默认“全部业务”只显示公共菜单，选择酒店/餐厅等业务后按 `merchant_menu.module_key` 展示对应专属菜单，离开可见路由时回 Dashboard。PHP 语法、merchant-web 类型检查与生产构建通过；Docker Desktop Engine 500，真实接口/UI 联调待恢复后补验。 |

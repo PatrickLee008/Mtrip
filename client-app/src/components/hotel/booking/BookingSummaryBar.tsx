@@ -3,12 +3,14 @@
  *
  * 两行,每行 = 圆角 8 的浅底图标板 + 两行文案:
  *   行 1 「BOOKING DURATION」+ 入住 / 离店两枚 `--background` 底的日期胶囊 + 中间箭头 + 晚数胶囊
+ *        —— **纯展示,不可点**:改日期走它下面那张常驻的 `BookingCalendar`,
+ *        再叠一个日期选择弹层等于同一件事有两个入口,反而容易误触。
  *   行 2 「GUESTS & ROOMS」+「2 Adults, 1 Room」Inter 600/16
  * 图标板设计稿是 42x44 / 46x40 的 `rgba(66,104,244,0.1)` 圆角矩形,里面各是 18x20 / 22x16 的图标。
  */
 
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 
 import HomeIcon from '@/components/home/HomeIcon';
@@ -21,8 +23,6 @@ interface Props {
   checkOutLabel: string;
   nightsLabel: string;
   guestsLabel: string;
-  /** 点日期区打开日期选择器 */
-  onPressDates: () => void;
 }
 
 export default function BookingSummaryBar({
@@ -30,7 +30,6 @@ export default function BookingSummaryBar({
   checkOutLabel,
   nightsLabel,
   guestsLabel,
-  onPressDates,
 }: Props) {
   const { t } = useTranslation();
 
@@ -42,10 +41,7 @@ export default function BookingSummaryBar({
         </View>
         <View style={styles.flex}>
           <Text style={bookingShared.overline}>{t('hotels.booking.dates.duration')}</Text>
-          <Pressable
-            style={({ pressed }) => [styles.chipRow, pressed && bookingShared.pressed]}
-            onPress={onPressDates}
-          >
+          <View style={styles.chipRow}>
             <View style={[styles.chip, styles.flex]}>
               <Text style={styles.chipText} numberOfLines={1}>
                 {checkInLabel}
@@ -64,7 +60,7 @@ export default function BookingSummaryBar({
                 {nightsLabel}
               </Text>
             </View>
-          </Pressable>
+          </View>
         </View>
       </View>
 

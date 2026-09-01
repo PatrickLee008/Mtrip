@@ -45,31 +45,46 @@ export default function ReviewBody({ stay, agreed, onToggleAgree, onComingSoon }
   const nightsText = nightsLowerLabel(t, nights);
   const guests = stay.adults + stay.childCount;
 
-  const rows: PriceRow[] = [
-    {
-      key: 'original',
-      label: t('hotels.booking.review.originalPrice', { nights: nightsText }),
-      value: formatAmount(stay.originalPrice, currency),
-      strike: true,
-    },
-    {
-      key: 'room',
-      label: t('hotels.booking.review.roomPrice', { nights: nightsText }),
-      value: formatAmount(stay.roomPrice, currency),
-    },
-    {
-      key: 'taxes',
-      label: t('hotels.booking.review.taxes', { percent: stay.taxPercent }),
-      value: formatAmount(stay.taxes, currency),
-    },
-  ];
+  /**
+   * 价格明细分两套:
+   *   演示数据 —— 按设计稿三行(原价划线 / 房费 / 服务费与税费 10%);
+   *   真实商品 —— **只列后端真的会收的部分**。后端定价链路是「锁库存得出的房费 → 长住折扣 → 优惠券」,
+   *     没有税费这一项,照设计稿凭空展示 10% 会与实际扣款对不上。
+   */
+  const rows: PriceRow[] = stay.demo
+    ? [
+        {
+          key: 'original',
+          label: t('hotels.booking.review.originalPrice', { nights: nightsText }),
+          value: formatAmount(stay.originalPrice, currency),
+          strike: true,
+        },
+        {
+          key: 'room',
+          label: t('hotels.booking.review.roomPrice', { nights: nightsText }),
+          value: formatAmount(stay.roomPrice, currency),
+        },
+        {
+          key: 'taxes',
+          label: t('hotels.booking.review.taxes', { percent: stay.taxPercent }),
+          value: formatAmount(stay.taxes, currency),
+        },
+      ]
+    : [
+        {
+          key: 'room',
+          label: t('hotels.booking.review.roomPrice', { nights: nightsText }),
+          value: formatAmount(stay.roomPrice, currency),
+        },
+      ];
 
   return (
     <View style={styles.root}>
       <RoomSummaryCard
-        cover={TEMP_ROOM_COVERS[stay.roomKey]}
+        /* 真实房型没有封面图(接口 images 为空),沿用设计稿的临时房型图兜底 */
+        cover={TEMP_ROOM_COVERS[stay.roomKey] ?? TEMP_ROOM_COVERS.deluxe}
         badge={t('hotels.booking.review.preferred')}
-        name={t(`hotels.detail.rooms.names.${stay.roomKey}`)}
+        name={stay.roomName ?? t(`hotels.detail.rooms.names.${stay.roomKey}`)}
         guestsLabel={t('hotels.booking.review.roomGuests', { guests })}
         bedLabel={t('hotels.detail.rooms.beds.king')}
         areaLabel={t('hotels.detail.rooms.area', {

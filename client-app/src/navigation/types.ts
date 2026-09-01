@@ -35,16 +35,25 @@ export type RootStackParamList = {
   };
   /**
    * 酒店详情页(Figma 94:438),搜索结果卡的落地页。
-   * 当前是静态页,还没接 `/goods/detail`,故 id 可缺省(演示卡没有真实商品 id)。
+   * 真实卡带 id 拉 `/goods/detail`,演示卡无 id 时使用设计稿数据。
+   * `checkIn`/`checkOut` 是搜索页选好的日期,只是过一道手透传给订房向导 ——
+   * 否则选完房日期会跳回向导自己挑的默认值。
    */
-  HotelDetail: { id?: number } | undefined;
+  HotelDetail: { id?: number; checkIn?: string; checkOut?: string } | undefined;
   /**
    * 订房向导(Figma section 1675:5776),房型卡 Select 的落地页。
-   * 4 步在同一个路由内切换,`roomKey` 只用来指定进来时选中的房型(当前是静态页,可缺省)。
+   * 4 步在同一个路由内切换,`roomKey` 只用来指定进来时选中的房型(演示模式下可缺省)。
    */
   HotelBooking:
     | {
         roomKey?: string;
+        /** 搜索页选好的入离日期(`YYYY-MM-DD`),缺省时向导用明天起 1 晚 */
+        checkIn?: string;
+        checkOut?: string;
+        /** 真实商品 id;带上即「真实模式」,向导会拉 /goods/detail 并真的下单 */
+        goodsId?: number;
+        /** 选中的房型 id(hotel_room_type.id) */
+        skuId?: number;
         /**
          * 从常旅客页选回来的主要入住人。**只有姓名** ——
          * `user_traveler` 没有联系方式列,`/app/user/me` 的手机号与邮箱又是脱敏的,
@@ -62,8 +71,21 @@ export type RootStackParamList = {
   Insurance: undefined;
   /** Trip 里单段住宿的复核页(1675:9677);index 从 0 起 */
   StayDetail: { index?: number } | undefined;
-  /** 预订成功(1675:6714) */
-  BookingSuccess: undefined;
+  /** 预订成功(1675:6714);真实下单后带上订单结果,缺省则显示设计稿演示值 */
+  BookingSuccess:
+    | {
+        orderNo?: string;
+        /** 支付接口返回的核销码,成功页的二维码就是它 */
+        verifyCode?: string;
+        hotelName?: string;
+        address?: string;
+        checkIn?: string;
+        checkOut?: string;
+        adults?: number;
+        rooms?: number;
+        paidTotal?: number;
+      }
+    | undefined;
   GoodsList: { goodsType?: number; categoryId?: number; keyword?: string; title?: string };
   GoodsDetail: { id: number };
   OrderList: undefined;

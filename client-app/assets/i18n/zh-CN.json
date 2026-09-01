@@ -1002,6 +1002,7 @@
         "guestsRooms": "入住人与房间",
         "guestsRoomsValue": "{{adults}} 位成人,{{rooms}} 间房",
         "selectedDates": "已选日期",
+        "checkOutRequired": "请选择离店日期。",
         "whosComing": "同行人",
         "adults": "成人",
         "adultsHint": "13 岁及以上",
@@ -1047,7 +1048,8 @@
         "additionalHint": "选填:再添加 {{guests}} 位旅客",
         "secureTitle": "安全预订",
         "secureDesc": "您的数据经过加密,仅用于本次预订,我们绝不出售您的个人信息。",
-        "nameRequired": "请先填写主要入住人的姓名。"
+        "nameRequired": "请先填写主要入住人的姓名。",
+        "phoneRequired": "请填写联系手机号。"
       },
       "review": {
         "preferred": "优选",
