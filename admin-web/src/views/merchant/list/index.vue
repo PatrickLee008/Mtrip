@@ -791,7 +791,6 @@ onMounted(() => {
 .directory-detail-actions { display: flex; gap: 8px; margin-top: 16px; flex-wrap: wrap; }
 .directory-table :deep(.ant-table) { border: 1px solid #e3e8f0; border-radius: 8px; overflow: hidden; }
 .directory-table :deep(.ant-table-thead > tr > th) { font-size: 12px; color: #64748b; background: #f8fafc; }
-.directory-table :deep(.ant-tag) { border: none; font-size: 11px; }
 .directory-table :deep(.ant-pagination-total-text) { margin-right: auto; color: #94a3b8; }
 @media (max-width: 900px) { .directory-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 </style>

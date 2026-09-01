@@ -1,5 +1,13 @@
 # 会话交接文档(HANDOFF)
 
+## ★ 2026-08-31：admin-web 全局 Tag 原型配色
+
+`admin-web/src/styles/index.less` 已全局覆盖 Ant Design Vue Tag 的四组状态配色，并同时覆盖语义色及对应常用预设色：success/green 为 `#027A48/#ECFDF3/#6EE7B7`，warning/orange/gold 为 `#B45308/#FFFBEB/#FCD34D`，error/red 为 `#C01048/#FFF1F3/#FDA4AF`，processing/blue/geekblue 为 `#1D4ED8/#EFF6FF/#93C5FD`（文字/背景/加深边框）；内容字体统一为 11px/400，边框明确为 `1px solid`。“所有商户”表格已移除遗留的 Tag `border:none`，默认 Tag 恢复灰白底和灰色边框；商户验证四队列已将自绘 `verify-badge` 替换为共用 `StatusTag`，与入驻申请、所有商户统一组件和字体风格。保留默认圆角、尺寸、间距及 borderless 行为。`vue-tsc --noEmit` 与 Vite production build 通过（4195 modules），仅有既有大 chunk 警告；未执行 Git 暂存、提交或推送。
+
+## ★ 2026-08-31：商户文档列表与详情抽屉原型样式对齐
+
+`admin-web/merchant/documents` 已按用户提供的两张原型截图调整呈现层：列表页重做页头、五张图标统计卡、组合搜索筛选栏、文档/核验人单元格、状态与分页视觉；详情抽屉重做双行标题、双 Tab、状态提示、文件预览卡、元信息表与整宽下载入口。原审核、驳回、替换、要求重交、历史、预览、下载及权限键均保留，未改后端和数据库；接口无城市字段，页面继续只展示真实商户名称与内部 ID。中英文新增筛选、结果数、分页和 PDF 文案。`admin-web npm run build`（vue-tsc + Vite）通过，仅有既有大 chunk 警告；本地站点可启动，但浏览器停在登录门禁，未擅自使用账号做登录后视觉验收。未执行 Git 暂存、提交或推送。
+
 ## ★ 2026-08-30：admin-web 主题资源可视化编辑 + 公共资源库
 
 `cops/theme` 主题编辑弹窗由原始 JSON 文本框改为控件化资源编辑：常用资源支持启动页图、Logo、首页头图 URL 输入及导航强调色、主品牌色、页面背景色取色；未知 assets 键保留为扩展资源键值行，保存时仍按原接口提交 `assets` 对象。弹窗已放大至 1180px，主题资源区桌面端一行三列展示，列表新增资源数量与颜色标签；缩略图字段保留手输 URL，并接入公共资源库选择/上传图片。

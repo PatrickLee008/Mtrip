@@ -26,6 +26,10 @@ MTrip/
 
 ## 模块进度总览
 
+2026-08-31更新：admin-web 的 Ant Design Vue Tag 已在全局样式入口统一为原型截图的绿/橙/红/蓝四组深色文字、浅底和清晰描边，字体统一为 11px/400；边框在同色系内加深一级并明确为 `1px solid`。“所有商户”移除遗留的 Tag `border:none`，默认状态恢复灰白底和灰色边框；商户验证四队列由自绘徽章改用共用 `StatusTag`，与入驻申请及所有商户统一风格。TypeScript 校验与 Vite production build 通过。详见[模块04](./04-管理后台框架.md)。未提交Git。
+
+2026-08-31更新：admin-web 商户文档列表与详情抽屉按用户原型完成配色、图标和布局对齐，保留全部既有文档操作与权限；中英文文案补齐，`npm run build` 通过。浏览器仅验证本地站点可启动，登录后视觉验收未执行。详见 [M12 S7交付](./m12/08-s7-delivery.md)。未提交Git。
+
 2026-08-28修复：商户经营看板缺少优惠券归属列及趋势`groupByRaw`兼容错误已处理；14项看板＋300项既有集成通过，详见[商户端修复记录](./13-商家端merchant-web落地.md)。未提交Git。
 
 | 序号 | 模块计划文件 | 内容 | 状态 | 进度 |
@@ -51,6 +55,7 @@ MTrip/
 
 | 日期 | 变更内容 |
 |------|---------|
+| 2026-08-31 | admin-web 全局 Tag 状态色按原型截图统一：success/green、warning/orange/gold、error/red、processing/blue/geekblue 分别应用绿、橙、红、蓝的深色文字/浅底/加深边框组合；保留 Ant Design Vue 默认圆角、尺寸和 borderless，不改页面组件调用。TypeScript 校验及 Vite production build 通过。 |
 | 2026-08-30 | admin-web `cops/theme` 主题资源编辑器改为可视化控件模式，弹窗 1180px、资源卡一行三列，缩略图接入公共资源弹窗；新增 `FileResourceManager`/`FileResourcePicker` 公共组件（左侧目录树、右侧文件列表、根/子目录维护、上传/查看/单选/多选/删除、限定不限/图片/视频/图片+视频等类型），system-service 补 `/admin/sys/file/tree|upload|dir/save|dir/delete` 并增强 list/delete（多类型过滤、local/aliyun 同步删除实际资源），支持图片/文档/视频/音频资源；存储配置新增阿里云 OSS 驱动与 endpoint，新增 `sys_file_dir` 与 `10-storage-aliyun-resource.sql` 并登记 initdb，compose 给 system-service 挂 uploads。PHP lint、admin-web build、compose config、本地迁移和服务重建通过。 |
 | 2026-08-27 | PRD模块12商户管理阶段0：完成Git/代码/数据库只读核验、八项决策映射、技术设计和第一批36项验收用例；发现餐厅展示链路缺口、单笔/Trip双下单入口和账号级2FA缺失。check.ps1四步及商户端构建复核通过。仅文档提交，不修改业务代码/数据；设计G1～G4待用户确认。 |
 | 2026-08-26 | 商户验证四队列页(待核实/重新提交/得到正式认可的/已拒绝)搜索栏与表格风格统一为入职页口径:搜索栏改用 `SearchFilterBar` 组件(关键词+业态+国家下拉),表格移除 `a-card` 包裹,分页栏新增 `verify-pagination` 类(灰底 #FAFBFC + 28×28 按钮 + 激活态 #1664FF)。 |

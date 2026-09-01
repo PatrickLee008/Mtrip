@@ -17,6 +17,11 @@
   --sap-warning: #b54708; --sap-warning-bg: #fffaeb;
   --sap-danger:  #c01048; --sap-danger-bg:  #fff1f3;
   --sap-info:    #026aa2; --sap-info-bg:    #f0f9ff;
+  // Tag 状态色(取自 Super Admin Portal 原型截图)
+  --sap-tag-success-text: #027a48; --sap-tag-success-bg: #ecfdf3; --sap-tag-success-border: #6ee7b7;
+  --sap-tag-warning-text: #b45308; --sap-tag-warning-bg: #fffbeb; --sap-tag-warning-border: #fcd34d;
+  --sap-tag-danger-text:  #c01048; --sap-tag-danger-bg:  #fff1f3; --sap-tag-danger-border:  #fda4af;
+  --sap-tag-info-text:    #1d4ed8; --sap-tag-info-bg:    #eff6ff; --sap-tag-info-border:    #93c5fd;
   --sap-font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
 
   // 兼容旧变量(指向新令牌,存量页面无需改动)
@@ -54,6 +59,48 @@ body {
   background: var(--mtrip-bg-page);
   color: var(--mtrip-text-main);
   font-size: 14px;
+}
+
+// ===== Tag 状态配色(全局) =====
+// 同步原型的文字/浅底/边框，并统一标签内容字号与字重；保留默认圆角、尺寸与间距。
+// 同时覆盖语义色和常用预设色，避免各页面逐一修改 a-tag。
+.ant-tag {
+  font-size: 11px !important;
+  font-weight: 400 !important;
+}
+
+.ant-tag.ant-tag-success,
+.ant-tag.ant-tag-green {
+  color: var(--sap-tag-success-text) !important;
+  background: var(--sap-tag-success-bg) !important;
+  border: 1px solid var(--sap-tag-success-border) !important;
+}
+
+.ant-tag.ant-tag-warning,
+.ant-tag.ant-tag-orange,
+.ant-tag.ant-tag-gold {
+  color: var(--sap-tag-warning-text) !important;
+  background: var(--sap-tag-warning-bg) !important;
+  border: 1px solid var(--sap-tag-warning-border) !important;
+}
+
+.ant-tag.ant-tag-error,
+.ant-tag.ant-tag-red {
+  color: var(--sap-tag-danger-text) !important;
+  background: var(--sap-tag-danger-bg) !important;
+  border: 1px solid var(--sap-tag-danger-border) !important;
+}
+
+.ant-tag.ant-tag-processing,
+.ant-tag.ant-tag-blue,
+.ant-tag.ant-tag-geekblue {
+  color: var(--sap-tag-info-text) !important;
+  background: var(--sap-tag-info-bg) !important;
+  border: 1px solid var(--sap-tag-info-border) !important;
+}
+
+.ant-tag.ant-tag-borderless {
+  border-color: transparent !important;
 }
 
 // ===== 抽屉底部操作栏 =====

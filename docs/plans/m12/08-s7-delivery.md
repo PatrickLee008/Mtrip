@@ -182,6 +182,13 @@ npm run dev -- --host 127.0.0.1 --port 3518 --strictPort
 
 开发交付时，原有ReviewController、start.bat、stop.bat及两份未跟踪PRD的SHA-256与本阶段初始记录一致，均未纳入S7清单。本次依用户明确要求额外纳入ReviewController已有改动，其余四文件仍排除。下一步为剩余页面/原型验收与用户确认，不自动进行后续Git提交或生产发布。
 
+### 2026-08-31 商户文档页面原型样式补充
+
+- 按用户提供的列表页与详情侧边栏截图，对 `admin-web/src/views/merchant/documents/index.vue` 做呈现层调整：浅灰工作区、白色信息卡、蓝绿橙红状态体系、五张图标统计卡、横向组合筛选、紧凑表格、核验人头像与图标操作区均按原型信息层级重排。
+- 详情抽屉改为双行标题、顶部双 Tab、整块状态提示、文件预览卡、上传/大小/有效期摘要、条纹元信息表与整宽原文档下载按钮；现有真实 PDF/图片预览和历史 Tab 继续保留。
+- 审核、驳回、替换、要求重交、下载、历史和按钮权限键未改；未新增后端字段，原型中的城市和商户编码因接口不返回而不伪造，继续展示商户名称与内部 ID。
+- `en-US.ts`、`zh-CN.ts` 补充全部状态/文档类型、结果数、分页和 PDF 文档文案。`npm run build`（vue-tsc + Vite）通过，仅有既有大 chunk 警告；本地 Vite 可启动，浏览器到达登录页后停止，未使用项目账号执行登录后视觉验收。
+
 ## 8. S7文件清单
 
 - `backend/services/merchant-service/config/autoload/aspects.php`：权限配置。

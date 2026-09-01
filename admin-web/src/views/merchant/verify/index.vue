@@ -164,15 +164,15 @@ const columns = computed(() => [
   { title: t('common.action'), key: 'action_col', width: 150, fixed: 'right' as const },
 ]);
 
-/** 商户验证状态徽章(对齐原型:采用 status 徽章配色) */
-const VERIF_BADGE: Record<number, { text: string; color: string; bg: string; border?: string }> = {
-  0: { text: VP('statusPending'), color: '#B54708', bg: '#FFFBEB', border: '#FDE68A' },
-  2: { text: VP('statusRejected'), color: '#C01048', bg: '#FFF1F3', border: '#FECDD3' },
-  3: { text: VP('statusApproved'), color: '#027A48', bg: '#ECFDF3', border: '#A7F3D0' },
-  4: { text: VP('statusSuspended'), color: '#C01048', bg: '#FFF1F3', border: '#FECDD3' },
-  5: { text: VP('statusClosed'), color: '#64748B', bg: '#F1F5F9', border: '#E2E8F0' },
-  6: { text: VP('statusResubmission'), color: '#1D4ED8', bg: '#EFF6FF', border: '#BFDBFE' },
-};
+/** 商户验证状态统一使用全局 StatusTag 语义色 */
+const VERIF_BADGE = computed<Record<number, StatusItem>>(() => ({
+  0: { text: VP('statusPending'), color: 'warning' },
+  2: { text: VP('statusRejected'), color: 'error' },
+  3: { text: VP('statusApproved'), color: 'success' },
+  4: { text: VP('statusSuspended'), color: 'error' },
+  5: { text: VP('statusClosed'), color: 'default' },
+  6: { text: VP('statusResubmission'), color: 'processing' },
+}));
 
 
 // ---------- 详情抽屉 ----------
@@ -589,10 +589,7 @@ onMounted(() => {
             <span style="font-family: monospace; font-size: 12px; color: #475569">{{ record.created_at || '-' }}</span>
           </template>
           <template v-else-if="column.dataIndex === 'status'">
-            <span v-if="VERIF_BADGE[record.status]" class="verify-badge" :style="{ color: VERIF_BADGE[record.status].color, background: VERIF_BADGE[record.status].bg, borderColor: VERIF_BADGE[record.status].border || 'transparent' }">
-              {{ VERIF_BADGE[record.status].text }}
-            </span>
-            <span v-else>{{ record.status }}</span>
+            <StatusTag :value="record.status" :map="VERIF_BADGE" />
           </template>
           <template v-else-if="column.dataIndex === 'audit_by'">
             <span :style="record.audit_by ? undefined : 'color: var(--sap-muted)'">{{ record.audit_by || t('merchant.verifyPage.unassigned') }}</span>
@@ -1008,18 +1005,6 @@ onMounted(() => {
   background: #f8fafc !important;
   border-color: #e3e8f0 !important;
   color: #475569 !important;
-}
-
-/* 商户验证状态徽章(原型 Pending/Under Review/Approved/Rejected/Resubmission 配色) */
-.verify-badge {
-  display: inline-block;
-  padding: 1px 8px;
-  border: 1px solid transparent;
-  border-radius: 4px;
-  font-size: 11px;
-  font-weight: 600;
-  line-height: 18px;
-  white-space: nowrap;
 }
 
 .verify-drawer-title > div {
