@@ -23,6 +23,8 @@
  *   结果头的总数也随之显示演示条数,并在其下给一条可点重试的提示条(请求失败时附带错误原因)。
  *   演示态下 chips / 排序 / 关键词在前端本地生效,点心只切本地状态;
  *   点卡片跳酒店详情静态页(`HotelDetail`,同样是设计稿数据,不带商品 id)。
+ *   演示卡也被 chips/关键词筛空时才落到 `EmptyView`;`ErrorView` 只在演示兜底之外的场景出现
+ *   (演示态下错误原因走上面那条提示条,不再单独占位)。
  *
  * 未实现的能力(设计稿有、当前没有对应依赖或接口),一律走 comingSoon:
  *   入住人选择、View map(未引入地图)。
@@ -63,7 +65,15 @@ import { GOODS_TYPE } from '@/config/global';
 import { PAGE_PADDING, colors, radius, shadows } from '@/config/theme';
 import { fonts } from '@/config/typography';
 import type { RootStackParamList } from '@/navigation/types';
-
+import {
+  DEMO_BADGE,
+  DEMO_COVERS,
+  DEMO_KEY_BY_ID,
+  DEMO_PROMO,
+  DEMO_RATING_TIER,
+  queryDemoResults,
+  type DemoKey,
+} from '@/screens/hotel/demoResults';
 import { useCommonStore } from '@/store/commonStore';
 import { useUserStore } from '@/store/userStore';
 import type { GoodsItem } from '@/types/models';
@@ -202,7 +212,13 @@ export default function HotelResultsScreen() {
   }, [isLogin]);
 
   const toggleFavorite = (goods: GoodsItem) => {
-
+    /* 演示卡(id 取负数)没有真实商品,只切本地状态 */
+    if (goods.id < 0) {
+      setFavorites((prev) =>
+        prev.includes(goods.id) ? prev.filter((id) => id !== goods.id) : [...prev, goods.id],
+      );
+      return;
+    }
     if (!isLogin) {
       navigation.navigate('Login');
       return;
@@ -245,8 +261,22 @@ export default function HotelResultsScreen() {
     });
   };
 
-  const data = loading ? [] : items;
-  const shownTotal = total;
+  /**
+   * 演示数据:接口没连通或没有结果时,先用设计稿那四张卡把页面撑起来。
+   * 关键词匹配要用译文,故把「名称 + 地址」喂给 queryDemoResults。
+   */
+  const demoText = useCallback(
+    (key: DemoKey) =>
+      `${t(`hotels.results.demo.${key}.name`)} ${t(`hotels.results.demo.${key}.address`)}`,
+    [t],
+  );
+  const demoItems = useMemo(
+    () => queryDemoResults({ chips, keyword: applied.keyword, sortBy, textOf: demoText }),
+    [chips, applied.keyword, sortBy, demoText],
+  );
+  const showDemo = !loading && items.length === 0;
+  const data = loading ? [] : showDemo ? demoItems : items;
+  const shownTotal = showDemo ? demoItems.length : total;
 
   const header = (
     <View>
@@ -375,7 +405,21 @@ export default function HotelResultsScreen() {
           </Pressable>
         </View>
 
-
+        {/* 演示数据提示:点一下重试真实请求 */}
+        {showDemo ? (
+          <Pressable
+            style={({ pressed }) => [styles.demoNotice, pressed && styles.pressed]}
+            onPress={() => void load(1, 'init')}
+          >
+            {/* 请求失败时把原因一并带出来,别让演示数据把错误盖掉 */}
+            <Text style={styles.demoNoticeText}>
+              {error
+                ? `${t('hotels.results.demoNotice')} · ${error}`
+                : t('hotels.results.demoNotice')}
+            </Text>
+            <Text style={styles.demoNoticeLink}>{t('common.retry')}</Text>
+          </Pressable>
+        ) : null}
       </View>
     </View>
   );
@@ -387,10 +431,49 @@ export default function HotelResultsScreen() {
           data={data}
           keyExtractor={(item) => String(item.id)}
           ListHeaderComponent={header}
-          renderItem={({ item }) => (
-            <HotelResultCard goods={item} favorite={favorites.includes(item.id)} citizen={applied.citizen}
-              onPress={(g) => navigation.navigate('GoodsDetail', { id: g.id })} onToggleFavorite={toggleFavorite} />
-          )}
+          renderItem={({ item }) => {
+            /* 演示卡(id 取负数)的名称/地址/促销/徽章全部照设计稿回填,真实数据一律走接口字段 */
+            const key = item.id < 0 ? DEMO_KEY_BY_ID[item.id] : undefined;
+            if (!key) {
+              return (
+                <HotelResultCard
+                  goods={item}
+                  favorite={favorites.includes(item.id)}
+                  citizen={applied.citizen}
+                  onPress={(g) => navigation.navigate('GoodsDetail', { id: g.id })}
+                  onToggleFavorite={toggleFavorite}
+                />
+              );
+            }
+            const tier = DEMO_RATING_TIER[key];
+            const badge = DEMO_BADGE[key];
+            const promo = DEMO_PROMO[key];
+            return (
+              <HotelResultCard
+                goods={{
+                  ...item,
+                  goods_name: t(`hotels.results.demo.${key}.name`),
+                  address: t(`hotels.results.demo.${key}.address`),
+                }}
+                coverSource={DEMO_COVERS[key]}
+                favorite={favorites.includes(item.id)}
+                citizen={applied.citizen}
+                ratingTier={tier ? t(`hotels.results.${tier}`) : null}
+                badge={badge ? { text: t(badge.textKey), tone: badge.tone } : null}
+                promo={
+                  promo
+                    ? {
+                        strike: promo.strike,
+                        tags: promo.tags?.map((tag) => ({ text: t(tag.textKey), tone: tag.tone })),
+                      }
+                    : undefined
+                }
+                /* 演示卡没有真实商品 id,跳详情静态页(页面自己用设计稿数据渲染) */
+                onPress={() => navigation.navigate('HotelDetail')}
+                onToggleFavorite={toggleFavorite}
+              />
+            );
+          }}
           ListEmptyComponent={loading ? <LoadingView /> : error ? <ErrorView message={error} onRetry={() => void load(1, 'init')} /> : <EmptyView />}
           ListFooterComponent={
             items.length > 0 ? (
@@ -633,6 +716,29 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     letterSpacing: 0.14,
     color: colors.textSoft,
+  },
+  demoNotice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+    marginTop: -12,
+    padding: 12,
+    borderRadius: radius.btn,
+    backgroundColor: colors.tintBg,
+  },
+  demoNoticeText: {
+    flexShrink: 1,
+    fontFamily: fonts.inter,
+    fontSize: 12,
+    lineHeight: 16,
+    color: colors.textSoft,
+  },
+  demoNoticeLink: {
+    fontFamily: fonts.interSemi,
+    fontSize: 12,
+    lineHeight: 16,
+    color: colors.primary,
   },
 
   mapBtn: { flexDirection: 'row', alignItems: 'center', gap: 4 },
