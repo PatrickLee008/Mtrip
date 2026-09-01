@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 import { Modal } from 'ant-design-vue';
 import { useI18n } from 'vue-i18n';
 import {
@@ -8,7 +9,9 @@ import {
   DownOutlined,
   HomeOutlined,
   LogoutOutlined,
+  ShopOutlined,
 } from '@ant-design/icons-vue';
+import type { MerchantBusiness, MenuNode } from '@/api/types';
 import { useUserStore } from '@/stores/user';
 import SupportBanner from '@/components/SupportBanner.vue';
 import AppHeader from './components/AppHeader.vue';
@@ -16,37 +19,40 @@ import SideMenu from './components/SideMenu.vue';
 
 const userStore = useUserStore();
 const { t } = useI18n();
-
-// ===== 物业切换器(原型 Property Switcher,假数据照搬原型) =====
-interface PropertyItem {
-  key: string;
-  name: string;
-  location: string;
-  kind: 'hotel' | 'restaurant';
-}
-
-/** 原型假数据:All Properties + 3 酒店 + 2 餐厅 */
-const properties: PropertyItem[] = [
-  { key: 'horizon', name: 'The Horizon Resort', location: 'Phuket, Thailand', kind: 'hotel' },
-  { key: 'lagoon', name: 'Blue Lagoon Boutique', location: 'Koh Samui, Thailand', kind: 'hotel' },
-  { key: 'cityview', name: 'Cityview Business Hotel', location: 'Bangkok, Thailand', kind: 'hotel' },
-  { key: 'terrace', name: 'The Terrace Kitchen', location: 'Phuket, Thailand', kind: 'restaurant' },
-  { key: 'rooftop', name: 'Horizon Rooftop Dining', location: 'Koh Samui, Thailand', kind: 'restaurant' },
-];
+const route = useRoute();
+const router = useRouter();
 
 const switcherOpen = ref(false);
-/** 当前选中的物业 key('' = All Properties) */
-const currentKey = ref('');
+const currentBusiness = computed(() => userStore.selectedBusiness);
+const businessGroups = computed(() => {
+  const groups = new Map<string, MerchantBusiness[]>();
+  for (const business of userStore.businesses) {
+    const list = groups.get(business.business_type) ?? [];
+    list.push(business);
+    groups.set(business.business_type, list);
+  }
+  return Array.from(groups.entries()).map(([type, businesses]) => ({ type, businesses }));
+});
 
-const currentProperty = computed(() => properties.find((p) => p.key === currentKey.value));
+function businessTypeLabel(type: string): string {
+  const key = ['hotel', 'restaurant', 'airline', 'car_rental', 'attraction'].includes(type) ? type : 'other';
+  return t(`sidebar.businessType.${key}`);
+}
+
+function containsPath(nodes: MenuNode[], path: string): boolean {
+  return nodes.some((node) => node.route_path === path || containsPath(node.children ?? [], path));
+}
 
 function toggleSwitcher(): void {
   switcherOpen.value = !switcherOpen.value;
 }
 
-function selectProperty(key: string): void {
-  currentKey.value = key;
+function selectBusiness(id: number | null): void {
+  userStore.selectBusiness(id);
   switcherOpen.value = false;
+  if (route.path !== '/dashboard' && !containsPath(userStore.visibleMenus, route.path)) {
+    void router.push('/dashboard');
+  }
 }
 
 /** 点击面板外部关闭 */
@@ -87,20 +93,21 @@ function onLogout(): void {
         </div>
       </div>
 
-      <!-- 物业切换器(原型 Property Switcher + 下拉面板,假数据) -->
+      <!-- 业务切换器:默认全局视图,选择具体注册业务后显示该业务模块菜单 -->
       <div class="switcher-area">
         <div :class="['subject-switcher', { open: switcherOpen }]" @click="toggleSwitcher">
-          <HomeOutlined v-if="!currentProperty" class="switcher-icon" />
-          <BankOutlined v-else-if="currentProperty.kind === 'hotel'" class="switcher-icon hotel" />
-          <CoffeeOutlined v-else class="switcher-icon restaurant" />
+          <HomeOutlined v-if="!currentBusiness" class="switcher-icon" />
+          <BankOutlined v-else-if="currentBusiness.business_type === 'hotel'" class="switcher-icon hotel" />
+          <CoffeeOutlined v-else-if="currentBusiness.business_type === 'restaurant'" class="switcher-icon restaurant" />
+          <ShopOutlined v-else class="switcher-icon" />
           <div class="switcher-text">
             <div class="switcher-title">
-              {{ currentProperty ? currentProperty.name : t('sidebar.allProperties') }}
+              {{ currentBusiness ? currentBusiness.business_name : t('sidebar.allBusinesses') }}
             </div>
             <div class="switcher-sub">
               {{
-                currentProperty
-                  ? `${currentProperty.kind === 'hotel' ? t('sidebar.hotel') : t('sidebar.restaurant')} · ${currentProperty.location}`
+                currentBusiness
+                  ? [businessTypeLabel(currentBusiness.business_type), currentBusiness.city].filter(Boolean).join(' · ')
                   : t('sidebar.portfolioView')
               }}
             </div>
@@ -108,52 +115,42 @@ function onLogout(): void {
           <DownOutlined :class="['switcher-chevron', { rotated: switcherOpen }]" />
         </div>
 
-        <!-- 下拉面板(原型:当前项高亮 + HOTELS/RESTAURANTS 分组 + Add New Property) -->
+        <!-- 下拉面板:真实注册业务按业态分组 -->
         <div v-if="switcherOpen" class="switcher-panel" @click.stop>
-          <!-- All Properties 条目(选中态:浅蓝底 + 蓝色细边框) -->
           <div
-            :class="['panel-item', 'panel-all', { selected: currentKey === '' }]"
-            @click="selectProperty('')"
+            :class="['panel-item', 'panel-all', { selected: userStore.selectedBusinessId === null }]"
+            @click="selectBusiness(null)"
           >
             <HomeOutlined class="panel-item-icon" />
             <div class="panel-item-text">
-              <div class="panel-item-title">{{ t('sidebar.allProperties') }}</div>
+              <div class="panel-item-title">{{ t('sidebar.allBusinesses') }}</div>
               <div class="panel-item-sub">{{ t('sidebar.portfolioOverview') }}</div>
             </div>
           </div>
 
-          <!-- HOTELS 分组 -->
-          <div class="panel-group-title">{{ t('sidebar.hotels') }}</div>
-          <div
-            v-for="p in properties.filter((x) => x.kind === 'hotel')"
-            :key="p.key"
-            :class="['panel-item', { selected: currentKey === p.key }]"
-            @click="selectProperty(p.key)"
-          >
-            <BankOutlined class="panel-item-icon hotel" />
-            <div class="panel-item-text">
-              <div class="panel-item-title">{{ p.name }}</div>
-              <div class="panel-item-sub">{{ p.location }}</div>
+          <template v-for="group in businessGroups" :key="group.type">
+            <div class="panel-group-title">{{ businessTypeLabel(group.type) }}</div>
+            <div
+              v-for="business in group.businesses"
+              :key="business.id"
+              :class="['panel-item', { selected: userStore.selectedBusinessId === business.id }]"
+              @click="selectBusiness(business.id)"
+            >
+              <BankOutlined v-if="business.business_type === 'hotel'" class="panel-item-icon hotel" />
+              <CoffeeOutlined v-else-if="business.business_type === 'restaurant'" class="panel-item-icon restaurant" />
+              <ShopOutlined v-else class="panel-item-icon" />
+              <div class="panel-item-text">
+                <div class="panel-item-title">{{ business.business_name }}</div>
+                <div class="panel-item-sub">
+                  {{ business.city || business.merchant_name }}
+                </div>
+              </div>
             </div>
-          </div>
+          </template>
 
-          <!-- RESTAURANTS 分组 -->
-          <div class="panel-group-title">{{ t('sidebar.restaurants') }}</div>
-          <div
-            v-for="p in properties.filter((x) => x.kind === 'restaurant')"
-            :key="p.key"
-            :class="['panel-item', { selected: currentKey === p.key }]"
-            @click="selectProperty(p.key)"
-          >
-            <CoffeeOutlined class="panel-item-icon restaurant" />
-            <div class="panel-item-text">
-              <div class="panel-item-title">{{ p.name }}</div>
-              <div class="panel-item-sub">{{ p.location }}</div>
-            </div>
+          <div v-if="userStore.businesses.length === 0" class="panel-empty">
+            {{ t('sidebar.noBusinesses') }}
           </div>
-
-          <!-- 底部操作项 -->
-          <div class="panel-add">+ {{ t('sidebar.addProperty') }}</div>
         </div>
       </div>
 
@@ -230,7 +227,7 @@ function onLogout(): void {
   }
 }
 
-// ===== 物业切换器(原型:顶部紧贴 logo 区,卡片左右留 12px,底部分割线贯穿侧边栏全宽) =====
+// ===== 业务切换器(沿用原型视觉:顶部紧贴 logo 区,卡片左右留 12px) =====
 .switcher-area {
   position: relative;
   flex-shrink: 0;
@@ -387,19 +384,11 @@ function onLogout(): void {
     }
   }
 
-  .panel-add {
-    margin-top: 4px;
-    padding: 8px 10px;
-    border-radius: 7px;
-    font-size: 12px;
-    font-weight: 500;
-    color: var(--mtrip-primary);
-    cursor: pointer;
-    transition: background 0.15s ease;
-
-    &:hover {
-      background: var(--mtrip-primary-light);
-    }
+  .panel-empty {
+    padding: 12px 10px 8px;
+    color: var(--mtrip-text-aux);
+    font-size: 11px;
+    text-align: center;
   }
 }
 

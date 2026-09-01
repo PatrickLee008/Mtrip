@@ -1,5 +1,9 @@
 # 会话交接文档(HANDOFF)
 
+## ★ 2026-09-01：merchant-web 注册业务切换与菜单上下文整改
+
+商户端左上角已从原型假数据改为 `/merchant/auth/menus` 返回的真实注册业务：仅取当前账号数据范围内、已关联正式商户且业务 KYC 通过的 `merchant_application_business`，集团按可见商户汇总，门店收窄到 `merchant_store.source_business_id`。默认“全部业务”只展示 `merchant_menu.module_key=''` 的全局菜单；选择具体酒店/餐厅等业务后追加同 `business_type` 的业务专属菜单，当前路由被隐藏时回 `/dashboard`。既有后端模块授权与 JWT 权限不放宽；当前只有客房、房量价格标为酒店专属，餐饮暂无专属页面，不伪造。PHP 语法、merchant-web 类型检查与 Vite build 通过；Docker Desktop Engine `_ping` 返回 500，真实接口和登录后 UI 联调仍待 Docker 恢复。
+
 ## ★ 2026-09-01：测试入驻申请商户编号与审批关联修复
 
 `test/gen_testdata.py` 已修复入驻申请 `merchant_code` 固定为空以及阶段 5 使用循环总下标访问 `enabled` 导致 `merchant_id` 永远为 0 的问题。尚未转正式商户的测试申请使用独立 `MCH-5xxx` 编号段，避免与已有 `merchant_info` 的 `MCH-1001～MCH-1024` 冲突；阶段 5 的申请关联同 ID 正式商户并同步 `merchant_code/site_id`，时间线同步正式商户主键。`test/sql/02-商户域.sql` 已兼容当前生成文件并重新执行 `test/apply.sh`。验收：18 条申请缺失编号 0、编号唯一 18、异常编号碰撞 0、阶段 5 未关联 0、待审批注册号冲突 0；生成器 `py_compile` 与 `git diff --check` 通过。未执行 Git 暂存、提交或推送。

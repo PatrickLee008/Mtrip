@@ -57,6 +57,7 @@ MTrip/
 
 | 日期 | 变更内容 |
 |------|---------|
+| 2026-09-01 | merchant-web 注册业务切换与菜单上下文整改：移除左上角 3 酒店＋2 餐厅原型假数据，菜单接口返回当前账号真实已验证注册业务；默认“全部业务”只显示公共菜单，选择酒店/餐厅等业务后按 `merchant_menu.module_key` 展示对应专属菜单，离开可见路由时回 Dashboard。PHP 语法、merchant-web 类型检查与生产构建通过；Docker Desktop Engine 500，真实接口/UI 联调待恢复后补验。 |
 | 2026-09-01 | 测试数据入驻申请编号及关联修复：`merchant_application` 全量生成唯一 `merchant_code`；未转正式商户申请改用独立 `MCH-5xxx` 编号段，阶段 5 关联同 ID `merchant_info` 并同步编号、站点和时间线。重新执行 `test/apply.sh` 后 18 条申请无空编号、无异常跨表冲突，3 条阶段 5 均正确关联。 |
 | 2026-08-31 | admin-web 全局 Tag 状态色按原型截图统一：success/green、warning/orange/gold、error/red、processing/blue/geekblue 分别应用绿、橙、红、蓝的深色文字/浅底/加深边框组合；保留 Ant Design Vue 默认圆角、尺寸和 borderless，不改页面组件调用。TypeScript 校验及 Vite production build 通过。 |
 | 2026-08-30 | admin-web `cops/theme` 主题资源编辑器改为可视化控件模式，弹窗 1180px、资源卡一行三列，缩略图接入公共资源弹窗；新增 `FileResourceManager`/`FileResourcePicker` 公共组件（左侧目录树、右侧文件列表、根/子目录维护、上传/查看/单选/多选/删除、限定不限/图片/视频/图片+视频等类型），system-service 补 `/admin/sys/file/tree|upload|dir/save|dir/delete` 并增强 list/delete（多类型过滤、local/aliyun 同步删除实际资源），支持图片/文档/视频/音频资源；存储配置新增阿里云 OSS 驱动与 endpoint，新增 `sys_file_dir` 与 `10-storage-aliyun-resource.sql` 并登记 initdb，compose 给 system-service 挂 uploads。PHP lint、admin-web build、compose config、本地迁移和服务重建通过。 |

@@ -105,6 +105,7 @@ export default {
     switchLanguage: 'Switch Language',
   },
   sidebar: {
+    allBusinesses: 'All Businesses',
     allProperties: 'All Properties',
     portfolioView: 'Portfolio view',
     portfolioOverview: 'Portfolio overview',
@@ -113,6 +114,15 @@ export default {
     hotel: 'Hotel',
     restaurant: 'Restaurant',
     addProperty: 'Add New Property',
+    noBusinesses: 'No verified registered businesses',
+    businessType: {
+      hotel: 'Hotels',
+      restaurant: 'Restaurants',
+      airline: 'Airlines',
+      car_rental: 'Car Rentals',
+      attraction: 'Attractions',
+      other: 'Other Businesses',
+    },
   },
   app: {
     title: 'Merchant Center',

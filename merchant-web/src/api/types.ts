@@ -33,7 +33,19 @@ export interface MenuNode {
   is_cache: number;
   /** 该菜单对哪些 account_type 可见(逗号分隔) */
   account_scope?: string;
+  /** 所属业务模块,空字符串表示全局菜单 */
+  module_key?: string;
   children?: MenuNode[];
+}
+
+/** 商户已注册且通过业务级 KYC 的可切换业务 */
+export interface MerchantBusiness {
+  id: number;
+  merchant_id: number;
+  merchant_name: string;
+  business_name: string;
+  business_type: string;
+  city: string;
 }
 
 /**

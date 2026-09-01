@@ -104,6 +104,7 @@ export default {
     switchLanguage: '切换语言',
   },
   sidebar: {
+    allBusinesses: '全部业务',
     allProperties: '所有物业',
     portfolioView: '组合视图',
     portfolioOverview: '组合概览',
@@ -112,6 +113,15 @@ export default {
     hotel: '酒店',
     restaurant: '餐厅',
     addProperty: '添加新物业',
+    noBusinesses: '暂无已注册并通过验证的业务',
+    businessType: {
+      hotel: '酒店',
+      restaurant: '餐厅',
+      airline: '航空',
+      car_rental: '租车',
+      attraction: '景区',
+      other: '其他业务',
+    },
   },
   app: {
     title: '商家中心',

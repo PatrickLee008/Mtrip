@@ -31,7 +31,7 @@ interface MenuGroup {
 /** 将菜单树转为分组结构(保留原逻辑:目录→分组,页面→顶级项) */
 const groups = computed<MenuGroup[]>(() => {
   const result: MenuGroup[] = [];
-  const nodes = userStore.menus;
+  const nodes = userStore.visibleMenus;
 
   for (const node of nodes) {
     if (node.menu_type === 1) {

@@ -69,7 +69,9 @@ class AuthController extends AbstractController
             MerchantContext::adminId(),
             MerchantContext::accountType(),
             MerchantContext::isOwner(),
-            MerchantContext::merchantId()
+            MerchantContext::merchantId(),
+            MerchantContext::scopeMerchantIds(),
+            MerchantContext::scopeStoreId()
         );
         if (isset(MerchantContext::get()['impersonation_session_id'])) {
             $allowed = ['dashboard/index', 'order/index', 'rooms/index', 'availability/index', 'promotions/index', 'reviews/index', 'notifications/index'];

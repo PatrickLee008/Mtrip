@@ -3,6 +3,14 @@
 > 参考 admin-web 从零搭建平行的 merchant-web(Vue3+Vite+TS+antdv),为商户账号(`merchant_admin`,account_type 1集团/2商户/3门店)落地一套完整仿 admin 的动态 RBAC:独立四表菜单/角色,登录按 `account_type` 下发菜单树+权限集,接口权限继续由 `#[Permission]` 注解按 `perm_key` 联动(与前端 `v-perm` 同一把钥匙)。
 > 承接 12-商家账号体系.md 的二期清单。
 
+## 2026-09-01 注册业务切换与菜单上下文整改
+
+- [x] 移除 `BasicLayout.vue` 中照搬原型的 3 家酒店、2 家餐厅假数据及无真实动作的“添加物业”入口。
+- [x] `/api/v1/merchant/auth/menus` 在原有 `menus/perms` 基础上返回当前账号数据范围内、已关联正式商户且业务 KYC 已通过的 `businesses`；集团账号按集团可见商户汇总，门店账号只返回当前门店绑定业务。
+- [x] 默认进入商户端时保持“全部业务”全局上下文，只展示 `merchant_menu.module_key=''` 的公共菜单；选择具体业务后追加展示与其 `business_type` 同名模块菜单。酒店现有专属菜单为客房管理、房量与价格；餐饮暂无专属页面，不伪造入口。
+- [x] 切换业务后如果当前路由不再可见，自动回到 `/dashboard`；动态路由和后端权限仍使用完整授权菜单，不用前端选择替代后端鉴权。
+- [x] PHP 语法检查、merchant-web `vue-tsc --noEmit` 与 Vite production build 通过；Docker Desktop Engine 返回 500，真实接口与登录后浏览器联调待 Docker 恢复后补验。
+
 ## 2026-08-28 商户工作台服务器内部错误修复
 
 - 现象：GET `/api/v1/merchant/stats/dashboard`服务器内部错误。日志先报`Unknown column merchant_id`；本地开发库及隔离库缺marketing/07迁移。
