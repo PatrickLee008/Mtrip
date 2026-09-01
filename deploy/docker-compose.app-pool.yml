@@ -1,0 +1,99 @@
+# Mtrip APP 端独立实例池(管理端 / APP 端物理隔离)
+# ------------------------------------------------------------------
+# 为 5 个「同一进程同时服务管理端与 APP 端」的共享服务各起一个 -app 孪生容器:
+#   system / user / goods / order / marketing
+# 孪生 = 同镜像、同代码、同 HTTP_PORT,但【不发布宿主端口】,仅经网关内网访问。
+# 网关 $app_upstream 指向这些孪生(见 openresty/conf.d/mtrip.conf 的 *_service_app upstream)。
+#
+# 隔离收益:
+#   - 重启主池(admin/merchant/supplier 侧)→ 不影响 /api/v1/app/*(APP 池照常服务)
+#   - 重启 -app 池                          → 不影响 /api/v1/admin|merchant|supplier/*
+#
+# 加载时机:默认栈与 --prod 栈均合并本文件;开发热挂载见 docker-compose.app-pool.override.yml。
+# 环境变量【刻意与 docker-compose.yml 的 x-hyperf-env 保持一致】—— 改一处须两处同改。
+name: mtrip
+
+x-app-common: &app-common
+  restart: unless-stopped
+  environment: &app-env
+    APP_ENV: ${APP_ENV:-dev}
+    SCAN_CACHEABLE: ${SCAN_CACHEABLE:-false}
+    # 孪生 worker 数可单独调低省内存(默认与主池一致 2)
+    WORKER_NUM: ${APP_WORKER_NUM:-2}
+    MAX_REQUEST: ${MAX_REQUEST:-10000}
+    DB_HOST: mysql
+    DB_PORT: "3306"
+    DB_BUSINESS_DATABASE: mtrip_business
+    DB_SYSTEM_DATABASE: mtrip_system
+    DB_USERNAME: ${MYSQL_USER:-mtrip}
+    DB_PASSWORD: ${MYSQL_PASSWORD:-mtrip@2026}
+    DB_MAX_CONNECTIONS: "10"
+    REDIS_HOST: redis
+    REDIS_PORT: "6379"
+    REDIS_AUTH: ""
+    REDIS_DB: "0"
+    MTRIP_JWT_SECRET: ${MTRIP_JWT_SECRET:-mtrip-dev-jwt-secret-change-me}
+    MTRIP_JWT_TTL: "7200"
+    MTRIP_APP_JWT_TTL: "604800"
+    MTRIP_AES_KEY: ${MTRIP_AES_KEY:-mtrip-dev-aes-key-change-me}
+    MTRIP_REQUEST_LOG: ${MTRIP_REQUEST_LOG:-false}
+    MTRIP_CLIENT_SIGN: ${MTRIP_CLIENT_SIGN:-true}
+    MTRIP_SIGN_TTL: ${MTRIP_SIGN_TTL:-3600}
+    MTRIP_PAYLOAD_ENCRYPT: ${MTRIP_PAYLOAD_ENCRYPT:-true}
+    MTRIP_ADMIN_AES_KEY: ${MTRIP_ADMIN_AES_KEY:-}
+    MTRIP_SUBMIT_LOCK: ${MTRIP_SUBMIT_LOCK:-true}
+    MTRIP_SUBMIT_LOCK_TTL: ${MTRIP_SUBMIT_LOCK_TTL:-10}
+    MTRIP_FORM_ID_TTL: ${MTRIP_FORM_ID_TTL:-300}
+  depends_on:
+    mysql:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+
+services:
+  system-service-app:
+    <<: *app-common
+    build:
+      context: ../backend
+      dockerfile: services/system-service/Dockerfile
+    environment:
+      <<: *app-env
+      HTTP_PORT: "9501"
+    volumes:
+      - ./uploads:/opt/www/uploads
+
+  user-service-app:
+    <<: *app-common
+    build:
+      context: ../backend
+      dockerfile: services/user-service/Dockerfile
+    environment:
+      <<: *app-env
+      HTTP_PORT: "9502"
+
+  goods-service-app:
+    <<: *app-common
+    build:
+      context: ../backend
+      dockerfile: services/goods-service/Dockerfile
+    environment:
+      <<: *app-env
+      HTTP_PORT: "9503"
+
+  order-service-app:
+    <<: *app-common
+    build:
+      context: ../backend
+      dockerfile: services/order-service/Dockerfile
+    environment:
+      <<: *app-env
+      HTTP_PORT: "9504"
+
+  marketing-service-app:
+    <<: *app-common
+    build:
+      context: ../backend
+      dockerfile: services/marketing-service/Dockerfile
+    environment:
+      <<: *app-env
+      HTTP_PORT: "9507"

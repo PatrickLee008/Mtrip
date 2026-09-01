@@ -1,0 +1,47 @@
+# APP 孪生池 · 开发热挂载(与主池 docker-compose.override.yml 对称)
+# ------------------------------------------------------------------
+# 把本地源码挂进 -app 孪生容器,改后端代码后:
+#   ./mtrip.sh restart <svc>-app     (约 2 秒,无需 --build)
+# 说明:
+#   - 只挂 app/ 与 config/,不整目录覆盖 /opt/www(避免遮住镜像内 vendor/)
+#   - shared 挂 /shared/src 穿透生效(与主池同一份源码)
+#   - 日志挂到 deploy/logs/<svc>-app/,与主池日志分开便于区分是哪一侧在报错
+#   - 生产部署不合并本文件(--prod 只用 docker-compose.yml + docker-compose.app-pool.yml)
+x-shared-mount: &shared-src ../backend/shared/src:/shared/src
+
+services:
+  system-service-app:
+    volumes:
+      - ../backend/services/system-service/app:/opt/www/app
+      - ../backend/services/system-service/config:/opt/www/config
+      - ./logs/system-service-app:/opt/www/runtime/logs
+      - ./uploads:/opt/www/uploads
+      - *shared-src
+
+  user-service-app:
+    volumes:
+      - ../backend/services/user-service/app:/opt/www/app
+      - ../backend/services/user-service/config:/opt/www/config
+      - ./logs/user-service-app:/opt/www/runtime/logs
+      - *shared-src
+
+  goods-service-app:
+    volumes:
+      - ../backend/services/goods-service/app:/opt/www/app
+      - ../backend/services/goods-service/config:/opt/www/config
+      - ./logs/goods-service-app:/opt/www/runtime/logs
+      - *shared-src
+
+  order-service-app:
+    volumes:
+      - ../backend/services/order-service/app:/opt/www/app
+      - ../backend/services/order-service/config:/opt/www/config
+      - ./logs/order-service-app:/opt/www/runtime/logs
+      - *shared-src
+
+  marketing-service-app:
+    volumes:
+      - ../backend/services/marketing-service/app:/opt/www/app
+      - ../backend/services/marketing-service/config:/opt/www/config
+      - ./logs/marketing-service-app:/opt/www/runtime/logs
+      - *shared-src

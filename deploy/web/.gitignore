@@ -1,0 +1,13 @@
+# 前端 vite build 产物落地目录(由 scripts/auto-deploy.sh 原子替换)
+# 只保留占位 index.html,忽略真实构建产物(体积大、可重新生成)
+*
+!.gitignore
+!admin/
+!merchant/
+!supplier/
+admin/*
+merchant/*
+supplier/*
+!admin/index.html
+!merchant/index.html
+!supplier/index.html

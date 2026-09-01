@@ -295,10 +295,18 @@ services:
     restart: unless-stopped
     ports:
       - "${GATEWAY_HOST_PORT:-8081}:80"
+      # 前端静态托管端口(admin/merchant/supplier),server 块见 openresty/conf.d/mtrip.conf
+      - "${ADMIN_WEB_PORT:-8090}:8090"
+      - "${MERCHANT_WEB_PORT:-8091}:8091"
+      - "${SUPPLIER_WEB_PORT:-8092}:8092"
     volumes:
       - ./openresty/nginx.conf:/usr/local/openresty/nginx/conf/nginx.conf:ro
       - ./openresty/conf.d:/etc/nginx/conf.d:ro
       - ./uploads:/usr/local/openresty/nginx/static/uploads:ro
+      # 前端 vite build 产物(由 scripts/auto-deploy.sh 原子替换),缺省空目录 SPA 回退 index.html
+      - ./web/admin:/usr/local/openresty/nginx/html/admin:ro
+      - ./web/merchant:/usr/local/openresty/nginx/html/merchant:ro
+      - ./web/supplier:/usr/local/openresty/nginx/html/supplier:ro
     depends_on:
       - system-service
       - user-service
