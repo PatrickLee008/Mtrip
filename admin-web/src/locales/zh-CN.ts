@@ -2409,6 +2409,7 @@ export default {
       businessTypesPlaceholder: '请选择业务类型',
       merchantNameRequired: '请填写商家名称',
       companyNameRequired: '请填写商户名称',
+      siteRequired: '请选择所属站点',
       businessRequired: '请至少录入一家注册商家',
       leadCreated: '线索已创建',
       approveModalTitle: '通过入驻',

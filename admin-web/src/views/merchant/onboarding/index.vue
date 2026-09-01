@@ -25,11 +25,13 @@ import {
 } from '@ant-design/icons-vue';
 import PageContainer from '@/components/PageContainer.vue';
 import SearchFilterBar, { type FilterConfig } from '@/components/SearchFilterBar.vue';
+import SiteTreeSelect from '@/components/SiteTreeSelect.vue';
 import StageSteps from '@/components/StageSteps.vue';
 import StatusTag from '@/components/StatusTag.vue';
 import MerchantVerifyNav from '@/components/MerchantVerifyNav.vue';
 import { useTable, type TableRow } from '@/composables/useTable';
 import type { StatusItem } from '@/components/StatusTag.vue';
+import { useUserStore } from '@/stores/user';
 import {
   apiOnboardingAdd,
   apiOnboardingAddNote,
@@ -59,6 +61,8 @@ import { exportCsv } from '@/utils/exportCsv';
  *   验证状态页(Pending Verification/Approved/Rejected/Resubmission)由 merchant/verify/index 承接
  */
 const { t } = useI18n();
+const user = useUserStore();
+const isSuper = computed(() => user.profile?.isSuper === true);
 
 // 阶段枚举(与后端 merchant_application.stage 对齐)
 const STAGE_MAP = computed<Record<number, StatusItem>>(() => ({
@@ -701,6 +705,7 @@ async function doReject(): Promise<void> {
 const createOpen = ref(false);
 const createSaving = ref(false);
 const createForm = reactive({
+  siteId: 0,
   companyName: '',
   companyGroupName: '',
   regNumber: '',
@@ -717,6 +722,7 @@ const createForm = reactive({
   }[],
 });
 function openCreate(): void {
+  createForm.siteId = user.profile?.siteId || 0;
   createForm.companyName = '';
   createForm.companyGroupName = '';
   createForm.regNumber = '';
@@ -736,6 +742,10 @@ function removeBusinessRow(index: number): void {
 }
 
 async function doCreate(): Promise<void> {
+  if (isSuper.value && createForm.siteId <= 0) {
+    message.warning(t('merchant.onboardingPage.siteRequired'));
+    return;
+  }
   if (!createForm.companyName.trim()) {
     message.warning(t('merchant.onboardingPage.companyNameRequired'));
     return;
@@ -748,6 +758,7 @@ async function doCreate(): Promise<void> {
   createSaving.value = true;
   try {
     await apiOnboardingAdd({
+      siteId: createForm.siteId,
       companyName: createForm.companyName,
       companyGroupName: createForm.companyGroupName,
       regNumber: createForm.regNumber,
@@ -1393,6 +1404,9 @@ onMounted(() => {
     <!-- 录入线索 -->
     <a-modal v-model:open="createOpen" :title="t('merchant.onboardingPage.createTitle')" :confirm-loading="createSaving" :ok-text="t('merchant.onboardingPage.createOkText')" @ok="doCreate">
       <a-form layout="vertical">
+        <a-form-item v-if="isSuper" :label="t('common.site')" required>
+          <SiteTreeSelect v-model:value="createForm.siteId" :placeholder="t('merchant.onboardingPage.siteRequired')" style="width: 100%" />
+        </a-form-item>
         <a-row :gutter="12">
           <a-col :span="12">
             <a-form-item :label="t('merchant.onboardingPage.labelCompanyName')" required>

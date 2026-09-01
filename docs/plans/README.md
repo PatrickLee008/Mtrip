@@ -26,6 +26,8 @@ MTrip/
 
 ## 模块进度总览
 
+2026-09-02修复：超级管理员录入入驻线索时新增必选站点，前端提交 `siteId`、后端拒绝 `siteId<=0`，避免申请及后续商户/商品链路落入平台作用域。按用户确认将 `MCH-5019` 的申请、KYC、正式商户、物业、商户账号、酒店商品和房型从 `site_id=0` 幂等迁移到 `site_id=1（全球）`；复查全部现有相关记录站点一致，物业 `2052` 与商品 `1033` 已可作为站点1 `CN/南宁` 市场排名候选。正式展示资格与排名发布仍保持独立人工操作。详见[模块15](./15-M12-merchant-management.md)。
+
 2026-09-01更新：修复客户端真实酒店卡不进入酒店详情真实 Rooms 的问题。真实酒店搜索结果现在携带 `id` 跳 `HotelDetail` 并拉 `/app/goods/detail` 渲染真实房型，演示卡仍保留静态稿；同时补跑漏执行的 `database/goods/07-room-review-workflow.sql`，本地房型已回填为 `status=1/publish_status=2/approved_version=1`。排查确认当前本地新增酒店仍在 `site_id=0` 且未发布 marketplace，客户端默认站点 1 按设计仍不会展示该数据，需站点一致并发布排名后才会出现在 C 端。详见[模块10](./10-移动端App框架.md)。
 
 2026-09-01热修复：定位 merchant Booking Management 报 `Unknown column 'booking_status'` 为存量 MySQL 数据卷未执行 M4 增量 SQL；已补跑 `database/order/05-merchant-booking.sql`、`database/merchant/36-merchant-booking-menu.sql`、`database/merchant/37-merchant-booking-message.sql` 与 `database/user/10-chat-booking-link.sql`，并将后两份漏挂脚本登记到 `deploy/docker-compose.yml` initdb，复查 `order_main.booking_status` 与 `chat_conversation.order_id` 已落库。详见[方案文档](./实现方案-Merchant-M4-酒店预订管理.md)。
@@ -72,6 +74,7 @@ MTrip/
 
 | 日期 | 变更内容 |
 |------|---------|
+| 2026-09-02 | 入驻线索站点归属修复：超级管理员创建线索必须选择具体站点，后端拒绝站点0；新增并应用 `39-mch-5019-site-fix.sql`，将 `MCH-5019` 全部现有申请/KYC/商户/物业/账号/商品/房型链路迁移至站点1，数据库一致性与 `CN/南宁` 排名候选查询通过。 |
 | 2026-09-02 | 修复商户业务编号跨表碰撞：新增 `merchant_code_sequence` 全局序列及行锁分配，线索创建与审批冲突兜底共用同一入口；迁移幂等复跑通过，回滚事务验证 `APP-20260019` 可由冲突编号 `MCH-1020` 自动换为 `MCH-5019`，随后新建线索取得 `MCH-5020`，测试后真实申请状态未改变。 |
 | 2026-09-01 | client-app 酒店详情接真实房型：真实搜索结果卡改跳 `HotelDetail({id})`，详情页拉 `/app/goods/detail` 渲染标题、图库、起价和 Rooms，房型 Select 接真实下单确认；补跑房型审核流迁移 `goods/07`。同时确认当前本地数据仍因 `site_id=0` 与 marketplace 未发布被 C 端过滤。 |
 | 2026-09-01 | 热修复 merchant Booking Management `booking_status` 缺列：存量 MySQL 卷未重放 M4 增量 SQL，已补跑 `order/05`、`merchant/36`、`merchant/37`、`user/10` 并复查字段；同时补登记 `deploy/docker-compose.yml` initdb 中遗漏的住客消息两份 SQL，避免全新环境漏执行。 |

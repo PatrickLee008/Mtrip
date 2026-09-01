@@ -1,5 +1,12 @@
 # 会话交接文档(HANDOFF)
 
+### ★ 2026-09-02(入驻线索必选站点 + MCH-5019 站点修复)
+
+- 根因：超级管理员“录入线索”弹窗没有站点字段，提交也不带 `siteId`；`OnboardingController::create()` 对缺失值默认写 `0`，后续申请、KYC、正式商户、物业、商品和房型全部继承平台作用域，市场排名又明确要求具体 `site_id>=1`。
+- 修复：admin-web 创建线索时对超级管理员显示必选 `SiteTreeSelect` 并提交 `siteId`；普通站点管理员仍使用自身站点。后端新增 `siteId>0` 硬校验，绕过前端同样返回 `40001`。中英文提示已补齐。
+- 存量：用户明确确认将 `MCH-5019` 迁移到 `site_id=1（全球）`。新增幂等脚本 `database/merchant/39-mch-5019-site-fix.sql`，覆盖申请/业务、商户、物业、商户管理员、访问码与活动审计、KYC文件/时间线、酒店商品、房型及房型审核版本；compose initdb 登记为 `99l-mch-5019-site-fix.sql`，存量库已用 `scripts/db-apply.ps1` 执行成功。
+- 验证：前端 `npm run build` 通过；PHP lint 与 `git diff --check` 通过；新增集成断言确认缺站点被拒、所选站点写入申请与业务单元。全量 M12 被隔离测试库缺 `meal_plan_snapshot` 阻断，定向目录套件在新增断言通过后又被隔离库缺 `sub_account_limit` 阻断，均非本次代码回归。数据库复查 `MCH-5019` 现有相关记录全部为站点1，物业 `2052` + 商品 `1033` 已进入 `CN/南宁` 排名候选；`display_enabled=0` 与正式排名绑定/发布仍按独立人工流程处理。
+
 ### ★ 2026-09-02(商户业务编号跨表唯一性修复)
 
 - 根因：`merchant_application` 与 `merchant_info` 是两张独立自增表，旧实现却直接以申请主键生成 `MCH-XXXX`；申请 `id=1020` 审批时与既有正式商户 `MCH-1020` 冲突，触发 `merchant_info.uk_merchant_code` 唯一键并返回 500。
