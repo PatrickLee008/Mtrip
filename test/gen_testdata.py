@@ -877,11 +877,12 @@ def build_merchant(ctx: Ctx, f: SqlFile) -> None:
         reg = f"RCS-{rng.randint(100000, 999999)}-{i:03d}"
         ops = rng.choice(ctx.admin_ids)
         submitted = ctx.rand_dt(120, 5) if stage >= 3 else None
-        apps.append({
+        app_merchant = merchants[app_id - ID_BASE] if stage == 5 else None
+        app = {
             "id": app_id, "site_id": MAIN_SITE if i % 3 else rng.choice([1, 3]),
             "app_no": f"APP-2026{app_id:05d}",
-            "merchant_code": None,
-            "merchant_id": enabled[i]["id"] if (stage == 5 and i < len(enabled)) else 0,
+            "merchant_code": app_merchant["merchant_code"] if app_merchant else f"MCH-{app_id + 4000:04d}",
+            "merchant_id": app_merchant["id"] if app_merchant else 0,
             "company_name": f"{city} {rng.choice(['Hospitality', 'Travel', 'Resorts', 'Group'])} SARL",
             "merchant_name": f"{city} {rng.choice(['Grand', 'Central', 'Premium', 'Garden'])} Hotel",
             "company_group_name": rng.choice([g["name"] for g in ctx.groups]) if i % 3 == 0 else "",
@@ -912,7 +913,10 @@ def build_merchant(ctx: Ctx, f: SqlFile) -> None:
             "last_updated_at": ctx.rand_dt(60, 1),
             "created_at": ctx.ago(rng.randint(30, 200)),
             "updated_at": ctx.rand_dt(20),
-        })
+        }
+        if app_merchant:
+            app["site_id"] = app_merchant["site_id"]
+        apps.append(app)
         app_id += 1
     f.insert(BIZ_DB, "merchant_application", apps)
     ctx.applications = apps

@@ -200,6 +200,16 @@ INSERT INTO `merchant_application` (`id`,`site_id`,`app_no`,`merchant_code`,`mer
 (1017,4,'APP-202601017',NULL,0,'Marseille Hospitality SARL','Marseille Central Hotel','','RCS-225440-016','FR','Marseille','10 Rue de Marseille','hotel,restaurant',4,6,104,'客服专员','single_unit',NULL,'商户配合度高,优先处理',2,9,2,1,'2026-05-16 16:58:43',4,'银行账户证明与公司名称不一致','[1001, 1002]','2026-05-16 16:58:43','2026-08-01 10:02:43','2026-04-26 04:19:43','2026-08-24 12:29:43'),
 (1018,4,'APP-202601018',NULL,0,'Amsterdam Group SARL','Amsterdam Premium Hotel','','RCS-968793-017','NL','Amsterdam','150 Rue de Amsterdam','restaurant',5,6,106,'','chain',NULL,'商户配合度高,优先处理',1,1,1,1,'2026-05-08 11:42:43',5,'法人身份证件照片模糊,无法辨识','[1001, 1002]','2026-05-08 11:42:43','2026-08-25 11:27:43','2026-04-30 04:19:43','2026-08-20 10:36:43');
 
+-- 对齐当前入驻流程：创建线索即生成商户业务编号；阶段 5 已转为正式商户
+UPDATE `merchant_application`
+SET `merchant_code` = CONCAT('MCH-', LPAD(`id` + 4000, 4, '0'))
+WHERE `id` BETWEEN 1001 AND 1018;
+
+UPDATE `merchant_application` AS a
+INNER JOIN `merchant_info` AS m ON m.`id` = a.`id`
+SET a.`merchant_id` = m.`id`, a.`merchant_code` = m.`merchant_code`, a.`site_id` = m.`site_id`
+WHERE a.`id` BETWEEN 1001 AND 1018 AND a.`stage` = 5;
+
 -- 入驻申请 - 注册业务单元
 INSERT INTO `merchant_application_business` (`id`,`site_id`,`application_id`,`business_name`,`business_type`,`contact_name`,`contact_phone`,`contact_phone_index`,`contact_email`,`city`,`kyc_scope`,`kyc_template_id`,`kyc_status`,`kyc_submitted_at`,`kyc_submitted_by`,`created_at`,`updated_at`) VALUES
 (2001,3,1001,'Amsterdam Central Hotel - 单元1','hotel','Felix Garcia','S2bFuNm/VFtfyhGQjvx+PdL5+6QOujrFBErLVX6ae/x4M/H56yqgvA==','83be8ee59f785eba0629db210878378c04aaf8f8bf41939468a1bd7da66dbd62','biz2001@mtrip.test','Amsterdam',2,0,0,NULL,0,'2026-05-01 04:19:43','2026-08-19 01:08:43'),
@@ -559,6 +569,12 @@ INSERT INTO `merchant_verify_timeline` (`id`,`site_id`,`merchant_id`,`applicatio
 (1058,4,0,1018,'kyc_sent',3,106,'','阶段流转:kyc_sent',0,'2026-08-20 10:36:43'),
 (1059,4,0,1018,'doc_verified',2,106,'','阶段流转:doc_verified',0,'2026-08-20 10:36:43'),
 (1060,4,0,1018,'rejected',2,106,'','阶段流转:rejected',1,'2026-08-20 10:36:43');
+
+-- 已转正式商户的申请时间线同步正式商户主键
+UPDATE `merchant_verify_timeline` AS t
+INNER JOIN `merchant_application` AS a ON a.`id` = t.`application_id`
+SET t.`merchant_id` = a.`merchant_id`
+WHERE a.`id` BETWEEN 1001 AND 1018 AND a.`merchant_id` > 0;
 
 -- 商户黑名单(与 merchant_info.status=4 配对)
 INSERT INTO `merchant_blacklist` (`id`,`site_id`,`merchant_id`,`reason`,`evidence`,`operator_id`,`operator_name`,`status`,`removed_at`,`removed_by`,`created_at`,`updated_at`) VALUES

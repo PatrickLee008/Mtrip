@@ -209,6 +209,9 @@ php test/verify_testdata.php
    「按月分表」,但后端运行态使用未加后缀的表名,数据已写入未后缀表。
 7. **保留 ID 段**:业务表 `>= 1001`、系统配置类 `>= 101`、商户后台账号 `>= 4001`;
    `00-clean.sql` 只删这些段,**不会动种子数据**。重复执行 `apply.sh` 安全。
+8. **入驻申请商户编号**:所有 `merchant_application` 测试记录都必须有唯一 `merchant_code`。
+   尚未转正式商户的阶段使用独立的 `MCH-5xxx` 编号段且 `merchant_id=0`;阶段 5 必须关联
+   同 ID 的 `merchant_info`,并保持两表 `merchant_code`、`site_id` 一致,避免批准时唯一键冲突。
 
 ---
 

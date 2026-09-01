@@ -1,5 +1,9 @@
 # 会话交接文档(HANDOFF)
 
+## ★ 2026-09-01：测试入驻申请商户编号与审批关联修复
+
+`test/gen_testdata.py` 已修复入驻申请 `merchant_code` 固定为空以及阶段 5 使用循环总下标访问 `enabled` 导致 `merchant_id` 永远为 0 的问题。尚未转正式商户的测试申请使用独立 `MCH-5xxx` 编号段，避免与已有 `merchant_info` 的 `MCH-1001～MCH-1024` 冲突；阶段 5 的申请关联同 ID 正式商户并同步 `merchant_code/site_id`，时间线同步正式商户主键。`test/sql/02-商户域.sql` 已兼容当前生成文件并重新执行 `test/apply.sh`。验收：18 条申请缺失编号 0、编号唯一 18、异常编号碰撞 0、阶段 5 未关联 0、待审批注册号冲突 0；生成器 `py_compile` 与 `git diff --check` 通过。未执行 Git 暂存、提交或推送。
+
 ## ★ 2026-08-31：admin-web 全局 Tag 原型配色
 
 `admin-web/src/styles/index.less` 已全局覆盖 Ant Design Vue Tag 的四组状态配色，并同时覆盖语义色及对应常用预设色：success/green 为 `#027A48/#ECFDF3/#6EE7B7`，warning/orange/gold 为 `#B45308/#FFFBEB/#FCD34D`，error/red 为 `#C01048/#FFF1F3/#FDA4AF`，processing/blue/geekblue 为 `#1D4ED8/#EFF6FF/#93C5FD`（文字/背景/加深边框）；内容字体统一为 11px/400，边框明确为 `1px solid`。“所有商户”表格已移除遗留的 Tag `border:none`，默认 Tag 恢复灰白底和灰色边框；商户验证四队列已将自绘 `verify-badge` 替换为共用 `StatusTag`，与入驻申请、所有商户统一组件和字体风格。保留默认圆角、尺寸、间距及 borderless 行为。`vue-tsc --noEmit` 与 Vite production build 通过（4195 modules），仅有既有大 chunk 警告；未执行 Git 暂存、提交或推送。
