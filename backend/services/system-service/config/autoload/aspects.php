@@ -2,9 +2,11 @@
 
 declare(strict_types=1);
 
-use Mtrip\Shared\Aspect\PermissionAspect;
-
+/**
+ * 显式切面注册:不依赖注解扫描收集时序,保证切面恒生效。
+ * 背景:共享包 PermissionAspect 在部分服务重启扫描时未进入 aspects.cache,
+ * 导致 #[Permission] 注解静默失效;显式注册后由 AspectCollector 直接合并。
+ */
 return [
-    // RBAC 按钮/接口权限切面(拦截 #[Permission] 注解)
-    PermissionAspect::class,
+    \Mtrip\Shared\Aspect\PermissionAspect::class,
 ];
