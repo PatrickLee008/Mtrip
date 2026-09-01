@@ -4,6 +4,8 @@
 
 import type { NavigatorScreenParams } from '@react-navigation/native';
 
+import type { TravelerItem } from '@/types/models';
+
 /** 底部 Tab(对应 Figma M-Trip / Home 81:2464 的 BottomNavBar) */
 export type MainTabParamList = {
   HomeTab: undefined;
@@ -40,9 +42,22 @@ export type RootStackParamList = {
    * 订房向导(Figma section 1675:5776),房型卡 Select 的落地页。
    * 4 步在同一个路由内切换,`roomKey` 只用来指定进来时选中的房型(当前是静态页,可缺省)。
    */
-  HotelBooking: { roomKey?: string } | undefined;
-  /** 新增旅客(1675:5777),向导第 2 步与「更多 / 常用旅客」共用 */
-  AddGuest: undefined;
+  HotelBooking:
+    | {
+        roomKey?: string;
+        /**
+         * 从常旅客页选回来的主要入住人。**只有姓名** ——
+         * `user_traveler` 没有联系方式列,`/app/user/me` 的手机号与邮箱又是脱敏的,
+         * 拿不到可直接提交的原值,所以电话/邮箱仍由用户自己填。
+         */
+        leadGuest?: { firstName: string; lastName: string };
+      }
+    | undefined;
+  /**
+   * 新增 / 编辑常旅客(1675:5777),向导第 2 步与「更多 / 常用旅客」共用。
+   * 带 `traveler` 即编辑态 —— 列表接口已返回全部可编辑字段,不再单独请求详情。
+   */
+  AddGuest: { traveler?: TravelerItem } | undefined;
   /** 旅行保险(1675:5900),向导第 1 步加购卡的落地页 */
   Insurance: undefined;
   /** Trip 里单段住宿的复核页(1675:9677);index 从 0 起 */
@@ -63,7 +78,8 @@ export type RootStackParamList = {
   /** 通知(Figma 1770:3863),首页 / 我的精选顶部栏铃铛的落地页 */
   Notifications: undefined;
   Account: undefined;
-  Travelers: undefined;
+  /** `pick` = 从订房第 2 步进来的「选择主要入住人」模式:点一行即选中并返回,不是多选管理 */
+  Travelers: { pick?: boolean } | undefined;
   EditEmail: undefined;
   Referral: undefined;
   ReferralStatus: undefined;

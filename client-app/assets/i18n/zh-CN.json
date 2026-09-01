@@ -446,10 +446,36 @@
     "travelers": {
       "title": "常用旅客",
       "guest": "旅客",
-      "selectGuest": "选择同行人({{count}}/{{max}})",
+      "selectGuest": "选择同行人({{selected}}/{{max}})",
+      "pickTitle": "选择主要入住人",
       "addGuest": "新增旅客",
+      "editTitle": "编辑旅客",
       "done": "完成",
-      "maxReached": "最多可选 {{max}} 位同行人"
+      "save": "保存信息",
+      "delete": "删除该旅客",
+      "confirm": "确定",
+      "empty": "还没有保存过旅客",
+      "default": "默认",
+      "maxReached": "最多可选 {{max}} 位同行人",
+      "firstName": "名",
+      "lastName": "姓",
+      "nationality": "国籍",
+      "nationalityPlaceholder": "例如 Myanmar",
+      "idType": "证件类型",
+      "idTypes": {
+        "nrc": "身份证(NRC)",
+        "passport": "护照",
+        "other": "其他"
+      },
+      "idNo": "证件号码",
+      "idNoPlaceholder": "例如 12/OoKaMa(N)123456",
+      "idNoKeep": "留空则保持原证件号",
+      "idNoMasked": "当前已存:{{masked}}",
+      "expireDate": "证件到期日",
+      "expireDatePlaceholder": "请选择到期日",
+      "setDefault": "设为默认旅客",
+      "nameRequired": "请填写姓与名。",
+      "idNoRequired": "请填写证件号码。"
     },
     "editEmail": {
       "title": "换绑邮箱",
@@ -1140,31 +1166,6 @@
           "room": "豪华房",
           "breakfast": "含早餐"
         }
-      },
-      "addGuest": {
-        "title": "新增旅客",
-        "noLastName": "我没有姓氏",
-        "gender": "性别",
-        "genderPlaceholder": "请选择性别",
-        "genders": {
-          "male": "男",
-          "female": "女",
-          "other": "其他"
-        },
-        "dob": "出生日期",
-        "dobPlaceholder": "请选择出生日期",
-        "dobTitle": "出生日期",
-        "under13": "该旅客未满 13 周岁",
-        "nationality": "国籍",
-        "nationalities": {
-          "myanmar": "缅甸"
-        },
-        "nrcName": "姓名",
-        "nrcNamePlaceholder": "请填写身份证上的姓名",
-        "nrcNumber": "身份证号",
-        "nrcPlaceholder": "123456",
-        "save": "保存信息",
-        "confirm": "确定"
       },
       "insurance": {
         "title": "旅行保障",

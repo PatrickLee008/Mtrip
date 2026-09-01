@@ -446,10 +446,36 @@
     "travelers": {
       "title": "Traveler",
       "guest": "Guest",
-      "selectGuest": "Select Guest ({{count}}/{{max}})",
+      "selectGuest": "Select Guest ({{selected}}/{{max}})",
+      "pickTitle": "Select Lead Guest",
       "addGuest": "Add New Guest",
+      "editTitle": "Edit Traveler",
       "done": "Done",
-      "maxReached": "You can select up to {{max}} guests"
+      "save": "Save Info",
+      "delete": "Delete this traveler",
+      "confirm": "Confirm",
+      "empty": "No saved travelers yet",
+      "default": "Default",
+      "maxReached": "You can select up to {{max}} guests",
+      "firstName": "First Name",
+      "lastName": "Last Name",
+      "nationality": "Nationality",
+      "nationalityPlaceholder": "e.g. Myanmar",
+      "idType": "ID Type",
+      "idTypes": {
+        "nrc": "NRC",
+        "passport": "Passport",
+        "other": "Other"
+      },
+      "idNo": "ID Number",
+      "idNoPlaceholder": "e.g. 12/OoKaMa(N)123456",
+      "idNoKeep": "Leave blank to keep current",
+      "idNoMasked": "Currently saved: {{masked}}",
+      "expireDate": "Expiry Date",
+      "expireDatePlaceholder": "Select expiry date",
+      "setDefault": "Set as default traveler",
+      "nameRequired": "Please fill in both first and last name.",
+      "idNoRequired": "Please fill in the ID number."
     },
     "editEmail": {
       "title": "Edit Email",
@@ -1140,31 +1166,6 @@
           "room": "Deluxe Room",
           "breakfast": "Breakfast Included"
         }
-      },
-      "addGuest": {
-        "title": "Add New Guest",
-        "noLastName": "I don't have a last name",
-        "gender": "Gender",
-        "genderPlaceholder": "Gender",
-        "genders": {
-          "male": "Male",
-          "female": "Female",
-          "other": "Other"
-        },
-        "dob": "Date of birth",
-        "dobPlaceholder": "Date of birth",
-        "dobTitle": "Date Of Birth",
-        "under13": "Guest is under 13 years old",
-        "nationality": "Nationality",
-        "nationalities": {
-          "myanmar": "Myanmar"
-        },
-        "nrcName": "Name",
-        "nrcNamePlaceholder": "enter your name on NRC",
-        "nrcNumber": "NRC Number",
-        "nrcPlaceholder": "123456",
-        "save": "Save Info",
-        "confirm": "Confirm"
       },
       "insurance": {
         "title": "Travel Protection",

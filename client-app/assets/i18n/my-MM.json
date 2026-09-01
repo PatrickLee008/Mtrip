@@ -446,10 +446,36 @@
     "travelers": {
       "title": "ခရီးသွား",
       "guest": "ဧည့်သည်",
-      "selectGuest": "ဧည့်သည်ရွေးရန် ({{count}}/{{max}})",
+      "selectGuest": "ဧည့်သည်ရွေးရန် ({{selected}}/{{max}})",
+      "pickTitle": "ပင်မ ဧည့်သည် ရွေးရန်",
       "addGuest": "ဧည့်သည်အသစ်ထည့်ရန်",
+      "editTitle": "ခရီးသွား ပြင်ဆင်ရန်",
       "done": "ပြီးပါပြီ",
-      "maxReached": "ဧည့်သည် {{max}} ဦးအထိသာ ရွေးနိုင်သည်"
+      "save": "အချက်အလက် သိမ်းရန်",
+      "delete": "ဤခရီးသွားကို ဖျက်ရန်",
+      "confirm": "အတည်ပြုရန်",
+      "empty": "သိမ်းထားသော ခရီးသွား မရှိသေးပါ",
+      "default": "မူလ",
+      "maxReached": "ဧည့်သည် {{max}} ဦးအထိသာ ရွေးနိုင်သည်",
+      "firstName": "အမည်",
+      "lastName": "မျိုးနွယ်အမည်",
+      "nationality": "နိုင်ငံသား",
+      "nationalityPlaceholder": "ဥပမာ Myanmar",
+      "idType": "မှတ်ပုံတင် အမျိုးအစား",
+      "idTypes": {
+        "nrc": "မှတ်ပုံတင် (NRC)",
+        "passport": "နိုင်ငံကူးလက်မှတ်",
+        "other": "အခြား"
+      },
+      "idNo": "မှတ်ပုံတင် နံပါတ်",
+      "idNoPlaceholder": "ဥပမာ 12/OoKaMa(N)123456",
+      "idNoKeep": "အလွတ်ထားပါက မူလနံပါတ် ဆက်သုံးမည်",
+      "idNoMasked": "လက်ရှိ သိမ်းထားသည် - {{masked}}",
+      "expireDate": "သက်တမ်းကုန်ဆုံးရက်",
+      "expireDatePlaceholder": "သက်တမ်းကုန်ဆုံးရက် ရွေးပါ",
+      "setDefault": "မူလ ခရီးသွားအဖြစ် သတ်မှတ်ရန်",
+      "nameRequired": "အမည်နှင့် မျိုးနွယ်အမည် နှစ်ခုလုံး ဖြည့်ပါ။",
+      "idNoRequired": "မှတ်ပုံတင် နံပါတ် ဖြည့်ပါ။"
     },
     "editEmail": {
       "title": "အီးမေးလ်ပြင်ရန်",
@@ -1140,31 +1166,6 @@
           "room": "ဒီလက်စ် အခန်း",
           "breakfast": "မနက်စာ ပါဝင်သည်"
         }
-      },
-      "addGuest": {
-        "title": "ဧည့်သည် အသစ် ထည့်ရန်",
-        "noLastName": "မျိုးနွယ်အမည် မရှိပါ",
-        "gender": "ကျား/မ",
-        "genderPlaceholder": "ကျား/မ ရွေးပါ",
-        "genders": {
-          "male": "ကျား",
-          "female": "မ",
-          "other": "အခြား"
-        },
-        "dob": "မွေးသက္ကရာဇ်",
-        "dobPlaceholder": "မွေးသက္ကရာဇ် ရွေးပါ",
-        "dobTitle": "မွေးသက္ကရာဇ်",
-        "under13": "ဧည့်သည်သည် အသက် 13 နှစ် အောက် ဖြစ်သည်",
-        "nationality": "နိုင်ငံသား",
-        "nationalities": {
-          "myanmar": "မြန်မာ"
-        },
-        "nrcName": "အမည်",
-        "nrcNamePlaceholder": "မှတ်ပုံတင်ပေါ်ရှိ အမည် ဖြည့်ပါ",
-        "nrcNumber": "မှတ်ပုံတင် နံပါတ်",
-        "nrcPlaceholder": "123456",
-        "save": "အချက်အလက် သိမ်းရန်",
-        "confirm": "အတည်ပြုရန်"
       },
       "insurance": {
         "title": "ခရီးသွား အကာအကွယ်",

@@ -1,5 +1,94 @@
 # 会话交接文档(HANDOFF)
 
+### ★ 2026-09-01(订房第 2 步:主要入住人自动填入 + 选择回填)
+
+- 问题:Step 2 的 Select 原本只是 `navigate('Travelers')` 跳过去看看,常旅客页的选中态**没有回传通道**
+  (上一轮留的口子);另外用户设了默认旅客也不会自动带出来。
+- **自动填入**:`HotelBookingScreen` 挂载时(已登录)拉一次 `fetchTravelerList()`,取 `is_default === 1` 那条
+  填进 Lead Guest。三条约束:只在姓名两栏**都为空**时填(不覆盖已输入)、`useRef` 守卫只填一次、
+  **没设默认就不填** —— 接口虽按 `is_default DESC, id DESC` 排序、首行总有值,
+  但拿「最新一条」冒充默认会让人莫名其妙。
+- **选择回填**:Step 2 的 Select 改为 `navigate('Travelers', { pick: true })`;
+  `TravelersScreen` 新增选择模式 —— 标题换成「选择主要入住人」(原来的 `(0/3)` 在单选场景是误导)、
+  隐藏多选勾选框、**点一行即选中并返回**,用 `navigate({ name:'HotelBooking', params:{leadGuest}, merge:true })`
+  把姓名合并回向导的路由参数。从「更多 → 账号」进入时行为不变,仍是管理列表。
+  回填副作用依赖 `route.params.leadGuest` 的**对象身份**(React Navigation 只在 params 真变化时才换新对象),
+  所以每次「选择并返回」只跑一次,不会反复盖掉用户之后手改的姓名 —— 也就不需要 `setParams` 清参数
+  (那个 API 在联合类型的路由参数上还有类型坑)。
+- **只能填姓名,电话与邮箱填不了**(两个原因叠加,已写进代码注释):
+  `user_traveler` 表没有联系方式列;`/app/user/me` 走 `AuthService::profile()`,
+  **mobile 与 email 都过了 `MaskHelper`**(`911****1111`),拿脱敏值占位会被用户直接提交成脏数据。
+  要做到全自动,需后端给 `user_traveler` 加联系方式列,或提供不脱敏的自有资料接口 —— 属另一件事。
+- i18n 新增 `more.travelers.pickTitle`(三份),共 **786** 键仍逐键对齐。
+- 验证:`npm run typecheck` 零报错、`npx expo export -p web` 打包通过(dist 已删);
+  接口侧冒烟确认 —— 建两位旅客、第二位 `isDefault:1`,`list` 首位即该默认旅客且 `is_default=1`
+  (同时验证了 `clearDefault()` 会把前一位的默认标记清掉),前端 `find(r => r.is_default === 1)` 取到的正是它。
+  **未做**:浏览器里的端到端走查(本会话无浏览器工具),需本地跑一遍
+  「Step 2 是否自动带出默认旅客 → 点 Select 换一位 → 姓名变化而电话邮箱保持不变」。
+
+**⚠️ 订正:此前两次「冒烟数据已清干净」的结论是错的**
+
+- 清库命令写成了 `delete from mtrip_business.user_referral where user_id=...`,而 `user_referral`
+  **没有 `user_id` 列**(实际是 `inviter_user_id` / `invitee_user_id`),MySQL 报 `ERROR 1054` 后
+  **停在该语句、后续的 `delete from user_info` 从未执行**;而命令里加了 `2>/dev/null` 把错误吞掉、
+  收尾的 `echo` 又是用 `;` 无条件执行的,于是我据此误报了「已清干净」。
+  **教训:清理/校验类命令不要 `2>/dev/null`,收尾结论要用 `&&` 挂在命令成功之后,不能用 `;` 无条件 echo。**
+- 实际残留:注册冒烟建的 `911111111`(user id=1)与常旅客冒烟建的 `988887777`(id=2)当时都还在。
+- 已处理:**只删掉属于我的两个冒烟账号(id=2、id=3)**;
+  **保留 user id=1 及其常旅客** —— 用户正用这个账号在浏览器里测试,删掉会破坏现场。
+  `user_referral` 表本来就是空的,无需清理。
+
+### ★ 2026-09-01(常旅客接后端 + 滚轮选择器两个 bug)
+
+**1) 「更多 → 账号 → Traveler」接上真实接口**
+
+- 后端本来就有 `user-service` 的 `TravelerController`(`/api/v1/app/user/traveler/{list,add,update,delete}`,
+  挂 `UserAuthMiddleware`,表 `user_traveler`),所以这次**主要是前端对接**,后端只改了一处。
+- **后端唯一改动**:`collect()` 增加 `bool $isUpdate`,编辑时 `idNo` 留空则不写 `id_no` 列,`update()` 传 `true`。
+  原因是 `list` 返回的证件号经 `MaskHelper::idCard` 脱敏(如 `12/***********3456`),前端回填不了原文,
+  而原来的 `requireStr('idNo')` 是必填 —— 不改的话用户不重输就会把掩码当成真证件号存回去。
+- 前端:`types/models.ts` 加 `TravelerItem`;`api/user.ts` 加四个接口 + `TravelerPayload`;
+  `config/global.ts` 加 `TRAVELER_ID_TYPES` / `TRAVELER_ID_TYPE_I18N`(口径对齐后端的 `[1,2,3]`);
+  `navigation/types.ts` 的 `AddGuest` 改成 `{ traveler? }`(带值即编辑态 —— 列表接口已返回全部可编辑字段,
+  不再单独请求详情);`TravelersScreen` 接真列表(未登录 / loading / 空 / 数据四态、默认角标、
+  副行显示「证件类型 · 脱敏号」、`useFocusEffect` 保证从编辑页回来自动重拉);
+  `AddGuestScreen` 重写为真表单,新增 / 编辑 / 删除都打接口。
+- **按用户决策裁掉了设计稿 `1675:5777` 的四栏**(性别 / 出生日期 / 未满 13 岁 / NRC 姓名)——
+  `user_traveler` 没有对应列,留着只会让用户白填一遍再被静默丢弃。
+  另外两处收敛:证件号从 NRC 三段并成一个输入框(后端是单列,且证件类型还支持护照 / 其他,那两种没有段码);
+  国籍从下拉改成输入框(后端是自由文本、也没有国家列表接口,一个只有 Myanmar 的下拉没有意义)。
+  **反过来补了两个设计稿没有、后端有的字段**:证件到期日、设为默认。
+- i18n:`more.travelers` 由 6 键扩到 29 键,**删掉已无引用的整组 `hotels.booking.addGuest`**;
+  顺带把 `selectGuest` 的 `{{count}}` 换成 `{{selected}}` —— `count` 是 i18next 保留字,
+  本来就违反仓库既有约定(其它页早就在避开它)。
+
+**2) 「证件到期日」选不动,只能停在固定值**
+
+两个真 bug 叠在一起,都在 `components/hotel/booking/WheelPickerSheet.tsx`:
+
+- **主因**:选中项只由 `onMomentumScrollEnd` / `onScrollEndDrag` 推导,而 **react-native-web 下用滚轮 /
+  触控板滚动时这两个事件不触发**,索引永远停在初始值 —— 表现就是「滚得动但选不动,确认后还是原来那天」。
+  改为 `onScroll` + `scrollEventThrottle={16}` 实时推导(索引没变则跳过 setState),末尾两个事件保留做原生端校准。
+- **次因**:关闭时组件只是 `return null`、实例并不卸载(挂载态由 `mounted` 自持,为的是放完关闭动画),
+  三个 `useState` 的初值**只在第一次渲染算一次**,那时 `value` 往往还是空的 ——
+  带着已有到期日再打开,列位置停在旧值。改为 `visible` 变 true 时按 `value` 重置三列,
+  并用 `session` 作三列的 key,换 key 让 `WheelColumn` 重挂载,其挂载副作用才会滚到新位置。
+- 顺带修掉一个静默改数据的坑:年份区间原本固定「今年 ~ 今年+20」,已存的到期日若早于今年(证件已过期)
+  会因 `indexOf` 返回 -1 被夹到第 0 项,**一打开就把日期悄悄改掉**。现在区间会兜住当前值。
+- 同批把该组件泛化成通用日期滚轮(`title` / `confirmLabel` / `minYear` / `maxYear` 都是 props),
+  原来标题与确认文案是硬编码的出生日期词条。
+
+**验证**
+
+- `npm run typecheck` 零报错;`npx expo export -p web` 打包通过(dist 已删)。
+- 三份语言包脚本比对 missing / extra 均为空,JSON 合法。
+- 容器内 `php -l` 通过,`docker compose restart user-service` 已执行。
+- **真实接口全链路冒烟**:临时账号 → add(返回 id)→ list(证件号确为脱敏)→
+  update 不带 `idNo`(证件号保持 `12/***********3456` 未被覆盖、其余字段已改)→
+  update 带新 `idNo`(变为 `MA9**6543`,证明能改)→ delete(list 变空)。
+- **未做**:浏览器里逐屏的视觉走查(本会话没有浏览器工具),需本地跑一遍
+  「更多 → 账号 → Traveler → 新增 → 编辑(到期日滚一下看能不能选中)→ 删除」。
+
 ### ★ 2026-09-01(登录/注册横向可拖动修复 + 本地 app 接口 401 的根因)
 
 **1) 登录页与注册页可以左右拖动、元素超出屏幕**

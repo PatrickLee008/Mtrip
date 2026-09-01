@@ -18,13 +18,14 @@
  * 新增卡片、Add Hotel and Homestay 的二次搜索(这里直接把设计稿的第二段住宿加进来)。
  */
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTranslation } from 'react-i18next';
 
+import { fetchTravelerList } from '@/api/user';
 import HomeIcon from '@/components/home/HomeIcon';
 import AlertDialog from '@/components/hotel/booking/AlertDialog';
 import BookingBottomBar from '@/components/hotel/booking/BookingBottomBar';
@@ -56,6 +57,7 @@ import {
 } from '@/screens/hotel/bookingDemo';
 import { useCommonStore } from '@/store/commonStore';
 import { useSiteStore } from '@/store/siteStore';
+import { useUserStore } from '@/store/userStore';
 import { formatAmount, formatMoney } from '@/utils/format';
 
 /** 设计稿写死「还能再加 2 位同行人」 */
@@ -84,7 +86,9 @@ function makeStay(source: typeof BOOKING_DEMO | typeof BOOKING_SECOND_STAY, key:
 export default function HotelBookingScreen() {
   const { t, i18n } = useTranslation();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const route = useRoute<RouteProp<RootStackParamList, 'HotelBooking'>>();
   const insets = useSafeAreaInsets();
+  const isLogin = useUserStore((s) => s.isLogin);
   const currency = useSiteStore((s) => s.currency);
   const showToast = useCommonStore((s) => s.showToast);
 
@@ -104,6 +108,43 @@ export default function HotelBookingScreen() {
   const [method, setMethod] = useState<PaymentMethodKey | null>(null);
   const [expanded, setExpanded] = useState<'card' | 'mobileBanking' | null>(null);
   const [payResult, setPayResult] = useState<'success' | 'error' | null>(null);
+
+  /**
+   * 主要入住人的姓名有两个来源,都**只填姓名**:
+   *   1) 进页面时自动读**默认常旅客**(`is_default=1`);没设默认就不填 —— 拿最新一条会让人莫名其妙。
+   *   2) 从常旅客页选回来(`route.params.leadGuest`,见 TravelersScreen 的 pick 模式)。
+   * 电话与邮箱填不了:`user_traveler` 没有联系方式列,`/app/user/me` 的手机号与邮箱又都是脱敏的
+   * (`AuthService::profile` 走 MaskHelper),拿脱敏值占位会被用户直接提交上去。
+   */
+  const autoFilled = useRef(false);
+  useEffect(() => {
+    if (!isLogin || autoFilled.current) return;
+    autoFilled.current = true;
+    void fetchTravelerList()
+      .then((rows) => {
+        const preset = rows.find((r) => r.is_default === 1);
+        if (!preset) return;
+        /* 只在用户还没动过姓名两栏时填,不覆盖已输入的内容 */
+        setForm((prev) =>
+          prev.firstName || prev.lastName
+            ? prev
+            : { ...prev, firstName: preset.first_name, lastName: preset.last_name },
+        );
+      })
+      .catch(() => undefined);
+  }, [isLogin]);
+
+  /**
+   * 从常旅客页选回来。依赖用的是 `picked` 的**对象身份**:React Navigation 只在 params 真的变化时
+   * 才换一个新对象,普通重渲染拿到的是同一个引用,所以这个副作用每次「选择并返回」只跑一次,
+   * 不会反复盖掉用户之后手改的姓名 —— 也就不需要再 `setParams` 去清参数
+   * (那个 API 在联合类型的路由参数上还有类型坑)。
+   */
+  const picked = route.params?.leadGuest;
+  useEffect(() => {
+    if (!picked) return;
+    setForm((prev) => ({ ...prev, firstName: picked.firstName, lastName: picked.lastName }));
+  }, [picked]);
 
   const multi = stays.length > 1;
   const current = stays[0];
@@ -194,7 +235,7 @@ export default function HotelBookingScreen() {
             form={form}
             additionalQuota={ADDITIONAL_QUOTA}
             onChange={(patch) => setForm((prev) => ({ ...prev, ...patch }))}
-            onSelectTraveler={() => navigation.navigate('Travelers')}
+            onSelectTraveler={() => navigation.navigate('Travelers', { pick: true })}
             onAddGuest={() => navigation.navigate('AddGuest')}
             onSaveInfo={comingSoon}
             onComingSoon={comingSoon}

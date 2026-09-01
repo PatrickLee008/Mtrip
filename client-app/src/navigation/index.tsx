@@ -158,7 +158,7 @@ export default function AppNavigator() {
         <Stack.Screen
           name="AddGuest"
           component={AddGuestScreen}
-          options={{ title: t('hotels.booking.addGuest.title'), headerShown: false }}
+          options={{ title: t('more.travelers.addGuest'), headerShown: false }}
         />
         <Stack.Screen
           name="Insurance"

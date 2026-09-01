@@ -155,21 +155,11 @@ export const TRUST_BADGES = [
   height: number;
 }[];
 
-/* ------------------------------------------------------------------ 表单选项 */
-
-/** 性别下拉(设计稿 1675:7737 Container) */
-export const GENDER_OPTIONS = ['male', 'female', 'other'] as const;
-
-/** NRC 号的省份码 / 镇区码(设计稿只给了 12 / OoKaMa 一组示例,不臆造完整表) */
-export const NRC_STATE_OPTIONS = ['12'] as const;
-export const NRC_TOWNSHIP_OPTIONS = ['OoKaMa'] as const;
-
-/** 国籍下拉(设计稿只画了 Myanmar) */
-export const NATIONALITY_OPTIONS = ['myanmar'] as const;
-
-/** 出生日期滚轮的年份范围(设计稿示例是 2024/2025/2026 三行,这里给一段真实可选区间) */
-export const DOB_YEAR_MIN = 1925;
-export const DOB_YEAR_MAX = new Date().getFullYear();
+/*
+ * 新增旅客页原有的性别 / NRC 段码 / 国籍 / 出生日期年份四组常量已删除:
+ * 那一页已接后端 `user_traveler`,只保留表里有的字段(见 screens/hotel/AddGuestScreen.tsx 的说明),
+ * 证件类型改用 `config/global.ts` 的 `TRAVELER_ID_TYPES`。
+ */
 
 /* ---------------------------------------------------------------- 旅行保险页 */
 

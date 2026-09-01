@@ -1,5 +1,8 @@
 /**
- * 出生日期滚轮浮层(设计稿 1675:7673「Date of birth Overlay」)
+ * 年 / 月 / 日 三列滚轮浮层(设计稿 1675:7673「Date of birth Overlay」)
+ *
+ * 设计稿画的是「出生日期」,但结构是通用的日期选择;常旅客的**证件到期日**复用同一个浮层,
+ * 故标题与年份区间都做成 props(到期日要选未来年份,出生日期要选过去年份)。
  *
  * 设计稿实测:白卡、1px `rgba(196,197,215,0.3)`、**只有上两角圆角 32**、padding 25、gap 16;
  *   标题行 「Date Of Birth」Inter 700/16 + 右侧 12 的关闭叉(`--text-2`)
@@ -32,7 +35,6 @@ import HomeIcon from '@/components/home/HomeIcon';
 import { BORDER_SOFT_STRONG, bookingShared } from '@/components/hotel/booking/bookingShared';
 import { colors, radius } from '@/config/theme';
 import { fonts } from '@/config/typography';
-import { DOB_YEAR_MAX, DOB_YEAR_MIN } from '@/screens/hotel/bookingDemo';
 
 /** 一行的高度(设计稿行文 12/normal + gap 10,取整到 34 便于 snap) */
 const ROW_HEIGHT = 34;
@@ -41,11 +43,20 @@ const LINE = 'rgba(85, 85, 85, 0.1)';
 
 interface Props {
   visible: boolean;
-  /** `YYYY-MM-DD`,为空时默认停在 1995-01-01 */
+  /** 浮层标题 */
+  title: string;
+  /** `YYYY-MM-DD`,为空时停在 `fallbackYear`-01-01 */
   value?: string | null;
+  /** 年份区间(含),默认取当年往后 20 年 —— 证件到期日的口径 */
+  minYear?: number;
+  maxYear?: number;
+  /** 确认按钮文案 */
+  confirmLabel: string;
   onClose: () => void;
   onConfirm: (value: string) => void;
 }
+
+const THIS_YEAR = new Date().getFullYear();
 
 interface ColumnProps {
   items: string[];
@@ -58,15 +69,24 @@ function WheelColumn({ items, index, onChange, width }: ColumnProps) {
   const ref = useRef<ScrollView>(null);
 
   useEffect(() => {
-    /* 首次挂载把选中项滚到中间;后续由手势驱动,不再强行回滚 */
+    /* 挂载时把选中项滚到中间;之后由手势/滚轮驱动,不再强行回滚(靠外层换 key 重挂载来重置) */
     const timer = setTimeout(() => ref.current?.scrollTo({ y: index * ROW_HEIGHT, animated: false }), 0);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleEnd = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const next = Math.round(e.nativeEvent.contentOffset.y / ROW_HEIGHT);
-    onChange(Math.min(Math.max(next, 0), items.length - 1));
+  /**
+   * 选中项**必须由 onScroll 实时推导**,不能只依赖 onMomentumScrollEnd / onScrollEndDrag ——
+   * react-native-web 下用滚轮/触控板滚动时那两个事件不会触发,导致索引永远停在初始值,
+   * 表现就是「滚得动但选不动,确认后拿到的还是原来那天」。
+   * 末尾两个事件保留:原生端惯性停下后再校准一次。
+   */
+  const sync = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const next = Math.min(
+      Math.max(Math.round(e.nativeEvent.contentOffset.y / ROW_HEIGHT), 0),
+      items.length - 1,
+    );
+    if (next !== index) onChange(next);
   };
 
   return (
@@ -76,8 +96,10 @@ function WheelColumn({ items, index, onChange, width }: ColumnProps) {
         showsVerticalScrollIndicator={false}
         snapToInterval={ROW_HEIGHT}
         decelerationRate="fast"
-        onMomentumScrollEnd={handleEnd}
-        onScrollEndDrag={handleEnd}
+        scrollEventThrottle={16}
+        onScroll={sync}
+        onMomentumScrollEnd={sync}
+        onScrollEndDrag={sync}
         contentContainerStyle={styles.columnContent}
       >
         {items.map((item, i) => (
@@ -95,17 +117,32 @@ function WheelColumn({ items, index, onChange, width }: ColumnProps) {
   );
 }
 
-export default function WheelPickerSheet({ visible, value, onClose, onConfirm }: Props) {
-  const { t, i18n } = useTranslation();
+export default function WheelPickerSheet({
+  visible,
+  title,
+  value,
+  minYear = THIS_YEAR,
+  maxYear = THIS_YEAR + 20,
+  confirmLabel,
+  onClose,
+  onConfirm,
+}: Props) {
+  const { i18n } = useTranslation();
   const insets = useSafeAreaInsets();
 
   const [mounted, setMounted] = useState(visible);
   const anim = useRef(new Animated.Value(0)).current;
 
-  const years = useMemo(
-    () => Array.from({ length: DOB_YEAR_MAX - DOB_YEAR_MIN + 1 }, (_, i) => `${DOB_YEAR_MIN + i}`),
-    [],
-  );
+  /**
+   * 年份区间要**兜住当前值** —— 已存的到期日可能早于 minYear(比如证件已过期),
+   * 区间不含它的话 `indexOf` 返回 -1、被夹到第 0 项,一打开就把日期悄悄改掉了。
+   */
+  const valueYear = value ? Number(value.split('-')[0]) : 0;
+  const years = useMemo(() => {
+    const from = valueYear ? Math.min(minYear, valueYear) : minYear;
+    const to = valueYear ? Math.max(maxYear, valueYear) : maxYear;
+    return Array.from({ length: Math.max(to - from + 1, 1) }, (_, i) => `${from + i}`);
+  }, [minYear, maxYear, valueYear]);
   const months = useMemo(
     () =>
       Array.from({ length: 12 }, (_, i) =>
@@ -114,12 +151,29 @@ export default function WheelPickerSheet({ visible, value, onClose, onConfirm }:
     [i18n.language],
   );
 
-  const initial = value ? value.split('-').map(Number) : [1995, 1, 1];
+  const initial = value ? value.split('-').map(Number) : [minYear, 1, 1];
   const [yearIdx, setYearIdx] = useState(Math.max(years.indexOf(`${initial[0]}`), 0));
   const [monthIdx, setMonthIdx] = useState((initial[1] || 1) - 1);
   const [dayIdx, setDayIdx] = useState((initial[2] || 1) - 1);
 
-  const year = Number(years[yearIdx] ?? DOB_YEAR_MAX);
+  /**
+   * 每次打开都按当前 `value` 重置三列。
+   * 上面那三个 useState 的初值**只在组件第一次渲染时算一次** —— 而本组件在关闭时只是 `return null`、
+   * 实例并不卸载(挂载态由 `mounted` 自持,为的是放完关闭动画),所以第一次渲染时 `value` 往往还是空的。
+   * 不重置的话,带着已有到期日再打开,列位置还停在旧值上。
+   * `session` 用作三列的 key:换 key 让 WheelColumn 重挂载,它的挂载副作用才会滚到新位置。
+   */
+  const [session, setSession] = useState(0);
+  useEffect(() => {
+    if (!visible) return;
+    const [y, m, d] = value ? value.split('-').map(Number) : [minYear, 1, 1];
+    setYearIdx(Math.max(years.indexOf(`${y}`), 0));
+    setMonthIdx(Math.min(Math.max((m || 1) - 1, 0), 11));
+    setDayIdx(Math.max((d || 1) - 1, 0));
+    setSession((s) => s + 1);
+  }, [visible, value, minYear, years]);
+
+  const year = Number(years[yearIdx] ?? maxYear);
   const daysInMonth = new Date(year, monthIdx + 1, 0).getDate();
   const days = useMemo(
     () => Array.from({ length: daysInMonth }, (_, i) => `${i + 1}`),
@@ -169,16 +223,29 @@ export default function WheelPickerSheet({ visible, value, onClose, onConfirm }:
           style={[styles.card, { paddingBottom: 25 + insets.bottom, transform: [{ translateY }] }]}
         >
           <View style={styles.head}>
-            <Text style={styles.title}>{t('hotels.booking.addGuest.dobTitle')}</Text>
+            <Text style={styles.title}>{title}</Text>
             <Pressable onPress={onClose} hitSlop={10}>
               <HomeIcon name="close" size={12} color={colors.textSoft} />
             </Pressable>
           </View>
 
+          {/* key 带 session:每次打开都让三列重挂载,挂载副作用才会滚到 value 对应的位置 */}
           <View style={styles.wheels}>
-            <WheelColumn items={years} index={yearIdx} onChange={setYearIdx} width={100} />
-            <WheelColumn items={months} index={monthIdx} onChange={setMonthIdx} />
             <WheelColumn
+              key={`y${session}`}
+              items={years}
+              index={yearIdx}
+              onChange={setYearIdx}
+              width={100}
+            />
+            <WheelColumn
+              key={`m${session}`}
+              items={months}
+              index={monthIdx}
+              onChange={setMonthIdx}
+            />
+            <WheelColumn
+              key={`d${session}`}
               items={days}
               index={Math.min(dayIdx, days.length - 1)}
               onChange={setDayIdx}
@@ -191,9 +258,7 @@ export default function WheelPickerSheet({ visible, value, onClose, onConfirm }:
             style={({ pressed }) => [bookingShared.primaryBtn, pressed && bookingShared.pressed]}
             onPress={confirm}
           >
-            <Text style={bookingShared.primaryBtnText}>
-              {t('hotels.booking.addGuest.confirm')}
-            </Text>
+            <Text style={bookingShared.primaryBtnText}>{confirmLabel}</Text>
           </Pressable>
         </Animated.View>
       </View>
