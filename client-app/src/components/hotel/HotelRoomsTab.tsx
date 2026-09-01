@@ -8,6 +8,9 @@
  * 切换按钮走 comingSoon。
  *
  * 设计稿这一页的底部价格栏是 hidden 的(每张卡自带 Select),页面据此在本页签隐藏底栏。
+ *
+ * 房型卡的 Select 已接上订房流程(Figma section 1675:5776):由页面传 `onSelectRoom` 进来,
+ * 落到 `HotelBooking` 路由;其余交互(收藏、See Details、360°/全景、面积单位切换)仍是 comingSoon。
  */
 
 import React from 'react';
@@ -27,9 +30,11 @@ import { formatMoney } from '@/utils/format';
 interface Props {
   /** 设计稿有、当前没有对应实现的交互统一走这里 */
   onComingSoon: () => void;
+  /** 点 Select 进订房流程 */
+  onSelectRoom: (roomKey: string) => void;
 }
 
-export default function HotelRoomsTab({ onComingSoon }: Props) {
+export default function HotelRoomsTab({ onComingSoon, onSelectRoom }: Props) {
   const { t } = useTranslation();
   const currency = useSiteStore((s) => s.currency);
 
@@ -92,7 +97,7 @@ export default function HotelRoomsTab({ onComingSoon }: Props) {
             viewer={room.viewer}
             onPress={onComingSoon}
             onToggleFavorite={onComingSoon}
-            onSelect={onComingSoon}
+            onSelect={() => onSelectRoom(room.key)}
             onOpenViewer={onComingSoon}
           />
         ))}

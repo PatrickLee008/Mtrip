@@ -54,6 +54,42 @@ export const TEMP_ATTRACTION_COVERS: Record<string, ImageSourcePropType> = {
 /** 政策页页头大图(设计稿 222:3504,展示框 370x192) */
 export const TEMP_POLICIES_HEADER: ImageSourcePropType = require('../../assets/images/temp/hotel/policies-header.png');
 
+/* ------------------------------------------------------------------ 订房流程 */
+
+/** Step 1 加购卡封面(设计稿 1675:6220 / 1675:6237,展示框 368x182) */
+export const TEMP_ADDON_COVERS: Record<string, ImageSourcePropType> = {
+  breakfast: require('../../assets/images/temp/hotel/booking/addon-breakfast.jpg'),
+  transfer: require('../../assets/images/temp/hotel/booking/addon-transfer.jpg'),
+};
+
+/**
+ * 预订成功页的数字凭证二维码(设计稿 1675:6728,展示框 174x174)
+ * —— 静态页阶段用导出的静态图,不引 qrcode 库;接口给出凭证串后改运行时生成
+ */
+export const TEMP_VOUCHER_QR: ImageSourcePropType = require('../../assets/images/temp/hotel/booking/voucher-qr.png');
+
+/** 支付方式图标,键为 PAYMENT_METHODS 的 key(展示框 40x40;mmqr 是 22x34 的窄图) */
+export const TEMP_PAY_ICONS: Record<string, ImageSourcePropType> = {
+  mmqr: require('../../assets/images/temp/hotel/booking/pay-mmqr.png'),
+  kbzpay: require('../../assets/images/temp/hotel/booking/pay-kbzpay.png'),
+  wavepay: require('../../assets/images/temp/hotel/booking/pay-wavepay.png'),
+  wallet: require('../../assets/images/temp/hotel/booking/pay-wallet.png'),
+  hotel: require('../../assets/images/temp/hotel/booking/pay-hotel.png'),
+  card: require('../../assets/images/temp/hotel/booking/pay-card.png'),
+  coupon: require('../../assets/images/temp/hotel/booking/pay-coupon.png'),
+};
+
+/** 「Mobile Banking」那格是两层图叠出来的(底图 cover + 标 contain),设计稿即如此 */
+export const TEMP_PAY_MOBILE_BANKING: ImageSourcePropType = require('../../assets/images/temp/hotel/booking/pay-mobile-banking.png');
+export const TEMP_PAY_MOBILE_BANKING_LOGO: ImageSourcePropType = require('../../assets/images/temp/hotel/booking/pay-mobile-banking-logo.png');
+
+/** 卡组织标,键为 CARD_BRANDS 的 key(展示框高 16,宽各不相同) */
+export const TEMP_CARD_BRANDS: Record<string, ImageSourcePropType> = {
+  mpu: require('../../assets/images/temp/hotel/booking/brand-mpu.png'),
+  visa: require('../../assets/images/temp/hotel/booking/brand-visa.png'),
+  mastercard: require('../../assets/images/temp/hotel/booking/brand-mastercard.png'),
+};
+
 /* ---------------------------------------------------------------------- 首页 */
 
 /** 热门目的地兜底卡,键为 DESTINATIONS 的 key(展示框 280x192) */

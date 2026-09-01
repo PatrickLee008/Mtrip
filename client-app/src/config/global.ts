@@ -9,6 +9,11 @@ export const STORAGE_KEYS = {
   SITE: 'mtrip:site',
   LANG: 'mtrip:lang',
   GDPR: 'mtrip:gdpr-consent',
+  /**
+   * 登录页「记住我」记住的手机号(**不含密码**)。
+   * 单独一个键是因为它要**跨退出登录**保留 —— `userStore.clearLocal` 只清 TOKEN 与 USER。
+   */
+  REMEMBER_MOBILE: 'mtrip:remember-mobile',
 } as const;
 
 /** App 版本号(与 app.json / package.json 的 version 保持一致,展示在「更多」页底部) */

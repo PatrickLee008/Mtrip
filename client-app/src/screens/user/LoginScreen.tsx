@@ -12,11 +12,15 @@
  *   登录按钮 主色,py16,圆角 12,文字 Outfit 400/16;未填完时整体 50% 透明(设计稿即禁用态)
  *   三方按钮 高 48,圆角 12,px31,1px --secondary 描边
  *
+ * 「记住我」= **记住手机号**(不含密码):进页面回填上次保存的号码并默认勾上,
+ * 登录成功时按当前勾选状态写入 / 清除 `STORAGE_KEYS.REMEMBER_MOBILE`。
+ * 它管的不是免登录 —— token 本来就无条件持久化(见 `store/userStore.ts` 的 applyAuth / hydrate)。
+ *
  * 未实现的能力(设计稿有、后端没有),一律走 comingSoon:
- *   区号选择(固定 +95)、三方登录、记住我(仅本地勾选态,不持久化)
+ *   区号选择(固定 +95)、三方登录
  */
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
@@ -25,10 +29,12 @@ import { useTranslation } from 'react-i18next';
 
 import HomeIcon from '@/components/home/HomeIcon';
 import SocialIcon, { type SocialProvider } from '@/components/user/SocialIcon';
+import { STORAGE_KEYS } from '@/config/global';
 import { PAGE_PADDING, colors, radius } from '@/config/theme';
 import { fonts } from '@/config/typography';
 import { useCommonStore } from '@/store/commonStore';
 import { useUserStore } from '@/store/userStore';
+import { storage } from '@/utils/storage';
 import { isMobile, isPassword } from '@/utils/validate';
 
 const ILLUSTRATION = require('../../../assets/images/login/illustration.png');
@@ -52,6 +58,19 @@ export default function LoginScreen() {
   const [remember, setRemember] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
+  /* 进页面回填上次「记住我」保存的手机号,并把勾选框恢复成勾上 */
+  useEffect(() => {
+    let alive = true;
+    void storage.getString(STORAGE_KEYS.REMEMBER_MOBILE).then((saved) => {
+      if (!alive || !saved) return;
+      setMobile(saved);
+      setRemember(true);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
   /* 设计稿的登录按钮是 50% 透明的禁用态,对应两栏未填完 */
   const canSubmit = mobile.trim().length > 0 && password.length > 0 && !submitting;
 
@@ -69,6 +88,12 @@ export default function LoginScreen() {
     setSubmitting(true);
     try {
       await login(mobile.trim(), password);
+      /* 只在登录成功后按当前勾选状态落盘,单纯勾/取消勾不改本地值 */
+      if (remember) {
+        await storage.setString(STORAGE_KEYS.REMEMBER_MOBILE, mobile.trim());
+      } else {
+        await storage.remove(STORAGE_KEYS.REMEMBER_MOBILE);
+      }
       showToast(t('common.success'));
       navigation.goBack();
     } catch (e) {
@@ -80,8 +105,14 @@ export default function LoginScreen() {
 
   return (
     <View style={styles.root}>
-      {/* 插画铺底:设计稿是整屏图片填充后裁切,这里按同样的比例绝对定位 */}
-      <Image source={ILLUSTRATION} style={styles.illustration} resizeMode="cover" />
+      {/**
+       * 插画铺底:设计稿是整屏图片填充后裁切,这里按同样的比例绝对定位。
+       * **必须外面套一层 overflow:'hidden' 的裁切层** —— 图宽是屏宽的 150.41%、左边还退了 18.49%,
+       * 右侧会超出屏幕约 32%,不裁的话整页可以横向拖动(同开屏页波浪的 `styles.waves` 做法)。
+       */}
+      <View style={styles.illustrationClip} pointerEvents="none">
+        <Image source={ILLUSTRATION} style={styles.illustration} resizeMode="cover" />
+      </View>
 
       <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
         {/* 顶部栏:自上而下由主色 50% 渐隐到透明 */}
@@ -228,6 +259,8 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.primary },
   safe: { flex: 1 },
   flex: { flex: 1 },
+  /* 插画裁切层:铺满整屏并把超出的部分剪掉(见上面 JSX 的说明) */
+  illustrationClip: { ...StyleSheet.absoluteFillObject, overflow: 'hidden' },
   /* 设计稿:w150.41% h46.55%,left-18.49% top16.66% */
   illustration: {
     position: 'absolute',
@@ -348,11 +381,18 @@ const styles = StyleSheet.create({
   },
 
   socials: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 16 },
+  /**
+   * 设计稿是 px31 的固定宽(20 的图标 → 82 宽),三枚 + 两道 16 间距 = 278。
+   * 卡片可用宽 = 屏宽 - 32(页边距)- 48(卡片内边距),屏宽小于约 358 时会被挤破,
+   * 故改成等分 + 上限 82:402 宽下与设计稿一致,窄屏自动收窄。
+   */
   socialBtn: {
+    flex: 1,
+    minWidth: 0,
+    maxWidth: 82,
     height: 48,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 31,
     borderRadius: radius.btn,
     borderWidth: 1,
     borderColor: colors.softBlue,

@@ -36,6 +36,19 @@ export type RootStackParamList = {
    * 当前是静态页,还没接 `/goods/detail`,故 id 可缺省(演示卡没有真实商品 id)。
    */
   HotelDetail: { id?: number } | undefined;
+  /**
+   * 订房向导(Figma section 1675:5776),房型卡 Select 的落地页。
+   * 4 步在同一个路由内切换,`roomKey` 只用来指定进来时选中的房型(当前是静态页,可缺省)。
+   */
+  HotelBooking: { roomKey?: string } | undefined;
+  /** 新增旅客(1675:5777),向导第 2 步与「更多 / 常用旅客」共用 */
+  AddGuest: undefined;
+  /** 旅行保险(1675:5900),向导第 1 步加购卡的落地页 */
+  Insurance: undefined;
+  /** Trip 里单段住宿的复核页(1675:9677);index 从 0 起 */
+  StayDetail: { index?: number } | undefined;
+  /** 预订成功(1675:6714) */
+  BookingSuccess: undefined;
   GoodsList: { goodsType?: number; categoryId?: number; keyword?: string; title?: string };
   GoodsDetail: { id: number };
   OrderList: undefined;

@@ -18,7 +18,8 @@
  *   **底部价格栏在 Rooms 页签隐藏**:设计稿 222:2529 是 hidden 的(每张房型卡自带 Select)。
  *
  * 设计稿有、当前没有对应实现的交互一律走 comingSoon:See Map / Get Directions / 提醒 / 分享 /
- * 客服 / Choose my room / 房型卡的收藏与 Select / Read All Reviews / 面积单位切换。
+ * 客服 / 房型卡的收藏 / Read All Reviews / 面积单位切换。
+ * (「Choose my room」已改为切到 Rooms 页签,房型卡 Select 已接上订房流程 1675:5776)
  * 设计稿里另有几张二级页(Rooms Details 281:1041、Reviews Page 1133:2998、Map Location 864:1775、
  * Property Preview / VR View / 3d View)不属于页签,本次未实现。
  */
@@ -28,6 +29,7 @@ import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } fr
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTranslation } from 'react-i18next';
 
 import { TEMP_HOTEL_GALLERY } from '@/assets/tempImages';
@@ -42,6 +44,7 @@ import HotelReviewsTab from '@/components/hotel/HotelReviewsTab';
 import HotelRoomsTab from '@/components/hotel/HotelRoomsTab';
 import { PAGE_PADDING, SECTION_GAP, colors, radius, shadows } from '@/config/theme';
 import { fonts } from '@/config/typography';
+import type { RootStackParamList } from '@/navigation/types';
 import { DETAIL_DEMO, DETAIL_TABS, type DetailTabKey } from '@/screens/hotel/detailDemo';
 import { useCommonStore } from '@/store/commonStore';
 import { useSiteStore } from '@/store/siteStore';
@@ -54,7 +57,7 @@ const BOTTOM_BAR_HEIGHT = 88;
 
 export default function HotelDetailScreen() {
   const { t } = useTranslation();
-  const navigation = useNavigation();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const currency = useSiteStore((s) => s.currency);
@@ -71,7 +74,12 @@ export default function HotelDetailScreen() {
   const renderTab = () => {
     switch (tab) {
       case 'rooms':
-        return <HotelRoomsTab onComingSoon={comingSoon} />;
+        return (
+          <HotelRoomsTab
+            onComingSoon={comingSoon}
+            onSelectRoom={(roomKey) => navigation.navigate('HotelBooking', { roomKey })}
+          />
+        );
       case 'amenities':
         return <HotelAmenitiesTab />;
       case 'nearby':
@@ -179,7 +187,8 @@ export default function HotelDetailScreen() {
           </View>
           <Pressable
             style={({ pressed }) => [styles.cta, pressed && styles.pressed]}
-            onPress={comingSoon}
+            /* 「Choose my room」切到 Rooms 页签(那里每张房型卡自带 Select 进订房流程) */
+            onPress={() => setTab('rooms')}
           >
             <Text style={styles.ctaText}>{t('hotels.detail.chooseRoom')}</Text>
           </Pressable>

@@ -107,3 +107,16 @@ Expo 51 / TypeScript / Zustand / React Navigation 6 / Axios / i18next + react-i1
   同批把反复出现四次的分段页签抽成 `components/common/SegmentedTabs.tsx`(优惠中心 / 推荐明细 /
   教程与指南 / 通知共用)。**静态页**:App 侧没有消息接口,数据走 `screens/notification/notificationDemo.ts`。
   完整记录见 HANDOFF「★ 2026-08-31(通知页)」。
+- 2026-09-01:新增订房流程(Figma section `Multi Booking Hotel Booking Flow` `1675:5776`)。
+  向导落成**一个路由 + 内部分步**:`screens/hotel/HotelBookingScreen.tsx`(路由 `HotelBooking`)
+  按 dates → guests → review →(多住宿才有)trip → payment 切换,内容各自一个组件
+  (`components/hotel/booking/BookingStep{Dates,Guests,Payment}` + `ReviewBody`,trip 段内联)。
+  另新增 4 个独立屏:`AddGuestScreen` / `InsuranceScreen` / `StayDetailScreen` / `BookingSuccessScreen`。
+  酒店详情房型卡的 Select 与底栏「Choose my room」不再是 comingSoon:前者进向导,后者切到 Rooms 页签;
+  「更多 / 常用旅客」的「Add New Guest」也接到同一张新增旅客页。
+  新增 `components/hotel/booking/*`(bookingShared / bookingFormat / BookingProgress / BookingBottomBar /
+  BookingSummaryBar / BookingCalendar / GuestCounterRow / AddOnCard / FormField / SelectSheet /
+  WheelPickerSheet / AlertDialog / ReviewCards / ReviewBody / StaySummaryCard / PaymentMethodRow),
+  `HomeIcon` 新增 19 枚设计稿图标,`assets/images/temp/hotel/booking/` 新增 15 张素材。
+  **当前是静态页**:后端没有酒店下单接口、支付仍是 mock,数值走 `screens/hotel/bookingDemo.ts`,
+  交互只在页面内生效。完整记录见 HANDOFF「★ 2026-09-01(订房流程)」。

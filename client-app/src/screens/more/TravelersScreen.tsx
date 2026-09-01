@@ -8,18 +8,20 @@
  *   末尾   「Add New Guest」同款行(文字 `--text-2` 居中偏左)+ 主色 Done 按钮(圆角 8、py8)
  *
  * 后端没有常用旅客接口(order 的 guests 字段只存在订单里),这里用本地状态演示勾选,
- * 新增/编辑/Done 一律 comingSoon;关闭叉退回上一页。
+ * 编辑 / Done 走 comingSoon;「Add New Guest」跳订房流程里的同名页(1675:5777);关闭叉退回上一页。
  */
 
 import React, { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTranslation } from 'react-i18next';
 
 import HomeIcon from '@/components/home/HomeIcon';
 import MorePageLayout from '@/components/more/MorePageLayout';
 import { moreShared } from '@/components/more/moreShared';
 import { colors, radius, shadows } from '@/config/theme';
+import type { RootStackParamList } from '@/navigation/types';
 import { fonts } from '@/config/typography';
 import { useCommonStore } from '@/store/commonStore';
 import { useUserStore } from '@/store/userStore';
@@ -29,7 +31,7 @@ const MAX_GUESTS = 3;
 
 export default function TravelersScreen() {
   const { t } = useTranslation();
-  const navigation = useNavigation();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const profile = useUserStore((s) => s.profile);
   const showToast = useCommonStore((s) => s.showToast);
 
@@ -96,7 +98,8 @@ export default function TravelersScreen() {
 
         <Pressable
           style={({ pressed }) => [styles.row, styles.addRow, pressed && moreShared.pressed]}
-          onPress={comingSoon}
+          /* 「新增旅客」已接上订房流程的 Add New Guest 页(设计稿 1675:5777) */
+          onPress={() => navigation.navigate('AddGuest')}
         >
           <Text style={styles.addText}>{t('more.travelers.addGuest')}</Text>
         </Pressable>

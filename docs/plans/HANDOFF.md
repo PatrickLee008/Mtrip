@@ -1,5 +1,128 @@
 # 会话交接文档(HANDOFF)
 
+### ★ 2026-09-01(登录/注册横向可拖动修复 + 本地 app 接口 401 的根因)
+
+**1) 登录页与注册页可以左右拖动、元素超出屏幕**
+
+- 根因是铺底插画:`styles.illustration` 是 `width:'150.41%' / left:'-18.49%'` 的绝对定位图
+  (照搬设计稿的图片填充裁切),但它的父层 `styles.root` **没有 `overflow:'hidden'`**,
+  右侧超出屏幕约 32%,于是整页可以横向拖动。开屏页的波浪是同一种画法,那里有
+  `styles.waves`(`absoluteFillObject + overflow:'hidden'`)兜着,所以没出问题 —— 这次照同一做法补上
+  `styles.illustrationClip` 裁切层(顺带加 `pointerEvents="none"`,免得它吃掉点击)。
+- 同批修掉一个只在窄屏出现的溢出:三方登录按钮原本是 `paddingHorizontal:31` 的固定宽(20 图标 → 82 宽),
+  三枚 + 两道 16 间距 = 278,而卡片可用宽 = 屏宽 - 32(页边距)- 48(卡片内边距),
+  **屏宽小于约 358 时会被挤破**。改成 `flex:1 + maxWidth:82`:402 宽下与设计稿一致,窄屏自动收窄。
+- 改动只在 `screens/user/LoginScreen.tsx` 与 `screens/user/RegisterScreen.tsx`,两页取值本来就同源。
+  `npm run typecheck` 零报错。
+
+**2) 注册返回 401 —— 是客户端签名,不是账号问题**
+
+- 浏览器发出的 `POST /api/v1/app/auth/register` 只有 `X-Client-Type / X-Lang / X-Site-Id / X-Timestamp`,
+  **缺 `X-Client-Id / X-Nonce / X-Sign`**;`ClientSignMiddleware` 对 `/api/v1/app/*` 强制校验这四个头,
+  缺任一个抛 `ErrorCode::CLIENT_AUTH_FAIL = 40103`,而 `ErrorCode.php` 把它映射成 **HTTP 401**。
+  第二道 `PayloadDecryptMiddleware` 的 `DEFAULT_ENCRYPT_PATHS` 里也有 `/app/auth/register`,
+  要求 `X-Encrypted:1` + AES 密文,而请求体是明文。
+- 为什么没带签名:`client-app/` 下**只有 `.env.example`、没有 `.env`**,`EXPO_PUBLIC_CLIENT_ID/SECRET` 为空,
+  `api/request.ts` 的逻辑正是「没配密钥就不加签名头」,`postEncrypted` 同理回退明文。
+  而运行库里 `mtrip_system.sys_client` **一条记录都没有**(`database/system/06-client.sql` 只建表不插种子),
+  所以当时也拿不到可用的 ClientId/Secret。
+- **按用户选择走开发调试路径**:`deploy/.env` 改为 `MTRIP_CLIENT_SIGN=false`、`MTRIP_PAYLOAD_ENCRYPT=false`,
+  然后 `docker compose up -d` **重建**容器(注意:`restart` 不重新读 `.env`,只有重建才会生效),
+  再 `docker compose restart gateway`(服务重建后容器 IP 变,不重启网关会 50200)。
+  已复核 `user-service` 内 `printenv` 两项均为 `false`。
+- 验证:用**与浏览器完全相同**的那条无签名请求复现 —— 注册返回 `HTTP 200 / code 0`;
+  随后用不存在的账号打 `POST /app/auth/login` 得到 `40001 手机号或密码错误`(说明已进业务逻辑,不再被 401 拦);
+  `GET /app/site/config` 仍 200。**复现时真的建出了 `911111111` 那个用户(id=1),已连同 `user_referral` 一并删除,
+  库恢复到复现前的状态**,你在浏览器里可以正常走一遍注册。
+- ⚠ **两项遗留**:
+  1. `deploy/.env` 是 gitignore 的本地文件,这次改动不进仓库;**上线/联调前必须改回 `true`**,
+     正规做法是在 admin-web「配置 → 客户端管理」建一个 app 客户端,把 ClientId/Secret 写进 `client-app/.env`。
+  2. 注册接口**仍然不接收 `email`** —— 复现返回的 `user.email` 是空串,与此前记录的
+     「`AuthController::register` 只读 mobile/password/nickname/referralCode」一致,需后端补一行才能落库。
+
+**3) 登录页「记住我」没生效**
+
+- 原状是纯 UI 状态:`LoginScreen.tsx` 的 `remember` 只控制勾选框图标,全项目再无第二处引用。
+- 关键背景:**token 本来就无条件持久化**(`userStore.applyAuth` 每次登录写 `mtrip:token`,启动 `hydrate()` 恢复),
+  所以「记住我」管的**不是免登录**。用户确认按**记住手机号**实现(不含密码)。
+- 落地:`STORAGE_KEYS` 新增 `REMEMBER_MOBILE: 'mtrip:remember-mobile'`;登录页挂载时读取并回填号码、
+  同时把勾选框恢复成勾上;**登录成功后**按当前勾选状态写入 / 清除(单纯勾或取消勾不动本地值,
+  避免误碰就丢号码)。单独用一个键是因为它要**跨退出登录**保留 —— `userStore.clearLocal` 只清 TOKEN 与 USER。
+- 顺带确认:`storage.clear()` 目前全项目没有调用方(GDPR 被遗忘权的本地清空入口还没接),
+  将来接上时这个新键会一并被清掉,不需要额外处理。
+- `npm run typecheck` 零报错。**未做**运行时验证(没有可用的浏览器工具):
+  需要你本地跑一遍「注册 → 勾上记住我登录 → 退出登录 → 回到登录页看号码是否回填且默认勾上」。
+
+### ★ 2026-09-01(client-app 订房流程,Figma section `Multi Booking Hotel Booking Flow` `1675:5776`)
+
+- 这个 section 下有 21 张稿。**本次做**核心 4 步向导 + 配套子页 + **多住宿 Trip**;
+  **不做**机场接送子流程(`1675:6985` / `7094` / `7203` / `7631` —— 那三张自带底部 Tab 栏,
+  属首页 Cars 入口的独立功能,与订房主线无关)。范围与向导结构都是用户明确选定的。
+- **向导落成「一个路由 + 内部分步」**(同酒店详情页「一个壳 + 六个页签组件」的做法):
+  `screens/hotel/HotelBookingScreen.tsx`(路由 `HotelBooking`)只留壳 —— 状态栏黑条 / 第 1 步的返回栏 /
+  进度条 / 滚动区 / 吸底栏 —— 内容按 `dates → guests → review →(多住宿才有)trip → payment` 分发。
+  **步骤序列是单一出处**(`bookingDemo.ts` 的 `BOOKING_STEPS`);进度条固定 4 格,
+  多住宿的支付页**没有进度条**(设计稿 `1675:9158` 确实没画);第 1 步的 Back 走 `goBack()` 退出向导。
+  草稿状态(日期/人数/加购/表单/支付方式/stays)用页面内 `useState`,**没有建 store** —— 单路由内不需要跨路由共享。
+- 稿 → 落地对照:Step 1 `1675:6069`(加购已选态 `1675:7406` 是同一组件的另一状态)/ Step 2 `1675:6292` /
+  Step 3 `1675:6404`(单住宿变体 `1675:9010`,差别只是有没有 Add More Stay 区块,由 `stays.length` 决定)/
+  Step 4 Trip `1675:9406` / Step 4 支付 `1675:6537`(多住宿态 `1675:9158`)/ 成功页 `1675:6714` /
+  新增旅客 `1675:5777` / 旅行保险 `1675:5900` / Stay 明细 `1675:9677` / 出生日期浮层 `1675:7673` /
+  性别下拉 `1675:7737` / 支付成功·失败浮层 `1675:7715`、`1675:7726`。
+  **「Choose Date」`1675:6806` 与已实现的 `695:1428` 是同一张稿,直接复用现成的 `DatePickerSheet`,没有重做。**
+- 新增 `components/hotel/booking/`:`bookingShared`(第四份卡壳 —— 这套稿 padding 是 **25** 不是 24、
+  描边在 `--secondary` 与 `rgba(196,197,215,0.2|0.3)` 之间切换、底色分 `--tab` 与纯白两种,
+  照搬 detailShared / promoShared / moreShared 会有肉眼可见的差)、`bookingFormat`(四种日期写法 + 晚数文案)、
+  `BookingProgress` / `BookingBottomBar`(按钮版与「预计总价 + Continue」版两种布局)/ `BookingSummaryBar` /
+  `BookingCalendar` / `GuestCounterRow` / `AddOnCard` / `FormField` / `SelectSheet` / `WheelPickerSheet` /
+  `AlertDialog` / `ReviewCards` / `ReviewBody`(Step 3 与 Stay 明细页共用)/ `StaySummaryCard` / `PaymentMethodRow`。
+  另新增 4 个屏 `screens/hotel/{AddGuest,Insurance,StayDetail,BookingSuccess}Screen.tsx`,
+  前三个的页头与「更多」子页完全一致,**直接复用 `MorePageLayout`**,没有自绘顶栏。
+- **接线**:酒店详情房型卡的 `Select` 由 comingSoon 改为进向导(`HotelRoomsTab` 新增 `onSelectRoom` 回调,
+  `HotelRoomCard` 未动);底栏「Choose my room」改为切到 Rooms 页签;
+  「更多 / 常用旅客」的「Add New Guest」也接到同一张新增旅客页。新增 5 条 Stack 路由,全部 `headerShown: false`。
+- **图标 19 枚**进 `HomeIcon`(path 全部取自设计稿导出的 SVG,未手抄):minus / caretDown / calendarOutline /
+  infoSmall / peopleDuo / shieldLock / infoCircle / edit / shareAndroid / megaphone / shieldSimple /
+  lockSmall / shieldCheckSmall / headset / download / eye / dismissCircle / checkSlim / arrowRightLine。
+  **同名不同字形的分开入表**:info(20)/ infoSmall(13.333)/ infoCircle(20) 是三个不同字形;
+  share 与 shareAndroid、eyeOff 与 eye、arrowRight(8)与 arrowRightLine(9.3333)同理;
+  caretDown 是**描边**箭头(表单下拉),与实心的 chevronDown 不能互相顶替。
+  **可复用的没有重复入表**(逐条比对过 path):日期确认页人数图标 = 已有 `travelers`(同字形偏移 12/12)、
+  复核页日历 = `calendar`、Add More Stay 水印 = `building`、支付成功对号 = `checkmarkCircle`、
+  加购「+」= `plus`、勾选框 = `checkbox`、位置针 = `locationOutline`、钱包 = `wallet`、
+  出生日期浮层的叉 = `close`、保险页的勾 = `check`、盾牌 = `shieldTask`。
+- **素材 15 张**落 `assets/images/temp/hotel/booking/`(两张加购照片存 JPEG 各约 60KB,PNG 编码要 400KB+;
+  其余是保留透明通道的小图标),已登记进 `assets/images/temp/README.md` 与 `src/assets/tempImages.ts`。
+  Step 3 / Stay 明细的房型封面**与 Rooms 页签的 `room-deluxe.png` 逐像素相同(RMS=0),不重复入包**。
+  二维码用设计稿导出的静态图,**没有为一张静态页引 `react-native-qrcode-svg`** —— 本次**零新增依赖**。
+- **i18n** 新增 `hotels.booking.*` 中英缅各 186 键,三份仍逐键对齐(共 **781** 键)。
+  插值键继续避开 i18next 保留字 `count`(用 `{{nights}}` / `{{guests}}` / `{{stays}}` / `{{points}}`)。
+  缅甸语仍是机器翻译,**上线前需母语者复核**。
+- **静态页边界**:后端没有酒店预订下单接口(现有 `createOrder` 是通用商品下单,没有房型 / 加购 / 多住宿概念),
+  支付渠道仍是 mock。所以**不发任何请求**,数值全部来自 `screens/hotel/bookingDemo.ts`。
+  真的能点:改日期(拉起 `DatePickerSheet`)、加减人数、勾加购、填表、勾条款、单选支付方式、
+  加第二段住宿、逐步前进后退。走 comingSoon:区号选择、Save Info、优惠券、Pay by other / Share、
+  Payment Summary 展开、新增卡片、Download Voucher / View Booking、Add Hotel and Homestay 的二次搜索。
+  支付页点「Continue」会弹设计稿的成功浮层、关闭后进成功页 —— 这是演示链路,不代表真的下过单。
+- **刻意偏离设计稿之处(代码内均已注明)**:
+  1. **设计稿自身对不上** —— Step 1 摘要条写「Thu, 12 Oct → Sat, 14 Oct / 2 Nights」,同屏日历却高亮 2026 年 6 月的
+     12–14,而 Step 3 / 4 / 成功页写「4 Jun – 5 Jun (1 Night)」。这里统一取 **2026-06-04 → 2026-06-05**
+     (与价格行「(1 night)」自洽),日历随之高亮 6 月 4–5;晚数由实际选择推导,金额沿用设计稿原值。
+  2. 第 1 步统一显示「← Back」返回栏 +「预计总价 + Continue」吸底栏(设计稿把这两样分在 `1675:6069`
+     与 `1675:7406` 两张状态稿里),否则第 1 步没有退出向导的入口。
+  3. 文案笔误按正确英文写并在代码注明:「Guest is under 13 year old」→ years、
+     「Medical. Hospital and other expenses」→ 逗号、保险页「you agree to xxxxxx Terms & Conditions」的 xxxxxx 占位。
+  4. 两张 Alert 稿是独立画板、没画遮罩,同 `PromoDialog` 的既有处理补一层黑 25%。
+  5. 日历首尾格下方那枚 4px 白点(`1675:6172`)落在白卡上不可见,未实现(同 `DatePickerSheet` 的既有取舍)。
+  6. `MorePageLayout` 的 footer 插槽自带 px16 / pt12 / pb20 的页面底色内边距,保险页与 Stay 明细页的吸底栏
+     用等量负 margin 抵消,**没有改公共组件**。
+- **验收**:`cd client-app; npm run typecheck` 零报错;`npx expo export -p web` 打包通过,
+  15 张新素材全部进包(dist 已删)。三份语言包脚本比对 missing / extra 均为空。
+  **未做**:真机 / 浏览器逐屏与设计稿的像素级视觉比对(本会话没有可用的浏览器工具),
+  这一项需下次会话或用户本地 `npm start` 后按上面的稿号逐屏核对。
+  本次未改任何 PHP,`scripts/check.ps1` 未跑(本机 php 不在 PATH,第 1 步即中断,与本改动无关)。
+- 未执行 Git 暂存 / 提交 / 推送。
+
 ## ★ 2026-09-01：M4 酒店预订管理开发计划
 
 已新增 `docs/plans/实现方案-Merchant-M4-酒店预订管理.md`，严格映射 Merchant PRD 模块 4、场景 3 和预订管理验收标准。计划确认本期不接真实支付渠道，现有模拟支付结果通过统一入口驱动预订确认；真实支付作为后续独立里程碑。merchant-web 的 Booking Management 页面、筛选页签、表格、约 430px 右侧详情面板、详情区块及操作弹窗必须严格按 `https://big-plank-58319748.figma.site/` 原型实现，并在 1440×900、1366×768 登录态下截图对比，禁止用假数据、空页面或登录跳转代替验收。当前只新增文档，没有修改业务代码；人工确认、No-show、房号、改单、联系方式和导出规则仍需产品确认。

@@ -18,9 +18,14 @@ import type { MainTabParamList, RootStackParamList } from '@/navigation/types';
 import GoodsDetailScreen from '@/screens/goods/GoodsDetailScreen';
 import GoodsListScreen from '@/screens/goods/GoodsListScreen';
 import HomeScreen from '@/screens/home/HomeScreen';
+import AddGuestScreen from '@/screens/hotel/AddGuestScreen';
+import BookingSuccessScreen from '@/screens/hotel/BookingSuccessScreen';
+import HotelBookingScreen from '@/screens/hotel/HotelBookingScreen';
 import HotelDetailScreen from '@/screens/hotel/HotelDetailScreen';
 import HotelResultsScreen from '@/screens/hotel/HotelResultsScreen';
 import HotelsScreen from '@/screens/hotel/HotelsScreen';
+import InsuranceScreen from '@/screens/hotel/InsuranceScreen';
+import StayDetailScreen from '@/screens/hotel/StayDetailScreen';
 import AccountScreen from '@/screens/more/AccountScreen';
 import EditEmailScreen from '@/screens/more/EditEmailScreen';
 import GuidesScreen from '@/screens/more/GuidesScreen';
@@ -143,6 +148,32 @@ export default function AppNavigator() {
           name="HotelDetail"
           component={HotelDetailScreen}
           options={{ title: t('hotels.title'), headerShown: false }}
+        />
+        {/* 订房流程(Figma section 1675:5776)整组都自带设计稿顶栏 / 吸底栏,关掉 Stack 头 */}
+        <Stack.Screen
+          name="HotelBooking"
+          component={HotelBookingScreen}
+          options={{ title: t('hotels.booking.steps.dates'), headerShown: false }}
+        />
+        <Stack.Screen
+          name="AddGuest"
+          component={AddGuestScreen}
+          options={{ title: t('hotels.booking.addGuest.title'), headerShown: false }}
+        />
+        <Stack.Screen
+          name="Insurance"
+          component={InsuranceScreen}
+          options={{ title: t('hotels.booking.insurance.title'), headerShown: false }}
+        />
+        <Stack.Screen
+          name="StayDetail"
+          component={StayDetailScreen}
+          options={{ title: t('hotels.booking.trip.stayDetailTitle'), headerShown: false }}
+        />
+        <Stack.Screen
+          name="BookingSuccess"
+          component={BookingSuccessScreen}
+          options={{ title: t('hotels.booking.success.title'), headerShown: false }}
         />
         <Stack.Screen
           name="GoodsList"

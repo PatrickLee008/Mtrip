@@ -88,6 +88,8 @@ cd ../admin-web && npm install && npm run dev    # http://localhost:5173,接口�
 
 ## 当前状态(2026-07)
 
+client-app 订房流程（2026-09-01）：按 Figma section `Multi Booking Hotel Booking Flow` `1675:5776` 新增 4 步订房向导 `screens/hotel/HotelBookingScreen.tsx`（路由 `HotelBooking`，一个路由 + 内部分步：日期确认 → 旅客信息 → 复核确认 →（多住宿才有）行程明细 → 支付），以及新增旅客 / 旅行保险 / Stay 明细 / 预订成功四个独立屏。酒店详情房型卡的 Select 与底栏「Choose my room」由 comingSoon 改为真正进入流程。新增 `components/hotel/booking/*` 16 个文件、19 枚设计稿图标、15 张素材，`hotels.booking.*` 中英缅各 186 键（三份逐键对齐，共 781 键）。**当前是静态页**——后端没有酒店下单接口、支付仍是 mock，数值走 `screens/hotel/bookingDemo.ts`，交互只在页面内生效。`npm run typecheck` 零报错、`expo export -p web` 打包通过（15 张素材全部进包）；未执行 Git 操作。
+
 client-app 通知页（2026-08-31）：按 Figma section `1770:3863` 新增 `screens/notification/NotificationScreen.tsx`（System / Booking 两个页签，路由 `Notifications`），首页与「我的精选」顶部栏的铃铛由 comingSoon 改跳这里。同批把出现四次的分段页签抽成 `components/common/SegmentedTabs.tsx`（优惠中心 / 推荐明细 / 教程 / 通知共用）。**静态页**——App 侧没有消息接口，数据走 `notificationDemo.ts`。`npm run typecheck` 零报错、`expo export -p web` 打包通过；未执行 Git 操作。
 
 client-app「更多」及其子页（2026-08-31）：按 Figma section `More` `1695:5951` 重做 `screens/user/MineScreen.tsx`，并补齐 8 个子页（`screens/more/*`：Account / Travelers / EditEmail / Referral / ReferralStatus / HowReferralWorks / Guides / LegalTerms，均新增 Stack 路由）。新增 `components/more/*` 与 21 枚设计稿图标。**除资料与余额外都是静态页**——后端没有钱包/推荐查询/教程/条款接口，数据走 `screens/more/moreDemo.ts`，动作 comingSoon（推荐码复制是真的）。设计稿没有的多站点/多语言/GDPR/订单入口收进「更多」页新增的第三张卡，功能未丢。`npm run typecheck` 零报错、`expo export -p web` 打包通过；未执行 Git 操作。
