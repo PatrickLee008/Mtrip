@@ -6,8 +6,11 @@ namespace App\Controller\App;
 
 use App\Controller\AbstractController;
 
+use App\Service\Booking\BookingEventService;
+use App\Service\Booking\BookingLifecycleService;
 use App\Service\NotifyService;
 use App\Service\OrderStockService;
+use App\Service\PaymentResultHandler;
 use App\Service\PricingService;
 use App\Service\ReferralService;
 use App\Service\SettlementService;
@@ -43,6 +46,15 @@ class TripController extends AbstractController
 
     #[Inject]
     protected NotifyService $notifyService;
+
+    #[Inject]
+    protected BookingLifecycleService $bookingLifecycle;
+
+    #[Inject]
+    protected BookingEventService $bookingEvents;
+
+    #[Inject]
+    protected PaymentResultHandler $payHandler;
 
     #[Inject]
     protected ConfigInterface $config;
@@ -121,6 +133,7 @@ class TripController extends AbstractController
                 $payAmount = max(0.0, round($leg['net'] - $alloc, 2));
                 $orderNo = OrderNoGenerator::orderNo($siteId);
                 $unitPrice = round($leg['original'] / max(1, count($leg['dates'])) / $leg['quantity'], 2);
+                // M4:预订字段(10分钟支付截止/政策快照),Trip 均为酒店单
                 $orderId = (int) Db::table('order_main')->insertGetId([
                     'order_no' => $orderNo,
                     'site_id' => $siteId,
@@ -152,8 +165,16 @@ class TripController extends AbstractController
                     'contact_phone' => CryptoHelper::encrypt($leg['contactPhone'], $this->aesKey()),
                     'guests' => $leg['guests'] !== [] ? CryptoHelper::encrypt(json_encode($leg['guests'], JSON_UNESCAPED_UNICODE), $this->aesKey()) : null,
                     'remark' => $leg['remark'],
-                ]);
+                    'meal_plan_snapshot' => mb_substr((string) ($leg['sku']['meal_plan'] ?? ''), 0, 255),
+                ] + $this->bookingLifecycle->buildCreateFields(1, $leg['goodsId'], $leg['skuId'], (string) $leg['remark']));
                 $this->stockService->logChanges($orderId, $leg['changes']);
+                $this->bookingEvents->log([
+                    'id' => $orderId, 'order_no' => $orderNo, 'site_id' => $siteId,
+                    'merchant_id' => (int) $leg['goods']['merchant_id'],
+                ], 'created', \App\Constants\BookingConst::OPERATOR_GUEST, $userId, '', 1, [
+                    'trip' => true,
+                    'payAmount' => $payAmount,
+                ]);
                 $bookings[] = ['orderId' => $orderId, 'orderNo' => $orderNo, 'goodsName' => $leg['goods']['goods_name'], 'payAmount' => $payAmount];
             }
 
@@ -230,13 +251,8 @@ class TripController extends AbstractController
                     $firstBookingId = (int) $b['id'];
                 }
                 $verifyCode = OrderNoGenerator::verifyCode();
-                Db::table('order_main')->where('id', $b['id'])->update([
-                    'order_status' => 1,
-                    'pay_method' => $payMethod,
-                    'pay_trade_no' => 'MOCK' . OrderNoGenerator::flowNo(),
-                    'pay_time' => date('Y-m-d H:i:s'),
-                    'verify_code' => $verifyCode,
-                ]);
+                // 支付状态变更统一走 PaymentResultHandler(幂等+时间线)
+                $verifyCode = $this->payHandler->markPaid($b, $payMethod, 'MOCK' . OrderNoGenerator::flowNo(), $verifyCode);
                 $this->stockService->deduct($b);
                 Db::table('goods_info')->where('id', (int) $b['goods_id'])->increment('sales_count', (int) $b['quantity']);
                 $this->settlementService->recordBooking($b);
@@ -258,7 +274,7 @@ class TripController extends AbstractController
             if ($firstBookingId > 0) {
                 $this->referralService->grantOnFirstBooking((int) $trip['site_id'], (int) $trip['user_id'], $firstBookingId);
             }
-            return ['siteId' => (int) $trip['site_id'], 'userId' => (int) $trip['user_id'], 'tripNo' => (string) $trip['trip_no'], 'codes' => $codes];
+            return ['siteId' => (int) $trip['site_id'], 'userId' => (int) $trip['user_id'], 'tripNo' => (string) $trip['trip_no'], 'codes' => $codes, 'orders' => array_map(static fn ($x) => (array) $x, $bookings->all())];
         });
 
         // 预订确认通知(整单一次,后置容错)
@@ -270,6 +286,10 @@ class TripController extends AbstractController
                 $this->requireId('tripId'),
             );
         } catch (\Throwable) {
+        }
+        // 商户通知:逐预订通知对应酒店(事件后置容错)
+        foreach ($snap['orders'] as $o) {
+            $this->payHandler->notifyMerchantConfirmed($o);
         }
 
         return Result::success(['codes' => $snap['codes']], '支付成功,行程内各预订已确认');

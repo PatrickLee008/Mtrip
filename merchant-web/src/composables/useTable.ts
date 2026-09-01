@@ -1,5 +1,6 @@
 import { computed, reactive, ref, type Ref } from 'vue';
 import type { TablePaginationConfig } from 'ant-design-vue';
+import { useI18n } from 'vue-i18n';
 import type { PageData } from '@/api/types';
 
 /** 通用表格行(后端多为 snake_case 直出) */
@@ -19,6 +20,13 @@ export function useTable<T = TableRow>(
   const page = ref(1);
   const pageSize = ref(20);
   const query = reactive<Record<string, any>>({ ...defaultQuery });
+  let totalText = (n: number) => `共 ${n} 条`;
+  try {
+    const { t } = useI18n();
+    totalText = (n: number) => t('common.totalItems', { n });
+  } catch {
+    /* 组件外使用时保持中文兜底 */
+  }
 
   async function load(): Promise<void> {
     loading.value = true;
@@ -50,7 +58,7 @@ export function useTable<T = TableRow>(
     total: total.value,
     showSizeChanger: true,
     showQuickJumper: true,
-    showTotal: (t: number) => `共 ${t} 条`,
+    showTotal: (t: number) => totalText(t),
     onChange: (p: number, ps: number) => {
       page.value = p;
       pageSize.value = ps;

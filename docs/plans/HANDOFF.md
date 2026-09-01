@@ -123,6 +123,13 @@
   本次未改任何 PHP,`scripts/check.ps1` 未跑(本机 php 不在 PATH,第 1 步即中断,与本改动无关)。
 - 未执行 Git 暂存 / 提交 / 推送。
 
+## ★ 2026-09-01：M4 酒店预订管理交付完成(阶段0～6 全量收口)
+
+`实现方案-Merchant-M4-酒店预订管理.md` 七阶段全部完成,方案文档/README 进度表已勾选。后端:2 个迁移(`order/04` 库存字段、`goods/06` 房态字段)已应用并回填;`BookingLifecycleService` 过期确认任务+库存联动+幂等;商户预订管理 16 端点(列表/详情/确认/入住/退房/改房号/改单/联系方式/凭证/强制同步/统计/住客消息等)挂 `/api/v1/merchant/booking/*`;通知 23/23。前端:merchant-web `views/order/index.vue` 六页签(含 In House)+430px 详情面板+消息抽屉,构建通过。
+**平台级修复(最重要)**:`Mtrip\Shared\Aspect\PermissionAspect` 缺 `#[Aspect]` 注解,从未进入 `aspects.cache`,全平台 `#[Permission]` 静默失效(S7 时期 merchant-service 同类问题的跨服务收口)。修复双保险:①补 `#[Aspect]`;②8 个服务全部新增/覆盖 `config/autoload/aspects.php` 显式注册(不依赖扫描收集时序)。验证:8 服务 aspects.cache 全含切面、无权限子账号 4 写端点全 40301、超管/主账号不误拦、8 服务 healthz 全绿。用户子账号未走 JWT 全量签发语义,靠切面拦截——**新增服务必须携带 aspects.php**。
+回归:阶段3 E2E 22/22、阶段5 E2E 23/23(夹具用 `test/sql/m4-fixture-reset3.sql`/`m4-fixture-reset5.sql` 回补),`scripts/check.ps1` 四项全绿。浏览器验收:首轮网关对 merchant-service 上游 502(服务本体健康),`docker restart mtrip-gateway-1` 恢复;二轮 m1001+2FA 真实登录态全通过,截图存 `.reasonix\attachments\m4-guest-message-*.png`。**本次未执行任何 git 提交**,待用户审阅授权(变更含 8 个 aspects.php、2 迁移、后端、前端、测试脚本、文档)。
+测试账号:商户 `m1001 / Merchant@123456`(TOTP 用 `test/sql/m4-totp.php` 容器内生成);管理端超管 `admin / Admin@123456`。
+
 ## ★ 2026-09-01：M4 酒店预订管理开发计划
 
 已新增 `docs/plans/实现方案-Merchant-M4-酒店预订管理.md`，严格映射 Merchant PRD 模块 4、场景 3 和预订管理验收标准。计划确认本期不接真实支付渠道，现有模拟支付结果通过统一入口驱动预订确认；真实支付作为后续独立里程碑。merchant-web 的 Booking Management 页面、筛选页签、表格、约 430px 右侧详情面板、详情区块及操作弹窗必须严格按 `https://big-plank-58319748.figma.site/` 原型实现，并在 1440×900、1366×768 登录态下截图对比，禁止用假数据、空页面或登录跳转代替验收。当前只新增文档，没有修改业务代码；人工确认、No-show、房号、改单、联系方式和导出规则仍需产品确认。
@@ -819,6 +826,7 @@ Mtrip 海外旅游 SaaS 平台:后端 Hyperf 3.1 微服务(backend/)+ 平台管�
 - 字段命名:**请求入参驼峰;列表行 snake_case 直出**(例外:管理员列表/登录返回/统计返回为驼峰)。
 - 路由前缀:管理端 `/api/v1/admin/{merchant|goods|order|finance|user|marketing|payment}/*`;移动端双前缀方案见 `docs/plans/09-移动端微服务.md`。
 - 新服务的工程组织、代码风格(Controller/Model/Service、#[Inject]、验证、软删除、操作日志)**以 backend/services/system-service 为唯一范本**,共享能力用 backend/shared。
+- **【硬约定】每个服务必须携带 `config/autoload/aspects.php` 显式注册 `\Mtrip\Shared\Aspect\PermissionAspect::class`**(2026-09-01 M4 收口时发现该切面缺 `#[Aspect]` 注解,全平台 `#[Permission]` 静默失效;显式注册不依赖扫描收集时序,是唯一可靠生效方式)。新建服务照抄现有 8 个服务的 aspects.php。
 
 ## 5. 前端页面代码模式(模块07 必须沿用)
 

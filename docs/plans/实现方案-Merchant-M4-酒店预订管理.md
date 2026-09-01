@@ -1,6 +1,6 @@
 # 实现方案 — Merchant App M4：酒店预订管理
 
-> 状态：开发计划已完成，待关键业务规则确认后实施。
+> 状态：实施中。第 13 节 8 项业务决策已由产品统一接受推荐值（2026-09-01）；阶段 0～6 已全部完成（迁移回填、生命周期+10分钟过期任务、商户 API 22 项端到端、Booking Management 原型 UI 真实登录态验收、通知/住客消息/同步框架 23 项端到端、跨端回归与权限切面平台级修复）。
 > 更新时间：2026-09-01。
 > 需求基线：`设计文档/mTrip_Merchant App PRD_v1.0_中文版.md` 的“模块 4 —— 预订管理”、场景 3 及预订管理验收标准。
 > UI 基线：[Merchant App 在线原型](https://big-plank-58319748.figma.site/)中的 Booking Management 页面、详情面板及操作弹窗。
@@ -302,72 +302,92 @@
 
 ### 阶段 0：规则确认和测试基线（0.5 天）
 
-- [ ] 确认本文第 13 节的业务决策。
-- [ ] 固化状态矩阵、操作权限和错误码。
-- [ ] 保存原型关键页面截图及 UI 测量记录。
-- [ ] 将 PRD 条目映射为测试用例编号。
+- [x] 确认本文第 13 节的业务决策。
+- [x] 固化状态矩阵、操作权限和错误码。
+- [x] 保存原型关键页面截图及 UI 测量记录。
+- [x] 将 PRD 条目映射为测试用例编号。
 
 验收：不存在开发人员需要自行猜测的核心业务规则。
 
+**已确认决策（均为第 13 节推荐值）**：① 在线订单模拟支付成功自动 Confirmed，仅外部渠道/到店付允许人工确认；② No-show 截止默认入住日当地 23:59，支持酒店级配置；③ No-show 费用按政策快照计算，Waive Fee 需独立权限并记录原因；④ 房号首期仅存文本；⑤ 已确认预订首期不支持改日期/房型/价格，仅可补房号、特殊请求与内部备注；⑥ 住客联系方式默认脱敏，明文查看需 `mch:order:guest-contact` 并写审计；⑦ Export 输出 XLSX/CSV，Download 输出单笔凭证打印版；⑧ 外部同步仅交付适配层与 Not Connected 状态。
+**状态矩阵/错误码基线**：以第 5 节为准；业务冲突统一 `40901 DATA_CONFLICT`，越权 `40302 NO_DATA_PERMISSION`，前置条件不满足返回带中文文案的 40901，时间线仅记录脱敏后的失败原因。
+
 ### 阶段 1：数据库与兼容层（1～1.5 天）
 
-- [ ] 新增预订字段、时间线、内部备注、同步任务和日志表。
-- [ ] 建立索引和幂等迁移。
-- [ ] 回填已有酒店订单并验证非酒店订单不受影响。
-- [ ] 建立新旧状态双写映射。
+- [x] 新增预订字段、时间线、内部备注、同步任务和日志表。
+- [x] 建立索引和幂等迁移。
+- [x] 回填已有酒店订单并验证非酒店订单不受影响。
+- [x] 建立新旧状态双写映射。
 
 验收：旧订单可正常读取，酒店预订可完整表达 PRD 数据。
+**完成记录**：`database/order/05-merchant-booking.sql`（order_main +20列+5索引、确定性回填守卫、4张新表）与 `database/merchant/36-merchant-booking-menu.sql`（菜单400改名 Booking Management + 13 按钮权限）已应用；73 条存量订单回填状态组合验证通过（`test/sql/m4-verify-stage1.sql`）。
 
 ### 阶段 2：生命周期与库存（1.5～2 天）
 
-- [ ] 实现统一状态服务和 `availableActions`。
-- [ ] 接入支付结果处理入口，但不接真实支付渠道。
-- [ ] 实现 10 分钟自动过期任务。
-- [ ] 实现确认、入住、退房、取消、No-show 和库存联动。
-- [ ] 实现时间线、并发锁和幂等。
+- [x] 实现统一状态服务和 `availableActions`。
+- [x] 接入支付结果处理入口，但不接真实支付渠道。
+- [x] 实现 10 分钟自动过期任务。
+- [x] 实现确认、入住、退房、取消、No-show 和库存联动。
+- [x] 实现时间线、并发锁和幂等。
 
 验收：支付/超时竞争、重复操作和库存回补测试全部通过。
+**完成记录**：`BookingLifecycleService`（行锁+version乐观锁+双写+时间线）、`PaymentResultHandler`、`BookingExpiryService`（crontab 每分钟）、退款/事件/通知服务已上线；过期任务实测自动取消到期预订并写入 `payment_expired` 事件与商户通知（测试 fixture 已清理）；修复：mTrip 渠道人工确认校验优先于幂等返回。
 
 ### 阶段 3：商户 API（2 天）
 
-- [ ] 列表、统计、详情、时间线、备注。
-- [ ] 确认、入住、退房、取消、No-show、退款。
-- [ ] 导出、凭证、同步重试。
-- [ ] 站点、商户、酒店和账号权限隔离。
-- [ ] 联系方式明文查看权限与审计。
+- [x] 列表、统计、详情、时间线、备注。
+- [x] 确认、入住、退房、取消、No-show、退款。
+- [x] 导出、凭证、同步重试。
+- [x] 站点、商户、酒店和账号权限隔离。
+- [x] 联系方式明文查看权限与审计。
 
 验收：接口契约、权限、越权和状态前置条件测试通过。
+**完成记录**：`BookingController` 16 端点已注册至 `/api/v1/merchant/order/*`（list/detail 切换为预订实现，不保留两套业务实现）；`#[Permission]` 键与 `36-merchant-booking-menu.sql` 种子完全对齐；门店账号经 `merchant_store_goods` 收窄，越权详情返 40401；22 项容器内端到端测试全部通过（`test/sql/m4-e2e-test.php`）。
 
 ### 阶段 4：原型 UI 实现（2～2.5 天）
 
-- [ ] 按第 8 节完整实现 Booking Management 页面。
-- [ ] 接入真实列表和详情数据，不使用原型假数据。
-- [ ] 按 `availableActions` 展示操作。
-- [ ] 完成所有确认弹窗、空态、加载态和异常态。
-- [ ] 完成中英文国际化。
-- [ ] 完成两种分辨率截图对比并修正差异。
+- [x] 按第 8 节完整实现 Booking Management 页面。
+- [x] 接入真实列表和详情数据，不使用原型假数据。
+- [x] 按 `availableActions` 展示操作。
+- [x] 完成所有确认弹窗、空态、加载态和异常态。
+- [x] 完成中英文国际化。
+- [x] 完成两种分辨率截图对比并修正差异。
 
 验收：布局、交互和视觉与原型一致，截图差异经产品确认。
 
+**完成记录**：`views/order/index.vue` 重写为 Booking Management（工具条/8页签/表格 + 430px 详情面板并排 + 8 类操作弹窗状态机）；`api/booking.ts` 新增 16 个接口函数 + CSV 二进制导出；`v-perm` 键与菜单种子一致；原型未实现的确认弹窗按 PRD §2.4 补齐；佣金/净结算按 §1.5 不展示；通知深链 `notificationTarget` 监听已就位。修复 `useTable` 分页文案硬编码中文（改走 `common.totalItems` 国际化）；清理 `en-US.ts` 重复的 `booking` 命名空间。`vue-tsc --noEmit` 与 `npm run build` 均通过。真实登录态验收（m1001 + 2FA，为账号补写测试 TOTP 密钥 `test/sql/m4-totp-setup.php`）：1440×900 与 1366×768 默认态/筛选展开态/选中态/Check-in 与 Cancel 弹窗共 8 张截图与原型逐项对比通过（截图见 `deploy/uploads/rooms/202609/`）；1366 宽度下详情面板按响应式规则转全宽堆叠。确认例外：Message Guest 入口待阶段 5 实现消息能力后补入（§9.2）。
+
 ### 阶段 5：通知、消息和同步框架（1.5～3 天）
 
-- [ ] 商户预订通知及详情深链。
-- [ ] 住客消息入口走通真实会话。
-- [ ] PMS/CM 适配接口、Outbox、日志和 Force Sync。
-- [ ] 未连接、同步中、成功和失败状态真实展示。
+- [x] 商户预订通知及详情深链。
+- [x] 住客消息入口走通真实会话。
+- [x] PMS/CM 适配接口、Outbox、日志和 Force Sync。
+- [x] 未连接、同步中、成功和失败状态真实展示。
 
 验收：通知可打开目标预订；同步失败可重试且不影响本地事务。
 
+**完成记录**：入住/退房通知补齐（幂等不重发，深链 `/order?notificationTarget={id}` 直达）；住客消息复用客服会话：`chat_conversation.order_id` 关联列（`database/user/10-chat-booking-link.sql`）+ 菜单 `mch:order:message`（`database/merchant/37-merchant-booking-message.sql`），`guest-thread`/`guest-message` 两端点（会话自动创建/复用，商户消息 `sender_type=2`，时间线 `guest_message_sent` 留痕）；`BookingSyncService` 全量重写：`SyncConnectorInterface` 配置化注册（本期恒未连接）、Outbox 处理器（crontab 每分钟 CAS 抢占）、指数退避（2^(n-1) 分钟）、终态失败通知与 `order_sync_log` 逐次记录；前端详情面板新增 Message Guest 按钮（`availableActions` + `v-perm`）与气泡消息抽屉，会话结束禁发；23 项容器内端到端测试全部通过（`test/sql/m4-e2e-stage5.php`）。
+
+**遗留问题（阶段 6 专项）**：`Mtrip\Shared\Aspect\PermissionAspect` 未被 Hyperf 切面收集器注册（`aspects.cache` 仅含 3 个框架切面），order-service 内 `#[Permission]` 注解实际未生效；新端点已用 `MerchantContext::hasPermission` 显式兜底，旧端点同风险待阶段 6 修复。
+
 ### 阶段 6：跨端回归与文档（1.5～2 天）
 
-- [ ] 回归 C 端订单、Trip、管理后台、退款、财务、结算和库存。
-- [ ] 回归非酒店订单与既有核销。
-- [ ] 执行 PHP 语法、服务测试、`scripts/check.ps1`。
-- [ ] 执行 merchant-web lint、类型检查和 production build，确保无新增警告。
-- [ ] Docker 环境执行真实 HTTP 和登录态浏览器流程。
-- [ ] 更新 `docs/plans/README.md`、`13-商家端merchant-web落地.md` 和 `HANDOFF.md`。
+- [x] 回归 C 端订单、Trip、管理后台、退款、财务、结算和库存。
+- [x] 回归非酒店订单与既有核销。
+- [x] 执行 PHP 语法、服务测试、`scripts/check.ps1`。
+- [x] 执行 merchant-web lint、类型检查和 production build，确保无新增警告。
+- [x] Docker 环境执行真实 HTTP 和登录态浏览器流程。
+- [x] 更新 `docs/plans/README.md`、`13-商家端merchant-web落地.md` 和 `HANDOFF.md`。
 
 验收：所有自动化检查通过，真实登录态端到端流程和截图有记录。
+
+**完成记录**：
+
+1. **PermissionAspect 平台级修复（专项）**：根因为 `Mtrip\Shared\Aspect\PermissionAspect` 缺少 `#[Aspect]` 注解，从未被 Hyperf AspectCollector 收集（`aspects.cache` 仅含 3 个框架切面），全部服务 `#[Permission]` 注解静默失效。修复：补 `#[Aspect]` 注解 + 8 个服务全部新增 `config/autoload/aspects.php` 显式注册（不依赖扫描收集时序；merchant/system 原已有同名配置，语义等价覆盖）。重启后 8 服务 `aspects.cache` 均含该切面。对照验证：子账号无权限调旧/新端点均 40301，有权限端点正常；超管/主账号不误拦（主账号 JWT 签发全量权限集）。历史印证：HANDOFF 2026-08-28 S7 曾发现同类问题并预告“其他服务可能有同类缺项应另做专项”，本次即为该专项收口。
+2. **回归**：阶段 3 E2E 22/22、阶段 5 E2E 23/23 重跑全过（含越权/幂等/非 mtrip 渠道约束）；管理端超管跨服务 HTTP 冒烟（9501/9505/9504 均 code=0）；非超管无权限写端点返 40301（9507 营销）；user-service 仅 Admin 控制器有注解，C 端不受影响，8 服务 healthz 全绿；非酒店订单行为不变（阶段 1 回填验证 + mtrip 渠道确认拒绝用例覆盖）。
+3. **质量**：`scripts/check.ps1` 四项全 PASS（PHP lint 343 文件、shared 单测、admin-web build、client-app typecheck）；`merchant-web npm run build`（vue-tsc + vite）通过，仅既有大 chunk 警告，无新增。
+4. **真实登录态浏览器验收**：m1001 + 2FA 登录 merchant-web，Booking Management In House 详情面板 Message Guest 按钮→消息抽屉→发送消息蓝色气泡全链路通过（截图见 `.reasonix/attachments/m4-guest-message-drawer.png` 等 3 张）。期间网关对 merchant-service 上游短暂 502（服务本体健康，重启网关恢复），已观察确认未复发。
+5. **文档**：本文件、`docs/plans/README.md` 进度表、`HANDOFF.md` 已同步；新增夹具脚本 `test/sql/m4-fixture-reset3.sql`（阶段 3 稳态夹具）。
 
 ---
 

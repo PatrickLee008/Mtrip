@@ -173,6 +173,9 @@ services:
       # 平台特性开关(模块11)
       - ../database/system/09-feature-flag.sql:/docker-entrypoint-initdb.d/99f-feature-flag.sql:ro
       - ../database/system/10-storage-aliyun-resource.sql:/docker-entrypoint-initdb.d/99g-storage-aliyun-resource.sql:ro
+      # Merchant App M4 酒店预订管理(预订字段/时间线/备注/同步表 + 预订菜单权限)
+      - ../database/order/05-merchant-booking.sql:/docker-entrypoint-initdb.d/99h-merchant-booking.sql:ro
+      - ../database/merchant/36-merchant-booking-menu.sql:/docker-entrypoint-initdb.d/99i-merchant-booking-menu.sql:ro
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-p${MYSQL_ROOT_PASSWORD:-root@2026}"]
       interval: 5s
