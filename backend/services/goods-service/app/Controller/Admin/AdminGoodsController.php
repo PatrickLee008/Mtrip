@@ -197,6 +197,11 @@ class AdminGoodsController extends AbstractAdminController
             'audit_by' => AdminContext::adminId(),
             'audit_time' => date('Y-m-d H:i:s'),
         ]);
+        if ($auditStatus === 1 && (int) $goods['goods_type'] === 1) {
+            Db::table('hotel_room_type')->where('goods_id', $goods['id'])->where('status', 1)
+                ->where('publish_status', 0)->whereNull('deleted_at')
+                ->update(['publish_status' => 2, 'approved_version' => 1]);
+        }
         return Result::success(null, $auditStatus === 1 ? '审核通过,商品已上架' : '已驳回,商户可修改后重新提交');
     }
 

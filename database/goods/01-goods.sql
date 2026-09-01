@@ -84,6 +84,7 @@ CREATE TABLE IF NOT EXISTS `hotel_room_type` (
   `breakfast`    TINYINT      NOT NULL DEFAULT 0 COMMENT '早餐:0无早 1单早 2双早',
   `meal_plan`    VARCHAR(80)  NOT NULL DEFAULT '' COMMENT '餐食计划',
   `cancellation_policy` VARCHAR(255) NOT NULL DEFAULT '' COMMENT '取消政策',
+  `currency`     CHAR(3)      NOT NULL DEFAULT 'THB' COMMENT '币种',
   `checkin_notes` VARCHAR(500) NOT NULL DEFAULT '' COMMENT '入住提示',
   `base_price`   DECIMAL(12,2) NOT NULL DEFAULT 0.00 COMMENT '基础门市价',
   `weekend_price` DECIMAL(12,2) NOT NULL DEFAULT 0.00 COMMENT '周末价',
@@ -96,6 +97,7 @@ CREATE TABLE IF NOT EXISTS `hotel_room_type` (
   `status`       TINYINT      NOT NULL DEFAULT 1 COMMENT '售卖状态:1在售 2停售',
   `publish_status` TINYINT    NOT NULL DEFAULT 0 COMMENT '发布流程:0草稿 1待审核 2已发布 3驳回',
   `submitted_at` DATETIME     NULL DEFAULT NULL COMMENT '提交审核时间',
+  `approved_version` INT UNSIGNED NOT NULL DEFAULT 0 COMMENT '当前已生效版本号,0=从未发布',
   `sort`         INT          NOT NULL DEFAULT 0 COMMENT '排序号',
   `created_at`   DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `updated_at`   DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
@@ -104,6 +106,31 @@ CREATE TABLE IF NOT EXISTS `hotel_room_type` (
   KEY `idx_site_id` (`site_id`),
   KEY `idx_goods_id` (`goods_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin COMMENT='酒店房型表';
+
+CREATE TABLE IF NOT EXISTS `hotel_room_type_revision` (
+  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `site_id` BIGINT UNSIGNED NOT NULL DEFAULT 0,
+  `merchant_id` BIGINT UNSIGNED NOT NULL,
+  `goods_id` BIGINT UNSIGNED NOT NULL,
+  `room_id` BIGINT UNSIGNED NOT NULL,
+  `version` INT UNSIGNED NOT NULL,
+  `action` VARCHAR(20) NOT NULL DEFAULT 'upsert',
+  `status` TINYINT NOT NULL DEFAULT 0 COMMENT '0草稿 1待审核 2通过 3驳回 4撤销',
+  `payload_json` JSON NOT NULL,
+  `reject_reason` VARCHAR(500) NOT NULL DEFAULT '',
+  `submitted_by` BIGINT UNSIGNED NOT NULL DEFAULT 0,
+  `submitted_at` DATETIME NULL DEFAULT NULL,
+  `reviewed_by` BIGINT UNSIGNED NOT NULL DEFAULT 0,
+  `reviewed_at` DATETIME NULL DEFAULT NULL,
+  `review_remark` VARCHAR(500) NOT NULL DEFAULT '',
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_room_version` (`room_id`,`version`),
+  KEY `idx_review_queue` (`site_id`,`status`,`submitted_at`),
+  KEY `idx_merchant_room` (`merchant_id`,`room_id`,`id`),
+  KEY `idx_goods` (`goods_id`,`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin COMMENT='酒店房型草稿及审核版本';
 
 -- 门票票种表
 CREATE TABLE IF NOT EXISTS `ticket_type` (

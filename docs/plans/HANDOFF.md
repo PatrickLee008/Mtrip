@@ -1,5 +1,17 @@
 # 会话交接文档(HANDOFF)
 
+## ★ 2026-09-01：房型上传图片 403 修复
+
+房型图片无法显示的根因是 goods-service 的 `UploadedFile::moveTo()` 将上传文件保存为 `600`，共享卷和 URL 均正确，但 OpenResty 工作进程无读取权限，因此网关及 merchant-web `/uploads/rooms/*` 都返回 403。`RoomController::uploadMedia()` 已在移动成功后设置文件为 `0644`，部署卷内三张存量房型图片已同步修复；当前三张图片经网关和 merchant-web 代理均返回 `200 image/png`。HTTP 回归新增“上传图片可通过网关公开读取”断言，真实新上传与完整房型审核链路通过，临时回归文件已清理。goods-service 已重启，PHP 语法通过。本次用户已授权随 M2 房型交付本地提交，不推送；实际哈希见 Git 日志。
+
+## ★ 2026-09-01：merchant-web IPv4 空白页修复
+
+merchant-web Vite 默认只监听 `[::1]:5174`，浏览器通过 `127.0.0.1:5174` 访问时前端模块无法加载，页面 DOM 为空。`merchant-web/vite.config.ts` 已增加 `server.host='0.0.0.0'` 并仅重启 5174 开发进程；当前 `127.0.0.1:5174/rooms`、`localhost:5174/rooms` 与 IPv4 `/src/main.ts` 均返回 200，监听地址为 `0.0.0.0:5174`。由于浏览器将 localhost 与 127.0.0.1 视为不同 Origin，前者无法读取后者的登录 Token；`merchant-web/src/main.ts` 已在开发环境将 localhost 规范化到 127.0.0.1，完整保留路径、查询参数和 Hash，生产环境不变。merchant-web 构建通过。本次用户已授权随 M2 房型交付本地提交，不推送；实际哈希见 Git 日志。
+
+## ★ 2026-09-01：M2 房型管理与版本审核流程
+
+merchant-web 房型管理已按 PRD 与在线原型补齐，新增房型采用用户最终确认的独立页面 `/rooms/create`，并增加编辑和详情独立路由。表单覆盖房型资料、入住容量、设施、图片/视频上传、价格、库存与专项政策；列表和详情可跟踪草稿、待审、通过、驳回、撤回及下架申请。goods-service 新增 `hotel_room_type_revision` 版本审核，管理员在商品审核页查看当前生效/本次提交差异后通过或驳回；待审或驳回期间不覆盖当前已批准版本，消费者读取只暴露 `publish_status=2` 房型。幂等迁移已执行，真实网关 multipart 上传→提交→通过→更新→驳回→详情核对通过，临时夹具已清理；325 PHP、shared 58用例/858断言、admin/merchant build 和 client typecheck 均通过，仅保留既有 Vite 大 chunk 提示。本次用户已授权本地提交，不推送；实际哈希见 Git 日志。
+
 ## ★ 2026-09-01：merchant-web 注册业务切换与菜单上下文整改
 
 商户端左上角已从原型假数据改为 `/merchant/auth/menus` 返回的真实注册业务：仅取当前账号数据范围内、已关联正式商户且业务 KYC 通过的 `merchant_application_business`，集团按可见商户汇总，门店收窄到 `merchant_store.source_business_id`。默认“全部业务”只展示 `merchant_menu.module_key=''` 的全局菜单；选择具体酒店/餐厅等业务后追加同 `business_type` 的业务专属菜单，当前路由被隐藏时回 `/dashboard`。既有后端模块授权与 JWT 权限不放宽；当前只有客房、房量价格标为酒店专属，餐饮暂无专属页面，不伪造。PHP 语法、merchant-web 类型检查与 Vite build 通过；Docker Desktop Engine `_ping` 返回 500，真实接口和登录后 UI 联调仍待 Docker 恢复。

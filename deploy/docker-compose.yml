@@ -156,6 +156,7 @@ services:
       - ../database/order/04-consumer-trip.sql:/docker-entrypoint-initdb.d/96-consumer-trip.sql:ro
       - ../database/goods/05-merchant-review-flag.sql:/docker-entrypoint-initdb.d/96a-merchant-review-flag.sql:ro
       - ../database/goods/06-merchant-room-availability-fields.sql:/docker-entrypoint-initdb.d/96b-merchant-room-availability-fields.sql:ro
+      - ../database/goods/07-room-review-workflow.sql:/docker-entrypoint-initdb.d/96c-room-review-workflow.sql:ro
       - ../database/goods/04-consumer-filter.sql:/docker-entrypoint-initdb.d/97-consumer-filter.sql:ro
       - ../database/marketing/04-consumer-campaign.sql:/docker-entrypoint-initdb.d/98-consumer-campaign.sql:ro
       # 带货达人与联盟(Super Admin Portal Phase 2)
@@ -226,6 +227,8 @@ services:
       HTTP_PORT: "9503"
     ports:
       - "9503:9503"
+    volumes:
+      - ./uploads:/opt/www/uploads
 
   order-service:
     <<: *hyperf-common

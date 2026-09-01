@@ -172,7 +172,7 @@ class GoodsController extends AbstractController
         $goodsType = (int) $goods['goods_type'];
         if ($goodsType === 1) {
             $skus = Db::table('hotel_room_type')
-                ->where('goods_id', $id)->where('status', 1)->whereNull('deleted_at')
+                ->where('goods_id', $id)->where('status', 1)->where('publish_status', 2)->whereNull('deleted_at')
                 ->orderBy('sort')->orderBy('id')->get()
                 ->map(static function ($row) {
                     $row = (array) $row;
@@ -307,6 +307,7 @@ class GoodsController extends AbstractController
         $sku = Db::table($skuTable)
             ->where('id', $skuId)->where('site_id', $siteId)
             ->where('status', 1)->whereNull('deleted_at')
+            ->when($skuType === 1, static fn ($query) => $query->where('publish_status', 2))
             ->first();
         if (! $sku) {
             throw new BusinessException(ErrorCode::NOT_FOUND, 'SKU不存在或已停售');
@@ -401,7 +402,7 @@ class GoodsController extends AbstractController
             $query->whereExists(function ($q) use ($priceMin, $priceMax) {
                 $q->from('hotel_room_type')
                     ->whereColumn('hotel_room_type.goods_id', 'goods_info.id')
-                    ->where('hotel_room_type.status', 1)->whereNull('hotel_room_type.deleted_at');
+                    ->where('hotel_room_type.status', 1)->where('hotel_room_type.publish_status', 2)->whereNull('hotel_room_type.deleted_at');
                 if ($priceMin > 0) {
                     $q->where('hotel_room_type.base_price', '>=', $priceMin);
                 }
@@ -423,7 +424,7 @@ class GoodsController extends AbstractController
             $query->whereExists(function ($q) {
                 $q->from('hotel_room_type')->whereColumn('hotel_room_type.goods_id', 'goods_info.id')
                     ->where('hotel_room_type.breakfast', '>', 0)
-                    ->where('hotel_room_type.status', 1)->whereNull('hotel_room_type.deleted_at');
+                    ->where('hotel_room_type.status', 1)->where('hotel_room_type.publish_status', 2)->whereNull('hotel_room_type.deleted_at');
             });
         }
         if ($this->intInput('freeCancel') === 1) {
@@ -444,7 +445,7 @@ class GoodsController extends AbstractController
     /** 应用可配置排序到查询(sort_key 白名单) */
     private function applySort($query, string $sortBy): void
     {
-        $minPrice = '(SELECT MIN(base_price) FROM hotel_room_type WHERE hotel_room_type.goods_id = goods_info.id AND hotel_room_type.status = 1 AND hotel_room_type.deleted_at IS NULL)';
+        $minPrice = '(SELECT MIN(base_price) FROM hotel_room_type WHERE hotel_room_type.goods_id = goods_info.id AND hotel_room_type.status = 1 AND hotel_room_type.publish_status = 2 AND hotel_room_type.deleted_at IS NULL)';
         $avgRating = '(SELECT COALESCE(AVG(rating),0) FROM goods_review WHERE goods_review.goods_id = goods_info.id AND goods_review.status = 1 AND goods_review.deleted_at IS NULL)';
         switch ($sortBy) {
             case 'price_asc':
@@ -499,6 +500,7 @@ class GoodsController extends AbstractController
         $min = Db::table($table)
             ->where('goods_id', $goodsId)
             ->where('status', 1)
+            ->when($goodsType === 1, static fn ($query) => $query->where('publish_status', 2))
             ->whereNull('deleted_at')
             ->min('base_price');
         return (float) ($min ?? 0);
@@ -515,6 +517,7 @@ class GoodsController extends AbstractController
         $min = Db::table('hotel_room_type')
             ->where('goods_id', $goodsId)
             ->where('status', 1)
+            ->where('publish_status', 2)
             ->where('base_price_citizen', '>', 0)
             ->whereNull('deleted_at')
             ->min('base_price_citizen');

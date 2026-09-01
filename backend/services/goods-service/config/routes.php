@@ -12,6 +12,7 @@ use App\Controller\Admin\AdminCategoryController;
 use App\Controller\Admin\AdminFilterController;
 use App\Controller\Admin\AdminGoodsController;
 use App\Controller\Admin\AdminReviewController;
+use App\Controller\Admin\AdminRoomReviewController;
 use App\Controller\Admin\AdminSkuController;
 use App\Controller\Admin\AdminStockController;
 use App\Controller\App\GoodsController;
@@ -54,6 +55,9 @@ Router::addGroup('/api/v1/admin/goods', static function () {
     Router::post('/update', [AdminGoodsController::class, 'update']);
     Router::post('/submit', [AdminGoodsController::class, 'submit']);
     Router::post('/audit', [AdminGoodsController::class, 'audit']);
+    Router::get('/room-review/list', [AdminRoomReviewController::class, 'index']);
+    Router::get('/room-review/detail', [AdminRoomReviewController::class, 'detail']);
+    Router::post('/room-review/audit', [AdminRoomReviewController::class, 'audit']);
     Router::post('/toggle-status', [AdminGoodsController::class, 'toggleStatus']);
     Router::post('/delete', [AdminGoodsController::class, 'remove']);
 
@@ -116,6 +120,9 @@ Router::addGroup('/api/v1/merchant/rooms', static function () {
     Router::get('/list', [MerchantRoomController::class, 'index']);
     Router::get('/detail', [MerchantRoomController::class, 'detail']);
     Router::post('/save', [MerchantRoomController::class, 'save']);
+    Router::post('/copy', [MerchantRoomController::class, 'copy']);
+    Router::post('/withdraw', [MerchantRoomController::class, 'withdraw']);
+    Router::post('/media/upload', [MerchantRoomController::class, 'uploadMedia']);
     Router::post('/toggle-status', [MerchantRoomController::class, 'toggleStatus']);
     Router::post('/delete', [MerchantRoomController::class, 'delete']);
 }, [

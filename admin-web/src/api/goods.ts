@@ -66,6 +66,18 @@ export function apiRoomDelete(goodsId: number, id: number): Promise<null> {
   return post('/admin/goods/room/delete', { goodsId, id });
 }
 
+export function apiRoomReviewList(params: Record<string, unknown>): Promise<PageData<Row>> {
+  return get<PageData<Row>>('/admin/goods/room-review/list', params);
+}
+
+export function apiRoomReviewDetail(id: number): Promise<{ revision: Row; effective: Row; history: Row[] }> {
+  return get('/admin/goods/room-review/detail', { id });
+}
+
+export function apiRoomReviewAudit(data: { id: number; auditStatus: number; auditRemark?: string }): Promise<null> {
+  return post('/admin/goods/room-review/audit', data);
+}
+
 // ---------- 门票票种 ----------
 export function apiTicketList(goodsId: number): Promise<Row[]> {
   return get('/admin/goods/ticket/list', { goodsId });

@@ -17,10 +17,15 @@ export default defineConfig({
   },
   server: {
     // 与 admin-web(5173)并存,商家端用 5174
+    host: '0.0.0.0',
     port: 5174,
     proxy: {
       // 开发环境转发到本地网关(OpenResty,deploy/docker-compose 默认 8081)
       '/api': {
+        target: process.env.MTRIP_DEV_GATEWAY || 'http://127.0.0.1:8081',
+        changeOrigin: true,
+      },
+      '/uploads': {
         target: process.env.MTRIP_DEV_GATEWAY || 'http://127.0.0.1:8081',
         changeOrigin: true,
       },

@@ -184,3 +184,30 @@
 ### 验证
 - [x] `D:\BtSoft\php\81\php.exe -l` 检查新增 RoomController / AvailabilityController / routes.php 通过。
 - [x] `cd merchant-web; npm run build` 通过(EXIT=0;仅 Vite chunk 体积警告)。
+
+## 2026-09-01 M2 房型列表、新增房型与完整审核流程
+
+### 交付范围
+- 房型列表保留酒店、关键词、审核状态筛选，展示销售状态、审核状态、驳回原因，并提供详情、编辑、复制、上下架、删除/申请下架操作。
+- 新增与编辑房型采用独立页面 `/rooms/create`、`/rooms/:id/edit`，不是弹窗；表单覆盖基础资料、床型与人数、设施、真实图片/视频上传、定价、库存、政策及草稿/提交审核动作。
+- 新增 `/rooms/:id` 详情页，同时展示当前生效版本、待审核/草稿版本、审核历史及驳回原因。
+- 新增 `hotel_room_type_revision` 版本表及房型审核服务。草稿、提交、驳回、重新提交、撤回、复制、下架申请和管理员通过/驳回均有版本记录；已生效房型在新版本获批前保持不变。
+- admin-web 商品审核页新增“房型审核”队列、版本差异、媒体预览与通过/驳回动作，沿用 `goods:audit:audit` 权限。
+- C 端/市场读取只返回 `publish_status=2` 的已批准房型；既有已上架酒店房型由幂等迁移回填为生效版本。
+
+### 数据与部署
+- 新增幂等迁移 `database/goods/07-room-review-workflow.sql`，并同步基线 `database/goods/01-goods.sql` 与 Docker initdb 登记。
+- goods-service 增加 `/uploads` 共享卷；merchant-web Vite 代理补齐 `/uploads`，媒体上传由 goods-service 校验类型、大小和图片分辨率。
+
+### 验证
+- [x] 房型审核服务回归 6 项通过：新建隔离、驳回、重新提交、批准发布、待审更新不覆盖线上、再次驳回保留线上版本。
+- [x] 真实网关 HTTP 链路通过：图片 multipart 上传 → 商户提交 → 管理员队列/详情/通过 → 商户更新 → 管理员驳回 → 商户详情核对线上版本与驳回原因；临时业务数据与上传文件已清理。
+- [x] `scripts/check.ps1` 通过：325 个 PHP 文件语法检查、shared 58 用例/858 断言、admin-web 构建、client 类型检查全部成功。
+- [x] merchant-web `vue-tsc --noEmit && vite build` 与 admin-web production build 通过；仅有项目既有 Vite 大 chunk 提示，无新增 TypeScript 或构建警告。
+- [x] 修复开发服务器仅监听 IPv6 导致 `127.0.0.1:5174` 白屏：Vite 明确监听 `0.0.0.0`，重启后 IPv4 与 `localhost` 的 `/rooms`、`/src/main.ts` 均返回 200。
+- [x] 开发环境将 `localhost:5174` 规范化跳转到 `127.0.0.1:5174` 并保留路径、查询参数和 Hash，避免两个 Origin 的 `localStorage` 登录 Token 不共享而误跳登录页；生产环境不受影响。
+- [x] 修复房型媒体上传文件权限：`UploadedFile::moveTo()` 生成的文件原为 `600`，OpenResty 无权读取并返回 403；保存后统一调整为 `0644`，存量房型图片已同步修复。真实新上传回归已验证网关公开读取返回 `200 image/*`。
+
+### Git 记录
+- 用户已授权将本节 M2 房型管理、审核流程、开发入口与图片显示修复做一次本地提交，不推送。
+- 明确排除项目根目录 `start.bat`、`stop.bat`、`设计文档/` 下新增文件及与本任务无关的 OpenResty DNS 配置改动；实际提交哈希见 Git 日志。
