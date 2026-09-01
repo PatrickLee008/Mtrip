@@ -14,6 +14,7 @@
  * 日历随之高亮 6 月 4–5;晚数不再硬写,由实际选择推导。金额沿用设计稿原值。
  */
 
+import { nightsBetween } from '@/components/hotel/booking/bookingFormat';
 import type { HomeIconName } from '@/components/home/HomeIcon';
 
 /* ------------------------------------------------------------------ 步骤序列 */
@@ -61,12 +62,41 @@ export const BOOKING_DEMO = {
   paidTotal: 185_000,
 } as const;
 
+/** 每晚每间的价格基数,乘上晚数与间数才是展示金额 */
+export interface StayUnits {
+  originalPrice: number;
+  roomPrice: number;
+  taxes: number;
+  total: number;
+  points: number;
+}
+
 /**
  * 一段住宿的完整形状 —— Step 3 复核、Trip 明细、Stay 明细页三处共用。
  * 接下单接口后这就是「一条 stay 行」的字段清单。
  */
 export interface BookingStay {
   key: string;
+  /**
+   * true = 设计稿演示数据(价格明细按设计稿显示原价划线 / 服务费与税费两行);
+   * false = 真实商品,价格只显示后端真正会收的部分 —— 后端定价链路是
+   * 「锁库存得出的房费 → 长住折扣 → 优惠券」,**没有税费概念**,
+   * 照着设计稿凭空展示 10% 税费会与实际扣款对不上。
+   */
+  demo: boolean;
+  /** 真实模式下的商品与房型 id,用于下单 */
+  goodsId?: number;
+  skuId?: number;
+  /**
+   * **每晚每间**的价格基数。展示用的 `originalPrice`/`roomPrice`/`taxes`/`total`/`points`
+   * 一律由它 × 晚数 × 间数推出(见 `scaleStay`),所以改日期或加减房间时金额会跟着动。
+   * 演示模式取设计稿那组数(默认 1 晚 1 间,与设计稿完全一致);真实模式取 `sku.base_price`。
+   */
+  units: StayUnits;
+  /** 真实模式下直接用接口给的名称,不再走 i18n 演示键 */
+  hotelName?: string;
+  roomName?: string;
+  address?: string;
   hotelKey: string;
   roomKey: string;
   /** `YYYY-MM-DD` */
@@ -188,3 +218,26 @@ export const VOUCHER_TAGS = [
   { key: 'room', bg: '#DDE1FF' },
   { key: 'breakfast', bg: '#DBE2FA' },
 ] as const;
+
+/* ------------------------------------------------------------- 金额随日期/间数重算 */
+
+/**
+ * 把 `units`(每晚每间的基数)按晚数 × 间数摊开,写回展示字段。
+ *
+ * 之前只有真实模式重算房费,演示模式的金额是设计稿写死的常量 —— 结果从搜索页带 3 晚进来时,
+ * 页面上写着「3 Nights」金额却还是 1 晚的数,对不上。现在两种模式统一走这里:
+ * 默认 1 晚 1 间时结果与设计稿原值完全相同,多晚多间才线性放大。
+ */
+export function scaleStay(stay: BookingStay): BookingStay {
+  const nights = Math.max(1, nightsBetween(stay.checkIn, stay.checkOut));
+  const factor = nights * Math.max(1, stay.rooms);
+  const u = stay.units;
+  return {
+    ...stay,
+    originalPrice: u.originalPrice * factor,
+    roomPrice: u.roomPrice * factor,
+    taxes: u.taxes * factor,
+    total: u.total * factor,
+    points: u.points * factor,
+  };
+}

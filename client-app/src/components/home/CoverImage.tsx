@@ -1,6 +1,7 @@
 /**
  * 首页封面图,三级降级:
- *   1. uri —— 接口返回的远程图
+ *   1. uri —— 接口返回的远程图(经 `resolveMediaUri` 解析:相对路径补 API_BASE_URL,
+ *      脏值如 `'111'` 一律当作没有图,否则会绕过下面两级兜底、渲染成加载失败的空白块)
  *   2. fallback —— 设计稿导出的本地临时图(assets/images/temp/,见该目录 README)
  *   3. 主色渐变 + 文字占位
  * 两种图都用 resizeMode="cover" 居中裁切,与设计稿图片框的裁切方式一致。
@@ -22,6 +23,7 @@ import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 
 import { colors } from '@/config/theme';
 import { fonts } from '@/config/typography';
+import { resolveMediaUri } from '@/utils/media';
 
 interface Props {
   uri?: string | null;
@@ -45,7 +47,8 @@ export default function CoverImage({
   style,
 }: Props) {
   const box = { width, height, borderRadius: radius };
-  const source = uri ? { uri } : fallback;
+  const remote = resolveMediaUri(uri);
+  const source = remote ? { uri: remote } : fallback;
   if (source) {
     return <Image source={source} style={[box, style as StyleProp<ImageStyle>]} resizeMode="cover" />;
   }

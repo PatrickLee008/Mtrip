@@ -388,6 +388,8 @@
 3. **质量**：`scripts/check.ps1` 四项全 PASS（PHP lint 343 文件、shared 单测、admin-web build、client-app typecheck）；`merchant-web npm run build`（vue-tsc + vite）通过，仅既有大 chunk 警告，无新增。
 4. **真实登录态浏览器验收**：m1001 + 2FA 登录 merchant-web，Booking Management In House 详情面板 Message Guest 按钮→消息抽屉→发送消息蓝色气泡全链路通过（截图见 `.reasonix/attachments/m4-guest-message-drawer.png` 等 3 张）。期间网关对 merchant-service 上游短暂 502（服务本体健康，重启网关恢复），已观察确认未复发。
 5. **文档**：本文件、`docs/plans/README.md` 进度表、`HANDOFF.md` 已同步；新增夹具脚本 `test/sql/m4-fixture-reset3.sql`（阶段 3 稳态夹具）。
+6. **2026-09-01 热修复**：存量本地 MySQL 卷未重放 initdb，导致 `order_main.booking_status` 缺列；已用 `scripts/db-apply.ps1` 补执行 `database/order/05-merchant-booking.sql`、`database/merchant/36-merchant-booking-menu.sql`、`database/merchant/37-merchant-booking-message.sql`、`database/user/10-chat-booking-link.sql` 并复查字段落库。同步补登记 `deploy/docker-compose.yml` 中遗漏的 `10-chat-booking-link.sql` 与 `37-merchant-booking-message.sql`，避免全新环境漏挂。
+7. **2026-09-01 联动排查**：客户端真实房型不显示还依赖 M2 房型审核流与 marketplace；已补跑 `database/goods/07-room-review-workflow.sql`，并确认当前本地酒店/房型已是 live room，但因数据仍在 `site_id=0` 且未发布 Ranking Marketplace，C 端默认站点 1 仍会过滤。
 
 ---
 

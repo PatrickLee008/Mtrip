@@ -25,6 +25,27 @@ export const TEMP_RESTAURANT_COVERS: Record<string, ImageSourcePropType> = {
   shweFlower: require('../../assets/images/temp/mypick/restaurant-shwe-flower.jpg'),
 };
 
+/* ------------------------------------------------ 真实商品的封面兜底(跨页面统一) */
+
+/**
+ * **真实**酒店商品的封面兜底图。后端目前拿不到可用的 `cover_image`
+ * (实测是后台表单填进去的 `'111'`,非空但加载不出来,已由 `utils/media.ts` 判成没有图),
+ * 先按位置轮流用设计稿的临时酒店图,免得列表和卡片全是渐变空块。
+ *
+ * 用 `tempCoverFor(index)` 取,酒店搜索结果、我的精选(预订卡 / 收藏酒店)共用同一套,
+ * 免得同一家酒店在两个页面显示成两张不同的图。商品真传了图之后 `CoverImage`
+ * 会自动改用远程图,这里不需要再动;等后端封面普遍可用了,删掉这一段与调用处即可。
+ */
+const TEMP_REAL_COVERS: ImageSourcePropType[] = [
+  TEMP_HOTEL_COVERS.heritageBagan,
+  TEMP_HOTEL_COVERS.strandSuites,
+];
+
+export function tempCoverFor(index: number): ImageSourcePropType {
+  const i = ((index % TEMP_REAL_COVERS.length) + TEMP_REAL_COVERS.length) % TEMP_REAL_COVERS.length;
+  return TEMP_REAL_COVERS[i];
+}
+
 /* ------------------------------------------------------------------ 酒店详情 */
 
 /** 酒店详情图库(设计稿 94:897 Hero Section / Gallery,展示框 402x300),顺序即设计稿顺序 */

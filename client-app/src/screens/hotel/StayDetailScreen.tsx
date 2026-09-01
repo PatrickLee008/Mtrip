@@ -23,14 +23,17 @@ import type { RootStackParamList } from '@/navigation/types';
 import {
   BOOKING_DEMO,
   BOOKING_SECOND_STAY,
+  scaleStay,
   type BookingStay,
 } from '@/screens/hotel/bookingDemo';
 import { useCommonStore } from '@/store/commonStore';
 
 function toStay(index: number): BookingStay {
   const source = index > 0 ? BOOKING_SECOND_STAY : BOOKING_DEMO;
-  return {
+  return scaleStay({
     key: `stay${index + 1}`,
+    /* 这一屏只服务演示数据(多住宿只在演示模式下存在) */
+    demo: true,
     hotelKey: source.hotelKey,
     roomKey: source.roomKey,
     checkIn: source.checkIn,
@@ -40,13 +43,21 @@ function toStay(index: number): BookingStay {
     rooms: source.rooms,
     /* 设计稿这张稿画了 Airport Transfer 胶囊 */
     addons: ['transfer'],
-    originalPrice: source.originalPrice,
-    roomPrice: source.roomPrice,
+    /* 设计稿金额是「1 晚 1 间」的基数,由 scaleStay 按实际晚数摊开(第二段住宿是 2 晚) */
+    units: {
+      originalPrice: source.originalPrice,
+      roomPrice: source.roomPrice,
+      taxes: source.taxes,
+      total: source.total,
+      points: source.points,
+    },
     taxPercent: source.taxPercent,
-    taxes: source.taxes,
-    total: source.total,
-    points: source.points,
-  };
+    originalPrice: 0,
+    roomPrice: 0,
+    taxes: 0,
+    total: 0,
+    points: 0,
+  });
 }
 
 export default function StayDetailScreen() {

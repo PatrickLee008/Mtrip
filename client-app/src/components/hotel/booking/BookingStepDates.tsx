@@ -2,10 +2,13 @@
  * Step 1 · 日期确认(设计稿 1675:6069;加购已选 + 保险的状态是 1675:7406,同一组件的另一状态)
  *
  * 结构:摘要卡 → Selected Dates 日历 → Who's Coming? 人数卡 → Enhance Your Stay 加购卡 → Special Requests。
- * 日期改动复用已有的 `DatePickerSheet`(设计稿 1675:6806「Choose Date」与已实现的 695:1428 是同一张稿)。
+ *
+ * 改日期只有一个入口:**常驻的 `BookingCalendar`**。顶部摘要卡的日期胶囊是纯展示。
+ * 这里曾经还能点摘要卡拉起 `DatePickerSheet`(设计稿 1675:6806)—— 同一件事两个入口,
+ * 日历就在下面一屏,弹层反而挡住它、还容易误触,已去掉。
  */
 
-import React, { useState } from 'react';
+import React from 'react';
 import { StyleSheet, Text, TextInput, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 
@@ -21,9 +24,6 @@ import {
   nightsBetween,
   nightsLabel,
 } from '@/components/hotel/booking/bookingFormat';
-import DatePickerSheet, {
-  type DateRangeValue,
-} from '@/components/hotel/DatePickerSheet';
 import { colors, radius } from '@/config/theme';
 import { fonts } from '@/config/typography';
 import { BOOKING_ADDONS, type BookingAddonKey } from '@/screens/hotel/bookingDemo';
@@ -65,7 +65,6 @@ export default function BookingStepDates({
 }: Props) {
   const { t, i18n } = useTranslation();
   const currency = useSiteStore((s) => s.currency);
-  const [pickerOpen, setPickerOpen] = useState(false);
 
   const nights = nightsBetween(checkIn, checkOut);
 
@@ -78,10 +77,6 @@ export default function BookingStepDates({
     onChangeDates(checkIn, key);
   };
 
-  const confirmRange = (value: DateRangeValue) => {
-    onChangeDates(value.checkIn, value.checkOut || value.checkIn);
-  };
-
   return (
     <View style={styles.root}>
       <View style={styles.summaryGroup}>
@@ -90,7 +85,6 @@ export default function BookingStepDates({
           checkOutLabel={checkOut ? formatWeekdayDate(checkOut, i18n.language) : '—'}
           nightsLabel={nightsLabel(t, nights)}
           guestsLabel={t('hotels.booking.dates.guestsRoomsValue', { adults, rooms })}
-          onPressDates={() => setPickerOpen(true)}
         />
         <BookingCalendar checkIn={checkIn} checkOut={checkOut} onPickDate={pickDate} />
       </View>
@@ -159,13 +153,6 @@ export default function BookingStepDates({
           </View>
         </View>
       </View>
-
-      <DatePickerSheet
-        visible={pickerOpen}
-        value={{ checkIn, checkOut, flexDays: 0 }}
-        onClose={() => setPickerOpen(false)}
-        onConfirm={confirmRange}
-      />
     </View>
   );
 }

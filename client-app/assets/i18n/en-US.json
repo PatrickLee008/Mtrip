@@ -1002,6 +1002,7 @@
         "guestsRooms": "GUESTS & ROOMS",
         "guestsRoomsValue": "{{adults}} Adults, {{rooms}} Room",
         "selectedDates": "Selected Dates",
+        "checkOutRequired": "Please pick your check-out date.",
         "whosComing": "Who's Coming?",
         "adults": "Adults",
         "adultsHint": "Ages 13 or above",
@@ -1047,7 +1048,8 @@
         "additionalHint": "Optional: Add {{guests}} more travelers",
         "secureTitle": "Secure Booking",
         "secureDesc": "Your data is encrypted and used only for booking purposes. We never sell your personal information.",
-        "nameRequired": "Please fill in the lead guest's name."
+        "nameRequired": "Please fill in the lead guest's name.",
+        "phoneRequired": "Please enter a contact phone number."
       },
       "review": {
         "preferred": "Preferred",

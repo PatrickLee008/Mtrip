@@ -17,6 +17,37 @@ export function parseDateKey(key: string): Date {
   return new Date(y, (m || 1) - 1, d || 1);
 }
 
+/**
+ * 今天起 n 天后的 `YYYY-MM-DD`。真实下单要用它挑默认入离日 ——
+ * 演示数据那组日期(2026-06-04)早已过去,后端 `order/create` 会以
+ * 「使用日期不能早于今天」直接拒掉。
+ */
+export function dayAfter(days: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() + days);
+  const m = `${d.getMonth() + 1}`.padStart(2, '0');
+  const day = `${d.getDate()}`.padStart(2, '0');
+  return `${d.getFullYear()}-${m}-${day}`;
+}
+
+/**
+ * 校正一组入离日期,返回可以直接下单的 `{checkIn, checkOut}`。
+ *
+ * 三种情况回落到「明天起 1 晚」:没传、离店不晚于入住、入住早于今天
+ * —— 最后一条是后端 `order/create` 的硬校验(「使用日期不能早于今天」),
+ * 搜索页留在页面上的旧日期很容易踩到。
+ */
+export function normalizeDates(
+  checkIn?: string,
+  checkOut?: string,
+): { checkIn: string; checkOut: string } {
+  const fallback = { checkIn: dayAfter(1), checkOut: dayAfter(2) };
+  if (!checkIn || !checkOut) return fallback;
+  if (nightsBetween(checkIn, checkOut) < 1) return fallback;
+  if (checkIn < dayAfter(0)) return fallback;
+  return { checkIn, checkOut };
+}
+
 /** 「Thu, 4 Jun」 */
 export function formatWeekdayDate(key: string, locale: string): string {
   return parseDateKey(key).toLocaleDateString(locale, {
