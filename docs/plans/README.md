@@ -16,6 +16,7 @@ MTrip/
 ├── client-app/              # C端 Expo(模块10 已落地)
 ├── database/                # 数据库 DDL + 种子数据,按服务分目录
 ├── deploy/                  # docker-compose、OpenResty 网关、k8s
+├── mtrip-ops/                # 独立运维监控台(Node 单体,不与业务前后端耦合)
 ├── docs/
 │   ├── plans/               # 工作计划(本目录)
 │   ├── guides/              # 开发指导文件(api/standards/frontend 分目录)
@@ -25,6 +26,16 @@ MTrip/
 ```
 
 ## 模块进度总览
+
+2026-09-02补充：Mtrip Ops 默认端口按用户要求改为 `56700`;本机 Docker 读取改走 `sudo -n docker`,新增 `/api/diagnostics/docker` 与服务页 Docker 权限诊断卡,用于定位 sudo/NOPASSWD/socket 权限问题。详见[模块16](./16-运维监控.md)。
+
+2026-09-02补充：Mtrip Ops 主题切换改为下拉模式;服务页新增镜像、启动时间、运行时长、版本号、发布时间、Git SHA 与发布说明字段。当前部署侧尚未注入发布元数据,需后续通过 `deploy/release.json`、Docker labels 或 `MTRIP_RELEASE_*` 环境变量配置。详见[模块16](./16-运维监控.md)。
+
+2026-09-02补充：Mtrip Ops 服务页改为读取 Docker 真实容器状态,APP 孪生池 missing/stopped 时明确提示 `/api/v1/app/*` 固定上游可能 502 且不会自动回退;同时新增玻璃/黑色经典/浅色专业/终端矩阵四套主题和紧凑/舒展密度切换,服务表改为高信息密度。详见[模块16](./16-运维监控.md)。
+
+2026-09-02增强：Mtrip Ops 从基础 MVP 升级为完整应用骨架,新增服务矩阵、日志搜索、Docker stats 负载展示、单服务 logs/restart/build 操作入口、DB backup 入口和审计页;默认仍只读,动作需显式开启。详见[模块16](./16-运维监控.md)。
+
+2026-09-02新增：启动独立运维监控台 `mtrip-ops/`。第一版为 Node.js 单体、服务端渲染、零依赖 MVP,已支持平台总览、gateway 与 8 个主池服务 healthz、`mtrip.sh status`、业务日志列表/tail、request log 流量摘要、发布 dry-run 与 health 白名单动作(默认禁用动作并写审计)。设计、计划、安全模型和成熟软件调研均放在 `mtrip-ops/docs/`,主计划见[模块16](./16-运维监控.md)。
 
 2026-09-01更新：修复客户端真实酒店卡不进入酒店详情真实 Rooms 的问题。真实酒店搜索结果现在携带 `id` 跳 `HotelDetail` 并拉 `/app/goods/detail` 渲染真实房型，演示卡仍保留静态稿；同时补跑漏执行的 `database/goods/07-room-review-workflow.sql`，本地房型已回填为 `status=1/publish_status=2/approved_version=1`。排查确认当前本地新增酒店仍在 `site_id=0` 且未发布 marketplace，客户端默认站点 1 按设计仍不会展示该数据，需站点一致并发布排名后才会出现在 C 端。详见[模块10](./10-移动端App框架.md)。
 
@@ -59,6 +70,7 @@ MTrip/
 | 09 | [09-移动端微服务.md](./09-移动端微服务.md) | C端 /api/v1/app/* 接口(user/goods/order等) | 已完成(联调归模块07/08) | 100% |
 | 10 | [10-移动端App框架.md](./10-移动端App框架.md) | client-app Expo51+RN+TS 多端工程 | 已完成(冒烟联调归模块08) | 100% |
 | 15 | [15-M12-merchant-management.md](./15-M12-merchant-management.md) | PRD模块12：酒店优先的商户管理，餐厅资料展示、运营延期 | 8/29列表整改已提交；追加取消详情餐厅隐藏，admin构建及Browser混合业务核验通过，追加改动未提交；S7整体原型待收口 | 列表及餐厅展示已验证，S7进行中 |
+| 16 | [16-运维监控.md](./16-运维监控.md) | Mtrip Ops 独立运维监控台:系统/服务/日志/流量/在线/发布管理 | 进行中(Docker sudo 诊断增强) | 54% |
 | M4 | [实现方案-Merchant-M4-酒店预订管理.md](./实现方案-Merchant-M4-酒店预订管理.md) | Merchant PRD 模块4：酒店预订列表、履约状态、库存、退款、通知、同步框架及原型 UI | 阶段0～6全部完成：生命周期+过期任务、商户API(22/22)、原型UI真实登录态验收、通知/住客消息/同步框架(23/23)、PermissionAspect平台级修复、跨端回归与check.ps1全绿 | 100% |
 
 ## 实施顺序(首期里程碑)
@@ -70,6 +82,11 @@ MTrip/
 
 | 日期 | 变更内容 |
 |------|---------|
+| 2026-09-02 | Mtrip Ops 默认端口改为 `56700`;Docker 命令默认使用 `sudo -n docker`,新增 `/api/diagnostics/docker` 和服务页诊断卡,验证主池/MySQL/Redis 可读为 running,APP 孪生池未启动显示 missing 与 routeRisk。 |
+| 2026-09-02 | Mtrip Ops 主题切换改为下拉;服务页新增 Docker inspect 运行信息与发布元数据展示,并补 `docs/05-发布版本信息配置.md`。当前 deploy/Dockerfile 未配置版本标签,页面会显示“未配置”。 |
+| 2026-09-02 | Mtrip Ops 补充 APP 孪生池真实状态与主题模板:读取 `docker ps -a` 显示 running/stopped/missing,缺失时标注 C 端路由风险;新增 4 套主题和紧凑/舒展密度,服务页增加高密度全量表。 |
+| 2026-09-02 | Mtrip Ops 增强:新增 `/services` 服务矩阵、增强 `/logs` 搜索、扩展 `/actions` 发布工作台、增加 `/audit` 审计页,并接入 Docker stats 降级采集与单服务白名单操作。 |
+| 2026-09-02 | 新增 `mtrip-ops/` 独立运维监控台 MVP:Node.js 单体服务端渲染,支持总览、服务 healthz、容器状态输出、日志 tail、request log 流量摘要、发布 dry-run 与 health 白名单动作;默认只读,动作需 `enableActions=true`,审计写 `data/audit.log`。详见[模块16](./16-运维监控.md)。 |
 | 2026-09-01 | client-app 酒店详情接真实房型：真实搜索结果卡改跳 `HotelDetail({id})`，详情页拉 `/app/goods/detail` 渲染标题、图库、起价和 Rooms，房型 Select 接真实下单确认；补跑房型审核流迁移 `goods/07`。同时确认当前本地数据仍因 `site_id=0` 与 marketplace 未发布被 C 端过滤。 |
 | 2026-09-01 | 热修复 merchant Booking Management `booking_status` 缺列：存量 MySQL 卷未重放 M4 增量 SQL，已补跑 `order/05`、`merchant/36`、`merchant/37`、`user/10` 并复查字段；同时补登记 `deploy/docker-compose.yml` initdb 中遗漏的住客消息两份 SQL，避免全新环境漏执行。 |
 | 2026-09-01 | Merchant App M4 酒店预订管理全部 7 个阶段完成：数据库迁移与回填、生命周期服务（确认/入住/退房/取消/No-show/退款+库存联动+10分钟过期任务）、商户 API 16 端点（22 项端到端）、Booking Management 原型 UI（真实登录态截图验收）、通知/住客消息/同步框架（23 项端到端）。阶段 6 完成 PermissionAspect 平台级修复（补 `#[Aspect]` + 8 服务显式注册，此前全平台 `#[Permission]` 注解静默失效）与跨端回归；check.ps1 四项全绿，仅既有大 chunk 警告。详见[方案文档](./实现方案-Merchant-M4-酒店预订管理.md)。 |

@@ -1,0 +1,16 @@
+{
+  "global": {
+    "version": "2026.09.02-001",
+    "publishedAt": "2026-09-02T18:30:00+08:00",
+    "gitSha": "abcdef1234567890",
+    "notes": "Mtrip platform release"
+  },
+  "services": {
+    "user-service": {
+      "version": "2026.09.02-user-001",
+      "publishedAt": "2026-09-02T18:31:00+08:00",
+      "gitSha": "abcdef1234567890",
+      "notes": "User service release notes"
+    }
+  }
+}

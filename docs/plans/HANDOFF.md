@@ -1,5 +1,64 @@
 # 会话交接文档(HANDOFF)
 
+### ★ 2026-09-02(Mtrip Ops:Docker sudo 诊断与端口调整)
+
+- 按用户要求将 Mtrip Ops 默认端口从 `9700` 改为 `56700`,配置样例、README 与模块计划同步更新。
+- 本机 Docker 命令需要 sudo 才能读取,Ops 默认 `dockerCommand` 改为 `["sudo","-n","docker"]`;使用 `-n` 避免 Web 进程等待密码,运行用户需配置 Docker sudo NOPASSWD 或改接 docker 组/socket proxy。
+- 新增 `/api/diagnostics/docker` 诊断接口与服务页 Docker 权限诊断卡,展示 effective user、`/var/run/docker.sock` 信息、version/ps/stats 的退出码、stderr、耗时与修复建议。验证 `npm run check`、`git diff --check` 通过;`npm start` 监听 56700,`/`、`/services`、`/api/services`、`/api/diagnostics/docker`、`/docs/07` 均 HTTP 200;诊断返回 `ok=true`,命令 `sudo -n docker`,主池/MySQL/Redis 为 `running`,APP 孪生池为 `missing`。
+
+### ★ 2026-09-02(Mtrip Ops:异常服务优先排序)
+
+- `/services` 服务矩阵补风险排序:health 失败最高优先级,其次 APP 路由风险、容器 stopped/exited/missing、5xx、慢请求,正常服务靠后。
+- 当前本机因 Ops 进程无 Docker API 权限,APP 孪生池状态为 `unknown` 且带 routeRisk,所以会排在服务页最前,便于直接看到 `/api/v1/app/*` 风险。
+- 验收:`npm run check` 与 `git diff --check` 通过;临时 9701 端口访问 `/services`、`/actions`、`/api/services` 均 HTTP 200,抽查 `/api/services` 前 5 项为 APP routeRisk。
+
+
+### ★ 2026-09-02(Mtrip Ops:Git 发布入口 + 主题修复 + Docker unknown 诊断)
+
+- 发布页补 Git 操作区:展示当前分支、HEAD、dirty 状态、远端摘要、最近 8 条提交;新增白名单动作 `git status -sb`、`git fetch --prune origin`、`git pull --ff-only`。发布流程条调整为 Git 拉取 → dry-run → DB 备份 → 部署/单服务 → health。新增 `mtrip-ops/docs/06-Git发布流程.md`。
+- 修复主题问题:玻璃主题强化透明、模糊、光斑与层次;黑色经典/终端矩阵对右侧页头、查询区域、panel、输入框、表头、说明文字做硬覆盖,避免继续出现灰底灰字。
+- 用户贴出的 `docker ps` 显示主池/MySQL/Redis 实际运行正常,但 Ops 页面显示 unknown 的根因是 Ops 进程无 Docker API 权限(此前本地抽查报 `/var/run/docker.sock permission denied`)。已增加 `dockerCommand` 配置,默认 `["sudo","-n","docker"]`,需要为运行用户配置 sudo 免密 Docker;更推荐运行用户加入 docker 组或生产接 socket proxy。
+- Docker 状态语义:只有 Docker 可读且容器不存在才显示 `missing`;Docker 不可读统一显示 `unknown`,并在服务页顶部显示“Docker 访问异常”说明。
+- 验收:`npm run check` 通过;启动后 `/services`、`/actions`、`/api/services` HTTP 200。
+
+
+### ★ 2026-09-02(Mtrip Ops:主题下拉 + 发布元数据展示)
+
+- 按用户要求把主题切换从一组按钮改为两个下拉框:界面模板(玻璃/黑色经典/浅色专业/终端矩阵)与显示密度(紧凑/舒展),仍用浏览器 `localStorage` 记忆。
+- `/services` 增加版本与运行信息字段:镜像、启动时间、运行时长、版本号、发布时间、Git SHA、发布说明。启动时间/运行时长来自 `docker inspect .State.StartedAt`,镜像来自 `docker inspect .Config.Image`;CPU/内存仍来自 `docker stats`。
+- 发布语义支持三种来源:优先 `deploy/release.json`,其次 Docker labels(`mtrip.release.*` / OCI labels),最后环境变量(`MTRIP_RELEASE_*`)。新增说明文档 `mtrip-ops/docs/05-发布版本信息配置.md` 与示例 `mtrip-ops/examples/release.example.json`。
+- 已核对当前 `deploy` 与服务 Dockerfile 没有 `mtrip.release.*`、`MTRIP_RELEASE_*` 或 `org.opencontainers.image.version` 配置,所以版本号/发布时间/说明目前会显示“未配置”;这不是 Ops 缺字段,而是部署侧还没注入发布元数据。
+- 修正 Docker 无权限降级:当前 Ops 进程读取 `/var/run/docker.sock` 会报 permission denied,现在容器状态显示 `unknown`,不会误报 `missing`;APP 池风险文案相应改为“Docker 不可读,无法确认 APP 上游,且 /api/v1/app/* 不会自动 fallback”。
+- 验收:`npm run check` 通过;启动后 `/services`、`/docs/05`、`/api/services` HTTP 200;抽查 API 输出 `containerState=unknown`、版本字段存在但未配置。
+
+
+### ★ 2026-09-02(Mtrip Ops:APP 孪生池真实状态 + 多主题模板)
+
+- 修正 Ops 对 APP 孪生池的表达:不再用模糊的“内网待接”当状态,而是读取 `docker ps -a` 区分 `running/stopped/missing`。当前本机抽查 5 个 APP 孪生容器均为 `missing`,页面会明确提示 `/api/v1/app/* fixed upstream may 502; no automatic fallback`。
+- 关键架构说明已写入 `mtrip-ops/README.md`:当前网关不是自动双服务器切换,而是管理端主池与 APP 孪生池隔离;`/api/v1/app/*` 固定指向 APP 池,APP 池没启动不会自动回退主池。
+- `/services` 升级为高密度服务监控页:卡片 + 全量表同时展示端口、容器状态、health 耗时、CPU、内存、网络、Block IO、PIDs、请求数、慢请求、5xx、路由风险,更适合大平台扫视。
+- 增加多样式模板切换:玻璃、黑色经典、浅色专业、终端矩阵四套主题,以及紧凑/舒展两种密度。主题状态保存在浏览器 `localStorage`,不影响服务端配置。
+- 验收:`npm run check` 通过;启动后 `/`、`/services`、`/api/services` 均 HTTP 200;抽查 `/api/services` 确认 APP 孪生池输出 `missing + routeRisk`。
+
+
+### ★ 2026-09-02(Mtrip Ops 增强:日志搜索/服务负载/单服务操作)
+
+- 用户指出上一版过于简单,本轮把 `mtrip-ops` 从“能跑 MVP”升级为**完整应用骨架**:新增 `/services` 服务矩阵页、增强 `/logs` 日志中心、扩展 `/actions` 发布工作台、新增 `/audit` 审计页。
+- 日志中心现在支持关键词、服务、文件、状态码、慢请求、仅 5xx 筛选,搜索结果展示服务、文件位置、状态码、耗时与命中行;仍保留文件 tail。
+- 服务矩阵按 gateway、8 个主池、5 个 APP 孪生、mysql、redis 展示,合并 health、请求量、慢请求、5xx 与 `docker stats --no-stream` 的 CPU/内存/网络负载;Docker 不可用时降级显示原因。APP 孪生 health 仍为“内网待接”,后续需让 ops 加入 compose 网络或用受限 runner 容器内探测。
+- 发布管理扩展为发布工作台:全局 `auto-deploy.sh --dry-run`、`db-backup.sh`、`mtrip.sh health`,以及单服务 `logs/restart/build` 白名单入口。默认仍 `enableActions=false`,不会误执行危险动作;开启后所有动作写 `data/audit.log`,并可在 `/audit` 查看。
+- 验收:`cd mtrip-ops && npm run check` 通过;启动后 curl `/services`、带筛选 `/logs?service=user-service&q=/api/v1/admin&status=200`、`/api/services`、`/audit` 均 HTTP 200;默认禁用动作下 POST 单服务 restart 返回禁用提示页。
+
+
+### ★ 2026-09-02(Mtrip Ops 独立运维监控台 MVP)
+
+- 新增独立目录 `mtrip-ops/`,不混入现有 admin-web/merchant-web/client-app/后端服务。第一版采用 **Node.js 单体 + 服务端渲染 HTML + 零依赖** 实现,默认监听 `127.0.0.1:56700`,配置样例为 `mtrip-ops/ops.config.example.json`。
+- 已落地页面:总览(`/`)、日志(`/logs`)、发布(`/actions`)、计划(`/docs` 与 `/docs/01~04`)。总览会探测 gateway 与 8 个主池服务 `/healthz`,展示 `deploy/mtrip.sh status` 输出,并从 `deploy/logs/*/request-*.log` 聚合请求样本、状态码、Top API 与慢请求。APP 孪生池暂以“内网待接”展示,后续通过 compose 网络或受限 runner 做容器内探测。
+- 发布管理只做安全 MVP:默认 `enableActions=false`;显式开启后只允许白名单动作 `scripts/auto-deploy.sh --dry-run` 与 `deploy/mtrip.sh health`,使用 `execFile` 不拼 shell,审计写 `mtrip-ops/data/audit.log`。正式 deploy、DB apply、服务重启、Docker stats、业务库只读看板和告警中心列入 `mtrip-ops/docs/02-实施计划.md`。
+- 配套文档已放在独立目录:`mtrip-ops/docs/01-方案设计.md`、`02-实施计划.md`、`03-安全模型.md`、`04-成熟软件调研.md`;主计划新增 `docs/plans/16-运维监控.md`。
+- 验收:`cd mtrip-ops && npm run check` 通过;启动 `npm start` 后 curl `/`、`/api/health`、`/logs`、`/actions`、`/docs`、`/docs/01` 均 HTTP 200。本机 gateway 与 8 个主池 healthz 均正常。
+
+
 ### ★ 2026-09-01(订房第 1 步:去掉多余的日期选择弹层)
 
 - 第 1 步本来就有一张**常驻的 `BookingCalendar`**,顶部摘要卡的日期胶囊却还能点开 `DatePickerSheet`(设计稿 1675:6806)—— 同一件事两个入口,弹层还会盖住下面那张日历。已把摘要卡的日期区改成纯展示:`BookingSummaryBar` 去掉 `onPressDates` 与外层 `Pressable`,`BookingStepDates` 移除 `DatePickerSheet` 与 `pickerOpen` 状态。`DatePickerSheet` 组件本身保留 —— 酒店搜索页与搜索结果页仍在用。

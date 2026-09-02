@@ -4,6 +4,9 @@
 
 ## 技术栈
 
+
+Mtrip Ops 运维监控台（2026-09-02）：新增独立目录 `mtrip-ops/`,已从零依赖 MVP 增强为完整应用骨架,默认只读并监听 `127.0.0.1:56700`。本机 Docker 读取默认走 `sudo -n docker`,并提供 `/api/diagnostics/docker` 诊断。已支持 gateway 与 8 个主池服务 healthz、服务矩阵、Docker stats 负载降级采集、业务日志搜索/tail、request log 流量摘要、发布 dry-run、DB backup、health、单服务 logs/restart/build 白名单动作(显式开启 `enableActions` 后执行并写审计)。设计与计划放在 `mtrip-ops/docs/`,主进度见 `docs/plans/16-运维监控.md`。新增 APP 孪生池真实容器状态识别,缺失/停止时明确提示 C 端路由风险;界面支持玻璃、黑色经典、浅色专业、终端矩阵四套主题与紧凑/舒展密度,主题切换已改为下拉模式。服务页支持镜像、启动时间、运行时长、版本号、发布时间、Git SHA 与发布说明展示;当前 deploy/Dockerfile 尚未注入发布元数据,需通过 `deploy/release.json`、Docker labels 或 `MTRIP_RELEASE_*` 配置。发布页已补 Git 状态、fetch、pull --ff-only、最近提交与发布流程条。
+
 admin-web 主题与公共资源补充（2026-08-30）：`cops/theme` 编辑主题资源从 JSON 字符串改为控件化编辑，弹窗 1180px、资源卡一行三列；缩略图接入公共资源选择弹窗。存储配置新增阿里云 OSS 驱动/endpoint，system-service 新增文件树、上传、目录过滤、目录新增/删除和 local/aliyun 实际资源删除接口；公共资源组件支持单选/多选、限定文件类型（不限/图片/视频/图片+视频等）、图片/文档/视频/音频上传选择，以及根目录/子目录维护。PHP lint、admin-web build、compose config 通过，本地迁移和 system-service 重建已执行。
 
 M12餐厅资料展示（2026-08-29，未提交）：商户详情不再过滤餐厅等非酒店业务，补充类型列并显示现有联系资料/KYC；酒店专用物业关联边界不变，不扩展餐厅运营。admin构建与Browser混合业务核验通过，临时测试资料已清理，见[追加整改记录](docs/plans/m12/09-all-merchants-ui.md)。
@@ -19,6 +22,7 @@ M12 S7（2026-08-28）：本地独立环境、两轮历史迁移/124表恢复、
 | 移动端 | Expo 51 + React Native + TypeScript | `client-app/` |
 | 数据库 | MySQL 8.0 双库(mtrip_system / mtrip_business,54 表) | `database/` |
 | 网关/部署 | OpenResty + docker-compose(k8s 预留) | `deploy/` |
+| 运维监控 | Node.js 单体 + 服务端渲染 HTML | `mtrip-ops/` |
 
 ## 目录结构
 
@@ -33,6 +37,7 @@ MTrip/
 ├── client-app/              # C 端 Expo 应用(iOS/Android/Web)
 ├── database/                # DDL 按服务分目录 + seed/ 种子数据(管理员/菜单/站点)
 ├── deploy/                  # docker-compose.yml + openresty/ 网关 + k8s/ 预留
+├── mtrip-ops/                # 独立运维监控台(Node 单体,服务端渲染)
 ├── docs/
 │   ├── plans/               # ★ 各模块工作计划与完成状态(进度看这里)
 │   ├── guides/              # ★ 开发指导文件(setup/ api/ frontend/ standards/)
@@ -64,6 +69,7 @@ cd ../admin-web && npm install && npm run dev    # http://localhost:5173,接口�
 | **移动端接口规范**(双前缀路由/签名头/分页约定) | [docs/guides/api/移动端接口规范.md](docs/guides/api/移动端接口规范.md) |
 | **环境搭建与启动** | [docs/guides/setup/启动开发指南.md](docs/guides/setup/启动开发指南.md) |
 | **网关路由表/限流/CORS** | `deploy/openresty/conf.d/mtrip.conf` + [docs/plans/08-部署与网关.md](docs/plans/08-部署与网关.md) |
+| **运维监控台方案与计划** | [mtrip-ops/docs/](mtrip-ops/docs/) + [docs/plans/16-运维监控.md](docs/plans/16-运维监控.md) |
 | **原始需求** | `设计文档/*.docx`(提取文本在 `docs/reference/`) |
 
 ## 核心开发约定(速览,详细定义见上表)

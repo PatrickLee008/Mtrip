@@ -1,0 +1,17 @@
+[Unit]
+Description=Mtrip Ops
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/mtrip/mtrip-ops
+Environment=MTRIP_OPS_CONFIG=/opt/mtrip/mtrip-ops/ops.config.json
+ExecStart=/usr/bin/node src/server.js
+Restart=on-failure
+RestartSec=3
+User=mtrip
+Group=mtrip
+
+[Install]
+WantedBy=multi-user.target
+
