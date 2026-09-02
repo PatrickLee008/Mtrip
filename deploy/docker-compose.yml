@@ -121,6 +121,8 @@ services:
       - ../database/merchant/25-merchant-application-reg-number-unique.sql:/docker-entrypoint-initdb.d/39g-merchant-application-reg-number-unique.sql:ro
       # 入驻线索创建即生成唯一商户业务编号 MCH-XXXX，并贯穿正式商户
       - ../database/merchant/26-merchant-code.sql:/docker-entrypoint-initdb.d/39h-merchant-code.sql:ro
+      # 商户业务编号跨申请表与正式商户表统一分配，避免独立自增主键碰撞
+      - ../database/merchant/38-merchant-code-sequence.sql:/docker-entrypoint-initdb.d/39q-merchant-code-sequence.sql:ro
       - ../database/merchant/27-merchant-status.sql:/docker-entrypoint-initdb.d/39i-merchant-status.sql:ro
       - ../database/merchant/28-merchant-directory-property.sql:/docker-entrypoint-initdb.d/39j-merchant-directory-property.sql:ro
       - ../database/merchant/29-merchant-documents-notifications.sql:/docker-entrypoint-initdb.d/39k-merchant-documents-notifications.sql:ro
@@ -180,6 +182,8 @@ services:
       - ../database/merchant/37-merchant-booking-message.sql:/docker-entrypoint-initdb.d/99j-merchant-booking-message.sql:ro
       # order_main.guests 列类型修正(JSON → TEXT,存的是 AES 密文)
       - ../database/order/06-guests-column-type-fix.sql:/docker-entrypoint-initdb.d/99k-guests-column-type-fix.sql:ro
+      # 修复超级管理员录入线索未带站点时生成的 MCH-5019 全链路 site_id=0
+      - ../database/merchant/39-mch-5019-site-fix.sql:/docker-entrypoint-initdb.d/99l-mch-5019-site-fix.sql:ro
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-p${MYSQL_ROOT_PASSWORD:-root@2026}"]
       interval: 5s

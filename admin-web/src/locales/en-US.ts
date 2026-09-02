@@ -2434,6 +2434,7 @@ export default {
       businessTypesPlaceholder: 'Select business types',
       merchantNameRequired: 'Merchant name is required',
       companyNameRequired: 'Merchant name is required',
+      siteRequired: 'Please select a site',
       businessRequired: 'Please enter at least one registered business',
       leadCreated: 'Lead created',
       approveModalTitle: 'Approve Onboarding',
