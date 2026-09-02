@@ -16,6 +16,17 @@
 #
 # 用法:
 #   scripts/auto-deploy.sh [--dry-run] [--branch <name>] [--apply-db] [--no-app-sync] [--prod]
+#   scripts/auto-deploy.sh [--dry-run] <target> [target...]
+#
+# 强制发布 target(跳过 fetch/merge/变更判断,也不要求工作区干净):
+#   admin-web|merchant-web|supplier-web  直接构建并发布静态文件
+#   system-service|user-service|...      直接重启对应后端主池服务
+#   system-service-app|user-service-app  直接重启 APP 孪生服务
+#   gateway|openresty                    直接重启网关
+#
+# 示例:
+#   scripts/auto-deploy.sh admin-web
+#   scripts/auto-deploy.sh goods-service goods-service-app gateway
 #
 # cron 示例(每 5 分钟,避开整点):
 #   3,8,13,18,23,28,33,38,43,48,53,58 * * * * cd /path/to/MTrip && \
@@ -34,6 +45,7 @@ APPLY_DB=0
 NO_APP_SYNC=0
 PROD=0
 BRANCH_OVERRIDE=""
+FORCE_TARGETS=""
 prev=""
 for arg in "$@"; do
     case "$arg" in
@@ -41,9 +53,16 @@ for arg in "$@"; do
         --apply-db)    APPLY_DB=1 ;;
         --no-app-sync) NO_APP_SYNC=1 ;;
         --prod)        PROD=1 ;;
+        --branch)      : ;;
         --branch=*)    BRANCH_OVERRIDE="${arg#*=}" ;;
         -h|--help)     grep -E '^#( |$)' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
-        *)             [ "$prev" = "--branch" ] && BRANCH_OVERRIDE="$arg" ;;  # 兼容 --branch xxx
+        *)
+            if [ "$prev" = "--branch" ]; then
+                BRANCH_OVERRIDE="$arg"  # 兼容 --branch xxx
+            else
+                FORCE_TARGETS="$FORCE_TARGETS $arg"
+            fi
+            ;;
     esac
     prev="$arg"
 done
@@ -91,55 +110,65 @@ command -v git >/dev/null 2>&1 || die "未安装 git"
 git config --global --get-all safe.directory 2>/dev/null | grep -qxF "$REPO_ROOT" \
     || git config --global --add safe.directory "$REPO_ROOT" 2>/dev/null || true
 
-CUR_BRANCH="$(git rev-parse --abbrev-ref HEAD 2>/dev/null)"
-BRANCH="${BRANCH_OVERRIDE:-$CUR_BRANCH}"
-[ -n "$BRANCH" ] && [ "$BRANCH" != "HEAD" ] || die "无法确定当前分支(HEAD 游离?),请用 --branch 指定并先 checkout"
-# ff-only 只能把「当前所在分支」快进到其远端;--branch 必须与当前分支一致,否则要求先 checkout
-if [ "$BRANCH" != "$CUR_BRANCH" ]; then
-    die "当前分支是 $CUR_BRANCH,但要求部署 $BRANCH。请先 git checkout $BRANCH 再运行(ff-only 不跨分支合并)"
-fi
-info "目标分支:$BRANCH  仓库:$REPO_ROOT  模式:${MODE_FLAG:-dev}  dry-run:$DRY_RUN"
-
-# 工作区必须干净(ff-only 前提,绝不覆盖本地改动)
-if [ -n "$(git status --porcelain)" ]; then
-    fail "工作区有未提交改动,按 ff-only 策略中止(避免覆盖本地)。清理后重试:"
-    git status --short >&2
-    exit 1
-fi
-
-# ---------- 拉取(fetch + 判断是否落后 + 快进) ----------
-info "git fetch origin $BRANCH ..."
-git fetch --quiet origin "$BRANCH" || die "git fetch 失败"
-
-if ! git rev-parse --verify --quiet "origin/$BRANCH" >/dev/null; then
-    die "远端不存在 origin/$BRANCH"
-fi
-AHEAD="$(git rev-list --count "origin/$BRANCH..HEAD" 2>/dev/null || echo 0)"
-BEHIND="$(git rev-list --count "HEAD..origin/$BRANCH" 2>/dev/null || echo 0)"
-
-if [ "$AHEAD" -gt 0 ]; then
-    die "本地领先/分叉 origin/$BRANCH 共 $AHEAD 个提交,ff-only 无法处理,请人工核对(绝不 reset)"
-fi
-if [ "$BEHIND" -eq 0 ]; then
-    ok "已是最新(落后 0 个提交),无需部署"
-    exit 0
-fi
-info "落后 $BEHIND 个提交,开始快进合并"
-
-BEFORE="$(git rev-parse HEAD)"
-if [ "$DRY_RUN" -eq 1 ]; then
-    info "[dry-run] 跳过实际 merge,用 origin/$BRANCH 作为变更范围终点"
-    AFTER="$(git rev-parse "origin/$BRANCH")"
+CHANGED=""
+if [ -n "$FORCE_TARGETS" ]; then
+    info "强制发布目标:$FORCE_TARGETS  仓库:$REPO_ROOT  模式:${MODE_FLAG:-dev}  dry-run:$DRY_RUN"
+    warn "强制发布模式:跳过 git fetch/merge/落后检查,直接使用当前工作区内容"
+    if [ -n "$(git status --porcelain 2>/dev/null)" ]; then
+        warn "当前工作区有未提交改动;强制发布会把这些本地内容一并用于构建/重启:"
+        git status --short
+    fi
 else
-    git merge --ff-only "origin/$BRANCH" || die "快进合并失败(可能已分叉)"
-    AFTER="$(git rev-parse HEAD)"
-    ok "已快进:$(git rev-parse --short "$BEFORE") -> $(git rev-parse --short "$AFTER")"
-fi
+    CUR_BRANCH="$(git rev-parse --abbrev-ref HEAD 2>/dev/null)"
+    BRANCH="${BRANCH_OVERRIDE:-$CUR_BRANCH}"
+    [ -n "$BRANCH" ] && [ "$BRANCH" != "HEAD" ] || die "无法确定当前分支(HEAD 游离?),请用 --branch 指定并先 checkout"
+    # ff-only 只能把「当前所在分支」快进到其远端;--branch 必须与当前分支一致,否则要求先 checkout
+    if [ "$BRANCH" != "$CUR_BRANCH" ]; then
+        die "当前分支是 $CUR_BRANCH,但要求部署 $BRANCH。请先 git checkout $BRANCH 再运行(ff-only 不跨分支合并)"
+    fi
+    info "目标分支:$BRANCH  仓库:$REPO_ROOT  模式:${MODE_FLAG:-dev}  dry-run:$DRY_RUN"
 
-# ---------- 变更文件清单 ----------
-CHANGED="$(git diff --name-only "$BEFORE" "$AFTER")"
-[ -n "$CHANGED" ] || { ok "无文件差异,结束"; exit 0; }
-info "本次变更 $(echo "$CHANGED" | wc -l | tr -d ' ') 个文件"
+    # 工作区必须干净(ff-only 前提,绝不覆盖本地改动)
+    if [ -n "$(git status --porcelain)" ]; then
+        fail "工作区有未提交改动,按 ff-only 策略中止(避免覆盖本地)。清理后重试:"
+        git status --short >&2
+        exit 1
+    fi
+
+    # ---------- 拉取(fetch + 判断是否落后 + 快进) ----------
+    info "git fetch origin $BRANCH ..."
+    git fetch --quiet origin "$BRANCH" || die "git fetch 失败"
+
+    if ! git rev-parse --verify --quiet "origin/$BRANCH" >/dev/null; then
+        die "远端不存在 origin/$BRANCH"
+    fi
+    AHEAD="$(git rev-list --count "origin/$BRANCH..HEAD" 2>/dev/null || echo 0)"
+    BEHIND="$(git rev-list --count "HEAD..origin/$BRANCH" 2>/dev/null || echo 0)"
+
+    if [ "$AHEAD" -gt 0 ]; then
+        die "本地领先/分叉 origin/$BRANCH 共 $AHEAD 个提交,ff-only 无法处理,请人工核对(绝不 reset)"
+    fi
+    if [ "$BEHIND" -eq 0 ]; then
+        ok "已是最新(落后 0 个提交),无需部署"
+        exit 0
+    fi
+    info "落后 $BEHIND 个提交,开始快进合并"
+
+    BEFORE="$(git rev-parse HEAD)"
+    if [ "$DRY_RUN" -eq 1 ]; then
+        info "[dry-run] 跳过实际 merge,用 origin/$BRANCH 作为变更范围终点"
+        AFTER="$(git rev-parse "origin/$BRANCH")"
+    else
+        git merge --ff-only "origin/$BRANCH" || die "快进合并失败(可能已分叉)"
+        AFTER="$(git rev-parse HEAD)"
+        ok "已快进:$(git rev-parse --short "$BEFORE") -> $(git rev-parse --short "$AFTER")"
+    fi
+
+    # ---------- 变更文件清单 ----------
+    CHANGED="$(git diff --name-only "$BEFORE" "$AFTER")"
+    [ -n "$CHANGED" ] || { ok "无文件差异,结束"; exit 0; }
+    info "本次变更 $(echo "$CHANGED" | wc -l | tr -d ' ') 个文件"
+fi
 
 # ---------- 分类(累积到集合) ----------
 FE_BUILD=""        # 待构建前端(admin-web ...)
@@ -172,46 +201,92 @@ svc_touches_app() {
 }
 is_app_serving() { case " $APP_SERVING " in *" $1 "*) return 0 ;; esac; return 1; }
 
-while IFS= read -r f; do
-    [ -n "$f" ] || continue
-    case "$f" in
-        admin-web/*)     add admin-web    "$FE_BUILD" FE_BUILD ;;
-        merchant-web/*)  add merchant-web "$FE_BUILD" FE_BUILD ;;
-        supplier-web/*)  add supplier-web "$FE_BUILD" FE_BUILD ;;
-        client-app/*)    NOTE_MOBILE=1 ;;
-
-        backend/shared/*)
-            # 影响所有业务服务 + 所有孪生
-            for s in system-service user-service goods-service order-service \
-                     merchant-service finance-service marketing-service payment-service; do
-                add "$s" "$MAIN_RESTART" MAIN_RESTART
-            done
-            for s in $APP_SERVING; do add "${s}-app" "$APP_RESTART" APP_RESTART; done
-            case "$f" in backend/shared/composer.*) REBUILD="$MAIN_RESTART $APP_RESTART";; esac
-            ;;
-
-        backend/services/*/Dockerfile|backend/services/*/composer.json|backend/services/*/composer.lock)
-            s="$(echo "$f" | awk -F/ '{print $3}')"
-            add "$s" "$REBUILD" REBUILD
-            is_app_serving "$s" && add "${s}-app" "$REBUILD" REBUILD
-            ;;
-
-        backend/services/*)
-            s="$(echo "$f" | awk -F/ '{print $3}')"
-            add "$s" "$MAIN_RESTART" MAIN_RESTART
-            if is_app_serving "$s"; then
-                if svc_touches_app "$s"; then
-                    add "${s}-app" "$APP_RESTART" APP_RESTART
+if [ -n "$FORCE_TARGETS" ]; then
+    INVALID_TARGETS=""
+    for target in $FORCE_TARGETS; do
+        target="${target#./}"
+        target="${target%/}"
+        case "$target" in
+            admin|admin-web)         add admin-web    "$FE_BUILD" FE_BUILD ;;
+            merchant|merchant-web)   add merchant-web "$FE_BUILD" FE_BUILD ;;
+            supplier|supplier-web)   add supplier-web "$FE_BUILD" FE_BUILD ;;
+            gateway|openresty)       GATEWAY_ACTION="restart" ;;
+            client-app|mobile|app)
+                NOTE_MOBILE=1
+                warn "$target 是移动端工程,当前脚本不做 Expo/商店发版;本次不会部署 client-app"
+                ;;
+            backend/services/*)
+                s="${target#backend/services/}"
+                s="${s%%/*}"
+                if [ -d "$REPO_ROOT/backend/services/$s" ]; then
+                    add "$s" "$MAIN_RESTART" MAIN_RESTART
+                else
+                    INVALID_TARGETS="$INVALID_TARGETS $target"
                 fi
-            fi
-            ;;
+                ;;
+            *-service-app)
+                s="${target%-app}"
+                if is_app_serving "$s"; then
+                    add "$target" "$APP_RESTART" APP_RESTART
+                else
+                    INVALID_TARGETS="$INVALID_TARGETS $target"
+                fi
+                ;;
+            *-service)
+                if [ -d "$REPO_ROOT/backend/services/$target" ]; then
+                    add "$target" "$MAIN_RESTART" MAIN_RESTART
+                else
+                    INVALID_TARGETS="$INVALID_TARGETS $target"
+                fi
+                ;;
+            *)
+                INVALID_TARGETS="$INVALID_TARGETS $target"
+                ;;
+        esac
+    done
+    [ -z "$INVALID_TARGETS" ] || die "未知强制发布目标:$INVALID_TARGETS"
+else
+    while IFS= read -r f; do
+        [ -n "$f" ] || continue
+        case "$f" in
+            admin-web/*)     add admin-web    "$FE_BUILD" FE_BUILD ;;
+            merchant-web/*)  add merchant-web "$FE_BUILD" FE_BUILD ;;
+            supplier-web/*)  add supplier-web "$FE_BUILD" FE_BUILD ;;
+            client-app/*)    NOTE_MOBILE=1 ;;
 
-        deploy/openresty/*)   GATEWAY_ACTION="restart" ;;
-        deploy/.env|deploy/docker-compose*.yml) NEED_STACK_UP=1 ;;
-        database/*.sql)       DB_FILES="$DB_FILES $f" ;;
-        *) : ;;  # 其余(docs、脚本、UI 设计稿等)不触发部署动作
-    esac
-done <<< "$CHANGED"
+            backend/shared/*)
+                # 影响所有业务服务 + 所有孪生
+                for s in system-service user-service goods-service order-service \
+                         merchant-service finance-service marketing-service payment-service; do
+                    add "$s" "$MAIN_RESTART" MAIN_RESTART
+                done
+                for s in $APP_SERVING; do add "${s}-app" "$APP_RESTART" APP_RESTART; done
+                case "$f" in backend/shared/composer.*) REBUILD="$MAIN_RESTART $APP_RESTART";; esac
+                ;;
+
+            backend/services/*/Dockerfile|backend/services/*/composer.json|backend/services/*/composer.lock)
+                s="$(echo "$f" | awk -F/ '{print $3}')"
+                add "$s" "$REBUILD" REBUILD
+                is_app_serving "$s" && add "${s}-app" "$REBUILD" REBUILD
+                ;;
+
+            backend/services/*)
+                s="$(echo "$f" | awk -F/ '{print $3}')"
+                add "$s" "$MAIN_RESTART" MAIN_RESTART
+                if is_app_serving "$s"; then
+                    if svc_touches_app "$s"; then
+                        add "${s}-app" "$APP_RESTART" APP_RESTART
+                    fi
+                fi
+                ;;
+
+            deploy/openresty/*)   GATEWAY_ACTION="restart" ;;
+            deploy/.env|deploy/docker-compose*.yml) NEED_STACK_UP=1 ;;
+            database/*.sql)       DB_FILES="$DB_FILES $f" ;;
+            *) : ;;  # 其余(docs、脚本、UI 设计稿等)不触发部署动作
+        esac
+    done <<< "$CHANGED"
+fi
 
 # 去重后,凡进入 REBUILD 的服务从 restart 集合剔除(build 已含重启)
 prune_rebuilt() {
@@ -232,6 +307,7 @@ fi
 # ---------- 决策摘要 ----------
 echo
 info "===== 部署决策 ====="
+[ -n "$FORCE_TARGETS" ] && echo "  强制目标     :$FORCE_TARGETS (跳过 fetch/merge/变更判断)"
 echo "  前端构建     :${FE_BUILD:- (无)}"
 echo "  主池重启     :${MAIN_RESTART:- (无)}"
 echo "  APP 孪生重启 :${APP_RESTART:- (无)}"
@@ -245,6 +321,10 @@ if [ -n "$SKIPPED_APP" ]; then
     warn "  风险:APP 池仍跑旧代码;若本次共享代码/接口不兼容,/api/v1/app/* 可能报错。请尽快手动同步。"
 fi
 echo
+
+if [ -n "$FORCE_TARGETS" ] && [ -z "$FE_BUILD$MAIN_RESTART$APP_RESTART$REBUILD$GATEWAY_ACTION$DB_FILES" ]; then
+    die "强制发布目标未产生可执行部署动作"
+fi
 
 # ---------- APP 相关性提示(用户核心诉求) ----------
 if [ -n "$APP_RESTART" ] || [ -n "$(echo "$REBUILD" | grep -o -- '-app' || true)" ]; then

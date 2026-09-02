@@ -94,6 +94,8 @@ cd ../admin-web && npm install && npm run dev    # http://localhost:5173,接口�
 
 ## 当前状态(2026-07)
 
+auto-deploy 指定目标强制发布（2026-09-02）：`scripts/auto-deploy.sh` 现支持 `scripts/auto-deploy.sh admin-web` 这类 target 模式，跳过 `git fetch`、落后检查、ff-only merge 和工作区干净门禁，直接用当前工作区构建发布指定前端；后端 `*-service` / `*-service-app` / `gateway` 可直接重启。无 target 的 cron 自动部署仍保持原安全策略；`client-app` 继续提示需单独 Expo/商店发版。
+
 client-app 订房收尾（2026-09-01）：① 搜索页选好的入离日期一路透传到订房向导（此前选完房日期会跳回默认值），并把金额改为由 `units`（每晚每间基数）× 晚数 × 间数 实时推算，演示/真实两种模式共用一套算法（默认 1 晚 1 间时与设计稿原值一致），修掉「写着 3 Nights 却显示 1 晚金额」；② 预订成功页的二维码改为现场生成 `/app/order/pay` 返回的核销码 `verifyCode`（新增依赖 `react-native-qrcode-svg`，peer 为已装的 `react-native-svg`），无核销码时回落设计稿静态图；③ 「我的精选」的预订卡与收藏酒店卡也回落设计稿临时封面，兜底规则统一到 `tempCoverFor()`，与酒店搜索结果页同一套。后端 `create` 实测 1 晚 1 间 = 150、2 晚 2 间 = 600、3 晚 1 间 = 450，与前端算法一致。
 
 client-app 订房接后端下单（2026-09-01）：订房向导由「纯静态页」升级为**双模式**——从酒店详情真实房型卡 Select 进入时带 `goodsId`/`skuId`，进入**真实模式**：酒店名/房型名/单价取自 `/app/goods/detail`，房费按「`base_price` × 晚数 × 间数」随日期与间数重算，支付步真的调 `/app/order/create` + `/app/order/pay` 落单（**支付渠道本次不做**——后端 `pay` 本来就是 mock，点哪个渠道都直接成功），成功页展示真实单号与实付；不带参数进入仍是演示模式，数值走 `bookingDemo.ts` 不发请求。真实模式下加购项只展示不提交（后端无价目表）、多住宿走 comingSoon（后端一次只收一个 sku）、价格明细不再显示设计稿那条 10% 税费（后端定价链路里没有）。**顺带修了一个后端硬伤**：`order_main.guests` 建成了 `JSON` 却存 AES 密文，导致任何带住客名单的下单都 500，已加幂等脚本 `database/order/06-guests-column-type-fix.sql`（JSON → TEXT）并登记进 compose initdb。实测 1 晚 1 间 = 150、2 晚 2 间 = 600 与前端算法一致，冒烟数据已逐表清理复核。`npm run typecheck` 零报错、`expo export -p web` 打包通过；未执行 Git 操作。
@@ -130,6 +132,6 @@ Git补充(2026-08-27)：用户已单次授权S3本地提交，不推送；提交
 
 补充(2026-08-27)：PRD模块12商户管理S1状态闭环、S2酒店目录/档案/物业关联、S3证件版本/活动/站内通知已实现并通过核心测试。酒店优先，餐厅及外部通知服务商对接延期。S3共70项、累计208项集成检查通过；浏览器视觉、完整上传及模块11端到端仍未验，详见[阶段3交付](docs/plans/m12/04-s3-delivery.md)。S1＋S2已按单次授权联合提交87cfb66；S3未暂存、未提交，Git由用户操作。
 
-模块 01~07、09、10 已完成;模块 08(部署与网关)完成 80%——deploy 基础设施、权限键统一与 **08-6 部署后四步验证(2026-07-30 全部通过:11 容器全 Up、八服务 healthz ok、网关 8081 无签名 401、.env 注入生效)** 已落地,剩余 08-7 全链路联调待执行,清单见 [docs/plans/08-部署与网关.md](docs/plans/08-部署与网关.md)。
+模块 01~07、09、10 已完成;模块 08(部署与网关)完成 82%——deploy 基础设施、auto-deploy 指定目标强制发布、权限键统一与 **08-6 部署后四步验证(2026-07-30 全部通过:11 容器全 Up、八服务 healthz ok、网关 8081 无签名 401、.env 注入生效)** 已落地,剩余 08-7 全链路联调待执行,清单见 [docs/plans/08-部署与网关.md](docs/plans/08-部署与网关.md)。
 
 补充(2026-08-23):商家端 `merchant-web` 已完成全局样式同步与 M5/M6/M8/M9/M10 首轮页面/接口增量,详见 [docs/plans/13-商家端merchant-web落地.md](docs/plans/13-商家端merchant-web落地.md)、[docs/plans/实现方案-Merchant-全模块差距与样式同步.md](docs/plans/实现方案-Merchant-全模块差距与样式同步.md) 与 [docs/plans/实现方案-Merchant-M8-营销活动.md](docs/plans/实现方案-Merchant-M8-营销活动.md)。
