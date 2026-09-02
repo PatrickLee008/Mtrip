@@ -16,12 +16,13 @@ test/
 ├── validate_testdata.py   # 列名/约束静态校验(导入前自检)
 ├── apply.sh               # 一键清理 + 导入
 ├── verify_testdata.php    # 用后端同款算法抽样回解密文/校验口令
-├── sql/                   # 生成的 SQL
+├── sql/                   # 生成的 SQL(仅生成器产物,勿手工放别的脚本)
 │   ├── 00-clean.sql       #   清理脚本(只删保留 ID 段)
 │   ├── 01-系统域.sql
 │   ├── 02-商户域.sql
 │   ├── ...                #   各业务域,共 12 个数据文件
 │   └── .verify_manifest.json  # 校验样本(明文),供 verify_testdata.php 使用
+├── adhoc/                 # 一次性联调 fixture(m4-*,非生成器产物,apply.sh 不导入)
 └── README.md              # 本手册
 ```
 
@@ -95,16 +96,22 @@ php test/verify_testdata.php
 | `auditor` | `Admin@123456` | 0(全平台) | 只读审计员 | 全菜单只读 |
 | `fr_admin` | `Admin@123456` | 3(法国) | 站点管理员 | 跨站点隔离对比 |
 | `disabled_admin` | `Admin@123456` | 4 | 已禁用 | status=2,验证禁用账号不可登录 |
+| `mm_admin` | `Admin@123456` | 7(仰光) | 站点管理员 | **MMK 站点**,验证多币种 + 站点隔离(只见 site 7) |
 
 > 角色 `101~105` 已通过 `sys_role_menu` 按菜单 ID 段批量授予菜单权限;
 > 验证「菜单权限」时切换不同账号即可看到不同左侧菜单。
+> `mm_admin` 与 `fr_admin` 同为站点管理员(复用角色 101),站点隔离由 `admin.site_id` 强制:
+> 用 `site_admin`(site 4)只见欧元数据,`mm_admin`(site 7)只见 MMK 数据。
 
 ### 4.2 商户后台(merchant_admin)
 
-- 用户名:`m{merchant_id}`(如 `m1001`、`m1002` …)
+- 用户名:`m{merchant_id}`(如 `m1001`、`m1002` …);缅甸站商户为 `m7001`…`m7004`。
 - 口令:`Merchant@123456`
 - 仅 `merchant_info.status = 3`(已启用)的商户账号 `status=1` 可登录;其余为禁用态(`status=2`)。
-- 推荐用 `m1001`(首条商户,status=3)登录验证。
+- 推荐用 `m1001`(首条商户,status=3)登录验证;缅甸站用 `m7001`。
+- **子账号(is_owner=0)**:前若干家启用商户各有 `m{id}_ops`(运营)与 `m{id}_cs`(客服)
+  两个子账号(口令同上),角色取 seed/06 内置预设 `merchant_ops` / `merchant_cs`,
+  用于验证商户后台 StaffScreen 与按钮级 `v-perm` 差异。
 
 ### 4.3 C 端用户(user_info)
 
@@ -127,8 +134,10 @@ php test/verify_testdata.php
 | 商品 goods_info | status | 0–5 全覆盖 | 20 |
 | 用户 user_info | user_status | 1 正常 / 2 冻结 / 3 注销 / 4 拉黑 | 1–4 全覆盖(40) |
 | 优惠券 / 退款 / 结算 / 供应商 / 达人 / 合规 / 帮助 | 各自状态 | 均覆盖枚举全值域 | 见各域 SQL |
+| **缅甸站 MMK**(site 7) | 跨域 | 商户/门店/账号(含子账号)/商品/房型/库存/用户/订单/资金/结算/优惠券,金额为 MMK 大额 | 商户 4 + 用户 6 + 订单 10 |
 
-> 每张表的 `site_id` 已混入 `0`(超管全局)与 `1/3/4`(具体站点),便于验证站点隔离。
+> 每张表的 `site_id` 已混入 `0`(超管全局)与 `1/3/4`(欧元:全球/法国/巴黎)、`7`(MMK:仰光),便于验证站点隔离与多币种。
+> 欧元数据(site 4 为主)与 MMK 数据(site 7)ID 段互不重叠(EUR 1001+ / MMK 7001+),清理规则一并覆盖。
 
 ---
 
@@ -190,6 +199,24 @@ php test/verify_testdata.php
 
 ### 6.11 帮助中心
 - [ ] 分类 / FAQ 文章(`help_article` 状态 1~3)/ 公告(1 生效/2 待生效/3 过期/4 草稿)/ 搜索日志
+
+---
+
+## 6bis. merchant-web(Hotel Merchant Dashboard)分模块清单
+
+> 用商户账号登录商户后台(`m1001` 巴黎 / `m7001` 仰光,口令 `Merchant@123456`)。
+> 数据形态对齐 UI mock 屏幕;**注意 test 数据为 EUR/MMK,与 Figma mock 的 THB 字面无关**。
+
+- [ ] **Staff**:主账号 `m{id}` + 子账号 `m{id}_ops` / `m{id}_cs`(`merchant_admin` is_owner=0 + `merchant_admin_role` 预设角色);验证子账号按钮级 `v-perm` 差异
+- [ ] **Bookings/预订**:`order_main`(本商户 order_status 0~7);确认/入住/退房/取消/退款履约
+- [ ] **Reviews/评价**:`goods_review`(含 `merchant_flag_status` 商户标记)回复/申诉标记
+- [ ] **Promotions/促销**:`marketing_coupon`(`merchant_id` = 本商户,商户自建券)
+- [ ] **Earnings/结算**:`finance_merchant_settle`(按月,status 0~3)、`finance_account_entry` 分录
+- [ ] **多物业**:`merchant_store`(1 商户多门店)+ 房型/库存(`hotel_room_type` / `goods_daily_stock`)
+- [ ] **站点/币种**:`m7001` 应展示 MMK 金额、缅甸城市;`m1001` 展示欧元
+
+> 说明:UI 的「Message Guest / 住客消息」当前只有按钮权限(`database/merchant/37`,perm `mch:order:message`),
+> **后端尚无消息实体表**,故 test 数据未生成会话内容——待该表落地后再补。
 
 ---
 

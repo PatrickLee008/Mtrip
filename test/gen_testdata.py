@@ -224,6 +224,9 @@ class SqlFile:
 
 SITE_IDS = [1, 3, 4]           # 全球 / 法国 / 巴黎
 MAIN_SITE = 4                  # 主要运营站点(巴黎)
+MMK_SITE = 7                   # 缅甸仰光运营站(货币 MMK,见 database/seed/03-config-site.sql)
+MMK_ID_BASE = 7001             # MMK 市场业务行高位 ID 段(避开 EUR 的 1001 段)
+MMK_ADMIN_BASE = 4701          # MMK 商户登录账号 ID 段(EUR owner 从 4001 起)
 
 HOTEL_POOL = [
     ("巴黎星辰大酒店", "Paris Etoile Grand Hotel", 5),
@@ -349,6 +352,32 @@ FEEDBACK_POOL = [
     "客服响应速度太慢",
 ]
 
+# ---- 缅甸(MMK)市场数据池:仅供 build_mmk_market 使用,与 EUR 数据完全隔离 ----
+MM_HOTEL_POOL = [
+    ("仰光大金塔景观酒店", "Yangon Shwedagon View Hotel", 5),
+    ("茵莱湖畔度假酒店", "Inle Lake Resort", 4),
+    ("蒲甘古城精品酒店", "Bagan Heritage Boutique", 4),
+    ("曼德勒皇宫商务酒店", "Mandalay Palace Business Hotel", 3),
+    ("内比都中央酒店", "Naypyidaw Central Hotel", 4),
+]
+
+MM_CITY_POOL = [
+    ("Yangon", "MM", 16.8409, 96.1735),
+    ("Mandalay", "MM", 21.9588, 96.0891),
+    ("Naypyidaw", "MM", 19.7633, 96.0785),
+    ("Bagan", "MM", 21.1717, 94.8585),
+    ("Inle", "MM", 20.5860, 96.9100),
+]
+
+MM_BANKS = ["KBZ Bank", "AYA Bank", "CB Bank", "Yoma Bank", "AGD Bank"]
+
+MM_FIRST_NAME = ["Aung", "Su", "Kyaw", "Thida", "Zaw", "Nilar", "Min", "Ei",
+                 "Htet", "Yamin", "Wai", "Moe", "Phyo", "Nyein"]
+MM_LAST_NAME = ["Kyaw", "Hlaing", "Win", "Oo", "Tun", "Aung", "Soe", "Myint",
+                "Naing", "Thu", "Zin", "Lwin"]
+
+MM_ROOM_NAMES = ["高级大床房", "湖景套房", "行政客房", "家庭房"]
+
 
 # ============================================================================
 # 四、上下文:跨域共享的 ID 与对象
@@ -453,6 +482,7 @@ def build_system(ctx: Ctx, f: SqlFile) -> None:
         (105, 0, "auditor", "只读审计员", 0, 105, "全平台只读"),
         (106, 3, "fr_admin", "法国站点管理员", 0, 101, "法国站点(用于跨站点隔离对比)"),
         (107, MAIN_SITE, "disabled_admin", "已禁用账号", 0, 101, "状态=2,用于验证禁用账号不可登录"),
+        (108, MMK_SITE, "mm_admin", "缅甸站点管理员", 0, 101, "仰光站点(MMK 货币,用于多币种/站点隔离验证)"),
     ]
     f.add("管理员账号(口令统一 Admin@123456)")
     f.insert(SYSTEM_DB, "sys_admin", [
@@ -866,6 +896,39 @@ def build_merchant(ctx: Ctx, f: SqlFile) -> None:
     f.insert(BIZ_DB, "merchant_admin_role", [
         {"admin_id": a["id"], "role_id": 2} for a in madmins
     ], clean="admin_id >= 4001")
+
+    # ---- 商户子账号(非主账号,喂 merchant-web StaffScreen)----
+    # 给前若干家启用商户各建 1 个运营 + 1 个客服子账号(is_owner=0),
+    # 角色用 seed/06 的内置预设(merchant_ops / merchant_cs),按 role_code 动态解析,
+    # 不能硬编码角色 ID(存量库自增可能串号)。
+    f.add("商户子账号(is_owner=0,喂 StaffScreen;口令 Merchant@123456)")
+    subs, sub_id = [], 4501
+    sub_role_links: list[tuple[int, str]] = []  # (admin_id, role_code)
+    for m in enabled[:ctx.n(4)]:
+        for suffix, real_role in (("ops", "merchant_ops"), ("cs", "merchant_cs")):
+            subs.append({
+                "id": sub_id, "site_id": m["site_id"], "account_type": 2,
+                "merchant_id": m["id"], "group_id": 0, "store_id": 0,
+                "username": f"m{m['id']}_{suffix}", "password": pw,
+                "real_name": f"{rng.choice(FIRST_NAME)} {rng.choice(LAST_NAME)}",
+                "mobile": c.encrypt(f"+3361{rng.randint(1000000, 9999999)}"),
+                "is_owner": 0, "role_perms": None,
+                "status": 1, "last_login_at": ctx.rand_dt(20),
+                "auth_version": 1, "last_accepted_totp_step": -1,
+                "two_fa_status": 0, "security_fail_count": 0,
+                "created_at": m["created_at"], "updated_at": ctx.rand_dt(20),
+            })
+            sub_role_links.append((sub_id, real_role))
+            sub_id += 1
+    f.insert(BIZ_DB, "merchant_admin", subs)
+    if sub_role_links:
+        f.add("子账号 - 内置预设角色关联(按 role_code 解析,依赖 seed/06)")
+        for aid, role_code in sub_role_links:
+            f.parts.append(
+                f"INSERT IGNORE INTO `merchant_admin_role` (`admin_id`, `role_id`)\n"
+                f"SELECT {aid}, `r`.`id` FROM `merchant_role` `r` "
+                f"WHERE `r`.`is_builtin` = 1 AND `r`.`role_code` = '{role_code}' LIMIT 1;\n"
+            )
 
     # ---- 入驻申请:覆盖 stage 1~6 ----
     f.add("入驻申请(覆盖 1新线索 ~ 6已驳回 全部阶段)")
@@ -2487,6 +2550,396 @@ def build_property_history(ctx: Ctx, f: SqlFile) -> None:
 
 
 # ============================================================================
+# 五之二、缅甸(MMK)市场:与 EUR 数据完全隔离的跨域样例
+# ============================================================================
+
+def build_mmk_market(ctx: Ctx, mch_f: SqlFile, gds_f: SqlFile, usr_f: SqlFile,
+                     ord_f: SqlFile, fin_f: SqlFile, mkt_f: SqlFile) -> None:
+    """
+    仰光(site_id=7,货币 MMK)一条完整业务链:商户→门店→账号(含子账号)→
+    商品→房型→库存→用户→订单→资金/结算→优惠券。
+    金额用 MMK 大额整数;所有行 site_id=7,ID 走高位段(7001+/4701+/2000001+),
+    与 EUR(1001+/4001+/1000001+)不冲突,且被既有 id>=... 清理规则一并覆盖。
+    列结构严格对齐各 EUR builder,保证 validate_testdata.py 通过。
+    """
+    rng, c = ctx.rng, ctx.c
+    pw_m = bcrypt_hash("Merchant@123456")
+    pw_u = bcrypt_hash("User@123456")
+
+    def mm_name() -> str:
+        return f"{rng.choice(MM_FIRST_NAME)} {rng.choice(MM_LAST_NAME)}"
+
+    def mm_phone() -> str:
+        return f"+959{rng.randint(100000000, 999999999)}"
+
+    # ---- 商户(4 家:3 启用 + 1 待审)----
+    mch_f.add("【MMK 仰光站】商户主体(site_id=7)")
+    mm_merchants, mid = [], MMK_ID_BASE
+    mm_status_plan = [3, 3, 3, 0]
+    for i, st in enumerate(mm_status_plan):
+        name, en, star = MM_HOTEL_POOL[i % len(MM_HOTEL_POOL)]
+        city, country, lat, lng = MM_CITY_POOL[i % len(MM_CITY_POOL)]
+        phone = mm_phone()
+        if i == 0:
+            ctx.verify_samples[("mtrip_business", "merchant_info", mid, "contact_phone_index")] = phone
+        mm_merchants.append({
+            "id": mid, "merchant_code": f"MCH-{mid}", "site_id": MMK_SITE, "group_id": 0,
+            "merchant_name": name, "merchant_short_name": en, "merchant_type": 1,
+            "credit_code": f"MM{rng.randint(100000000, 999999999)}00{i:02d}",
+            "business_license": f"https://cdn.mtrip.test/prod/merchant/license_{mid}.jpg",
+            "legal_person": mm_name(),
+            "legal_id_card": c.encrypt(f"MM{rng.randint(10000000, 99999999)}"),
+            "legal_id_images": json.dumps([
+                f"https://cdn.mtrip.test/prod/merchant/id_front_{mid}.jpg",
+                f"https://cdn.mtrip.test/prod/merchant/id_back_{mid}.jpg"], ensure_ascii=False),
+            "contact_name": mm_name(),
+            "contact_phone": c.encrypt(phone),
+            "contact_phone_index": c.phone_index(normalize_phone(phone)),
+            "contact_email": f"merchant{mid}@mtrip.test",
+            "address": f"{rng.randint(1, 200)} Pyay Road, {city}, {country}",
+            "longitude": money(lng + rng.uniform(-0.05, 0.05)),
+            "latitude": money(lat + rng.uniform(-0.05, 0.05)),
+            "commission_rate": money(rng.choice([10.00, 12.00, 15.00])),
+            "settlement_cycle": rng.choice([7, 14, 30]),
+            "status": st, "status_version": rng.randint(1, 3),
+            "suspended_until": None, "reactivation_requires_super": 0,
+            "audit_remark": "资料齐全,审核通过" if st == 3 else "",
+            "audit_by": 101 if st == 3 else None,
+            "audit_time": ctx.rand_dt(60) if st == 3 else None,
+            "access_code": f"MTRP-HOTEL-{rng.randint(100000, 999999)}",
+            "credential_channels": "email,sms",
+            "reject_reason_code": 0,
+            "two_fa_enabled": 0, "two_fa_method": "", "two_fa_status": 0,
+            "two_fa_secret_enc": "", "access_status": 0,
+            "logo": f"https://cdn.mtrip.test/prod/merchant/logo_{mid}.png",
+            "cover_image": f"https://cdn.mtrip.test/prod/merchant/cover_{mid}.jpg",
+            "last_login_at": ctx.rand_dt(30) if st == 3 else None,
+            "remark": "MMK 测试数据",
+            "commission_plan": rng.choice(["premium", "standard"]),
+            "created_at": ctx.ago(rng.randint(60, 300)), "updated_at": ctx.rand_dt(30),
+        })
+        mid += 1
+    mch_f.insert(BIZ_DB, "merchant_info", mm_merchants)
+    mm_enabled = [m for m in mm_merchants if m["status"] == 3]
+
+    # ---- 门店 ----
+    mch_f.add("【MMK 仰光站】门店")
+    mm_stores, sid_no = [], MMK_ID_BASE + 500
+    for m in mm_merchants:
+        if m["status"] == 0:
+            continue
+        for k in range(rng.randint(1, 2)):
+            city, country, lat, lng = MM_CITY_POOL[k % len(MM_CITY_POOL)]
+            mm_stores.append({
+                "id": sid_no, "site_id": MMK_SITE, "merchant_id": m["id"],
+                "store_name": f"{m['merchant_short_name']} - {city} {k + 1}号店",
+                "contact_name": mm_name(), "contact_phone": c.encrypt(mm_phone()),
+                "address": f"{rng.randint(1, 200)} Strand Road, {city}",
+                "longitude": money(lng + rng.uniform(-0.05, 0.05)),
+                "latitude": money(lat + rng.uniform(-0.05, 0.05)),
+                "business_license": f"https://cdn.mtrip.test/prod/store/license_{sid_no}.jpg",
+                "business_hours": "08:00-22:00", "images": None,
+                "is_main": 1 if k == 0 else 0, "status": 1,
+                "business_type": "hotel", "country_code": country, "city_key": city.lower(),
+                "display_enabled": 1, "mapping_version": 1, "remark": "MMK 测试数据",
+                "created_at": m["created_at"], "updated_at": ctx.rand_dt(20),
+            })
+            sid_no += 1
+    mch_f.insert(BIZ_DB, "merchant_store", mm_stores)
+
+    # ---- 结算账户 ----
+    mch_f.add("【MMK 仰光站】结算账户")
+    mch_f.insert(BIZ_DB, "merchant_account", [
+        {"id": MMK_ID_BASE + 600 + i, "site_id": MMK_SITE, "merchant_id": m["id"],
+         "bank_name": rng.choice(MM_BANKS), "account_name": m["merchant_name"],
+         "account_no": c.encrypt(f"MM{rng.randint(10 ** 11, 10 ** 12 - 1)}"),
+         "swift_code": rng.choice(["KBZMMMY", "AYARMMMY", "CBAKMMMY"]),
+         "currency": "MMK", "is_default": 1, "status": 1, "remark": "MMK 测试账户",
+         "created_at": m["created_at"], "updated_at": m["created_at"]}
+        for i, m in enumerate(mm_merchants)
+    ])
+
+    # ---- 商户登录账号(owner + 部分子账号)----
+    mch_f.add("【MMK 仰光站】商户登录账号(口令 Merchant@123456)")
+    mm_admins, maid = [], MMK_ADMIN_BASE
+    for m in mm_merchants:
+        mm_admins.append({
+            "id": maid, "site_id": MMK_SITE, "account_type": 2, "merchant_id": m["id"],
+            "group_id": 0, "store_id": 0, "username": f"m{m['id']}", "password": pw_m,
+            "real_name": m["contact_name"], "mobile": c.encrypt(mm_phone()),
+            "is_owner": 1, "role_perms": None, "status": 1 if m["status"] == 3 else 2,
+            "last_login_at": m["last_login_at"], "auth_version": 1,
+            "last_accepted_totp_step": -1, "two_fa_status": 0, "security_fail_count": 0,
+            "created_at": m["created_at"], "updated_at": ctx.rand_dt(20),
+        })
+        maid += 1
+    mm_sub_links: list[tuple[int, str]] = []
+    for m in mm_enabled[:2]:
+        mm_admins.append({
+            "id": maid, "site_id": MMK_SITE, "account_type": 2, "merchant_id": m["id"],
+            "group_id": 0, "store_id": 0, "username": f"m{m['id']}_ops", "password": pw_m,
+            "real_name": mm_name(), "mobile": c.encrypt(mm_phone()),
+            "is_owner": 0, "role_perms": None, "status": 1,
+            "last_login_at": ctx.rand_dt(20), "auth_version": 1,
+            "last_accepted_totp_step": -1, "two_fa_status": 0, "security_fail_count": 0,
+            "created_at": m["created_at"], "updated_at": ctx.rand_dt(20),
+        })
+        mm_sub_links.append((maid, "merchant_ops"))
+        maid += 1
+    mch_f.insert(BIZ_DB, "merchant_admin", mm_admins)
+    mch_f.insert(BIZ_DB, "merchant_admin_role",
+                 [{"admin_id": a["id"], "role_id": 2} for a in mm_admins if a["is_owner"] == 1],
+                 clean="admin_id >= 4001")
+    for aid, role_code in mm_sub_links:
+        mch_f.parts.append(
+            f"INSERT IGNORE INTO `merchant_admin_role` (`admin_id`, `role_id`)\n"
+            f"SELECT {aid}, `r`.`id` FROM `merchant_role` `r` "
+            f"WHERE `r`.`is_builtin` = 1 AND `r`.`role_code` = '{role_code}' LIMIT 1;\n"
+        )
+
+    # ---- 商品 + 房型 + 库存 ----
+    gds_f.add("【MMK 仰光站】商品(酒店)")
+    mm_goods, gid = [], MMK_ID_BASE
+    g_status = [3, 3, 3, 1, 4]
+    for i, st in enumerate(g_status):
+        m = mm_enabled[i % len(mm_enabled)]
+        city, country, lat, lng = MM_CITY_POOL[i % len(MM_CITY_POOL)]
+        mm_goods.append({
+            "id": gid, "site_id": MMK_SITE, "merchant_id": m["id"], "supplier_id": 0,
+            "goods_type": 1, "category_id": 0,
+            "goods_name": f"{m['merchant_short_name']} - {rng.choice(MM_ROOM_NAMES)}",
+            "goods_brief": f"{city} 市中心,近大金塔/湖景,设施完善。",
+            "goods_detail": f"<p>{m['merchant_short_name']} 位于 {city},提供优质服务。</p>",
+            "cover_image": f"https://cdn.mtrip.test/prod/goods/cover_{gid}.jpg",
+            "images": json.dumps([f"https://cdn.mtrip.test/prod/goods/{gid}_{k}.jpg" for k in range(1, 4)],
+                                 ensure_ascii=False),
+            "address": m["address"], "longitude": m["longitude"], "latitude": m["latitude"],
+            "star_level": rng.randint(3, 5),
+            "facilities": json.dumps(["wifi", "parking", "pool", "gym"][:rng.randint(1, 4)]),
+            "open_time": "00:00", "close_time": "23:59", "status": st,
+            "audit_remark": "" if st in (0, 1) else ("审核通过" if st == 3 else "已下架"),
+            "audit_by": 101 if st in (3, 4) else None,
+            "audit_time": ctx.rand_dt(60) if st in (3, 4) else None,
+            "sort_weight": rng.randint(1, 100), "is_recommend": 1 if i == 0 else 0,
+            "is_hot": 1 if i == 1 else 0, "sales_count": rng.randint(0, 500),
+            "created_at": ctx.ago(rng.randint(30, 200)), "updated_at": ctx.rand_dt(20),
+        })
+        gid += 1
+    gds_f.insert(BIZ_DB, "goods_info", mm_goods)
+    mm_enabled_goods = [g for g in mm_goods if g["status"] == 3]
+
+    gds_f.add("【MMK 仰光站】酒店房型")
+    mm_rooms, rid = [], MMK_ID_BASE
+    for g in mm_enabled_goods:
+        for k in range(2):
+            base = money(rng.choice([80000, 120000, 180000, 250000, 350000]))
+            mm_rooms.append({
+                "id": rid, "site_id": MMK_SITE, "goods_id": g["id"],
+                "room_name": rng.choice(MM_ROOM_NAMES), "room_code": f"RM{g['id']}{k}",
+                "description": "宽敞舒适,含免费 WiFi。",
+                "bed_type": rng.choice(["1张大床", "2张单人床"]), "bed_count": rng.randint(1, 2),
+                "area": f"{rng.randint(24, 70)}㎡", "max_adults": rng.randint(2, 3),
+                "max_children": rng.randint(0, 2), "max_guests": rng.randint(2, 4),
+                "floor_name": f"{rng.randint(3, 15)}F", "room_view": rng.choice(["城市景观", "湖景", "花园景"]),
+                "smoking": 0, "breakfast": rng.randint(0, 2),
+                "meal_plan": rng.choice(["", "含双早"]),
+                "cancellation_policy": "入住前 24 小时可免费取消",
+                "checkin_notes": "请携带有效证件办理入住",
+                "base_price": base, "base_price_citizen": money(base * Decimal("0.8")),
+                "weekend_price": money(base * Decimal("1.25")), "extra_bed_price": money(30000),
+                "base_stock": rng.randint(5, 30), "launch_stock": rng.randint(3, 20),
+                "images": None, "video_url": "",
+                "facilities": json.dumps(["wifi", "tv", "minibar", "safe"]),
+                "status": 1, "publish_status": rng.choice([2, 2, 1, 0]),
+                "submitted_at": ctx.rand_dt(60), "sort": k + 1,
+                "created_at": g["created_at"], "updated_at": ctx.rand_dt(20),
+            })
+            rid += 1
+    gds_f.insert(BIZ_DB, "hotel_room_type", mm_rooms)
+
+    gds_f.add("【MMK 仰光站】库存价格日历(未来 14 天)")
+    mm_stock, stid = [], 2000001
+    for r in mm_rooms[:4]:
+        base_date = ctx.now.date()
+        for d in range(14):
+            day = base_date + timedelta(days=d)
+            weekend = day.weekday() >= 5
+            p = money(r["base_price"] * (Decimal("1.25") if weekend else Decimal("1")))
+            mm_stock.append({
+                "id": stid, "site_id": MMK_SITE, "goods_id": 0, "sku_type": 1,
+                "sku_id": r["id"], "stock_date": day, "price": p,
+                "price_citizen": money(p * Decimal("0.8")), "stock_total": r["base_stock"],
+                "stock_sold": rng.randint(0, max(1, r["base_stock"] // 3)),
+                "stock_locked": rng.randint(0, 2), "is_closed": 0,
+                "min_stay": 1, "max_stay": 30, "closed_to_arrival": 0,
+                "closed_to_departure": 0, "source": "manual", "note": "",
+                "created_at": ctx.ago(5), "updated_at": ctx.ago(1),
+            })
+            stid += 1
+    gds_f.insert(BIZ_DB, "goods_daily_stock", mm_stock)
+
+    # ---- 用户 ----
+    usr_f.add("【MMK 仰光站】C 端用户(site_id=7,+959)")
+    mm_users, uid = [], MMK_ID_BASE
+    for i in range(6):
+        mobile = mm_phone()
+        status = rng.choices([1, 1, 1, 1, 2, 4], weights=[60, 10, 10, 10, 6, 4])[0]
+        reg = ctx.ago(rng.randint(20, 300))
+        mm_users.append({
+            "id": uid, "site_id": MMK_SITE, "nickname": f"{rng.choice(MM_FIRST_NAME)} {rng.choice(MM_LAST_NAME)[:1]}.",
+            "avatar": f"https://cdn.mtrip.test/prod/avatar/{uid}.png",
+            "mobile": c.encrypt(mobile), "mobile_hash": c.mobile_hash(mobile),
+            "email": c.encrypt(f"user{uid}@mtrip.test"), "password": pw_u,
+            "register_source": rng.randint(1, 4), "register_time": reg,
+            "last_login_at": ctx.rand_dt(30) if status == 1 else None,
+            "last_login_ip": f"{rng.randint(1, 223)}.{rng.randint(0, 255)}.{rng.randint(0, 255)}.{rng.randint(1, 254)}",
+            "member_level_id": ID_BASE, "member_expire_time": ctx.ago(-180),
+            "balance": money(rng.choice([0, 0, 20000, 80000, 200000])), "points": rng.randint(0, 5000),
+            "real_name_status": rng.choices([0, 1], weights=[55, 45])[0],
+            "real_name": c.encrypt(mm_name()), "id_card": c.encrypt(f"MM{rng.randint(10000000, 99999999)}"),
+            "user_status": status, "tags": json.dumps(["新客"], ensure_ascii=False),
+            "remark": "MMK 测试数据", "referral_code": f"REF{uid:06d}",
+            "created_at": reg, "updated_at": ctx.rand_dt(20),
+        })
+        uid += 1
+    usr_f.insert(BIZ_DB, "user_info", mm_users)
+
+    # ---- 订单 ----
+    ord_f.add("【MMK 仰光站】订单(MMK 金额,状态铺开)")
+    mm_orders, oid = [], MMK_ID_BASE
+    o_status_plan = [1, 3, 3, 2, 0, 6, 5, 4, 1, 3]
+    for i, st in enumerate(o_status_plan):
+        g = mm_enabled_goods[i % len(mm_enabled_goods)]
+        u = mm_users[i % len(mm_users)]
+        m = next(x for x in mm_merchants if x["id"] == g["merchant_id"])
+        sku = mm_rooms[i % len(mm_rooms)] if mm_rooms else None
+        nights = rng.randint(1, 4)
+        qty = 1
+        unit = money(sku["base_price"] if sku else 120000)
+        original = money(unit * qty * nights)
+        discount = money(original * Decimal(rng.choice(["0", "0", "0.1"])))
+        total = money(original - discount)
+        rate = Decimal(str(m["commission_rate"])) / Decimal("100")
+        commission = money(total * rate)
+        created = ctx.rand_dt(90, 1)
+        use_date = (created + timedelta(days=rng.randint(1, 30))).date()
+        end_date = use_date + timedelta(days=nights)
+        paid = st in (1, 2, 3, 5, 6)
+        phone = mm_phone()
+        mm_orders.append({
+            "id": oid, "order_no": f"NO{created.strftime('%Y%m%d')}{oid:06d}",
+            "site_id": MMK_SITE, "user_id": u["id"], "trip_id": 0, "order_type": 1,
+            "is_citizen": 1 if rng.random() < 0.3 else 0, "merchant_id": m["id"],
+            "supplier_id": 0, "goods_id": g["id"], "goods_name": g["goods_name"],
+            "goods_image": g["cover_image"], "sku_id": sku["id"] if sku else 0,
+            "sku_name": sku["room_name"] if sku else "标准", "quantity": qty,
+            "unit_price": unit, "original_price": original, "total_amount": total,
+            "discount_amount": discount, "longstay_discount": money(0), "coupon_id": 0,
+            "coupon_discount": money(0), "alloc_coupon_discount": money(0),
+            "points_discount": money(0), "pay_amount": total, "platform_fee": money(0),
+            "platform_commission": commission, "merchant_receivable": money(total - commission),
+            "supplier_cost": money(0), "pay_method": rng.choice([1, 2]) if paid else 0,
+            "pay_trade_no": f"pi_{rng.randint(10 ** 15, 10 ** 16 - 1)}" if paid else "",
+            "pay_time": created + timedelta(minutes=rng.randint(1, 30)) if paid else None,
+            "order_status": st, "refund_status": {5: 1, 6: 3}.get(st, 0),
+            "use_date": use_date, "end_date": end_date, "contact_name": mm_name(),
+            "contact_phone": c.encrypt(phone),
+            "guests": json.dumps([{"firstName": rng.choice(MM_FIRST_NAME),
+                                   "lastName": rng.choice(MM_LAST_NAME),
+                                   "phone": phone, "email": f"guest{oid}@mtrip.test"}],
+                                 ensure_ascii=False),
+            "verify_code": f"{rng.randint(100000000000, 999999999999)}",
+            "cancel_reason": "用户主动取消" if st == 4 else "",
+            "cancel_time": created + timedelta(hours=rng.randint(1, 48)) if st == 4 else None,
+            "remark": "MMK 测试数据", "created_at": created,
+            "updated_at": created + timedelta(hours=rng.randint(1, 24)),
+        })
+        oid += 1
+    ord_f.insert(BIZ_DB, "order_main", mm_orders)
+
+    # ---- 财务:税配置 / 资金流水 / 分录 / 结算 ----
+    fin_f.add("【MMK 仰光站】税费配置")
+    fin_f.insert(BIZ_DB, "finance_tax_config", [
+        {"id": MMK_ID_BASE + i, "site_id": MMK_SITE, "tax_name": nm, "goods_type": gt,
+         "tax_rate": money(rate), "calc_type": ct, "status": 1, "remark": "MMK 测试数据",
+         "created_at": ctx.ago(200), "updated_at": ctx.ago(200)}
+        for i, (nm, gt, rate, ct) in enumerate([
+            ("缅甸商业税", 0, 0.0500, 1),
+            ("仰光住宿税", 1, 0.0300, 1),
+        ])
+    ])
+
+    mm_paid = [o for o in mm_orders if o["order_status"] in (1, 2, 3, 5, 6)]
+    fin_f.add("【MMK 仰光站】资金流水")
+    fin_f.insert(BIZ_DB, "finance_flow", [
+        {"id": MMK_ID_BASE + i, "flow_no": f"FL{ctx.now.strftime('%Y%m%d')}{MMK_ID_BASE + i:06d}",
+         "site_id": MMK_SITE, "flow_type": 1, "biz_type": 1, "amount": o["pay_amount"],
+         "order_id": o["id"], "merchant_id": o["merchant_id"], "supplier_id": 0,
+         "user_id": o["user_id"], "pay_channel": o["pay_method"] or 1,
+         "trade_no": o["pay_trade_no"], "flow_status": 1, "remark": "订单支付",
+         "operator_id": 0, "created_at": o["pay_time"] or o["created_at"]}
+        for i, o in enumerate(mm_paid)
+    ])
+    fin_f.add("【MMK 仰光站】按订单结算分录")
+    fin_f.insert(BIZ_DB, "finance_account_entry", [
+        {"id": MMK_ID_BASE + i, "site_id": MMK_SITE, "order_id": o["id"], "order_no": o["order_no"],
+         "merchant_id": o["merchant_id"], "coupon_id": 0, "order_amount": o["pay_amount"],
+         "commission": o["platform_commission"], "discount_amount": o["discount_amount"],
+         "funding_source": 1, "mtrip_pays": money(0), "merchant_pays": money(0),
+         "partner_pays": money(0),
+         "merchant_settlement": money(o["pay_amount"] - o["platform_commission"]),
+         "platform_revenue": o["platform_commission"],
+         "created_at": o["pay_time"] or o["created_at"]}
+        for i, o in enumerate(mm_paid)
+    ])
+    fin_f.add("【MMK 仰光站】商户结算单")
+    mm_settles, seid = [], MMK_ID_BASE
+    for i, m in enumerate(mm_enabled):
+        mos = [o for o in mm_paid if o["merchant_id"] == m["id"]]
+        if not mos:
+            continue
+        order_amt = money(sum(o["pay_amount"] for o in mos))
+        commission = money(sum(o["platform_commission"] for o in mos))
+        refund_amt = money(sum(o["pay_amount"] for o in mos if o["order_status"] == 6))
+        tax = money(commission * Decimal("0.05"))
+        st = rng.choice([0, 1, 2])
+        cycle = (ctx.now - timedelta(days=30 * (i % 2))).strftime("%Y-%m")
+        mm_settles.append({
+            "id": seid, "settle_no": f"ST{cycle.replace('-', '')}{seid:05d}",
+            "site_id": MMK_SITE, "merchant_id": m["id"], "settle_cycle": cycle,
+            "order_count": len(mos), "order_amount": order_amt, "refund_amount": refund_amt,
+            "commission": commission, "tax_amount": tax,
+            "settle_amount": money(order_amt - commission - tax - refund_amt), "status": st,
+            "confirm_by": 103 if st in (1, 2) else None,
+            "confirm_time": ctx.rand_dt(20) if st in (1, 2) else None,
+            "pay_time": ctx.rand_dt(10) if st == 2 else None,
+            "pay_voucher": f"https://cdn.mtrip.test/prod/voucher/{seid}.pdf" if st == 2 else "",
+            "remark": "", "created_at": ctx.rand_dt(60, 20), "updated_at": ctx.rand_dt(10),
+        })
+        seid += 1
+    fin_f.insert(BIZ_DB, "finance_merchant_settle", mm_settles)
+
+    # ---- 营销:优惠券 ----
+    mkt_f.add("【MMK 仰光站】优惠券(MMK)")
+    mkt_f.insert(BIZ_DB, "marketing_coupon", [
+        {"id": MMK_ID_BASE + i, "site_id": MMK_SITE,
+         "merchant_id": mm_enabled[i % len(mm_enabled)]["id"] if i == 0 else 0,
+         "created_by_merchant_admin": 0, "coupon_name": nm, "coupon_type": ct,
+         "discount_value": money(val), "min_amount": money(minv),
+         "max_discount": money(val if ct != 2 else 50000),
+         "funding_source": 1, "funding_rules": json.dumps({"mtrip": 100, "merchant": 0, "partner": 0}),
+         "goods_scope": 0, "goods_ids": None, "total_count": 1000, "received_count": rng.randint(0, 600),
+         "used_count": rng.randint(0, 300), "per_user_limit": 1, "valid_type": 1,
+         "valid_start": ctx.ago(30), "valid_end": ctx.ago(-60), "valid_days": 30,
+         "status": 1, "remark": "MMK 测试数据", "created_at": ctx.ago(40), "updated_at": ctx.rand_dt(10)}
+        for i, (nm, ct, val, minv) in enumerate([
+            ("仰光新客立减 2 万", 3, 20000.00, 0.00),
+            ("住宿满 15 万减 3 万", 1, 30000.00, 150000.00),
+        ])
+    ])
+
+
+# ============================================================================
 # 六、主流程
 # ============================================================================
 
@@ -2558,6 +3011,9 @@ def main() -> int:
 
     hc_f = SqlFile("帮助中心:分类 / FAQ / 公告", SYSTEM_DB)
     build_helpcenter(ctx, hc_f)
+
+    # 缅甸(MMK)市场:把 site_id=7 的跨域样例追加进对应域文件(用于多币种/站点隔离验证)
+    build_mmk_market(ctx, mch_f, gds_f, usr_f, ord_f, fin_f, mkt_f)
 
     files = [sys_f, mch_f, gds_f, usr_f, ord_f, fin_f, mkt_f, aff_f, cpl_f, sup_f, ph_f, hc_f]
 
