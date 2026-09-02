@@ -5,6 +5,9 @@
  * 收藏酒店(横滑)→ 收藏餐厅(横滑)→ 新用户促销卡。
  * 数据策略沿用 HomeScreen:预订列表取 /order/list、收藏酒店取 /user/favorite/list,
  * 未登录或接口为空时用设计稿示例兜底;收藏餐厅后端暂无对应品类,走 myPickSections.ts 静态数据。
+ *
+ * 封面另有一层兜底:真实酒店的 `cover_image` / 订单快照 `goods_image` 目前多是脏值或空值,
+ * 统一用 `tempCoverFor(index)` 回落到设计稿临时图(与酒店搜索结果页同一套,免得同一家酒店两页两张图)。
  */
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
@@ -19,6 +22,7 @@ import {
   TEMP_BOOKING_COVER,
   TEMP_HOTEL_COVERS,
   TEMP_RESTAURANT_COVERS,
+  tempCoverFor,
 } from '@/assets/tempImages';
 import HomeHeader from '@/components/home/HomeHeader';
 import PromoCard from '@/components/home/PromoCard';
@@ -153,12 +157,14 @@ export default function MyPickScreen() {
         {/* 02 预订卡列表 */}
         <View style={styles.stack}>
           {tabOrders.length > 0 ? (
-            tabOrders.map((o) => (
+            tabOrders.map((o, i) => (
               <BookingCard
                 key={o.id}
                 width={contentWidth}
                 title={o.goods_name}
                 coverUri={o.goods_image}
+                /* 订单快照里的酒店图同样多是脏值/空值,先用设计稿临时图兜底(同酒店搜索结果页) */
+                coverSource={tempCoverFor(i)}
                 skuName={o.sku_name}
                 statusLabel={t(ORDER_STATUS_I18N[o.order_status] ?? 'common.empty')}
                 statusColor={statusColor(o.order_status)}
@@ -210,7 +216,8 @@ export default function MyPickScreen() {
             decelerationRate="fast"
           >
             {savedHotels.map((g, i) => {
-              // 兜底卡(id 取负数)的名称/地址/封面走设计稿素材,真实收藏一律用接口字段
+              // 兜底卡(id 取负数)的名称/地址走设计稿文案,真实收藏一律用接口字段;
+              // 封面两者都先用设计稿临时图 —— 真实商品的 cover_image 目前多是脏值/空值
               const sampleKey = g.id < 0 ? SAMPLE_SAVED_HOTEL_KEYS[i] : undefined;
               const item = sampleKey
                 ? {
@@ -223,7 +230,7 @@ export default function MyPickScreen() {
                 <StayCard
                   key={g.id}
                   goods={item}
-                  coverSource={sampleKey ? TEMP_HOTEL_COVERS[sampleKey] : undefined}
+                  coverSource={sampleKey ? TEMP_HOTEL_COVERS[sampleKey] : tempCoverFor(i)}
                   onPress={(goods) =>
                     goods.id > 0
                       ? navigation.navigate('GoodsDetail', { id: goods.id })

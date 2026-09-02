@@ -446,10 +446,36 @@
     "travelers": {
       "title": "常用旅客",
       "guest": "旅客",
-      "selectGuest": "选择同行人({{count}}/{{max}})",
+      "selectGuest": "选择同行人({{selected}}/{{max}})",
+      "pickTitle": "选择主要入住人",
       "addGuest": "新增旅客",
+      "editTitle": "编辑旅客",
       "done": "完成",
-      "maxReached": "最多可选 {{max}} 位同行人"
+      "save": "保存信息",
+      "delete": "删除该旅客",
+      "confirm": "确定",
+      "empty": "还没有保存过旅客",
+      "default": "默认",
+      "maxReached": "最多可选 {{max}} 位同行人",
+      "firstName": "名",
+      "lastName": "姓",
+      "nationality": "国籍",
+      "nationalityPlaceholder": "例如 Myanmar",
+      "idType": "证件类型",
+      "idTypes": {
+        "nrc": "身份证(NRC)",
+        "passport": "护照",
+        "other": "其他"
+      },
+      "idNo": "证件号码",
+      "idNoPlaceholder": "例如 12/OoKaMa(N)123456",
+      "idNoKeep": "留空则保持原证件号",
+      "idNoMasked": "当前已存:{{masked}}",
+      "expireDate": "证件到期日",
+      "expireDatePlaceholder": "请选择到期日",
+      "setDefault": "设为默认旅客",
+      "nameRequired": "请填写姓与名。",
+      "idNoRequired": "请填写证件号码。"
     },
     "editEmail": {
       "title": "换绑邮箱",
@@ -947,6 +973,229 @@
         "homesApts": "民宿与公寓",
         "hostels": "青年旅舍",
         "hourly": "钟点房"
+      }
+    },
+    "booking": {
+      "steps": {
+        "dates": "确认日期",
+        "guests": "旅客信息",
+        "review": "核对确认",
+        "trip": "行程明细",
+        "payment": "支付"
+      },
+      "stepOf": "第 {{step}} 步 / 共 {{total}} 步",
+      "back": "上一步",
+      "continue": "继续",
+      "addToTrip": "加入行程",
+      "checkOut": "去结算",
+      "totalEstimated": "预计总价",
+      "nights": {
+        "one": "1 晚",
+        "many": "{{nights}} 晚"
+      },
+      "nightsLower": {
+        "one": "1 晚",
+        "many": "{{nights}} 晚"
+      },
+      "dates": {
+        "duration": "入住时长",
+        "guestsRooms": "入住人与房间",
+        "guestsRoomsValue": "{{adults}} 位成人,{{rooms}} 间房",
+        "selectedDates": "已选日期",
+        "checkOutRequired": "请选择离店日期。",
+        "whosComing": "同行人",
+        "adults": "成人",
+        "adultsHint": "13 岁及以上",
+        "children": "儿童",
+        "childrenHint": "2 - 12 岁",
+        "enhance": "增值服务",
+        "optional": "选填",
+        "addToBooking": "加入预订",
+        "selected": "已选择",
+        "specialRequests": "特殊要求",
+        "requestLabel": "有什么特别需要吗?",
+        "requestPlaceholder": "例如:提前入住、饮食禁忌、纪念日布置……",
+        "requestNote": "特殊要求以到店时的实际情况为准。"
+      },
+      "addons": {
+        "breakfast": {
+          "title": "每日早餐",
+          "desc": "自助早餐,提供本地与国际风味。"
+        },
+        "transfer": {
+          "title": "机场接送",
+          "desc": "娘乌机场专车直达酒店。"
+        },
+        "insurance": {
+          "title": "旅行保险",
+          "desc": "添加保障方案"
+        }
+      },
+      "guests": {
+        "leadGuest": "主要入住人",
+        "select": "选择",
+        "firstName": "名",
+        "firstNamePlaceholder": "例如 John",
+        "lastName": "姓",
+        "lastNamePlaceholder": "例如 Doe",
+        "phone": "手机号码",
+        "phonePlaceholder": "9 123 4567",
+        "email": "电子邮箱",
+        "emailPlaceholder": "john.doe@example.com",
+        "emailNote": "预订确认函将发送至该邮箱。",
+        "saveInfo": "保存信息",
+        "additional": "同行旅客",
+        "additionalHint": "选填:再添加 {{guests}} 位旅客",
+        "secureTitle": "安全预订",
+        "secureDesc": "您的数据经过加密,仅用于本次预订,我们绝不出售您的个人信息。",
+        "nameRequired": "请先填写主要入住人的姓名。",
+        "phoneRequired": "请填写联系手机号。"
+      },
+      "review": {
+        "preferred": "优选",
+        "roomGuests": "{{guests}} 人入住",
+        "checkInOut": "入住 / 退房",
+        "checkInOutValue": "{{checkIn}} - {{checkOut}}",
+        "guestsRooms": "人数与房间",
+        "guestsRoomsValue": "{{guests}} 位旅客,{{rooms}} 间房",
+        "addOnService": "增值服务",
+        "priceBreakdown": "价格明细",
+        "originalPrice": "原价({{nights}})",
+        "roomPrice": "房费({{nights}})",
+        "taxes": "服务费与税费({{percent}}%)",
+        "totalAmount": "应付总额",
+        "earnPoints": "可得 {{points}} 积分",
+        "addMoreStay": "继续添加住宿",
+        "addMoreStayDesc": "把下一家酒店加进本次行程:填写目的地与入住日期后加入本单,所有住宿一次付清。",
+        "addHotel": "+ 添加酒店与民宿",
+        "cancellationPolicy": "取消政策",
+        "cancellationDesc": "入住前 48 小时可免费取消;{{date}} 之后取消不予退款。",
+        "agreePrefix": "我已阅读并同意",
+        "terms": "服务条款",
+        "agreeSeparator": "、",
+        "privacy": "隐私政策",
+        "agreeSuffix": "以及酒店的入住规定,并理解 mTrip 在本次预订中仅为中介代理。",
+        "agreeRequired": "请先勾选同意条款。"
+      },
+      "trip": {
+        "stay": "第 {{index}} 段住宿",
+        "change": "修改",
+        "viewDetails": "查看详情",
+        "hotelTotal": "第 {{index}} 家酒店合计",
+        "multiBooking": "连住预订(共 {{stays}} 段)",
+        "stayDetailTitle": "酒店详情",
+        "added": "已为本次行程添加第二段住宿。"
+      },
+      "payment": {
+        "summaryRange": "{{checkIn}} - {{checkOut}}({{nights}})",
+        "roomLine": "{{rooms}} 间 {{room}},{{guests}} 人入住",
+        "viewDetails": "查看详情",
+        "payByOther": "由他人代付",
+        "share": "分享",
+        "wallet": "mTRIP 钱包",
+        "availableBalance": "可用余额",
+        "popular": "常用支付方式",
+        "other": "其他支付方式",
+        "methods": {
+          "mmqr": {
+            "title": "MMQR Pay",
+            "desc": "扫码即时支付"
+          },
+          "kbzpay": {
+            "title": "KBZPay",
+            "desc": "手机钱包"
+          },
+          "wavepay": {
+            "title": "Wave Pay",
+            "desc": "手机钱包"
+          },
+          "wallet": {
+            "title": "使用 mTrip 钱包支付",
+            "desc": "可用余额:{{amount}}"
+          },
+          "hotel": {
+            "title": "到店支付",
+            "desc": "仅在酒店前台支付"
+          },
+          "card": {
+            "title": "信用卡 / 借记卡"
+          },
+          "mobileBanking": {
+            "title": "手机银行"
+          }
+        },
+        "savedCard": "Visa **** {{last4}}",
+        "cardExpires": "有效期至 {{date}}",
+        "addCard": "添加新卡",
+        "couponsLabel": "优惠券",
+        "couponsTitle": "优惠券",
+        "couponsDesc": "选择一张优惠券",
+        "cashbackTitle": "可得 {{percent}}% 返现",
+        "cashbackDesc": "{{amount}} 将返还至您的钱包",
+        "paymentSummary": "支付摘要",
+        "secureTitle": "安全支付保障",
+        "secureDesc": "支付信息全程加密处理,mTrip 不会保存您的银行卡信息。",
+        "badges": {
+          "ssl": "SSL 加密",
+          "pci": "PCI 合规",
+          "support": "7×24 客服"
+        },
+        "methodRequired": "请先选择支付方式。",
+        "successTitle": "支付成功",
+        "close": "关闭",
+        "failTitle": "支付失败!",
+        "failReason": "失败原因:",
+        "cancel": "取消",
+        "retry": "重试"
+      },
+      "success": {
+        "title": "预订成功",
+        "referencePrefix": "预订编号:",
+        "voucher": "您的电子凭证",
+        "summary": "预订摘要",
+        "paid": "已支付",
+        "checkIn": "入住",
+        "checkOut": "退房",
+        "guests": "入住人",
+        "totalPaid": "实付金额",
+        "guestsValue": "{{adults}} 位成人,{{rooms}} 间房",
+        "download": "下载凭证",
+        "viewBooking": "查看订单",
+        "upsell": "准备好开启{{city}}之旅了吗?",
+        "upsellLink": "探索当地美食与玩乐",
+        "backHome": "返回首页",
+        "tags": {
+          "room": "豪华房",
+          "breakfast": "含早餐"
+        }
+      },
+      "insurance": {
+        "title": "旅行保障",
+        "insurance": "旅行保险",
+        "daysCovered": "保障 {{days}} 天",
+        "personalize": "定制您的保障",
+        "persons": "投保人数",
+        "personValue": "{{persons}} 人",
+        "extend": "最多可延长 30 天保障期",
+        "dayValue": "{{days}} 天",
+        "beneficiary": "受益人信息",
+        "fullName": "姓名",
+        "fullNamePlaceholder": "请填写受益人姓名",
+        "phone": "手机号码",
+        "phonePlaceholder": "9 123 4567",
+        "benefits": "保障内容",
+        "benefitLabels": {
+          "accidentalDeath": "意外身故",
+          "medical": "医疗、住院及其他费用"
+        },
+        "links": {
+          "eligibility": "投保条件",
+          "terms": "条款与细则",
+          "cancellation": "退保政策"
+        },
+        "agree": "继续即表示您同意相关条款与细则及退保政策。",
+        "totalCost": "总费用",
+        "confirm": "确认"
       }
     }
   }

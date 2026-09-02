@@ -10,7 +10,7 @@
  *   Reviews    222:2978 → components/hotel/HotelReviewsTab
  *   Policies   222:3189 → components/hotel/HotelPoliciesTab
  *
- * **当前是静态页**:数值/文案来自设计稿(`detailDemo.ts` + `hotels.detail.*`),尚未接 `/goods/detail`。
+ * 有真实商品 id 时接 `/goods/detail` 渲染酒店与房型;无 id 时仍回落到设计稿演示数据。
  *
  * 页面壳的实现要点:
  *   状态栏黑条(760:10037)不随内容滚动;二级导航吸顶用 `ScrollView` 的 `stickyHeaderIndices`,
@@ -18,19 +18,23 @@
  *   **底部价格栏在 Rooms 页签隐藏**:设计稿 222:2529 是 hidden 的(每张房型卡自带 Select)。
  *
  * 设计稿有、当前没有对应实现的交互一律走 comingSoon:See Map / Get Directions / 提醒 / 分享 /
- * 客服 / Choose my room / 房型卡的收藏与 Select / Read All Reviews / 面积单位切换。
+ * 客服 / 房型卡的收藏 / Read All Reviews / 面积单位切换。
+ * (「Choose my room」已改为切到 Rooms 页签,房型卡 Select 已接上订房流程 1675:5776)
  * 设计稿里另有几张二级页(Rooms Details 281:1041、Reviews Page 1133:2998、Map Location 864:1775、
  * Property Preview / VR View / 3d View)不属于页签,本次未实现。
  */
 
-import React, { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import React, { useCallback, useEffect, useState } from 'react';
+import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View, type ImageSourcePropType } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTranslation } from 'react-i18next';
 
+import { fetchGoodsDetail } from '@/api/goods';
 import { TEMP_HOTEL_GALLERY } from '@/assets/tempImages';
+import { ErrorView, LoadingView } from '@/components/common/StateViews';
 import HomeIcon from '@/components/home/HomeIcon';
 import HotelAmenitiesTab from '@/components/hotel/HotelAmenitiesTab';
 import HotelDetailTabs from '@/components/hotel/HotelDetailTabs';
@@ -42,10 +46,13 @@ import HotelReviewsTab from '@/components/hotel/HotelReviewsTab';
 import HotelRoomsTab from '@/components/hotel/HotelRoomsTab';
 import { PAGE_PADDING, SECTION_GAP, colors, radius, shadows } from '@/config/theme';
 import { fonts } from '@/config/typography';
+import type { RootStackParamList } from '@/navigation/types';
 import { DETAIL_DEMO, DETAIL_TABS, type DetailTabKey } from '@/screens/hotel/detailDemo';
 import { useCommonStore } from '@/store/commonStore';
 import { useSiteStore } from '@/store/siteStore';
+import type { GoodsDetail, GoodsSku } from '@/types/models';
 import { formatMoney } from '@/utils/format';
+import { resolveMediaUri } from '@/utils/media';
 
 /** 设计稿图库 402x300 */
 const GALLERY_HEIGHT = 300;
@@ -54,24 +61,85 @@ const BOTTOM_BAR_HEIGHT = 88;
 
 export default function HotelDetailScreen() {
   const { t } = useTranslation();
-  const navigation = useNavigation();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const route = useRoute<RouteProp<RootStackParamList, 'HotelDetail'>>();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const currency = useSiteStore((s) => s.currency);
   const showToast = useCommonStore((s) => s.showToast);
 
   const [tab, setTab] = useState<DetailTabKey>('overview');
+  const goodsId = route.params?.id;
+  const [detail, setDetail] = useState<GoodsDetail | null>(null);
+  const [loading, setLoading] = useState(Boolean(goodsId));
+  const [error, setError] = useState('');
+
+  const loadDetail = useCallback(async () => {
+    if (!goodsId) return;
+    setLoading(true);
+    try {
+      setDetail(await fetchGoodsDetail(goodsId));
+      setError('');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Error');
+    } finally {
+      setLoading(false);
+    }
+  }, [goodsId]);
+
+  useEffect(() => {
+    void loadDetail();
+  }, [loadDetail]);
 
   const comingSoon = () => showToast(t('home.comingSoon'));
+  /**
+   * 选房一律进设计稿那套 4 步订房向导(Figma section 1675:5776)。
+   * 曾被改成「有真实 sku 时跳旧的通用 `OrderConfirm`」,那是门票时代的下单页,
+   * 没有房型/加购/多住宿概念,与设计稿的流程对不上,已恢复。
+   * 有真实商品与房型时一并带过去,向导据此进入「真实模式」并真的下单。
+   */
+  const selectRoom = (roomKey: string, sku?: GoodsSku) =>
+    navigation.navigate('HotelBooking', {
+      roomKey,
+      /* 搜索页选好的日期原样透传,向导不再自己挑默认日期 */
+      checkIn: route.params?.checkIn,
+      checkOut: route.params?.checkOut,
+      goodsId: sku && detail ? detail.id : undefined,
+      skuId: sku?.id,
+    });
+
+  if (loading) return <LoadingView />;
+  if (error) return <ErrorView message={error} onRetry={() => void loadDetail()} />;
 
   /** 设计稿 Rooms 页的底部价格栏是 hidden 的(每张房型卡自带 Select) */
   const showBottomBar = tab !== 'rooms';
   const bottomInset = showBottomBar ? BOTTOM_BAR_HEIGHT + insets.bottom : insets.bottom;
+  /**
+   * 顶部图库:只收**可用**的图片地址(`resolveMediaUri` 会把相对路径补全、把脏值判掉 ——
+   * 实际遇到过后台把 `cover_image` 填成 `'111'`,非空却加载不出来,只按「非空」判断会留白块)。
+   * 一张可用的都没有时整套回落到设计稿临时图,不显示空白。
+   */
+  const remoteGallery = detail
+    ? [detail.cover_image, ...detail.images]
+        .map((uri) => resolveMediaUri(uri))
+        .filter((uri): uri is string => uri !== null)
+        .map((uri) => ({ uri }) as ImageSourcePropType)
+    : [];
+  const gallery = remoteGallery.length > 0 ? remoteGallery : TEMP_HOTEL_GALLERY;
+  const title = detail?.goods_name ?? t('hotels.results.demo.heritageBagan.name');
+  const address = detail?.address ?? t('hotels.results.demo.heritageBagan.address');
+  const priceFrom = detail?.minPrice && detail.minPrice > 0 ? detail.minPrice : DETAIL_DEMO.priceFrom;
 
   const renderTab = () => {
     switch (tab) {
       case 'rooms':
-        return <HotelRoomsTab onComingSoon={comingSoon} />;
+        return (
+          <HotelRoomsTab
+            onComingSoon={comingSoon}
+            onSelectRoom={selectRoom}
+            rooms={detail?.skus}
+          />
+        );
       case 'amenities':
         return <HotelAmenitiesTab />;
       case 'nearby':
@@ -97,15 +165,15 @@ export default function HotelDetailScreen() {
         /* 二级导航吸顶:必须是 ScrollView 的直接子节点,故下面几块按设计稿的 24 间距各自留边 */
         stickyHeaderIndices={[2]}
       >
-        <HotelGallery images={TEMP_HOTEL_GALLERY} height={GALLERY_HEIGHT} width={width} />
+        <HotelGallery images={gallery} height={GALLERY_HEIGHT} width={width} />
 
         {/* 标题卡(六个页签共用) */}
         <View style={styles.titleWrap}>
           <View style={styles.titleCard}>
-            <Text style={styles.title}>{t('hotels.results.demo.heritageBagan.name')}</Text>
+            <Text style={styles.title}>{title}</Text>
             <View style={styles.addressRow}>
               <HomeIcon name="locationOutline" width={12} height={15} color={colors.textSoft} />
-              <Text style={styles.address}>{t('hotels.results.demo.heritageBagan.address')}</Text>
+              <Text style={styles.address}>{address}</Text>
             </View>
           </View>
         </View>
@@ -172,14 +240,15 @@ export default function HotelDetailScreen() {
         <View style={[styles.bottomBar, { paddingBottom: 16 + insets.bottom }]}>
           <View>
             <Text style={styles.startAt}>{t('hotels.detail.startAt')}</Text>
-            <Text style={styles.price}>{formatMoney(DETAIL_DEMO.priceFrom, currency)}</Text>
+            <Text style={styles.price}>{formatMoney(priceFrom, currency)}</Text>
             <Text style={styles.discount}>
               {t('hotels.detail.discountToday', { percent: DETAIL_DEMO.discountPercent })}
             </Text>
           </View>
           <Pressable
             style={({ pressed }) => [styles.cta, pressed && styles.pressed]}
-            onPress={comingSoon}
+            /* 「Choose my room」切到 Rooms 页签(那里每张房型卡自带 Select 进订房流程) */
+            onPress={() => setTab('rooms')}
           >
             <Text style={styles.ctaText}>{t('hotels.detail.chooseRoom')}</Text>
           </Pressable>

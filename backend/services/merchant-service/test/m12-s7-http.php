@@ -111,7 +111,7 @@ Db::transaction(function () use (&$fixture, $key) {
         $b = Db::table('merchant_application_business')->insertGetId(['site_id' => 991, 'application_id' => $app, 'business_name' => 'S7 Hotel ' . $i, 'business_type' => 'hotel', 'kyc_status' => 1]);
         $fixture['properties'][] = (int) Db::table('merchant_store')->insertGetId(['site_id' => 991, 'merchant_id' => $m, 'source_business_id' => $b, 'store_name' => 'S7 Property ' . $i, 'business_type' => 'hotel', 'country_code' => 'MM', 'city_key' => $key, 'status' => 1]);
         $g = $fixture['goods'][] = (int) Db::table('goods_info')->insertGetId(['site_id' => 991, 'merchant_id' => $m, 'goods_name' => 'S7 Hotel ' . $i . ' ' . $key, 'goods_type' => 1, 'status' => 3]);
-        Db::table('hotel_room_type')->insert(['site_id' => 991, 'goods_id' => $g, 'room_name' => 'S7 Room', 'base_price' => 100 + $i, 'status' => 1]);
+        Db::table('hotel_room_type')->insert(['site_id' => 991, 'goods_id' => $g, 'room_name' => 'S7 Room', 'base_price' => 100 + $i, 'status' => 1, 'publish_status' => 2]);
     }
     $fixture['document'] = (int) Db::table('merchant_verify_document')->insertGetId(['site_id' => 991, 'merchant_id' => $m, 'doc_type' => 'hotel_license', 'name' => 'S7 hotel license', 'status' => 2]);
 });

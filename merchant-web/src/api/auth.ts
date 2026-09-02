@@ -1,6 +1,6 @@
 import { get, post, request } from '@/utils/http';
 import { encryptPayload, LOGIN_AES_KEY } from '@/utils/crypto';
-import type { MerchantProfile, MenuNode } from '@/api/types';
+import type { MerchantBusiness, MerchantProfile, MenuNode } from '@/api/types';
 
 export interface ChallengeResult { challengeToken: string; requiresEnrollment: boolean; expiresIn: number }
 export interface SetupResult { manualKey: string; otpauthUri: string }
@@ -16,6 +16,7 @@ export interface LoginResult {
 export interface MenusResult {
   menus: MenuNode[];
   perms: string[];
+  businesses: MerchantBusiness[];
 }
 
 export function apiLogin(username: string, password: string): Promise<ChallengeResult> {

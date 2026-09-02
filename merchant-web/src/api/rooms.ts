@@ -1,4 +1,4 @@
-import { get, post } from '@/utils/http';
+import { get, post, request } from '@/utils/http';
 import type { PageData } from '@/api/types';
 
 export interface RoomHotelOption {
@@ -32,6 +32,7 @@ export interface MerchantRoom {
   breakfast: number;
   meal_plan: string;
   cancellation_policy: string;
+  currency: string;
   checkin_notes: string;
   base_price: number;
   weekend_price: number;
@@ -44,6 +45,12 @@ export interface MerchantRoom {
   status: number;
   publish_status: number;
   submitted_at: string | null;
+  approved_version: number;
+  review_status: number;
+  revision_id: number;
+  revision_version: number;
+  revision_action: string;
+  reject_reason: string;
   sort: number;
   today_stock_total?: number;
   today_stock_left?: number;
@@ -57,18 +64,53 @@ export function apiRoomList(params: Record<string, unknown>): Promise<PageData<M
   return get('/merchant/rooms/list', params);
 }
 
-export function apiRoomDetail(id: number): Promise<MerchantRoom> {
+export interface RoomRevision {
+  id: number;
+  room_id: number;
+  version: number;
+  action: string;
+  status: number;
+  payload: Partial<MerchantRoom>;
+  reject_reason: string;
+  submitted_at: string | null;
+  reviewed_at: string | null;
+  review_remark: string;
+}
+
+export interface RoomDetailResult {
+  room: MerchantRoom;
+  editable: Partial<MerchantRoom>;
+  latestRevision: RoomRevision | null;
+  history: RoomRevision[];
+}
+
+export function apiRoomDetail(id: number): Promise<RoomDetailResult> {
   return get('/merchant/rooms/detail', { id });
 }
 
-export function apiRoomSave(data: Record<string, unknown>): Promise<{ id: number }> {
+export function apiRoomSave(data: Record<string, unknown>): Promise<{ id: number; revisionId: number; version: number; reviewStatus: number }> {
   return post('/merchant/rooms/save', data);
+}
+
+export function apiRoomCopy(id: number): Promise<{ id: number; revisionId: number }> {
+  return post('/merchant/rooms/copy', { id });
+}
+
+export function apiRoomWithdraw(revisionId: number): Promise<null> {
+  return post('/merchant/rooms/withdraw', { revisionId });
+}
+
+export function apiRoomUpload(file: File, kind: 'image' | 'video'): Promise<{ url: string; name: string; kind: string }> {
+  const data = new FormData();
+  data.append('file', file);
+  data.append('kind', kind);
+  return request({ method: 'POST', url: '/merchant/rooms/media/upload', data });
 }
 
 export function apiRoomToggleStatus(id: number): Promise<{ status: number }> {
   return post('/merchant/rooms/toggle-status', { id });
 }
 
-export function apiRoomDelete(id: number): Promise<null> {
+export function apiRoomDelete(id: number): Promise<{ reviewRequired: boolean; revisionId?: number }> {
   return post('/merchant/rooms/delete', { id });
 }

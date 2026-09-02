@@ -107,3 +107,42 @@ Expo 51 / TypeScript / Zustand / React Navigation 6 / Axios / i18next + react-i1
   同批把反复出现四次的分段页签抽成 `components/common/SegmentedTabs.tsx`(优惠中心 / 推荐明细 /
   教程与指南 / 通知共用)。**静态页**:App 侧没有消息接口,数据走 `screens/notification/notificationDemo.ts`。
   完整记录见 HANDOFF「★ 2026-08-31(通知页)」。
+- 2026-09-01:新增订房流程(Figma section `Multi Booking Hotel Booking Flow` `1675:5776`)。
+  向导落成**一个路由 + 内部分步**:`screens/hotel/HotelBookingScreen.tsx`(路由 `HotelBooking`)
+  按 dates → guests → review →(多住宿才有)trip → payment 切换,内容各自一个组件
+  (`components/hotel/booking/BookingStep{Dates,Guests,Payment}` + `ReviewBody`,trip 段内联)。
+  另新增 4 个独立屏:`AddGuestScreen` / `InsuranceScreen` / `StayDetailScreen` / `BookingSuccessScreen`。
+  酒店详情房型卡的 Select 与底栏「Choose my room」不再是 comingSoon:前者进向导,后者切到 Rooms 页签;
+  「更多 / 常用旅客」的「Add New Guest」也接到同一张新增旅客页。
+  新增 `components/hotel/booking/*`(bookingShared / bookingFormat / BookingProgress / BookingBottomBar /
+  BookingSummaryBar / BookingCalendar / GuestCounterRow / AddOnCard / FormField / SelectSheet /
+  WheelPickerSheet / AlertDialog / ReviewCards / ReviewBody / StaySummaryCard / PaymentMethodRow),
+  `HomeIcon` 新增 19 枚设计稿图标,`assets/images/temp/hotel/booking/` 新增 15 张素材。
+- 2026-09-01:修复真实酒店卡不进入酒店详情真实 Rooms 的问题。`HotelResultsScreen` 中接口返回的真实酒店改为携带 `id` 跳 `HotelDetail`;
+  `HotelDetailScreen` 在有 `id` 时拉 `/api/v1/app/goods/detail`,标题、地址、图库、起价和 Rooms 页签使用接口数据,
+  无 `id` 的演示卡仍保留设计稿静态数据。`HotelRoomsTab` 支持渲染真实 `skus` 房型并把 Select 接到真实 `OrderConfirm`(未登录先跳登录),
+  空房型显示空态。`npm run typecheck` 通过。注意:C 端仍只展示同站点、已上架、已发布到 marketplace 的酒店;房型须 `status=1` 且 `publish_status=2`。
+- 2026-09-01:订房第 1 步去掉摘要卡上的日期选择弹层(`DatePickerSheet`)——
+  下面已有常驻的 `BookingCalendar`,同一件事两个入口且弹层会盖住日历;摘要卡日期区改为纯展示。
+  连带在 `goNext` 的 dates 步拦住「只点了入住日、离店日还空着」的半选状态
+  (新增 `hotels.booking.dates.checkOutRequired`)。`DatePickerSheet` 组件保留,酒店搜索页仍在用。
+- 2026-09-01:预订成功页的二维码由设计稿静态图改为现场生成 `/app/order/pay` 返回的核销码
+  (`verifyCode` 经路由参数传到 `BookingSuccessScreen`),新增依赖 `react-native-qrcode-svg`
+  (peer 为已装的 `react-native-svg`);无核销码时仍回落静态图,设计稿走查不受影响。
+- 2026-09-01:修复「搜索页选好日期 → 选房后日期被重置、金额与晚数对不上」。
+  `HotelDetail`/`HotelBooking` 两条路由加 `checkIn`/`checkOut`,搜索结果页 → 详情页 → 向导逐级透传;
+  `BookingStay` 改为持 `units`(每晚每间基数)+ `scaleStay()` 按晚数 × 间数摊开,构造与 `patchStay` 都过它,
+  演示/真实两种模式统一一套算法(默认 1 晚 1 间时与设计稿原值一致)。
+  另加 `normalizeDates()` 兜住「没传 / 离店不晚于入住 / 入住早于今天」三种情况。
+- 2026-09-01:「我的精选」的预订卡与收藏酒店卡的真实数据也回落设计稿临时封面(此前只有酒店搜索结果页有兜底,
+  后端封面是脏值/空值时这两处只剩渐变空块)。兜底规则抽成 `assets/tempImages.ts` 的 `tempCoverFor(index)`,
+  `HotelResultsScreen` 原局部的 `REAL_COVER_FALLBACKS` 删除改调它,保证同一家酒店在两个页面是同一张图。
+- 2026-09-01:订房向导接后端下单。房型卡 Select 带 `goodsId`/`skuId` 进 `HotelBooking` 即进入**真实模式**:
+  酒店名/房型名/单价来自 `/app/goods/detail`,房费按「`base_price` × 晚数 × 间数」随日期与间数重算
+  (与后端锁库存的算法一致,已实测 2 晚 × 2 间 = 600 对齐),支付步真的调
+  `/app/order/create` + `/app/order/pay` 落单,成功页展示真实单号与实付。
+  不带参数进入仍是**演示模式**,数值走 `screens/hotel/bookingDemo.ts`,不发任何请求。
+  真实模式下不提交加购项(后端无价目表,仅页面展示)、多住宿走 comingSoon(后端一次只收一个 sku)。
+  顺手修了一个后端硬伤:`order_main.guests` 列建成了 JSON 却存 AES 密文,**任何带住客名单的下单都 500**,
+  已加 `database/order/06-guests-column-type-fix.sql`(JSON → TEXT,幂等)并登记进 compose initdb。
+  完整记录见 HANDOFF「★ 2026-09-01(订房接后端下单)」。

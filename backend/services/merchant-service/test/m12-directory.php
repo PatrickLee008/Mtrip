@@ -16,6 +16,7 @@ function s2Actor(bool $super = true, int $site = 991, array $permissions = []): 
 }
 $directory = $container->get(MerchantController::class);
 $property = $container->get(MerchantPropertyController::class);
+$onboardingController = $container->get(\App\Controller\Admin\OnboardingController::class);
 function requestCall(object $controller, string $method, array $params = []): mixed {
     setRequest($params);
     return $controller->$method()['data'];
@@ -36,6 +37,15 @@ $businessIds = [];
 $constraint = false;
 try {
     $key = (string) $config->get('mtrip.aes_key');
+    s2Actor();
+    $leadInput = ['companyName' => 'S2 Lead', 'businesses' => [['businessName' => 'S2 Lead Hotel', 'businessType' => 'hotel']]];
+    rejects(40001, fn () => requestCall($onboardingController, 'create', $leadInput), 'S2 onboarding super admin site required');
+    $lead = requestCall($onboardingController, 'create', $leadInput + ['siteId' => 991]);
+    $apps[] = (int) $lead['id'];
+    $leadBusinessIds = Db::table('merchant_application_business')->where('application_id', $lead['id'])->pluck('id')->map('intval')->all();
+    $businessIds = array_merge($businessIds, $leadBusinessIds);
+    check((int) $lead['site_id'] === 991 && Db::table('merchant_application_business')->whereIn('id', $leadBusinessIds)->where('site_id', 991)->count() === 1,
+        'S2 onboarding selected site persists to application and business');
     $id = $ids[] = merchantFixture();
     Db::table('merchant_info')->where('id', $id)->update([
         'merchant_name' => 'S2 Alpha', 'merchant_code' => 'S2-' . $id, 'contact_email' => 's2@hotel.test',

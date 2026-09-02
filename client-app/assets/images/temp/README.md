@@ -37,6 +37,31 @@
 房型卡的计数设计稿同样是 `2/12`,但每个房型只导出了封面一张,那里沿用设计稿文案。
 三张景点缩略图实为 JPEG(见下方「已知问题」),已按真实格式存成 `.jpg`。
 
+## hotel/booking/ —— 订房流程(设计稿 section `1675:5776` Multi Booking Hotel Booking Flow)
+
+| 文件 | 设计稿节点 | 素材像素 | 展示框 | 用在哪 | 将来由谁替代 |
+| --- | --- | --- | --- | --- | --- |
+| `addon-breakfast.jpg` | `1675:6220` | 512×512 | 368×182 | Step 1 加购卡「Daily Breakfast」封面 | 加购商品接口的图 |
+| `addon-transfer.jpg` | `1675:6237` | 512×512 | 368×182 | Step 1 加购卡「Airport Transfer」封面 | 同上 |
+| `voucher-qr.png` | `1675:6728` | 296×296 | 174×174 | 预订成功页的数字凭证二维码 | 下单接口返回的凭证串(届时改为运行时生成) |
+| `pay-mmqr.png` | `1675:6600` | 104×160 | 22×34 | 支付页 MMQR Pay 图标 | 支付渠道接口的 icon |
+| `pay-kbzpay.png` | `1675:6610` | 160×160 | 40×40 | 支付页 KBZPay 图标 | 同上 |
+| `pay-wavepay.png` | `1675:6619` | 160×160 | 40×40 | 支付页 Wave Pay 图标 | 同上 |
+| `pay-wallet.png` | `1675:6634` | 160×160 | 40×40 | 支付页「Pay with mTrip Wallet」图标 | 同上 |
+| `pay-hotel.png` | `1675:6655` | 160×107 | 40×40 | 支付页「Pay at Hotel」图标 | 同上 |
+| `pay-mobile-banking.png` | `I1675:6663;582:1444` | 160×160 | 40×40 | 支付页「Mobile Banking」底图 | 同上 |
+| `pay-mobile-banking-logo.png` | 同上(上层 contain) | 160×160 | 40×40 | 同上,压在底图上的标 | 同上 |
+| `pay-card.png` | `581:1438` | 160×160 | 40×40 | 支付页「Credit/debit Cards」图标 | 同上 |
+| `pay-coupon.png` | `582:1447` | 160×107 | 40×40 | 支付页「Coupons」图标 | 优惠券接口 |
+| `brand-mpu.png` | `522:1303` | 176×64 | 44×16 | 卡组织标 MPU | 支付渠道接口 |
+| `brand-visa.png` | `522:1305` | 196×64 | 49×16 | 卡组织标 VISA | 同上 |
+| `brand-mastercard.png` | `522:1307` | 108×65 | 27×16 | 卡组织标 Mastercard | 同上 |
+
+Step 3 复核页与 Stay 明细页的房型封面(`1675:6419` / `1675:9692`)**与 Rooms 页签的 `room-deluxe.png` 是同一张图**
+(逐像素比对 RMS=0),不重复入包,直接复用 `TEMP_ROOM_COVERS.deluxe`。
+两张加购照片按上面「已知问题」的教训直接存成 JPEG(各约 60KB,PNG 编码要 400KB+);其余都是小图标,PNG 保留透明通道。
+二维码是设计稿导出的静态图 —— 静态页阶段不为一张图引 `react-native-qrcode-svg`,接口给出凭证串后再换成运行时生成。
+
 ## home/ —— 首页(设计稿节点 `81:2464`)
 
 | 文件 | 设计稿节点 | 素材像素 | 展示框 | 用在哪 |

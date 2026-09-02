@@ -3,6 +3,27 @@
 > 参考 admin-web 从零搭建平行的 merchant-web(Vue3+Vite+TS+antdv),为商户账号(`merchant_admin`,account_type 1集团/2商户/3门店)落地一套完整仿 admin 的动态 RBAC:独立四表菜单/角色,登录按 `account_type` 下发菜单树+权限集,接口权限继续由 `#[Permission]` 注解按 `perm_key` 联动(与前端 `v-perm` 同一把钥匙)。
 > 承接 12-商家账号体系.md 的二期清单。
 
+## 2026-09-01 M4 Booking Management 预订管理落地(阶段0～6)
+
+方案:`实现方案-Merchant-M4-酒店预订管理.md`(已全部完成并勾选)。前端交付集中在 `views/order/index.vue`:
+
+- [x] 六页签布局(全部/待确认/In House/已退房/待支付/已取消)+ 页签内筛选工具栏,列表行直出 `available_actions` 驱动按钮显隐。
+- [x] 右侧约 430px 详情面板:住客信息/日期房型/支付/时间线(含强制同步、住客消息事件)/可用操作区(确认/入住/退房/改房号/改单/联系方式/凭证上传),写操作全部 `v-perm` + `a-popconfirm` 防护。
+- [x] 住客消息抽屉(`availableActions.includes('message')` + `mch:order:message`):拉取会话线程 `apiGuestThread`,气泡式展示,`sender_type===2` 商户消息靠右;会话结束(`status===1`)时只读。
+- [x] 词条:新增 `booking.msg` 命名空间、`booking.actions.messageGuest`、时间线类型 `guest_message_sent`/`sync_failed`(en-US/zh-CN 同步)。
+- [x] 构建 `npm run build`(vue-tsc + vite)通过,仅既有大 chunk 警告。
+- [x] 验收:`m1001 / Merchant@123456` + TOTP 真实登录态,In House → 详情 → Message Guest → 发送消息气泡验证,截图 `.reasonix\attachments\m4-guest-message-*.png`。
+
+配套后端契约(详见方案文档):`/api/v1/merchant/booking/*` 16 端点挂 order-service,`BookingLifecycleService` 管理状态机+库存联动+过期确认任务;通知/同步失败不回滚主事务、不伪造成功(时间线 `sync_failed` 事件如实记录)。期间发现并修复平台级缺陷:`PermissionAspect` 缺 `#[Aspect]` 注解导致全平台 `#[Permission]` 静默失效,已为 8 个服务补 `config/autoload/aspects.php` 显式注册(新服务必须携带,见 HANDOFF 第4节硬约定)。
+
+## 2026-09-01 注册业务切换与菜单上下文整改
+
+- [x] 移除 `BasicLayout.vue` 中照搬原型的 3 家酒店、2 家餐厅假数据及无真实动作的“添加物业”入口。
+- [x] `/api/v1/merchant/auth/menus` 在原有 `menus/perms` 基础上返回当前账号数据范围内、已关联正式商户且业务 KYC 已通过的 `businesses`；集团账号按集团可见商户汇总，门店账号只返回当前门店绑定业务。
+- [x] 默认进入商户端时保持“全部业务”全局上下文，只展示 `merchant_menu.module_key=''` 的公共菜单；选择具体业务后追加展示与其 `business_type` 同名模块菜单。酒店现有专属菜单为客房管理、房量与价格；餐饮暂无专属页面，不伪造入口。
+- [x] 切换业务后如果当前路由不再可见，自动回到 `/dashboard`；动态路由和后端权限仍使用完整授权菜单，不用前端选择替代后端鉴权。
+- [x] PHP 语法检查、merchant-web `vue-tsc --noEmit` 与 Vite production build 通过；Docker Desktop Engine 返回 500，真实接口与登录后浏览器联调待 Docker 恢复后补验。
+
 ## 2026-08-28 商户工作台服务器内部错误修复
 
 - 现象：GET `/api/v1/merchant/stats/dashboard`服务器内部错误。日志先报`Unknown column merchant_id`；本地开发库及隔离库缺marketing/07迁移。
@@ -176,3 +197,30 @@
 ### 验证
 - [x] `D:\BtSoft\php\81\php.exe -l` 检查新增 RoomController / AvailabilityController / routes.php 通过。
 - [x] `cd merchant-web; npm run build` 通过(EXIT=0;仅 Vite chunk 体积警告)。
+
+## 2026-09-01 M2 房型列表、新增房型与完整审核流程
+
+### 交付范围
+- 房型列表保留酒店、关键词、审核状态筛选，展示销售状态、审核状态、驳回原因，并提供详情、编辑、复制、上下架、删除/申请下架操作。
+- 新增与编辑房型采用独立页面 `/rooms/create`、`/rooms/:id/edit`，不是弹窗；表单覆盖基础资料、床型与人数、设施、真实图片/视频上传、定价、库存、政策及草稿/提交审核动作。
+- 新增 `/rooms/:id` 详情页，同时展示当前生效版本、待审核/草稿版本、审核历史及驳回原因。
+- 新增 `hotel_room_type_revision` 版本表及房型审核服务。草稿、提交、驳回、重新提交、撤回、复制、下架申请和管理员通过/驳回均有版本记录；已生效房型在新版本获批前保持不变。
+- admin-web 商品审核页新增“房型审核”队列、版本差异、媒体预览与通过/驳回动作，沿用 `goods:audit:audit` 权限。
+- C 端/市场读取只返回 `publish_status=2` 的已批准房型；既有已上架酒店房型由幂等迁移回填为生效版本。
+
+### 数据与部署
+- 新增幂等迁移 `database/goods/07-room-review-workflow.sql`，并同步基线 `database/goods/01-goods.sql` 与 Docker initdb 登记。
+- goods-service 增加 `/uploads` 共享卷；merchant-web Vite 代理补齐 `/uploads`，媒体上传由 goods-service 校验类型、大小和图片分辨率。
+
+### 验证
+- [x] 房型审核服务回归 6 项通过：新建隔离、驳回、重新提交、批准发布、待审更新不覆盖线上、再次驳回保留线上版本。
+- [x] 真实网关 HTTP 链路通过：图片 multipart 上传 → 商户提交 → 管理员队列/详情/通过 → 商户更新 → 管理员驳回 → 商户详情核对线上版本与驳回原因；临时业务数据与上传文件已清理。
+- [x] `scripts/check.ps1` 通过：325 个 PHP 文件语法检查、shared 58 用例/858 断言、admin-web 构建、client 类型检查全部成功。
+- [x] merchant-web `vue-tsc --noEmit && vite build` 与 admin-web production build 通过；仅有项目既有 Vite 大 chunk 提示，无新增 TypeScript 或构建警告。
+- [x] 修复开发服务器仅监听 IPv6 导致 `127.0.0.1:5174` 白屏：Vite 明确监听 `0.0.0.0`，重启后 IPv4 与 `localhost` 的 `/rooms`、`/src/main.ts` 均返回 200。
+- [x] 开发环境将 `localhost:5174` 规范化跳转到 `127.0.0.1:5174` 并保留路径、查询参数和 Hash，避免两个 Origin 的 `localStorage` 登录 Token 不共享而误跳登录页；生产环境不受影响。
+- [x] 修复房型媒体上传文件权限：`UploadedFile::moveTo()` 生成的文件原为 `600`，OpenResty 无权读取并返回 403；保存后统一调整为 `0644`，存量房型图片已同步修复。真实新上传回归已验证网关公开读取返回 `200 image/*`。
+
+### Git 记录
+- 用户已授权将本节 M2 房型管理、审核流程、开发入口与图片显示修复做一次本地提交，不推送。
+- 明确排除项目根目录 `start.bat`、`stop.bat`、`设计文档/` 下新增文件及与本任务无关的 OpenResty DNS 配置改动；实际提交哈希见 Git 日志。

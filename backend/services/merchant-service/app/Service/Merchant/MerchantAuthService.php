@@ -110,7 +110,14 @@ class MerchantAuthService
     /**
      * 动态菜单:按 account_type + 角色返回可见菜单树(目录+页面)与按钮权限集合
      */
-    public function menus(int $adminId, int $accountType, bool $isOwner, int $merchantId = 0): array
+    public function menus(
+        int $adminId,
+        int $accountType,
+        bool $isOwner,
+        int $merchantId = 0,
+        array $merchantIds = [],
+        ?int $storeId = null
+    ): array
     {
         $query = Db::table('merchant_menu')
             ->where('status', 1)
@@ -133,7 +140,42 @@ class MerchantAuthService
         return [
             'menus' => MenuTreeHelper::build($menus),
             'perms' => $perms,
+            'businesses' => $this->businesses($merchantIds, $storeId),
         ];
+    }
+
+    /**
+     * 左上角业务切换器的数据源:只返回当前账号数据范围内、已关联正式商户的注册业务。
+     * 门店账号进一步收窄到当前门店绑定的业务,避免展示同商户的其他业务。
+     */
+    private function businesses(array $merchantIds, ?int $storeId): array
+    {
+        $merchantIds = array_values(array_filter(array_map('intval', $merchantIds), static fn (int $id) => $id > 0));
+        if ($merchantIds === []) {
+            return [];
+        }
+
+        $query = Db::table('merchant_application_business as b')
+            ->join('merchant_application as a', 'a.id', '=', 'b.application_id')
+            ->join('merchant_info as m', 'm.id', '=', 'a.merchant_id')
+            ->whereIn('a.merchant_id', $merchantIds)
+            ->whereIn('m.status', [3, 4])
+            ->whereNull('m.deleted_at')
+            ->where('b.kyc_status', 1);
+
+        if ($storeId !== null) {
+            $businessId = (int) (Db::table('merchant_store')
+                ->where('id', $storeId)->whereNull('deleted_at')->value('source_business_id') ?? 0);
+            $query->where('b.id', $businessId > 0 ? $businessId : -1);
+        }
+
+        return $query->orderBy('b.business_type')->orderBy('b.id')
+            ->get([
+                'b.id', 'a.merchant_id', 'm.merchant_name', 'b.business_name',
+                'b.business_type', 'b.city',
+            ])
+            ->map(static fn ($row) => (array) $row)
+            ->all();
     }
 
     /**

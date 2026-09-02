@@ -108,8 +108,14 @@ export default function RegisterScreen() {
 
   return (
     <View style={styles.root}>
-      {/* 插画铺底:设计稿是整屏图片填充后裁切,这里按同样的比例绝对定位 */}
-      <Image source={ILLUSTRATION} style={styles.illustration} resizeMode="cover" />
+      {/**
+       * 插画铺底:设计稿是整屏图片填充后裁切,这里按同样的比例绝对定位。
+       * **必须外面套一层 overflow:'hidden' 的裁切层** —— 图宽是屏宽的 150.41%、左边还退了 18.49%,
+       * 右侧会超出屏幕约 32%,不裁的话整页可以横向拖动(同开屏页波浪的 `styles.waves` 做法)。
+       */}
+      <View style={styles.illustrationClip} pointerEvents="none">
+        <Image source={ILLUSTRATION} style={styles.illustration} resizeMode="cover" />
+      </View>
 
       <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
         {/* 顶部栏:自上而下由主色 50% 渐隐到透明 */}
@@ -296,6 +302,8 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.primary },
   safe: { flex: 1 },
   flex: { flex: 1 },
+  /* 插画裁切层:铺满整屏并把超出的部分剪掉(见上面 JSX 的说明) */
+  illustrationClip: { ...StyleSheet.absoluteFillObject, overflow: 'hidden' },
   /* 设计稿:w150.41% h46.55%,left-18.49% top16.66% */
   illustration: {
     position: 'absolute',
@@ -425,11 +433,18 @@ const styles = StyleSheet.create({
   },
 
   socials: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 16 },
+  /**
+   * 设计稿是 px31 的固定宽(20 的图标 → 82 宽),三枚 + 两道 16 间距 = 278。
+   * 卡片可用宽 = 屏宽 - 32(页边距)- 48(卡片内边距),屏宽小于约 358 时会被挤破,
+   * 故改成等分 + 上限 82:402 宽下与设计稿一致,窄屏自动收窄。
+   */
   socialBtn: {
+    flex: 1,
+    minWidth: 0,
+    maxWidth: 82,
     height: 48,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 31,
     borderRadius: radius.btn,
     borderWidth: 1,
     borderColor: colors.softBlue,

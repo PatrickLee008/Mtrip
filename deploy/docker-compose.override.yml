@@ -32,6 +32,7 @@ services:
       - ../backend/services/goods-service/app:/opt/www/app
       - ../backend/services/goods-service/config:/opt/www/config
       - ./logs/goods-service:/opt/www/runtime/logs
+      - ./uploads:/opt/www/uploads
       - *shared-src
 
   order-service:

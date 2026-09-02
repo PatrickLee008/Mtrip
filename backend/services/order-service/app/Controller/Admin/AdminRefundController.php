@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Controller\Admin;
 
+use App\Service\Booking\BookingEventService;
 use App\Service\OrderStockService;
 use App\Service\WalletService;
 use Hyperf\DbConnection\Db;
@@ -28,6 +29,9 @@ class AdminRefundController extends AbstractAdminController
 
     #[Inject]
     protected WalletService $walletService;
+
+    #[Inject]
+    protected BookingEventService $bookingEvents;
 
     /** 退款单列表:筛选 退款单号/订单号/状态/商户/申请日期 */
     public function index(): array
@@ -178,6 +182,9 @@ class AdminRefundController extends AbstractAdminController
             Db::table('order_main')->where('id', $order['id'])->update([
                 'order_status' => $fullRefund ? 6 : 1,
                 'refund_status' => $fullRefund ? 3 : 2,
+                // M4:支付状态双写(部分退款/已退款)
+                'payment_status' => $fullRefund ? \App\Constants\BookingConst::PAY_REFUNDED : \App\Constants\BookingConst::PAY_PARTIAL_REFUNDED,
+                'version' => Db::raw('version + 1'),
             ]);
             // 全额退款回补库存(change_type=4);部分退款订单仍有效不回补
             if ($fullRefund) {
@@ -211,6 +218,11 @@ class AdminRefundController extends AbstractAdminController
                 'remark' => "退款单 {$refund['refund_no']} 到账确认(" . ($toWallet ? '入mTrip钱包' : '原路退回') . ')',
                 'operator_id' => AdminContext::adminId(),
             ]);
+            $this->bookingEvents->log($order, 'refund_completed', \App\Constants\BookingConst::OPERATOR_PLATFORM, AdminContext::adminId(), '', 1, [
+                'refundNo' => (string) $refund['refund_no'],
+                'refundAmount' => $refundAmount,
+                'fullRefund' => $fullRefund,
+            ], 'refund');
         });
         $channelMsg = $toWallet ? '已退入 mTrip 钱包' : '已原路退回';
         return Result::success(null, ($fullRefund ? '退款已完成,订单已关闭并回补库存' : '部分退款已完成,订单继续有效') . ",{$channelMsg}");

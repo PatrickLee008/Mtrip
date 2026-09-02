@@ -121,6 +121,8 @@ services:
       - ../database/merchant/25-merchant-application-reg-number-unique.sql:/docker-entrypoint-initdb.d/39g-merchant-application-reg-number-unique.sql:ro
       # 入驻线索创建即生成唯一商户业务编号 MCH-XXXX，并贯穿正式商户
       - ../database/merchant/26-merchant-code.sql:/docker-entrypoint-initdb.d/39h-merchant-code.sql:ro
+      # 商户业务编号跨申请表与正式商户表统一分配，避免独立自增主键碰撞
+      - ../database/merchant/38-merchant-code-sequence.sql:/docker-entrypoint-initdb.d/39q-merchant-code-sequence.sql:ro
       - ../database/merchant/27-merchant-status.sql:/docker-entrypoint-initdb.d/39i-merchant-status.sql:ro
       - ../database/merchant/28-merchant-directory-property.sql:/docker-entrypoint-initdb.d/39j-merchant-directory-property.sql:ro
       - ../database/merchant/29-merchant-documents-notifications.sql:/docker-entrypoint-initdb.d/39k-merchant-documents-notifications.sql:ro
@@ -153,9 +155,11 @@ services:
       - ../database/marketing/03-consumer-funding.sql:/docker-entrypoint-initdb.d/93-consumer-funding.sql:ro
       - ../database/finance/02-consumer-account-entry.sql:/docker-entrypoint-initdb.d/94-consumer-account-entry.sql:ro
       - ../database/user/08-consumer-chat.sql:/docker-entrypoint-initdb.d/95-consumer-chat.sql:ro
+      - ../database/user/10-chat-booking-link.sql:/docker-entrypoint-initdb.d/95a-chat-booking-link.sql:ro
       - ../database/order/04-consumer-trip.sql:/docker-entrypoint-initdb.d/96-consumer-trip.sql:ro
       - ../database/goods/05-merchant-review-flag.sql:/docker-entrypoint-initdb.d/96a-merchant-review-flag.sql:ro
       - ../database/goods/06-merchant-room-availability-fields.sql:/docker-entrypoint-initdb.d/96b-merchant-room-availability-fields.sql:ro
+      - ../database/goods/07-room-review-workflow.sql:/docker-entrypoint-initdb.d/96c-room-review-workflow.sql:ro
       - ../database/goods/04-consumer-filter.sql:/docker-entrypoint-initdb.d/97-consumer-filter.sql:ro
       - ../database/marketing/04-consumer-campaign.sql:/docker-entrypoint-initdb.d/98-consumer-campaign.sql:ro
       # 带货达人与联盟(Super Admin Portal Phase 2)
@@ -172,6 +176,14 @@ services:
       # 平台特性开关(模块11)
       - ../database/system/09-feature-flag.sql:/docker-entrypoint-initdb.d/99f-feature-flag.sql:ro
       - ../database/system/10-storage-aliyun-resource.sql:/docker-entrypoint-initdb.d/99g-storage-aliyun-resource.sql:ro
+      # Merchant App M4 酒店预订管理(预订字段/时间线/备注/同步表 + 预订菜单权限)
+      - ../database/order/05-merchant-booking.sql:/docker-entrypoint-initdb.d/99h-merchant-booking.sql:ro
+      - ../database/merchant/36-merchant-booking-menu.sql:/docker-entrypoint-initdb.d/99i-merchant-booking-menu.sql:ro
+      - ../database/merchant/37-merchant-booking-message.sql:/docker-entrypoint-initdb.d/99j-merchant-booking-message.sql:ro
+      # order_main.guests 列类型修正(JSON → TEXT,存的是 AES 密文)
+      - ../database/order/06-guests-column-type-fix.sql:/docker-entrypoint-initdb.d/99k-guests-column-type-fix.sql:ro
+      # 修复超级管理员录入线索未带站点时生成的 MCH-5019 全链路 site_id=0
+      - ../database/merchant/39-mch-5019-site-fix.sql:/docker-entrypoint-initdb.d/99l-mch-5019-site-fix.sql:ro
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-p${MYSQL_ROOT_PASSWORD:-root@2026}"]
       interval: 5s
@@ -226,6 +238,8 @@ services:
       HTTP_PORT: "9503"
     ports:
       - "9503:9503"
+    volumes:
+      - ./uploads:/opt/www/uploads
 
   order-service:
     <<: *hyperf-common
@@ -289,10 +303,18 @@ services:
     restart: unless-stopped
     ports:
       - "${GATEWAY_HOST_PORT:-8081}:80"
+      # 前端静态托管端口(admin/merchant/supplier),server 块见 openresty/conf.d/mtrip.conf
+      - "${ADMIN_WEB_PORT:-8090}:8090"
+      - "${MERCHANT_WEB_PORT:-8091}:8091"
+      - "${SUPPLIER_WEB_PORT:-8092}:8092"
     volumes:
       - ./openresty/nginx.conf:/usr/local/openresty/nginx/conf/nginx.conf:ro
       - ./openresty/conf.d:/etc/nginx/conf.d:ro
       - ./uploads:/usr/local/openresty/nginx/static/uploads:ro
+      # 前端 vite build 产物(由 scripts/auto-deploy.sh 原子替换),缺省空目录 SPA 回退 index.html
+      - ./web/admin:/usr/local/openresty/nginx/html/admin:ro
+      - ./web/merchant:/usr/local/openresty/nginx/html/merchant:ro
+      - ./web/supplier:/usr/local/openresty/nginx/html/supplier:ro
     depends_on:
       - system-service
       - user-service

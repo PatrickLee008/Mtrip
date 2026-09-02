@@ -9,6 +9,11 @@ export const STORAGE_KEYS = {
   SITE: 'mtrip:site',
   LANG: 'mtrip:lang',
   GDPR: 'mtrip:gdpr-consent',
+  /**
+   * 登录页「记住我」记住的手机号(**不含密码**)。
+   * 单独一个键是因为它要**跨退出登录**保留 —— `userStore.clearLocal` 只清 TOKEN 与 USER。
+   */
+  REMEMBER_MOBILE: 'mtrip:remember-mobile',
 } as const;
 
 /** App 版本号(与 app.json / package.json 的 version 保持一致,展示在「更多」页底部) */
@@ -43,6 +48,19 @@ export const ORDER_STATUS_I18N: Record<number, string> = {
 
 /** 商品类型:1酒店 2门票 */
 export const GOODS_TYPE = { HOTEL: 1, TICKET: 2 } as const;
+
+/**
+ * 常旅客证件类型:1 NRC 2 护照 3 其他
+ * 口径与 user-service `TravelerController::collect()` 的 `in_array($idType, [1,2,3])` 一致
+ */
+export const TRAVELER_ID_TYPES = [1, 2, 3] as const;
+export type TravelerIdType = (typeof TRAVELER_ID_TYPES)[number];
+/** 证件类型 → i18n 文案键 */
+export const TRAVELER_ID_TYPE_I18N: Record<number, string> = {
+  1: 'more.travelers.idTypes.nrc',
+  2: 'more.travelers.idTypes.passport',
+  3: 'more.travelers.idTypes.other',
+};
 
 /** 支持语言(顺序 = 开屏语言选择页的展示顺序,见 Figma Splash 2163:8057) */
 export const SUPPORTED_LANGS = ['en-US', 'my-MM', 'zh-CN'] as const;

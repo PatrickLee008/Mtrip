@@ -16,7 +16,7 @@ INSERT IGNORE INTO `merchant_menu` (`id`, `parent_id`, `menu_name`, `menu_name_e
 (100, 0, '工作台',     'Dashboard', 'menu.dashboard', 'mch:dashboard',   2, '/dashboard', 'dashboard/index', 'DashboardOutlined', 1, '1,2,3'),
 (200, 0, '组织与权限', 'Org',       'menu.org',       'mch:org',         1, '/account',   '',                'TeamOutlined',      2, '1,2'),
 (300, 0, '门店管理',   'Stores',    'menu.store',     'mch:store:list',  2, '/store',     'store/index',     'ShopOutlined',      3, '1,2,3'),
-(400, 0, '订单核销',   'Orders',    'menu.order',     'mch:order:list',  2, '/order',     'order/index',     'ProfileOutlined',   4, '1,2,3'),
+(400, 0, '预订管理',   'Booking Management', 'menu.booking', 'mch:order:list',  2, '/order',     'order/index',     'ProfileOutlined',   4, '1,2,3'),
 (500, 0, '商品管理',   'Goods',     'menu.goods',     'mch:goods:list',  2, '/goods',     'goods/index',     'GoldOutlined',      5, '1,2,3'),
 (600, 0, '客房管理',   'Rooms',     'menu.rooms',     'mch:rooms:list',  2, '/rooms',     'rooms/index',     'HomeOutlined',      6, '1,2,3'),
 (700, 0, '房量与价格', 'Availability & Pricing', 'menu.availability', 'mch:availability:list', 2, '/availability', 'availability/index', 'CalendarOutlined', 7, '1,2,3'),
@@ -49,9 +49,22 @@ INSERT IGNORE INTO `merchant_menu` (`id`, `parent_id`, `menu_name`, `menu_name_e
 (30003, 300, '设为主门店', 'Set Main',       'mch:store:set-main', 3, 3, '1,2'),
 (30004, 300, '启用停业',   'Enable/Disable', 'mch:store:status',   3, 4, '1,2');
 
--- ---------- 订单核销按钮 ----------
+-- ---------- 预订管理按钮 ----------
 INSERT IGNORE INTO `merchant_menu` (`id`, `parent_id`, `menu_name`, `menu_name_en`, `perm_key`, `menu_type`, `sort`, `account_scope`) VALUES
-(40001, 400, '订单核销', 'Verify Order',  'mch:order:verify', 3, 1, '1,2,3');
+(40001, 400, '订单核销', 'Verify Order',  'mch:order:verify', 3, 1, '1,2,3'),
+(40002, 400, '查看预订详情', 'View Booking',     'mch:order:detail',        3, 2,  '1,2,3'),
+(40003, 400, '导出预订',     'Export Bookings',  'mch:order:export',        3, 3,  '1,2,3'),
+(40004, 400, '确认预订',     'Confirm Booking',  'mch:order:confirm',       3, 4,  '1,2,3'),
+(40005, 400, '办理入住',     'Check In',         'mch:order:check-in',      3, 5,  '1,2,3'),
+(40006, 400, '办理退房',     'Check Out',        'mch:order:check-out',     3, 6,  '1,2,3'),
+(40007, 400, '取消预订',     'Cancel Booking',   'mch:order:cancel',        3, 7,  '1,2,3'),
+(40008, 400, '预订退款',     'Refund Booking',   'mch:order:refund',        3, 8,  '1,2,3'),
+(40009, 400, '标记未入住',   'Mark No-show',     'mch:order:no-show',       3, 9,  '1,2,3'),
+(40010, 400, 'No-show豁免费用', 'Waive No-show Fee', 'mch:order:no-show-waive', 3, 10, '1,2'),
+(40011, 400, '内部备注',     'Internal Note',    'mch:order:note',          3, 11, '1,2,3'),
+(40012, 400, '同步PMS渠道',  'Sync PMS',         'mch:order:sync',          3, 12, '1,2,3'),
+(40013, 400, '预订凭证',     'Booking Voucher',  'mch:order:voucher',       3, 13, '1,2,3'),
+(40014, 400, '查看住客联系方式', 'View Guest Contact', 'mch:order:guest-contact', 3, 14, '1,2,3');
 
 -- ---------- 商品管理按钮 ----------
 INSERT IGNORE INTO `merchant_menu` (`id`, `parent_id`, `menu_name`, `menu_name_en`, `perm_key`, `menu_type`, `sort`, `account_scope`) VALUES

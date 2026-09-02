@@ -446,10 +446,36 @@
     "travelers": {
       "title": "Traveler",
       "guest": "Guest",
-      "selectGuest": "Select Guest ({{count}}/{{max}})",
+      "selectGuest": "Select Guest ({{selected}}/{{max}})",
+      "pickTitle": "Select Lead Guest",
       "addGuest": "Add New Guest",
+      "editTitle": "Edit Traveler",
       "done": "Done",
-      "maxReached": "You can select up to {{max}} guests"
+      "save": "Save Info",
+      "delete": "Delete this traveler",
+      "confirm": "Confirm",
+      "empty": "No saved travelers yet",
+      "default": "Default",
+      "maxReached": "You can select up to {{max}} guests",
+      "firstName": "First Name",
+      "lastName": "Last Name",
+      "nationality": "Nationality",
+      "nationalityPlaceholder": "e.g. Myanmar",
+      "idType": "ID Type",
+      "idTypes": {
+        "nrc": "NRC",
+        "passport": "Passport",
+        "other": "Other"
+      },
+      "idNo": "ID Number",
+      "idNoPlaceholder": "e.g. 12/OoKaMa(N)123456",
+      "idNoKeep": "Leave blank to keep current",
+      "idNoMasked": "Currently saved: {{masked}}",
+      "expireDate": "Expiry Date",
+      "expireDatePlaceholder": "Select expiry date",
+      "setDefault": "Set as default traveler",
+      "nameRequired": "Please fill in both first and last name.",
+      "idNoRequired": "Please fill in the ID number."
     },
     "editEmail": {
       "title": "Edit Email",
@@ -947,6 +973,229 @@
         "homesApts": "Homes & Apts",
         "hostels": "Hostels",
         "hourly": "Hourly rate rooms"
+      }
+    },
+    "booking": {
+      "steps": {
+        "dates": "Date Confirmation",
+        "guests": "Traveler Information",
+        "review": "Review & Confirm",
+        "trip": "Trip Details",
+        "payment": "Payment"
+      },
+      "stepOf": "Step {{step}} of {{total}}",
+      "back": "Back",
+      "continue": "Continue",
+      "addToTrip": "Add To Trip",
+      "checkOut": "Check Out",
+      "totalEstimated": "TOTAL ESTIMATED PRICE",
+      "nights": {
+        "one": "1 Night",
+        "many": "{{nights}} Nights"
+      },
+      "nightsLower": {
+        "one": "1 night",
+        "many": "{{nights}} nights"
+      },
+      "dates": {
+        "duration": "BOOKING DURATION",
+        "guestsRooms": "GUESTS & ROOMS",
+        "guestsRoomsValue": "{{adults}} Adults, {{rooms}} Room",
+        "selectedDates": "Selected Dates",
+        "checkOutRequired": "Please pick your check-out date.",
+        "whosComing": "Who's Coming?",
+        "adults": "Adults",
+        "adultsHint": "Ages 13 or above",
+        "children": "Children",
+        "childrenHint": "Ages 2 - 12",
+        "enhance": "Enhance Your Stay",
+        "optional": "Optional",
+        "addToBooking": "Add to booking",
+        "selected": "Selected",
+        "specialRequests": "Special Requests",
+        "requestLabel": "Any specific requirements?",
+        "requestPlaceholder": "e.g. Early check-in, dietary restrictions, or anniversary celebration...",
+        "requestNote": "Requests are subject to availability upon arrival."
+      },
+      "addons": {
+        "breakfast": {
+          "title": "Daily Breakfast",
+          "desc": "Buffet selection with local and international specialties."
+        },
+        "transfer": {
+          "title": "Airport Transfer",
+          "desc": "Private pickup from Nyaung-U Airport directly to hotel."
+        },
+        "insurance": {
+          "title": "Insurance",
+          "desc": "Add Protection Plans"
+        }
+      },
+      "guests": {
+        "leadGuest": "Lead Guest",
+        "select": "Select",
+        "firstName": "First Name",
+        "firstNamePlaceholder": "e.g. John",
+        "lastName": "Last Name",
+        "lastNamePlaceholder": "e.g. Doe",
+        "phone": "Phone Number",
+        "phonePlaceholder": "9 123 4567",
+        "email": "Email Address",
+        "emailPlaceholder": "john.doe@example.com",
+        "emailNote": "Booking confirmation will be sent to this email.",
+        "saveInfo": "Save Info",
+        "additional": "Additional Guests",
+        "additionalHint": "Optional: Add {{guests}} more travelers",
+        "secureTitle": "Secure Booking",
+        "secureDesc": "Your data is encrypted and used only for booking purposes. We never sell your personal information.",
+        "nameRequired": "Please fill in the lead guest's name.",
+        "phoneRequired": "Please enter a contact phone number."
+      },
+      "review": {
+        "preferred": "Preferred",
+        "roomGuests": "{{guests}} Guests",
+        "checkInOut": "Check-in / Check-out",
+        "checkInOutValue": "{{checkIn}} - {{checkOut}}",
+        "guestsRooms": "Guests & Rooms",
+        "guestsRoomsValue": "{{guests}} travellers, {{rooms}} room",
+        "addOnService": "Add On Service",
+        "priceBreakdown": "Price Breakdown",
+        "originalPrice": "Original Price ({{nights}})",
+        "roomPrice": "Room Price ({{nights}})",
+        "taxes": "Service Charge & Taxes ({{percent}}%)",
+        "totalAmount": "TOTAL AMOUNT",
+        "earnPoints": "Earn {{points}} Points",
+        "addMoreStay": "Add More Stay",
+        "addMoreStayDesc": "Add another hotel to your trip. Enter the destination and stay dates for your next hotel, then add it to this booking and pay for all your hotel stays together in one payment",
+        "addHotel": "+ Add Hotel and Homestay",
+        "cancellationPolicy": "Cancellation Policy",
+        "cancellationDesc": "Free cancellation until 48 hours before check-in. Non-refundable if cancelled after {{date}}.",
+        "agreePrefix": "I agree to the ",
+        "terms": "Terms of Service",
+        "agreeSeparator": ", ",
+        "privacy": "Privacy Policy",
+        "agreeSuffix": ", and the property's house rules. I understand that mTrip acts as an intermediary agent for this booking.",
+        "agreeRequired": "Please accept the terms and conditions to continue."
+      },
+      "trip": {
+        "stay": "Stay {{index}}",
+        "change": "Change",
+        "viewDetails": "View Details",
+        "hotelTotal": "Hotel {{index}} Total",
+        "multiBooking": "Multi Booking ({{stays}} Stay)",
+        "stayDetailTitle": "Hotel Detail",
+        "added": "A second stay has been added to this trip."
+      },
+      "payment": {
+        "summaryRange": "{{checkIn}} - {{checkOut}} ({{nights}})",
+        "roomLine": "{{rooms}} x {{room}}, {{guests}} Guests",
+        "viewDetails": "View Details",
+        "payByOther": "Pay by other",
+        "share": "Share",
+        "wallet": "mTRIP WALLET",
+        "availableBalance": "Available Balance",
+        "popular": "Popular Payment Method",
+        "other": "Other Payment Methods",
+        "methods": {
+          "mmqr": {
+            "title": "MMQR Pay",
+            "desc": "Scan to pay instantly"
+          },
+          "kbzpay": {
+            "title": "KBZPay",
+            "desc": "Mobile Wallet"
+          },
+          "wavepay": {
+            "title": "Wave Pay",
+            "desc": "Mobile Wallet"
+          },
+          "wallet": {
+            "title": "Pay with mTrip Wallet",
+            "desc": "Available: {{amount}}"
+          },
+          "hotel": {
+            "title": "Pay at Hotel",
+            "desc": "Pay only at property"
+          },
+          "card": {
+            "title": "Credit/debit Cards"
+          },
+          "mobileBanking": {
+            "title": "Mobile Banking"
+          }
+        },
+        "savedCard": "Visa **** {{last4}}",
+        "cardExpires": "Expires {{date}}",
+        "addCard": "Add New Card",
+        "couponsLabel": "COUPONS",
+        "couponsTitle": "Coupons",
+        "couponsDesc": "Choose a coupon",
+        "cashbackTitle": "Earn {{percent}}% Cashback",
+        "cashbackDesc": "Get {{amount}} back in your wallet",
+        "paymentSummary": "Payment Summary",
+        "secureTitle": "Secure Payment Guarantee",
+        "secureDesc": "Your payment details are encrypted and securely processed. mTrip does not store your credit card information.",
+        "badges": {
+          "ssl": "SSL ENCRYPTED",
+          "pci": "PCI COMPLIANT",
+          "support": "24/7 SUPPORT"
+        },
+        "methodRequired": "Please choose a payment method.",
+        "successTitle": "Payment Success",
+        "close": "Close",
+        "failTitle": "Payment Fail!",
+        "failReason": "Reason of failure:",
+        "cancel": "Cancel",
+        "retry": "Retry"
+      },
+      "success": {
+        "title": "Booking Confirmed",
+        "referencePrefix": "Reference ID: ",
+        "voucher": "YOUR DIGITAL VOUCHER",
+        "summary": "Booking Summary",
+        "paid": "PAID",
+        "checkIn": "CHECK-IN",
+        "checkOut": "CHECK-OUT",
+        "guests": "GUESTS",
+        "totalPaid": "TOTAL PAID",
+        "guestsValue": "{{adults}} Adults, {{rooms}} Room",
+        "download": "Download Voucher",
+        "viewBooking": "View Booking",
+        "upsell": "Ready for your adventure in {{city}}?",
+        "upsellLink": "Explore local dining & tours",
+        "backHome": "Back to Home",
+        "tags": {
+          "room": "Deluxe Room",
+          "breakfast": "Breakfast Included"
+        }
+      },
+      "insurance": {
+        "title": "Travel Protection",
+        "insurance": "Insurance",
+        "daysCovered": "{{days}} days covered",
+        "personalize": "Personalize your coverage",
+        "persons": "Number of person",
+        "personValue": "{{persons}} Person",
+        "extend": "Extend your coverage by up to 30 days",
+        "dayValue": "{{days}} days",
+        "beneficiary": "Beneficiary Information",
+        "fullName": "Full name",
+        "fullNamePlaceholder": "Enter beneficiary's full name",
+        "phone": "Phone Number",
+        "phonePlaceholder": "9 123 4567",
+        "benefits": "Benefits",
+        "benefitLabels": {
+          "accidentalDeath": "Accidental Death",
+          "medical": "Medical, hospital and other expenses"
+        },
+        "links": {
+          "eligibility": "Eligibility",
+          "terms": "Terms and Conditions",
+          "cancellation": "Cancellation Policy"
+        },
+        "agree": "By continuing, you agree to the Terms & Conditions and Cancellation Policy.",
+        "totalCost": "Total Cost",
+        "confirm": "Confirm"
       }
     }
   }

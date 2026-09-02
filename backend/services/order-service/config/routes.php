@@ -14,6 +14,7 @@ use App\Controller\Admin\AdminRefundController;
 use App\Controller\Admin\AdminStatsController;
 use App\Controller\Admin\AdminTripController;
 use App\Controller\Admin\AdminVerifyController;
+use App\Controller\Merchant\BookingController as MerchantBookingController;
 use App\Controller\Merchant\OrderController as MerchantOrderController;
 use App\Controller\Merchant\StatsController as MerchantStatsController;
 use App\Controller\App\OrderController;
@@ -75,10 +76,27 @@ Router::addGroup('/api/v1/admin/order', static function () {
     'middleware' => [AdminAuthMiddleware::class, OperationLogMiddleware::class],
 ]);
 
-// 商户端(merchant-web):订单与核销,MerchantAuthMiddleware 鉴权 + 商户数据范围
+// 商户端(merchant-web):酒店预订管理(实现方案-Merchant-M4 §7.2),MerchantAuthMiddleware 鉴权 + 商户数据范围
+// list/detail 已切换为预订实现,不保留两套业务实现;通用手工核销仍由旧订单控制器承载
 Router::addGroup('/api/v1/merchant/order', static function () {
-    Router::get('/list', [MerchantOrderController::class, 'index']);
-    Router::get('/detail', [MerchantOrderController::class, 'detail']);
+    Router::get('/booking-stats', [MerchantBookingController::class, 'stats']);
+    Router::get('/list', [MerchantBookingController::class, 'index']);
+    Router::get('/detail', [MerchantBookingController::class, 'detail']);
+    Router::get('/timeline', [MerchantBookingController::class, 'timeline']);
+    Router::post('/confirm', [MerchantBookingController::class, 'confirm']);
+    Router::post('/check-in', [MerchantBookingController::class, 'checkIn']);
+    Router::post('/check-out', [MerchantBookingController::class, 'checkOut']);
+    Router::post('/cancel', [MerchantBookingController::class, 'cancel']);
+    Router::post('/no-show', [MerchantBookingController::class, 'noShow']);
+    Router::get('/refund/quote', [MerchantBookingController::class, 'refundQuote']);
+    Router::post('/refund/apply', [MerchantBookingController::class, 'refundApply']);
+    Router::post('/note', [MerchantBookingController::class, 'noteAdd']);
+    Router::post('/sync', [MerchantBookingController::class, 'sync']);
+    Router::get('/export', [MerchantBookingController::class, 'export']);
+    Router::get('/voucher', [MerchantBookingController::class, 'voucher']);
+    Router::get('/guest-contact', [MerchantBookingController::class, 'guestContact']);
+    Router::get('/guest-thread', [MerchantBookingController::class, 'guestThread']);
+    Router::post('/guest-message', [MerchantBookingController::class, 'guestMessage']);
     Router::post('/verify', [MerchantOrderController::class, 'verify']);
 }, [
     'middleware' => [MerchantAuthMiddleware::class, OperationLogMiddleware::class],

@@ -4,7 +4,7 @@
 
 import { get, post, postEncrypted } from '@/api/request';
 import type { PageData, PageParams } from '@/api/types';
-import type { AuthResult, FavoriteItem, UserProfile } from '@/types/models';
+import type { AuthResult, FavoriteItem, TravelerItem, UserProfile } from '@/types/models';
 
 export function apiRegister(params: {
   mobile: string;
@@ -68,6 +68,38 @@ export function addFavorite(goodsId: number): Promise<null> {
 
 export function removeFavorite(goodsId: number): Promise<null> {
   return post<null>('/api/v1/app/user/favorite/remove', { goodsId });
+}
+
+/* ---- 常旅客(Frequent Traveler,需登录) ---- */
+
+/** 列表:后端直接返回数组(不是分页对象),按 is_default / id 倒序 */
+export function fetchTravelerList(): Promise<TravelerItem[]> {
+  return get<TravelerItem[]>('/api/v1/app/user/traveler/list');
+}
+
+export interface TravelerPayload {
+  nationality?: string;
+  firstName: string;
+  lastName: string;
+  /** 1 NRC 2 护照 3 其他,缺省 2 */
+  idType?: number;
+  /** 新增必填;**编辑时留空 = 保持原值**(列表返回的是脱敏值,回填不了原文) */
+  idNo?: string;
+  /** YYYY-MM-DD */
+  idExpireDate?: string;
+  isDefault?: number;
+}
+
+export function addTraveler(params: TravelerPayload): Promise<{ id: number }> {
+  return post<{ id: number }>('/api/v1/app/user/traveler/add', { ...params });
+}
+
+export function updateTraveler(id: number, params: TravelerPayload): Promise<null> {
+  return post<null>('/api/v1/app/user/traveler/update', { id, ...params });
+}
+
+export function deleteTraveler(id: number): Promise<null> {
+  return post<null>('/api/v1/app/user/traveler/delete', { id });
 }
 
 export function addFeedback(params: {

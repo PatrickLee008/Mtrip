@@ -30,10 +30,19 @@ BUSINESS_SERVICES=(
     system-service user-service goods-service order-service
     merchant-service finance-service marketing-service payment-service
 )
+# APP 端独立实例池:5 个共享服务的 -app 孪生(不发布宿主端口,仅经网关内网可达)
+# 定义见 docker-compose.app-pool.yml;网关 /api/v1/app/* 一律走这些孪生
+APP_POOL_SERVICES=(
+    system-service-app user-service-app goods-service-app
+    order-service-app marketing-service-app
+)
 INFRA_SERVICES=(mysql redis gateway)
 # 业务服务 -> 容器内 HTTP 端口(默认栈同时映射到宿主机同名端口)
 SERVICE_PORTS="system-service:9501 user-service:9502 goods-service:9503 order-service:9504 \
 merchant-service:9505 finance-service:9506 marketing-service:9507 payment-service:9508"
+# APP 孪生 -> 容器内 HTTP 端口(无宿主映射,仅容器内探活用)
+APP_POOL_PORTS="system-service-app:9501 user-service-app:9502 goods-service-app:9503 \
+order-service-app:9504 marketing-service-app:9507"
 
 S7_PROJECT="mtrip-s7"
 S7_ENV_FILE="s7.env.example"
@@ -74,9 +83,16 @@ detect_compose() {
     fi
 
     case "$MODE" in
+        dev)
+            # 默认栈:显式列出全部文件(一旦用 -f,compose 不再自动加载 yml+override)
+            # 含 APP 孪生池及其开发热挂载
+            COMPOSE+=(-f docker-compose.yml -f docker-compose.override.yml
+                      -f docker-compose.app-pool.yml -f docker-compose.app-pool.override.yml)
+            ;;
         prod)
-            COMPOSE+=(-f docker-compose.yml)
-            warn "生产模式:跳过 docker-compose.override.yml(不挂载本地源码,改代码需 build)"
+            # 生产:主池 + APP 孪生池,均不挂本地源码
+            COMPOSE+=(-f docker-compose.yml -f docker-compose.app-pool.yml)
+            warn "生产模式:跳过 override(不挂载本地源码,改代码需 build)"
             ;;
         s7)
             [ -f "$S7_ENV_FILE" ] || die "缺少 deploy/$S7_ENV_FILE,无法启动 S7 栈"
@@ -119,10 +135,10 @@ validate_services() {
     local s t known
     for s in "$@"; do
         known=0
-        for t in "${BUSINESS_SERVICES[@]}" "${INFRA_SERVICES[@]}"; do
+        for t in "${BUSINESS_SERVICES[@]}" "${APP_POOL_SERVICES[@]}" "${INFRA_SERVICES[@]}"; do
             [ "$t" = "$s" ] && { known=1; break; }
         done
-        [ "$known" -eq 1 ] || die "未知服务名:$s(可用:${BUSINESS_SERVICES[*]} ${INFRA_SERVICES[*]})"
+        [ "$known" -eq 1 ] || die "未知服务名:$s(可用:${BUSINESS_SERVICES[*]} ${APP_POOL_SERVICES[*]} ${INFRA_SERVICES[*]})"
     done
 }
 
@@ -238,6 +254,19 @@ health_via_host() {
         502) printf '  %-18s %s502%s 上游不可达 —— 跑 ./mtrip.sh restart gateway\n' "gateway 转发" "$C_RED" "$C_OFF"; failed=1 ;;
         *)   printf '  %-18s %s%s%s\n' "gateway 转发" "$C_YELLOW" "${code:-ERR}" "$C_OFF"; failed=1 ;;
     esac
+
+    # APP 孪生池:无宿主端口,只能在容器内探活(与 s7 同法)
+    info "APP 孪生池 healthz 探活(容器内,端口不对外发布)"
+    local entry name port probe
+    for entry in $APP_POOL_PORTS; do
+        name="${entry%%:*}"; port="${entry##*:}"
+        probe='exit(@file_get_contents("http://127.0.0.1:'"$port"'/healthz")?0:1);'
+        if "${COMPOSE[@]}" exec -T "$name" php -r "$probe" >/dev/null 2>&1; then
+            printf '  %-22s %s200%s\n' "$name" "$C_GREEN" "$C_OFF"
+        else
+            printf '  %-22s %s未就绪%s(看日志:./mtrip.sh logs %s)\n' "$name" "$C_RED" "$C_OFF" "$name"; failed=1
+        fi
+    done
     return $failed
 }
 
@@ -289,7 +318,9 @@ print_endpoints() {
         echo "  探活          ./mtrip.sh health --s7"
     else
         echo "  网关入口      http://localhost:$(env_get GATEWAY_HOST_PORT 8081)   (/api/v1/{admin,app,merchant,supplier}/*)"
+        echo "  前端(静态)   admin http://localhost:$(env_get ADMIN_WEB_PORT 8090)  merchant :$(env_get MERCHANT_WEB_PORT 8091)  supplier :$(env_get SUPPLIER_WEB_PORT 8092)"
         echo "  微服务直连    9501~9508  system/user/goods/order/merchant/finance/marketing/payment"
+        echo "  APP 孪生池    system/user/goods/order/marketing-service-app(无宿主端口,/app/* 走此)"
         echo "  MySQL         localhost:$(env_get MYSQL_HOST_PORT 3307)    Redis  localhost:$(env_get REDIS_HOST_PORT 6380)"
         echo "  上传目录      deploy/uploads(merchant-service 写 / gateway 读)"
         echo "  探活          ./mtrip.sh health"
@@ -330,6 +361,9 @@ Mtrip 服务启停脚本
   system-service user-service goods-service order-service
   merchant-service finance-service marketing-service payment-service
   mysql redis gateway
+  # APP 孪生池(/api/v1/app/* 上游,重启不影响管理端):
+  system-service-app user-service-app goods-service-app
+  order-service-app marketing-service-app
 
 示例:
   ./mtrip.sh start                      # 启动全部(开发栈)

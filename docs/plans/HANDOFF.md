@@ -1,5 +1,318 @@
 # 会话交接文档(HANDOFF)
 
+### ★ 2026-09-02(入驻线索必选站点 + MCH-5019 站点修复)
+
+- 根因：超级管理员“录入线索”弹窗没有站点字段，提交也不带 `siteId`；`OnboardingController::create()` 对缺失值默认写 `0`，后续申请、KYC、正式商户、物业、商品和房型全部继承平台作用域，市场排名又明确要求具体 `site_id>=1`。
+- 修复：admin-web 创建线索时对超级管理员显示必选 `SiteTreeSelect` 并提交 `siteId`；普通站点管理员仍使用自身站点。后端新增 `siteId>0` 硬校验，绕过前端同样返回 `40001`。中英文提示已补齐。
+- 存量：用户明确确认将 `MCH-5019` 迁移到 `site_id=1（全球）`。新增幂等脚本 `database/merchant/39-mch-5019-site-fix.sql`，覆盖申请/业务、商户、物业、商户管理员、访问码与活动审计、KYC文件/时间线、酒店商品、房型及房型审核版本；compose initdb 登记为 `99l-mch-5019-site-fix.sql`，存量库已用 `scripts/db-apply.ps1` 执行成功。
+- 验证：前端 `npm run build` 通过；PHP lint 与 `git diff --check` 通过；新增集成断言确认缺站点被拒、所选站点写入申请与业务单元。全量 M12 被隔离测试库缺 `meal_plan_snapshot` 阻断，定向目录套件在新增断言通过后又被隔离库缺 `sub_account_limit` 阻断，均非本次代码回归。数据库复查 `MCH-5019` 现有相关记录全部为站点1，物业 `2052` + 商品 `1033` 已进入 `CN/南宁` 排名候选；`display_enabled=0` 与正式排名绑定/发布仍按独立人工流程处理。
+
+### ★ 2026-09-02(商户业务编号跨表唯一性修复)
+
+- 根因：`merchant_application` 与 `merchant_info` 是两张独立自增表，旧实现却直接以申请主键生成 `MCH-XXXX`；申请 `id=1020` 审批时与既有正式商户 `MCH-1020` 冲突，触发 `merchant_info.uk_merchant_code` 唯一键并返回 500。
+- 修复：新增 `merchant_code_sequence` 单行序列表，创建线索时在事务中使用 `FOR UPDATE` 行锁取得全局序号，并同时检查申请表和正式商户表；审批存量申请时若原编号已被占用，在同一事务中自动分配新编号并回写申请。
+- 迁移：`database/merchant/38-merchant-code-sequence.sql`，compose initdb 登记为 `39q-merchant-code-sequence.sql`；存量库需用 `scripts/db-apply.ps1` 增量应用。
+- 验证：迁移连续执行两次成功；在数据库外层回滚事务中，`APP-20260019` 审批由冲突的 `MCH-1020` 自动改为 `MCH-5019`，随后新建线索分配 `MCH-5020`，测试结束后真实申请仍保持 stage 4 / merchant_id 0；merchant-service healthz 正常，`scripts/check.ps1` 四项全绿。
+
+### ★ 2026-09-01(订房第 1 步:去掉多余的日期选择弹层)
+
+- 第 1 步本来就有一张**常驻的 `BookingCalendar`**,顶部摘要卡的日期胶囊却还能点开 `DatePickerSheet`(设计稿 1675:6806)—— 同一件事两个入口,弹层还会盖住下面那张日历。已把摘要卡的日期区改成纯展示:`BookingSummaryBar` 去掉 `onPressDates` 与外层 `Pressable`,`BookingStepDates` 移除 `DatePickerSheet` 与 `pickerOpen` 状态。`DatePickerSheet` 组件本身保留 —— 酒店搜索页与搜索结果页仍在用。
+- 连带补了一个洞:日历是「点一下起头、再点一下收尾」,中间那一下之后 `checkOut` 是空的。以前弹层总是产出完整区间,看不出来;现在这个半选状态会一直留在页面上,所以在 `goNext` 的 dates 步加了拦截(新增 i18n 键 `hotels.booking.dates.checkOutRequired`,三份语言已对齐)。不拦的话真实模式会带着空 `endDate` 下单,被后端以「入住/离店日期不正确」打回。
+- 验收:`npm run typecheck` 零报错、`npx expo export -p web` 打包通过(已删 `dist`)。
+
+### ★ 2026-09-01(预订成功页:二维码改画真实核销码)
+
+- 原来成功页的二维码是设计稿导出的**静态图**,与订单无关。现在画的是 `/app/order/pay` 返回的 `verifyCode`(实测形如 `A1A5C66F65FA2A27`),链路:`payOrder` 的返回 → 向导 `paid` 状态 → `BookingSuccess` 路由参数 `verifyCode` → 成功页。
+- 新增依赖 **`react-native-qrcode-svg` 6.3.2**(peer 是已装的 `react-native-svg`,不引额外原生模块)。之前静态页阶段刻意没引它(见 10 号计划),现在是真实数据,值得。已确认 web 打包后 `qrcode` 内部符号进包(`Alphanumeric`/`toSJIS`),`expo export -p web` 通过。
+- 没有核销码时(演示模式 / 设计稿走查)仍回落到 `TEMP_VOUCHER_QR` 静态图,设计稿走查不受影响。
+- 尺寸取 `QR_SIZE = 172` = 设计稿 192 见方白框 − padding 9×2 − 描边 1×2;白框内层底色由占位蓝 `#E5EEFF` 改为白并居中,否则现场生成的二维码四周会露出蓝边(静态图是满铺的,看不出来)。
+- **未做**(需要时再说):核销码没有以文字形式显示在二维码下方,现场核销时不能手输;设计稿也没有这一行。
+
+### ★ 2026-09-01(订房:选房后日期被重置 + 金额与晚数对不上)
+
+- 现象:在 hotels 搜索页选好入离日期,进详情点「选择房间」后,① 向导里的日期变回了别的值;② 金额与页面写的晚数对不上。
+- 根因一(日期):搜索页选的日期**根本没往下传** —— `HotelDetail` 路由只有 `id`,向导拿不到就自己挑了「明天起 1 晚」。已给 `HotelDetail` 与 `HotelBooking` 两条路由都加 `checkIn`/`checkOut`,`HotelResultsScreen`(真实卡与演示卡两处)→ `HotelDetailScreen.selectRoom` → 向导逐级透传。
+- 根因二(金额):向导的金额是**进来那一刻算一次**的常量 —— 真实模式初始化时按 1 晚写死,演示模式干脆用设计稿的固定数;只有在向导内部改日期时真实模式才重算。所以从搜索页带 3 晚进来,页面写着「3 Nights」金额还是 1 晚的数。
+- 修法:`BookingStay` 新增 `units`(**每晚每间**的价格基数)+ `scaleStay(stay)`(按晚数 × 间数摊开成 `originalPrice`/`roomPrice`/`taxes`/`total`/`points`)。构造与 `patchStay` 都过 `scaleStay`,**两种模式统一**,金额不再有「初始值」与「改过之后」两套算法。演示模式默认 1 晚 1 间时结果与设计稿原值完全一致。
+- 新增 `normalizeDates(checkIn, checkOut)`(`bookingFormat.ts`):没传 / 离店不晚于入住 / 入住早于今天,三种情况回落「明天起 1 晚」。第三条是后端 `order/create` 的硬校验(「使用日期不能早于今天」),搜索页留在页面上的旧日期很容易踩到。
+- **一处对设计稿的偏离**:Trip 的第二段住宿(`BOOKING_SECOND_STAY`,6-06 → 6-08 共 2 晚)金额现在是设计稿数值的 2 倍。设计稿那张卡写的是 1 晚的金额配 2 晚的日期,本身对不上;新口径让「N Nights」与金额自洽,优先保证一致性。
+- 实测:后端 `create` 3 晚 1 间 = `450`(150 × 3),与前端 `unit × 晚数 × 间数` 一致(此前已验 1 晚 1 间 = 150、2 晚 2 间 = 600)。冒烟数据(order id=4、user id=5 及其库存/日志行)已删并复核;**用户自己的 order id=3(user_id=1)与其库存行保留未动**。
+- 验收:`npm run typecheck` 零报错、`npx expo export -p web` 打包通过(已删 `dist`)。
+
+### ★ 2026-09-01(我的精选:真实酒店封面统一回落设计稿临时图)
+
+- 「我的精选」的**预订卡**(真实订单,原来用 `goods_image`)与**收藏酒店卡**(真实收藏,原来用 `cover_image`)此前没有本地兜底,后端封面是脏值/空值时只剩渐变空块。现与酒店搜索结果页统一。
+- 兜底规则抽到 `src/assets/tempImages.ts` 的 `tempCoverFor(index)`(内部即 `TEMP_HOTEL_COVERS` 的 heritageBagan / strandSuites 两张按位置轮流),`HotelResultsScreen` 原来的局部 `REAL_COVER_FALLBACKS` 已删除改调它 —— **一套规则一个出处**,免得同一家酒店在两个页面显示成两张不同的图。
+- 真正的判空仍在 `utils/media.ts` 的 `resolveMediaUri`(只认 `http(s)://` 与 `/` 开头,`'111'` 这类脏值判成没有图),`CoverImage` 的三级降级(远程图 → 本地兜底 → 渐变占位)不变。商品真传了图之后会自动改用远程图,这些兜底不需要再动;等后端封面普遍可用了,删掉 `tempCoverFor` 与四处调用即可。
+- 验收:`npm run typecheck` 零报错、`npx expo export -p web` 打包通过(已删 `dist`)。
+
+### ★ 2026-09-01(订房向导接后端下单 + `order_main.guests` 列类型硬伤修复)
+
+- 范围:把订房向导接到真实下单,**支付流程本次不做** —— 后端 `/app/order/pay` 本来就是 mock(直接置为已支付并返回 `verifyCode`),所以「点支付直接成功」不需要前端伪造,照常调即可;接真实渠道时只换 `pay` 的实现,前端不用改。
+- **发现并修复了一个后端硬伤**:`order_main.guests` 在 `database/order/03-consumer-booking.sql` 里建成了 `JSON`,而 `OrderController::create` 与 `TripController::create` 两处写入的都是 `CryptoHelper::encrypt(json_encode($guests))` 的 **AES 密文**(base64,不是合法 JSON),MySQL 直接 `3140 Invalid JSON text` → **任何带 `travelers` 的下单一律 500**;不传 travelers 时写 `null` 才侥幸没暴露。已加 `database/order/06-guests-column-type-fix.sql`(查 `information_schema` 幂等,`JSON → TEXT`),登记进 `deploy/docker-compose.yml` initdb 为 `99k-`,并用 `scripts/db-apply.ps1` 补跑;复查列类型已是 `text`。保留「住客名单加密存储」的既有设计(同表 `contact_phone` 一致,读取侧 `decryptGuests()` 也是按密文写的),所以改列类型而不是改成明文 JSON。
+- 前端两种模式(同一个 `HotelBookingScreen`,由 `route.params.goodsId`/`skuId` 是否存在决定):
+  - **真实模式**(详情页真实房型卡 Select 进来):拉 `/app/goods/detail`,用 `goods_name` / `room_name` / `base_price` 覆盖演示数据;默认日期取**明天起 1 晚**(演示数据那组 `2026-06-04` 早已过去,后端 `create` 会以「使用日期不能早于今天」拒掉);房费 = `base_price × 晚数 × 间数`,改日期或间数实时重算。
+  - **演示模式**(不带参数,设计稿走查):数值仍走 `screens/hotel/bookingDemo.ts`,不发任何请求,支付步直接弹设计稿的成功浮层。
+  - 区分靠 `BookingStay.demo` 布尔位;`ReviewBody` 据此切价格明细 —— **真实模式只列房费一行**,不显示设计稿那条「服务费与税费 10%」,因为后端定价链路是「锁库存日历价 → 长住折扣 → 优惠券」,根本没有税费,照抄会与实付对不上。
+- 本次刻意**不提交**的两项(页面照旧展示,提交时忽略):① 加购项(早餐/接送/保险)—— 后端没有加购价目表与字段;② 多住宿 Add More Stay —— 后端一次 `create` 只收一个 sku,真实模式下改走 comingSoon。
+- 校验位置调整:联系人手机号后端 `create` 必填,而设计稿第 2 步是选填,真实模式改在**第 2 步就拦**,不拖到支付步才报错(新增 i18n 键 `hotels.booking.guests.phoneRequired`,三份语言已对齐)。**不拿账号手机号兜底** —— `/app/user/me` 与登录返回的 `mobile` 都过 `MaskHelper`(形如 `097****0199`),提交上去就是一条联系不上的假号码。
+- 成功页 `BookingSuccessScreen` 改为读路由参数(单号/酒店名/地址/日期/人数/实付),缺参回落演示值;地址为空时(后台允许 `goods_info.address` 为空,本地这家真实酒店就是空)隐藏地址行与引流卡,而不是回落到设计稿的 Bagan 地址。二维码仍是设计稿静态图 —— `pay` 返回的 `verifyCode` 还没有出码接口。
+- 实测(网关 8081,站点 1,商品 `goods_id=1` 房型 `sku_id=2` 单价 150):`create` 1 晚 1 间 → `payAmount=150`;2 晚 2 间 → `600`,与前端算法完全一致;`pay` 返回 `verifyCode`。**冒烟数据已清理并逐表复核**:`order_main` / `order_booking_event` / `goods_stock_log` / `goods_daily_stock` 均 `count=0`,冒烟账号 `user_info id=4`(0977000199)及其 `notify_record`/`user_action_log` 已删,`user_info` 只剩用户自己的 id=1。
+- 验收:`cd client-app; npm run typecheck` 通过;`npx expo export -p web` 打包通过(已删 `dist`)。
+
+### ★ 2026-09-01(客户端真实酒店房型不显示排查 + 接详情页)
+
+- 现象:后台酒店/房型已审核通过,客户端仍看不到真实房型。排查到三道门槛:① 存量库漏跑 `database/goods/07-room-review-workflow.sql`,执行前 `hotel_room_type.approved_version` 缺列且 C 端 live room 过滤命中 0;② 当前本地新建酒店/房型都在 `site_id=0`,而 client-app 默认站点是 `EXPO_PUBLIC_DEFAULT_SITE_ID=1`,C 端接口还会拒绝 `X-Site-Id<=0`;③ C 端酒店发现/详情对酒店商品有 marketplace 发布门槛,当前 `ranking_market=0`、真实 `ranking_listing=0`,仅“商品+房型审核通过”还不会进入 C 端酒店列表。
+- 已处理 SQL:补跑 `database/goods/07-room-review-workflow.sql`;复查本地 `goods_id=1` 两个房型 `status=1,publish_status=2,approved_version=1`,live room count=2。
+- 已处理前端:`HotelResultsScreen` 真实酒店卡由旧 `GoodsDetail` 改为 `HotelDetail({id})`;`HotelDetailScreen` 有 id 时拉 `/api/v1/app/goods/detail`,标题/地址/图库/起价/Rooms 用接口数据,无 id 演示卡仍走设计稿静态数据;`HotelRoomsTab` 支持真实 `skus` 房型渲染,Select 接真实 `OrderConfirm`(未登录跳登录)。`client-app npm run typecheck` 通过。
+- 仍需用户侧数据动作:要在当前客户端看到这家酒店,需把酒店/商户/房型建到客户端当前站点(通常 `site_id=1`),并在后台 Marketplace Ranking 里绑定酒店物业+酒店商品后 Publish;否则按设计会继续被 C 端过滤。不要把 `site_id=0` 当 C 端站点使用。
+
+### ★ 2026-09-01(M4 预订 SQL 漏执行热修复)
+
+- 现象:`merchant/booking` 列表统计报 `SQLSTATE[42S22] Unknown column 'booking_status' in 'where clause'`,出错 SQL 查 `order_main.booking_status`。
+- 结论:本地 `mtrip-mysql-1` 是存量数据卷,不会因为 `deploy/docker-compose.yml` 新挂 initdb 脚本而自动重放;查询 `information_schema.COLUMNS` 确认 `order_main` 缺 `booking_status/payment_status/booking_channel/pms_sync_status`。
+- 已处理:用 `scripts/db-apply.ps1` 幂等补跑 `database/order/05-merchant-booking.sql`、`database/merchant/36-merchant-booking-menu.sql`、`database/merchant/37-merchant-booking-message.sql`、`database/user/10-chat-booking-link.sql`;复查 `order_main` 关键列已存在,`order_booking_event` 表存在,`mch:order:detail/message` 权限共 2 条,`chat_conversation.order_id` 已存在。
+- 顺手修复:发现 `database/user/10-chat-booking-link.sql` 与 `database/merchant/37-merchant-booking-message.sql` 漏登记到 `deploy/docker-compose.yml` initdb,已补为 `95a-chat-booking-link.sql` / `99j-merchant-booking-message.sql`,避免全新环境漏执行。`database/merchant/22-kyc-template-restore.sql` 仍是一次性修复脚本,未登记。
+
+### ★ 2026-09-01(订房第 2 步:主要入住人自动填入 + 选择回填)
+
+- 问题:Step 2 的 Select 原本只是 `navigate('Travelers')` 跳过去看看,常旅客页的选中态**没有回传通道**
+  (上一轮留的口子);另外用户设了默认旅客也不会自动带出来。
+- **自动填入**:`HotelBookingScreen` 挂载时(已登录)拉一次 `fetchTravelerList()`,取 `is_default === 1` 那条
+  填进 Lead Guest。三条约束:只在姓名两栏**都为空**时填(不覆盖已输入)、`useRef` 守卫只填一次、
+  **没设默认就不填** —— 接口虽按 `is_default DESC, id DESC` 排序、首行总有值,
+  但拿「最新一条」冒充默认会让人莫名其妙。
+- **选择回填**:Step 2 的 Select 改为 `navigate('Travelers', { pick: true })`;
+  `TravelersScreen` 新增选择模式 —— 标题换成「选择主要入住人」(原来的 `(0/3)` 在单选场景是误导)、
+  隐藏多选勾选框、**点一行即选中并返回**,用 `navigate({ name:'HotelBooking', params:{leadGuest}, merge:true })`
+  把姓名合并回向导的路由参数。从「更多 → 账号」进入时行为不变,仍是管理列表。
+  回填副作用依赖 `route.params.leadGuest` 的**对象身份**(React Navigation 只在 params 真变化时才换新对象),
+  所以每次「选择并返回」只跑一次,不会反复盖掉用户之后手改的姓名 —— 也就不需要 `setParams` 清参数
+  (那个 API 在联合类型的路由参数上还有类型坑)。
+- **只能填姓名,电话与邮箱填不了**(两个原因叠加,已写进代码注释):
+  `user_traveler` 表没有联系方式列;`/app/user/me` 走 `AuthService::profile()`,
+  **mobile 与 email 都过了 `MaskHelper`**(`911****1111`),拿脱敏值占位会被用户直接提交成脏数据。
+  要做到全自动,需后端给 `user_traveler` 加联系方式列,或提供不脱敏的自有资料接口 —— 属另一件事。
+- i18n 新增 `more.travelers.pickTitle`(三份),共 **786** 键仍逐键对齐。
+- 验证:`npm run typecheck` 零报错、`npx expo export -p web` 打包通过(dist 已删);
+  接口侧冒烟确认 —— 建两位旅客、第二位 `isDefault:1`,`list` 首位即该默认旅客且 `is_default=1`
+  (同时验证了 `clearDefault()` 会把前一位的默认标记清掉),前端 `find(r => r.is_default === 1)` 取到的正是它。
+  **未做**:浏览器里的端到端走查(本会话无浏览器工具),需本地跑一遍
+  「Step 2 是否自动带出默认旅客 → 点 Select 换一位 → 姓名变化而电话邮箱保持不变」。
+
+**⚠️ 订正:此前两次「冒烟数据已清干净」的结论是错的**
+
+- 清库命令写成了 `delete from mtrip_business.user_referral where user_id=...`,而 `user_referral`
+  **没有 `user_id` 列**(实际是 `inviter_user_id` / `invitee_user_id`),MySQL 报 `ERROR 1054` 后
+  **停在该语句、后续的 `delete from user_info` 从未执行**;而命令里加了 `2>/dev/null` 把错误吞掉、
+  收尾的 `echo` 又是用 `;` 无条件执行的,于是我据此误报了「已清干净」。
+  **教训:清理/校验类命令不要 `2>/dev/null`,收尾结论要用 `&&` 挂在命令成功之后,不能用 `;` 无条件 echo。**
+- 实际残留:注册冒烟建的 `911111111`(user id=1)与常旅客冒烟建的 `988887777`(id=2)当时都还在。
+- 已处理:**只删掉属于我的两个冒烟账号(id=2、id=3)**;
+  **保留 user id=1 及其常旅客** —— 用户正用这个账号在浏览器里测试,删掉会破坏现场。
+  `user_referral` 表本来就是空的,无需清理。
+
+### ★ 2026-09-01(常旅客接后端 + 滚轮选择器两个 bug)
+
+**1) 「更多 → 账号 → Traveler」接上真实接口**
+
+- 后端本来就有 `user-service` 的 `TravelerController`(`/api/v1/app/user/traveler/{list,add,update,delete}`,
+  挂 `UserAuthMiddleware`,表 `user_traveler`),所以这次**主要是前端对接**,后端只改了一处。
+- **后端唯一改动**:`collect()` 增加 `bool $isUpdate`,编辑时 `idNo` 留空则不写 `id_no` 列,`update()` 传 `true`。
+  原因是 `list` 返回的证件号经 `MaskHelper::idCard` 脱敏(如 `12/***********3456`),前端回填不了原文,
+  而原来的 `requireStr('idNo')` 是必填 —— 不改的话用户不重输就会把掩码当成真证件号存回去。
+- 前端:`types/models.ts` 加 `TravelerItem`;`api/user.ts` 加四个接口 + `TravelerPayload`;
+  `config/global.ts` 加 `TRAVELER_ID_TYPES` / `TRAVELER_ID_TYPE_I18N`(口径对齐后端的 `[1,2,3]`);
+  `navigation/types.ts` 的 `AddGuest` 改成 `{ traveler? }`(带值即编辑态 —— 列表接口已返回全部可编辑字段,
+  不再单独请求详情);`TravelersScreen` 接真列表(未登录 / loading / 空 / 数据四态、默认角标、
+  副行显示「证件类型 · 脱敏号」、`useFocusEffect` 保证从编辑页回来自动重拉);
+  `AddGuestScreen` 重写为真表单,新增 / 编辑 / 删除都打接口。
+- **按用户决策裁掉了设计稿 `1675:5777` 的四栏**(性别 / 出生日期 / 未满 13 岁 / NRC 姓名)——
+  `user_traveler` 没有对应列,留着只会让用户白填一遍再被静默丢弃。
+  另外两处收敛:证件号从 NRC 三段并成一个输入框(后端是单列,且证件类型还支持护照 / 其他,那两种没有段码);
+  国籍从下拉改成输入框(后端是自由文本、也没有国家列表接口,一个只有 Myanmar 的下拉没有意义)。
+  **反过来补了两个设计稿没有、后端有的字段**:证件到期日、设为默认。
+- i18n:`more.travelers` 由 6 键扩到 29 键,**删掉已无引用的整组 `hotels.booking.addGuest`**;
+  顺带把 `selectGuest` 的 `{{count}}` 换成 `{{selected}}` —— `count` 是 i18next 保留字,
+  本来就违反仓库既有约定(其它页早就在避开它)。
+
+**2) 「证件到期日」选不动,只能停在固定值**
+
+两个真 bug 叠在一起,都在 `components/hotel/booking/WheelPickerSheet.tsx`:
+
+- **主因**:选中项只由 `onMomentumScrollEnd` / `onScrollEndDrag` 推导,而 **react-native-web 下用滚轮 /
+  触控板滚动时这两个事件不触发**,索引永远停在初始值 —— 表现就是「滚得动但选不动,确认后还是原来那天」。
+  改为 `onScroll` + `scrollEventThrottle={16}` 实时推导(索引没变则跳过 setState),末尾两个事件保留做原生端校准。
+- **次因**:关闭时组件只是 `return null`、实例并不卸载(挂载态由 `mounted` 自持,为的是放完关闭动画),
+  三个 `useState` 的初值**只在第一次渲染算一次**,那时 `value` 往往还是空的 ——
+  带着已有到期日再打开,列位置停在旧值。改为 `visible` 变 true 时按 `value` 重置三列,
+  并用 `session` 作三列的 key,换 key 让 `WheelColumn` 重挂载,其挂载副作用才会滚到新位置。
+- 顺带修掉一个静默改数据的坑:年份区间原本固定「今年 ~ 今年+20」,已存的到期日若早于今年(证件已过期)
+  会因 `indexOf` 返回 -1 被夹到第 0 项,**一打开就把日期悄悄改掉**。现在区间会兜住当前值。
+- 同批把该组件泛化成通用日期滚轮(`title` / `confirmLabel` / `minYear` / `maxYear` 都是 props),
+  原来标题与确认文案是硬编码的出生日期词条。
+
+**验证**
+
+- `npm run typecheck` 零报错;`npx expo export -p web` 打包通过(dist 已删)。
+- 三份语言包脚本比对 missing / extra 均为空,JSON 合法。
+- 容器内 `php -l` 通过,`docker compose restart user-service` 已执行。
+- **真实接口全链路冒烟**:临时账号 → add(返回 id)→ list(证件号确为脱敏)→
+  update 不带 `idNo`(证件号保持 `12/***********3456` 未被覆盖、其余字段已改)→
+  update 带新 `idNo`(变为 `MA9**6543`,证明能改)→ delete(list 变空)。
+- **未做**:浏览器里逐屏的视觉走查(本会话没有浏览器工具),需本地跑一遍
+  「更多 → 账号 → Traveler → 新增 → 编辑(到期日滚一下看能不能选中)→ 删除」。
+
+### ★ 2026-09-01(登录/注册横向可拖动修复 + 本地 app 接口 401 的根因)
+
+**1) 登录页与注册页可以左右拖动、元素超出屏幕**
+
+- 根因是铺底插画:`styles.illustration` 是 `width:'150.41%' / left:'-18.49%'` 的绝对定位图
+  (照搬设计稿的图片填充裁切),但它的父层 `styles.root` **没有 `overflow:'hidden'`**,
+  右侧超出屏幕约 32%,于是整页可以横向拖动。开屏页的波浪是同一种画法,那里有
+  `styles.waves`(`absoluteFillObject + overflow:'hidden'`)兜着,所以没出问题 —— 这次照同一做法补上
+  `styles.illustrationClip` 裁切层(顺带加 `pointerEvents="none"`,免得它吃掉点击)。
+- 同批修掉一个只在窄屏出现的溢出:三方登录按钮原本是 `paddingHorizontal:31` 的固定宽(20 图标 → 82 宽),
+  三枚 + 两道 16 间距 = 278,而卡片可用宽 = 屏宽 - 32(页边距)- 48(卡片内边距),
+  **屏宽小于约 358 时会被挤破**。改成 `flex:1 + maxWidth:82`:402 宽下与设计稿一致,窄屏自动收窄。
+- 改动只在 `screens/user/LoginScreen.tsx` 与 `screens/user/RegisterScreen.tsx`,两页取值本来就同源。
+  `npm run typecheck` 零报错。
+
+**2) 注册返回 401 —— 是客户端签名,不是账号问题**
+
+- 浏览器发出的 `POST /api/v1/app/auth/register` 只有 `X-Client-Type / X-Lang / X-Site-Id / X-Timestamp`,
+  **缺 `X-Client-Id / X-Nonce / X-Sign`**;`ClientSignMiddleware` 对 `/api/v1/app/*` 强制校验这四个头,
+  缺任一个抛 `ErrorCode::CLIENT_AUTH_FAIL = 40103`,而 `ErrorCode.php` 把它映射成 **HTTP 401**。
+  第二道 `PayloadDecryptMiddleware` 的 `DEFAULT_ENCRYPT_PATHS` 里也有 `/app/auth/register`,
+  要求 `X-Encrypted:1` + AES 密文,而请求体是明文。
+- 为什么没带签名:`client-app/` 下**只有 `.env.example`、没有 `.env`**,`EXPO_PUBLIC_CLIENT_ID/SECRET` 为空,
+  `api/request.ts` 的逻辑正是「没配密钥就不加签名头」,`postEncrypted` 同理回退明文。
+  而运行库里 `mtrip_system.sys_client` **一条记录都没有**(`database/system/06-client.sql` 只建表不插种子),
+  所以当时也拿不到可用的 ClientId/Secret。
+- **按用户选择走开发调试路径**:`deploy/.env` 改为 `MTRIP_CLIENT_SIGN=false`、`MTRIP_PAYLOAD_ENCRYPT=false`,
+  然后 `docker compose up -d` **重建**容器(注意:`restart` 不重新读 `.env`,只有重建才会生效),
+  再 `docker compose restart gateway`(服务重建后容器 IP 变,不重启网关会 50200)。
+  已复核 `user-service` 内 `printenv` 两项均为 `false`。
+- 验证:用**与浏览器完全相同**的那条无签名请求复现 —— 注册返回 `HTTP 200 / code 0`;
+  随后用不存在的账号打 `POST /app/auth/login` 得到 `40001 手机号或密码错误`(说明已进业务逻辑,不再被 401 拦);
+  `GET /app/site/config` 仍 200。**复现时真的建出了 `911111111` 那个用户(id=1),已连同 `user_referral` 一并删除,
+  库恢复到复现前的状态**,你在浏览器里可以正常走一遍注册。
+- ⚠ **两项遗留**:
+  1. `deploy/.env` 是 gitignore 的本地文件,这次改动不进仓库;**上线/联调前必须改回 `true`**,
+     正规做法是在 admin-web「配置 → 客户端管理」建一个 app 客户端,把 ClientId/Secret 写进 `client-app/.env`。
+  2. 注册接口**仍然不接收 `email`** —— 复现返回的 `user.email` 是空串,与此前记录的
+     「`AuthController::register` 只读 mobile/password/nickname/referralCode」一致,需后端补一行才能落库。
+
+**3) 登录页「记住我」没生效**
+
+- 原状是纯 UI 状态:`LoginScreen.tsx` 的 `remember` 只控制勾选框图标,全项目再无第二处引用。
+- 关键背景:**token 本来就无条件持久化**(`userStore.applyAuth` 每次登录写 `mtrip:token`,启动 `hydrate()` 恢复),
+  所以「记住我」管的**不是免登录**。用户确认按**记住手机号**实现(不含密码)。
+- 落地:`STORAGE_KEYS` 新增 `REMEMBER_MOBILE: 'mtrip:remember-mobile'`;登录页挂载时读取并回填号码、
+  同时把勾选框恢复成勾上;**登录成功后**按当前勾选状态写入 / 清除(单纯勾或取消勾不动本地值,
+  避免误碰就丢号码)。单独用一个键是因为它要**跨退出登录**保留 —— `userStore.clearLocal` 只清 TOKEN 与 USER。
+- 顺带确认:`storage.clear()` 目前全项目没有调用方(GDPR 被遗忘权的本地清空入口还没接),
+  将来接上时这个新键会一并被清掉,不需要额外处理。
+- `npm run typecheck` 零报错。**未做**运行时验证(没有可用的浏览器工具):
+  需要你本地跑一遍「注册 → 勾上记住我登录 → 退出登录 → 回到登录页看号码是否回填且默认勾上」。
+
+### ★ 2026-09-01(client-app 订房流程,Figma section `Multi Booking Hotel Booking Flow` `1675:5776`)
+
+- 这个 section 下有 21 张稿。**本次做**核心 4 步向导 + 配套子页 + **多住宿 Trip**;
+  **不做**机场接送子流程(`1675:6985` / `7094` / `7203` / `7631` —— 那三张自带底部 Tab 栏,
+  属首页 Cars 入口的独立功能,与订房主线无关)。范围与向导结构都是用户明确选定的。
+- **向导落成「一个路由 + 内部分步」**(同酒店详情页「一个壳 + 六个页签组件」的做法):
+  `screens/hotel/HotelBookingScreen.tsx`(路由 `HotelBooking`)只留壳 —— 状态栏黑条 / 第 1 步的返回栏 /
+  进度条 / 滚动区 / 吸底栏 —— 内容按 `dates → guests → review →(多住宿才有)trip → payment` 分发。
+  **步骤序列是单一出处**(`bookingDemo.ts` 的 `BOOKING_STEPS`);进度条固定 4 格,
+  多住宿的支付页**没有进度条**(设计稿 `1675:9158` 确实没画);第 1 步的 Back 走 `goBack()` 退出向导。
+  草稿状态(日期/人数/加购/表单/支付方式/stays)用页面内 `useState`,**没有建 store** —— 单路由内不需要跨路由共享。
+- 稿 → 落地对照:Step 1 `1675:6069`(加购已选态 `1675:7406` 是同一组件的另一状态)/ Step 2 `1675:6292` /
+  Step 3 `1675:6404`(单住宿变体 `1675:9010`,差别只是有没有 Add More Stay 区块,由 `stays.length` 决定)/
+  Step 4 Trip `1675:9406` / Step 4 支付 `1675:6537`(多住宿态 `1675:9158`)/ 成功页 `1675:6714` /
+  新增旅客 `1675:5777` / 旅行保险 `1675:5900` / Stay 明细 `1675:9677` / 出生日期浮层 `1675:7673` /
+  性别下拉 `1675:7737` / 支付成功·失败浮层 `1675:7715`、`1675:7726`。
+  **「Choose Date」`1675:6806` 与已实现的 `695:1428` 是同一张稿,直接复用现成的 `DatePickerSheet`,没有重做。**
+- 新增 `components/hotel/booking/`:`bookingShared`(第四份卡壳 —— 这套稿 padding 是 **25** 不是 24、
+  描边在 `--secondary` 与 `rgba(196,197,215,0.2|0.3)` 之间切换、底色分 `--tab` 与纯白两种,
+  照搬 detailShared / promoShared / moreShared 会有肉眼可见的差)、`bookingFormat`(四种日期写法 + 晚数文案)、
+  `BookingProgress` / `BookingBottomBar`(按钮版与「预计总价 + Continue」版两种布局)/ `BookingSummaryBar` /
+  `BookingCalendar` / `GuestCounterRow` / `AddOnCard` / `FormField` / `SelectSheet` / `WheelPickerSheet` /
+  `AlertDialog` / `ReviewCards` / `ReviewBody`(Step 3 与 Stay 明细页共用)/ `StaySummaryCard` / `PaymentMethodRow`。
+  另新增 4 个屏 `screens/hotel/{AddGuest,Insurance,StayDetail,BookingSuccess}Screen.tsx`,
+  前三个的页头与「更多」子页完全一致,**直接复用 `MorePageLayout`**,没有自绘顶栏。
+- **接线**:酒店详情房型卡的 `Select` 由 comingSoon 改为进向导(`HotelRoomsTab` 新增 `onSelectRoom` 回调,
+  `HotelRoomCard` 未动);底栏「Choose my room」改为切到 Rooms 页签;
+  「更多 / 常用旅客」的「Add New Guest」也接到同一张新增旅客页。新增 5 条 Stack 路由,全部 `headerShown: false`。
+- **图标 19 枚**进 `HomeIcon`(path 全部取自设计稿导出的 SVG,未手抄):minus / caretDown / calendarOutline /
+  infoSmall / peopleDuo / shieldLock / infoCircle / edit / shareAndroid / megaphone / shieldSimple /
+  lockSmall / shieldCheckSmall / headset / download / eye / dismissCircle / checkSlim / arrowRightLine。
+  **同名不同字形的分开入表**:info(20)/ infoSmall(13.333)/ infoCircle(20) 是三个不同字形;
+  share 与 shareAndroid、eyeOff 与 eye、arrowRight(8)与 arrowRightLine(9.3333)同理;
+  caretDown 是**描边**箭头(表单下拉),与实心的 chevronDown 不能互相顶替。
+  **可复用的没有重复入表**(逐条比对过 path):日期确认页人数图标 = 已有 `travelers`(同字形偏移 12/12)、
+  复核页日历 = `calendar`、Add More Stay 水印 = `building`、支付成功对号 = `checkmarkCircle`、
+  加购「+」= `plus`、勾选框 = `checkbox`、位置针 = `locationOutline`、钱包 = `wallet`、
+  出生日期浮层的叉 = `close`、保险页的勾 = `check`、盾牌 = `shieldTask`。
+- **素材 15 张**落 `assets/images/temp/hotel/booking/`(两张加购照片存 JPEG 各约 60KB,PNG 编码要 400KB+;
+  其余是保留透明通道的小图标),已登记进 `assets/images/temp/README.md` 与 `src/assets/tempImages.ts`。
+  Step 3 / Stay 明细的房型封面**与 Rooms 页签的 `room-deluxe.png` 逐像素相同(RMS=0),不重复入包**。
+  二维码用设计稿导出的静态图,**没有为一张静态页引 `react-native-qrcode-svg`** —— 本次**零新增依赖**。
+- **i18n** 新增 `hotels.booking.*` 中英缅各 186 键,三份仍逐键对齐(共 **781** 键)。
+  插值键继续避开 i18next 保留字 `count`(用 `{{nights}}` / `{{guests}}` / `{{stays}}` / `{{points}}`)。
+  缅甸语仍是机器翻译,**上线前需母语者复核**。
+- **静态页边界**:后端没有酒店预订下单接口(现有 `createOrder` 是通用商品下单,没有房型 / 加购 / 多住宿概念),
+  支付渠道仍是 mock。所以**不发任何请求**,数值全部来自 `screens/hotel/bookingDemo.ts`。
+  真的能点:改日期(拉起 `DatePickerSheet`)、加减人数、勾加购、填表、勾条款、单选支付方式、
+  加第二段住宿、逐步前进后退。走 comingSoon:区号选择、Save Info、优惠券、Pay by other / Share、
+  Payment Summary 展开、新增卡片、Download Voucher / View Booking、Add Hotel and Homestay 的二次搜索。
+  支付页点「Continue」会弹设计稿的成功浮层、关闭后进成功页 —— 这是演示链路,不代表真的下过单。
+- **刻意偏离设计稿之处(代码内均已注明)**:
+  1. **设计稿自身对不上** —— Step 1 摘要条写「Thu, 12 Oct → Sat, 14 Oct / 2 Nights」,同屏日历却高亮 2026 年 6 月的
+     12–14,而 Step 3 / 4 / 成功页写「4 Jun – 5 Jun (1 Night)」。这里统一取 **2026-06-04 → 2026-06-05**
+     (与价格行「(1 night)」自洽),日历随之高亮 6 月 4–5;晚数由实际选择推导,金额沿用设计稿原值。
+  2. 第 1 步统一显示「← Back」返回栏 +「预计总价 + Continue」吸底栏(设计稿把这两样分在 `1675:6069`
+     与 `1675:7406` 两张状态稿里),否则第 1 步没有退出向导的入口。
+  3. 文案笔误按正确英文写并在代码注明:「Guest is under 13 year old」→ years、
+     「Medical. Hospital and other expenses」→ 逗号、保险页「you agree to xxxxxx Terms & Conditions」的 xxxxxx 占位。
+  4. 两张 Alert 稿是独立画板、没画遮罩,同 `PromoDialog` 的既有处理补一层黑 25%。
+  5. 日历首尾格下方那枚 4px 白点(`1675:6172`)落在白卡上不可见,未实现(同 `DatePickerSheet` 的既有取舍)。
+  6. `MorePageLayout` 的 footer 插槽自带 px16 / pt12 / pb20 的页面底色内边距,保险页与 Stay 明细页的吸底栏
+     用等量负 margin 抵消,**没有改公共组件**。
+- **验收**:`cd client-app; npm run typecheck` 零报错;`npx expo export -p web` 打包通过,
+  15 张新素材全部进包(dist 已删)。三份语言包脚本比对 missing / extra 均为空。
+  **未做**:真机 / 浏览器逐屏与设计稿的像素级视觉比对(本会话没有可用的浏览器工具),
+  这一项需下次会话或用户本地 `npm start` 后按上面的稿号逐屏核对。
+  本次未改任何 PHP,`scripts/check.ps1` 未跑(本机 php 不在 PATH,第 1 步即中断,与本改动无关)。
+- 未执行 Git 暂存 / 提交 / 推送。
+
+## ★ 2026-09-01：M4 酒店预订管理交付完成(阶段0～6 全量收口)
+
+`实现方案-Merchant-M4-酒店预订管理.md` 七阶段全部完成,方案文档/README 进度表已勾选。后端:2 个迁移(`order/04` 库存字段、`goods/06` 房态字段)已应用并回填;`BookingLifecycleService` 过期确认任务+库存联动+幂等;商户预订管理 16 端点(列表/详情/确认/入住/退房/改房号/改单/联系方式/凭证/强制同步/统计/住客消息等)挂 `/api/v1/merchant/booking/*`;通知 23/23。前端:merchant-web `views/order/index.vue` 六页签(含 In House)+430px 详情面板+消息抽屉,构建通过。
+**平台级修复(最重要)**:`Mtrip\Shared\Aspect\PermissionAspect` 缺 `#[Aspect]` 注解,从未进入 `aspects.cache`,全平台 `#[Permission]` 静默失效(S7 时期 merchant-service 同类问题的跨服务收口)。修复双保险:①补 `#[Aspect]`;②8 个服务全部新增/覆盖 `config/autoload/aspects.php` 显式注册(不依赖扫描收集时序)。验证:8 服务 aspects.cache 全含切面、无权限子账号 4 写端点全 40301、超管/主账号不误拦、8 服务 healthz 全绿。用户子账号未走 JWT 全量签发语义,靠切面拦截——**新增服务必须携带 aspects.php**。
+回归:阶段3 E2E 22/22、阶段5 E2E 23/23(夹具用 `test/sql/m4-fixture-reset3.sql`/`m4-fixture-reset5.sql` 回补),`scripts/check.ps1` 四项全绿。浏览器验收:首轮网关对 merchant-service 上游 502(服务本体健康),`docker restart mtrip-gateway-1` 恢复;二轮 m1001+2FA 真实登录态全通过,截图存 `.reasonix\attachments\m4-guest-message-*.png`。**本次未执行任何 git 提交**,待用户审阅授权(变更含 8 个 aspects.php、2 迁移、后端、前端、测试脚本、文档)。
+测试账号:商户 `m1001 / Merchant@123456`(TOTP 用 `test/sql/m4-totp.php` 容器内生成);管理端超管 `admin / Admin@123456`。
+
+## ★ 2026-09-01：M4 酒店预订管理开发计划
+
+已新增 `docs/plans/实现方案-Merchant-M4-酒店预订管理.md`，严格映射 Merchant PRD 模块 4、场景 3 和预订管理验收标准。计划确认本期不接真实支付渠道，现有模拟支付结果通过统一入口驱动预订确认；真实支付作为后续独立里程碑。merchant-web 的 Booking Management 页面、筛选页签、表格、约 430px 右侧详情面板、详情区块及操作弹窗必须严格按 `https://big-plank-58319748.figma.site/` 原型实现，并在 1440×900、1366×768 登录态下截图对比，禁止用假数据、空页面或登录跳转代替验收。当前只新增文档，没有修改业务代码；人工确认、No-show、房号、改单、联系方式和导出规则仍需产品确认。
+
+## ★ 2026-09-01：房型上传图片 403 修复
+
+房型图片无法显示的根因是 goods-service 的 `UploadedFile::moveTo()` 将上传文件保存为 `600`，共享卷和 URL 均正确，但 OpenResty 工作进程无读取权限，因此网关及 merchant-web `/uploads/rooms/*` 都返回 403。`RoomController::uploadMedia()` 已在移动成功后设置文件为 `0644`，部署卷内三张存量房型图片已同步修复；当前三张图片经网关和 merchant-web 代理均返回 `200 image/png`。HTTP 回归新增“上传图片可通过网关公开读取”断言，真实新上传与完整房型审核链路通过，临时回归文件已清理。goods-service 已重启，PHP 语法通过。本次用户已授权随 M2 房型交付本地提交，不推送；实际哈希见 Git 日志。
+
+## ★ 2026-09-01：merchant-web IPv4 空白页修复
+
+merchant-web Vite 默认只监听 `[::1]:5174`，浏览器通过 `127.0.0.1:5174` 访问时前端模块无法加载，页面 DOM 为空。`merchant-web/vite.config.ts` 已增加 `server.host='0.0.0.0'` 并仅重启 5174 开发进程；当前 `127.0.0.1:5174/rooms`、`localhost:5174/rooms` 与 IPv4 `/src/main.ts` 均返回 200，监听地址为 `0.0.0.0:5174`。由于浏览器将 localhost 与 127.0.0.1 视为不同 Origin，前者无法读取后者的登录 Token；`merchant-web/src/main.ts` 已在开发环境将 localhost 规范化到 127.0.0.1，完整保留路径、查询参数和 Hash，生产环境不变。merchant-web 构建通过。本次用户已授权随 M2 房型交付本地提交，不推送；实际哈希见 Git 日志。
+
+## ★ 2026-09-01：M2 房型管理与版本审核流程
+
+merchant-web 房型管理已按 PRD 与在线原型补齐，新增房型采用用户最终确认的独立页面 `/rooms/create`，并增加编辑和详情独立路由。表单覆盖房型资料、入住容量、设施、图片/视频上传、价格、库存与专项政策；列表和详情可跟踪草稿、待审、通过、驳回、撤回及下架申请。goods-service 新增 `hotel_room_type_revision` 版本审核，管理员在商品审核页查看当前生效/本次提交差异后通过或驳回；待审或驳回期间不覆盖当前已批准版本，消费者读取只暴露 `publish_status=2` 房型。幂等迁移已执行，真实网关 multipart 上传→提交→通过→更新→驳回→详情核对通过，临时夹具已清理；325 PHP、shared 58用例/858断言、admin/merchant build 和 client typecheck 均通过，仅保留既有 Vite 大 chunk 提示。本次用户已授权本地提交，不推送；实际哈希见 Git 日志。
+
+## ★ 2026-09-01：merchant-web 注册业务切换与菜单上下文整改
+
+商户端左上角已从原型假数据改为 `/merchant/auth/menus` 返回的真实注册业务：仅取当前账号数据范围内、已关联正式商户且业务 KYC 通过的 `merchant_application_business`，集团按可见商户汇总，门店收窄到 `merchant_store.source_business_id`。默认“全部业务”只展示 `merchant_menu.module_key=''` 的全局菜单；选择具体酒店/餐厅等业务后追加同 `business_type` 的业务专属菜单，当前路由被隐藏时回 `/dashboard`。既有后端模块授权与 JWT 权限不放宽；当前只有客房、房量价格标为酒店专属，餐饮暂无专属页面，不伪造。PHP 语法、merchant-web 类型检查与 Vite build 通过；Docker Desktop Engine `_ping` 返回 500，真实接口和登录后 UI 联调仍待 Docker 恢复。
+
 ## ★ 2026-09-01：测试入驻申请商户编号与审批关联修复
 
 `test/gen_testdata.py` 已修复入驻申请 `merchant_code` 固定为空以及阶段 5 使用循环总下标访问 `enabled` 导致 `merchant_id` 永远为 0 的问题。尚未转正式商户的测试申请使用独立 `MCH-5xxx` 编号段，避免与已有 `merchant_info` 的 `MCH-1001～MCH-1024` 冲突；阶段 5 的申请关联同 ID 正式商户并同步 `merchant_code/site_id`，时间线同步正式商户主键。`test/sql/02-商户域.sql` 已兼容当前生成文件并重新执行 `test/apply.sh`。验收：18 条申请缺失编号 0、编号唯一 18、异常编号碰撞 0、阶段 5 未关联 0、待审批注册号冲突 0；生成器 `py_compile` 与 `git diff --check` 通过。未执行 Git 暂存、提交或推送。
@@ -176,7 +489,7 @@ S6已实现并通过核心验证，见[m12/07-s6-delivery.md](./m12/07-s6-delive
 
 ## ★ 2026-08-25(商户业务编号 MCH-XXXX)
 
-- 入驻线索创建后在同一事务内按申请自增主键生成唯一 `merchant_code`，格式为 `MCH-` + 至少四位序号；编号在申请、待核实、重新提交、批准和拒绝阶段保持不变。
+- 入驻线索创建后在同一事务内生成唯一 `merchant_code`，格式为 `MCH-` + 至少四位序号；当前由 `merchant_code_sequence` 在申请表与正式商户表之间全局分配，编号在申请、待核实、重新提交、批准和拒绝阶段保持不变。
 - `merchant_application.merchant_id` 继续作为批准后关联 `merchant_info.id` 的内部数字外键；`merchant_info.access_code` 继续作为最终批准后生成的门户登录别名，三者不混用。
 - 新增幂等迁移 `26-merchant-code.sql`，回填存量申请并同步已关联正式商户，两个业务表分别建立唯一索引；compose initdb 登记为 `39h`。
 - 入驻与验证详情“商户 ID”改为展示 `merchant_code`，入驻批准响应和提示同步返回该业务编号。
@@ -676,6 +989,7 @@ Mtrip 海外旅游 SaaS 平台:后端 Hyperf 3.1 微服务(backend/)+ 平台管�
 - 字段命名:**请求入参驼峰;列表行 snake_case 直出**(例外:管理员列表/登录返回/统计返回为驼峰)。
 - 路由前缀:管理端 `/api/v1/admin/{merchant|goods|order|finance|user|marketing|payment}/*`;移动端双前缀方案见 `docs/plans/09-移动端微服务.md`。
 - 新服务的工程组织、代码风格(Controller/Model/Service、#[Inject]、验证、软删除、操作日志)**以 backend/services/system-service 为唯一范本**,共享能力用 backend/shared。
+- **【硬约定】每个服务必须携带 `config/autoload/aspects.php` 显式注册 `\Mtrip\Shared\Aspect\PermissionAspect::class`**(2026-09-01 M4 收口时发现该切面缺 `#[Aspect]` 注解,全平台 `#[Permission]` 静默失效;显式注册不依赖扫描收集时序,是唯一可靠生效方式)。新建服务照抄现有 8 个服务的 aspects.php。
 
 ## 5. 前端页面代码模式(模块07 必须沿用)
 
@@ -689,6 +1003,18 @@ Mtrip 海外旅游 SaaS 平台:后端 Hyperf 3.1 微服务(backend/)+ 平台管�
 - **多语言**(vue-i18n,默认/fallback 均 en-US):en-US.ts 为全量词条源,zh-CN.ts 只维护已翻译部分;菜单三字段 `menu_name`(中文)/`menu_name_en`(英文回退)/`i18n_key`(词条 key,目录与页面必填、按钮不占词条);显示名统一走 `locales/menuI18n.ts` 的 `resolveMenuTitle/menuTitle`(i18n_key 命中→t(key),未命中→非中文环境用英文名、中文用中文名);扩展新语言只需前端加语言包+SUPPORTED_LOCALES,菜单数据与后端零改动;详细规范见 `docs/guides/standards/README.md`。
 
 ## 6. 下一步(模块08 部署与网关联调,任务清单见 docs/plans/08-部署与网关.md)
+
+client-app 订房线下一步(2026-09-01,承接本文件顶部「订房向导接后端下单」一条):
+1. **上线前必做**:把 `deploy/.env` 的 `MTRIP_CLIENT_SIGN` / `MTRIP_PAYLOAD_ENCRYPT` 改回 `true`
+   (本地为绕开 `sys_client` 为空导致的 40103 临时关掉了),改后要 `docker compose up -d` 重建再 `restart gateway`。
+2. 日期与库存联动:向导现在只按 `base_price` 估价,没读 `/app/goods/calendar`,
+   遇到分日定价 / 满房日期时页面金额会与 `create` 的 `payAmount` 有出入(以后者为准)。
+   接日历后可顺带做「不可售日期置灰」。
+3. 加购项(早餐/接送/保险)与多住宿 Trip 目前只在演示模式成立,要真做需要后端先有加购价目表
+   与一次多 sku 的下单接口。
+4. 成功页二维码仍是设计稿静态图;`pay` 返回的 `verifyCode` 还没有出码/展示接口。
+5. `AuthController::register` 仍忽略 `email` 入参;本地这家真实酒店 `goods_info.cover_image='111'`
+   是后台表单填进去的脏值(前端已用 `utils/media.ts` 兜底,但建议清掉)。
 
 商户账号体系三期下一步(2026-08-31,按优先级):
 1. **先验库**:`select id,menu_name,perm_key,account_scope from merchant_menu where id in (200,201,202);`

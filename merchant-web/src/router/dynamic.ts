@@ -64,6 +64,27 @@ export function buildRoutes(menus: MenuNode[]): RouteRecordRaw {
   };
   walk(menus);
 
+  children.push(
+    {
+      path: '/rooms/create',
+      name: 'RoomCreate',
+      component: wrapView('../views/rooms/form.vue', 'RoomCreate'),
+      meta: { title: 'rooms.form.createTitle', keepAlive: false },
+    },
+    {
+      path: '/rooms/:id/edit',
+      name: 'RoomEdit',
+      component: wrapView('../views/rooms/form.vue', 'RoomEdit'),
+      meta: { title: 'rooms.form.editTitle', keepAlive: false },
+    },
+    {
+      path: '/rooms/:id',
+      name: 'RoomDetail',
+      component: wrapView('../views/rooms/detail.vue', 'RoomDetail'),
+      meta: { title: 'rooms.detail.title', keepAlive: false },
+    },
+  );
+
   return {
     path: '/',
     name: 'Layout',

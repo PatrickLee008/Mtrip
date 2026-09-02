@@ -65,7 +65,7 @@ class TravelerController extends AbstractController
     {
         $id = $this->requireId();
         $this->ownTraveler($id);
-        $data = $this->collect();
+        $data = $this->collect(true);
         Db::transaction(function () use ($id, $data) {
             if ($data['is_default'] === 1) {
                 $this->clearDefault();
@@ -84,23 +84,32 @@ class TravelerController extends AbstractController
         return Result::success(null, '已删除');
     }
 
-    /** 归集并校验入参 → 落库字段(证件号加密) */
-    private function collect(): array
+    /**
+     * 归集并校验入参 → 落库字段(证件号加密)
+     *
+     * @param bool $isUpdate 编辑场景:证件号留空表示保持原值,不写 id_no 列。
+     *                       list 接口返回的是 MaskHelper 脱敏值(如 12****3456),前端无法回填原文;
+     *                       若编辑时仍强制必填,用户不重输就会把掩码当成真证件号存回去。
+     */
+    private function collect(bool $isUpdate = false): array
     {
         $idType = $this->intInput('idType', 2);
         if (! in_array($idType, [1, 2, 3], true)) {
             throw new BusinessException(ErrorCode::PARAM_ERROR, '证件类型不正确');
         }
-        $idNo = $this->requireStr('idNo');
-        return [
+        $data = [
             'nationality' => mb_substr($this->strInput('nationality'), 0, 50),
             'first_name' => mb_substr($this->requireStr('firstName'), 0, 50),
             'last_name' => mb_substr($this->requireStr('lastName'), 0, 50),
             'id_type' => $idType,
-            'id_no' => CryptoHelper::encrypt($idNo, $this->aesKey()),
             'id_expire_date' => ($d = $this->strInput('idExpireDate')) !== '' ? $d : null,
             'is_default' => $this->intInput('isDefault', 0) === 1 ? 1 : 0,
         ];
+        $idNo = $isUpdate ? $this->strInput('idNo') : $this->requireStr('idNo');
+        if ($idNo !== '') {
+            $data['id_no'] = CryptoHelper::encrypt($idNo, $this->aesKey());
+        }
+        return $data;
     }
 
     /** 取本人常旅客,不存在/非本人抛404 */

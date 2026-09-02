@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace App\Controller\Merchant;
 
 use App\Controller\Admin\AbstractAdminController;
+use App\Service\RoomReviewService;
 use Hyperf\Database\Query\Builder;
 use Hyperf\DbConnection\Db;
+use Hyperf\HttpMessage\Upload\UploadedFile;
 use Mtrip\Shared\Annotation\Permission;
 use Mtrip\Shared\Constants\ErrorCode;
 use Mtrip\Shared\Context\MerchantContext;
@@ -72,6 +74,10 @@ class RoomController extends AbstractAdminController
         if ($status !== null && $status !== '') {
             $query->where('r.status', (int) $status);
         }
+        $reviewStatus = $this->input('reviewStatus');
+        if ($reviewStatus !== null && $reviewStatus !== '') {
+            $query->whereRaw('COALESCE((SELECT v.status FROM hotel_room_type_revision v WHERE v.room_id=r.id ORDER BY v.id DESC LIMIT 1), IF(r.publish_status=2,2,0)) = ?', [(int) $reviewStatus]);
+        }
 
         $total = (clone $query)->count();
         $rows = $query->orderByDesc('r.updated_at')->orderBy('r.sort')->orderByDesc('r.id')
@@ -81,13 +87,33 @@ class RoomController extends AbstractAdminController
             ])->map(fn ($row) => $this->formatRoom((array) $row))->all();
 
         $rows = $this->appendAvailability($rows);
+        $rows = $this->appendReviewState($rows);
         return Result::page($rows, $total, $page, $pageSize);
     }
 
     /** 房型详情 */
     public function detail(): array
     {
-        return Result::success($this->formatRoom($this->findScopedRoom($this->requireId())));
+        $room = $this->formatRoom($this->findScopedRoom($this->requireId()));
+        $revisions = Db::table('hotel_room_type_revision')->where('room_id', $room['id'])
+            ->orderByDesc('version')->get()->map(function ($row) {
+                $item = (array) $row;
+                $item['payload'] = (new RoomReviewService())->decode((string) $item['payload_json']);
+                foreach (['images', 'facilities'] as $field) {
+                    if (isset($item['payload'][$field]) && is_string($item['payload'][$field])) {
+                        $item['payload'][$field] = $this->jsonDecode($item['payload'][$field]);
+                    }
+                }
+                unset($item['payload_json']);
+                return $item;
+            })->all();
+        $latest = $revisions[0] ?? null;
+        return Result::success([
+            'room' => $room,
+            'editable' => $latest && in_array((int) $latest['status'], [0, 3], true) ? $latest['payload'] : $room,
+            'latestRevision' => $latest,
+            'history' => $revisions,
+        ]);
     }
 
     /** 新增/编辑房型:保存草稿或提交审核由 publishStatus 表示 */
@@ -107,13 +133,62 @@ class RoomController extends AbstractAdminController
         $data['goods_id'] = (int) $goods['id'];
         $data['site_id'] = (int) $goods['site_id'];
 
-        if ($id > 0) {
-            Db::table('hotel_room_type')->where('id', $id)->update($data);
-            return Result::success(['id' => $id], '房型已更新');
-        }
+        $submit = (int) $data['publish_status'] === 1;
+        unset($data['publish_status'], $data['submitted_at']);
+        $result = (new RoomReviewService())->save($goods, $id, $data, $submit);
+        return Result::success($result, $submit ? '房型已提交审核' : '房型草稿已保存');
+    }
 
-        $newId = (int) Db::table('hotel_room_type')->insertGetId($data);
-        return Result::success(['id' => $newId], '房型已创建');
+    /** 复制房型为新草稿。 */
+    #[Permission('mch:rooms:add')]
+    public function copy(): array
+    {
+        $room = $this->findScopedRoom($this->requireId());
+        $goods = $this->findScopedHotel((int) $room['goods_id']);
+        return Result::success((new RoomReviewService())->copy($goods, $room), '房型已复制为草稿');
+    }
+
+    /** 撤回待审核版本。 */
+    #[Permission('mch:rooms:edit')]
+    public function withdraw(): array
+    {
+        (new RoomReviewService())->withdraw($this->requireId('revisionId'), MerchantContext::scopeMerchantIds());
+        return Result::success(null, '已撤回审核');
+    }
+
+    /** 房型媒体上传:图片最多10MB且不低于800x600;视频最多500MB。 */
+    #[Permission(['mch:rooms:add', 'mch:rooms:edit'])]
+    public function uploadMedia(): array
+    {
+        /** @var UploadedFile|null $file */
+        $file = $this->request->file('file');
+        if (! $file || ! $file->isValid()) {
+            throw new BusinessException(ErrorCode::PARAM_ERROR, '未接收到有效文件');
+        }
+        $kind = $this->strInput('kind', 'image');
+        $name = (string) ($file->getClientFilename() ?? '');
+        $ext = strtolower((string) pathinfo($name, PATHINFO_EXTENSION));
+        $size = (int) $file->getSize();
+        if ($kind === 'image') {
+            if (! in_array($ext, ['jpg', 'jpeg', 'png', 'webp'], true) || $size > 10 * 1024 * 1024) {
+                throw new BusinessException(ErrorCode::PARAM_ERROR, '图片仅支持 JPG/PNG/WEBP,单张不超过10MB');
+            }
+            $dimensions = @getimagesize((string) $file->getRealPath());
+            if (! $dimensions || (int) $dimensions[0] < 800 || (int) $dimensions[1] < 600) {
+                throw new BusinessException(ErrorCode::PARAM_ERROR, '图片分辨率不能低于800×600');
+            }
+        } elseif (! in_array($ext, ['mp4', 'mov'], true) || $size > 500 * 1024 * 1024) {
+            throw new BusinessException(ErrorCode::PARAM_ERROR, '视频仅支持 MP4/MOV,大小不超过500MB');
+        }
+        $dir = '/opt/www/uploads/rooms/' . date('Ym');
+        if (! is_dir($dir) && ! @mkdir($dir, 0775, true) && ! is_dir($dir)) {
+            throw new BusinessException(ErrorCode::SERVER_ERROR, '上传目录创建失败');
+        }
+        $filename = date('His') . '-' . bin2hex(random_bytes(8)) . '.' . $ext;
+        $path = $dir . '/' . $filename;
+        $file->moveTo($path);
+        @chmod($path, 0644);
+        return Result::success(['url' => '/uploads/rooms/' . date('Ym') . '/' . $filename, 'name' => $name, 'kind' => $kind], '上传成功');
     }
 
     /** 上下架/停售切换 */
@@ -140,8 +215,9 @@ class RoomController extends AbstractAdminController
         if ($pending > 0) {
             throw new BusinessException(ErrorCode::DATA_CONFLICT, "存在 {$pending} 笔进行中订单,禁止删除");
         }
-        Db::table('hotel_room_type')->where('id', $room['id'])->update(['deleted_at' => date('Y-m-d H:i:s')]);
-        return Result::success(null, '房型已删除');
+        $goods = $this->findScopedHotel((int) $room['goods_id']);
+        $result = (new RoomReviewService())->remove($goods, $room);
+        return Result::success($result, $result['reviewRequired'] ? '下线申请已提交审核' : '房型草稿已删除');
     }
 
     private function collectRoomFields(bool $creating): array
@@ -162,6 +238,7 @@ class RoomController extends AbstractAdminController
             'breakfast' => in_array($this->intInput('breakfast'), [0, 1, 2], true) ? $this->intInput('breakfast') : 0,
             'meal_plan' => mb_substr($this->strInput('mealPlan'), 0, 80),
             'cancellation_policy' => mb_substr($this->strInput('cancellationPolicy'), 0, 255),
+            'currency' => mb_substr(strtoupper($this->strInput('currency', 'THB')), 0, 3),
             'checkin_notes' => mb_substr($this->strInput('checkinNotes'), 0, 500),
             'base_price' => $this->validPrice('basePrice'),
             'weekend_price' => $this->input('weekendPrice') !== null ? $this->validPrice('weekendPrice') : 0,
@@ -186,6 +263,24 @@ class RoomController extends AbstractAdminController
             $data['submitted_at'] = date('Y-m-d H:i:s');
         }
         return $data;
+    }
+
+    private function appendReviewState(array $rows): array
+    {
+        if ($rows === []) return [];
+        $roomIds = array_map(static fn (array $row) => (int) $row['id'], $rows);
+        $latestIds = Db::table('hotel_room_type_revision')->whereIn('room_id', $roomIds)
+            ->selectRaw('MAX(id) as id')->groupBy('room_id')->pluck('id')->all();
+        $latest = $latestIds === [] ? collect() : Db::table('hotel_room_type_revision')->whereIn('id', $latestIds)->get()->keyBy('room_id');
+        return array_map(static function (array $row) use ($latest) {
+            $revision = $latest[(int) $row['id']] ?? null;
+            $row['review_status'] = $revision ? (int) $revision->status : ((int) ($row['publish_status'] ?? 0) === 2 ? 2 : 0);
+            $row['revision_id'] = $revision ? (int) $revision->id : 0;
+            $row['revision_version'] = $revision ? (int) $revision->version : (int) ($row['approved_version'] ?? 0);
+            $row['revision_action'] = $revision ? (string) $revision->action : '';
+            $row['reject_reason'] = $revision ? (string) $revision->reject_reason : '';
+            return $row;
+        }, $rows);
     }
 
     private function findScopedRoom(int $id): array

@@ -6,7 +6,7 @@ import { useI18n } from 'vue-i18n';
 import PageContainer from '@/components/PageContainer.vue';
 import { useTable, type TableRow } from '@/composables/useTable';
 import { formatAmount } from '@/utils/format';
-import { apiGoodsAudit, apiGoodsDetail, apiGoodsList, apiGoodsToggleStatus } from '@/api/goods';
+import { apiGoodsAudit, apiGoodsDetail, apiGoodsList, apiGoodsToggleStatus, apiRoomReviewAudit, apiRoomReviewDetail, apiRoomReviewList } from '@/api/goods';
 
 /** 商品审核工作台:待审核队列(通过=直接上架/驳回必填原因)+ 已上架强制下架 */
 const { t } = useI18n();
@@ -25,6 +25,17 @@ const onsale = useTable(
   (params) => apiGoodsList({ ...params, status: 3 }),
   { goodsName: '', goodsType: undefined },
 );
+const roomReviews = useTable((params) => apiRoomReviewList({ ...params, status: 1 }), { keyword: '' });
+const roomReviewColumns = [
+  { title: t('common.id'), dataIndex: 'id', width: 70 },
+  { title: t('goods.audit.roomReview.roomType'), dataIndex: 'room_name', ellipsis: true },
+  { title: t('goods.audit.roomReview.hotel'), dataIndex: 'goods_name', ellipsis: true },
+  { title: t('goods.audit.merchant'), dataIndex: 'merchant_name', width: 150, ellipsis: true },
+  { title: t('goods.audit.roomReview.version'), dataIndex: 'version', width: 80 },
+  { title: t('goods.audit.roomReview.action'), dataIndex: 'action', width: 90 },
+  { title: t('goods.audit.submitTime'), dataIndex: 'submitted_at', width: 165 },
+  { title: t('common.action'), key: 'action_col', width: 180 },
+];
 
 const pendingColumns = [
   { title: t('common.id'), dataIndex: 'id', width: 70 },
@@ -47,7 +58,26 @@ const onsaleColumns = [
 function reloadAll(): void {
   pending.search();
   onsale.search();
+  roomReviews.search();
 }
+
+const roomDrawerOpen = ref(false);
+const roomDetailLoading = ref(false);
+const roomDetail = ref<TableRow | null>(null);
+const roomAuditOpen = ref(false);
+const roomAuditSaving = ref(false);
+const roomAuditTarget = ref<TableRow | null>(null);
+const roomAuditForm = reactive({ auditStatus: 1, auditRemark: '' });
+const roomDiffRows = computed(() => {
+  const current = roomDetail.value?.effective || {};
+  const submitted = roomDetail.value?.revision?.payload || {};
+  const fields = ['room_name', 'room_code', 'description', 'bed_type', 'bed_count', 'area', 'max_adults', 'max_children', 'max_guests', 'floor_name', 'room_view', 'smoking', 'facilities', 'images', 'currency', 'base_price', 'weekend_price', 'extra_bed_price', 'base_stock', 'launch_stock', 'cancellation_policy', 'meal_plan', 'checkin_notes'];
+  return fields.map((field) => ({ field, current: current[field], submitted: submitted[field], changed: JSON.stringify(current[field] ?? null) !== JSON.stringify(submitted[field] ?? null) }));
+});
+async function openRoomDetail(row: TableRow): Promise<void> { roomDrawerOpen.value = true; roomDetailLoading.value = true; try { roomDetail.value = await apiRoomReviewDetail(row.id); } finally { roomDetailLoading.value = false; } }
+function openRoomAudit(row: TableRow, status: number): void { roomAuditTarget.value = row; Object.assign(roomAuditForm, { auditStatus: status, auditRemark: '' }); roomAuditOpen.value = true; }
+async function doRoomAudit(): Promise<void> { if (!roomAuditTarget.value) return; if (roomAuditForm.auditStatus === 2 && !roomAuditForm.auditRemark.trim()) { message.warning(t('goods.audit.auditModal.warningRejectReasonRequired')); return; } roomAuditSaving.value = true; try { await apiRoomReviewAudit({ id: roomAuditTarget.value.id, ...roomAuditForm }); message.success(roomAuditForm.auditStatus === 1 ? t('goods.audit.roomReview.successApprove') : t('goods.audit.roomReview.successReject')); roomAuditOpen.value = false; roomDrawerOpen.value = false; roomReviews.search(); } finally { roomAuditSaving.value = false; } }
+function roomDiffRowClass(record: TableRow): string { return record.changed ? 'changed-row' : ''; }
 
 // ---------- 详情抽屉 ----------
 const drawerOpen = ref(false);
@@ -144,6 +174,7 @@ async function doOff(): Promise<void> {
 onMounted(() => {
   void pending.load();
   void onsale.load();
+  void roomReviews.load();
 });
 </script>
 
@@ -241,8 +272,20 @@ onMounted(() => {
             </template>
           </a-table>
         </a-tab-pane>
+
+        <a-tab-pane key="room-review">
+          <template #tab><a-badge :count="roomReviews.total.value" :offset="[10, -2]">{{ t('goods.audit.roomReview.title') }}</a-badge></template>
+          <a-form layout="inline" style="margin-bottom: 16px"><a-form-item :label="t('goods.audit.roomReview.searchLabel')"><a-input v-model:value="roomReviews.query.keyword" allow-clear style="width: 240px" @press-enter="roomReviews.search()" /></a-form-item><a-form-item><a-button type="primary" @click="roomReviews.search()"><template #icon><SearchOutlined /></template>{{ t('common.search') }}</a-button></a-form-item></a-form>
+          <a-table :columns="roomReviewColumns" :data-source="roomReviews.list.value" :loading="roomReviews.loading.value" :pagination="roomReviews.pagination.value" row-key="id" size="middle">
+            <template #bodyCell="{ column, record }"><template v-if="column.dataIndex === 'action'">{{ record.action === 'delete' ? t('goods.audit.roomReview.actionDelete') : t('goods.audit.roomReview.actionUpsert') }}</template><template v-else-if="column.key === 'action_col'"><a-space :size="0"><a-button type="link" size="small" @click="openRoomDetail(record)">{{ t('common.detail') }}</a-button><a-button v-perm="'goods:audit:audit'" type="link" size="small" style="color:var(--mtrip-success,#52c41a)" @click="openRoomAudit(record, 1)">{{ t('goods.audit.columns.pass') }}</a-button><a-button v-perm="'goods:audit:audit'" type="link" size="small" danger @click="openRoomAudit(record, 2)">{{ t('goods.audit.columns.reject') }}</a-button></a-space></template></template>
+          </a-table>
+        </a-tab-pane>
       </a-tabs>
     </a-card>
+
+    <a-drawer v-model:open="roomDrawerOpen" :title="t('goods.audit.roomReview.title')" width="920"><a-spin :spinning="roomDetailLoading"><template v-if="roomDetail"><a-descriptions :column="2" bordered size="small"><a-descriptions-item :label="t('goods.audit.roomReview.roomType')">{{ roomDetail.revision.payload.room_name }}</a-descriptions-item><a-descriptions-item :label="t('goods.audit.roomReview.hotel')">{{ roomDetail.revision.goods_name }}</a-descriptions-item><a-descriptions-item :label="t('goods.audit.merchant')">{{ roomDetail.revision.merchant_name }}</a-descriptions-item><a-descriptions-item :label="t('goods.audit.roomReview.version')">v{{ roomDetail.revision.version }} · {{ roomDetail.revision.action }}</a-descriptions-item></a-descriptions><a-divider orientation="left">{{ t('goods.audit.roomReview.submittedChanges') }}</a-divider><a-table :data-source="roomDiffRows" row-key="field" size="small" :pagination="false" :columns="[{ title: t('goods.audit.roomReview.field'), dataIndex: 'field', width: 180 }, { title: t('goods.audit.roomReview.currentLive'), dataIndex: 'current' }, { title: t('goods.audit.roomReview.submitted'), dataIndex: 'submitted' }]" :row-class-name="roomDiffRowClass"><template #bodyCell="{ column, record }"><template v-if="column.dataIndex === 'current'">{{ Array.isArray(record.current) ? record.current.join(', ') : (record.current ?? '-') }}</template><template v-else-if="column.dataIndex === 'submitted'">{{ Array.isArray(record.submitted) ? record.submitted.join(', ') : (record.submitted ?? '-') }}</template></template></a-table><template v-if="roomDetail.revision.payload.images?.length"><a-divider orientation="left">{{ t('goods.audit.roomReview.media') }}</a-divider><a-image-preview-group><a-space wrap><a-image v-for="url in roomDetail.revision.payload.images" :key="url" :src="url" :width="120" :height="90" style="object-fit:cover;border-radius:6px" /></a-space></a-image-preview-group></template><a-divider /><a-space><a-button v-perm="'goods:audit:audit'" type="primary" @click="openRoomAudit(roomDetail.revision, 1)">{{ t('goods.audit.columns.pass') }}</a-button><a-button v-perm="'goods:audit:audit'" danger @click="openRoomAudit(roomDetail.revision, 2)">{{ t('goods.audit.columns.reject') }}</a-button></a-space></template></a-spin></a-drawer>
+
+    <a-modal v-model:open="roomAuditOpen" :title="roomAuditForm.auditStatus === 1 ? t('goods.audit.roomReview.approveTitle') : t('goods.audit.roomReview.rejectTitle')" width="480px" :confirm-loading="roomAuditSaving" :ok-button-props="roomAuditForm.auditStatus === 2 ? { danger: true } : undefined" @ok="doRoomAudit"><a-alert :type="roomAuditForm.auditStatus === 1 ? 'success' : 'warning'" :message="roomAuditForm.auditStatus === 1 ? t('goods.audit.roomReview.approveNotice') : t('goods.audit.roomReview.rejectNotice')" show-icon style="margin:16px 0" /><a-form><a-form-item :label="t('goods.audit.roomReview.reviewNote')" :required="roomAuditForm.auditStatus === 2"><a-textarea v-model:value="roomAuditForm.auditRemark" :rows="3" :maxlength="500" /></a-form-item></a-form></a-modal>
 
     <!-- 详情抽屉 -->
     <a-drawer v-model:open="drawerOpen" :title="t('goods.audit.detailModal.title', { name: detail?.goods_name ?? '' })" width="720">
@@ -368,3 +411,9 @@ onMounted(() => {
     </a-modal>
   </PageContainer>
 </template>
+
+<style scoped>
+:deep(.changed-row > td) {
+  background: #fffbe6 !important;
+}
+</style>

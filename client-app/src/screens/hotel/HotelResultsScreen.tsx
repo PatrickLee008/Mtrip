@@ -22,7 +22,7 @@
  *   (评分 9.3/7.8/4.3、SUMMER PROMO、Long Stay Not Supported、PREFERRED/HIGH DEMAND/BEST SELLER…),
  *   结果头的总数也随之显示演示条数,并在其下给一条可点重试的提示条(请求失败时附带错误原因)。
  *   演示态下 chips / 排序 / 关键词在前端本地生效,点心只切本地状态;
- *   点卡片跳酒店详情静态页(`HotelDetail`,同样是设计稿数据,不带商品 id)。
+ *   点演示卡跳酒店详情静态页(`HotelDetail` 不带商品 id);真实卡带 id 进入酒店详情并渲染接口房型。
  *   演示卡也被 chips/关键词筛空时才落到 `EmptyView`;`ErrorView` 只在演示兜底之外的场景出现
  *   (演示态下错误原因走上面那条提示条,不再单独占位)。
  *
@@ -48,6 +48,7 @@ import { useNavigation, useRoute, type RouteProp } from '@react-navigation/nativ
 import { useTranslation } from 'react-i18next';
 
 import { fetchGoodsList, type GoodsSortBy } from '@/api/goods';
+import { TEMP_HOTEL_COVERS, tempCoverFor } from '@/assets/tempImages';
 import { addFavorite, fetchFavoriteList, removeFavorite } from '@/api/user';
 import { LoadingView, EmptyView, ErrorView } from '@/components/common/StateViews';
 import HomeIcon from '@/components/home/HomeIcon';
@@ -431,16 +432,25 @@ export default function HotelResultsScreen() {
           data={data}
           keyExtractor={(item) => String(item.id)}
           ListHeaderComponent={header}
-          renderItem={({ item }) => {
+          renderItem={({ item, index }) => {
             /* 演示卡(id 取负数)的名称/地址/促销/徽章全部照设计稿回填,真实数据一律走接口字段 */
             const key = item.id < 0 ? DEMO_KEY_BY_ID[item.id] : undefined;
             if (!key) {
               return (
                 <HotelResultCard
                   goods={item}
+                  /* 接口暂时没有可用封面,轮流用设计稿临时图兜底(与我的精选同一套,见 tempCoverFor) */
+                  coverSource={tempCoverFor(index)}
                   favorite={favorites.includes(item.id)}
                   citizen={applied.citizen}
-                  onPress={(g) => navigation.navigate('GoodsDetail', { id: g.id })}
+                  /* 带上已选日期,一路透传到订房向导 —— 否则选完房日期会跳回默认值 */
+                  onPress={(g) =>
+                    navigation.navigate('HotelDetail', {
+                      id: g.id,
+                      checkIn: range.checkIn,
+                      checkOut: range.checkOut,
+                    })
+                  }
                   onToggleFavorite={toggleFavorite}
                 />
               );
@@ -469,7 +479,12 @@ export default function HotelResultsScreen() {
                     : undefined
                 }
                 /* 演示卡没有真实商品 id,跳详情静态页(页面自己用设计稿数据渲染) */
-                onPress={() => navigation.navigate('HotelDetail')}
+                onPress={() =>
+                  navigation.navigate('HotelDetail', {
+                    checkIn: range.checkIn,
+                    checkOut: range.checkOut,
+                  })
+                }
                 onToggleFavorite={toggleFavorite}
               />
             );

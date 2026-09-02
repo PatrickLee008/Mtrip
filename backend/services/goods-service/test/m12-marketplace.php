@@ -23,7 +23,7 @@ try {
         $b = $businesses[] = (int) Db::table('merchant_application_business')->insertGetId(['site_id' => 991, 'application_id' => $app, 'business_name' => 'S5 hotel ' . $i, 'business_type' => 'hotel', 'kyc_status' => 1]);
         $p = $properties[] = (int) Db::table('merchant_store')->insertGetId(['site_id' => 991, 'merchant_id' => $merchant, 'source_business_id' => $b, 'store_name' => 'S5 hotel', 'business_type' => 'hotel', 'country_code' => 'MM', 'city_key' => $key, 'status' => 1, 'display_enabled' => 1]);
         $g = $goods[] = (int) Db::table('goods_info')->insertGetId(['site_id' => 991, 'merchant_id' => $merchant, 'goods_name' => $key . ' hotel ' . $i, 'goods_type' => 1, 'status' => 3]);
-        Db::table('hotel_room_type')->insert(['site_id' => 991, 'goods_id' => $g, 'room_name' => 'Room', 'base_price' => $price, 'base_price_citizen' => $price - 10, 'status' => 1]);
+        Db::table('hotel_room_type')->insert(['site_id' => 991, 'goods_id' => $g, 'room_name' => 'Room', 'base_price' => $price, 'base_price_citizen' => $price - 10, 'status' => 1, 'publish_status' => 2]);
         Db::table('goods_review')->insert(['site_id' => 991, 'goods_id' => $g, 'user_id' => 99101, 'order_id' => $g, 'rating' => $i + 3, 'content' => 'S5 review', 'status' => 1]);
         $rankingId = (int) Db::table('ranking_listing')->insertGetId(['market_id' => $market, 'property_id' => $p, 'goods_id' => $g, 'business_id' => $b, 'site_id' => 991, 'rank' => $i + 1]);
         $configs[] = ['id' => $rankingId, 'property_id' => $p, 'goods_id' => $g, 'business_id' => $b, 'rank' => $i + 1, 'pinned' => $i === 0 ? 1 : 0, 'featured' => $i === 1 ? 1 : 0, 'status' => 1];

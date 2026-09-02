@@ -6,9 +6,12 @@ namespace App\Controller\App;
 
 use App\Controller\AbstractController;
 
+use App\Service\Booking\BookingEventService;
+use App\Service\Booking\BookingLifecycleService;
 use App\Service\FraudService;
 use App\Service\NotifyService;
 use App\Service\OrderStockService;
+use App\Service\PaymentResultHandler;
 use App\Service\PricingService;
 use App\Service\ReferralService;
 use App\Service\SettlementService;
@@ -53,9 +56,18 @@ class OrderController extends AbstractController
     protected ReferralService $referralService;
 
     #[Inject]
+    protected BookingLifecycleService $bookingLifecycle;
+
+    #[Inject]
+    protected BookingEventService $bookingEvents;
+
+    #[Inject]
+    protected PaymentResultHandler $payHandler;
+
+    #[Inject]
     protected ConfigInterface $config;
 
-    /** 创建订单:锁定价格日历库存,15分钟未支付由定时任务过期 */
+    /** 创建订单:锁定价格日历库存,10分钟未支付由定时任务过期(实现方案 M4 §2.3) */
     public function create(): array
     {
         $siteId = $this->requireSiteId();
@@ -105,6 +117,7 @@ class OrderController extends AbstractController
         $remark = mb_substr($this->strInput('remark'), 0, 500);
 
         $orderNo = OrderNoGenerator::orderNo($siteId);
+        // M4:预订字段(状态/10分钟支付截止/特殊请求/政策快照),非酒店订单仅双写基础状态字段
         $priced = Db::transaction(function () use (
             $siteId, $userId, $goods, $sku, $orderType, $goodsId, $skuId,
             $quantity, $dates, $useDate, $endDate, $orderNo, $contactName, $contactPhone,
@@ -128,6 +141,7 @@ class OrderController extends AbstractController
                 : [0, 0.0];
             $payAmount = max(0.0, round($totalAmount - $longstay - $couponDiscount, 2));
             $unitPrice = round($totalAmount / max(1, count($dates)) / $quantity, 2);
+            $bookingFields = $this->bookingLifecycle->buildCreateFields($orderType, $goodsId, $skuId, $remark);
             $orderId = (int) Db::table('order_main')->insertGetId([
                 'order_no' => $orderNo,
                 'site_id' => $siteId,
@@ -158,16 +172,36 @@ class OrderController extends AbstractController
                 'contact_phone' => CryptoHelper::encrypt($contactPhone, $this->aesKey()),
                 'guests' => $guests !== [] ? CryptoHelper::encrypt(json_encode($guests, JSON_UNESCAPED_UNICODE), $this->aesKey()) : null,
                 'remark' => $remark,
-            ]);
+                'meal_plan_snapshot' => $orderType === 1 ? mb_substr((string) ($sku['meal_plan'] ?? ''), 0, 255) : '',
+            ] + $bookingFields);
             $this->stockService->logChanges($orderId, $changes);
+            $newBooking = [
+                'id' => $orderId,
+                'order_no' => $orderNo,
+                'site_id' => $siteId,
+                'merchant_id' => (int) $goods['merchant_id'],
+                'goods_name' => (string) $goods['goods_name'],
+                'sku_name' => (string) ($sku['room_name'] ?? $sku['ticket_name'] ?? ''),
+                'quantity' => $quantity,
+                'use_date' => $useDate,
+                'contact_name' => mb_substr($contactName, 0, 50),
+            ];
+            $this->bookingEvents->log($newBooking, 'created', \App\Constants\BookingConst::OPERATOR_GUEST, $userId, '', 1, [
+                'payAmount' => $payAmount,
+                'paymentExpiresAt' => $bookingFields['payment_expires_at'],
+            ]);
             return [
                 'orderId' => $orderId,
                 'original' => $totalAmount,
                 'longstay' => $longstay,
                 'coupon' => $couponDiscount,
                 'payAmount' => $payAmount,
+                'newBooking' => $newBooking,
             ];
         });
+
+        // 新预订通知商户(事件后置容错,不影响下单主流程)
+        $this->payHandler->notifyMerchantNewBooking($priced['newBooking']);
 
         return Result::success([
             'orderId' => $priced['orderId'],
@@ -178,7 +212,7 @@ class OrderController extends AbstractController
                 'couponDiscount' => $priced['coupon'],
                 'payAmount' => $priced['payAmount'],
             ],
-        ], '下单成功,请在15分钟内完成支付');
+        ], '下单成功,请在10分钟内完成支付');
     }
 
     /** 支付(本期mock):payMethod 1Stripe 2PayPal,直接置为已支付并生成核销码 */
@@ -208,13 +242,8 @@ class OrderController extends AbstractController
                 throw new BusinessException(ErrorCode::DATA_CONFLICT, '订单不是待支付状态');
             }
             $verifyCode = OrderNoGenerator::verifyCode();
-            Db::table('order_main')->where('id', $orderId)->update([
-                'order_status' => 1,
-                'pay_method' => $payMethod,
-                'pay_trade_no' => 'MOCK' . OrderNoGenerator::flowNo(),
-                'pay_time' => date('Y-m-d H:i:s'),
-                'verify_code' => $verifyCode,
-            ]);
+            // 支付状态变更统一走 PaymentResultHandler(幂等+迟到支付拦截+时间线)
+            $verifyCode = $this->payHandler->markPaid($order, $payMethod, 'MOCK' . OrderNoGenerator::flowNo(), $verifyCode);
             $this->stockService->deduct($order);
             Db::table('goods_info')->where('id', (int) $order['goods_id'])
                 ->increment('sales_count', (int) $order['quantity']);
@@ -259,6 +288,9 @@ class OrderController extends AbstractController
             );
         } catch (\Throwable) {
         }
+        // 商户通知:新预订支付确认(事件后置容错)
+        $order['order_no'] = $result['orderNo'];
+        $this->payHandler->notifyMerchantConfirmed($order);
 
         return Result::success(['verifyCode' => $result['verifyCode']], '支付成功');
     }
@@ -308,10 +340,15 @@ class OrderController extends AbstractController
             }
             Db::table('order_main')->where('id', $orderId)->update([
                 'order_status' => 4,
+                'booking_status' => \App\Constants\BookingConst::STATUS_CANCELLED,
                 'cancel_reason' => mb_substr($this->strInput('reason', '用户主动取消'), 0, 500),
                 'cancel_time' => date('Y-m-d H:i:s'),
+                'version' => Db::raw('version + 1'),
             ]);
             $this->stockService->release($order);
+            $this->bookingEvents->log($order, 'cancelled', \App\Constants\BookingConst::OPERATOR_GUEST, (int) $order['user_id'], '', 1, [
+                'reason' => '用户主动取消',
+            ]);
         });
         return Result::success(null, '订单已取消');
     }
@@ -374,7 +411,12 @@ class OrderController extends AbstractController
                 'order_status' => 5,
                 'refund_status' => 1,
                 'platform_fee' => $q['platformFee'],
+                'version' => Db::raw('version + 1'),
             ]);
+            $this->bookingEvents->log($order, 'refund_applied', \App\Constants\BookingConst::OPERATOR_GUEST, (int) $order['user_id'], '', 1, [
+                'refundNo' => $refundNo,
+                'refundAmount' => $q['refundAmount'],
+            ], 'refund');
             return [
                 'siteId' => (int) $order['site_id'],
                 'userId' => (int) $order['user_id'],

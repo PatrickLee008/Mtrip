@@ -88,6 +88,30 @@ export interface FavoriteItem {
   status: number;
 }
 
+/**
+ * 常旅客(user-service `/api/v1/app/user/traveler/list`,列表行 snake_case 直出)
+ *
+ * `id_no` 是**脱敏值**(后端 MaskHelper::idCard,形如 12****3456),不是原文 ——
+ * 编辑时留空即保持原值,不要把它当默认值提交回去。
+ */
+export interface TravelerItem {
+  id: number;
+  site_id: number;
+  user_id: number;
+  nationality: string;
+  first_name: string;
+  last_name: string;
+  /** 1 NRC 2 护照 3 其他 */
+  id_type: number;
+  /** 已脱敏 */
+  id_no: string;
+  /** YYYY-MM-DD,可为空 */
+  id_expire_date: string | null;
+  is_default: number;
+  created_at: string;
+  updated_at: string;
+}
+
 /** 商品分类(两级树) */
 export interface GoodsCategory {
   id: number;

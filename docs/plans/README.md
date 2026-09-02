@@ -26,6 +26,22 @@ MTrip/
 
 ## 模块进度总览
 
+2026-09-02修复：超级管理员录入入驻线索时新增必选站点，前端提交 `siteId`、后端拒绝 `siteId<=0`，避免申请及后续商户/商品链路落入平台作用域。按用户确认将 `MCH-5019` 的申请、KYC、正式商户、物业、商户账号、酒店商品和房型从 `site_id=0` 幂等迁移到 `site_id=1（全球）`；复查全部现有相关记录站点一致，物业 `2052` 与商品 `1033` 已可作为站点1 `CN/南宁` 市场排名候选。正式展示资格与排名发布仍保持独立人工操作。详见[模块15](./15-M12-merchant-management.md)。
+
+2026-09-01更新：修复客户端真实酒店卡不进入酒店详情真实 Rooms 的问题。真实酒店搜索结果现在携带 `id` 跳 `HotelDetail` 并拉 `/app/goods/detail` 渲染真实房型，演示卡仍保留静态稿；同时补跑漏执行的 `database/goods/07-room-review-workflow.sql`，本地房型已回填为 `status=1/publish_status=2/approved_version=1`。排查确认当前本地新增酒店仍在 `site_id=0` 且未发布 marketplace，客户端默认站点 1 按设计仍不会展示该数据，需站点一致并发布排名后才会出现在 C 端。详见[模块10](./10-移动端App框架.md)。
+
+2026-09-01热修复：定位 merchant Booking Management 报 `Unknown column 'booking_status'` 为存量 MySQL 数据卷未执行 M4 增量 SQL；已补跑 `database/order/05-merchant-booking.sql`、`database/merchant/36-merchant-booking-menu.sql`、`database/merchant/37-merchant-booking-message.sql` 与 `database/user/10-chat-booking-link.sql`，并将后两份漏挂脚本登记到 `deploy/docker-compose.yml` initdb，复查 `order_main.booking_status` 与 `chat_conversation.order_id` 已落库。详见[方案文档](./实现方案-Merchant-M4-酒店预订管理.md)。
+
+2026-09-01计划：新增 [Merchant App M4 酒店预订管理实现方案](./实现方案-Merchant-M4-酒店预订管理.md)。方案严格映射 Merchant PRD 模块 4、场景 3 和验收标准，明确本期不接真实支付渠道，使用现有模拟支付结果完成预订状态联动；Booking Management 页面、详情面板和操作弹窗必须严格按在线原型实现并进行登录态截图对比。当前仅完成计划，未修改业务代码，关键 No-show、人工确认、房号和改单规则待确认后实施。
+
+2026-09-01修复：房型图片上传后文件权限为 `600`，导致 OpenResty 静态服务返回 403。goods-service 上传成功后现统一设置 `0644`，存量房型图片也已修复；真实新上传测试确认经网关与 merchant-web 代理均返回 `200 image/*`。详见[商户端落地记录](./13-商家端merchant-web落地.md)。本次用户已授权随 M2 房型交付本地提交，不推送。
+
+2026-09-02修复：商户业务编号不再由申请表主键直接生成，新增跨 `merchant_application` / `merchant_info` 的全局序列表并通过行锁串行分配；审批旧申请时若编号已被正式商户占用，会在同一事务中自动换号，避免 `uk_merchant_code` 冲突返回 500。详见[模块03](./03-数据库设计.md)。
+
+2026-09-01修复：merchant-web 开发服务器已显式监听 `0.0.0.0`，解决只监听 `[::1]:5174` 时通过 `127.0.0.1:5174` 访问出现空白页的问题；开发环境同时将 localhost 规范化到 127.0.0.1，避免两个 Origin 的登录 Token 不共享而误跳登录页。构建通过，IPv4 与 localhost 均可访问。详见[商户端落地记录](./13-商家端merchant-web落地.md)。本次用户已授权随 M2 房型交付本地提交，不推送。
+
+2026-09-01更新：M2 房型管理已补齐列表、独立新增/编辑页、详情页与完整审核流程。商户可保存草稿、提交、撤回、查看驳回原因并重新提交；管理员可查看新旧版本差异和媒体后通过/驳回，已批准房型在更新获批前持续对用户可见。真实网关已走通 multipart 上传、提交、通过、更新、驳回和详情核对，双后台构建及项目质量检查通过。详见[商户端落地记录](./13-商家端merchant-web落地.md)。本次用户已授权本地提交，不推送。
+
 2026-09-01更新：修复测试数据中入驻申请缺少商户业务编号、阶段 5 未关联正式商户的问题。生成器与现有商户域 SQL 已同步整改：未转正式商户申请使用独立 `MCH-5xxx` 编号段，阶段 5 与同 ID 正式商户共享编号和站点；重新全量导入后 18 条申请编号完整且唯一，3 条阶段 5 全部关联，无审批编号或注册号冲突。详见[模块03](./03-数据库设计.md)。未提交Git。
 
 2026-08-31更新：admin-web 的 Ant Design Vue Tag 已在全局样式入口统一为原型截图的绿/橙/红/蓝四组深色文字、浅底和清晰描边，字体统一为 11px/400；边框在同色系内加深一级并明确为 `1px solid`。“所有商户”移除遗留的 Tag `border:none`，默认状态恢复灰白底和灰色边框；商户验证四队列由自绘徽章改用共用 `StatusTag`，与入驻申请及所有商户统一风格。TypeScript 校验与 Vite production build 通过。详见[模块04](./04-管理后台框架.md)。未提交Git。
@@ -47,6 +63,7 @@ MTrip/
 | 09 | [09-移动端微服务.md](./09-移动端微服务.md) | C端 /api/v1/app/* 接口(user/goods/order等) | 已完成(联调归模块07/08) | 100% |
 | 10 | [10-移动端App框架.md](./10-移动端App框架.md) | client-app Expo51+RN+TS 多端工程 | 已完成(冒烟联调归模块08) | 100% |
 | 15 | [15-M12-merchant-management.md](./15-M12-merchant-management.md) | PRD模块12：酒店优先的商户管理，餐厅资料展示、运营延期 | 8/29列表整改已提交；追加取消详情餐厅隐藏，admin构建及Browser混合业务核验通过，追加改动未提交；S7整体原型待收口 | 列表及餐厅展示已验证，S7进行中 |
+| M4 | [实现方案-Merchant-M4-酒店预订管理.md](./实现方案-Merchant-M4-酒店预订管理.md) | Merchant PRD 模块4：酒店预订列表、履约状态、库存、退款、通知、同步框架及原型 UI | 阶段0～6全部完成：生命周期+过期任务、商户API(22/22)、原型UI真实登录态验收、通知/住客消息/同步框架(23/23)、PermissionAspect平台级修复、跨端回归与check.ps1全绿 | 100% |
 
 ## 实施顺序(首期里程碑)
 
@@ -57,6 +74,13 @@ MTrip/
 
 | 日期 | 变更内容 |
 |------|---------|
+| 2026-09-02 | 入驻线索站点归属修复：超级管理员创建线索必须选择具体站点，后端拒绝站点0；新增并应用 `39-mch-5019-site-fix.sql`，将 `MCH-5019` 全部现有申请/KYC/商户/物业/账号/商品/房型链路迁移至站点1，数据库一致性与 `CN/南宁` 排名候选查询通过。 |
+| 2026-09-02 | 修复商户业务编号跨表碰撞：新增 `merchant_code_sequence` 全局序列及行锁分配，线索创建与审批冲突兜底共用同一入口；迁移幂等复跑通过，回滚事务验证 `APP-20260019` 可由冲突编号 `MCH-1020` 自动换为 `MCH-5019`，随后新建线索取得 `MCH-5020`，测试后真实申请状态未改变。 |
+| 2026-09-01 | client-app 酒店详情接真实房型：真实搜索结果卡改跳 `HotelDetail({id})`，详情页拉 `/app/goods/detail` 渲染标题、图库、起价和 Rooms，房型 Select 接真实下单确认；补跑房型审核流迁移 `goods/07`。同时确认当前本地数据仍因 `site_id=0` 与 marketplace 未发布被 C 端过滤。 |
+| 2026-09-01 | 热修复 merchant Booking Management `booking_status` 缺列：存量 MySQL 卷未重放 M4 增量 SQL，已补跑 `order/05`、`merchant/36`、`merchant/37`、`user/10` 并复查字段；同时补登记 `deploy/docker-compose.yml` initdb 中遗漏的住客消息两份 SQL，避免全新环境漏执行。 |
+| 2026-09-01 | Merchant App M4 酒店预订管理全部 7 个阶段完成：数据库迁移与回填、生命周期服务（确认/入住/退房/取消/No-show/退款+库存联动+10分钟过期任务）、商户 API 16 端点（22 项端到端）、Booking Management 原型 UI（真实登录态截图验收）、通知/住客消息/同步框架（23 项端到端）。阶段 6 完成 PermissionAspect 平台级修复（补 `#[Aspect]` + 8 服务显式注册，此前全平台 `#[Permission]` 注解静默失效）与跨端回归；check.ps1 四项全绿，仅既有大 chunk 警告。详见[方案文档](./实现方案-Merchant-M4-酒店预订管理.md)。 |
+| 2026-09-01 | 新增 Merchant App M4 酒店预订管理开发计划：本期不接真实支付，使用模拟支付结果打通预订生命周期；UI 必须严格按在线原型实现并完成登录态截图对比；数据、接口、状态机、权限、通知、同步框架、阶段任务和测试矩阵已列明，关键业务决策待确认。 |
+| 2026-09-01 | merchant-web 注册业务切换与菜单上下文整改：移除左上角 3 酒店＋2 餐厅原型假数据，菜单接口返回当前账号真实已验证注册业务；默认“全部业务”只显示公共菜单，选择酒店/餐厅等业务后按 `merchant_menu.module_key` 展示对应专属菜单，离开可见路由时回 Dashboard。PHP 语法、merchant-web 类型检查与生产构建通过；Docker Desktop Engine 500，真实接口/UI 联调待恢复后补验。 |
 | 2026-09-01 | 测试数据入驻申请编号及关联修复：`merchant_application` 全量生成唯一 `merchant_code`；未转正式商户申请改用独立 `MCH-5xxx` 编号段，阶段 5 关联同 ID `merchant_info` 并同步编号、站点和时间线。重新执行 `test/apply.sh` 后 18 条申请无空编号、无异常跨表冲突，3 条阶段 5 均正确关联。 |
 | 2026-08-31 | admin-web 全局 Tag 状态色按原型截图统一：success/green、warning/orange/gold、error/red、processing/blue/geekblue 分别应用绿、橙、红、蓝的深色文字/浅底/加深边框组合；保留 Ant Design Vue 默认圆角、尺寸和 borderless，不改页面组件调用。TypeScript 校验及 Vite production build 通过。 |
 | 2026-08-30 | admin-web `cops/theme` 主题资源编辑器改为可视化控件模式，弹窗 1180px、资源卡一行三列，缩略图接入公共资源弹窗；新增 `FileResourceManager`/`FileResourcePicker` 公共组件（左侧目录树、右侧文件列表、根/子目录维护、上传/查看/单选/多选/删除、限定不限/图片/视频/图片+视频等类型），system-service 补 `/admin/sys/file/tree|upload|dir/save|dir/delete` 并增强 list/delete（多类型过滤、local/aliyun 同步删除实际资源），支持图片/文档/视频/音频资源；存储配置新增阿里云 OSS 驱动与 endpoint，新增 `sys_file_dir` 与 `10-storage-aliyun-resource.sql` 并登记 initdb，compose 给 system-service 挂 uploads。PHP lint、admin-web build、compose config、本地迁移和服务重建通过。 |
@@ -64,7 +88,7 @@ MTrip/
 | 2026-08-26 | 商户验证四队列页(待核实/重新提交/得到正式认可的/已拒绝)搜索栏与表格风格统一为入职页口径:搜索栏改用 `SearchFilterBar` 组件(关键词+业态+国家下拉),表格移除 `a-card` 包裹,分页栏新增 `verify-pagination` 类(灰底 #FAFBFC + 28×28 按钮 + 激活态 #1664FF)。 |
 | 2026-08-25 | 商户验证五个页面（入职/待核实/重新提交/得到正式认可的/已拒绝）页头标题区按线上原型实测统一为三段式（eyebrow 11px/500/#94A3B8 大写 + 主标题 18px/700/#1A2332 + 副标题 13px/#94A3B8，行高 1.5、行距 4px/2px）；验证四队列页从内联样式改为命名类并修正行高；页头主标题新增专用词条对齐原型文案（Approved Applications 等），入职页中文标题改为“入职”。 |
 | 2026-08-25 | 商户验证四队列的线索 ID 统一为关联入驻申请编号 `APP-XXXX`：列表接口批量返回 `application_no`，表格和 CSV 不再显示 `#merchant_info.id`，关键词支持按申请编号检索。 |
-| 2026-08-25 | 新增唯一商户业务编号 `MCH-XXXX`：线索创建事务内按申请自增主键生成，存量申请由 `26-merchant-code.sql` 回填，入驻批准时原样同步到正式商户；与内部数字 `merchant_id`、最终批准生成的 `MTRP-*` 访问码严格区分。入驻及验证详情统一展示业务编号。 |
+| 2026-08-25 | 新增唯一商户业务编号 `MCH-XXXX`：线索创建事务内生成，存量申请由 `26-merchant-code.sql` 回填，入驻批准时同步到正式商户；2026-09-02 起由全局序列表跨申请表与正式商户表统一分配。该编号与内部数字 `merchant_id`、最终批准生成的 `MTRP-*` 访问码严格区分，入驻及验证详情统一展示业务编号。 |
 | 2026-08-25 | 入驻线索术语与列表按原型/PRD 调整：弹窗标题改为“商户入驻线索”，统一商户名称、业务类型、业务数量、注册业务、业务名称等术语；列表业务名称聚合全部注册业务并以逗号分隔，商户名称副标题固定展示注册国家/地区，提交日期仅显示年月日，操作列仅保留详情图标。 |
 | 2026-08-25 | 公司注册号唯一性校验完成：创建线索时非空注册号在全平台有效线索范围内不可重复，空值和软删除记录不占用。新增 `active_reg_number` 生成列及唯一索引，防止并发创建绕过应用层校验；迁移已挂载 compose 并应用本地数据库。随后修复事务闭包遗漏捕获注册号变量导致写入 `null`、创建线索返回 500 的问题。 |
 | 2026-08-25 | 入驻线索录入表单收敛为公司信息 6 项（公司名称、公司/集团名称、公司注册号、注册国家/地区、企业类型、企业数量）与注册商家 6 项（商家名称、类型、城市、业务联系人、手机号码、电子邮箱）；移除公司层商家名称、城市和注册地址，默认提供一条注册商家记录并要求至少录入一家。后端以公司名称回退生成线索商家名称，兼容旧请求。 |

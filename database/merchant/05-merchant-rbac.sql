@@ -27,6 +27,7 @@ CREATE TABLE IF NOT EXISTS `merchant_menu` (
   `sort`          INT          NOT NULL DEFAULT 0 COMMENT '排序',
   `is_cache`      TINYINT      NOT NULL DEFAULT 1 COMMENT '页面是否 keep-alive 缓存:0否 1是',
   `account_scope` VARCHAR(20)  NOT NULL DEFAULT '1,2,3' COMMENT '可见账号类型(逗号分隔:1集团 2商户 3门店)',
+  `business_scope` VARCHAR(20) NOT NULL DEFAULT '' COMMENT '所属业务模块:空=全业务可见,hotel=仅酒店业务视图展示',
   `status`        TINYINT      NOT NULL DEFAULT 1 COMMENT '状态:1启用 2禁用',
   `created_at`    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `updated_at`    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',

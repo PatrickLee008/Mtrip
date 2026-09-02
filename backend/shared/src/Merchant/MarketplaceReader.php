@@ -54,8 +54,8 @@ final class MarketplaceReader
             ->whereIn('id', array_column($configs, 'goods_id'))->whereNull('deleted_at')
             ->select(['id', 'merchant_id', 'status', 'goods_name', 'goods_brief', 'cover_image', 'address',
                 'goods_type', 'category_id', 'star_level', 'sales_count', 'longitude', 'latitude', 'is_hot', 'is_recommend'])
-            ->selectRaw('(SELECT MIN(base_price) FROM hotel_room_type r WHERE r.goods_id=goods_info.id AND r.site_id=goods_info.site_id AND r.status=1 AND r.deleted_at IS NULL) as minPrice')
-            ->selectRaw('(SELECT MIN(base_price_citizen) FROM hotel_room_type r WHERE r.goods_id=goods_info.id AND r.site_id=goods_info.site_id AND r.status=1 AND r.deleted_at IS NULL AND r.base_price_citizen>0) as minPriceCitizen')
+            ->selectRaw('(SELECT MIN(base_price) FROM hotel_room_type r WHERE r.goods_id=goods_info.id AND r.site_id=goods_info.site_id AND r.status=1 AND r.publish_status=2 AND r.deleted_at IS NULL) as minPrice')
+            ->selectRaw('(SELECT MIN(base_price_citizen) FROM hotel_room_type r WHERE r.goods_id=goods_info.id AND r.site_id=goods_info.site_id AND r.status=1 AND r.publish_status=2 AND r.deleted_at IS NULL AND r.base_price_citizen>0) as minPriceCitizen')
             ->selectRaw('(SELECT COALESCE(AVG(rating),0) FROM goods_review r WHERE r.goods_id=goods_info.id AND r.site_id=goods_info.site_id AND r.status=1 AND r.deleted_at IS NULL) as rating')
             ->selectRaw('(SELECT COUNT(*) FROM goods_review r WHERE r.goods_id=goods_info.id AND r.site_id=goods_info.site_id AND r.status=1 AND r.deleted_at IS NULL) as review_count')
             ->get()->map(static fn ($r) => (array) $r)->keyBy('id')->all();
