@@ -1,10 +1,25 @@
 # 会话交接文档(HANDOFF)
 
+### ★ 2026-09-02(client-app H5 纳入部署链路 + 三个既有缺陷修复)
+
+- **背景**:`deploy/web/` 只托管 admin/merchant/supplier 三个前端,移动端 `client-app` 完全不在部署链路里(`auto-deploy.sh` 刻意跳过)。本次把它的 **H5 网页版**补齐为第四个静态站点。**iOS/Android 商店发版仍走人工 EAS,刻意不进脚本**(提审是不可回退的对外动作)。
+- **新增静态站 client**:产物目录 `deploy/web/client/`,网关直连端口 **8093**(`mtrip.conf` 新增 server 块,与 8092 块逐字一致仅 root 不同;compose 加端口映射与只读挂载;`.env.example` 补 `ADMIN_WEB_PORT`/`MERCHANT_WEB_PORT`/`SUPPLIER_WEB_PORT`/`CLIENT_WEB_PORT` 四个变量 —— 之前一个都没有,端口不可发现)。
+- **`auto-deploy.sh` 接入**:`client-app/*` 变更 → 自动 `npm run build:web` 并原子发布(与另外三个同构);强制目标新增 `client-app|client|h5`,`mobile|native` 只提示原生走人工。新增 `web_dist_dir()`(`client-app`→`client`)与 `web_build_script()`(`client-app`→`build:web`)两个映射,原先的死变量 `FE_WEBS` 现已真正承担工程清单职责。`publish_web()` 补 `node_modules` 不存在时也 `npm ci`。
+- **修复 1 —— `.env.production` 的 API 地址是错的**:原值 `EXPO_PUBLIC_API_BASE_URL=/api/v1`。该变量语义是 **origin** 而非路径前缀(`src/api/*.ts` 的 URL 本身就带 `/api/v1/...` 全前缀,`request.ts:70` 也按 `startsWith('/api/v1/app/')` 判断签名),原值会拼成 `/api/v1/api/v1/app/...` 全部 404,`resolveMediaUri` 也会把图拼成 `/api/v1/uploads/...`。**正确值是 `/`**。注意**留空同样不行** —— 实测编译产物确认 Expo 把空值 `.env` 变量当未定义丢弃,`??` 会回落到 `DEFAULT_BASE_URL.production = https://api.mtrip.com`。同时补了缺失的 `EXPO_PUBLIC_ENV=production`(否则 `IS_DEV=true`,debug/info 日志会进生产包)。
+- **修复 2 —— Metro 缓存会编进过期 env**:Metro 按【源文件内容】缓存 transform,只改 `.env` 而 `env.ts` 没动时会复用旧缓存。实测改完 `.env.production` 重新 export,产物里仍是旧地址;必须 `--clear`。故 `build:web` 固定为 `expo export -p web --clear`,**不要去掉**。
+- **修复 3 —— 发布后 cron 自动部署会永久中止**:`deploy/web/<app>/index.html` 占位页是被 git 跟踪的,每次发布都被构建产物覆盖 → `git status --porcelain` 永远非空 → ff-only 洁净门禁从「第一次发布之后」开始把每一次 cron 运行都判为脏工作区而 `exit 1`。已新增 `workspace_status()` 用 pathspec `':!deploy/web'` 把发布目标排除出洁净判断(发布产物不是源码)。
+- **宝塔面板适配**(用户实际用宝塔建站,站点监听 :80 按域名分流,根目录指向 `deploy/web/<名>/`):
+  - 站点根目录下的 `.user.ini`(被 `chattr +i`,删会报 `Operation not permitted`)与 `.htaccess` 不是构建产物,原先的 `rsync -a --delete` 会尝试删除它们导致整次发布失败。已加 `--exclude='.user.ini' --exclude='.htaccess'`(被 exclude 的文件在接收端不会被 `--delete` 清理,已实测验证)。**不要去掉这两个 exclude。**
+  - 8090~8093 是 **gateway 容器**监听的直连端口,`auto-deploy.sh` 本身不监听任何端口(它只构建 + rsync 文件)。宝塔场景下这几个端口只是额外调试入口。
+  - **宝塔站点必须自己加 `/api/` 与 `/uploads/` 反代到网关 `:8081`**,否则同源相对路径的接口全部 404。配置片段见 `deploy/README.md` 第 7 节。
+- **验证**:`npm ci` + `typecheck` + `build:web` 通过;编译产物实测 `e.API_BASE_URL="/"`、`api/v1/api/v1` 出现 0 次、`/api/v1/app/goods/home` 存在;`scripts/auto-deploy.sh client-app` 实跑发布成功(`deploy/web/client/` 得到 index.html + `_expo/` + `assets/`);`docker compose config` 合法且四个挂载/端口齐全;`mtrip.conf` 大括号平衡、8093 块与 8092 块 diff 仅 root 一行;rsync 保护与洁净门禁排除均已用构造场景实测。**未执行 Git 操作**。Docker daemon 本机无权限(需 sudo),故 `openresty -t` 与 8093 端口实访未跑,留待部署机复验。
+
 ### ★ 2026-09-02(auto-deploy 强制发布指定目标)
 
 - `scripts/auto-deploy.sh` 新增强制发布 target 模式:命令行只要带非选项目标(如 `admin-web` / `goods-service` / `goods-service-app` / `gateway`),就跳过 `git fetch`、落后判断、`ff-only merge` 与工作区干净门禁,直接按目标执行当前工作区内容的发布/重启。
 - 用法: `scripts/auto-deploy.sh admin-web` 直接构建并发布 `deploy/web/admin/`; `scripts/auto-deploy.sh goods-service goods-service-app gateway` 直接重启对应主池、APP 孪生和网关。`--dry-run` 可预览决策且不构建、不重启。
 - 范围边界:强制目标支持 `admin-web` / `merchant-web` / `supplier-web`、后端 `*-service`、APP 孪生 `*-service-app`、`gateway|openresty`; `client-app|mobile|app` 只提示需单独 Expo/商店发版,不会部署。默认无 target 的 cron 模式保持原 ff-only 安全策略不变。
+  - **【已被 2026-09-02「client-app H5 纳入部署链路」条目取代】** 现在 `client-app|client|h5` 是有效强制目标(发 H5),`client-app/*` 变更在 cron 模式下也会自动构建发布;只有 `mobile|native`(原生商店发版)仍不部署。
 - 验证:`bash -n scripts/auto-deploy.sh` 通过;`scripts/auto-deploy.sh --dry-run admin-web`、`bash scripts/auto-deploy.sh --dry-run goods-service goods-service-app gateway` 均正确跳过 fetch 并输出部署决策。脚本已补执行位,可直接 `scripts/auto-deploy.sh ...` 调用。
 
 ### ★ 2026-09-02(入驻线索必选站点 + MCH-5019 站点修复)

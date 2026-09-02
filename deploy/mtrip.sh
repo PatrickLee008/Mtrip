@@ -318,7 +318,7 @@ print_endpoints() {
         echo "  探活          ./mtrip.sh health --s7"
     else
         echo "  网关入口      http://localhost:$(env_get GATEWAY_HOST_PORT 8081)   (/api/v1/{admin,app,merchant,supplier}/*)"
-        echo "  前端(静态)   admin http://localhost:$(env_get ADMIN_WEB_PORT 8090)  merchant :$(env_get MERCHANT_WEB_PORT 8091)  supplier :$(env_get SUPPLIER_WEB_PORT 8092)"
+        echo "  前端(静态)   admin http://localhost:$(env_get ADMIN_WEB_PORT 8090)  merchant :$(env_get MERCHANT_WEB_PORT 8091)  supplier :$(env_get SUPPLIER_WEB_PORT 8092)  client(H5) :$(env_get CLIENT_WEB_PORT 8093)"
         echo "  微服务直连    9501~9508  system/user/goods/order/merchant/finance/marketing/payment"
         echo "  APP 孪生池    system/user/goods/order/marketing-service-app(无宿主端口,/app/* 走此)"
         echo "  MySQL         localhost:$(env_get MYSQL_HOST_PORT 3307)    Redis  localhost:$(env_get REDIS_HOST_PORT 6380)"

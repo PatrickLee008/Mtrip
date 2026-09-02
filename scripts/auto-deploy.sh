@@ -4,6 +4,9 @@
 # ------------------------------------------------------------------
 # 设计目标(与 deploy/docker-compose.app-pool.yml 的双实例池配套):
 #   - 前端(admin/merchant/supplier)有变更 → npm run build → 原子替换 deploy/web/<web>/
+#   - 移动端 client-app 有变更 → npm run build:web(Expo web export)→ 原子替换 deploy/web/client/
+#       * 只发 【H5 网页版】。iOS/Android 的 EAS build 与商店提审【刻意不做】:
+#         提审是不可回退的对外动作,不适合放进 cron 自动流程,仍走人工。
 #   - 后端服务有变更 → 经 deploy/mtrip.sh 精准重启
 #       * 改动【全部落在 Controller/{Admin,Merchant,Supplier}】→ 只重启主池,APP 池零打断
 #       * 触碰 Controller/App 或服务共享代码(Model/Service/Middleware/config)或 backend/shared
@@ -20,12 +23,15 @@
 #
 # 强制发布 target(跳过 fetch/merge/变更判断,也不要求工作区干净):
 #   admin-web|merchant-web|supplier-web  直接构建并发布静态文件
+#   client-app|client|h5                 直接构建并发布移动端 H5 到 deploy/web/client/
 #   system-service|user-service|...      直接重启对应后端主池服务
 #   system-service-app|user-service-app  直接重启 APP 孪生服务
 #   gateway|openresty                    直接重启网关
+#   (mobile|native 不是有效目标,只会提示「原生发版走人工 EAS」)
 #
 # 示例:
 #   scripts/auto-deploy.sh admin-web
+#   scripts/auto-deploy.sh client-app
 #   scripts/auto-deploy.sh goods-service goods-service-app gateway
 #
 # cron 示例(每 5 分钟,避开整点):
@@ -76,8 +82,26 @@ DOCKER="${DOCKER:-docker}"
 NPM="${NPM:-npm}"
 LOCK_FILE="/tmp/mtrip-auto-deploy.lock"
 
-# 前端项目 -> 静态发布目录(网关挂载源)
-FE_WEBS="admin-web merchant-web supplier-web"
+# 前端工程清单(含移动端 H5)。发布目录与构建脚本由下面两个映射函数给出。
+FE_WEBS="admin-web merchant-web supplier-web client-app"
+
+# 工程名 -> deploy/web/ 下的发布目录名(网关挂载源,见 docker-compose.yml)
+# 三个管理端是 <名>-web 去掉后缀;client-app 的目录刻意叫 client(与网关 root 一致)
+web_dist_dir() {
+    case "$1" in
+        client-app) echo "client" ;;
+        *)          echo "${1%-web}" ;;
+    esac
+}
+
+# 工程名 -> package.json 里的构建脚本名
+# client-app 用 build:web(= expo export -p web),刻意不叫 build 以免与原生 EAS build 混淆
+web_build_script() {
+    case "$1" in
+        client-app) echo "build:web" ;;
+        *)          echo "build" ;;
+    esac
+}
 # 同时服务管理端与 APP 端的共享服务(有 -app 孪生)
 APP_SERVING="system-service user-service goods-service order-service marketing-service"
 
@@ -110,13 +134,19 @@ command -v git >/dev/null 2>&1 || die "未安装 git"
 git config --global --get-all safe.directory 2>/dev/null | grep -qxF "$REPO_ROOT" \
     || git config --global --add safe.directory "$REPO_ROOT" 2>/dev/null || true
 
+# 工作区洁净判断(排除 deploy/web —— 那是【发布目标】不是源码)
+# 为什么必须排除:deploy/web/<app>/index.html 占位页是被 git 跟踪的,
+# 每次发布都会被构建产物覆盖 → git status 永远非空 → 下面的 ff-only 洁净门禁
+# 会从「第一次发布之后」开始把每一次 cron 自动部署都判为脏工作区而中止。
+workspace_status() { git status --porcelain -- . ':!deploy/web' 2>/dev/null; }
+
 CHANGED=""
 if [ -n "$FORCE_TARGETS" ]; then
     info "强制发布目标:$FORCE_TARGETS  仓库:$REPO_ROOT  模式:${MODE_FLAG:-dev}  dry-run:$DRY_RUN"
     warn "强制发布模式:跳过 git fetch/merge/落后检查,直接使用当前工作区内容"
-    if [ -n "$(git status --porcelain 2>/dev/null)" ]; then
+    if [ -n "$(workspace_status)" ]; then
         warn "当前工作区有未提交改动;强制发布会把这些本地内容一并用于构建/重启:"
-        git status --short
+        workspace_status
     fi
 else
     CUR_BRANCH="$(git rev-parse --abbrev-ref HEAD 2>/dev/null)"
@@ -128,10 +158,10 @@ else
     fi
     info "目标分支:$BRANCH  仓库:$REPO_ROOT  模式:${MODE_FLAG:-dev}  dry-run:$DRY_RUN"
 
-    # 工作区必须干净(ff-only 前提,绝不覆盖本地改动)
-    if [ -n "$(git status --porcelain)" ]; then
+    # 工作区必须干净(ff-only 前提,绝不覆盖本地改动;deploy/web 发布产物不算)
+    if [ -n "$(workspace_status)" ]; then
         fail "工作区有未提交改动,按 ff-only 策略中止(避免覆盖本地)。清理后重试:"
-        git status --short >&2
+        workspace_status >&2
         exit 1
     fi
 
@@ -211,9 +241,10 @@ if [ -n "$FORCE_TARGETS" ]; then
             merchant|merchant-web)   add merchant-web "$FE_BUILD" FE_BUILD ;;
             supplier|supplier-web)   add supplier-web "$FE_BUILD" FE_BUILD ;;
             gateway|openresty)       GATEWAY_ACTION="restart" ;;
-            client-app|mobile|app)
-                NOTE_MOBILE=1
-                warn "$target 是移动端工程,当前脚本不做 Expo/商店发版;本次不会部署 client-app"
+            client-app|client|h5)    add client-app "$FE_BUILD" FE_BUILD; NOTE_MOBILE=1 ;;
+            mobile|native)
+                warn "$target:iOS/Android 原生商店发版不在本脚本范围(需人工 EAS build + 提审)"
+                warn "  若你要发的是 H5 网页版,请用:scripts/auto-deploy.sh client-app"
                 ;;
             backend/services/*)
                 s="${target#backend/services/}"
@@ -252,7 +283,8 @@ else
             admin-web/*)     add admin-web    "$FE_BUILD" FE_BUILD ;;
             merchant-web/*)  add merchant-web "$FE_BUILD" FE_BUILD ;;
             supplier-web/*)  add supplier-web "$FE_BUILD" FE_BUILD ;;
-            client-app/*)    NOTE_MOBILE=1 ;;
+            # H5 网页版自动构建发布;原生商店发版仍需人工(NOTE_MOBILE 只用于末尾提醒)
+            client-app/*)    add client-app "$FE_BUILD" FE_BUILD; NOTE_MOBILE=1 ;;
 
             backend/shared/*)
                 # 影响所有业务服务 + 所有孪生
@@ -315,7 +347,7 @@ echo "  镜像重建     :${REBUILD:- (无)}"
 echo "  网关动作     :${GATEWAY_ACTION:- (无)}"
 [ "$NEED_STACK_UP" -eq 1 ] && echo "  ${C_YELLOW}.env/compose 变更:需 ./mtrip.sh build 或 start 重建容器(本脚本不自动执行)${C_OFF}"
 [ -n "$DB_FILES" ] && echo "  ${C_YELLOW}DB 变更(不自动执行):$DB_FILES${C_OFF}"
-[ "$NOTE_MOBILE" -eq 1 ] && echo "  client-app(移动端)有变更:需单独 Expo 发版,本脚本跳过"
+[ "$NOTE_MOBILE" -eq 1 ] && echo "  client-app:本次只发 H5 网页版(见上方前端构建);iOS/Android 商店发版仍需人工 EAS build + 提审"
 if [ -n "$SKIPPED_APP" ]; then
     warn "--no-app-sync:跳过 APP 孪生重启 [$SKIPPED_APP]"
     warn "  风险:APP 池仍跑旧代码;若本次共享代码/接口不兼容,/api/v1/app/* 可能报错。请尽快手动同步。"
@@ -341,21 +373,37 @@ FAILED=0
 
 # ---------- 执行:前端构建 + 原子发布 ----------
 publish_web() {
-    local web="$1" src="$REPO_ROOT/$1/dist" dst="$REPO_ROOT/deploy/web/${1%-web}"
-    info "构建前端 $web ..."
+    local web="$1" src="$REPO_ROOT/$1/dist"
+    local dst="$REPO_ROOT/deploy/web/$(web_dist_dir "$web")"
+    local script="$(web_build_script "$web")"
+    info "构建前端 $web($NPM run $script) ..."
     ( cd "$REPO_ROOT/$web" || exit 1
-      if echo "$CHANGED" | grep -qE "^$web/(package-lock\.json|package\.json)$"; then
+      # 没装依赖(首次部署 / 新机器)也要装,否则构建必失败
+      if [ ! -d node_modules ]; then
+          info "  node_modules 不存在,$NPM ci"; $NPM ci || exit 2
+      elif echo "$CHANGED" | grep -qE "^$web/(package-lock\.json|package\.json)$"; then
           info "  依赖清单变更,$NPM ci"; $NPM ci || exit 2
       fi
-      $NPM run build ) || { fail "$web 构建失败,保留旧产物不发布"; FAILED=1; return 1; }
+      # 先清输出目录:Expo export 对已存在的 dist 行为不一致
+      # (client-app 的 build:web 还带 --clear 清 Metro 缓存 —— Metro 按【源文件内容】缓存
+      #  transform,只改 .env 而源码没动时会复用旧缓存,把过期的 EXPO_PUBLIC_* 值编进包里。
+      #  实测踩过:改了 .env.production 但产物仍是旧地址。别去掉那个 --clear。)
+      rm -rf dist
+      $NPM run "$script" ) || { fail "$web 构建失败,保留旧产物不发布"; FAILED=1; return 1; }
     [ -f "$src/index.html" ] || { fail "$web 构建产物缺 index.html,跳过发布"; FAILED=1; return 1; }
     mkdir -p "$dst"
+    # 【宝塔面板保护】站点根目录下的 .user.ini / .htaccess 是面板生成的跨站隔离配置,
+    # 不属于构建产物。.user.ini 被面板加了 immutable(chattr +i),删它会直接报
+    # "Operation not permitted" 让整次发布失败;.htaccess 删了会破坏站点配置。
+    # 故 rsync 必须 --exclude 掉:被 exclude 的文件在接收端【不会】被 --delete 清理。
+    # (cp 分支的 rm 用 * 通配,bash 默认不含 dotglob,本就删不到隐藏文件,这里保持一致语义。)
     if command -v rsync >/dev/null 2>&1; then
-        rsync -a --delete "$src/" "$dst/" || { fail "$web 发布(rsync)失败"; FAILED=1; return 1; }
+        rsync -a --delete --exclude='.user.ini' --exclude='.htaccess' "$src/" "$dst/" \
+            || { fail "$web 发布(rsync)失败"; FAILED=1; return 1; }
     else
         rm -rf "${dst:?}/"* && cp -r "$src/." "$dst/" || { fail "$web 发布(cp)失败"; FAILED=1; return 1; }
     fi
-    ok "$web 已发布 -> deploy/web/${1%-web}/"
+    ok "$web 已发布 -> deploy/web/$(web_dist_dir "$web")/"
 }
 for web in $FE_BUILD; do publish_web "$web"; done
 

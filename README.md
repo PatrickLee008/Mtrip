@@ -94,7 +94,9 @@ cd ../admin-web && npm install && npm run dev    # http://localhost:5173,接口�
 
 ## 当前状态(2026-07)
 
-auto-deploy 指定目标强制发布（2026-09-02）：`scripts/auto-deploy.sh` 现支持 `scripts/auto-deploy.sh admin-web` 这类 target 模式，跳过 `git fetch`、落后检查、ff-only merge 和工作区干净门禁，直接用当前工作区构建发布指定前端；后端 `*-service` / `*-service-app` / `gateway` 可直接重启。无 target 的 cron 自动部署仍保持原安全策略；`client-app` 继续提示需单独 Expo/商店发版。
+client-app H5 纳入部署链路（2026-09-02）：移动端补齐为**第四个静态站点** `client`（产物 `deploy/web/client/`，网关直连端口 8093，构建走 `npm run build:web` = `expo export -p web --clear`）。`client-app/*` 变更在 cron 模式下自动构建发布，强制目标新增 `client-app|client|h5`；**iOS/Android 商店发版仍走人工 EAS，刻意不进脚本**（`mobile|native` 只提示）。同批修掉三个既有缺陷：① `client-app/.env.production` 的 `EXPO_PUBLIC_API_BASE_URL` 原为 `/api/v1`，该变量语义是 **origin** 不是路径前缀，会拼成 `/api/v1/api/v1/app/...` 全部 404 —— 正确值是 `/`（留空也不行，Expo 会把空值当未定义丢弃并回落到 `https://api.mtrip.com`，已由编译产物实测确认）；② `build:web` 必须带 `--clear`，否则 Metro 按源文件内容缓存 transform，只改 `.env` 会把过期值编进包；③ `deploy/web/<app>/index.html` 占位页被 git 跟踪、发布即被覆盖，导致 ff-only 洁净门禁在首次发布后**永久中止所有 cron 部署**，已用 pathspec `':!deploy/web'` 把发布目标排除出洁净判断。另适配宝塔面板：`rsync` 加 `--exclude='.user.ini' --exclude='.htaccess'` 保护面板生成的跨站隔离文件（`.user.ini` 被 `chattr +i`，删会报 `Operation not permitted` 让整次发布失败）；宝塔站点需自行反代 `/api/` 与 `/uploads/` 到网关 :8081，配置片段见 `deploy/README.md` 第 7 节。
+
+auto-deploy 指定目标强制发布（2026-09-02）：`scripts/auto-deploy.sh` 现支持 `scripts/auto-deploy.sh admin-web` 这类 target 模式，跳过 `git fetch`、落后检查、ff-only merge 和工作区干净门禁，直接用当前工作区构建发布指定前端；后端 `*-service` / `*-service-app` / `gateway` 可直接重启。无 target 的 cron 自动部署仍保持原安全策略。（其中「`client-app` 继续提示需单独 Expo/商店发版」一条已被上方条目取代。）
 
 client-app 订房收尾（2026-09-01）：① 搜索页选好的入离日期一路透传到订房向导（此前选完房日期会跳回默认值），并把金额改为由 `units`（每晚每间基数）× 晚数 × 间数 实时推算，演示/真实两种模式共用一套算法（默认 1 晚 1 间时与设计稿原值一致），修掉「写着 3 Nights 却显示 1 晚金额」；② 预订成功页的二维码改为现场生成 `/app/order/pay` 返回的核销码 `verifyCode`（新增依赖 `react-native-qrcode-svg`，peer 为已装的 `react-native-svg`），无核销码时回落设计稿静态图；③ 「我的精选」的预订卡与收藏酒店卡也回落设计稿临时封面，兜底规则统一到 `tempCoverFor()`，与酒店搜索结果页同一套。后端 `create` 实测 1 晚 1 间 = 150、2 晚 2 间 = 600、3 晚 1 间 = 450，与前端算法一致。
 
