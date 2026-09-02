@@ -449,15 +449,59 @@ pre {
 }
 
 input,
-select {
+select,
+textarea {
   width: 100%;
-  height: 44px;
+  height: 48px;
   border: 1px solid var(--line);
-  border-radius: 16px;
-  padding: 0 14px;
+  border-radius: 14px;
+  padding: 0 16px;
   color: var(--ink);
-  background: rgba(255, 255, 255, 0.72);
+  /* 用主题变量而不是写死白色:四套主题各自定义了 --field,深色主题不必再打补丁 */
+  background: var(--field);
   font: inherit;
+  font-size: 14px;
+  line-height: 1.4;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--muted);
+  opacity: 0.75;
+}
+
+input:hover,
+select:hover,
+textarea:hover {
+  border-color: color-mix(in srgb, var(--brand) 42%, var(--line));
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  outline: none;
+  border-color: var(--brand);
+  /* 聚焦环用品牌色的低透明度描边,四套主题都能看清 */
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand) 26%, transparent);
+  background: color-mix(in srgb, var(--field) 88%, var(--panel));
+}
+
+input:disabled,
+select:disabled,
+textarea:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* select 的原生箭头在深色主题下常常看不见,统一换成自绘箭头 */
+select {
+  appearance: none;
+  padding-right: 38px;
+  background-image: linear-gradient(45deg, transparent 50%, currentColor 50%), linear-gradient(135deg, currentColor 50%, transparent 50%);
+  background-position: calc(100% - 20px) calc(50% + 2px), calc(100% - 14px) calc(50% + 2px);
+  background-size: 6px 6px, 6px 6px;
+  background-repeat: no-repeat;
 }
 
 label {
@@ -468,9 +512,16 @@ label {
   white-space: nowrap;
 }
 
-label input {
+/*
+ * 只让【勾选类】控件恢复原生尺寸。
+ * 原先是无差别的 `label input { height: auto }`,把登录页
+ * `<label>用户名<input></label>` 里的文本框高度也一并清零了 —— 输入框「矮一条缝」的根因。
+ */
+label input[type="checkbox"],
+label input[type="radio"] {
   width: auto;
   height: auto;
+  min-height: 0;
 }
 
 .service-grid {
@@ -831,13 +882,7 @@ body[data-theme="terminal"] .service-card dl div {
   background: rgba(255, 255, 255, 0.06);
 }
 
-body[data-theme="classic-dark"] input,
-body[data-theme="classic-dark"] select,
-body[data-theme="terminal"] input,
-body[data-theme="terminal"] select {
-  color: var(--ink);
-  background: rgba(0, 0, 0, 0.22);
-}
+/* 深色主题的输入框配色已由各主题的 --field 变量承担,无需再单独覆盖背景 */
 
 pre {
   color: var(--code-fg);
@@ -1189,4 +1234,277 @@ body[data-theme="pro-light"] .theme-switcher select option {
   .diag-summary {
     grid-template-columns: 1fr;
   }
+}
+
+/* ==========================================================================
+   账号与权限(登录页、侧栏用户块、用户管理页)
+   —— 全部复用既有 CSS 变量与 .panel/.button/.badge 体系,四套主题自动跟随
+   ========================================================================== */
+
+.login-wrap {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 32px 24px;
+}
+
+.login-card {
+  width: min(560px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 48px 52px;
+  border-radius: 28px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+
+.login-card h1 {
+  margin: 0;
+  font-size: 23px;
+  letter-spacing: 0.2px;
+}
+
+/* 窄屏回落:内距收一档,避免在手机上被挤没 */
+@media (max-width: 600px) {
+  .login-card {
+    padding: 32px 24px;
+    border-radius: 22px;
+  }
+}
+
+/* 竖排的「标签在上、输入框在下」;white-space 必须复位,否则继承全局 label 的 nowrap */
+.login-card label {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  white-space: normal;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--muted);
+}
+
+.login-card input {
+  height: 52px;
+  border-radius: 16px;
+  font-size: 15px;
+}
+
+.login-card button {
+  height: 52px;
+  margin-top: 4px;
+  font-size: 15px;
+}
+
+.login-error,
+.login-notice {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  font-size: 13px;
+}
+
+.login-error {
+  color: var(--bad);
+  border: 1px solid var(--bad);
+  background: rgba(189, 61, 42, 0.08);
+}
+
+.login-notice {
+  color: var(--good);
+  border: 1px solid var(--good);
+  background: rgba(12, 143, 98, 0.08);
+}
+
+.login-hint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* 侧栏底部的当前用户块 */
+.rail-user {
+  margin-top: auto;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.rail-user-id {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 13px;
+}
+
+.rail-user form {
+  margin: 0;
+}
+
+.rail-user button {
+  width: 100%;
+}
+
+/* 用户管理页:表格内的行内小表单 */
+.inline-form {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 8px 6px 0;
+}
+
+/* 表格里的控件用略矮一档的尺寸,但仍保持可点区域充足 */
+.inline-form input,
+.inline-form select {
+  width: auto;
+  min-width: 150px;
+  height: 42px;
+  border-radius: 12px;
+  font-size: 13px;
+}
+
+.inline-form button {
+  height: 42px;
+  padding: 0 16px;
+  white-space: nowrap;
+}
+
+.user-ops {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.user-create {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  padding: 8px 0 4px;
+}
+
+.user-create input {
+  width: auto;
+  min-width: 230px;
+  flex: 1 1 230px;
+}
+
+.user-create select {
+  width: auto;
+  min-width: 180px;
+}
+
+.user-create button {
+  flex: 0 0 auto;
+  min-width: 120px;
+}
+
+button.danger,
+.button.danger {
+  background: var(--bad);
+  color: #fff;
+}
+
+/* 成功提示复用 .risk-banner 的版式,只换配色 */
+.risk-banner.ok-banner {
+  border-color: var(--good);
+  background: rgba(12, 143, 98, 0.08);
+}
+
+/* ==========================================================================
+   发布管理:自动部署 / 指定目标发布
+   ========================================================================== */
+
+.deploy-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+  gap: 18px;
+  margin-top: 22px;
+}
+
+.deploy-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 26px;
+  border-radius: 26px;
+}
+
+/* 主操作卡用品牌色左描边强调 */
+.deploy-card.primary {
+  border-left: 4px solid var(--brand);
+}
+
+.deploy-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.deploy-head h2 {
+  margin: 0;
+  font-size: 17px;
+}
+
+.deploy-card > p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.65;
+}
+
+.deploy-notes {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.deploy-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: auto;
+  padding-top: 4px;
+}
+
+.deploy-actions form {
+  margin: 0;
+}
+
+/* 目标选择 + 两个提交按钮(预检 / 立即发布) */
+.deploy-target-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  margin-top: auto;
+  padding-top: 4px;
+}
+
+.deploy-target-form select {
+  flex: 1 1 240px;
+  width: auto;
+  min-width: 220px;
+}
+
+.deploy-target-form button {
+  flex: 0 0 auto;
+}
+
+button:disabled,
+.button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  filter: grayscale(0.4);
 }

@@ -1,5 +1,31 @@
 # 会话交接文档(HANDOFF)
 
+### ★ 2026-09-02(mtrip-ops 输入框样式修复 + 发布管理接入 auto-deploy 全能力)
+
+- **输入框「矮一条缝」的根因**:`public/app.css` 里有一条无差别的 `label input { width:auto; height:auto }`,本意是让筛选栏的复选框恢复原生尺寸,却把登录页 `<label>用户名<input></label>` 结构里的**文本框高度也一并清零**了。已把该规则**收窄为只作用于 `input[type=checkbox]` 与 `input[type=radio]`**。
+- **输入框整体重做**:基础高度 44 → 48px(登录页 52px),圆角 16 → 14px,新增 hover/focus 态(品牌色描边 + 3px 聚焦环)、placeholder 配色、disabled 态;`select` 原生箭头在深色主题下几乎看不见,改为自绘箭头。
+- **顺手理顺一处主题欠债**:四套主题各自定义了 `--field` 变量专供输入框,但基础样式却硬编码 `rgba(255,255,255,0.72)` 再用 `body[data-theme="classic-dark"] input {...}` 打补丁。现改为直接 `background: var(--field)`,**删掉了那条补丁规则**,四套主题自动正确。
+- **登录页与用户管理表单**:登录卡加宽到 420px、内距与间距放大;`.login-card label` 必须显式 `white-space: normal`(全局 `label` 是 `nowrap`);用户管理页行内表单控件统一 42px 高、最小宽度,新建账号表单改为可换行的弹性布局。
+- **发布管理页重做**(用户反馈:auto-deploy 已支持「自动拉取 + 按变更精准发布」与「强制指定发布某个应用」,但面板只暴露了 dry-run):
+  - `src/runner.js` 新增 `deploy-auto`(`auto-deploy.sh` 无参数,全自动)、`deploy-target` / `deploy-target-dry`(`auto-deploy.sh [--dry-run] <目标>`)。目标白名单由 `deployTargetGroups()` 按「前端 / 后端主池 / APP 孪生 / 网关」四组给出,渲染层直接拿来做 `<optgroup>`。
+  - **修了一个会导致部署被腰斩的问题**:`runWhitelistedCommand` 默认超时 180s,而全量自动部署含前端构建(仅 client-app 的 Expo web 打包就要 1-2 分钟,首次还要 `npm ci`)必然超时被 KILL。部署类命令超时改为 **15 分钟**。
+  - 页面新增「自动部署」与「指定目标发布」两张卡(各带预检 + 真执行两个按钮、`高风险` 徽标、二次确认弹窗),并在 `enableActions=false` 时把所有按钮置灰 + 顶部横幅说明;工作区不干净时提前给出 ff-only 会中止的警告,并指路「指定目标发布」(它跳过洁净门禁)。
+- **登录后跳转 404 修复**:会话过期时若用户正好 POST 了某个动作(如「执行 health」),守卫会把 `/actions/mtrip-health` 这个**只接受 POST 的路径**存进 `next`,登录成功后用 302(GET)跳回去必然 404。两处同时拦:① 守卫只在 `req.method === 'GET'` 时记 `next`,POST 一律回 `/`;② `safeNext()` 增加 `POST_ONLY_PREFIXES`(`/actions/`、`/users/`、`/logout`)黑名单兜底。原有的开放重定向防护(必须 `/` 开头且非 `//`)保留。
+- **登录卡加宽**:420 → 560px,内距 40/36 → 48/52,标题 21 → 23px,并补窄屏(≤600px)回落规则。
+- **验证**:发布页在 viewer 仍 403,operator/admin 可见新卡片。**注意**:自动部署与指定发布的「真执行」按钮本次**未在本机实跑**(会真的拉代码并重启服务),只验证了命令构造与白名单拦截,首次使用请先点「预检」。**本轮改动因命令行持续限流,`npm run check` 未能执行,下次会话请先补跑。**
+
+### ★ 2026-09-02(mtrip-ops 账号鉴权 + 三级权限 + 启停脚本)
+
+- **背景**:`mtrip-ops` 运维控制台此前**完全没有鉴权**,`src/server.js` 的 `handle()` 对所有路由直接放行;而 `mtrip-ops/ops.config.json` 里 `enableActions: true`,意味着任何能连到 `127.0.0.1:56700` 的人(同机任意用户、任意 SSH 端口转发)都能读全部业务日志、跑 `git pull`、重启任意服务、备份数据库。`docs/02-实施计划.md` 早把「账号登录与 RBAC」列为待办。本次补齐。
+- **新增 `src/auth.js`(零依赖,只用 `node:crypto`)**:scrypt 加盐哈希 + `timingSafeEqual` 校验;用户存 `data/users.json`(`0600`,该目录已全量 gitignore);会话为「进程内 Map + 32 字节随机 sid」,cookie `HttpOnly; SameSite=Strict`,空闲 8 小时失效。**首次启动无账号时自动建 admin,随机口令只打印一次**,不留可猜默认口令。登录失败按「用户名+IP」5 次锁 5 分钟,且「用户名不存在」与「口令错误」返回同一提示以防账号枚举。
+- **三角色 RBAC**(对齐 `docs/03-安全模型.md` 既有风险分级):`viewer`(只读页面)/ `operator`(+ 全部白名单动作)/ `admin`(+ `/users` 账号管理)。判定统一走 `can(user, perm)`,路由层**默认拒绝**;导航栏同步按权限隐藏入口,但**隐藏只是界面收敛,真正拦截在路由层**。角色与禁用状态每次请求回读 `users.json`,故管理员改角色/禁用账号对目标用户的**当前会话立即生效**。
+- **防自锁**:最后一个可用管理员不能被降级、禁用或删除;不能删除当前登录账号。
+- **CSRF**:每会话一个 token,全部状态变更表单带隐藏域并在服务端比对(`SameSite=Strict` 之外的第二道 —— 该面板能跑 `git pull` 与重启服务)。
+- **审计补齐**:`src/runner.js` 的 `runWhitelistedCommand()` 增加第 4 个参数 `actor`,审计行落 `user` 与 `ip`,并新增 `command-rejected` 类型记录越权/未知命令探测。这是补上 `docs/03-安全模型.md`「审计字段」写明却一直没实现的两项。`/audit` 页新增「操作人」「来源 IP」两列(历史记录显示 `-`)。
+- **新增 `mtrip-ops/ops.sh`**(非 systemd 场景的启停):`start|stop|restart|status|logs`。start 校验 Node ≥20、拒绝重复启动、**等端口真正就绪才报成功**、进程秒退时直接打印日志尾部,并在首次初始化时主动把随机管理员口令提示出来;stop 先 TERM 再 KILL;pid 存活判断额外校验 `/proc/<pid>/cmdline` 含 `src/server.js`,**防 pid 复用误杀无关进程**。pid 与日志落 `data/`,不进 Git。
+- **注意**:会话在内存,**进程重启即全部登出**,这是「简单优先」的已知取舍,已写进 README。生产挂 HTTPS 时需在 `auth.js` 的 `sessionCookie()` 补 `; Secure`。忘记管理员口令的恢复方式是删 `data/users.json` 重启(会清空全部账号),已写进 README。
+- **验证**:`npm run check`(已把 auth.js 加进该脚本)与 `bash -n ops.sh` 通过;隔离实例实测首次初始化打印口令且 `users.json` 内无明文、权限 `0600`;未登录访问 6 个受保护页面全部 302 到 `/login`、`/api/*` 返回 401 JSON、`/login` 与 `/public/*` 正常放行;错误口令 401、正确口令拿到 `HttpOnly; SameSite=Strict` cookie 后各页 200。
+
 ### ★ 2026-09-02(client-app H5 纳入部署链路 + 三个既有缺陷修复)
 
 - **背景**:`deploy/web/` 只托管 admin/merchant/supplier 三个前端,移动端 `client-app` 完全不在部署链路里(`auto-deploy.sh` 刻意跳过)。本次把它的 **H5 网页版**补齐为第四个静态站点。**iOS/Android 商店发版仍走人工 EAS,刻意不进脚本**(提审是不可回退的对外动作)。
