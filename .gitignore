@@ -51,3 +51,4 @@ web-build/
 /.workbuddy
 .reasonix/
 reasonix.toml
+/.claude
