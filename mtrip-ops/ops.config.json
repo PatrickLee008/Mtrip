@@ -1,0 +1,31 @@
+{
+  "host": "127.0.0.1",
+  "port": 56700,
+  "projectRoot": "..",
+  "deployDir": "../deploy",
+  "logsDir": "../deploy/logs",
+  "releaseInfoFile": "../deploy/release.json",
+  "dockerCommand": ["sudo", "-n", "docker"],
+  "gatewayUrl": "http://127.0.0.1:8081",
+  "enableActions": true,
+  "servicePorts": {
+    "system-service": 9501,
+    "user-service": 9502,
+    "goods-service": 9503,
+    "order-service": 9504,
+    "merchant-service": 9505,
+    "finance-service": 9506,
+    "marketing-service": 9507,
+    "payment-service": 9508
+  },
+  "appPoolServices": [
+    "system-service-app",
+    "user-service-app",
+    "goods-service-app",
+    "order-service-app",
+    "marketing-service-app"
+  ],
+  "slowRequestMs": 1000,
+  "logTailLines": 200
+}
+

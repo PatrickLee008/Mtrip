@@ -1,5 +1,12 @@
 # 会话交接文档(HANDOFF)
 
+### ★ 2026-09-02(auto-deploy 强制发布指定目标)
+
+- `scripts/auto-deploy.sh` 新增强制发布 target 模式:命令行只要带非选项目标(如 `admin-web` / `goods-service` / `goods-service-app` / `gateway`),就跳过 `git fetch`、落后判断、`ff-only merge` 与工作区干净门禁,直接按目标执行当前工作区内容的发布/重启。
+- 用法: `scripts/auto-deploy.sh admin-web` 直接构建并发布 `deploy/web/admin/`; `scripts/auto-deploy.sh goods-service goods-service-app gateway` 直接重启对应主池、APP 孪生和网关。`--dry-run` 可预览决策且不构建、不重启。
+- 范围边界:强制目标支持 `admin-web` / `merchant-web` / `supplier-web`、后端 `*-service`、APP 孪生 `*-service-app`、`gateway|openresty`; `client-app|mobile|app` 只提示需单独 Expo/商店发版,不会部署。默认无 target 的 cron 模式保持原 ff-only 安全策略不变。
+- 验证:`bash -n scripts/auto-deploy.sh` 通过;`scripts/auto-deploy.sh --dry-run admin-web`、`bash scripts/auto-deploy.sh --dry-run goods-service goods-service-app gateway` 均正确跳过 fetch 并输出部署决策。脚本已补执行位,可直接 `scripts/auto-deploy.sh ...` 调用。
+
 ### ★ 2026-09-02(入驻线索必选站点 + MCH-5019 站点修复)
 
 - 根因：超级管理员“录入线索”弹窗没有站点字段，提交也不带 `siteId`；`OnboardingController::create()` 对缺失值默认写 `0`，后续申请、KYC、正式商户、物业、商品和房型全部继承平台作用域，市场排名又明确要求具体 `site_id>=1`。
