@@ -34,11 +34,15 @@ INSERT IGNORE INTO `sys_config` (`config_group`, `config_key`, `config_value`, `
 ('client', 'operation_log_retain_days',  '0',    2, '操作日志保留天数',       '0',    '0=永久(审计要求不可删)');
 
 -- ---------- 示例站点树:全球(1)→ 欧洲(2)→ 法国(3)→ 巴黎(4) ----------
+-- 另有东南亚分支:全球(1)→ 东南亚(5)→ 缅甸(6)→ 仰光(7,MMK 运营站),与法国分支平行,用于多币种/站点隔离验证。
 INSERT IGNORE INTO `sys_site` (`id`, `parent_id`, `site_name`, `site_type`, `country_code`, `timezone`, `currency`, `language`, `status`, `sort`, `remark`) VALUES
-(1, 0, '全球', 2, '',   'UTC',          'EUR', 'en-US', 1, 1, '根站点(全球总站)'),
-(2, 1, '欧洲', 2, '',   'Europe/Paris', 'EUR', 'en-US', 1, 1, '欧洲区域站'),
-(3, 2, '法国', 1, 'FR', 'Europe/Paris', 'EUR', 'fr-FR', 1, 1, '法国国家站'),
-(4, 3, '巴黎', 3, 'FR', 'Europe/Paris', 'EUR', 'fr-FR', 1, 1, '巴黎城市站(示例运营站点)');
+(1, 0, '全球',   2, '',   'UTC',          'EUR', 'en-US', 1, 1, '根站点(全球总站)'),
+(2, 1, '欧洲',   2, '',   'Europe/Paris', 'EUR', 'en-US', 1, 1, '欧洲区域站'),
+(3, 2, '法国',   1, 'FR', 'Europe/Paris', 'EUR', 'fr-FR', 1, 1, '法国国家站'),
+(4, 3, '巴黎',   3, 'FR', 'Europe/Paris', 'EUR', 'fr-FR', 1, 1, '巴黎城市站(示例运营站点)'),
+(5, 1, '东南亚', 2, '',   'Asia/Yangon',  'MMK', 'en-US', 1, 2, '东南亚区域站'),
+(6, 5, '缅甸',   1, 'MM', 'Asia/Yangon',  'MMK', 'en-US', 1, 1, '缅甸国家站'),
+(7, 6, '仰光',   3, 'MM', 'Asia/Yangon',  'MMK', 'en-US', 1, 1, '仰光城市站(MMK 示例运营站点)');
 
 -- ---------- 巴黎站点差异化配置示例 ----------
 INSERT IGNORE INTO `sys_site_config` (`site_id`, `config_group`, `config_key`, `config_value`, `config_name`) VALUES
@@ -46,3 +50,10 @@ INSERT IGNORE INTO `sys_site_config` (`site_id`, `config_group`, `config_key`, `
 (4, 'local',   'city_tax',        '2.50',  '城市税(欧元/人/晚)'),
 (4, 'operate', 'commission_rate', '0.10',  '平台默认佣金比例'),
 (4, 'page',    'site_logo',       '',      '站点Logo URL');
+
+-- ---------- 仰光站点差异化配置示例(MMK) ----------
+INSERT IGNORE INTO `sys_site_config` (`site_id`, `config_group`, `config_key`, `config_value`, `config_name`) VALUES
+(7, 'local',   'vat_rate',        '0.05',  '商业税率(缅甸 5%)'),
+(7, 'local',   'city_tax',        '0',     '城市税(MMK/人/晚)'),
+(7, 'operate', 'commission_rate', '0.10',  '平台默认佣金比例'),
+(7, 'page',    'site_logo',       '',      '站点Logo URL');
