@@ -34,7 +34,10 @@ export default function SearchSection({ value, onChangeText, onSubmit }: Props) 
         onSubmitEditing={onSubmit}
       />
       <Pressable style={({ pressed }) => [styles.btn, pressed && styles.pressed]} onPress={onSubmit}>
-        <Text style={styles.btnText}>{t('home.explore')}</Text>
+        {/* 极窄屏 / 超大系统字号下宁可省略号,也不让按钮把搜索框顶破 */}
+        <Text style={styles.btnText} numberOfLines={1}>
+          {t('home.explore')}
+        </Text>
       </Pressable>
     </View>
   );
@@ -53,16 +56,28 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     ...shadows.card,
   },
+  /**
+   * `minWidth: 0` 不能省(登录页 / 酒店搜索框同款):web 端 TextInput 落成 `<input>`,
+   * 其 `min-width: auto` 约等于 20 个字符宽,`flex: 1` 压不下去,
+   * 富余空间为负时整行溢出 —— 表现就是 Explore 按钮被挤出搜索框的圆角白底。
+   */
   input: {
     flex: 1,
+    minWidth: 0,
     marginLeft: 12,
     fontFamily: fonts.inter,
     fontSize: 16,
     color: colors.body,
     padding: 0,
   },
+  /**
+   * 按钮兜底可收缩:`input` 的 flexBasis 是 0,负富余空间全落在按钮上,
+   * 默认 flexShrink=0 时它只会溢出。给 1 之后窄屏改为文字省略号,不再顶破外框。
+   */
   btn: {
     marginLeft: 12,
+    flexShrink: 1,
+    minWidth: 0,
     height: 40,
     justifyContent: 'center',
     paddingHorizontal: 24,

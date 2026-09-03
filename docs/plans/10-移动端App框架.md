@@ -146,3 +146,28 @@ Expo 51 / TypeScript / Zustand / React Navigation 6 / Axios / i18next + react-i1
   顺手修了一个后端硬伤:`order_main.guests` 列建成了 JSON 却存 AES 密文,**任何带住客名单的下单都 500**,
   已加 `database/order/06-guests-column-type-fix.sql`(JSON → TEXT,幂等)并登记进 compose initdb。
   完整记录见 HANDOFF「★ 2026-09-01(订房接后端下单)」。
+- 2026-09-03:注册链路补齐设计稿 Onboarding(Figma section `752:9380`)的后两步 ——
+  新增短信验证码页 `screens/user/VerifyOtpScreen.tsx`(`566:3741` / `566:3902`,路由 `VerifyOtp`)
+  与推荐码页 `screens/user/ReferralCodeScreen.tsx`(`1077:1734`,路由 `ReferralCode`)。
+  **短信通道未接**:验证码页预填演示码 `123456`,只校验位数、填什么都通过,重发仅重置倒计时;
+  **推荐码则真的上送**(`apiRegister` 补 `referralCode`,Skip 即不带码)。
+  后端注册接口一次性收单,故 `RegisterScreen` 改为只校验不落库,`SignupDraft` 透传到推荐码页统一提交。
+  同批把四张稿共用的外壳(主色底 + 插画 + 顶部栏 + logo/标语)抽成 `components/user/AuthShell.tsx`,
+  Login / Register 一并改用。完整记录见 HANDOFF「★ 2026-09-03(短信验证码页 + 推荐码页)」。
+- 2026-09-03:「我的精选」的收藏酒店改为**只显示真实收藏** —— `MyPickScreen` 由 `useEffect` 改 `useFocusEffect`
+  (常驻 Tab 切回来要重拉,否则酒店页收藏完看不到);登录后收藏为空显示空态而不是设计稿示例卡
+  (示例卡只留给未登录);`StayCard` 新增可选 `favorite` / `onToggleFavorite`,收藏列表里心形实心可点,
+  点了调 `/user/favorite/remove`;收藏的酒店点卡改跳 `HotelDetail`(原先一律跳 `GoodsDetail`)。
+  完整记录见 HANDOFF「★ 2026-09-03(我的精选 / 收藏酒店)」。
+- 2026-09-03:「更多」页去掉原生导航头(居中「More」),只保留设计稿 `1690:4642` 的 mTrip 字标栏 ——
+  `MoreTab` 补 `headerShown: false`(它此前是唯一没设的 Tab,bottom-tabs 默认 `true` 才多出那条);
+  `MineScreen` 的 `SafeAreaView edges={['top']}` 必须保留,原生头一关状态栏就得页面自己让开。
+  完整记录见 HANDOFF「★ 2026-09-03(「更多」页去掉原生顶栏)」。
+- 2026-09-03:H5 端摘掉浏览器给 `<input>` 的**聚焦框与自动填充黄底** ——
+  新增 `utils/webStyles.ts` 的 `applyWebGlobalStyles()`,由 `App.tsx` 启动时调一次(原生端空转)。
+  全项目 20 个 `TextInput` 散在 14 个文件里,故走一处全局补丁而非逐个改 style。
+  完整记录见 HANDOFF「★ 2026-09-03(H5 输入框聚焦黄框)」。
+- 2026-09-03:修复首页搜索框的 Explore 按钮在部分机型 / H5 上被顶出圆角白底 ——
+  `components/home/SearchSection.tsx` 的 `input` 漏了 `minWidth: 0`(全项目 5 处 flex 输入框只有它漏),
+  web 端 `<input>` 的 `min-width: auto` 压不下去导致整行溢出;另给按钮补 `flexShrink: 1` 与
+  文字 `numberOfLines={1}` 作为窄屏兜底。完整记录见 HANDOFF「★ 2026-09-03(搜索框按钮溢出)」。

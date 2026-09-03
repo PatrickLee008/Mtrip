@@ -23,10 +23,23 @@ interface Props {
   /** goods.cover_image 为空时的本地兜底图(设计稿临时素材) */
   coverSource?: ImageSourcePropType;
   onPress: (goods: GoodsItem) => void;
+  /** 已收藏 = 实心心。首页等纯展示位不传,保持设计稿的空心 */
+  favorite?: boolean;
+  /** 传了心形才可点(「我的精选」的收藏列表用它取消收藏);不传就只是装饰 */
+  onToggleFavorite?: () => void;
 }
 
-export default function StayCard({ goods, coverSource, onPress }: Props) {
+export default function StayCard({
+  goods,
+  coverSource,
+  onPress,
+  favorite = false,
+  onToggleFavorite,
+}: Props) {
   const { t } = useTranslation();
+  const heartIcon = (
+    <HomeIcon name={favorite ? 'heartFilled' : 'heart'} size={14} color="#FFFFFF" />
+  );
   return (
     <Pressable
       style={({ pressed }) => [styles.card, pressed && styles.pressed]}
@@ -40,9 +53,17 @@ export default function StayCard({ goods, coverSource, onPress }: Props) {
           height={176}
           label={goods.goods_name}
         />
-        <View style={styles.heart}>
-          <HomeIcon name="heart" size={14} color="#FFFFFF" />
-        </View>
+        {onToggleFavorite ? (
+          <Pressable
+            style={({ pressed }) => [styles.heart, pressed && styles.pressed]}
+            onPress={onToggleFavorite}
+            hitSlop={8}
+          >
+            {heartIcon}
+          </Pressable>
+        ) : (
+          <View style={styles.heart}>{heartIcon}</View>
+        )}
       </View>
       <View style={styles.body}>
         <View style={styles.row}>

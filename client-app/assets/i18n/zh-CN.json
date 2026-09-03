@@ -45,6 +45,8 @@
     },
     "savedHotels": {
       "title": "收藏酒店",
+      "empty": "还没有收藏的酒店,点酒店卡片上的心形即可收藏。",
+      "removed": "已取消收藏",
       "heritageBagan": {
         "name": "蒲甘传承酒店",
         "address": "蒲甘 良乌"
@@ -365,7 +367,24 @@
     "invalidEmail": "邮箱格式不正确",
     "passwordMismatch": "两次输入的密码不一致",
     "agreeRequired": "请先同意服务条款与隐私政策",
-    "agreeSuffix": ""
+    "agreeSuffix": "",
+    "otp": {
+      "title": "输入验证码",
+      "sentTo": "我们已向 ",
+      "enterBelow": "请在下方输入以确认你的账号。",
+      "resend": "重新发送验证码",
+      "resent": "验证码已重新发送",
+      "continue": "继续",
+      "changePhone": "更换手机号",
+      "invalid": "请输入 6 位验证码"
+    },
+    "referral": {
+      "title": "输入推荐码",
+      "subtitle": "如果你有推荐码,请在此输入。",
+      "placeholder": "abcdef",
+      "continue": "继续",
+      "skip": "跳过"
+    }
   },
   "more": {
     "rewards": "你有 {{count}} 项专属权益",

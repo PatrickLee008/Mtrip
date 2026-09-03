@@ -45,6 +45,8 @@
     },
     "savedHotels": {
       "title": "Save Hotels",
+      "empty": "No saved hotels yet. Tap the heart on any hotel to save it here.",
+      "removed": "Removed from saved hotels",
       "heritageBagan": {
         "name": "The Heritage Bagan Hotel",
         "address": "Nyaung-U, Bagan"
@@ -365,7 +367,24 @@
     "invalidEmail": "Invalid email address",
     "passwordMismatch": "The two passwords do not match",
     "agreeRequired": "Please agree to the Terms & Conditions and Privacy Policy",
-    "agreeSuffix": ""
+    "agreeSuffix": "",
+    "otp": {
+      "title": "Enter Verification Code",
+      "sentTo": "We've sent a 6-digit code to ",
+      "enterBelow": "Please enter it below to confirm your account.",
+      "resend": "Resend OTP",
+      "resent": "A new code has been sent",
+      "continue": "Continue",
+      "changePhone": "Change phone number",
+      "invalid": "Please enter the 6-digit code"
+    },
+    "referral": {
+      "title": "Enter Referral Code",
+      "subtitle": "Enter a referral code if you have one.",
+      "placeholder": "abcdef",
+      "continue": "Continue",
+      "skip": "Skip"
+    }
   },
   "more": {
     "rewards": "You have {{count}} exclusive rewards",

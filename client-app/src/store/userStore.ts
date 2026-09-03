@@ -19,7 +19,7 @@ interface UserState {
   register: (
     mobile: string,
     password: string,
-    extra?: { nickname?: string; email?: string },
+    extra?: { nickname?: string; email?: string; referralCode?: string },
   ) => Promise<void>;
   logout: () => Promise<void>;
   /** 仅清本地(401 时由请求层调用) */

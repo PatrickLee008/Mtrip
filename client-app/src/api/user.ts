@@ -16,6 +16,11 @@ export function apiRegister(params: {
    * 这里先按设计稿把值传上去,后端补上入参即可落库,无需再动前端
    */
   email?: string;
+  /**
+   * 推荐人的推荐码(Figma Onboarding 的 Referral Code 页,选填)。
+   * 后端 `UserAuthService::setupReferral` 会据此写 `user_referral`;**填错会直接注册失败**(推荐码无效)
+   */
+  referralCode?: string;
 }): Promise<AuthResult> {
   // 敏感接口:请求体 AES 加密传输
   return postEncrypted<AuthResult>('/api/v1/app/auth/register', params);
