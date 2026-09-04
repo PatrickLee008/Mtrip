@@ -246,12 +246,17 @@ health_via_host() {
     [ "$code" = "200" ] && printf '  %-18s %s200%s\n' "gateway /healthz" "$C_GREEN" "$C_OFF" \
                         || { printf '  %-18s %s%s%s\n' "gateway /healthz" "$C_RED" "${code:-ERR}" "$C_OFF"; failed=1; }
 
-    # 无签名 POST 预期 401(链路 + 签名中间件均正常);502 说明网关缓存了旧上游 IP
+    # 无签名 POST 的预期码【取决于 .env 的 MTRIP_CLIENT_SIGN】:
+    #   true  → 401(签名中间件先挡下)
+    #   false → 400(直接落到业务校验:缺 X-Site-Id / 缺 mobile)—— 本地联调常关,同样证明链路已到上游
+    # 真正的故障是 502/504(网关缓存了旧上游 IP 或上游没起)与 404(mtrip.conf 的模块 map 没匹配上)。
     code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 3 -X POST \
         "http://127.0.0.1:${gw_port}/api/v1/app/auth/login" 2>/dev/null)"
     case "$code" in
-        401) printf '  %-18s %s401%s (无签名头,预期)\n' "gateway 转发" "$C_GREEN" "$C_OFF" ;;
-        502) printf '  %-18s %s502%s 上游不可达 —— 跑 ./mtrip.sh restart gateway\n' "gateway 转发" "$C_RED" "$C_OFF"; failed=1 ;;
+        401) printf '  %-18s %s401%s (签名中间件生效,预期)\n' "gateway 转发" "$C_GREEN" "$C_OFF" ;;
+        400) printf '  %-18s %s400%s (已达上游业务校验;MTRIP_CLIENT_SIGN=false 时的预期)\n' "gateway 转发" "$C_GREEN" "$C_OFF" ;;
+        502|504) printf '  %-18s %s%s%s 上游不可达 —— 跑 ./mtrip.sh restart gateway\n' "gateway 转发" "$C_RED" "$code" "$C_OFF"; failed=1 ;;
+        404) printf '  %-18s %s404%s 网关未匹配到模块 —— 查 openresty/conf.d/mtrip.conf 的 map\n' "gateway 转发" "$C_RED" "$C_OFF"; failed=1 ;;
         *)   printf '  %-18s %s%s%s\n' "gateway 转发" "$C_YELLOW" "${code:-ERR}" "$C_OFF"; failed=1 ;;
     esac
 

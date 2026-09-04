@@ -88,6 +88,7 @@ export default function MineScreen() {
 
   return (
     <View style={styles.root}>
+      {/* 原生导航头已关(见 navigation/index.tsx 的 MoreTab),状态栏高度由本页自己让开 */}
       <SafeAreaView style={styles.safe} edges={['top']}>
         <View style={styles.header}>
           <Image source={LOGO} style={styles.logo} resizeMode="contain" />

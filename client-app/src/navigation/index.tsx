@@ -44,7 +44,9 @@ import PromotionsScreen from '@/screens/promotions/PromotionsScreen';
 import SiteSelectScreen from '@/screens/site/SiteSelectScreen';
 import LoginScreen from '@/screens/user/LoginScreen';
 import MineScreen from '@/screens/user/MineScreen';
+import ReferralCodeScreen from '@/screens/user/ReferralCodeScreen';
 import RegisterScreen from '@/screens/user/RegisterScreen';
+import VerifyOtpScreen from '@/screens/user/VerifyOtpScreen';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const Tab = createBottomTabNavigator<MainTabParamList>();
@@ -117,7 +119,12 @@ function MainTabs() {
         component={PromotionsScreen}
         options={{ title: t('tab.promotions'), headerShown: false }}
       />
-      <Tab.Screen name="MoreTab" component={MineScreen} options={{ title: t('tab.more') }} />
+      {/* 「更多」页自带设计稿的 mTrip 字标顶栏(1690:4642),与另外三个 Tab 一样关掉原生导航头 */}
+      <Tab.Screen
+        name="MoreTab"
+        component={MineScreen}
+        options={{ title: t('tab.more'), headerShown: false }}
+      />
     </Tab.Navigator>
   );
 }
@@ -263,6 +270,17 @@ export default function AppNavigator() {
           name="Register"
           component={RegisterScreen}
           options={{ title: t('user.registerTitle'), headerShown: false }}
+        />
+        {/* 注册后两步(验证码 → 推荐码)与登录/注册共用同一套外壳,同样关掉 Stack 头 */}
+        <Stack.Screen
+          name="VerifyOtp"
+          component={VerifyOtpScreen}
+          options={{ title: t('user.otp.title'), headerShown: false }}
+        />
+        <Stack.Screen
+          name="ReferralCode"
+          component={ReferralCodeScreen}
+          options={{ title: t('user.referral.title'), headerShown: false }}
         />
       </Stack.Navigator>
     </NavigationContainer>

@@ -8,9 +8,14 @@
 
 ```powershell
 cd deploy
-Copy-Item .env.example .env    # 首次需要,已有 .env 跳过
-docker compose up -d --build   # 构建镜像并启动全部服务(分钟级)
+./mtrip.sh build               # 构建镜像并启动全部服务(分钟级);缺 .env 时自动从 .env.example 生成
+# 之后日常启动用 ./mtrip.sh start(不重建镜像)
 ```
+
+> ⚠ **不要直接敲 `docker compose up -d`**。裸命令只加载 `docker-compose.yml` + `docker-compose.override.yml`,
+> **起不出 APP 孪生池**(`docker-compose.app-pool.yml` 里的 `*-service-app`);而网关 conf 有 5 条 upstream 指向它们,
+> nginx **启动期**解析不到主机名会直接 `[emerg] host not found in upstream` 退出,表现为 `mtrip-gateway-1` 无限重启。
+> `mtrip.sh` 的 dev 模式固定合并 4 个 compose 文件,是唯一正确入口(生产 `--prod`、隔离验收 `--s7`)。
 
 启动完成后入口:
 
@@ -26,10 +31,13 @@ docker compose up -d --build   # 构建镜像并启动全部服务(分钟级)
 
 | 场景 | 命令 | 耗时 |
 | --- | --- | --- |
-| 只改 PHP 代码(`app/`、`config/`、`shared/src`) | `docker compose restart user-service`(或不带服务名重启全部) | ~2 秒/个 |
-| 改了 `docker-compose.yml` / `.env` 环境变量 | `docker compose up -d`,然后 `docker compose restart gateway` | ~10 秒 |
-| 新增 composer 依赖 / 改 Dockerfile | `docker compose up -d --build xxx-service` | 分钟级 |
-| 改了数据库初始化 SQL(需重跑建表) | `reinit.bat` 或 `docker compose down -v; docker compose up -d --build`(**清空数据卷,慎用**) | 分钟级 |
+| 只改 PHP 代码(`app/`、`config/`、`shared/src`) | `./mtrip.sh restart user-service`(APP 端接口还要 `user-service-app`) | ~2 秒/个 |
+| 改了 `docker-compose.yml` / `.env` 环境变量 | `./mtrip.sh start`(结束后脚本自动刷网关) | ~10 秒 |
+| 新增 composer 依赖 / 改 Dockerfile | `./mtrip.sh build xxx-service` | 分钟级 |
+| 改了数据库初始化 SQL(需重跑建表) | `./mtrip.sh clean` 后 `./mtrip.sh build`(**清空数据卷,慎用**);只补新脚本用 `scripts/db-apply.ps1` | 分钟级 |
+
+**注意**:5 个共享服务各有一个 `-app` 孪生(system / user / goods / order / marketing),`/api/v1/app/*` 全走孪生。
+只重启主池不会让 APP 端接口生效,反之亦然 —— 改这 5 个服务的代码时两个都要 restart。
 
 热重启原理:`docker-compose.override.yml` 把本地 `app/`、`config/`、`backend/shared/src` 挂载进容器覆盖镜像内代码,
 `restart` 后 Hyperf 重新扫描即生效,无需重建镜像。

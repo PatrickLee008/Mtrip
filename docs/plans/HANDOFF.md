@@ -1,5 +1,61 @@
 # 会话交接文档(HANDOFF)
 
+### ★ 2026-09-03(「我的精选 / 收藏酒店」= 真实收藏)
+
+- **反馈**:MyPick 的 Saved Hotels 应该是收藏的酒店。查网关日志确认**接口本来就通**:`09:22:19 favorite/add 200` → `09:22:23` 酒店页重拉得到 1 条(217 字节)→ `09:29:20` MyPick 重拉也是 1 条。库里 `user_favorite` 有 `user 1 / goods 1` 那条。
+- **真正的两个毛病**:
+  1. **不刷新**:`MyPickScreen` 用的是 `useEffect(..., [load])`,而它是常驻的底部 Tab —— 切走切回不会重新挂载,在酒店页收藏完切回来还是旧数据。已改 `useFocusEffect`(与 `MineScreen` 一致),顺带让订单列表也跟着获焦刷新。
+  2. **空收藏时拿设计稿示例卡冒充**:原来是 `favorites.length > 0 ? favorites : SAMPLE_SAVED_HOTELS`,登录后收藏为空也会显示 2 张假酒店,看起来就像「没对接后端」。改为 `isLogin ? favorites : SAMPLE_SAVED_HOTELS` + 空态文案(`myPick.savedHotels.empty`),示例卡只留给未登录(与上面预订卡的处理一致)。
+- **卡片同步做成真的收藏卡**:`StayCard` 加两个可选入参 `favorite` / `onToggleFavorite`(不传 = 首页那种不可点的空心装饰,行为不变)。收藏列表里心形是**实心且可点**,点了调 `/user/favorite/remove` 并就地移除(`myPick.savedHotels.removed`)。
+- **点卡跳转纠正**:收藏的酒店(`goods_type=1`)改跳设计稿的 `HotelDetail`,与酒店搜索结果页一致;其余品类仍回落 `GoodsDetail`(原先一律跳通用商品详情)。
+- 收藏列表接口不返回起价(`minPrice=0`),`StayCard` 早已按 `minPrice > 0` 隐藏价格行,无需额外处理;封面继续走 `tempCoverFor()` 兜底(真实 `cover_image` 目前多是脏值,库里那条就是 `'111'`)。
+- **验证**:`npx tsc --noEmit` 零报错;接口侧用网关日志与 `user_favorite` 表核对过。**UI 未实跑**(获焦刷新与取消收藏的交互需要在真机/浏览器点一遍)。
+
+### ★ 2026-09-03(网关无限重启的真因:启动命令漏了 APP 孪生池 + 一个漏执行的 SQL)
+
+- **`mtrip-gateway-1` 一直重启,与 SQL 无关**:日志是 `nginx: [emerg] host not found in upstream "system-service-app:9501" in /etc/nginx/conf.d/mtrip.conf:20`。nginx **启动期**就要解析 upstream 主机名,解析不到直接退出,再被 `restart: unless-stopped` 拉起 —— 无限循环。
+- **根因是启动方式**:`docker ps -a` 里只有 8 个主池服务,**一个 `*-service-app` 都没有**。孪生池定义在 `docker-compose.app-pool.yml`,裸 `docker compose up -d` 只加载 `yml + override`,起不出来;而网关自 commit `0921843`(管理端/APP 端服务分离)起就有 5 条 upstream 指向孪生。**唯一正确入口是 `deploy/mtrip.sh`**(dev 模式固定合并 4 个 compose 文件)。
+- **文档是这次踩坑的源头,已一并改**:`CLAUDE.md`、`deploy/README.md`、`docs/guides/setup/启动开发指南.md` 里的 `docker compose up -d --build` 全部改成 `./mtrip.sh build|start|restart`,并写明「裸命令会导致网关无限重启」的因果。
+- **本机 `-app` 镜像是 tag 出来的,不是 build 的**:首次 `up` 会去 build 孪生,但拉不到基础镜像 `hyperf/hyperf:8.1-alpine-v3.18-swoole`(`registry-1.docker.io` 连接超时)。孪生与主池用**同一个 Dockerfile 与构建上下文**,故直接 `docker tag mtrip-<svc>-service:latest mtrip-<svc>-service-app:latest`(5 个)即跳过构建。**下次跑 `./mtrip.sh build` 仍会因拉不到基础镜像而失败**,需要先解决 registry 网络或配镜像加速。
+- **顺手修了 `./mtrip.sh health` 的误报**:网关转发探针写死「无签名 POST 预期 401」,但本机 `.env` 是 `MTRIP_CLIENT_SIGN=false`,请求会越过签名中间件落到业务校验返回 **400**(`40001 缺少站点标识`),于是 health **恒定退 1**。已改为 401/400 都算通过(都证明已达上游),并把 502/504 与 404 分开给出具体处置建议。现在 `./mtrip.sh health` 全绿退 0。
+- **SQL 确实漏了一个**(你的直觉没错,只是与网关无关):initdb 只在数据卷首次初始化时跑,而本机 `mtrip_mysql-data` 建于 **2026-08-28**,之后有 20 个 SQL 被改动/新增。逐表核对(声明的 `CREATE TABLE` vs `information_schema`)只缺 **`merchant_code_sequence`**(`database/merchant/38-merchant-code-sequence.sql`,2026-09-02 的商户编号跨表唯一性修复)—— 缺它会让商户业务编号分配直接报表不存在。已用 `scripts/db-apply.ps1` 补跑 38 与同批的 39(`39-mch-5019-site-fix.sql`,带 `site_id = 0` 条件的一次性数据修复,幂等)。补完 133 张表齐全,序列表播种为 `next_value=8`。
+- `database/merchant/22-kyc-template-restore.sql` 仍是**故意不登记** initdb 的一次性修复脚本(HANDOFF 2026-08-21 与整改方案里都写过),不是漏登记。
+- **现状**:13 个容器(含 5 个孪生)全部 Up,`./mtrip.sh health` 8 个 healthz + 网关链路 + 5 个孪生全 200。
+
+### ★ 2026-09-03(H5 输入框聚焦黄框 / 自动填充底色)
+
+- **反馈**:点输入框聚焦时出现黄色的框。RN Web 把 `TextInput` 落成真实 `<input>`,浏览器有两套默认外观会盖到设计稿上:`:focus` 的系统 outline(Chromium 蓝、部分国产内核黄),以及 `-webkit-autofill` 的自动填充底色(老版 Chrome / Edge / 国产浏览器是黄的)。
+- **修法**:新增 `utils/webStyles.ts` 的 `applyWebGlobalStyles()`,`App.tsx` 启动时调一次 —— **只在 web 生效,原生端空转**。注入两条规则:① `input/textarea/select:focus { outline: none }`;② 自动填充用「把 `background-color` 过渡拖到 100000s」压住,文字色取 `currentColor`。**没用 `inset box-shadow` 的老写法**,因为本项目输入框底色有 `#EFF4FF` 与纯白两种,那种写法得按底色各写一遍。
+- **刻意只作用于表单控件**:按钮/链接的焦点框保留(键盘可达性)。
+- **注意**:全项目 20 个 `TextInput` 分布在 14 个文件里,所以走的是一处全局补丁而不是逐个改 style —— 新增输入框自动生效。
+- **验证**:`npx tsc --noEmit` 零报错、`expo export -p web --clear` 打包通过。**未在浏览器里肉眼确认**(本机不能起 App);若黄框实际出现在 Android 原生端,那是另一回事(`underlineColorAndroid`),本补丁不覆盖。
+
+### ★ 2026-09-03(「更多」页去掉原生「More」顶栏)
+
+- **结论**:More 页**只保留设计稿 `1690:4642` 的 mTrip 字标栏**,原生导航头(居中「More」)去掉 —— `MoreTab` 补上 `headerShown: false`,与另外三个 Tab 一致。
+- **为什么之前会有两条**:`@react-navigation/bottom-tabs@6.6.1` 的 `headerShown` 默认是 `true`,而 `MoreTab` 从建栈起就没设过 `false`(git 历史可查),于是它是唯一带原生头的 Tab。
+- **`MineScreen` 的 `SafeAreaView edges={['top']}` 必须留着**:原生头已关,状态栏高度只能由页面自己让开。(中途曾按「保留原生头」的方向把它改成普通 `View`,已改回。react-navigation 只向下透传 header 高度、**不会把安全区扣掉**,见 `@react-navigation/elements/lib/commonjs/Screen.js` —— 所以这两处是绑定的:谁开原生头,谁就不能再叠 top 安全区。)
+- **mTrip 栏维持现状(用户明确不改)**:该栏目前只画了 logo,设计稿 `1690:4642` 右侧的积分胶囊(370)与铃铛未实现(首页 `components/home/HomeHeader.tsx` 就是这套,我的精选页在复用)。**不要**擅自补齐。
+- **验证**:`npx tsc --noEmit` 零报错;未在真机/浏览器走查。
+
+### ★ 2026-09-03(首页搜索框 Explore 按钮溢出修复)
+
+- **现象**:部分机型 / H5 上首页搜索框的 Explore 按钮被顶出圆角白底。
+- **根因**:`components/home/SearchSection.tsx` 的 `input` 只写了 `flex: 1` 而**漏了 `minWidth: 0`** —— 全项目 5 处 `flex: 1` 的 TextInput 只有它漏了。web 端 TextInput 落成 `<input>`,其 `min-width: auto` 约等于 20 个字符宽,`flex: 1` 压不下去;富余空间为负时整行溢出,表现就是右侧按钮跑到白底外面。窄屏 + 超大系统字号 + 缅甸语「လေ့လာရန်」比英文宽,叠起来更容易触发,所以只在「部分机型」上看得到。
+- **修复**:① `input` 补 `minWidth: 0`(与登录页 / 酒店搜索框同款注释);② 按钮补 `flexShrink: 1` + `minWidth: 0` 兜底 —— `input` 的 flexBasis 是 0,负富余空间会全落在按钮上,默认 `flexShrink: 0` 时它只会溢出;③ 按钮文字加 `numberOfLines={1}`,极端窄屏改为省略号而不是顶破外框。
+- **验证**:`npx tsc --noEmit` 零报错。未在真机/浏览器复现与回归(本机无法起 App),建议下次会话在窄屏 + 缅甸语 + 大字号下走查一眼。
+
+### ★ 2026-09-03(client-app 短信验证码页 + 推荐码页,Figma Onboarding `752:9380`)
+
+- **新增两页**:`screens/user/VerifyOtpScreen.tsx`(Figma `566:3741` 空态 / `566:3902` 填充态,路由 `VerifyOtp`)与 `screens/user/ReferralCodeScreen.tsx`(Figma `1077:1734`,路由 `ReferralCode`),两页都关掉 Stack 头(自带设计稿顶部栏)。注册链路由「一页」变成 **注册表单 → 短信验证码 → 推荐码** 三步。
+- **短信通道还没接**,故验证码页是走过场:进页面就把演示码 `123456` 预填好,Continue 只校验「填满 6 位」,填什么都通过;倒计时 02:00 起跳,归零后「Resend OTP」可点,点了也只是把倒计时重置并重填演示码。接真实短信时改动集中在三处 —— 进页面不再预填、`resend` 调发码接口、`submit` 先调验码接口(文件头注释里已标出)。
+- **推荐码是真的会上送的**(与短信不同,后端本来就有这条链路):`apiRegister` 入参补 `referralCode`,Continue 带码提交、Skip 不带码提交。
+- **注册请求整体后移到推荐码页**:后端 `/app/auth/register` 是一次性收单(手机号 + 密码 + 推荐码),而设计稿把推荐码排在最后,所以 `RegisterScreen` 改为**只校验不落库**,把新增的 `SignupDraft`(手机号 / 密码 / 邮箱)经路由参数透传,由 `ReferralCodeScreen` 的 Continue / Skip 统一调 `register()` + 写 GDPR 授权 + `popToTop()`。
+- **抽出公共外壳 `components/user/AuthShell.tsx`**:主色底 + 插画铺底 + 顶部栏(返回 / 右侧文字链)+ logo/标语 这套壳在 Onboarding 的四张稿里逐字相同,原先只写在 Login/Register 两页里。本次抽成一处并把 **Login / Register 同步改用**(取值一字未动,只是搬家),新两页直接复用。卡片仍留在各页 —— 登录/注册卡 gap 8 无描边,验证码/推荐码卡 gap 24 且带 1px `--secondary` 描边 + DS_AG 投影。
+- **i18n**:`user.otp.*`(8 键)与 `user.referral.*`(5 键)中英缅三份逐键对齐(缅甸语仍是机器翻译,待母语者复核)。
+- ⚠ **后端遗留隐患(本次未改)**:`UserAuthService::register` 先 `insert` 了 `user_info`,之后 `setupReferral()` 才校验推荐码,且**两步不在同一事务里**。因此推荐码填错时会「注册失败但账号已经建好」,用户再试会被告知「该手机号已注册」。以前 App 侧没有推荐码入口所以碰不到,现在有了。修法是把 insert + setupReferral 包进 `Db::transaction`(需要后端跑 Docker 验证,故留给下一次会话决定)。
+- **验证**:`npx tsc --noEmit` 零报错。**未在模拟器/浏览器里跑过真实注册流程**(本机 Docker 无权限,后端起不来),视觉与交互按设计稿取值实现,建议下次会话起服务后走一遍三步注册。未执行 Git 操作。
+
 ### ★ 2026-09-02(mtrip-ops 输入框样式修复 + 发布管理接入 auto-deploy 全能力)
 
 - **输入框「矮一条缝」的根因**:`public/app.css` 里有一条无差别的 `label input { width:auto; height:auto }`,本意是让筛选栏的复选框恢复原生尺寸,却把登录页 `<label>用户名<input></label>` 结构里的**文本框高度也一并清零**了。已把该规则**收窄为只作用于 `input[type=checkbox]` 与 `input[type=radio]`**。
