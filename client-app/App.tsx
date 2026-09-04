@@ -26,9 +26,12 @@ import AppNavigator from '@/navigation';
 import SplashScreen from '@/screens/splash/SplashScreen';
 import { bootstrapStores, useCommonStore } from '@/store';
 import { detectSystemLang } from '@/utils/locale';
+import { applyWebGlobalStyles } from '@/utils/webStyles';
 
 // 先以兼容默认语言初始化,避免引导期间 useTranslation 无实例告警
 initI18n('en-US');
+// H5 端摘掉浏览器给 <input> 的聚焦框与自动填充底色(原生端空转,见函数注释)
+applyWebGlobalStyles();
 
 /** 开屏最短停留(ms):引导跑得比这快时也不让 logo 一闪而过 */
 const MIN_SPLASH_MS = 1200;

@@ -3,21 +3,30 @@
  *
  * 结构与设计稿一致:顶部栏 → 三分类页签 → 预订卡列表 → 入住反馈卡 →
  * 收藏酒店(横滑)→ 收藏餐厅(横滑)→ 新用户促销卡。
- * 数据策略沿用 HomeScreen:预订列表取 /order/list、收藏酒店取 /user/favorite/list,
- * 未登录或接口为空时用设计稿示例兜底;收藏餐厅后端暂无对应品类,走 myPickSections.ts 静态数据。
+ * 数据策略沿用 HomeScreen:预订列表取 /order/list、收藏酒店取 /user/favorite/list;
+ * 收藏餐厅后端暂无对应品类,走 myPickSections.ts 静态数据。
+ *
+ * 「收藏酒店」= 真实收藏,与酒店搜索结果页的心形是同一份数据(`user_favorite` 表):
+ *   - **登录后只显示真实收藏**,一条都没有时给空态文案 —— 不能拿设计稿示例卡冒充,
+ *     否则看起来像「没对接后端」(设计稿示例只在**未登录**时展示,与上面的预订卡一致)。
+ *   - 卡上的心形在这里是**实心且可点**,点一下调 `/user/favorite/remove` 取消收藏并就地移除。
+ *   - 列表接口不返回起价(minPrice=0),StayCard 会自动隐藏价格行。
+ *   - 本页是常驻的 Tab,**必须用 useFocusEffect 而不是 useEffect** —— 否则在酒店页收藏完
+ *     切回来还是旧数据(挂载不会重来)。
  *
  * 封面另有一层兜底:真实酒店的 `cover_image` / 订单快照 `goods_image` 目前多是脏值或空值,
  * 统一用 `tempCoverFor(index)` 回落到设计稿临时图(与酒店搜索结果页同一套,免得同一家酒店两页两张图)。
  */
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { RefreshControl, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTranslation } from 'react-i18next';
 
 import { fetchOrderList } from '@/api/order';
-import { fetchFavoriteList } from '@/api/user';
+import { fetchFavoriteList, removeFavorite } from '@/api/user';
 import {
   TEMP_BOOKING_COVER,
   TEMP_HOTEL_COVERS,
@@ -37,6 +46,7 @@ import SavedRestaurantCard, {
 import { GOODS_TYPE, ORDER_STATUS, ORDER_STATUS_I18N } from '@/config/global';
 import { PAGE_PADDING, SECTION_GAP, colors } from '@/config/theme';
 import { fonts } from '@/config/typography';
+import type { RootStackParamList } from '@/navigation/types';
 import {
   MY_PICK_TABS,
   SAMPLE_SAVED_HOTELS,
@@ -59,7 +69,7 @@ function statusColor(status: number): string {
 
 export default function MyPickScreen() {
   const { t } = useTranslation();
-  const navigation = useNavigation();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { width } = useWindowDimensions();
   // 同 HomeScreen:用实测宽度而非窗口宽度,避开 web 端竖向滚动条占位
   const [contentWidth, setContentWidth] = useState(width - PAGE_PADDING * 2);
@@ -117,9 +127,23 @@ export default function MyPickScreen() {
     [isLogin, showToast],
   );
 
-  useEffect(() => {
-    void load();
-  }, [load]);
+  /* 常驻 Tab:每次获焦都重拉,否则在酒店页收藏 / 下单后切回来还是旧数据 */
+  useFocusEffect(
+    useCallback(() => {
+      void load();
+    }, [load]),
+  );
+
+  /** 取消收藏:先请求再就地移除(失败不动列表) */
+  const unfavorite = async (goodsId: number) => {
+    try {
+      await removeFavorite(goodsId);
+      setFavorites((prev) => prev.filter((g) => g.id !== goodsId));
+      showToast(t('myPick.savedHotels.removed'));
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : 'Error');
+    }
+  };
 
   const tabOrders = useMemo(
     () => orders.filter((o) => TAB_STATUS[tab].includes(o.order_status)),
@@ -130,7 +154,8 @@ export default function MyPickScreen() {
   const requireLogin = () => (isLogin ? comingSoon() : navigation.navigate('Login'));
 
   const tabItems = MY_PICK_TABS.map((key) => ({ key, label: t(`myPick.tab.${key}`) }));
-  const savedHotels = favorites.length > 0 ? favorites : SAMPLE_SAVED_HOTELS;
+  /* 登录后一律显示真实收藏(可能为空);设计稿示例卡只用于未登录的空壳展示 */
+  const savedHotels = isLogin ? favorites : SAMPLE_SAVED_HOTELS;
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -207,39 +232,48 @@ export default function MyPickScreen() {
             title={t('myPick.savedHotels.title')}
             onSeeAll={requireLogin}
           />
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            style={styles.bleed}
-            contentContainerStyle={styles.hList}
-            snapToInterval={STAY_CARD_WIDTH + 16}
-            decelerationRate="fast"
-          >
-            {savedHotels.map((g, i) => {
-              // 兜底卡(id 取负数)的名称/地址走设计稿文案,真实收藏一律用接口字段;
-              // 封面两者都先用设计稿临时图 —— 真实商品的 cover_image 目前多是脏值/空值
-              const sampleKey = g.id < 0 ? SAMPLE_SAVED_HOTEL_KEYS[i] : undefined;
-              const item = sampleKey
-                ? {
-                    ...g,
-                    goods_name: t(`myPick.savedHotels.${sampleKey}.name`),
-                    address: t(`myPick.savedHotels.${sampleKey}.address`),
-                  }
-                : g;
-              return (
-                <StayCard
-                  key={g.id}
-                  goods={item}
-                  coverSource={sampleKey ? TEMP_HOTEL_COVERS[sampleKey] : tempCoverFor(i)}
-                  onPress={(goods) =>
-                    goods.id > 0
-                      ? navigation.navigate('GoodsDetail', { id: goods.id })
-                      : requireLogin()
-                  }
-                />
-              );
-            })}
-          </ScrollView>
+          {savedHotels.length === 0 ? (
+            <Text style={styles.empty}>{t('myPick.savedHotels.empty')}</Text>
+          ) : (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={styles.bleed}
+              contentContainerStyle={styles.hList}
+              snapToInterval={STAY_CARD_WIDTH + 16}
+              decelerationRate="fast"
+            >
+              {savedHotels.map((g, i) => {
+                // 未登录的示例卡(id 取负数)名称/地址走设计稿文案,真实收藏一律用接口字段;
+                // 封面两者都先用设计稿临时图 —— 真实商品的 cover_image 目前多是脏值/空值
+                const sampleKey = g.id < 0 ? SAMPLE_SAVED_HOTEL_KEYS[i] : undefined;
+                const item = sampleKey
+                  ? {
+                      ...g,
+                      goods_name: t(`myPick.savedHotels.${sampleKey}.name`),
+                      address: t(`myPick.savedHotels.${sampleKey}.address`),
+                    }
+                  : g;
+                return (
+                  <StayCard
+                    key={g.id}
+                    goods={item}
+                    coverSource={sampleKey ? TEMP_HOTEL_COVERS[sampleKey] : tempCoverFor(i)}
+                    /* 真实收藏:实心心 + 可点取消;示例卡保持不可点的空心 */
+                    favorite={!sampleKey}
+                    onToggleFavorite={sampleKey ? undefined : () => void unfavorite(g.id)}
+                    onPress={(goods) => {
+                      if (goods.id <= 0) return requireLogin();
+                      // 酒店走设计稿的酒店详情页,与搜索结果页一致;其余品类回落通用商品详情
+                      return goods.goods_type === GOODS_TYPE.HOTEL
+                        ? navigation.navigate('HotelDetail', { id: goods.id })
+                        : navigation.navigate('GoodsDetail', { id: goods.id });
+                    }}
+                  />
+                );
+              })}
+            </ScrollView>
+          )}
         </View>
 
         {/* 05 收藏餐厅(后端暂无餐饮品类,静态数据) */}

@@ -32,14 +32,19 @@ cd admin-web; npm run build                 # vue-tsc --noEmit && vite build,要
 cd client-app; npm run typecheck            # tsc --noEmit
 cd client-app; npm start                    # expo start
 
-# 全栈起服务(MySQL+Redis+8 服务+网关,首次自动建库导种子)
-cd deploy; cp .env.example .env; docker compose up -d --build
-docker compose restart goods-service        # 开发期改后端代码后重启(约 2 秒,override 已挂载本地代码)
-docker compose restart gateway              # 重建过后端服务(IP 变)后必跑,否则网关缓存旧 IP 报 50200
+# 全栈起服务:一律走 deploy/mtrip.sh,【不要直接敲 docker compose】
+# —— 裸 `docker compose up -d` 只加载 yml+override,起不出 APP 孪生池(*-service-app),
+#    而网关 conf 的 5 条 upstream 指向它们,nginx 启动期解析不到主机名会 [emerg] 退出并无限重启。
+cd deploy; ./mtrip.sh start                 # 开发栈(自动补 .env);dev 模式固定合并 4 个 compose 文件
+cd deploy; ./mtrip.sh build                 # 改 Dockerfile / 新增 composer 依赖时才用(up -d --build)
+cd deploy; ./mtrip.sh restart goods-service # 开发期改后端代码后重启(约 2 秒,override 已挂载本地代码)
+cd deploy; ./mtrip.sh restart goods-service-app   # 同一个服务的 APP 孪生要单独重启(/api/v1/app/* 走它)
+cd deploy; ./mtrip.sh status                # 容器状态;./mtrip.sh health 探活 8 个服务 + 网关链路
+# 网关会在 start/build 后自动刷新(容器 IP 变了不刷会全量 502/50200),无需手动 restart gateway
 
 # 增量执行 SQL(脚本幂等,不必 down -v 重建;新增 SQL 仍须登记进 compose 的 initdb 挂载)
 powershell -ExecutionPolicy Bypass -File scripts/db-apply.ps1 database/merchant/03-group-store.sql database/seed/04-merchant-menu.sql
-# 彻底清库重来(会删数据):cd deploy; docker compose down -v; docker compose up -d --build
+# 彻底清库重来(会删数据):cd deploy; ./mtrip.sh clean; ./mtrip.sh build
 ```
 
 后端**没有单测框架/单测命令**;`backend/shared/tests/run.php` 是手写的纯逻辑测试跑器(`tests/bootstrap.php` 自带 Hyperf 桩,无需 composer install)。要单跑某类逻辑,直接编辑该 run.php 的用例列表。

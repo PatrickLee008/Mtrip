@@ -6,6 +6,19 @@ import type { NavigatorScreenParams } from '@react-navigation/native';
 
 import type { TravelerItem } from '@/types/models';
 
+/**
+ * 注册草稿:注册表单填完、但**还没落库**的资料。
+ *
+ * 后端 `/app/auth/register` 是一次性收单(手机号 + 密码 + 推荐码),
+ * 而设计稿 Onboarding 把「验证码 → 推荐码」排在注册表单之后,
+ * 所以 Register / VerifyOtp 两页只收集,真正的注册请求在 ReferralCode 页发出。
+ */
+export interface SignupDraft {
+  mobile: string;
+  password: string;
+  email?: string;
+}
+
 /** 底部 Tab(对应 Figma M-Trip / Home 81:2464 的 BottomNavBar) */
 export type MainTabParamList = {
   HomeTab: undefined;
@@ -110,6 +123,10 @@ export type RootStackParamList = {
   LegalTerms: undefined;
   Login: undefined;
   Register: undefined;
+  /** 短信验证码(Figma `566:3741` / `566:3902`),注册表单的下一步 */
+  VerifyOtp: { draft: SignupDraft };
+  /** 推荐码(Figma `1077:1734`),注册流程最后一步,在这里真正提交注册 */
+  ReferralCode: { draft: SignupDraft };
 };
 
 declare global {
