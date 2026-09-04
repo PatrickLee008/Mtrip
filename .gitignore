@@ -52,3 +52,4 @@ web-build/
 .reasonix/
 reasonix.toml
 /.claude
+mtrip-ops/nohup.out
