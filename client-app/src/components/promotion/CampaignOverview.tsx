@@ -15,13 +15,20 @@ import { promoShared } from '@/components/promotion/promoShared';
 import { colors, radius } from '@/config/theme';
 import { fonts } from '@/config/typography';
 
-export default function CampaignOverview() {
+interface Props {
+  /** 真实活动的标题/副标题/期间;不传则回落设计稿文案(未登录 / 站点无活动时) */
+  name?: string;
+  desc?: string;
+  period?: string;
+}
+
+export default function CampaignOverview({ name, desc, period }: Props) {
   const { t } = useTranslation();
   return (
     <View style={[promoShared.panel, styles.panel]}>
       <View style={styles.head}>
-        <Text style={styles.name}>{t('promotions.campaign.name')}</Text>
-        <Text style={styles.desc}>{t('promotions.campaign.desc')}</Text>
+        <Text style={styles.name}>{name || t('promotions.campaign.name')}</Text>
+        <Text style={styles.desc}>{desc || t('promotions.campaign.desc')}</Text>
       </View>
 
       <View style={styles.divider} />
@@ -32,7 +39,7 @@ export default function CampaignOverview() {
         </View>
         <View style={styles.periodText}>
           <Text style={styles.periodLabel}>{t('promotions.campaign.periodLabel')}</Text>
-          <Text style={styles.period}>{t('promotions.campaign.period')}</Text>
+          <Text style={styles.period}>{period || t('promotions.campaign.period')}</Text>
         </View>
       </View>
     </View>

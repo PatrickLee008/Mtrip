@@ -29,9 +29,12 @@ Router::addGroup('/api/v1/app/marketing', static function () {
     Router::get('/campaigns', [MarketingController::class, 'campaigns']);
     Router::get('/campaign/detail', [MarketingController::class, 'campaignDetail']);
     Router::get('/coupon/available', [MarketingController::class, 'availableCoupons']);
+    Router::get('/coupon/detail', [MarketingController::class, 'couponDetail']);
     Router::post('/coupon/claim', [MarketingController::class, 'claim']);
+    Router::post('/coupon/redeem', [MarketingController::class, 'redeemPromoCode']);
     Router::get('/coupon/my', [MarketingController::class, 'myCoupons']);
     Router::get('/coupon/best-match', [MarketingController::class, 'bestMatch']);
+    Router::get('/coupon/match-list', [MarketingController::class, 'couponMatchList']);
 }, [
     'middleware' => [UserAuthMiddleware::class],
 ]);

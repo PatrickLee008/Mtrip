@@ -89,13 +89,17 @@
     "sections": {
       "weekly": "Weekly Promotions",
       "monthly": "Monthly Promotions",
-      "hotel": "Hotel Coupons"
+      "hotel": "Hotel Coupons",
+      "claimable": "Available to Claim",
+      "unavailable": "Not Available"
     },
     "coupon": {
       "categories": {
         "hotels": "Hotels",
         "food": "Food Order",
-        "ride": "Ride"
+        "ride": "Ride",
+        "tickets": "Tickets",
+        "all": "All Products"
       },
       "badges": {
         "newUser": "New User",
@@ -106,13 +110,31 @@
       "actions": {
         "claim": "Claim",
         "expired": "Expired",
-        "use": "Use Now"
+        "use": "Use Now",
+        "used": "Used"
       },
       "expiry": "Exp {{date}}",
       "codeLabel": "Coupon code",
       "copy": "Copy code",
       "copied": "Coupon code copied",
-      "claimed": "Claimed"
+      "claimed": "Claimed",
+      "amountOff": "{{amount}} OFF",
+      "percentOff": "{{percent}}% OFF",
+      "minSpend": "Minimum spend {{amount}}",
+      "noMinSpend": "No minimum spend",
+      "validDays": "Valid {{days}} days after claiming",
+      "noExpiry": "No expiry date",
+      "reasons": {
+        "sold_out": "Fully claimed",
+        "limit_reached": "Limit reached",
+        "not_started": "Not started",
+        "expired": "Expired",
+        "used": "Used",
+        "void": "Voided",
+        "min_amount": "Spend too low",
+        "scope": "Not applicable",
+        "offline": "Ended"
+      }
     },
     "items": {
       "hotelSave": {
@@ -169,11 +191,28 @@
       "placeholder": "abcdef123",
       "add": "Add",
       "more": "Get More Coupons",
-      "invalid": "Promo code not recognised"
+      "invalid": "Promo code not recognised",
+      "success": "{{name}} has been added to your coupons",
+      "errors": {
+        "notFound": "Promo code not recognised",
+        "expired": "This promo code is not active yet or has expired",
+        "exhausted": "This promo code has been fully redeemed",
+        "duplicated": "You have already redeemed this promo code",
+        "ineligible": "You are not eligible for this promo code"
+      }
     },
     "myCoupons": {
       "title": "My Coupons",
-      "empty": "No coupons claimed yet"
+      "empty": {
+        "available": "No coupons available yet",
+        "used": "No coupons used yet",
+        "expired": "No expired coupons"
+      },
+      "types": {
+        "available": "Valid",
+        "used": "Used",
+        "expired": "Expired"
+      }
     },
     "detail": {
       "title": "Coupon Details",
@@ -187,8 +226,19 @@
         "periodOnly": "Valid only during the current campaign period.",
         "elitePartners": "Applicable to selected elite hotel partners only."
       },
-      "cta": "Use Coupon Now"
-    }
+      "cta": "Use Coupon Now",
+      "rules": {
+        "maxDiscount": "Discount capped at {{amount}}",
+        "hotels": "Valid at selected hotels: {{list}}",
+        "allHotels": "Valid on all hotel bookings",
+        "allGoods": "Valid on all products",
+        "rooms": "Valid for selected room types: {{list}}",
+        "stackable": "Can be combined with other offers",
+        "notStackable": "Cannot be combined with other offers",
+        "period": "Valid from {{start}} to {{end}}"
+      }
+    },
+    "loginHint": "Sign in to view your coupons"
   },
   "home": {
     "searchPlaceholder": "Search anything...",
@@ -1215,6 +1265,17 @@
         "agree": "By continuing, you agree to the Terms & Conditions and Cancellation Policy.",
         "totalCost": "Total Cost",
         "confirm": "Confirm"
+      },
+      "coupon": {
+        "rowLabel": "Coupon",
+        "select": "Select a coupon",
+        "change": "Change",
+        "none": "No coupon available for this booking",
+        "pickTitle": "Choose a coupon",
+        "best": "Best",
+        "save": "Save {{amount}}",
+        "noCoupon": "Don't use a coupon",
+        "useBest": "Use best coupon"
       }
     }
   }

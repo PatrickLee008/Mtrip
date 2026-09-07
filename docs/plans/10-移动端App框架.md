@@ -24,7 +24,9 @@ Expo 51 / TypeScript / Zustand / React Navigation 6 / Axios / i18next + react-i1
 - [x] api/request.ts:Axios 单例,自动携带 Authorization、X-Site-Id、X-Client-Type、X-Timestamp、X-Lang;
       统一状态码解析(0 成功/40101、40102 清登录态跳登录/站点禁用提示)、错误 Toast、日志上报
 - [x] api 模块:types.ts、user.ts、site.ts、goods.ts、order.ts、pay.ts
-- [-] api/marketing.ts:后端 marketing-service 归模块06,待其落地后补充,避免无后端的误导性 API 文件
+- [x] api/marketing.ts(2026-09-07,C-M6.1):活动列表/详情、领券中心、领取、我的券、券详情、
+      促销码兑换、结账择优七个接口;券字段口径由后端 `App\Service\CouponView` 统一产出,
+      前端侧的「字段 → 卡片文案」唯一出口是 `screens/promotions/couponFormat.ts`
 
 ### 状态与国际化
 - [x] store:useUserStore(登录态持久化)、useSiteStore(站点/货币/语言/时区)、useCommonStore
@@ -171,3 +173,23 @@ Expo 51 / TypeScript / Zustand / React Navigation 6 / Axios / i18next + react-i1
   `components/home/SearchSection.tsx` 的 `input` 漏了 `minWidth: 0`(全项目 5 处 flex 输入框只有它漏),
   web 端 `<input>` 的 `min-width: auto` 压不下去导致整行溢出;另给按钮补 `flexShrink: 1` 与
   文字 `numberOfLines={1}` 作为窄屏兜底。完整记录见 HANDOFF「★ 2026-09-03(搜索框按钮溢出)」。
+- 2026-09-07(C-M6.1,9月计划第1周):**优惠中心由静态页改为真实数据**。
+  新增 `api/marketing.ts` 与 `screens/promotions/couponFormat.ts`(券字段 → 卡片文案的唯一出口,
+  领券中心 / 我的券 / 券详情三处共用,免得同一张券在不同页面显示成不同金额或状态);
+  `PromotionsScreen` 接活动 + 领券中心 + 我的券三份数据并承担领取 / 兑换 / 刷新,
+  `CouponsTab` 补「有效 / 已用 / 失效」三分类与真实促销码兑换,
+  `CouponDetailScreen` 按路由参数(`receiveId` 我的券 / `couponId` 券模板)拉真实详情、
+  条款改由券数据生成,`CouponCard` 改吃卡片模型不再认后端字段。
+  **登录后不再出现静态券**(为空给空态文案),设计稿示例券只留给未登录 —— 与「我的精选」同一口径。
+  促销码失败按后端五个独立错误码分别给文案(`api/types.ts` 的 `API_CODE.PROMO_*`)。
+  完整记录见 HANDOFF「★ 2026-09-07(C-M6/C-M6.1 优惠中心真实化)」。
+- 2026-09-07(C-M6,9月计划第2周):**订房 Step 3 结账选券**(Figma `228:5118`)。
+  进入复核步自动应用最优券,点价格明细里的券行打开 `components/hotel/booking/CouponPickerSheet.tsx`
+  更换 / 不使用 / 恢复最优券;改日期或间数后房费变了会重新试算。
+  `ReviewCards.PriceRow` 扩了 `discount` / `note` / `actionLabel` + `onPress` 四个可选字段
+  (折扣行样式取自设计稿里那条隐藏的 `869:2503`「Member Discount」);
+  `ReviewBody` 的 `coupon` 入参是可选的 —— 不传就不显示券行,Stay 明细页与演示模式行为不变。
+  每张券的抵扣额一律来自后端 `/marketing/coupon/match-list`,**前端不自己算**
+  (必须与下单时 `PricingService::resolveCoupon` 同一公式,否则显示的优惠与实付对不上);
+  下单提交的是领券记录 id 而不是金额。券的文案复用优惠中心的 `couponFormat`。
+  完整记录见 HANDOFF「★ 2026-09-07(订房 Step 3 结账选券)」。

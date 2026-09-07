@@ -15,12 +15,25 @@ import { useTranslation } from 'react-i18next';
 import { TEMP_CAMPAIGN_BANNER } from '@/assets/tempImages';
 import { colors, radius } from '@/config/theme';
 import { fonts } from '@/config/typography';
+import { resolveMediaUri } from '@/utils/media';
 
-export default function CampaignBanner() {
+interface Props {
+  /** 真实活动标题;不传回落设计稿文案 */
+  title?: string;
+  /** 真实活动头图(marketing_campaign.banner);脏值/空值时回落设计稿底图 */
+  banner?: string;
+}
+
+export default function CampaignBanner({ title, banner }: Props) {
   const { t } = useTranslation();
+  const remote = resolveMediaUri(banner);
   return (
     <View style={styles.frame}>
-      <Image source={TEMP_CAMPAIGN_BANNER} style={styles.image} resizeMode="cover" />
+      <Image
+        source={remote ? { uri: remote } : TEMP_CAMPAIGN_BANNER}
+        style={styles.image}
+        resizeMode="cover"
+      />
 
       <View style={styles.overlay}>
         <Svg style={StyleSheet.absoluteFill} width="100%" height="100%">
@@ -37,7 +50,7 @@ export default function CampaignBanner() {
         <View style={styles.chip}>
           <Text style={styles.chipText}>{t('promotions.campaign.category')}</Text>
         </View>
-        <Text style={styles.title}>{t('promotions.campaign.name')}</Text>
+        <Text style={styles.title}>{title || t('promotions.campaign.name')}</Text>
       </View>
     </View>
   );

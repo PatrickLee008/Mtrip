@@ -184,6 +184,8 @@ services:
       - ../database/order/06-guests-column-type-fix.sql:/docker-entrypoint-initdb.d/99k-guests-column-type-fix.sql:ro
       # 修复超级管理员录入线索未带站点时生成的 MCH-5019 全链路 site_id=0
       - ../database/merchant/39-mch-5019-site-fix.sql:/docker-entrypoint-initdb.d/99l-mch-5019-site-fix.sql:ro
+      # Consumer App C-M6/C-M6.1:券适用房型+叠加规则、促销码绑定券模板、促销码兑换记录
+      - ../database/marketing/08-consumer-coupon-promo.sql:/docker-entrypoint-initdb.d/99m-consumer-coupon-promo.sql:ro
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-p${MYSQL_ROOT_PASSWORD:-root@2026}"]
       interval: 5s

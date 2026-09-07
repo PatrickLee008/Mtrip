@@ -35,6 +35,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTranslation } from 'react-i18next';
 
 import { fetchGoodsDetail } from '@/api/goods';
+import { fetchCouponMatchList, type BestCoupon } from '@/api/marketing';
 import { createOrder, payOrder } from '@/api/order';
 import { fetchTravelerList } from '@/api/user';
 import { LoadingView } from '@/components/common/StateViews';
@@ -47,6 +48,7 @@ import BookingStepGuests, {
   type LeadGuestForm,
 } from '@/components/hotel/booking/BookingStepGuests';
 import BookingStepPayment from '@/components/hotel/booking/BookingStepPayment';
+import CouponPickerSheet from '@/components/hotel/booking/CouponPickerSheet';
 import ReviewBody from '@/components/hotel/booking/ReviewBody';
 import { AddMoreStayCard, PriceBreakdownCard } from '@/components/hotel/booking/ReviewCards';
 import StaySummaryCard from '@/components/hotel/booking/StaySummaryCard';
@@ -72,6 +74,7 @@ import {
 import { useCommonStore } from '@/store/commonStore';
 import { useSiteStore } from '@/store/siteStore';
 import { useUserStore } from '@/store/userStore';
+import type { CouponView } from '@/types/models';
 import { formatAmount, formatMoney } from '@/utils/format';
 
 /** 设计稿写死「还能再加 2 位同行人」 */
@@ -262,6 +265,73 @@ export default function HotelBookingScreen() {
   const multi = stays.length > 1;
   const current = stays[0];
 
+  /* ------------------------------------------------------------ 结账优惠券(C-M6) */
+  /**
+   * 进入复核步时**自动应用最优券**,用户可在弹窗里换一张 / 不用券 / 恢复最优券。
+   * 每张券对本单的抵扣额一律由服务端 `/marketing/coupon/match-list` 给出
+   * (与下单时 `PricingService::resolveCoupon` 同一公式),前端不自己算 —— 否则这里显示的
+   * 优惠会和实际扣款对不上。改日期/间数后房费变了会重新拉一次,即「切换后重新试算」。
+   *
+   * 只在**真实模式且已登录**时启用:演示模式没有 goodsId,券接口也要登录态。
+   */
+  const [couponList, setCouponList] = useState<CouponView[]>([]);
+  const [bestCoupon, setBestCoupon] = useState<BestCoupon | null>(null);
+  /** 当前选用的领券记录 id;0 = 不使用优惠券 */
+  const [couponId, setCouponId] = useState(0);
+  /** 用户手动动过券之后就不再被自动最优券覆盖 */
+  const [couponTouched, setCouponTouched] = useState(false);
+  const [couponLoading, setCouponLoading] = useState(false);
+  const [couponOpen, setCouponOpen] = useState(false);
+
+  const couponEnabled = realMode && isLogin && !multi;
+  const couponBase = current.roomPrice;
+
+  useEffect(() => {
+    if (!couponEnabled || !goodsId || !skuId || couponBase <= 0) {
+      setCouponList([]);
+      setBestCoupon(null);
+      return;
+    }
+    let alive = true;
+    setCouponLoading(true);
+    void fetchCouponMatchList({ orderType: 1, goodsId, skuId, amount: couponBase })
+      .then((data) => {
+        if (!alive) return;
+        setCouponList(data.list);
+        setBestCoupon(data.best);
+        setCouponId((prev) => {
+          /* 没动过 → 自动应用最优券 */
+          if (!couponTouched) return data.best?.couponId ?? 0;
+          /* 动过 → 原来那张若因金额变化而失效,退回最优券(没有就退回不使用) */
+          if (prev === 0) return 0;
+          const still = data.list.find((c) => c.receive_id === prev && c.unusableReason === null);
+          return still ? prev : (data.best?.couponId ?? 0);
+        });
+      })
+      .catch(() => {
+        if (!alive) return;
+        setCouponList([]);
+        setBestCoupon(null);
+      })
+      .finally(() => {
+        if (alive) setCouponLoading(false);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [couponEnabled, goodsId, skuId, couponBase, couponTouched]);
+
+  /** 真正生效的券:选中的那张必须仍在可用列表里,否则当作没有券 */
+  const appliedCoupon = useMemo(() => {
+    if (couponId <= 0) return null;
+    const found = couponList.find((c) => c.receive_id === couponId);
+    if (!found || found.unusableReason !== null) return null;
+    return { receiveId: found.receive_id, name: found.coupon_name, discount: found.discount ?? 0 };
+  }, [couponId, couponList]);
+
+  const hasUsableCoupon = couponList.some((c) => c.unusableReason === null);
+  const couponDiscount = appliedCoupon?.discount ?? 0;
+
   /** 步骤序列:多住宿才插入 trip */
   const sequence = useMemo<BookingStepKey[]>(
     () => (multi ? ['dates', 'guests', 'review', 'trip', 'payment'] : ['dates', 'guests', 'review', 'payment']),
@@ -332,6 +402,9 @@ export default function HotelBookingScreen() {
         contactName,
         contactPhone,
         remark: request.trim() || undefined,
+        /* 复核页应用的券。后端 create 会用同一张券再算一次并以它为准,
+           所以这里提交的是领券记录 id,不是前端算好的金额 */
+        couponId: appliedCoupon?.receiveId,
         travelers: [
           {
             firstName: form.firstName.trim(),
@@ -405,6 +478,8 @@ export default function HotelBookingScreen() {
   };
 
   const tripTotal = stays.reduce((sum, stay) => sum + stay.total, 0);
+  /** 吸底栏与支付页汇总卡的金额:多住宿走 Trip 合计,单段住宿要扣掉已应用的券 */
+  const payableTotal = multi ? tripTotal : Math.max(0, current.total - couponDiscount);
 
   /** 真实商品用接口给的名称,演示数据走 i18n 键 */
   const hotelNameOf = (stay: BookingStay) =>
@@ -458,6 +533,16 @@ export default function HotelBookingScreen() {
               agreed={agreed}
               onToggleAgree={() => setAgreed((v) => !v)}
               onComingSoon={comingSoon}
+              coupon={
+                couponEnabled
+                  ? {
+                      applied: appliedCoupon,
+                      hasUsable: hasUsableCoupon,
+                      loading: couponLoading,
+                      onOpen: () => setCouponOpen(true),
+                    }
+                  : undefined
+              }
             />
             <AddMoreStayCard
               title={t('hotels.booking.review.addMoreStay')}
@@ -529,7 +614,7 @@ export default function HotelBookingScreen() {
                 onViewDetails={() => navigation.navigate('StayDetail', { index: 0 })}
                 totalLabel={t('hotels.booking.review.totalAmount')}
                 pointsLabel={parts.pointsLabel}
-                total={formatMoney(multi ? tripTotal : current.total, currency)}
+                total={formatMoney(payableTotal, currency)}
                 payByOtherLabel={t('hotels.booking.payment.payByOther')}
                 shareLabel={t('hotels.booking.payment.share')}
                 onShare={comingSoon}
@@ -612,9 +697,23 @@ export default function HotelBookingScreen() {
         primaryLabel={primaryLabel}
         primaryArrow={step !== 'review' && step !== 'trip'}
         /* 真实商品的价格拉到手之前先留空,别把演示金额顶上去 */
-        priceLabel={loadingGoods ? '' : formatMoney(multi ? tripTotal : current.total, currency)}
+        priceLabel={loadingGoods ? '' : formatMoney(payableTotal, currency)}
         onPrimary={goNext}
         onBack={goBack}
+      />
+
+      <CouponPickerSheet
+        visible={couponOpen}
+        coupons={couponList}
+        selectedId={couponId}
+        bestId={bestCoupon?.couponId ?? 0}
+        currency={currency}
+        loading={couponLoading}
+        onClose={() => setCouponOpen(false)}
+        onSelect={(receiveId) => {
+          setCouponTouched(true);
+          setCouponId(receiveId);
+        }}
       />
 
       <AlertDialog

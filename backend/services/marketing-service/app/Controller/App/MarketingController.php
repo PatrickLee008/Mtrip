@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace App\Controller\App;
 
 use App\Controller\AppAbstractController;
+use App\Service\CouponView;
 
+use Hyperf\Di\Annotation\Inject;
 use Hyperf\DbConnection\Db;
 use Mtrip\Shared\Constants\ErrorCode;
 use Mtrip\Shared\Context\UserContext;
@@ -13,15 +15,16 @@ use Mtrip\Shared\Exception\BusinessException;
 use Mtrip\Shared\Support\Result;
 
 /**
- * C端营销:促销中心 Banner / 领券中心 / 我的优惠券 / 自动择优
- * PRD 模块 6.1:领取/管理/自动应用最优券
+ * C端营销:促销中心 Banner / 活动 / 领券中心 / 我的优惠券 / 券详情 / 促销码兑换 / 自动择优
+ * PRD 模块 6.1;2026-09 计划 C-M6(后端)+ C-M6.1(App)
+ *
+ * 全部券字段统一由 CouponView 产出 —— 领券中心、活动详情、券详情、我的券、结账择优
+ * 共用同一套口径(见 App\Service\CouponView 头注释)。
  */
 class MarketingController extends AppAbstractController
 {
-    private const COUPON_FIELDS = [
-        'c.id as coupon_id', 'c.coupon_name', 'c.coupon_type', 'c.discount_value',
-        'c.min_amount', 'c.max_discount', 'c.goods_scope', 'c.goods_ids', 'c.remark',
-    ];
+    #[Inject]
+    protected CouponView $couponView;
 
     /** 促销中心活动列表(展示中):PRD 模块6.1 */
     public function campaigns(): array
@@ -39,15 +42,16 @@ class MarketingController extends AppAbstractController
                 $q->whereNull('end_time')->orWhere('end_time', '>=', $now);
             })
             ->orderBy('sort')->orderByDesc('id')
-            ->get(['id', 'title', 'subtitle', 'banner', 'landing_url'])
+            ->get(['id', 'title', 'subtitle', 'banner', 'landing_url', 'start_time', 'end_time'])
             ->map(static fn ($r) => (array) $r)->all();
         return Result::success($rows);
     }
 
-    /** 活动详情:含落地页 + 可领优惠券模板 */
+    /** 活动详情:含落地页 + 可领优惠券(统一券口径,带本人已领数与可领判定) */
     public function campaignDetail(): array
     {
         $siteId = $this->requireSiteId();
+        $userId = UserContext::userId();
         $c = Db::table('marketing_campaign')
             ->where('id', $this->requireId())->where('site_id', $siteId)
             ->where('status', 1)->whereNull('deleted_at')->first();
@@ -57,15 +61,15 @@ class MarketingController extends AppAbstractController
         $c = (array) $c;
         $couponIds = $c['coupon_ids'] ? (json_decode((string) $c['coupon_ids'], true) ?: []) : [];
         $c['coupon_ids'] = array_map('intval', is_array($couponIds) ? $couponIds : []);
-        $coupons = [];
+        $c['coupons'] = [];
         if ($c['coupon_ids'] !== []) {
-            $coupons = Db::table('marketing_coupon')
+            $rows = Db::table('marketing_coupon')
                 ->whereIn('id', $c['coupon_ids'])->where('site_id', $siteId)
-                ->where('status', 1)->whereNull('deleted_at')
-                ->get(['id', 'coupon_name', 'coupon_type', 'discount_value', 'min_amount', 'max_discount', 'goods_scope'])
+                ->whereNull('deleted_at')
+                ->get(CouponView::TEMPLATE_COLUMNS)
                 ->map(static fn ($r) => (array) $r)->all();
+            $c['coupons'] = $this->templateViews($rows, $userId);
         }
-        $c['coupons'] = $coupons;
         unset($c['deleted_at']);
         return Result::success($c);
     }
@@ -92,7 +96,7 @@ class MarketingController extends AppAbstractController
         return Result::success($rows);
     }
 
-    /** 领券中心:进行中且当前可领的券模板(附本人已领数/是否可领) */
+    /** 领券中心:进行中的券模板(附本人已领数 / 可领判定 / 不可领原因) */
     public function availableCoupons(): array
     {
         $siteId = $this->requireSiteId();
@@ -115,27 +119,45 @@ class MarketingController extends AppAbstractController
             });
         $total = (clone $query)->count();
         $rows = $query->orderByDesc('id')->forPage($page, $pageSize)
-            ->get(['id', 'coupon_name', 'coupon_type', 'discount_value', 'min_amount',
-                'max_discount', 'goods_scope', 'total_count', 'received_count', 'per_user_limit', 'valid_end', 'remark'])
+            ->get(CouponView::TEMPLATE_COLUMNS)
             ->map(static fn ($row) => (array) $row)->all();
 
-        // 一次查出本人对这批券的已领数,避免 N+1
-        $ids = array_map(static fn ($r) => (int) $r['id'], $rows);
-        $mine = $ids === [] ? [] : Db::table('marketing_coupon_receive')
-            ->where('user_id', $userId)
-            ->whereIn('coupon_id', $ids)
-            ->whereNull('deleted_at')
-            ->select('coupon_id', Db::raw('COUNT(*) as c'))
-            ->groupBy('coupon_id')->pluck('c', 'coupon_id');
-        foreach ($rows as &$row) {
-            $received = (int) ($mine[$row['id']] ?? 0);
-            $limitOk = (int) $row['per_user_limit'] === 0 || $received < (int) $row['per_user_limit'];
-            $stockOk = (int) $row['total_count'] === 0 || (int) $row['received_count'] < (int) $row['total_count'];
-            $row['canClaim'] = $limitOk && $stockOk;
-            $row['myReceived'] = $received;
+        return Result::page($this->templateViews($rows, $userId), $total, $page, $pageSize);
+    }
+
+    /**
+     * 券详情(统一口径):传 receiveId = 我的券(带券码/状态),传 couponId = 券模板(带可领判定)
+     */
+    public function couponDetail(): array
+    {
+        $siteId = $this->requireSiteId();
+        $userId = UserContext::userId();
+        $receiveId = $this->intInput('receiveId');
+
+        if ($receiveId > 0) {
+            $row = Db::table('marketing_coupon_receive as r')
+                ->join('marketing_coupon as c', 'c.id', '=', 'r.coupon_id')
+                ->where('r.id', $receiveId)->where('r.user_id', $userId)
+                ->whereNull('r.deleted_at')
+                ->first(CouponView::RECEIVE_COLUMNS);
+            if (! $row) {
+                throw new BusinessException(ErrorCode::NOT_FOUND, '优惠券不存在');
+            }
+            $view = $this->couponView->receive((array) $row);
+            return Result::success($this->couponView->attachApplicableOne($view));
         }
-        unset($row);
-        return Result::page($rows, $total, $page, $pageSize);
+
+        $couponId = $this->requireId('couponId');
+        $row = Db::table('marketing_coupon')
+            ->where('id', $couponId)->where('site_id', $siteId)->whereNull('deleted_at')
+            ->first(CouponView::TEMPLATE_COLUMNS);
+        if (! $row) {
+            throw new BusinessException(ErrorCode::NOT_FOUND, '优惠券不存在');
+        }
+        $mine = Db::table('marketing_coupon_receive')
+            ->where('coupon_id', $couponId)->where('user_id', $userId)->whereNull('deleted_at')->count();
+        $views = $this->templateViews([(array) $row], $userId, [$couponId => $mine]);
+        return Result::success($views[0]);
     }
 
     /** 领取优惠券:校验进行中/未领满/未超个人限领,生成券码写领券记录 */
@@ -145,7 +167,7 @@ class MarketingController extends AppAbstractController
         $userId = UserContext::userId();
         $couponId = $this->requireId('couponId');
 
-        $code = Db::transaction(function () use ($siteId, $userId, $couponId) {
+        $issued = Db::transaction(function () use ($siteId, $userId, $couponId) {
             $c = Db::table('marketing_coupon')
                 ->where('id', $couponId)->where('site_id', $siteId)->whereNull('deleted_at')
                 ->lockForUpdate()->first();
@@ -153,46 +175,94 @@ class MarketingController extends AppAbstractController
                 throw new BusinessException(ErrorCode::NOT_FOUND, '优惠券不存在');
             }
             $c = (array) $c;
-            if ((int) $c['status'] !== 1) {
-                throw new BusinessException(ErrorCode::DATA_CONFLICT, '活动未进行或已结束');
+            $mine = Db::table('marketing_coupon_receive')
+                ->where('coupon_id', $couponId)->where('user_id', $userId)->whereNull('deleted_at')->count();
+            $blocker = $this->assertClaimable($c, (int) $mine);
+            if ($blocker !== null) {
+                throw new BusinessException(ErrorCode::DATA_CONFLICT, $blocker);
             }
-            $now = time();
-            if ((int) $c['valid_type'] === 1 && $c['valid_end'] && $now > strtotime((string) $c['valid_end'])) {
-                throw new BusinessException(ErrorCode::DATA_CONFLICT, '优惠券已过期');
+            return $this->issueCoupon($siteId, $userId, $c);
+        });
+        return Result::success($issued, '领取成功');
+    }
+
+    /**
+     * 促销码兑换(C-M6):校验站点、用户、活动状态、有效期、总量、每人限兑与重复兑换,
+     * 成功后按促销码绑定的券模板写入领券记录。
+     *
+     * 错误码按「不存在 / 过期 / 领完 / 重复 / 资格不符」分开返回,App 据此给不同文案。
+     */
+    public function redeemPromoCode(): array
+    {
+        $siteId = $this->requireSiteId();
+        $userId = UserContext::userId();
+        if ($userId <= 0) {
+            throw new BusinessException(ErrorCode::UNAUTHORIZED);
+        }
+        $code = strtoupper($this->strInput('code'));
+        if ($code === '') {
+            throw new BusinessException(ErrorCode::PARAM_ERROR, '请输入促销码');
+        }
+
+        $result = Db::transaction(function () use ($siteId, $userId, $code) {
+            $promo = Db::table('marketing_promo_code')
+                ->whereRaw('UPPER(`code`) = ?', [$code])
+                ->whereNull('deleted_at')
+                ->lockForUpdate()->first();
+            // 站点不符与不存在返回同一个码,避免暴露其他站点的促销码
+            if (! $promo || ((int) $promo->site_id !== 0 && (int) $promo->site_id !== $siteId)) {
+                throw new BusinessException(ErrorCode::PROMO_CODE_NOT_FOUND);
             }
-            if ((int) $c['total_count'] > 0 && (int) $c['received_count'] >= (int) $c['total_count']) {
-                throw new BusinessException(ErrorCode::DATA_CONFLICT, '优惠券已领完');
+            $promo = (array) $promo;
+
+            $this->assertPromoUsable($promo);
+
+            $couponId = (int) $promo['coupon_id'];
+            if ($couponId <= 0) {
+                // 促销码未绑定券模板(后台只填了 discount_type/value 的旧数据):C端无券可发
+                throw new BusinessException(ErrorCode::PROMO_CODE_INELIGIBLE, '该促销码暂不支持在 App 兑换');
+            }
+
+            // 每人限兑:促销码天然「一人一次」,后台未配置(<=0)时按 1 处理
+            $perUser = (int) $promo['per_user_limit'];
+            $perUser = $perUser > 0 ? $perUser : 1;
+            $redeemed = Db::table('marketing_promo_code_redeem')
+                ->where('promo_code_id', $promo['id'])->where('user_id', $userId)->count();
+            if ($redeemed >= $perUser) {
+                throw new BusinessException(ErrorCode::PROMO_CODE_DUPLICATED);
+            }
+
+            $c = Db::table('marketing_coupon')
+                ->where('id', $couponId)->whereNull('deleted_at')
+                ->lockForUpdate()->first();
+            if (! $c) {
+                throw new BusinessException(ErrorCode::PROMO_CODE_INELIGIBLE, '促销码关联的优惠券已不存在');
+            }
+            $c = (array) $c;
+            if ((int) $c['site_id'] !== 0 && (int) $c['site_id'] !== $siteId) {
+                throw new BusinessException(ErrorCode::PROMO_CODE_INELIGIBLE, '该促销码不适用于当前站点');
             }
             $mine = Db::table('marketing_coupon_receive')
                 ->where('coupon_id', $couponId)->where('user_id', $userId)->whereNull('deleted_at')->count();
-            if ((int) $c['per_user_limit'] > 0 && $mine >= (int) $c['per_user_limit']) {
-                throw new BusinessException(ErrorCode::DATA_CONFLICT, '已达个人限领数量');
-            }
-            // 有效期:领后N天型从当前算,固定型取模板区间
-            if ((int) $c['valid_type'] === 2) {
-                $validStart = date('Y-m-d H:i:s', $now);
-                $validEnd = date('Y-m-d H:i:s', $now + max(0, (int) $c['valid_days']) * 86400);
-            } else {
-                $validStart = $c['valid_start'];
-                $validEnd = $c['valid_end'];
-            }
-            $code = 'CP' . date('ymd') . strtoupper(bin2hex(random_bytes(6)));
-            Db::table('marketing_coupon_receive')->insert([
+            $this->assertCouponIssuable($c, (int) $mine);
+
+            $issued = $this->issueCoupon($siteId, $userId, $c);
+            Db::table('marketing_promo_code_redeem')->insert([
                 'site_id' => $siteId,
-                'coupon_id' => $couponId,
+                'promo_code_id' => $promo['id'],
+                'code' => $promo['code'],
                 'user_id' => $userId,
-                'coupon_code' => $code,
-                'status' => 0,
-                'valid_start' => $validStart,
-                'valid_end' => $validEnd,
+                'coupon_id' => $couponId,
+                'receive_id' => $issued['receiveId'],
             ]);
-            Db::table('marketing_coupon')->where('id', $couponId)->increment('received_count');
-            return $code;
+            Db::table('marketing_promo_code')->where('id', $promo['id'])->increment('usage_count');
+            $issued['couponName'] = (string) $c['coupon_name'];
+            return $issued;
         });
-        return Result::success(['couponCode' => $code], '领取成功');
+        return Result::success($result, '兑换成功');
     }
 
-    /** 我的优惠券:type=available 可用 / used 已用 / expired 已失效 */
+    /** 我的优惠券:type=available 可用 / used 已用 / expired 已失效(统一券口径) */
     public function myCoupons(): array
     {
         $userId = UserContext::userId();
@@ -217,25 +287,90 @@ class MarketingController extends AppAbstractController
             }),
         };
         $total = (clone $query)->count();
-        $fields = array_merge(['r.id', 'r.coupon_code', 'r.status', 'r.valid_start', 'r.valid_end'], self::COUPON_FIELDS);
-        $list = $query->orderByDesc('r.id')->forPage($page, $pageSize)
-            ->get($fields)->map(static fn ($row) => (array) $row)->all();
-        return Result::page($list, $total, $page, $pageSize);
+        $rows = $query->orderByDesc('r.id')->forPage($page, $pageSize)
+            ->get(CouponView::RECEIVE_COLUMNS)->map(static fn ($row) => (array) $row)->all();
+
+        $views = array_map(fn (array $row) => $this->couponView->receive($row), $rows);
+        $this->couponView->attachApplicable($views);
+        return Result::page($views, $total, $page, $pageSize);
     }
 
     /**
-     * 自动择优:给定 orderType/goodsId/amount,在本人可用券中返回抵扣最高的一张
+     * 结账选券(C-M6):给定下单上下文,返回本人**全部未使用券**的
+     * 「可用 / 不可用 + 本单实际抵扣额 + 不可用原因」,外加抵扣最高的一张 best。
+     *
+     * 与 bestMatch 的区别:bestMatch 只回一张,用于「进入结账自动应用」;
+     * 这里回整张列表,用于「打开券列表手动更换」—— App 要能解释每一张为什么不能选,
+     * 且**抵扣额必须由服务端算**(与 order-service `PricingService::resolveCoupon` 同一公式),
+     * 否则复核页显示的优惠与实际扣款会对不上。
+     *
+     * 已使用/已作废的券不返回(结账场景无意义);过期与未生效的会返回并带上原因。
+     */
+    public function couponMatchList(): array
+    {
+        $userId = UserContext::userId();
+        $ctx = [
+            'orderType' => $this->intInput('orderType', 1),
+            'goodsId' => $this->intInput('goodsId'),
+            'skuId' => $this->intInput('skuId'),
+            'amount' => round($this->floatInput('amount'), 2),
+        ];
+
+        $rows = Db::table('marketing_coupon_receive as r')
+            ->join('marketing_coupon as c', 'c.id', '=', 'r.coupon_id')
+            ->where('r.user_id', $userId)
+            ->where('r.status', 0)
+            ->whereNull('r.deleted_at')
+            ->orderByDesc('r.id')
+            ->limit(100)
+            ->get(CouponView::RECEIVE_COLUMNS);
+
+        $views = [];
+        foreach ($rows as $row) {
+            $views[] = $this->couponView->receive((array) $row, $ctx);
+        }
+        $this->couponView->attachApplicable($views);
+
+        // 可用的排前面并按抵扣额从大到小;不可用的保持领取时间倒序
+        usort($views, static function (array $a, array $b) {
+            $ua = $a['unusableReason'] === null ? 0 : 1;
+            $ub = $b['unusableReason'] === null ? 0 : 1;
+            if ($ua !== $ub) {
+                return $ua <=> $ub;
+            }
+            return $b['discount'] <=> $a['discount'];
+        });
+
+        $best = null;
+        foreach ($views as $view) {
+            if ($view['unusableReason'] === null && $view['discount'] > 0) {
+                $best = [
+                    'couponId' => $view['receive_id'],
+                    'couponName' => $view['coupon_name'],
+                    'discount' => $view['discount'],
+                ];
+                break;
+            }
+        }
+        return Result::success(['list' => $views, 'best' => $best]);
+    }
+
+    /**
+     * 自动择优:给定 orderType/goodsId/skuId/amount,在本人可用券中返回抵扣最高的一张
      * 返回 { couponId(领券记录ID), couponName, discount } 或 null(无可用券)
      */
     public function bestMatch(): array
     {
         $userId = UserContext::userId();
-        $orderType = $this->intInput('orderType', 1);
-        $goodsId = $this->intInput('goodsId');
-        $amount = round($this->floatInput('amount'), 2);
+        $ctx = [
+            'orderType' => $this->intInput('orderType', 1),
+            'goodsId' => $this->intInput('goodsId'),
+            'skuId' => $this->intInput('skuId'),
+            'amount' => round($this->floatInput('amount'), 2),
+        ];
         $now = date('Y-m-d H:i:s');
 
-        $receives = Db::table('marketing_coupon_receive as r')
+        $rows = Db::table('marketing_coupon_receive as r')
             ->join('marketing_coupon as c', 'c.id', '=', 'r.coupon_id')
             ->where('r.user_id', $userId)
             ->where('r.status', 0)
@@ -246,53 +381,140 @@ class MarketingController extends AppAbstractController
             ->where(static function ($q) use ($now) {
                 $q->whereNull('r.valid_end')->orWhere('r.valid_end', '>=', $now);
             })
-            ->get(array_merge(['r.id as receive_id'], self::COUPON_FIELDS));
+            ->get(CouponView::RECEIVE_COLUMNS);
 
         $best = null;
-        foreach ($receives as $row) {
-            $row = (array) $row;
-            $discount = $this->couponDiscount($row, $orderType, $goodsId, $amount);
-            if ($discount <= 0) {
+        foreach ($rows as $row) {
+            $view = $this->couponView->receive((array) $row, $ctx);
+            if ($view['unusableReason'] !== null || $view['discount'] <= 0) {
                 continue;
             }
-            if ($best === null || $discount > $best['discount']) {
+            if ($best === null || $view['discount'] > $best['discount']) {
                 $best = [
-                    'couponId' => (int) $row['receive_id'],
-                    'couponName' => (string) $row['coupon_name'],
-                    'discount' => $discount,
+                    'couponId' => $view['receive_id'],
+                    'couponName' => $view['coupon_name'],
+                    'discount' => $view['discount'],
                 ];
             }
         }
         return Result::success($best);
     }
 
-    /** 计算某券对给定订单的抵扣(不适用返回0);与 order-service resolveCoupon 规则一致 */
-    private function couponDiscount(array $coupon, int $orderType, int $goodsId, float $base): float
+    /**
+     * 批量把券模板行转成统一视图(补本人已领数,避免 N+1)
+     *
+     * @param array<int, array>     $rows
+     * @param array<int, int>|null  $received 已知的「券模板ID => 本人已领数」;为 null 时自行查询
+     */
+    private function templateViews(array $rows, int $userId, ?array $received = null): array
     {
-        $scope = (int) $coupon['goods_scope'];
-        if (($scope === 1 && $orderType !== 1) || ($scope === 2 && $orderType !== 2)) {
-            return 0.0;
+        if ($rows === []) {
+            return [];
         }
-        if ($scope === 3) {
-            $ids = is_string($coupon['goods_ids'] ?? null) ? (json_decode((string) $coupon['goods_ids'], true) ?: []) : (array) ($coupon['goods_ids'] ?? []);
-            if (! in_array($goodsId, array_map('intval', $ids), true)) {
-                return 0.0;
-            }
+        if ($received === null) {
+            $ids = array_map(static fn ($r) => (int) $r['id'], $rows);
+            $received = Db::table('marketing_coupon_receive')
+                ->where('user_id', $userId)
+                ->whereIn('coupon_id', $ids)
+                ->whereNull('deleted_at')
+                ->select('coupon_id', Db::raw('COUNT(*) as c'))
+                ->groupBy('coupon_id')->pluck('c', 'coupon_id')->all();
         }
-        if ((float) $coupon['min_amount'] > 0 && $base < (float) $coupon['min_amount']) {
-            return 0.0;
-        }
-        $type = (int) $coupon['coupon_type'];
-        $val = (float) $coupon['discount_value'];
-        $maxD = (float) $coupon['max_discount'];
-        if ($type === 2) {
-            $discount = round($base * (1 - $val / 10), 2);
-            if ($maxD > 0 && $discount > $maxD) {
-                $discount = $maxD;
-            }
+        $views = array_map(
+            fn (array $row) => $this->couponView->template($row, (int) ($received[$row['id']] ?? 0)),
+            $rows
+        );
+        $this->couponView->attachApplicable($views);
+        return $views;
+    }
+
+    /** 生成券码并写领券记录 + 累加已领数;返回 { receiveId, couponCode, validStart, validEnd } */
+    private function issueCoupon(int $siteId, int $userId, array $c): array
+    {
+        $now = time();
+        // 有效期:领后N天型从当前算,固定型取模板区间
+        if ((int) $c['valid_type'] === 2) {
+            $validStart = date('Y-m-d H:i:s', $now);
+            $validEnd = date('Y-m-d H:i:s', $now + max(0, (int) $c['valid_days']) * 86400);
         } else {
-            $discount = $val;
+            $validStart = $c['valid_start'];
+            $validEnd = $c['valid_end'];
         }
-        return max(0.0, min(round($discount, 2), $base));
+        $code = 'CP' . date('ymd') . strtoupper(bin2hex(random_bytes(6)));
+        $receiveId = Db::table('marketing_coupon_receive')->insertGetId([
+            'site_id' => $siteId,
+            'coupon_id' => (int) $c['id'],
+            'user_id' => $userId,
+            'coupon_code' => $code,
+            'status' => 0,
+            'valid_start' => $validStart,
+            'valid_end' => $validEnd,
+        ]);
+        Db::table('marketing_coupon')->where('id', $c['id'])->increment('received_count');
+        return [
+            'receiveId' => (int) $receiveId,
+            'couponCode' => $code,
+            'validStart' => $validStart,
+            'validEnd' => $validEnd,
+        ];
+    }
+
+    /** 领券侧校验:返回中文提示(null = 可领),供 claim 抛 DATA_CONFLICT */
+    private function assertClaimable(array $c, int $mine): ?string
+    {
+        return match ($this->claimBlocker($c, $mine)) {
+            CouponView::REASON_OFFLINE => '活动未进行或已结束',
+            CouponView::REASON_NOT_STARTED => '优惠券尚未开始发放',
+            CouponView::REASON_EXPIRED => '优惠券已过期',
+            CouponView::REASON_SOLD_OUT => '优惠券已领完',
+            CouponView::REASON_LIMIT_REACHED => '已达个人限领数量',
+            default => null,
+        };
+    }
+
+    /** 兑换侧校验:同一套判定,但映射到促销码的细分错误码 */
+    private function assertCouponIssuable(array $c, int $mine): void
+    {
+        $blocker = $this->claimBlocker($c, $mine);
+        match ($blocker) {
+            CouponView::REASON_SOLD_OUT => throw new BusinessException(ErrorCode::PROMO_CODE_EXHAUSTED),
+            CouponView::REASON_LIMIT_REACHED => throw new BusinessException(ErrorCode::PROMO_CODE_DUPLICATED),
+            CouponView::REASON_EXPIRED, CouponView::REASON_NOT_STARTED => throw new BusinessException(ErrorCode::PROMO_CODE_EXPIRED),
+            CouponView::REASON_OFFLINE => throw new BusinessException(ErrorCode::PROMO_CODE_INELIGIBLE, '促销码关联的优惠券未在发放中'),
+            default => null,
+        };
+    }
+
+    /** 券模板可领判定:复用 CouponView 的口径,保证「能不能领」与「列表上显示能不能领」一致 */
+    private function claimBlocker(array $c, int $mine): ?string
+    {
+        return $this->couponView->template($c, $mine)['unusableReason'];
+    }
+
+    /** 促销码本身的状态与有效期校验 */
+    private function assertPromoUsable(array $promo): void
+    {
+        $status = (int) $promo['status'];
+        if ($status === 3) {
+            throw new BusinessException(ErrorCode::PROMO_CODE_EXPIRED);
+        }
+        if ($status === 4) {
+            throw new BusinessException(ErrorCode::PROMO_CODE_EXPIRED, '促销码尚未生效');
+        }
+        if ($status !== 1) {
+            // 2 暂停 / 5 草稿
+            throw new BusinessException(ErrorCode::PROMO_CODE_INELIGIBLE, '促销码当前不可用');
+        }
+        $today = date('Y-m-d');
+        if (! empty($promo['start_date']) && $today < (string) $promo['start_date']) {
+            throw new BusinessException(ErrorCode::PROMO_CODE_EXPIRED, '促销码尚未生效');
+        }
+        if (! empty($promo['end_date']) && $today > (string) $promo['end_date']) {
+            throw new BusinessException(ErrorCode::PROMO_CODE_EXPIRED);
+        }
+        $limit = (int) $promo['usage_limit'];
+        if ($limit > 0 && (int) $promo['usage_count'] >= $limit) {
+            throw new BusinessException(ErrorCode::PROMO_CODE_EXHAUSTED);
+        }
     }
 }

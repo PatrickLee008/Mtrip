@@ -134,6 +134,17 @@ export interface PriceRow {
   value: string;
   /** 划线原价 */
   strike?: boolean;
+  /**
+   * 折扣行(优惠券 / 会员折扣):金额走主色。
+   * 设计稿在价格明细里预留了这种行 —— `869:2503` 是隐藏的「Member Discount (Gold Level) / - 27,750」,
+   * 排版与普通行完全一致;**用主色是刻意偏离**,隐藏节点没给配色,而折扣与房费同色会读成又一笔收费。
+   */
+  discount?: boolean;
+  /** 标签下的次级说明(券名、或「暂无可用优惠券」) */
+  note?: string;
+  /** 右下角操作链接(选择 / 更换);给了就整行可点 */
+  actionLabel?: string;
+  onPress?: () => void;
 }
 
 interface PriceProps {
@@ -158,12 +169,45 @@ export function PriceBreakdownCard({
     <View style={[bookingShared.panelWhite, styles.priceCard]}>
       <Text style={styles.priceTitle}>{title}</Text>
       <View style={styles.priceTable}>
-        {rows.map((row) => (
-          <View key={row.key} style={styles.priceRow}>
-            <Text style={styles.priceLabel}>{row.label}</Text>
-            <Text style={[styles.priceValue, row.strike && styles.priceStrike]}>{row.value}</Text>
-          </View>
-        ))}
+        {rows.map((row) => {
+          const body = (
+            <>
+              <View style={styles.priceLabelBox}>
+                <Text style={styles.priceLabel}>{row.label}</Text>
+                {row.note ? (
+                  <Text style={styles.priceNote} numberOfLines={1}>
+                    {row.note}
+                  </Text>
+                ) : null}
+                {row.actionLabel ? (
+                  <Text style={styles.priceAction}>{row.actionLabel}</Text>
+                ) : null}
+              </View>
+              <Text
+                style={[
+                  styles.priceValue,
+                  row.strike && styles.priceStrike,
+                  row.discount && styles.priceDiscount,
+                ]}
+              >
+                {row.value}
+              </Text>
+            </>
+          );
+          return row.onPress ? (
+            <Pressable
+              key={row.key}
+              style={({ pressed }) => [styles.priceRow, pressed && bookingShared.pressed]}
+              onPress={row.onPress}
+            >
+              {body}
+            </Pressable>
+          ) : (
+            <View key={row.key} style={styles.priceRow}>
+              {body}
+            </View>
+          );
+        })}
         <View style={styles.priceTotal}>
           <View style={styles.priceTotalHead}>
             <Text style={bookingShared.overline}>{totalLabel}</Text>
@@ -389,13 +433,23 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: colors.softBlue,
   },
+  priceLabelBox: { flex: 1, minWidth: 0 },
   priceLabel: {
-    flex: 1,
-    minWidth: 0,
     fontFamily: fonts.inter,
     fontSize: 16,
     lineHeight: 24,
     color: colors.heading,
+  },
+  /** 券名等次级说明 */
+  priceNote: { fontFamily: fonts.inter, fontSize: 12, lineHeight: 18, color: colors.textSoft },
+  /** 「选择 / 更换」链接 */
+  priceAction: {
+    marginTop: 2,
+    fontFamily: fonts.interSemi,
+    fontSize: 12,
+    lineHeight: 18,
+    color: colors.primary,
+    textDecorationLine: 'underline',
   },
   priceValue: {
     width: 100,
@@ -406,6 +460,7 @@ const styles = StyleSheet.create({
     color: colors.heading,
   },
   priceStrike: { textDecorationLine: 'line-through' },
+  priceDiscount: { color: colors.primary },
   priceTotal: { paddingHorizontal: 16, paddingVertical: 8 },
   priceTotalHead: {
     flexDirection: 'row',

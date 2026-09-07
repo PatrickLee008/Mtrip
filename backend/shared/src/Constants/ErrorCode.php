@@ -33,9 +33,25 @@ class ErrorCode
 
     /** 资源不存在 (HTTP 404) */
     public const NOT_FOUND = 40401;
+    /** 促销码不存在 (HTTP 404) */
+    public const PROMO_CODE_NOT_FOUND = 40411;
 
     /** 数据冲突 (HTTP 409) */
     public const DATA_CONFLICT = 40901;
+
+    /*
+     * 促销码兑换的细分错误码(C-M6):
+     * App 侧要按「不存在 / 过期 / 领完 / 重复 / 资格不符」给出不同文案,
+     * 只靠 40401+40901 两个码区分不出来,故单独编号。
+     */
+    /** 促销码未生效或已过期 (HTTP 409) */
+    public const PROMO_CODE_EXPIRED = 40911;
+    /** 促销码已兑完 (HTTP 409) */
+    public const PROMO_CODE_EXHAUSTED = 40912;
+    /** 促销码已兑换过(超出每人限兑) (HTTP 409) */
+    public const PROMO_CODE_DUPLICATED = 40913;
+    /** 不符合促销码兑换资格 (HTTP 409) */
+    public const PROMO_CODE_INELIGIBLE = 40914;
 
     /** 请求过于频繁(限流) (HTTP 429) */
     public const TOO_MANY_REQUESTS = 42901;
@@ -61,7 +77,12 @@ class ErrorCode
         self::NO_DATA_PERMISSION => 403,
         self::CLIENT_API_FORBIDDEN => 403,
         self::NOT_FOUND => 404,
+        self::PROMO_CODE_NOT_FOUND => 404,
         self::DATA_CONFLICT => 409,
+        self::PROMO_CODE_EXPIRED => 409,
+        self::PROMO_CODE_EXHAUSTED => 409,
+        self::PROMO_CODE_DUPLICATED => 409,
+        self::PROMO_CODE_INELIGIBLE => 409,
         self::TOO_MANY_REQUESTS => 429,
         self::REPEAT_SUBMIT => 429,
         self::SERVER_ERROR => 500,
@@ -81,7 +102,12 @@ class ErrorCode
         self::NO_DATA_PERMISSION => '无数据权限',
         self::CLIENT_API_FORBIDDEN => '接口权限不足',
         self::NOT_FOUND => '资源不存在',
+        self::PROMO_CODE_NOT_FOUND => '促销码不存在',
         self::DATA_CONFLICT => '数据冲突',
+        self::PROMO_CODE_EXPIRED => '促销码未生效或已过期',
+        self::PROMO_CODE_EXHAUSTED => '促销码已兑完',
+        self::PROMO_CODE_DUPLICATED => '该促销码已兑换过',
+        self::PROMO_CODE_INELIGIBLE => '不符合该促销码的兑换资格',
         self::TOO_MANY_REQUESTS => '请求过于频繁',
         self::REPEAT_SUBMIT => '请求正在处理中,请勿重复提交',
         self::SERVER_ERROR => '服务器内部错误',

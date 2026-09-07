@@ -106,9 +106,10 @@ export type RootStackParamList = {
   OrderDetail: { orderId: number };
   /**
    * 优惠券详情(Figma 1625:2009),优惠中心的券卡落地页。
-   * 当前是静态页(后端无优惠券接口),故不带参数。
+   * `receiveId` = 我的券(带券码),`couponId` = 尚未领取的券模板;
+   * 两者都不传 = 未登录时的设计稿静态详情。
    */
-  CouponDetail: undefined;
+  CouponDetail: { receiveId?: number; couponId?: number } | undefined;
   /* ---- 「更多」section(Figma 1695:5951)的子页,全部无参数(当前都是静态页) ---- */
   /** 通知(Figma 1770:3863),首页 / 我的精选顶部栏铃铛的落地页 */
   Notifications: undefined;

@@ -89,13 +89,17 @@
     "sections": {
       "weekly": "每周优惠",
       "monthly": "每月优惠",
-      "hotel": "酒店优惠券"
+      "hotel": "酒店优惠券",
+      "claimable": "可领取",
+      "unavailable": "暂不可领"
     },
     "coupon": {
       "categories": {
         "hotels": "酒店",
         "food": "外卖",
-        "ride": "打车"
+        "ride": "打车",
+        "tickets": "门票",
+        "all": "全场通用"
       },
       "badges": {
         "newUser": "新用户",
@@ -106,13 +110,31 @@
       "actions": {
         "claim": "领取",
         "expired": "已过期",
-        "use": "立即使用"
+        "use": "立即使用",
+        "used": "已使用"
       },
       "expiry": "有效期至 {{date}}",
       "codeLabel": "优惠码",
       "copy": "复制优惠码",
       "copied": "优惠码已复制",
-      "claimed": "已领取"
+      "claimed": "已领取",
+      "amountOff": "立减 {{amount}}",
+      "percentOff": "{{percent}}% 折扣",
+      "minSpend": "满 {{amount}} 可用",
+      "noMinSpend": "无门槛",
+      "validDays": "领取后 {{days}} 天内有效",
+      "noExpiry": "不限有效期",
+      "reasons": {
+        "sold_out": "已领完",
+        "limit_reached": "已达限领",
+        "not_started": "未开始",
+        "expired": "已过期",
+        "used": "已使用",
+        "void": "已作废",
+        "min_amount": "未达门槛",
+        "scope": "不适用",
+        "offline": "已结束"
+      }
     },
     "items": {
       "hotelSave": {
@@ -169,11 +191,28 @@
       "placeholder": "abcdef123",
       "add": "添加",
       "more": "获取更多优惠券",
-      "invalid": "优惠码无效"
+      "invalid": "优惠码无效",
+      "success": "已将「{{name}}」放入你的优惠券",
+      "errors": {
+        "notFound": "促销码不存在",
+        "expired": "该促销码未生效或已过期",
+        "exhausted": "该促销码已兑完",
+        "duplicated": "你已经兑换过该促销码",
+        "ineligible": "你不符合该促销码的兑换条件"
+      }
     },
     "myCoupons": {
       "title": "我的优惠券",
-      "empty": "还没有领取优惠券"
+      "empty": {
+        "available": "暂无可用优惠券",
+        "used": "暂无已使用的优惠券",
+        "expired": "暂无失效的优惠券"
+      },
+      "types": {
+        "available": "可使用",
+        "used": "已使用",
+        "expired": "已失效"
+      }
     },
     "detail": {
       "title": "优惠券详情",
@@ -187,8 +226,19 @@
         "periodOnly": "仅在本期活动期间内有效。",
         "elitePartners": "仅适用于指定的精选合作酒店。"
       },
-      "cta": "立即使用"
-    }
+      "cta": "立即使用",
+      "rules": {
+        "maxDiscount": "最高优惠 {{amount}}",
+        "hotels": "仅限指定酒店:{{list}}",
+        "allHotels": "全部酒店订单可用",
+        "allGoods": "全部商品可用",
+        "rooms": "仅限指定房型:{{list}}",
+        "stackable": "可与其他优惠叠加",
+        "notStackable": "不可与其他优惠叠加",
+        "period": "有效期 {{start}} 至 {{end}}"
+      }
+    },
+    "loginHint": "登录后查看你的优惠券"
   },
   "home": {
     "searchPlaceholder": "想去哪里?",
@@ -1215,6 +1265,17 @@
         "agree": "继续即表示您同意相关条款与细则及退保政策。",
         "totalCost": "总费用",
         "confirm": "确认"
+      },
+      "coupon": {
+        "rowLabel": "优惠券",
+        "select": "选择优惠券",
+        "change": "更换",
+        "none": "本单暂无可用优惠券",
+        "pickTitle": "选择优惠券",
+        "best": "最优",
+        "save": "省 {{amount}}",
+        "noCoupon": "不使用优惠券",
+        "useBest": "使用最优券"
       }
     }
   }

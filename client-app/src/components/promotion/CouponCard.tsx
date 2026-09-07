@@ -17,11 +17,8 @@ import { useTranslation } from 'react-i18next';
 import HomeIcon from '@/components/home/HomeIcon';
 import { colors, radius } from '@/config/theme';
 import { fonts } from '@/config/typography';
-import {
-  CATEGORY_ICONS,
-  type CouponBadge,
-  type DemoCoupon,
-} from '@/screens/promotions/promoSections';
+import type { CouponCardModel } from '@/screens/promotions/couponFormat';
+import { CATEGORY_ICONS, type CouponBadge } from '@/screens/promotions/promoSections';
 
 /** 角标配色(设计稿:新用户走主色、新用户专享/热门走 `--tertiary`、限量走 `--orange`) */
 const BADGE_COLORS: Record<CouponBadge, string> = {
@@ -32,16 +29,20 @@ const BADGE_COLORS: Record<CouponBadge, string> = {
 };
 
 interface Props {
-  coupon: DemoCoupon;
+  /**
+   * 已经翻好文字的卡片模型(见 screens/promotions/couponFormat.ts)。
+   * 真实券与设计稿示例券都先转成这个模型再进来,组件本身不认识后端字段。
+   */
+  coupon: CouponCardModel;
   /** 点整张卡(进券详情) */
   onPress?: () => void;
-  /** 点右下角按钮(领取 / 去使用);已过期态不可点 */
+  /** 点右下角按钮(领取 / 去使用);不可用态不可点 */
   onAction?: () => void;
 }
 
 export default function CouponCard({ coupon, onPress, onAction }: Props) {
   const { t } = useTranslation();
-  const expired = coupon.state === 'expired';
+  const expired = coupon.disabled;
 
   return (
     <Pressable
@@ -58,25 +59,32 @@ export default function CouponCard({ coupon, onPress, onAction }: Props) {
         <View style={styles.codeRow}>
           <View style={styles.codeLeft}>
             <HomeIcon name="ticketDiagonal" size={18} color={colors.primary} />
-            <Text style={styles.code}>{coupon.code}</Text>
-          </View>
-          <View style={styles.badge}>
-            <Text style={[styles.badgeText, { color: BADGE_COLORS[coupon.badge] }]}>
-              {t(`promotions.coupon.badges.${coupon.badge}`)}
+            <Text style={styles.code} numberOfLines={1}>
+              {coupon.codeLine}
             </Text>
           </View>
+          {/* 真实券推不出运营角标时不显示(见 couponFormat.badgeOf),此处按 null 收起 */}
+          {coupon.badge ? (
+            <View style={styles.badge}>
+              <Text style={[styles.badgeText, { color: BADGE_COLORS[coupon.badge] }]}>
+                {t(`promotions.coupon.badges.${coupon.badge}`)}
+              </Text>
+            </View>
+          ) : null}
         </View>
 
         <View style={styles.textBlock}>
-          <Text style={styles.title}>{t(`promotions.items.${coupon.item}.title`)}</Text>
-          <Text style={styles.desc}>{t(`promotions.items.${coupon.item}.desc`)}</Text>
+          <Text style={styles.title}>{coupon.title}</Text>
+          <Text style={styles.desc} numberOfLines={2}>
+            {coupon.desc}
+          </Text>
         </View>
 
         <View style={styles.footRow}>
           <View style={styles.expiryRow}>
             <HomeIcon name="clock" size={11.2} color={colors.textSoft} />
-            <Text style={styles.expiry}>
-              {t('promotions.coupon.expiry', { date: coupon.expiry })}
+            <Text style={styles.expiry} numberOfLines={1}>
+              {coupon.expiryText}
             </Text>
           </View>
           <Pressable
@@ -88,8 +96,11 @@ export default function CouponCard({ coupon, onPress, onAction }: Props) {
             disabled={expired}
             onPress={onAction}
           >
-            <Text style={[styles.actionText, expired && styles.actionTextExpired]}>
-              {t(`promotions.coupon.actions.${coupon.state}`)}
+            <Text
+              style={[styles.actionText, expired && styles.actionTextExpired]}
+              numberOfLines={1}
+            >
+              {coupon.actionLabel}
             </Text>
           </Pressable>
         </View>
@@ -181,6 +192,9 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: radius.round,
     backgroundColor: colors.primary,
+    /* 不可用态的文案是「已领完 / 已达限领」这类长句,窄屏要能收窄而不是顶破卡片 */
+    flexShrink: 1,
+    minWidth: 0,
   },
   actionBtnExpired: { backgroundColor: 'transparent' },
   actionText: {

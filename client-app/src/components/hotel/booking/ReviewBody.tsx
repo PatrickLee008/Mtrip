@@ -30,14 +30,34 @@ import type { BookingStay } from '@/screens/hotel/bookingDemo';
 import { useSiteStore } from '@/store/siteStore';
 import { formatAmount, formatMoney } from '@/utils/format';
 
+/**
+ * 结账优惠券区(C-M6)。不传 = 不显示券行 —— Stay 明细页与演示模式走这条路,行为与从前一致。
+ */
+export interface ReviewCouponState {
+  /** 已应用的券;null = 当前没有应用任何券 */
+  applied: { receiveId: number; name: string; discount: number } | null;
+  /** 本单是否存在可用券(决定券行显示「选择」还是「暂无可用优惠券」) */
+  hasUsable: boolean;
+  loading: boolean;
+  /** 打开选券弹窗 */
+  onOpen: () => void;
+}
+
 interface Props {
   stay: BookingStay;
   agreed: boolean;
   onToggleAgree: () => void;
   onComingSoon: () => void;
+  coupon?: ReviewCouponState;
 }
 
-export default function ReviewBody({ stay, agreed, onToggleAgree, onComingSoon }: Props) {
+export default function ReviewBody({
+  stay,
+  agreed,
+  onToggleAgree,
+  onComingSoon,
+  coupon,
+}: Props) {
   const { t, i18n } = useTranslation();
   const currency = useSiteStore((s) => s.currency);
 
@@ -77,6 +97,42 @@ export default function ReviewBody({ stay, agreed, onToggleAgree, onComingSoon }
           value: formatAmount(stay.roomPrice, currency),
         },
       ];
+
+  /**
+   * 优惠券行(设计稿 `228:5118` 的价格明细里预留了折扣行 `869:2503`,当时是隐藏的会员折扣)。
+   * 进入本步时已自动应用最优券,点这一行可以换一张或不用券。
+   * 抵扣额来自服务端(`/coupon/match-list` 按本单算),不在前端估。
+   */
+  if (coupon) {
+    rows.push(
+      coupon.applied
+        ? {
+            key: 'coupon',
+            label: t('hotels.booking.coupon.rowLabel'),
+            note: coupon.applied.name,
+            value: `- ${formatAmount(coupon.applied.discount, currency)}`,
+            discount: true,
+            actionLabel: t('hotels.booking.coupon.change'),
+            onPress: coupon.onOpen,
+          }
+        : {
+            key: 'coupon',
+            label: t('hotels.booking.coupon.rowLabel'),
+            note: coupon.loading
+              ? t('common.loading')
+              : coupon.hasUsable
+                ? undefined
+                : t('hotels.booking.coupon.none'),
+            value: '—',
+            /* 没有任何券时整行不可点,免得点开一个空弹窗 */
+            actionLabel: coupon.hasUsable ? t('hotels.booking.coupon.select') : undefined,
+            onPress: coupon.hasUsable ? coupon.onOpen : undefined,
+          },
+    );
+  }
+
+  /** 应付 = 明细合计 − 券抵扣(演示模式没有券,值不变) */
+  const payable = Math.max(0, stay.total - (coupon?.applied?.discount ?? 0));
 
   return (
     <View style={styles.root}>
@@ -132,7 +188,7 @@ export default function ReviewBody({ stay, agreed, onToggleAgree, onComingSoon }
         pointsLabel={t('hotels.booking.review.earnPoints', {
           points: stay.points.toLocaleString(i18n.language),
         })}
-        total={formatMoney(stay.total, currency)}
+        total={formatMoney(payable, currency)}
       />
 
       <View style={styles.policies}>

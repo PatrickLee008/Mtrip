@@ -8,8 +8,12 @@
 
 import type { HomeIconName } from '@/components/home/HomeIcon';
 
-/** 券的品类(决定左侧色块的图标与文案) */
-export type CouponCategory = 'hotels' | 'food' | 'ride';
+/**
+ * 券的品类(决定左侧色块的图标与文案)
+ * hotels/food/ride 是设计稿画到的三种;tickets/all 是后端 `goods_scope` 真实存在、
+ * 设计稿没画的两种(门票券 / 全场通用券),沿用同一套卡片样式,只换图标与文案。
+ */
+export type CouponCategory = 'hotels' | 'food' | 'ride' | 'tickets' | 'all';
 /** 券的状态(决定右下角按钮) */
 export type CouponState = 'claim' | 'expired' | 'use';
 /** 右上角角标(决定文案与配色) */
@@ -40,6 +44,8 @@ export const CATEGORY_ICONS: Record<CouponCategory, HomeIconName> = {
   hotels: 'building',
   food: 'food',
   ride: 'carProfile',
+  tickets: 'ticketDiagonal',
+  all: 'gift',
 };
 
 const EXPIRY = '31 Jul 2026';

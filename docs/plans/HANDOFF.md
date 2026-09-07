@@ -1,5 +1,165 @@
 # 会话交接文档(HANDOFF)
 
+### ★ 2026-09-07(订房 Step 3 结账选券,Figma `228:5118`,9月计划第 2 周 C-M6 的 App 部分)
+
+**范围**:复核步(Step 3)的 Price Breakdown 自动应用最优券 + 弹窗更换/移除/恢复最优券。
+第 2 周表格里的「价格试算接口」「创建订单再次校验」两行属后端 C-M6/C-M8,本次只做了选券必需的那一个接口。
+
+**设计稿的两个事实**(先说清楚,免得下次以为是照抄):
+
+- `228:5118` 的价格明细**没有券行** —— 只有 Original Price(划线)/ Room Price / Service Charge & Taxes(10%)/ TOTAL。
+  券行是本次新增的。
+- 但设计稿**预留了折扣行的样式**:`869:2503` 是一条 `hidden` 的「Member Discount (Gold Level)」/「- 27,750」,
+  排版与普通行完全一致。券行按它做,**唯一偏离是金额用主色** —— 隐藏节点没给配色,
+  折扣与房费同色会被读成又一笔收费。
+- 选券弹窗设计稿也没画,沿用本流程既有的 `SelectSheet` 浮层做法(Modal + Animated + 黑 25% 遮罩)。
+
+**后端(1 个新接口)**
+
+- `GET /app/marketing/coupon/match-list`(`MarketingController::couponMatchList`):
+  给定 `orderType/goodsId/skuId/amount`,返回本人**全部未使用券**的
+  `{ list: CouponView[], best }`,每张券带**本单实际抵扣额 `discount`** 与 `unusableReason`。
+  可用的排前面并按抵扣额从大到小,不可用的照样返回并给原因(用户要知道为什么不能选)。
+  实现整段复用上一条目建的 `CouponView::receive($row, $ctx)`,没有第二套判定。
+- **为什么不让前端算**:抵扣额必须与下单时 `PricingService::resolveCoupon` 同一公式,
+  否则复核页显示的优惠与实际扣款会对不上。两处公式已逐行比对一致(折扣券 `base*(1-val/10)` → `max_discount` 封顶 → `min(discount, base)`)。
+- `bestMatch` 保留不动(「自动应用最优券」用它就够,列表用新接口)。
+
+**App**
+
+- 新增 `components/hotel/booking/CouponPickerSheet.tsx`:券行 + 「最优」角标 + 每张券的抵扣额 +
+  不可用原因(灰掉不可点)+ 底部「不使用优惠券」/「使用最优券」两个退路。
+  券的文案(优惠值 / 门槛 / 有效期 / 原因)**复用优惠中心的 `couponFormat`** —— 同一张券在两个页面必须同一套说法。
+- `ReviewCards.PriceRow` 扩了四个可选字段:`discount`(金额走主色)、`note`(券名/空态说明)、
+  `actionLabel` + `onPress`(给了就整行可点)。Trip 页与支付页的既有用法未受影响。
+- `ReviewBody` 新增可选 `coupon` 入参;**不传就完全不显示券行** —— Stay 明细页与演示模式行为一字未变。
+- `HotelBookingScreen`:`couponEnabled = 真实模式 && 已登录 && 非多住宿`;
+  房费(`current.roomPrice`)变化就重拉 match-list(改日期/间数后自动重新试算);
+  `couponTouched` 守卫 —— 用户手动换过券之后不再被自动最优券覆盖,但**原券因金额变化而失效时会退回最优券**;
+  吸底栏、支付页汇总卡与复核页总价统一走 `payableTotal = 总额 − 券抵扣`(免得 Step 3 显示优惠、Step 4 又变回原价);
+  `createOrder` 提交 `couponId`(领券记录 id,**不提交前端算好的金额**,后端会用同一张券再算一次并以它为准)。
+- i18n `hotels.booking.coupon.*` 9 键 ×3 语言(共 **852** 键,逐键对齐)。
+
+**验证**
+
+- `match-list` 实测两种金额,排序与判定都对:
+  订单 **150** → 最优是「无门槛立减 10,000」但抵扣被压到 150(`min(discount, base)`),
+  接着 15% = 22.5、10% = 15,两张满减券以 `min_amount` 落到末尾;
+  订单 **400,000** → 15% 券 60,000 被 `max_discount` 封到 50,000 成为最优,其余按 40,000/30,000/20,000/10,000 排列。
+- **「显示 = 实扣」端到端验证**:用 `couponId=15`(10% 券)真下了一单 —— `match-list` 在 amount=50,000 时给 5,000,
+  `order/create` 返回 `couponDiscount: 5000 / payAmount: 45000`,完全一致。
+  (顺带发现房型 `sku_id=2` 的**日历价现在是 50,000**,不是早前 HANDOFF 记的 150。)
+- 冒烟数据已清理并复核:测试订单(id=6)及其 `order_booking_event` / `goods_stock_log` 已删、
+  `goods_daily_stock` 2026-09-08 的 `stock_locked` 已归 0(行本身保留,等同基础库存状态,不删以免误伤商户设的价);
+  临时账号 user id=8 及其 5 张领券记录已删,`received_count` **按 `marketing_coupon_receive` 重算**
+  (不是置 0 —— 用户自己的 6 张券还在,详见下一条目的教训)。现 `user_info` 只剩 id=1。
+- 门禁:后端 344 文件 `php -l` 零错、shared 58 用例 / 858 断言、client-app `typecheck` + `expo export -p web`(dist 已删)。
+- **未做 / 遗留**:
+  1. **浏览器实跑没做**(本会话无浏览器工具),需本地走一遍「进 Step 3 看是否自动选中最优券 →
+     点券行换一张 → 选不使用 → 用最优券 → 回 Step 1 改日期再回来看抵扣是否重算」。
+  2. `PricingService::resolveCoupon` **不校验 `sku_ids`(适用房型)**,而 `CouponView::matchScope` 校验。
+     方向是安全的(客户端更严,只会少给券,不会多扣),但两处判定不完全同源;
+     补齐属第 2 周「创建订单再次校验资格」那一行,本次未越界改 order-service。
+  3. 长住折扣仍是 0(没配梯度),所以券的计算基数目前 = 房费;接长住(第 3 周)后基数会变成「房费 − 长住折扣」,
+     届时前端传给 `match-list` 的 `amount` 要跟着改。
+- 未执行任何 Git 操作。
+
+### ★ 2026-09-07(C-M6 / C-M6.1 优惠中心真实化,9月计划第 1 周)
+
+**范围**:《2026年9月酒店核心业务开发计划》第 1 周表格里 **C-M6(后端 2 行)+ C-M6.1(App 2 行)**。
+同表的 M-M8(商户端促销可见状态)与 A-M14(平台后台发放追踪)是另外两个 Module,**本次未做**。
+
+**后端(marketing-service)**
+
+- **统一券口径 = `app/Service/CouponView.php`**(新增):领券中心 / 活动详情 / 券详情 / 我的券 /
+  结账择优五处共用一套字段。命名沿用本服务既有约定 —— **库列 snake_case 直出、计算值 camelCase**
+  (`canClaim`/`myReceived`/`unusableReason`),所以 `availableCoupons` 的老字段没有破坏性变更。
+  状态与不可用原因**一律下发机器码**(`claimable|unclaimable|available|unusable|used|expired|void`,
+  `sold_out|limit_reached|not_started|expired|used|void|min_amount|scope|offline`),
+  文案交给各端 i18n —— 后端不给 App 下发中文,否则缅甸语用户会看到中文提示。
+  `claim` / `redeem` 的可领判定都走 `CouponView::template()`,与列表上写的「能不能领」是同一处代码,
+  不会出现「列表说能领、点了说领完」。
+  `applicable_hotels` / `applicable_rooms` 由 `attachApplicable()` **批量**补名(join `goods_info` /
+  `hotel_room_type`),避免逐券 N+1。
+- **新增两个路由**:`GET /app/marketing/coupon/detail`(`receiveId` 我的券 / `couponId` 券模板,
+  两者返回同一套字段,App 不用分支)、`POST /app/marketing/coupon/redeem`(促销码兑换)。
+- **促销码兑换**:`code` 大小写不敏感(`UPPER(code)` 比对);站点不符与不存在**返回同一个码**,
+  免得暴露其他站点的促销码;校验顺序是 促销码状态/有效期/总量 → 是否绑券 → 每人限兑 → 券模板本身可否领。
+  成功后在**同一事务**内写 `marketing_coupon_receive` + `marketing_promo_code_redeem` 并累加两处计数。
+- **错误码按五类拆开**(shared `ErrorCode` 新增,附 HTTP_MAP / MESSAGE_MAP):
+  `PROMO_CODE_NOT_FOUND=40411`(404)、`PROMO_CODE_EXPIRED=40911`、`PROMO_CODE_EXHAUSTED=40912`、
+  `PROMO_CODE_DUPLICATED=40913`、`PROMO_CODE_INELIGIBLE=40914`(后四个 409)。
+  **这是刻意的**:计划要求「错误码区分不存在、过期、领完、重复和资格不符」,
+  只用 40401+40901 两个码,App 分不出「过期」和「兑完」,只能把后端中文原样弹出来。
+- **迁移 `database/marketing/08-consumer-coupon-promo.sql`**(幂等,查 information_schema;
+  compose initdb 登记为 `99m-`,存量库已用 `scripts/db-apply.ps1` 应用并**连跑两次成功**):
+  `marketing_coupon` 补 `sku_ids`(适用房型 —— 原表只有 `goods_ids` 即酒店级,表达不了「仅某几个房型」)
+  与 `stackable`(叠加规则 —— 原表一个字段都没有,而券详情与结账都要展示);
+  `marketing_promo_code` 补 `coupon_id`(兑换发放的券模板);新增 `marketing_promo_code_redeem`。
+  **为什么要新表**:原表只有 `usage_count` 总量、没有按人的记录,`per_user_limit` 一直是摆设,
+  「重复兑换」根本校验不了。
+- **两处口径决定**(代码里已注明):① 促销码 `per_user_limit<=0` 时**按 1 次**处理
+  (「一个码无限次兑同一张券」不是合理默认);② `coupon_id=0` 的存量促销码(后台只填了
+  discount_type/value 的老数据)在 C 端**不可兑换**,返回 40914 而不是假装成功。
+- `bestMatch` 增加 `skuId` 入参,抵扣与不可用判定改走 `CouponView::receive($row, $ctx)`,
+  与券详情同源。**结账接入是第 2 周的事,本次只把后端口径备齐。**
+
+**App(client-app)**
+
+- 新增 `api/marketing.ts`(7 个接口)与 **`screens/promotions/couponFormat.ts`** ——
+  「券字段 → 卡片文案」的唯一出口(金额/百分比标题、门槛副标题、有效期行、状态→按钮、原因文案),
+  领券中心 / 我的券 / 券详情三处共用,免得同一张券在两个页面显示成不同金额或不同状态。
+- `CouponCard` 改吃 `CouponCardModel`(成品文字),**不再认识后端字段**;设计稿示例券经
+  `demoToCouponCard()` 转成同一个模型,两条路径共用同一个组件。
+- `PromotionsScreen` 承担活动 + 领券中心 + 我的券三份数据与领取/兑换/刷新;
+  `CouponsTab` 补「有效 / 已用 / 失效」三分类(设计稿没有,后端 `?type=` 本来就支持)与真实促销码兑换;
+  `CouponDetailScreen` 按路由参数(`CouponDetail: {receiveId?} | {couponId?}`)拉真实详情。
+- **登录后不再出现静态券**:为空给空态文案,`promoSections.ts` 的设计稿示例券只留给未登录
+  —— 与「我的精选 / 收藏酒店」是同一条口径(登录后拿示例数据冒充,看起来就像没接后端)。
+- **本页是常驻 Tab,刷新用 `useFocusEffect`**(同 MyPickScreen 的教训:`useEffect` 只在挂载时跑,
+  从券详情领完券切回来会看到旧数据)。
+- **对设计稿的三处偏离**(代码内均已注明):
+  1. 券列表分段由设计稿的「每周 / 每月 / 酒店」改为「可领取 / 暂不可领」——
+     后端没有这个分组维度,**不拿分组名硬套**(三个旧 i18n 键保留未删)。
+  2. 券卡角标:真实券推不出「新用户 / 热门」这类运营标签,只在设了发行总量时显示「限量」,
+     其余**不显示角标**而不是硬编一个。
+  3. 券详情的「条款与条件」在有真实券时改为**由券数据生成**(门槛 / 封顶 / 适用酒店房型 /
+     叠加规则 / 有效期),不再显示设计稿那四条与本券无关的通用文案;未领取的券底部按钮是
+     「立即领取」而不是「立即使用」,券码框在未领取时整块隐藏(没有码就别画空框)。
+- i18n 三份各补 39 键(共 **843** 键,脚本比对 missing / extra 均为空)。
+  `promotions.myCoupons.empty` 由字符串改为按分类的对象(旧值已无引用)。缅甸语仍是机器翻译。
+
+**验证**
+
+- 迁移连跑两次成功,四项 schema 变更逐项核对存在。
+- **接口全链路冒烟**(网关 8081,临时账号 + 三张券模板 + 一个促销码 + 一个活动):
+  领取成功 → 再领 `40901 已达个人限领` → 领已领完的券 `40901 已领完`;
+  兑换成功(小写 `smoke2026` 也认,发的是「领后 7 天」型券) → 重复兑换 `40913` →
+  不存在 `40411` → 空码 `40001`;改数据后逐条命中 `40911 过期`、`40911 尚未生效`、
+  `40912 兑完`、`40914 未绑券`、`40411 站点不符`。
+  `coupon/my` 三个分类、`coupon/detail` 两种入参、`campaign/detail` 带券列表均正确;
+  `best-match` 在 40 万订单上选中**封顶 5 万的折扣券**而非 3 万满减券,10 万时满减券因门槛被排除,
+  换 `goodsId=99` 后折扣券因适用范围被排除、回落满减券,再降到 10 万返回 `null`。
+- **冒烟数据已逐表清理复核**:`marketing_coupon` / `marketing_coupon_receive` /
+  `marketing_promo_code` / `marketing_promo_code_redeem` / `marketing_campaign` 全部 `count=0`,
+  临时账号(user id=6)及其 `user_referral` / `notify_record` / `user_action_log` 已删,
+  `user_info` 只剩用户自己的 id=1。
+- 四项质量门禁全绿:后端 **344 文件 `php -l` 零错**、shared **58 用例 / 858 断言**、
+  admin-web build、client-app `typecheck` + `expo export -p web`(dist 已删)。
+  注意 `scripts/check.ps1` 在本机仍第 1 步就断(php 不在 PATH,本机 BtSoft 只有 PHP 7.2 认不了 `match`),
+  故 lint 与单测是**在容器里跑的**:
+  `docker run --rm --entrypoint sh -v "C:/Codes/Mtrip/backend:/src:ro" mtrip-marketing-service:latest -c '...'`。
+- `./mtrip.sh health` 8 个 healthz + 网关链路 + 5 个孪生全绿;marketing-service 与其 APP 孪生均已重启。
+- **未做 / 遗留**:
+  1. **浏览器/真机走查没跑**(本会话无浏览器工具),需本地起 App 走一遍
+     「优惠活动领券 → 切我的券三分类 → 兑促销码 → 进券详情 → 立即使用跳酒店搜索」。
+  2. **后台还不能配置新加的两列**:`sku_ids`(适用房型)与 `stackable`(叠加规则)已在库与接口里,
+     但 admin-web / merchant-web 的券表单没有对应字段,现在只能改库。补表单属 A-M14 / M-M8,
+     是第 1 周表格里的另外两行,本次刻意未越界。
+  3. 结账选券(自动最优券 / 换券 / 移除)是**第 2 周**的 C-M6,本次只备齐后端口径,
+     结账页的优惠券区仍是原样。
+- 未执行任何 Git 操作。
+
 ### ★ 2026-09-03(「我的精选 / 收藏酒店」= 真实收藏)
 
 - **反馈**:MyPick 的 Saved Hotels 应该是收藏的酒店。查网关日志确认**接口本来就通**:`09:22:19 favorite/add 200` → `09:22:23` 酒店页重拉得到 1 条(217 字节)→ `09:29:20` MyPick 重拉也是 1 条。库里 `user_favorite` 有 `user 1 / goods 1` 那条。
