@@ -19,13 +19,21 @@ import {
   apiSmsTemplateUpdate,
 } from '@/api/config';
 
-/** 短信配置:渠道(Twilio/MessageBird)+ 模板(${var} 占位符)+ 发送日志(手机号已脱敏) */
+/**
+ * 短信配置:渠道(Twilio / MessageBird / SMSPoh)+ 模板(${var} 占位符)+ 发送日志(手机号已脱敏)
+ *
+ * SMSPoh 是 C 端注册 / 验证码登录 / 重置密码用的验证码通道(Verify API V3),
+ * 比另外两家多一段密钥(API Secret)与三个服务商参数(brand / pinLength / maxInvalidAttempts),
+ * 故这几栏只在选中 smspoh 时显示。字段与服务商参数的对应见 `database/system/11-sms-smspoh.sql`。
+ * ⚠ **本站点存在启用中的 smspoh 渠道时,C 端注册就会强制要求短信验证**(后端 AuthController::register)。
+ */
 const { t } = useI18n();
 const activeTab = ref('channel');
 
 const PROVIDER_TEXT = computed<Record<string, string>>(() => ({
   twilio: t('config.sms.typeTwilio'),
   messagebird: t('config.sms.typeMessageBird'),
+  smspoh: t('config.sms.typeSmsPoh'),
 }));
 
 const TPL_TYPE = computed<Record<number, string>>(() => ({
@@ -56,25 +64,40 @@ const chForm = reactive({
   providerCode: 'twilio',
   providerName: '',
   apiKey: '',
+  apiSecret: '',
   accountSid: '',
   signName: '',
+  brandName: '',
+  countryCode: '95',
   regionWhitelist: [] as string[],
   codeExpireSec: 300,
+  pinLength: 6,
+  maxInvalidAttempts: 5,
   remark: '',
 });
 
+/** SMSPoh 比另外两家多一段密钥与三个 Verify API 参数,表单按渠道类型显隐 */
+const isSmsPoh = computed(() => chForm.providerCode === 'smspoh');
+
+const CHANNEL_DEFAULTS = {
+  providerCode: 'twilio',
+  providerName: '',
+  apiKey: '',
+  apiSecret: '',
+  accountSid: '',
+  signName: '',
+  brandName: '',
+  countryCode: '95',
+  regionWhitelist: [] as string[],
+  codeExpireSec: 300,
+  pinLength: 6,
+  maxInvalidAttempts: 5,
+  remark: '',
+};
+
 function openChannelCreate(): void {
   chEditingId.value = 0;
-  Object.assign(chForm, {
-    providerCode: 'twilio',
-    providerName: '',
-    apiKey: '',
-    accountSid: '',
-    signName: '',
-    regionWhitelist: [],
-    codeExpireSec: 300,
-    remark: '',
-  });
+  Object.assign(chForm, CHANNEL_DEFAULTS, { regionWhitelist: [] });
   chModalOpen.value = true;
 }
 
@@ -83,12 +106,17 @@ function openChannelEdit(row: TableRow): void {
   Object.assign(chForm, {
     providerCode: row.provider_code ?? 'twilio',
     providerName: row.provider_name ?? '',
-    // 密钥掩码回显,留空保留原值
+    // 两段密钥都是掩码回显,留空即保留原值(后端 SecretField::keep)
     apiKey: '',
+    apiSecret: '',
     accountSid: row.account_sid ?? '',
     signName: row.sign_name ?? '',
+    brandName: row.brand_name ?? '',
+    countryCode: row.country_code ?? '95',
     regionWhitelist: String(row.region_whitelist ?? '').split(',').filter(Boolean),
     codeExpireSec: row.code_expire_sec ?? 300,
+    pinLength: row.pin_length ?? 6,
+    maxInvalidAttempts: row.max_invalid_attempts ?? 5,
     remark: row.remark ?? '',
   });
   chModalOpen.value = true;
@@ -96,6 +124,11 @@ function openChannelEdit(row: TableRow): void {
 
 async function saveChannel(): Promise<void> {
   if (!chForm.providerName.trim()) {
+    message.warning(t('common.pleaseInput'));
+    return;
+  }
+  // SMSPoh 缺任一段密钥都发不出短信;新建时前端先拦一道,后端同样有硬校验
+  if (isSmsPoh.value && !chEditingId.value && (!chForm.apiKey.trim() || !chForm.apiSecret.trim() || !chForm.signName.trim())) {
     message.warning(t('common.pleaseInput'));
     return;
   }
@@ -244,6 +277,7 @@ onMounted(() => {
                 <a-select v-model:value="channel.query.providerCode" allow-clear :placeholder="t('common.all')" style="width: 150px">
                   <a-select-option value="twilio">Twilio</a-select-option>
                   <a-select-option value="messagebird">MessageBird</a-select-option>
+                  <a-select-option value="smspoh">SMSPoh</a-select-option>
                 </a-select>
               </a-form-item>
               <a-form-item :label="t('common.status')">
@@ -424,6 +458,7 @@ onMounted(() => {
               <a-select v-model:value="chForm.providerCode" :disabled="!!chEditingId">
                 <a-select-option value="twilio">Twilio</a-select-option>
                 <a-select-option value="messagebird">MessageBird</a-select-option>
+                <a-select-option value="smspoh">SMSPoh</a-select-option>
               </a-select>
             </a-form-item>
           </a-col>
@@ -432,8 +467,12 @@ onMounted(() => {
               <a-input v-model:value="chForm.providerName" :placeholder="t('common.pleaseInput')" />
             </a-form-item>
           </a-col>
+          <a-col v-if="isSmsPoh" :span="24">
+            <a-alert type="info" show-icon :message="t('config.sms.smsPohTip')" style="margin-bottom: 16px" />
+          </a-col>
           <a-col :span="12">
-            <a-form-item :label="t('config.sms.authToken')">
+            <!-- SMSPoh 这一栏就是 API Key,另外两家沿用 Auth Token 的叫法 -->
+            <a-form-item :label="isSmsPoh ? t('config.sms.apiKey') : t('config.sms.authToken')" :required="isSmsPoh">
               <a-input-password
                 v-model:value="chForm.apiKey"
                 :placeholder="chEditingId ? t('common.optional') : ''"
@@ -441,19 +480,51 @@ onMounted(() => {
               />
             </a-form-item>
           </a-col>
-          <a-col :span="12">
+          <a-col v-if="isSmsPoh" :span="12">
+            <a-form-item :label="t('config.sms.apiSecret')" :required="!chEditingId">
+              <a-input-password
+                v-model:value="chForm.apiSecret"
+                :placeholder="chEditingId ? t('common.optional') : ''"
+                autocomplete="new-password"
+              />
+            </a-form-item>
+          </a-col>
+          <a-col v-else :span="12">
             <a-form-item :label="t('config.sms.accountSid')">
               <a-input v-model:value="chForm.accountSid" />
             </a-form-item>
           </a-col>
           <a-col :span="12">
-            <a-form-item :label="t('config.sms.template.sign')">
-              <a-input v-model:value="chForm.signName" />
+            <!-- SMSPoh 的 Sender ID 就存这一列,大小写敏感 -->
+            <a-form-item :label="t('config.sms.template.sign')" :required="isSmsPoh">
+              <a-input v-model:value="chForm.signName" :placeholder="t('config.sms.signNamePlaceholder')" />
+            </a-form-item>
+          </a-col>
+          <a-col v-if="isSmsPoh" :span="12">
+            <a-form-item :label="t('config.sms.brandName')">
+              <a-input v-model:value="chForm.brandName" :placeholder="t('config.sms.brandNameTip')" />
+            </a-form-item>
+          </a-col>
+          <a-col v-if="isSmsPoh" :span="12">
+            <!-- App 只把 +95 画成静态标签,用户填的是本地号;出网前由后端按这里补成 E.164 -->
+            <a-form-item :label="t('config.sms.countryCode')">
+              <a-input v-model:value="chForm.countryCode" :placeholder="t('config.sms.countryCodeTip')" />
             </a-form-item>
           </a-col>
           <a-col :span="12">
+            <!-- 上限 3600 = SMSPoh ttl 的最大值;后端也会夹取 -->
             <a-form-item :label="t('config.sms.codeExpireSec')">
-              <a-input-number v-model:value="chForm.codeExpireSec" :min="60" style="width: 100%" />
+              <a-input-number v-model:value="chForm.codeExpireSec" :min="60" :max="3600" style="width: 100%" />
+            </a-form-item>
+          </a-col>
+          <a-col v-if="isSmsPoh" :span="12">
+            <a-form-item :label="t('config.sms.pinLength')">
+              <a-input-number v-model:value="chForm.pinLength" :min="4" :max="8" style="width: 100%" />
+            </a-form-item>
+          </a-col>
+          <a-col v-if="isSmsPoh" :span="12">
+            <a-form-item :label="t('config.sms.maxInvalidAttempts')">
+              <a-input-number v-model:value="chForm.maxInvalidAttempts" :min="1" :max="10" style="width: 100%" />
             </a-form-item>
           </a-col>
           <a-col :span="24">

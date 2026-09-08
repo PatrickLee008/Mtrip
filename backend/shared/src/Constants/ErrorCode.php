@@ -17,12 +17,24 @@ class ErrorCode
     /** 参数校验失败 (HTTP 400) */
     public const PARAM_VALIDATE_FAIL = 40002;
 
+    /*
+     * 短信验证码的细分错误码:
+     * App 的验证码页要区分「码错了(留在本页重填)」「码过期了(引导重新发码)」
+     * 与「发太频繁(显示倒计时)」三种处置,只用 40001 一个码前端分不出来。
+     */
+    /** 验证码不正确 (HTTP 400) */
+    public const SMS_CODE_INVALID = 40021;
+    /** 验证码不存在或已过期(需重新获取) (HTTP 400) */
+    public const SMS_CODE_EXPIRED = 40022;
+
     /** 未登录 / Token无效 (HTTP 401) */
     public const UNAUTHORIZED = 40101;
     /** Token已过期 (HTTP 401) */
     public const TOKEN_EXPIRED = 40102;
     /** 客户端鉴权失败 (HTTP 401) */
     public const CLIENT_AUTH_FAIL = 40103;
+    /** 手机号未通过短信验证(注册/重置密码缺少或使用了失效的 verifyToken) (HTTP 401) */
+    public const SMS_VERIFY_REQUIRED = 40111;
 
     /** 无操作权限 (HTTP 403) */
     public const FORBIDDEN = 40301;
@@ -57,6 +69,8 @@ class ErrorCode
     public const TOO_MANY_REQUESTS = 42901;
     /** 重复提交(并发锁/FormId 幂等拦截) (HTTP 429) */
     public const REPEAT_SUBMIT = 42902;
+    /** 验证码发送过于频繁(未过重发冷却或已达当日上限) (HTTP 429) */
+    public const SMS_SEND_TOO_FREQUENT = 42911;
 
     /** 服务器内部错误 (HTTP 500) */
     public const SERVER_ERROR = 50001;
@@ -64,15 +78,20 @@ class ErrorCode
     public const THIRD_PARTY_ERROR = 50002;
     /** 数据库操作失败 (HTTP 500) */
     public const DB_ERROR = 50003;
+    /** 短信服务不可用(未配置渠道 / 凭证无效 / 服务商故障) (HTTP 500) */
+    public const SMS_CHANNEL_UNAVAILABLE = 50021;
 
     /** 业务code → HTTP 状态码映射 */
     public const HTTP_MAP = [
         self::SUCCESS => 200,
         self::PARAM_ERROR => 400,
         self::PARAM_VALIDATE_FAIL => 400,
+        self::SMS_CODE_INVALID => 400,
+        self::SMS_CODE_EXPIRED => 400,
         self::UNAUTHORIZED => 401,
         self::TOKEN_EXPIRED => 401,
         self::CLIENT_AUTH_FAIL => 401,
+        self::SMS_VERIFY_REQUIRED => 401,
         self::FORBIDDEN => 403,
         self::NO_DATA_PERMISSION => 403,
         self::CLIENT_API_FORBIDDEN => 403,
@@ -85,9 +104,11 @@ class ErrorCode
         self::PROMO_CODE_INELIGIBLE => 409,
         self::TOO_MANY_REQUESTS => 429,
         self::REPEAT_SUBMIT => 429,
+        self::SMS_SEND_TOO_FREQUENT => 429,
         self::SERVER_ERROR => 500,
         self::THIRD_PARTY_ERROR => 500,
         self::DB_ERROR => 500,
+        self::SMS_CHANNEL_UNAVAILABLE => 500,
     ];
 
     /** 默认错误文案 */
@@ -95,9 +116,12 @@ class ErrorCode
         self::SUCCESS => 'success',
         self::PARAM_ERROR => '参数错误',
         self::PARAM_VALIDATE_FAIL => '参数校验失败',
+        self::SMS_CODE_INVALID => '验证码不正确',
+        self::SMS_CODE_EXPIRED => '验证码已过期,请重新获取',
         self::UNAUTHORIZED => '未登录或Token无效',
         self::TOKEN_EXPIRED => 'Token已过期',
         self::CLIENT_AUTH_FAIL => '客户端鉴权失败',
+        self::SMS_VERIFY_REQUIRED => '请先完成手机号短信验证',
         self::FORBIDDEN => '无操作权限',
         self::NO_DATA_PERMISSION => '无数据权限',
         self::CLIENT_API_FORBIDDEN => '接口权限不足',
@@ -110,9 +134,11 @@ class ErrorCode
         self::PROMO_CODE_INELIGIBLE => '不符合该促销码的兑换资格',
         self::TOO_MANY_REQUESTS => '请求过于频繁',
         self::REPEAT_SUBMIT => '请求正在处理中,请勿重复提交',
+        self::SMS_SEND_TOO_FREQUENT => '验证码发送过于频繁,请稍后再试',
         self::SERVER_ERROR => '服务器内部错误',
         self::THIRD_PARTY_ERROR => '第三方服务调用失败',
         self::DB_ERROR => '数据库操作失败',
+        self::SMS_CHANNEL_UNAVAILABLE => '短信服务暂不可用,请稍后再试',
     ];
 
     public static function httpStatus(int $code): int

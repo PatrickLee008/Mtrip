@@ -39,28 +39,38 @@ class UserAuthService
             }
 
             $now = date('Y-m-d H:i:s');
-            try {
-                $userId = Db::table('user_info')->insertGetId([
-                    'site_id' => $siteId,
-                    'nickname' => $nickname !== '' ? $nickname : 'User' . substr($mobile, -4),
-                    'mobile' => CryptoHelper::encrypt($mobile, $this->aesKey()),
-                    'mobile_hash' => $mobileHash,
-                    'password' => password_hash($password, PASSWORD_BCRYPT),
-                    'register_source' => $source,
-                    'register_time' => $now,
-                    'last_login_at' => $now,
-                    'last_login_ip' => $ip,
-                    'user_status' => 1,
-                ]);
-            } catch (\Throwable $e) {
-                // 唯一索引 uk_site_mobile_hash 冲突兜底(锁失效/跨实例极端并发)
-                if (str_contains($e->getMessage(), 'uk_site_mobile_hash') || str_contains($e->getMessage(), 'Duplicate entry')) {
-                    throw new BusinessException(ErrorCode::DATA_CONFLICT, '该手机号已注册');
+            /**
+             * 建号 + 绑推荐人必须在**同一事务**里:
+             * `setupReferral` 会在推荐码无效时抛异常,而它跑在 insert 之后 ——
+             * 不包事务的话「推荐码填错」会留下一个已建好的账号,用户改完码重试
+             * 反而被告知「该手机号已注册」,等于一次输入错误把号码废掉。
+             * (接入短信验证后更要紧:重试还得再发一条短信。)
+             */
+            $userId = Db::transaction(function () use ($siteId, $mobile, $mobileHash, $password, $nickname, $source, $ip, $now, $referralCode): int {
+                try {
+                    $userId = Db::table('user_info')->insertGetId([
+                        'site_id' => $siteId,
+                        'nickname' => $nickname !== '' ? $nickname : 'User' . substr($mobile, -4),
+                        'mobile' => CryptoHelper::encrypt($mobile, $this->aesKey()),
+                        'mobile_hash' => $mobileHash,
+                        'password' => password_hash($password, PASSWORD_BCRYPT),
+                        'register_source' => $source,
+                        'register_time' => $now,
+                        'last_login_at' => $now,
+                        'last_login_ip' => $ip,
+                        'user_status' => 1,
+                    ]);
+                } catch (\Throwable $e) {
+                    // 唯一索引 uk_site_mobile_hash 冲突兜底(锁失效/跨实例极端并发)
+                    if (str_contains($e->getMessage(), 'uk_site_mobile_hash') || str_contains($e->getMessage(), 'Duplicate entry')) {
+                        throw new BusinessException(ErrorCode::DATA_CONFLICT, '该手机号已注册');
+                    }
+                    throw $e;
                 }
-                throw $e;
-            }
-            // 生成本人推荐码 + (可选)绑定推荐关系;推荐码无效则拦截注册(PRD 模块14)
-            $this->setupReferral($siteId, $userId, $referralCode);
+                // 生成本人推荐码 + (可选)绑定推荐关系;推荐码无效则拦截注册(PRD 模块14)
+                $this->setupReferral($siteId, $userId, $referralCode);
+                return $userId;
+            });
             $this->actionLog($siteId, $userId, 1, '注册并登录', $ip);
 
             return $this->issueToken($userId, $siteId);
@@ -121,6 +131,64 @@ class UserAuthService
         $this->actionLog($siteId, (int) $user['id'], 1, '密码登录', $ip);
 
         return $this->issueToken((int) $user['id'], $siteId);
+    }
+
+    /**
+     * 短信验证码登录(免密)
+     *
+     * **不校验密码**:调用方必须先用 `SmsVerifyService::assertTicket()` 确认该手机号
+     * 刚刚通过了 scene=login 的短信验证,否则等于给任意手机号开后门。
+     */
+    public function loginBySms(int $siteId, string $mobile, string $ip): array
+    {
+        $user = $this->findActiveUser($siteId, $mobile);
+
+        Db::table('user_info')->where('id', $user['id'])->update([
+            'last_login_at' => date('Y-m-d H:i:s'),
+            'last_login_ip' => $ip,
+        ]);
+        $this->actionLog($siteId, (int) $user['id'], 1, '短信验证码登录', $ip);
+
+        return $this->issueToken((int) $user['id'], $siteId);
+    }
+
+    /**
+     * 忘记密码:按手机号重置为新密码
+     *
+     * 同样依赖调用方先兑 scene=reset 的短信票据。重置后**不自动登录** ——
+     * 让用户用新密码走一次正常登录,才能确认新密码确实记住了。
+     */
+    public function resetPassword(int $siteId, string $mobile, string $password, string $ip): void
+    {
+        $user = $this->findActiveUser($siteId, $mobile);
+
+        Db::table('user_info')->where('id', $user['id'])->update([
+            'password' => password_hash($password, PASSWORD_BCRYPT),
+        ]);
+        $this->actionLog($siteId, (int) $user['id'], 1, '短信验证码重置密码', $ip);
+    }
+
+    /**
+     * 按手机号取可用账号(冻结/注销一律拒绝)
+     *
+     * @return array<string, mixed>
+     */
+    private function findActiveUser(int $siteId, string $mobile): array
+    {
+        $user = Db::table('user_info')
+            ->where('site_id', $siteId)->where('mobile_hash', $this->mobileHash($mobile))
+            ->whereNull('deleted_at')->first();
+        if (! $user) {
+            throw new BusinessException(ErrorCode::NOT_FOUND, '该手机号尚未注册');
+        }
+        $user = (array) $user;
+        if ((int) $user['user_status'] === 2) {
+            throw new BusinessException(ErrorCode::FORBIDDEN, '账号已被冻结,请联系客服');
+        }
+        if ((int) $user['user_status'] === 3) {
+            throw new BusinessException(ErrorCode::FORBIDDEN, '账号已注销');
+        }
+        return $user;
     }
 
     public function logout(int $userId, string $ip): void

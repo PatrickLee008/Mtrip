@@ -26,6 +26,8 @@ MTrip/
 
 ## 模块进度总览
 
+2026-09-08更新：C 端**短信验证接入 SMSPoh Verify API V3**（`https://smspoh.com/v3/developers/verify-api`），覆盖注册 / 验证码登录 / 忘记密码三个场景。链路为 `POST /app/auth/sms/send` 发码 → `sms/verify` 验码换一次性 `verifyToken`（Redis 10 分钟，绑定「站点 + 场景 + 手机号」）→ 由 `register` / `login-by-sms` / `reset-password` 兑换；验证码本身后端不持有（服务商只回 `requestId`）。凭证配在 `sys_sms_channel`（`provider_code='smspoh'`，迁移 `database/system/11-sms-smspoh.sql` 补两段密钥与三个 Verify 参数），后台「配置 → 短信配置」可维护。**强制策略是「渠道启用即强制」**——本站点有启用中的 smspoh 渠道时注册必须带票据，未配则照旧放行，App 端在收到 `50021` 时同样跳过验证码步骤。同批修掉注册的历史隐患：建号与绑推荐人已包进同一事务，推荐码填错不再留下孤儿账号。**未跑通的只有「用真实凭证发出并收到短信」**（本地无 SMSPoh 账号），已用假凭证确认整条出网链路可达服务商。详见[模块10](./10-移动端App框架.md)与 [HANDOFF](./HANDOFF.md)。
+
 2026-09-02更新：`scripts/auto-deploy.sh` 支持指定目标强制发布，带 `admin-web` / `merchant-web` / `supplier-web` 时跳过 `git fetch` 与远端落后判断，直接构建并发布静态目录；带后端 `*-service` / `*-service-app` / `gateway` 时直接重启指定服务。无目标的 cron 自动部署仍保持原 ff-only 安全策略。详见[模块08](./08-部署与网关.md)。
 
 2026-09-02修复：超级管理员录入入驻线索时新增必选站点，前端提交 `siteId`、后端拒绝 `siteId<=0`，避免申请及后续商户/商品链路落入平台作用域。按用户确认将 `MCH-5019` 的申请、KYC、正式商户、物业、商户账号、酒店商品和房型从 `site_id=0` 幂等迁移到 `site_id=1（全球）`；复查全部现有相关记录站点一致，物业 `2052` 与商品 `1033` 已可作为站点1 `CN/南宁` 市场排名候选。正式展示资格与排名发布仍保持独立人工操作。详见[模块15](./15-M12-merchant-management.md)。

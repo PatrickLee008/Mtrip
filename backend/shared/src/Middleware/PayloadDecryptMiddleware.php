@@ -28,6 +28,9 @@ class PayloadDecryptMiddleware implements MiddlewareInterface
     private const DEFAULT_ENCRYPT_PATHS = [
         '/api/v1/app/auth/login',
         '/api/v1/app/auth/register',
+        // 忘记密码同样在请求体里带明文新密码,与注册/登录同级
+        // (sms/send 与 sms/verify 只有手机号+验证码,不入此名单,免得给发码链路多一层客户端密钥依赖)
+        '/api/v1/app/auth/reset-password',
         '/api/v1/admin/auth/login',
     ];
 

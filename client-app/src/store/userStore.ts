@@ -4,7 +4,7 @@
 
 import { create } from 'zustand';
 
-import { apiLogin, apiLogout, apiRegister, fetchMe } from '@/api/user';
+import { apiLogin, apiLoginBySms, apiLogout, apiRegister, fetchMe } from '@/api/user';
 import { STORAGE_KEYS } from '@/config/global';
 import type { AuthResult, UserProfile } from '@/types/models';
 import { storage } from '@/utils/storage';
@@ -16,10 +16,12 @@ interface UserState {
   /** App 启动时从本地恢复登录态 */
   hydrate: () => Promise<void>;
   login: (mobile: string, password: string) => Promise<void>;
+  /** 短信验证码登录(免密):verifyToken 来自 `apiSmsVerify`(scene=login) */
+  loginBySms: (mobile: string, verifyToken: string) => Promise<void>;
   register: (
     mobile: string,
     password: string,
-    extra?: { nickname?: string; email?: string; referralCode?: string },
+    extra?: { nickname?: string; email?: string; referralCode?: string; verifyToken?: string },
   ) => Promise<void>;
   logout: () => Promise<void>;
   /** 仅清本地(401 时由请求层调用) */
@@ -44,6 +46,12 @@ export const useUserStore = create<UserState>((set, get) => ({
 
   async login(mobile, password) {
     const result = await apiLogin({ mobile, password });
+    await applyAuth(result);
+    set({ token: result.token, profile: result.user, isLogin: true });
+  },
+
+  async loginBySms(mobile, verifyToken) {
+    const result = await apiLoginBySms({ mobile, verifyToken });
     await applyAuth(result);
     set({ token: result.token, profile: result.user, isLogin: true });
   },

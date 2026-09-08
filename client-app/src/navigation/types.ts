@@ -4,6 +4,7 @@
 
 import type { NavigatorScreenParams } from '@react-navigation/native';
 
+import type { SmsScene } from '@/api/user';
 import type { TravelerItem } from '@/types/models';
 
 /**
@@ -124,10 +125,34 @@ export type RootStackParamList = {
   LegalTerms: undefined;
   Login: undefined;
   Register: undefined;
-  /** 短信验证码(Figma `566:3741` / `566:3902`),注册表单的下一步 */
-  VerifyOtp: { draft: SignupDraft };
-  /** 推荐码(Figma `1077:1734`),注册流程最后一步,在这里真正提交注册 */
-  ReferralCode: { draft: SignupDraft };
+  /**
+   * 短信验证码(Figma `566:3741` / `566:3902`),三个场景共用一页。
+   *
+   * **进入本页前上一屏必须已经发过一次码**(注册页 / 忘记密码页 / 登录页的验证码登录入口),
+   * 所以本页挂载时不再发码,只按 `resendAfter` 起跳倒计时 —— 否则会连发两条。
+   * 验证通过后按 `scene` 分流:register 去推荐码页、login 直接登录、reset 去重置密码页。
+   */
+  VerifyOtp: {
+    scene: SmsScene;
+    mobile: string;
+    /** scene=register 专用:注册草稿,验证通过后透传给推荐码页统一提交 */
+    draft?: SignupDraft;
+    /** 发码接口返回的重发冷却(秒),缺省 60 */
+    resendAfter?: number;
+    /** 发码接口返回的验证码位数(后台可配 4~8),缺省 6 */
+    pinLength?: number;
+    /** 后端脱敏后的目标号码,用于「已发送到 097****56」;缺省则本地按 mobile 打码 */
+    maskedMobile?: string;
+  };
+  /**
+   * 推荐码(Figma `1077:1734`),注册流程最后一步,在这里真正提交注册。
+   * `verifyToken` 由验证码页透传;站点没配短信渠道时为空(后端此时也不强制)。
+   */
+  ReferralCode: { draft: SignupDraft; verifyToken?: string };
+  /** 忘记密码第一步:输入手机号发码(设计稿未画,见页面头部注释) */
+  ForgotPassword: undefined;
+  /** 忘记密码第二步:凭 verifyToken 设置新密码(设计稿未画,见页面头部注释) */
+  ResetPassword: { mobile: string; verifyToken: string };
 };
 
 declare global {

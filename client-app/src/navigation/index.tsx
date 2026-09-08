@@ -42,10 +42,12 @@ import OrderListScreen from '@/screens/order/OrderListScreen';
 import CouponDetailScreen from '@/screens/promotions/CouponDetailScreen';
 import PromotionsScreen from '@/screens/promotions/PromotionsScreen';
 import SiteSelectScreen from '@/screens/site/SiteSelectScreen';
+import ForgotPasswordScreen from '@/screens/user/ForgotPasswordScreen';
 import LoginScreen from '@/screens/user/LoginScreen';
 import MineScreen from '@/screens/user/MineScreen';
 import ReferralCodeScreen from '@/screens/user/ReferralCodeScreen';
 import RegisterScreen from '@/screens/user/RegisterScreen';
+import ResetPasswordScreen from '@/screens/user/ResetPasswordScreen';
 import VerifyOtpScreen from '@/screens/user/VerifyOtpScreen';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -281,6 +283,17 @@ export default function AppNavigator() {
           name="ReferralCode"
           component={ReferralCodeScreen}
           options={{ title: t('user.referral.title'), headerShown: false }}
+        />
+        {/* 忘记密码两步(设计稿没有,复用同一套 AuthShell 外壳,故同样关掉 Stack 头) */}
+        <Stack.Screen
+          name="ForgotPassword"
+          component={ForgotPasswordScreen}
+          options={{ title: t('user.forgot.title'), headerShown: false }}
+        />
+        <Stack.Screen
+          name="ResetPassword"
+          component={ResetPasswordScreen}
+          options={{ title: t('user.reset.title'), headerShown: false }}
         />
       </Stack.Navigator>
     </NavigationContainer>

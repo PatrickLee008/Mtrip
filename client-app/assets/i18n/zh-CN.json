@@ -434,6 +434,22 @@
       "placeholder": "abcdef",
       "continue": "继续",
       "skip": "跳过"
+    },
+    "forgot": {
+      "entry": "忘记密码?",
+      "title": "忘记密码",
+      "subtitle": "输入你的手机号,我们会发送验证码用于重置密码。",
+      "continue": "发送验证码"
+    },
+    "reset": {
+      "title": "设置新密码",
+      "subtitle": "请为你的账号设置一个新密码。",
+      "newPasswordPlaceholder": "请输入新密码",
+      "submit": "重置密码",
+      "success": "密码已重置,请用新密码登录"
+    },
+    "smsLogin": {
+      "entry": "使用验证码登录"
     }
   },
   "more": {

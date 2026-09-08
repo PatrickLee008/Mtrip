@@ -193,3 +193,15 @@ Expo 51 / TypeScript / Zustand / React Navigation 6 / Axios / i18next + react-i1
   (必须与下单时 `PricingService::resolveCoupon` 同一公式,否则显示的优惠与实付对不上);
   下单提交的是领券记录 id 而不是金额。券的文案复用优惠中心的 `couponFormat`。
   完整记录见 HANDOFF「★ 2026-09-07(订房 Step 3 结账选券)」。
+
+- [x] **短信验证接入 SMSPoh Verify API V3**(2026-09-08):注册 / 验证码登录 / 忘记密码三个场景接真实短信,
+  验证码页不再是预填 `123456` 的走过场。链路 `sms/send` → `sms/verify` 换一次性 `verifyToken`
+  (Redis 10 分钟,绑定「站点 + 场景 + 手机号」)→ `register` / `login-by-sms` / `reset-password` 兑换;
+  **验证码本身后端不持有**(SMSPoh 只回 `requestId`,码由服务商校验)。
+  新增两页 `ForgotPasswordScreen` / `ResetPasswordScreen` 与登录页的「忘记密码」「验证码登录」两个入口
+  —— **这四处设计稿都没画**,版式复用 AuthShell + 验证码页那张带描边的白卡。
+  **首次发码放在上一屏**(注册页 / 忘记密码页 / 登录页入口),验证码页只填码与重发:
+  本页挂载再发一次会连发两条,且「号码已注册 / 未注册」必须在还能改号码的那一屏就报出来。
+  格子数按后端 `pinLength` 渲染,不写死 6(后台配 4 位时写死会让 Continue 永远点不亮)。
+  站点未配渠道(50021)时注册流程直接跳过验证码页,与后端「渠道启用才强制」对齐。
+  完整记录见 HANDOFF「★ 2026-09-08(App 短信验证接入 SMSPoh Verify API V3)」。

@@ -25,7 +25,12 @@ use function Hyperf\Config\config;
  */
 class SmsController extends AbstractController
 {
-    private const PROVIDERS = ['twilio', 'messagebird'];
+    /**
+     * smspoh = SMSPoh Verify API V3(C端注册/验证码登录/重置密码的短信通道)
+     * 它比另外两家多两段配置:第二段密钥 api_secret,以及 brand/pinLength/maxInvalidAttempts。
+     * 字段与服务商参数的对应关系见 `database/system/11-sms-smspoh.sql` 头部注释。
+     */
+    private const PROVIDERS = ['twilio', 'messagebird', 'smspoh'];
 
     // ---------- 渠道 ----------
 
@@ -43,7 +48,9 @@ class SmsController extends AbstractController
         $list = $query->orderByDesc('id')->forPage($page, $pageSize)->get()
             ->map(static function (SysSmsChannel $channel) {
                 $row = $channel->toArray();
+                // 两段密钥都只回脱敏值;前端留空提交即保留原密文(见 SecretField::keep)
                 $row['api_key'] = SecretField::mask((string) $channel->api_key);
+                $row['api_secret'] = SecretField::mask((string) ($channel->api_secret ?? ''));
                 return $row;
             })->toArray();
         return Result::page($list, $total, $page, $pageSize);
@@ -175,14 +182,33 @@ class SmsController extends AbstractController
         $channel->provider_code = $code;
         $channel->provider_name = $this->strInput('providerName', (string) ($channel->provider_name ?? ucfirst($code)));
         $channel->api_key = SecretField::keep($this->strInput('apiKey'), (string) $channel->api_key);
+        $channel->api_secret = SecretField::keep($this->strInput('apiSecret'), (string) ($channel->api_secret ?? ''));
         $channel->account_sid = $this->strInput('accountSid', (string) $channel->account_sid);
         $channel->sign_name = $this->strInput('signName', (string) $channel->sign_name);
+        $channel->brand_name = $this->strInput('brandName', (string) ($channel->brand_name ?? ''));
+        // 国家码只留数字(允许填 +95 / 0095 / 95,统一存 95)
+        $channel->country_code = preg_replace('/\D/', '', $this->strInput('countryCode', (string) ($channel->country_code ?? '95'))) ?? '95';
         $whitelist = $this->input('regionWhitelist');
         if (is_array($whitelist)) {
             $channel->region_whitelist = array_values(array_map('strval', $whitelist));
         }
-        $channel->code_expire_sec = max(60, $this->intInput('codeExpireSec', (int) ($channel->code_expire_sec ?? 300)));
+        // 三个数值上限按服务商约束夹取(SMSPoh:ttl 60~3600、pinLength 4~8、maxInvalidAttempts 1~10),
+        // 越界值不落库,免得等到真发短信时才被服务商拒绝
+        $channel->code_expire_sec = min(3600, max(60, $this->intInput('codeExpireSec', (int) ($channel->code_expire_sec ?? 300))));
+        $channel->pin_length = min(8, max(4, $this->intInput('pinLength', (int) ($channel->pin_length ?? 6))));
+        $channel->max_invalid_attempts = min(10, max(1, $this->intInput('maxInvalidAttempts', (int) ($channel->max_invalid_attempts ?? 5))));
         $channel->remark = $this->strInput('remark', (string) $channel->remark);
+
+        // SMSPoh 的 accessToken 是 base64(apiKey:apiSecret),缺任一段都发不出短信;
+        // 允许编辑时留空(留空 = 保留原密文),但不允许"从来没填过"
+        if ($code === 'smspoh') {
+            if ((string) $channel->api_key === '' || (string) $channel->api_secret === '') {
+                throw new BusinessException(ErrorCode::PARAM_ERROR, 'SMSPoh 渠道必须填写 API Key 与 API Secret');
+            }
+            if ((string) $channel->sign_name === '') {
+                throw new BusinessException(ErrorCode::PARAM_ERROR, 'SMSPoh 渠道必须填写 Sender ID(短信签名,大小写敏感)');
+            }
+        }
     }
 
     private function fillTemplate(SysSmsTemplate $template): void

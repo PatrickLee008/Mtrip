@@ -434,6 +434,22 @@
       "placeholder": "abcdef",
       "continue": "Continue",
       "skip": "Skip"
+    },
+    "forgot": {
+      "entry": "Forgot password?",
+      "title": "Forgot Password",
+      "subtitle": "Enter your mobile number and we will send you a verification code to reset your password.",
+      "continue": "Send Code"
+    },
+    "reset": {
+      "title": "Set New Password",
+      "subtitle": "Choose a new password for your account.",
+      "newPasswordPlaceholder": "Enter new password",
+      "submit": "Reset Password",
+      "success": "Password reset. Please sign in with your new password."
+    },
+    "smsLogin": {
+      "entry": "Sign in with verification code"
     }
   },
   "more": {

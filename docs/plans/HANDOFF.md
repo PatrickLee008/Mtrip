@@ -1,5 +1,138 @@
 # 会话交接文档(HANDOFF)
 
+### ★ 2026-09-08(补:手机号必须补国家码 + 当前发码失败的真因在 SMSPoh 账号侧)
+
+**两件事,别混为一谈。**
+
+**1)真 bug:出网号码没补 `+95`(已修)**
+
+- App 登录/注册页把「+95」画成**静态标签**,占位符是 `9xxxxxxxx`,但**从不拼进请求** ——
+  用户填 `9971183240`,后端原样发给 SMSPoh。而 SMSPoh 文档只接受
+  `09xxxxxxxx` / `959xxxxxxx` / `+959xxxxxx` 三种前缀,`99` 开头三种都不是。
+- 修法**只动出网那一刻**:`sys_sms_channel` 新增 `country_code`(默认 `95`,可配、可分站点),
+  `SmsPohClient::normalizeMobile($mobile, $cc)` 归一成 E.164。
+  **库里 `mobile`/`mobile_hash` 仍按用户原样输入存** —— 改存储格式会让存量账号登不进来。
+- 归一规则:`+` 原样 → `00` 换 `+` → `0` 冠码去 0 补国家码 →
+  以国家码开头**且总长 ≥ 国家码长+9** 判为已带国家码 → 其余补国家码。
+  最后那条长度门槛是消歧用的:缅甸本地号 `95xxxxxxxx`(10 位)自己就以 95 开头,
+  只看前缀会被当成「已带国家码」而少发两位;带国家码的 `959971183240` 是 12 位,用长度分得开。
+  已锁 4 条单测(含这条消歧)。
+- 想更严格得让客户端把国家码作为独立字段上送,那要改 App 与接口约定,**本次没做**。
+
+**2)当前 `50021` 的真因:SMSPoh 账号侧,不是代码**
+
+用户已配好真实渠道(id=2,`site_id=0` 全局,Sender ID `MTrip`),发码仍失败。逐项排掉:
+
+| 试的东西 | 结果 | 结论 |
+|---|---|---|
+| 故意用错 token | `401 invalid credentials` | 真请求回 **400 不是 401** → **凭证有效** |
+| 不带 `from` | `400 missing or invalid parameters` | 带 `from` 的请求**参数校验是过的** |
+| `09971183240` / `959971183240` / `+959971183240` | **三种官方格式全部同样 400** | **换号码格式救不了** |
+| 换 Sender ID 为 `SMSPoh` | 同样 400 | 与 Sender ID 无关 |
+| 同一 token 打普通短信 API | `401` | 旁证该凭证只绑了部分产品权限 |
+
+服务商原文:`We were unable to send your OTP. Please contact the SMSPoh Dev Team for assistance.`
+—— 参数对、凭证对却拒绝发送,且它自己让你联系 Dev Team。
+**典型原因是账号未开通 OTP/Verify 产品、无余额,或 Sender ID 未报备通过**,须由账号持有人找 SMSPoh 开通,
+代码侧改不动。**因此「真收到一条验证码」这一步仍未跑通**,与上一条目的遗留项 1 是同一件事。
+
+**验证**:shared **95 用例 / 957 断言**、后端 348 文件 `php -l` 零错、admin-web build 通过;
+迁移幂等(连跑两次)、`country_code` 已落库且现有渠道回填为 `95`;
+用 App 原样输入 `9971183240` 走真实发码,出网 `to` 已是 `+959971183240`(单测锁死),
+服务商仍回同一条账号侧错误。冒烟日志已清空,`user_info` 只剩 id=1。
+
+### ★ 2026-09-08(App 短信验证接入 SMSPoh Verify API V3)
+
+**范围**:C 端**注册 / 验证码登录 / 忘记密码**三个场景接真实短信(用户明确选定这三个)。
+凭证存 `sys_sms_channel`(用户选定,而非环境变量);强制策略选定为**「渠道启用即强制」**。
+
+**服务商口径(照抄文档,别按常见 REST 习惯猜)**
+
+- 基址 `https://v3.smspoh.com/api/otp`,发码 `POST /request`,验码 `POST /verify`。
+- **参数全部走 query string,POST 没有请求体**。
+- 鉴权 `accessToken=base64(APIKey:APISecret)`,也放 query 里;**V3 与旧版凭证不通用**,
+  需在 v3.smspoh.com 的「Accounts & Security > API Credentials」重新申请。
+- base64 会产出 `+ / =`,**必须 URL 转义** —— `+` 被解成空格就等于凭证错误,
+  这是最难查的一个坑,已单独锁一条单测。
+- 发码成功回 `requestId`(示例是 9 位整数,但服务商没承诺位数,**按字符串存**);
+  验码要带 `requestId + code`。成功状态码是 **201** 不是 200。
+- **验证码本身我方拿不到也不存**,码由 SMSPoh 校验。
+
+**后端**
+
+- 新增 `shared/src/Support/SmsPohClient.php`:纯逻辑(建 URL / 解析响应)与网络分开,
+  `httpPost()` 是 protected,单测覆写它即可不联网跑全部分支。
+  网络用 `stream_context_create` + `file_get_contents`(**与 system-service 调阿里云 OSS 同一写法**,
+  Swoole hook 会协程化,**不必新增 composer 依赖**,也就不用 `./mtrip.sh build`)。
+- 新增 `user-service/app/Service/SmsVerifyService.php`:渠道解析 / 场景前置校验 / 三道限流 /
+  发码 / 验码 / 票据。**验码成功签发一次性 `verifyToken`**(Redis,10 分钟),
+  票据绑定「站点 + 场景 + 手机号」—— 不绑手机号的话,拿自己号码验一次就能去注册别人的号码。
+- **票据是 `assertTicket()` 验、`discardTicket()` 销,两步分开**:业务成功后才作废。
+  这样「推荐码填错」不会把票据一起赔进去,用户改完直接重试,不用再等一条短信。
+- 4 条新路由(公开,`/api/v1/app/auth/` 下,网关按二级模块已自动路由到 user_service_app,**网关无需改**):
+  `sms/send`、`sms/verify`、`login-by-sms`、`reset-password`。
+  `reset-password` 带明文新密码,已加进 `PayloadDecryptMiddleware` 的强制加密名单;
+  `sms/send`/`sms/verify` 刻意不加(只有手机号+验证码,加了等于给发码链路多一层客户端密钥依赖)。
+- ErrorCode 新增 5 个细分码:`40021` 码错 / `40022` 码过期 / `40111` 未完成短信验证 /
+  `42911` 发送过频 / `50021` 短信服务不可用。**拆开是刻意的**:App 要区分
+  「码错了(留在本页重填)」「码过期了(引导重新发码)」「没配渠道(跳过这一步)」三种处置。
+- **强制策略「渠道启用即强制」**:本站点有启用中的 smspoh 渠道 → register 必须带 `verifyToken`;
+  没配 → 照旧放行。本机开发不必申请凭证,生产装上凭证自动生效,不用再改代码或加开关。
+- **顺手修掉 HANDOFF 记了两次的遗留隐患**:`UserAuthService::register` 的
+  insert + `setupReferral` 现已包进 `Db::transaction`,推荐码填错不再留下孤儿账号。
+- 迁移 `database/system/11-sms-smspoh.sql`(幂等,已连跑两次成功,compose initdb 登记为 `99n-`):
+  `sys_sms_channel` 补 `api_secret`/`brand_name`/`pin_length`/`max_invalid_attempts`
+  (原表是「一个密钥 + 一个账号」的 Twilio 模型,放不下 SMSPoh 的**两段密钥**);
+  `sys_sms_log` 补 `scene`/`provider_request_id`(出问题要能回答「哪个场景」「服务商那边的 ID」)。
+- system-service `SmsController` 放开 `smspoh` 并落新字段,两段密钥都走 `SecretField` 掩码回显 /
+  留空保留;三个数值按服务商上下限夹取(ttl 60~3600、pinLength 4~8、attempts 1~10)。
+
+**App(client-app)**
+
+- 验证码页 `VerifyOtpScreen` 接真实接口:去掉演示码预填,格子数按后端 `pinLength` 渲染
+  (后台配 4 位而前端写死 6 格的话,用户永远填不满、Continue 永远点不亮),
+  验证通过后按 `scene` 分流(register→推荐码页 / login→直接登录 / reset→重置密码页)。
+- **首次发码在上一屏发,本页只填码与重发**:注册页 / 忘记密码页 / 登录页的验证码入口各发一次。
+  这么定有两个原因:① 本页挂载再发一次会连发两条、白烧一条短信;
+  ② 「该手机号已注册 / 尚未注册」必须在**还能改号码的那一屏**报出来。
+- 新增两页 `ForgotPasswordScreen` / `ResetPasswordScreen`(**设计稿没有这两张**,
+  版式复用 AuthShell + 验证码页那张带描边的白卡,字段逐字沿用登录页取值,已在文件头注明);
+  登录页新增「忘记密码」(与记住我同一行贴右端)与「验证码登录」(主按钮下方描边次要按钮,
+  复用本页已填的手机号,不另开一页)——**这两个入口设计稿都没有**。
+- 未配渠道时(50021)注册流程**直接跳过验证码页**去推荐码页,与后端「渠道启用才强制」对齐;
+  不这么处理的话,未配渠道的站点会彻底注册不了。
+- i18n 三份各补 8 键(共 **862** 键,脚本比对 missing / extra 均为空)。缅甸语仍是机器翻译。
+
+**验证**
+
+- 门禁:后端 **348 文件 `php -l` 零错**、shared **91 用例 / 945 断言**(原 58 用例,新增 33)、
+  admin-web build、client-app `typecheck` + `expo export -p web`(已确认 4 个新接口进包,dist 已删)。
+  本机 php 只有 7.2(认不了 8.x 语法),故 lint 与单测**在容器里跑**:
+  `docker run --rm --entrypoint sh -v "C:/Codes/Mtrip/backend:/src:ro" mtrip-user-service:latest -c '...'`。
+- **单测基建改动**:Redis / Db / ConfigInterface 三个桩从各用例文件**移到 `tests/bootstrap.php`**
+  统一定义(run.php 按文件名 glob 加载,谁先定义取决于字母序,加新方法就得猜顺序);
+  Redis 桩补 `setex/incr/expire/exists` 与 TTL 记录,Db 桩补 `connection()` 与 `transaction()`。
+- **真实打到服务商验证过**:用假凭证发码,`sys_sms_log.fail_reason` 落到的是 SMSPoh 原文
+  `Your request was made with invalid credentials.` —— 证明容器出网、TLS、URL 构造、
+  响应解析、错误映射整条链路是通的(**未验的只有「凭真实凭证发出并收到短信」**,需真实账号)。
+- 接口冒烟逐条命中:未配渠道发码 `50021`、非法 scene `40001`、未配渠道注册照旧放行;
+  配上渠道后注册不带票据 `40111`、已注册号码发注册码 `40901`、未注册号码发登录码 `40401`;
+  **发码失败不落冷却**(不然用户会被"发送过于频繁"锁 60 秒而实际一条都没发出去)。
+- **票据与事务的端到端实测**:票据手机号不匹配 → `40111` 且票据被立即作废;
+  推荐码填错 → `40001` + **建账号数为 0(事务已回滚)** + **票据保留**;
+  同一票据改对推荐码重试 → 注册成功且票据随即作废。
+- 冒烟数据已逐表清理复核:`user_info` 只剩用户自己的 id=1,`sys_sms_log` / `sys_sms_channel` 均 0 条,
+  Redis `mtrip:otp:*` 无残留。`./mtrip.sh health` 8 个 healthz + 网关 + 5 个孪生全绿。
+- **未做 / 遗留**:
+  1. **没有真实 SMSPoh 凭证,真发一条短信的链路未跑通**。上线前需:在 v3.smspoh.com 申请 V3 凭证 →
+     后台「配置 → 短信配置」建 smspoh 渠道(API Key / API Secret / Sender ID 三项必填)→
+     走一遍注册,确认能收到码且验码通过。
+  2. **浏览器/真机走查没做**(本会话无浏览器工具),需本地走一遍
+     「注册 → 收码 → 填码 → 推荐码 → 登录页忘记密码 → 重置 → 验证码登录」。
+  3. 后台**「发送测试短信」按钮仍是 comingSoon**(原本就是),接了 SMSPoh 后这个按钮值得做,本次未越界。
+  4. 区号仍固定 +95,`normalizeMobile` 只去分隔符、不改写国家码(SMSPoh 三种写法都收)。
+- 未执行任何 Git 操作。
+
 ### ★ 2026-09-07(订房 Step 3 结账选券,Figma `228:5118`,9月计划第 2 周 C-M6 的 App 部分)
 
 **范围**:复核步(Step 3)的 Price Breakdown 自动应用最优券 + 弹窗更换/移除/恢复最优券。
