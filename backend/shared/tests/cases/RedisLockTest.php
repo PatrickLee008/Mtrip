@@ -10,51 +10,7 @@ use Mtrip\Shared\Constants\ErrorCode;
 use Mtrip\Shared\Exception\BusinessException;
 use Mtrip\Shared\Support\RedisLock;
 
-// ---------- Hyperf Redis 桩(无 vendor 环境,数组模拟 set nx/get/del/eval) ----------
-if (! class_exists(Hyperf\Redis\Redis::class)) {
-    eval(<<<'PHP'
-    namespace Hyperf\Redis;
-
-    class Redis
-    {
-        public array $store = [];
-
-        public function set(string $key, string $value, array $options = []): bool
-        {
-            if (in_array('nx', $options, true) && array_key_exists($key, $this->store)) {
-                return false;
-            }
-            $this->store[$key] = $value;
-            return true;
-        }
-
-        public function get(string $key): string|false
-        {
-            return $this->store[$key] ?? false;
-        }
-
-        public function del(string $key): int
-        {
-            if (array_key_exists($key, $this->store)) {
-                unset($this->store[$key]);
-                return 1;
-            }
-            return 0;
-        }
-
-        /** 模拟"令牌一致才删除"的 Lua 原子释放脚本 */
-        public function eval(string $script, array $args = [], int $numKeys = 0): int
-        {
-            [$key, $token] = [$args[0], $args[1]];
-            if (($this->store[$key] ?? null) === $token) {
-                unset($this->store[$key]);
-                return 1;
-            }
-            return 0;
-        }
-    }
-    PHP);
-}
+// Hyperf\Redis\Redis 桩在 tests/bootstrap.php 统一定义(多个用例共用,避免依赖文件加载顺序)
 
 MiniTest::add('RedisLock:抢锁互斥,释放后可重新获取', static function (): void {
     $lock = new RedisLock(new Hyperf\Redis\Redis());

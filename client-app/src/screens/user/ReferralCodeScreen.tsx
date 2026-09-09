@@ -12,8 +12,10 @@
  * 而设计稿把推荐码排在注册表单与验证码之后,所以前两页只收集、不落库,
  * `draft` 一路透传到这里,Continue(带推荐码)与 Skip(不带)分别提交。
  *
- * 推荐码是**真的会上送**的(与短信不同,后端 `UserAuthService::setupReferral` 有这条链路):
+ * 推荐码是**真的会上送**的(后端 `UserAuthService::setupReferral` 有这条链路):
  * 填错会被后端判「推荐码无效」而注册失败,不填则只生成自己的推荐码。
+ * 后端已把「建号 + 绑推荐人」包进同一事务,填错推荐码不会留下半个账号;
+ * 短信票据也要等注册成功才作废,所以改完推荐码可以直接重试,不用再等一条短信。
  */
 
 import React, { useState } from 'react';
@@ -34,7 +36,7 @@ import { setGdprConsent } from '@/utils/gdpr';
 export default function ReferralCodeScreen() {
   const { t } = useTranslation();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  const { draft } = useRoute<RouteProp<RootStackParamList, 'ReferralCode'>>().params;
+  const { draft, verifyToken } = useRoute<RouteProp<RootStackParamList, 'ReferralCode'>>().params;
   const register = useUserStore((s) => s.register);
   const showToast = useCommonStore((s) => s.showToast);
   const setGdprAccepted = useCommonStore((s) => s.setGdprAccepted);
@@ -52,6 +54,8 @@ export default function ReferralCodeScreen() {
       await register(draft.mobile, draft.password, {
         email: draft.email || undefined,
         referralCode: referralCode || undefined,
+        // 短信验证票据(站点没配渠道时为空,后端此时也不强制)
+        verifyToken,
       });
       // 注册表单已勾选条款,即视为同意隐私政策(GDPR 授权落地)
       await setGdprConsent(true);

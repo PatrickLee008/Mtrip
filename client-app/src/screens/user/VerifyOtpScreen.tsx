@@ -9,14 +9,22 @@
  *   标题     Inter SemiBold 24/32 `--text`;说明 Inter Regular 16/24 #747686(第二句加粗)
  *   分格框   高 56,圆角 12,白底 1px #C4C5D7 描边,六格等分 gap 8;数字 Inter Medium 20 主色居中
  *   表单     三段(分格 / 倒计时 / CTA)gap 32;倒计时 Inter Bold 16/24 #204DDA,重发按钮 pt8 且 50% 透明
- *   CTA      主色 py16 圆角 12,Outfit 400 16/28;未填满 6 位时整体 50% 透明(设计稿即禁用态)
+ *   CTA      主色 py16 圆角 12,Outfit 400 16/28;未填满时整体 50% 透明(设计稿即禁用态)
  *
- * ⚠ **短信通道还没接**:后端没有发码/验码接口,所以本页是「走过场」——
- * 进页面就把演示码 `123456` 填好,Continue 只校验「填满 6 位」,填什么都通过,重发只是把倒计时归零。
- * 接入真实短信后,改动集中在三处:进页面不再预填、`resend` 调发码接口、`submit` 先调验码接口。
+ * **短信通道走 SMSPoh Verify API V3**(后端 `/app/auth/sms/{send,verify}`)。
+ * 三个场景共用本页,由路由参数 `scene` 区分:
+ *   register → 验证通过后带 `verifyToken` 去推荐码页,由那一页统一提交注册
+ *   login    → 验证通过即免密登录(`userStore.loginBySms`)
+ *   reset    → 验证通过后去重置密码页
  *
- * 注册接口是**一次性收单**(手机号 + 密码 + 推荐码),而设计稿把推荐码排在本页之后,
- * 因此这里**不落库**,只把 `draft` 透传给推荐码页,由那一页统一提交(见 `ReferralCodeScreen`)。
+ * **本页不负责首次发码** —— 进来之前上一屏(注册页 / 忘记密码页 / 登录页的验证码入口)
+ * 已经发过一条,这里挂载时再发一次就会连发两条、白烧一条短信,也会把重发冷却直接触发。
+ * 所以倒计时按上一屏返回的 `resendAfter` 起跳,只有点「Resend OTP」才真的再发。
+ *
+ * 对设计稿的两处偏离(设计稿只画了注册场景的静态页):
+ *   1. 格子数量改为按后端下发的 `pinLength` 渲染(后台可配 4~8,默认 6 与设计稿一致)——
+ *      写死 6 格而后台配了 4 位的话,用户永远填不满、Continue 永远点不亮。
+ *   2. 「更换手机号」在 login/reset 场景同样是返回上一屏,文案未按场景改写(设计稿没有对应稿)。
  */
 
 import React, { useEffect, useRef, useState } from 'react';
@@ -33,19 +41,22 @@ import { useNavigation, useRoute, type RouteProp } from '@react-navigation/nativ
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTranslation } from 'react-i18next';
 
+import { ApiError } from '@/api/request';
+import { API_CODE } from '@/api/types';
+import { apiSmsSend, apiSmsVerify } from '@/api/user';
 import AuthShell from '@/components/user/AuthShell';
 import { colors, radius, shadows } from '@/config/theme';
 import { fonts } from '@/config/typography';
 import type { RootStackParamList } from '@/navigation/types';
 import { useCommonStore } from '@/store/commonStore';
+import { useUserStore } from '@/store/userStore';
 
 /** 设计稿固定展示 +95(缅甸),区号选择未实现 */
 const COUNTRY_CODE = '+95';
-const CODE_LENGTH = 6;
-/** 短信未接通期间的演示验证码(进页面即预填) */
-const MOCK_CODE = '123456';
-/** 设计稿倒计时从 02:00 起跳(截图上是走了 1 秒的 01:59) */
-const RESEND_SECONDS = 120;
+/** 设计稿是 6 格;后台可配 4~8,实际以发码接口返回的 pinLength 为准 */
+const DEFAULT_CODE_LENGTH = 6;
+/** 后端 SmsVerifyService 的重发冷却也是 60 秒,两边保持一致 */
+const DEFAULT_RESEND_SECONDS = 60;
 
 /** 手机号打码:留首位与末两位,中间填星,与设计稿 `9*******56` 一致 */
 function maskMobile(mobile: string): string {
@@ -64,11 +75,17 @@ function formatCountdown(seconds: number): string {
 export default function VerifyOtpScreen() {
   const { t } = useTranslation();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  const { draft } = useRoute<RouteProp<RootStackParamList, 'VerifyOtp'>>().params;
+  const params = useRoute<RouteProp<RootStackParamList, 'VerifyOtp'>>().params;
+  const { scene, mobile, draft, maskedMobile } = params;
   const showToast = useCommonStore((s) => s.showToast);
+  const loginBySms = useUserStore((s) => s.loginBySms);
 
-  const [digits, setDigits] = useState<string[]>(() => MOCK_CODE.split('').slice(0, CODE_LENGTH));
-  const [left, setLeft] = useState(RESEND_SECONDS);
+  const [codeLength, setCodeLength] = useState(params.pinLength ?? DEFAULT_CODE_LENGTH);
+  const [digits, setDigits] = useState<string[]>(() =>
+    Array.from({ length: params.pinLength ?? DEFAULT_CODE_LENGTH }, () => ''),
+  );
+  const [left, setLeft] = useState(params.resendAfter ?? DEFAULT_RESEND_SECONDS);
+  const [submitting, setSubmitting] = useState(false);
   const inputs = useRef<Array<TextInput | null>>([]);
 
   /* 倒计时:每秒减 1,到 0 停住并放开重发。依赖只取「是否还在走」,避免每秒重建定时器 */
@@ -80,7 +97,7 @@ export default function VerifyOtpScreen() {
   }, [counting]);
 
   const code = digits.join('');
-  const canSubmit = code.length === CODE_LENGTH;
+  const canSubmit = code.length === codeLength && !submitting;
 
   /** 单格输入:只收数字;粘贴整串时按位铺开并把焦点移到最后一格 */
   const onChangeDigit = (index: number, text: string) => {
@@ -99,12 +116,12 @@ export default function VerifyOtpScreen() {
     }
     setDigits((prev) => {
       const next = [...prev];
-      for (let i = 0; i < nums.length && index + i < CODE_LENGTH; i += 1) {
+      for (let i = 0; i < nums.length && index + i < codeLength; i += 1) {
         next[index + i] = nums[i];
       }
       return next;
     });
-    const nextIndex = Math.min(index + nums.length, CODE_LENGTH - 1);
+    const nextIndex = Math.min(index + nums.length, codeLength - 1);
     inputs.current[nextIndex]?.focus();
   };
 
@@ -115,21 +132,69 @@ export default function VerifyOtpScreen() {
     inputs.current[index - 1]?.focus();
   };
 
-  const resend = () => {
-    if (left > 0) return;
-    // 短信未接通:只把倒计时归零重来,并把演示码填回去
-    setDigits(MOCK_CODE.split('').slice(0, CODE_LENGTH));
-    setLeft(RESEND_SECONDS);
-    showToast(t('user.otp.resent'));
+  const resend = async () => {
+    if (left > 0 || submitting) return;
+    setSubmitting(true);
+    try {
+      const result = await apiSmsSend({ mobile, scene });
+      // 后端可能改过配置,重发时按最新的位数重置格子
+      setCodeLength(result.pinLength);
+      setDigits(Array.from({ length: result.pinLength }, () => ''));
+      setLeft(result.resendAfter);
+      inputs.current[0]?.focus();
+      showToast(t('user.otp.resent'));
+    } catch (e) {
+      // 限流(42911)时后端已给出具体文案,request 层已 Toast,这里不再重复弹
+      if (!(e instanceof ApiError)) {
+        showToast(e instanceof Error ? e.message : 'Error');
+      }
+    } finally {
+      setSubmitting(false);
+    }
   };
 
-  const submit = () => {
-    if (!canSubmit) {
+  /** 验证通过后按场景分流 */
+  const dispatchByScene = async (verifyToken: string) => {
+    if (scene === 'register') {
+      if (!draft) {
+        // 正常流程不会发生(注册场景一定带 draft),兜底回注册表单重来
+        showToast(t('user.otp.invalid'));
+        navigation.navigate('Register');
+        return;
+      }
+      navigation.navigate('ReferralCode', { draft, verifyToken });
+      return;
+    }
+    if (scene === 'login') {
+      await loginBySms(mobile, verifyToken);
+      showToast(t('common.success'));
+      // 验证码登录由登录页 push 而来,完成后回到栈底
+      navigation.popToTop();
+      return;
+    }
+    navigation.navigate('ResetPassword', { mobile, verifyToken });
+  };
+
+  const submit = async () => {
+    if (code.length !== codeLength) {
       showToast(t('user.otp.invalid'));
       return;
     }
-    // 没有验码接口,填满即放行;推荐码页才真正提交注册
-    navigation.navigate('ReferralCode', { draft });
+    setSubmitting(true);
+    try {
+      const { verifyToken } = await apiSmsVerify({ mobile, scene, code });
+      await dispatchByScene(verifyToken);
+    } catch (e) {
+      // 码错/码过期都清空重填;request 层已按后端文案 Toast 过
+      if (e instanceof ApiError && (e.code === API_CODE.SMS_CODE_INVALID || e.code === API_CODE.SMS_CODE_EXPIRED)) {
+        setDigits(Array.from({ length: codeLength }, () => ''));
+        inputs.current[0]?.focus();
+      } else if (!(e instanceof ApiError)) {
+        showToast(e instanceof Error ? e.message : 'Error');
+      }
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -143,7 +208,7 @@ export default function VerifyOtpScreen() {
           <Text style={styles.title}>{t('user.otp.title')}</Text>
           <Text style={styles.desc}>
             {t('user.otp.sentTo')}
-            <Text style={styles.descStrong}>{maskMobile(draft.mobile)}</Text>
+            <Text style={styles.descStrong}>{maskedMobile ?? maskMobile(mobile)}</Text>
             {'. '}
             <Text style={styles.descStrong}>{t('user.otp.enterBelow')}</Text>
           </Text>
@@ -162,8 +227,8 @@ export default function VerifyOtpScreen() {
                 onChangeText={(text) => onChangeDigit(index, text)}
                 onKeyPress={(e) => onKeyPress(index, e)}
                 keyboardType="number-pad"
-                /* 粘贴 6 位整串时 maxLength=1 会被截断,故留出整串长度由 onChangeDigit 自己铺开 */
-                maxLength={CODE_LENGTH}
+                /* 粘贴整串时 maxLength=1 会被截断,故留出整串长度由 onChangeDigit 自己铺开 */
+                maxLength={codeLength}
                 selectTextOnFocus
                 textAlign="center"
                 accessibilityLabel={`${t('user.otp.title')} ${index + 1}`}
@@ -176,11 +241,11 @@ export default function VerifyOtpScreen() {
             <Pressable
               style={({ pressed }) => [
                 styles.resendBtn,
-                left > 0 && styles.resendDisabled,
+                (left > 0 || submitting) && styles.resendDisabled,
                 pressed && left === 0 && styles.pressed,
               ]}
-              disabled={left > 0}
-              onPress={resend}
+              disabled={left > 0 || submitting}
+              onPress={() => void resend()}
               hitSlop={8}
             >
               <Text style={styles.resendText}>{t('user.otp.resend')}</Text>
@@ -194,7 +259,7 @@ export default function VerifyOtpScreen() {
               pressed && canSubmit && styles.pressed,
             ]}
             disabled={!canSubmit}
-            onPress={submit}
+            onPress={() => void submit()}
           >
             <Text style={styles.ctaText}>{t('user.otp.continue')}</Text>
           </Pressable>

@@ -2,9 +2,66 @@
  * 用户接口(user-service /api/v1/app/auth|user/*)
  */
 
-import { get, post, postEncrypted } from '@/api/request';
+import { get, post, postEncrypted, type RequestOptions } from '@/api/request';
 import type { PageData, PageParams } from '@/api/types';
 import type { AuthResult, FavoriteItem, TravelerItem, UserProfile } from '@/types/models';
+
+/** 短信验证码场景(对齐后端 SmsVerifyService::SCENES) */
+export type SmsScene = 'register' | 'login' | 'reset';
+
+export interface SmsSendResult {
+  /** 验证码有效期(秒) */
+  expiresIn: number;
+  /** 重发冷却(秒),验证码页的倒计时按它起跳 */
+  resendAfter: number;
+  /** 验证码位数(后台可配 4~8,默认 6);验证码页按它决定画几个格 */
+  pinLength: number;
+  /** 后端脱敏后的目标号码,用于「已发送到 097****56」的展示 */
+  mobile: string;
+}
+
+export interface SmsVerifyResult {
+  /** 一次性票据,交给 register / login-by-sms / reset-password 兑换 */
+  verifyToken: string;
+  expiresIn: number;
+}
+
+/**
+ * 发送短信验证码(SMSPoh Verify API V3)
+ *
+ * 站点未配置短信渠道时返回 `SMS_CHANNEL_UNAVAILABLE`(50021)——
+ * 注册流程据此跳过验证码步骤,与后端「渠道启用才强制」的口径一致。
+ */
+export function apiSmsSend(
+  params: { mobile: string; scene: SmsScene },
+  options?: RequestOptions,
+): Promise<SmsSendResult> {
+  return post<SmsSendResult>('/api/v1/app/auth/sms/send', params, options);
+}
+
+/** 校验短信验证码,换取一次性 verifyToken */
+export function apiSmsVerify(params: {
+  mobile: string;
+  scene: SmsScene;
+  code: string;
+}): Promise<SmsVerifyResult> {
+  return post<SmsVerifyResult>('/api/v1/app/auth/sms/verify', params);
+}
+
+/** 短信验证码登录(免密):凭 scene=login 的 verifyToken 换 Token */
+export function apiLoginBySms(params: { mobile: string; verifyToken: string }): Promise<AuthResult> {
+  return post<AuthResult>('/api/v1/app/auth/login-by-sms', params);
+}
+
+/** 忘记密码:凭 scene=reset 的 verifyToken 重置密码(后端不自动登录) */
+export function apiResetPassword(params: {
+  mobile: string;
+  password: string;
+  verifyToken: string;
+}): Promise<null> {
+  // 带明文新密码,与注册/登录同级:请求体 AES 加密传输
+  return postEncrypted<null>('/api/v1/app/auth/reset-password', params);
+}
 
 export function apiRegister(params: {
   mobile: string;
@@ -21,6 +78,11 @@ export function apiRegister(params: {
    * 后端 `UserAuthService::setupReferral` 会据此写 `user_referral`;**填错会直接注册失败**(推荐码无效)
    */
   referralCode?: string;
+  /**
+   * 短信验证票据(`apiSmsVerify` 返回)。
+   * 站点配了启用中的短信渠道时**必填**,否则后端返回 40111;未配渠道时可省略。
+   */
+  verifyToken?: string;
 }): Promise<AuthResult> {
   // 敏感接口:请求体 AES 加密传输
   return postEncrypted<AuthResult>('/api/v1/app/auth/register', params);

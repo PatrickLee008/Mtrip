@@ -11,34 +11,7 @@ use Mtrip\Shared\Constants\ErrorCode;
 use Mtrip\Shared\Exception\BusinessException;
 use Mtrip\Shared\Support\RedisLock;
 
-// ---------- Hyperf ConfigInterface 桩(无 vendor 环境) ----------
-if (! interface_exists(Hyperf\Contract\ConfigInterface::class)) {
-    eval(<<<'PHP'
-    namespace Hyperf\Contract;
-
-    interface ConfigInterface
-    {
-    }
-    PHP);
-}
-
-// ---------- Hyperf Db 静态门面桩(按表名路由到测试注入的查询构造器) ----------
-if (! class_exists(Hyperf\DbConnection\Db::class)) {
-    eval(<<<'PHP'
-    namespace Hyperf\DbConnection;
-
-    class Db
-    {
-        /** @var callable|null 测试注入:fn(string $table): object */
-        public static $tableResolver = null;
-
-        public static function table(string $table): object
-        {
-            return (self::$tableResolver)($table);
-        }
-    }
-    PHP);
-}
+// Hyperf\Contract\ConfigInterface 与 Hyperf\DbConnection\Db 的桩在 tests/bootstrap.php 统一定义
 
 // UserAuthService 位于 user-service,不在 shared 自动加载前缀内,直接引入源文件
 require_once __DIR__ . '/../../../services/user-service/app/Service/UserAuthService.php';

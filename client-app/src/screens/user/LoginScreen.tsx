@@ -17,19 +17,28 @@
  *
  * 未实现的能力(设计稿有、后端没有),一律走 comingSoon:
  *   区号选择(固定 +95)、三方登录
+ *
+ * **设计稿之外新增的两个入口**(接入 SMSPoh 短信验证后才有的能力,Onboarding 四张稿都没画):
+ *   「忘记密码」—— 与记住我同一行贴右端,去 `ForgotPassword`
+ *   「验证码登录」—— 主登录按钮下方的描边次要按钮,复用本页已填的手机号发码(scene=login),
+ *                    验证通过后由验证码页直接调 `userStore.loginBySms`,不另开一页填号码
  */
 
 import React, { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTranslation } from 'react-i18next';
 
+import { ApiError } from '@/api/request';
+import { apiSmsSend } from '@/api/user';
 import HomeIcon from '@/components/home/HomeIcon';
 import AuthShell from '@/components/user/AuthShell';
 import SocialIcon, { type SocialProvider } from '@/components/user/SocialIcon';
 import { STORAGE_KEYS } from '@/config/global';
 import { colors, radius } from '@/config/theme';
 import { fonts } from '@/config/typography';
+import type { RootStackParamList } from '@/navigation/types';
 import { useCommonStore } from '@/store/commonStore';
 import { useUserStore } from '@/store/userStore';
 import { storage } from '@/utils/storage';
@@ -41,7 +50,7 @@ const SOCIALS: SocialProvider[] = ['google', 'facebook', 'apple'];
 
 export default function LoginScreen() {
   const { t } = useTranslation();
-  const navigation = useNavigation();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const login = useUserStore((s) => s.login);
   const showToast = useCommonStore((s) => s.showToast);
 
@@ -50,6 +59,7 @@ export default function LoginScreen() {
   const [secure, setSecure] = useState(true);
   const [remember, setRemember] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [sendingCode, setSendingCode] = useState(false);
 
   /* 进页面回填上次「记住我」保存的手机号,并把勾选框恢复成勾上 */
   useEffect(() => {
@@ -93,6 +103,33 @@ export default function LoginScreen() {
       showToast(e instanceof Error ? e.message : 'Error');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  /** 验证码登录:复用本页已填的手机号发码(scene=login),验证通过后由验证码页直接登录 */
+  const loginWithCode = async () => {
+    if (!isMobile(mobile)) {
+      showToast(t('user.invalidMobile'));
+      return;
+    }
+    const target = mobile.trim();
+    setSendingCode(true);
+    try {
+      const sent = await apiSmsSend({ mobile: target, scene: 'login' });
+      navigation.navigate('VerifyOtp', {
+        scene: 'login',
+        mobile: target,
+        resendAfter: sent.resendAfter,
+        pinLength: sent.pinLength,
+        maskedMobile: sent.mobile,
+      });
+    } catch (e) {
+      // 未注册 / 限流 / 未配渠道,request 层已按后端文案 Toast;密码登录仍可用,停在本页即可
+      if (!(e instanceof ApiError)) {
+        showToast(e instanceof Error ? e.message : 'Error');
+      }
+    } finally {
+      setSendingCode(false);
     }
   };
 
@@ -147,19 +184,30 @@ export default function LoginScreen() {
           </View>
         </View>
 
-        <Pressable
-          style={({ pressed }) => [styles.rememberRow, pressed && styles.pressed]}
-          onPress={() => setRemember((v) => !v)}
-          hitSlop={6}
-        >
-          {/* 选中态换成实心方块的 checkboxIndeterminate,与酒店页 Myanmar Citizen 一致 */}
-          <HomeIcon
-            name={remember ? 'checkboxIndeterminate' : 'checkbox'}
-            size={20}
-            color={remember ? colors.primary : colors.softBlue}
-          />
-          <Text style={styles.rememberText}>{t('user.rememberMe')}</Text>
-        </Pressable>
+        {/* 设计稿这一行只有「记住我」;忘记密码是本次接短信验证后新增的入口,贴右端不挤原有元素 */}
+        <View style={styles.optionsRow}>
+          <Pressable
+            style={({ pressed }) => [styles.rememberRow, pressed && styles.pressed]}
+            onPress={() => setRemember((v) => !v)}
+            hitSlop={6}
+          >
+            {/* 选中态换成实心方块的 checkboxIndeterminate,与酒店页 Myanmar Citizen 一致 */}
+            <HomeIcon
+              name={remember ? 'checkboxIndeterminate' : 'checkbox'}
+              size={20}
+              color={remember ? colors.primary : colors.softBlue}
+            />
+            <Text style={styles.rememberText}>{t('user.rememberMe')}</Text>
+          </Pressable>
+
+          <Pressable
+            style={({ pressed }) => pressed && styles.pressed}
+            onPress={() => navigation.navigate('ForgotPassword')}
+            hitSlop={8}
+          >
+            <Text style={styles.linkText}>{t('user.forgot.entry')}</Text>
+          </Pressable>
+        </View>
 
         <Pressable
           style={({ pressed }) => [
@@ -171,6 +219,16 @@ export default function LoginScreen() {
           onPress={() => void submit()}
         >
           <Text style={styles.loginText}>{t('user.login')}</Text>
+        </Pressable>
+
+        {/* 验证码登录:同样是设计稿之外的新增入口,复用上面已填的手机号,不再单独开一页 */}
+        <Pressable
+          style={({ pressed }) => [styles.smsLoginBtn, sendingCode && styles.loginBtnDisabled, pressed && styles.pressed]}
+          disabled={sendingCode}
+          onPress={() => void loginWithCode()}
+          hitSlop={6}
+        >
+          <Text style={styles.smsLoginText}>{t('user.smsLogin.entry')}</Text>
         </Pressable>
 
         <View style={styles.dividerRow}>
@@ -229,8 +287,28 @@ const styles = StyleSheet.create({
   /* minWidth 0 同酒店页搜索框:web 端 <input> 的 min-width:auto 会撑破字段,把右侧眼睛图标挤出去 */
   input: { flex: 1, minWidth: 0, fontFamily: fonts.inter, fontSize: 16, color: colors.heading },
 
+  optionsRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
   rememberRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   rememberText: { fontFamily: fonts.inter, fontSize: 16, lineHeight: 24, color: colors.muted },
+  linkText: { fontFamily: fonts.inter, fontSize: 14, lineHeight: 20, color: '#204DDA' },
+
+  /* 验证码登录:主色描边的次要按钮,与推荐码页的 Skip 同款,避免与主登录按钮抢焦点 */
+  smsLoginBtn: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 15,
+    borderRadius: radius.btn,
+    borderWidth: 1,
+    borderColor: colors.primary,
+  },
+  smsLoginText: {
+    fontFamily: fonts.interMedium,
+    fontSize: 14,
+    lineHeight: 20,
+    letterSpacing: 0.14,
+    color: '#204DDA',
+    textAlign: 'center',
+  },
 
   loginBtn: {
     alignItems: 'center',

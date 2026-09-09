@@ -9,6 +9,11 @@
  * 而后端注册接口一次性收手机号 + 密码 + 推荐码,故这里只校验并把 `SignupDraft` 交给
  * `VerifyOtp`,由 `ReferralCode` 页统一提交(见 `screens/user/ReferralCodeScreen.tsx`)。
  *
+ * **短信验证码在本页发出**(`/app/auth/sms/send`,scene=register),验证码页只负责填码与重发:
+ * 「该手机号已注册」这类失败必须在还能改号码的这一屏说清楚。
+ * 站点没配短信渠道时(后端返回 50021)直接跳过验证码页去推荐码页 ——
+ * 后端此时同样不强制 verifyToken,两边口径一致。
+ *
  * 与设计稿的两处有意偏差:
  *   1. CTA 文案设计稿写的是「Login」(注册页上显然是笔误),这里用 user.register「Sign up」
  *   2. 设计稿没有昵称栏,故删掉原昵称输入;后端 nickname 为空时会自动取「User+手机后四位」
@@ -26,6 +31,9 @@ import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTranslation } from 'react-i18next';
 
+import { ApiError } from '@/api/request';
+import { API_CODE } from '@/api/types';
+import { apiSmsSend } from '@/api/user';
 import HomeIcon from '@/components/home/HomeIcon';
 import AuthShell from '@/components/user/AuthShell';
 import SocialIcon, { type SocialProvider } from '@/components/user/SocialIcon';
@@ -51,14 +59,15 @@ export default function RegisterScreen() {
   const [securePwd, setSecurePwd] = useState(true);
   const [secureConfirm, setSecureConfirm] = useState(true);
   const [agreed, setAgreed] = useState(false);
+  const [sending, setSending] = useState(false);
 
   /* 设计稿的 CTA 是 50% 透明的禁用态,对应必填项没填完或未勾选条款 */
   const canSubmit =
-    mobile.trim().length > 0 && password.length > 0 && confirm.length > 0 && agreed;
+    mobile.trim().length > 0 && password.length > 0 && confirm.length > 0 && agreed && !sending;
 
   const comingSoon = () => showToast(t('home.comingSoon'));
 
-  const submit = () => {
+  const submit = async () => {
     if (!isMobile(mobile)) {
       showToast(t('user.invalidMobile'));
       return;
@@ -79,10 +88,43 @@ export default function RegisterScreen() {
       showToast(t('user.agreeRequired'));
       return;
     }
-    // 校验通过即进入短信验证码页;真正的注册请求在推荐码页发出
-    navigation.navigate('VerifyOtp', {
-      draft: { mobile: mobile.trim(), password, email: email.trim() || undefined },
-    });
+
+    const draft = { mobile: mobile.trim(), password, email: email.trim() || undefined };
+    setSending(true);
+    try {
+      // 发码放在本页而不是验证码页:号码已被占用之类的失败要在这里就说清楚,
+      // 而不是把用户送进验证码页再弹错(那一页没有改号码的输入框)
+      // 50021 是本页预期内的分支(下面直接跳过验证码页),不让 request 层再弹一句
+      // 「短信服务未配置」——那会让用户以为注册失败了
+      const sent = await apiSmsSend(
+        { mobile: draft.mobile, scene: 'register' },
+        { silentCodes: [API_CODE.SMS_CHANNEL_UNAVAILABLE] },
+      );
+      navigation.navigate('VerifyOtp', {
+        scene: 'register',
+        mobile: draft.mobile,
+        draft,
+        resendAfter: sent.resendAfter,
+        pinLength: sent.pinLength,
+        maskedMobile: sent.mobile,
+      });
+    } catch (e) {
+      /*
+       * 本站点没配短信渠道 → 整条验证码链路不可用,直接跳过这一步。
+       * 后端此时同样不会强制 verifyToken(见 AuthController::register 的「渠道启用即强制」),
+       * 两边口径一致;不这么处理的话,未配渠道的站点会彻底注册不了。
+       */
+      if (e instanceof ApiError && e.code === API_CODE.SMS_CHANNEL_UNAVAILABLE) {
+        navigation.navigate('ReferralCode', { draft });
+        return;
+      }
+      // 其余失败(号码已注册 / 限流 / 服务商故障)request 层已按后端文案 Toast
+      if (!(e instanceof ApiError)) {
+        showToast(e instanceof Error ? e.message : 'Error');
+      }
+    } finally {
+      setSending(false);
+    }
   };
 
   return (
@@ -200,7 +242,7 @@ export default function RegisterScreen() {
             pressed && canSubmit && styles.pressed,
           ]}
           disabled={!canSubmit}
-          onPress={submit}
+          onPress={() => void submit()}
         >
           <Text style={styles.submitText}>{t('user.register')}</Text>
         </Pressable>

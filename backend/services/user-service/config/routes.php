@@ -32,6 +32,11 @@ Router::get('/healthz', static fn () => ['status' => 'ok', 'service' => 'user-se
 // 公开接口(游客可用,须携带 X-Site-Id)
 Router::post('/api/v1/app/auth/register', [AuthController::class, 'register']);
 Router::post('/api/v1/app/auth/login', [AuthController::class, 'login']);
+// 短信验证码(SMSPoh Verify API V3):三场景共用发码/验码,验码换一次性 verifyToken
+Router::post('/api/v1/app/auth/sms/send', [AuthController::class, 'smsSend']);
+Router::post('/api/v1/app/auth/sms/verify', [AuthController::class, 'smsVerify']);
+Router::post('/api/v1/app/auth/login-by-sms', [AuthController::class, 'loginBySms']);
+Router::post('/api/v1/app/auth/reset-password', [AuthController::class, 'resetPassword']);
 
 // 登录态接口
 Router::addGroup('/api/v1/app', static function () {

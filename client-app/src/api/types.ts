@@ -40,4 +40,12 @@ export const API_CODE = {
   PROMO_CODE_EXHAUSTED: 40912,
   PROMO_CODE_DUPLICATED: 40913,
   PROMO_CODE_INELIGIBLE: 40914,
+  /* 短信验证码(SMSPoh):验证码页要区分「码错了(留在本页重填)」与
+     「码过期了(引导重新发码)」;SMS_CHANNEL_UNAVAILABLE 表示本站点没配短信渠道,
+     注册流程据此跳过验证码这一步(后端同样不会强制),否则未配渠道时根本注册不了 */
+  SMS_CODE_INVALID: 40021,
+  SMS_CODE_EXPIRED: 40022,
+  SMS_VERIFY_REQUIRED: 40111,
+  SMS_SEND_TOO_FREQUENT: 42911,
+  SMS_CHANNEL_UNAVAILABLE: 50021,
 } as const;

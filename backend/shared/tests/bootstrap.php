@@ -57,6 +57,147 @@ if (! class_exists(Hyperf\Context\Context::class)) {
     PHP);
 }
 
+// ---------- Hyperf ConfigInterface 桩 ----------
+if (! interface_exists(Hyperf\Contract\ConfigInterface::class)) {
+    eval(<<<'PHP'
+    namespace Hyperf\Contract;
+
+    interface ConfigInterface
+    {
+    }
+    PHP);
+}
+
+// ---------- Hyperf Redis 桩(数组模拟:set nx / get / del / eval / setex / incr / expire / exists) ----------
+/*
+ * 放在 bootstrap 而不是某个用例文件里:多个用例都要用它,
+ * 而 run.php 是按文件名 glob 加载的 —— 谁先定义取决于字母序,
+ * 一旦某个用例需要新方法就得去猜加载顺序。集中在这里就没有这个坑。
+ * TTL 只记不判(单测不等待真实过期),需要"已过期"场景时直接 del。
+ */
+if (! class_exists(Hyperf\Redis\Redis::class)) {
+    eval(<<<'PHP'
+    namespace Hyperf\Redis;
+
+    class Redis
+    {
+        public array $store = [];
+
+        /** @var array<string, int> 记录各键设置过的 TTL,供断言"是否按预期时长过期" */
+        public array $ttl = [];
+
+        public function set(string $key, string $value, array $options = []): bool
+        {
+            if (in_array('nx', $options, true) && array_key_exists($key, $this->store)) {
+                return false;
+            }
+            $this->store[$key] = $value;
+            return true;
+        }
+
+        public function setex(string $key, int $seconds, string $value): bool
+        {
+            $this->store[$key] = $value;
+            $this->ttl[$key] = $seconds;
+            return true;
+        }
+
+        public function get(string $key): string|false
+        {
+            return $this->store[$key] ?? false;
+        }
+
+        public function exists(string $key): int
+        {
+            return array_key_exists($key, $this->store) ? 1 : 0;
+        }
+
+        public function incr(string $key): int
+        {
+            $next = (int) ($this->store[$key] ?? 0) + 1;
+            $this->store[$key] = (string) $next;
+            return $next;
+        }
+
+        public function expire(string $key, int $seconds): bool
+        {
+            $this->ttl[$key] = $seconds;
+            return true;
+        }
+
+        public function del(string $key): int
+        {
+            if (array_key_exists($key, $this->store)) {
+                unset($this->store[$key], $this->ttl[$key]);
+                return 1;
+            }
+            return 0;
+        }
+
+        /** 模拟"令牌一致才删除"的 Lua 原子释放脚本 */
+        public function eval(string $script, array $args = [], int $numKeys = 0): int
+        {
+            [$key, $token] = [$args[0], $args[1]];
+            if (($this->store[$key] ?? null) === $token) {
+                unset($this->store[$key]);
+                return 1;
+            }
+            return 0;
+        }
+    }
+    PHP);
+}
+
+// ---------- Hyperf Db 静态门面桩(按连接名+表名路由到测试注入的查询构造器) ----------
+/*
+ * `transaction()` 直接执行闭包、不模拟回滚:被测代码关心的是"异常会不会往外抛"
+ * 与"抛了之后后续步骤不再执行",这两点直执行就能覆盖;真正的回滚语义属集成测试范畴。
+ */
+if (! class_exists(Hyperf\DbConnection\Db::class)) {
+    eval(<<<'PHP'
+    namespace Hyperf\DbConnection;
+
+    class Db
+    {
+        /** @var callable|null 测试注入:fn(string $table): object */
+        public static $tableResolver = null;
+
+        /** @var callable|null 测试注入:fn(string $connection, string $table): object;未设置时回落 $tableResolver */
+        public static $connectionResolver = null;
+
+        public static function table(string $table): object
+        {
+            return (self::$tableResolver)($table);
+        }
+
+        public static function connection(string $name): object
+        {
+            return new DbConnectionStub($name);
+        }
+
+        public static function transaction(callable $callback): mixed
+        {
+            return $callback();
+        }
+    }
+
+    class DbConnectionStub
+    {
+        public function __construct(private string $name)
+        {
+        }
+
+        public function table(string $table): object
+        {
+            if (Db::$connectionResolver !== null) {
+                return (Db::$connectionResolver)($this->name, $table);
+            }
+            return (Db::$tableResolver)($table);
+        }
+    }
+    PHP);
+}
+
 // ---------- 迷你断言框架 ----------
 final class MiniTest
 {

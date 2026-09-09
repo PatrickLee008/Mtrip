@@ -88,7 +88,7 @@ cd ../admin-web && npm install && npm run dev    # http://localhost:5173,接口�
 统一执行入口:`powershell -ExecutionPolicy Bypass -File scripts/check.ps1`(按序执行下列四步,任一失败即非零退出):
 
 1. 后端全量 `php -l` 语法检查(backend/,排除 vendor/runtime);
-2. shared 纯逻辑单测 `php backend/shared/tests/run.php`(47 用例,无需 vendor/Swoole);
+2. shared 纯逻辑单测 `php backend/shared/tests/run.php`(95 用例,无需 vendor/Swoole);
 3. admin-web `npm run build`(vue-tsc 零 TS 报错);
 4. client-app `npm run typecheck`。
 
@@ -109,6 +109,8 @@ merchant-app 状态栏规范（2026-09-08）：Figma 画布中的 iPhone 状态�
 client-app「我的精选 / 收藏酒店」接真实收藏（2026-09-03）：接口本来就接着（`/app/user/favorite/list`），问题是**页面不刷新**与**空收藏时用示例卡冒充**。`MyPickScreen` 改用 `useFocusEffect`（它是常驻底部 Tab，`useEffect` 只在挂载时跑，从酒店页收藏完切回来还是旧数据）；登录后一律显示真实收藏，为空给空态文案，设计稿示例卡只留给未登录。`StayCard` 新增可选 `favorite` / `onToggleFavorite`，收藏列表里的心形改为实心可点，点击调 `/app/user/favorite/remove` 取消收藏并就地移除；收藏的酒店点卡改跳设计稿的 `HotelDetail`（与搜索结果页一致，原先一律跳通用 `GoodsDetail`）。`npx tsc --noEmit` 零报错；接口侧以网关日志与 `user_favorite` 表核对，UI 交互未实跑。
 
 本地栈启动方式修正（2026-09-03）：**一律用 `deploy/mtrip.sh`，不要直接敲 `docker compose`**。自「管理端 / APP 端服务分离」起，网关有 5 条 upstream 指向 APP 孪生池（`*-service-app`，定义在 `docker-compose.app-pool.yml`），裸 `docker compose up -d` 只加载 `yml + override` 起不出孪生，nginx 启动期解析不到主机名会 `[emerg]` 退出并被反复拉起——即 `mtrip-gateway-1` 无限重启。`CLAUDE.md` / `deploy/README.md` / `启动开发指南.md` 的命令已全部改写。同批：修 `mtrip.sh health` 的网关探针误报（`MTRIP_CLIENT_SIGN=false` 时预期是 400 不是 401，原先恒定退 1）；补跑漏执行的 `database/merchant/38-merchant-code-sequence.sql`（数据卷建于 2026-08-28，之后新增的脚本不会自动补跑，缺 `merchant_code_sequence` 会让商户编号分配报表不存在）。现 13 个容器全 Up、health 全绿。
+
+App 短信验证接入 SMSPoh Verify API V3（2026-09-08）：C 端**注册 / 验证码登录 / 忘记密码**三个场景全部接上真实短信（此前验证码页是预填 `123456` 的走过场）。链路统一为 `POST /app/auth/sms/send` 发码 → `sms/verify` 验码换**一次性 `verifyToken`**（Redis，10 分钟）→ 由 `register` / `login-by-sms` / `reset-password` 兑换；**验证码本身后端不持有**（SMSPoh 只回 `requestId`，码由服务商校验），票据绑定「站点 + 场景 + 手机号」三者，防止拿自己号码验出的票据去注册别人的号码。**服务商口径易踩的两点**：参数全部走 query string 而非 JSON body；鉴权是 `accessToken=base64(APIKey:APISecret)`，base64 的 `+ / =` 必须转义（`+` 会被解成空格导致凭证失效，已锁单测）。凭证配在 `sys_sms_channel`（新增 `provider_code='smspoh'` 与 `api_secret`/`brand_name`/`pin_length`/`max_invalid_attempts` 四列，迁移 `database/system/11-sms-smspoh.sql`），后台「配置 → 短信配置」可增删改、可分站点。**强制策略是「渠道启用即强制」**：本站点存在启用中的 smspoh 渠道时注册必须带 `verifyToken`（否则 `40111`），没配渠道则照旧放行——本机开发不必申请凭证，生产装上凭证自动生效；App 端同步：发码返回 `50021` 时注册流程直接跳过验证码页，两边口径一致。三道限流：同号同场景 60 秒冷却、同号每日 10 条、同 IP 每小时 20 条。**手机号必须补国家码**：App 把「+95」画成静态标签却从不拼进请求，用户填的 `9971183240` 以 `99` 开头，不属于 SMSPoh 接受的 `09xxxxxxxx / 959xxxxxxx / +959xxxxxx` 三种前缀，故 `sys_sms_channel` 增加可配的 `country_code`（默认 95），**只在出网那一刻**归一成 E.164——库里 `mobile` / `mobile_hash` 仍按用户原样输入存，改存储格式会让存量账号登不进来。同批**修掉 HANDOFF 记了两次的注册遗留隐患**——`UserAuthService::register` 的建号与绑推荐人现已包进 `Db::transaction`，推荐码填错不再留下「注册失败但账号已建」的孤儿账号；票据也改为**注册成功后才作废**，改完推荐码可直接重试而不用再等一条短信（已实测：填错码 → 回滚 0 账号 + 票据保留 → 同票据重试注册成功）。
 
 client-app H5 输入框聚焦黄框修复（2026-09-03）：RN Web 把 `TextInput` 落成真实 `<input>`，浏览器的两套默认外观会盖到设计稿上——`:focus` 的系统 outline（Chromium 蓝，部分国产内核是黄的）与 `-webkit-autofill` 的自动填充底色（老版 Chrome / Edge / 国产浏览器是黄的）。新增 `utils/webStyles.ts` 的 `applyWebGlobalStyles()`，`App.tsx` 启动调一次，**只在 web 生效、原生端空转**：`input/textarea/select:focus { outline: none }` + 自动填充用「把 background-color 过渡拖到 100000s」压住（不用 inset box-shadow 老写法，因为项目输入框底色有 `#EFF4FF` 与纯白两种）。按钮/链接的焦点框刻意保留（键盘可达性）。全项目 20 个 `TextInput` 散在 14 个文件，故走全局补丁，新增输入框自动生效。
 
