@@ -20,6 +20,7 @@ M12 S7（2026-08-28）：本地独立环境、两轮历史迁移/124表恢复、
 | 后端微服务 | PHP 8.1 + Hyperf 3.1 + Swoole 5(Docker 运行) | `backend/`(8 个服务 + shared 共享包) |
 | 管理后台 | Vue 3 + Vite 5 + TypeScript + Ant Design Vue | `admin-web/` |
 | 移动端 | Expo 51 + React Native + TypeScript | `client-app/` |
+| 商户移动端 | Expo 51 + React Native + TypeScript | `merchant-app/` |
 | 数据库 | MySQL 8.0 双库(mtrip_system / mtrip_business,54 表) | `database/` |
 | 网关/部署 | OpenResty + docker-compose(k8s 预留) | `deploy/` |
 | 运维监控 | Node.js 单体 + 服务端渲染 HTML | `mtrip-ops/` |
@@ -35,6 +36,7 @@ MTrip/
 ├── admin-web/               # 平台管理后台(动态菜单 + v-perm 按钮权限)
 ├── merchant-web/            # 商户后台(Vue3+Vite+TS,端口5174;骨架/RBAC/订单/商品/门店已建)
 ├── client-app/              # C 端 Expo 应用(iOS/Android/Web)
+├── merchant-app/            # 商户移动端 Expo 应用(iOS/Android/Web,独立模块17)
 ├── database/                # DDL 按服务分目录 + seed/ 种子数据(管理员/菜单/站点)
 ├── deploy/                  # docker-compose.yml + openresty/ 网关 + k8s/ 预留
 ├── mtrip-ops/                # 独立运维监控台(Node 单体,服务端渲染)
@@ -90,9 +92,15 @@ cd ../admin-web && npm install && npm run dev    # http://localhost:5173,接口�
 3. admin-web `npm run build`(vue-tsc 零 TS 报错);
 4. client-app `npm run typecheck`。
 
+`merchant-app` 有改动时追加执行 `npm run typecheck --prefix merchant-app`；需要验证 H5 构建时执行 `npm run build:web --prefix merchant-app`。
+
 - 工作方式:每完成一项任务,同步更新 `docs/plans/` 对应模块文件、README 进度表和 HANDOFF.md;交付前本地跑一次 `scripts/check.ps1` 作为验收入口。
 
 ## 当前状态(2026-07)
+
+merchant-app 状态栏规范（2026-09-08）：Figma 画布中的 iPhone 状态栏只作设备环境说明,页面代码不手绘时间/信号/电池；一律使用系统透明状态栏 + `SafeAreaView`。注册 Step 1 `839:6106` 与注册 Step 2 `839:6159` 已按此规范实现。
+
+商户移动端 merchant-app 首屏（2026-09-08）：新增独立 `merchant-app/` 工程，不并入 C 端模块 10。技术栈、目录结构和请求/store/i18n 模式对齐 `client-app`，但存储 key 使用 `mtrip:merchant:*`，API 默认拼接 `/api/v1/merchant`。已按 Merchant PRD 梳理入驻认证、KYC、酒店运营、预订、结算、通知、RBAC、营销、评价和帮助中心范围，并新增独立计划 `docs/plans/17-商户移动端merchant-app.md`。Figma `mTrip_Merchant` node `839:5721` 的引导首屏已落地，Figma logo 与三枚功能图标已下载为本地资产；登录页先接入现有商户 Web 同口径的登录 challenge + Authenticator 2FA 数据流，注册、OTP、KYC 上传/审核、Access Code、扫码 2FA、Authenticator 绑定、生物识别和首页占位已按 Figma 原型连通；这些页面目前为本地演示状态，尚未接入移动端入驻 API。`npm run typecheck --prefix merchant-app` 与 `npm run build:web --prefix merchant-app` 通过，构建产物已清理。
 
 订房 Step 3 结账选券 C-M6（2026-09-07，Figma `228:5118`，对应9月计划第 2 周）：复核步的 Price Breakdown **进入即自动应用最优券**，点券行打开弹窗可更换 / 不使用 / 恢复最优券，改日期或间数后自动重新试算。后端新增 `GET /app/marketing/coupon/match-list`，返回本人全部未使用券的「本单实际抵扣额 + 不可用原因」，可用的按抵扣额排前面——**抵扣额一律由服务端算**（与下单 `PricingService::resolveCoupon` 同一公式），前端不自己算，否则复核页显示的优惠会与实付对不上；下单提交的是领券记录 id 而非金额。设计稿这张稿里**没有券行**，但预留了折扣行样式（隐藏节点 `869:2503`「Member Discount / - 27,750」），券行按它实现，唯一偏离是金额用主色（同色会被读成又一笔收费）。吸底栏与支付页汇总卡统一按「总额 − 券抵扣」显示，避免 Step 3 有优惠、Step 4 变回原价。实测：订单 150 时最优券抵扣被压到 150（`min(discount, base)`）、两张满减券以 `min_amount` 落到末尾；订单 400,000 时 15% 券 60,000 被封顶到 50,000 成为最优；端到端核对 `match-list` 给 5,000 与 `order/create` 实扣 5,000 完全一致。冒烟订单、库存锁定与临时账号已清理复核。四项门禁全绿。**已知不同源**：`resolveCoupon` 不校验券的适用房型而 `CouponView` 校验（方向安全，客户端更严），待第 2 周「创建订单再次校验资格」补齐。
 

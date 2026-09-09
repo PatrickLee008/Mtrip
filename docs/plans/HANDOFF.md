@@ -1,5 +1,92 @@
 # 会话交接文档(HANDOFF)
 
+
+### ★ 2026-09-09(merchant-app 入驻、KYC、Authenticator 2FA 完整原型流程)
+
+**范围**:补续中断的 merchant-app Figma 页面实现；本轮只交付可连续点击的移动端原型，不硬接尚未确认的入驻/KYC/扫码/生物识别 API。
+
+**代码**:
+
+- 新增 `src/screens/onboarding/MerchantFlowScreens.tsx`，并补齐 10 个 React Navigation Stack 路由；注册 Step 2 Submit 现在进入账号验证。
+- 注册流程已覆盖 `839:6107`（账号验证）→ `839:6133`（OTP）→ `839:5984`（审核中）→ `839:6075`（审核成功）；审核状态在同页本地切换，成功后可进入 KYC。
+- KYC 流程已覆盖 `839:6160`/`839:6192`（材料上传前/后）和审核成功 `839:6044`；三份必传材料都点选后才启用 Submit to Admin，审核结果仍是本地演示状态。
+- Access Code / 2FA 流程已覆盖 `839:5779`、`839:6224`、`839:5844`、`839:5889`、`839:5916`、`839:5941`；扫码框以 2 秒循环扫描线和边框呼吸动效实现，完成弹窗后进入 `1603:13873` 生物识别选择，最后展示 `1591:13854` 首页待设计占位。
+- `DashboardScreen` 更新为 Figma 的 Welcome Back 占位，避免继续显示与当前设计不符的旧卡片。
+
+**验证**:
+
+- `npm run typecheck --prefix merchant-app` 通过。
+- `npm run build:web --prefix merchant-app` 通过，`merchant-app/dist` 已删除。
+
+**遗留**:
+
+1. 目前所有 OTP、文件上传、审批、Merchant Access Code、QR 扫描及 Face ID / Touch ID 都是本地可点击的原型状态；页面完成后再对照现有 merchant 入驻 API 明确接口复用/缺口。
+2. 需要浏览器或真机实际点击走查安全区、长文案和动效；本会话完成了 TypeScript 与 Expo Web 导出验证，未做视觉截图比对。
+
+### ★ 2026-09-08(独立 merchant-app 首屏,Figma `839:5721`)
+
+**范围**:读取 `PRD/mTrip_Merchant App PRD_v1.0.docx` 的商户移动端需求,按用户确认将 `merchant-app` 作为独立计划,不并入既有 `client-app` 模块 10。本次先搭工程骨架并实现第一个 Figma 页面。
+
+**需求结论**:
+
+- PRD 的商户 App 覆盖入驻注册/OTP/KYC/审批状态、审批后 Merchant Access Code + Authenticator 2FA、可选生物识别、酒店/房型、房量房价、预订管理、经营结算、通知设置、RBAC 员工、营销、评价、帮助中心/住客消息。
+- 当前实现顺序按用户要求:先逐个完成 Figma 页面,可以不对接接口;全部页面完成后再按 PRD 和页面业务接真实功能。
+- API 口径先对齐已有 `merchant-web`:商户认证走 `/api/v1/merchant/auth/login` → challenge,再走 `/auth/2fa/setup|verify` 获取 JWT;后续业务优先复用 `/api/v1/merchant/*`、goods/order/finance/marketing 中已存在的商户端路由。
+
+**代码**:
+
+- 新增独立工程 `merchant-app/`,技术栈对齐 `client-app`:Expo 51 / RN 0.74 / TS / React Navigation / Zustand / axios / i18next / Outfit+Inter。端口使用 8083,scheme `mtripmerchant`,包名 `com.mtrip.merchantapp`。
+- 请求层 `src/api/request.ts` 默认拼接 `/api/v1/merchant`,统一解包 `{code,message,data}`,40101/40102 清本地登录态;存储 key 前缀改成 `mtrip:merchant:*`,避免与 C 端串 token。
+- `src/screens/onboarding/OnboardingScreen.tsx` 完成 Figma `839:5721`:主色 `#0D9488` 顶部、状态栏视觉、logo、标题/副标题、三条 feature、白色圆角底板和底部 Register / Log In。
+- Figma 临时资产已下载成本地文件:`assets/images/onboarding/logo.png`、`booking.svg`、`mobile.svg`、`support.svg`;SVG 通过 `SvgXml` 渲染,不手写替代图标。
+- `LoginScreen` 仅为数据流骨架:用户名/访问码 + 密码获取 challenge,需要 enrollment 时展示 manualKey,输入 6 位 Authenticator code 后调用 verify 并进 Dashboard。视觉后续要继续按 Figma 登录/2FA 节点精修。`RegisterScreen` 和 `DashboardScreen` 目前是承接占位。
+
+**文档**:
+
+- 新增 `docs/plans/17-商户移动端merchant-app.md`,作为 merchant-app 独立计划。
+- 已更新 `docs/plans/README.md` 模块表/变更记录与根 `README.md` 技术栈、目录结构、质量基线补充。
+
+**验证**:
+
+- `npm install --prefix merchant-app --ignore-scripts --prefer-offline` 已安装本地依赖,`node_modules/` 已加入 `.gitignore`。
+- `npm run typecheck --prefix merchant-app` 通过。
+- `npm run build:web --prefix merchant-app` 通过,验证后已删除 `merchant-app/dist`。
+
+**注册 Step 2**:
+
+- 已实现 Figma `839:6159` 注册 Step 2 Business Details,不手绘 Figma 状态栏。
+- 新增 `RegisterBusinessDetailsScreen`:Back、Step 2/4、50% 进度条、两张 Business 详情卡(业务类型、联系人、手机号、邮箱、总部城市)、Terms/Privacy checkbox、底部 Submit。
+- Step 1 的 Next 改为导航到 Step 2;为了连续走原型,保留 40% opacity 淡色视觉但可点。
+- 已补 `RegisterBusinessDetails` 路由和 `register.businessDetails.*` 三语言 i18n;下载 Step 2 图标到 `assets/images/register/back-step2.svg` 与 `chevron-down-step2.svg`。
+- 验证:`npm run typecheck --prefix merchant-app` 与 `npm run build:web --prefix merchant-app` 通过,`dist` 已删。
+
+**注册 Step 1 与状态栏规范**:
+
+- 用户确认：Figma 里画出的 iPhone 状态栏(时间/电池/信号/白天黑夜)只是设计稿环境,App 中由系统真实状态栏透明覆盖,页面代码不要手绘；后续所有 merchant-app Figma 页面都先忽略 `Status bar - iPhone` / `StatusBarIPhone` 节点。
+- 已删除首屏 `OnboardingScreen` 的手绘 `StatusStrip`;页面改为只设置 `expo-status-bar` 透明和图标样式,通过 `SafeAreaView` 让开真实设备安全区。
+- 已实现 Figma `839:6106` 注册 Step 1 Company Info：Back、Step 1/4、25% 进度条、标题说明、Number of Business 选择框、Company / Group Name 必填输入框、底部 Next。
+- 已下载注册页 Figma 图标到 `merchant-app/assets/images/register/back.svg` 与 `chevron-down.svg`;代码用 `Svg + Path` 渲染,规避 Expo Web `SvgXml` 为 undefined 的问题。
+- `npm run typecheck --prefix merchant-app` 与 `npm run build:web --prefix merchant-app` 通过,`dist` 已删。
+
+**Web 运行警告修正**:
+
+- 用户浏览器控制台报 `FeatureIcon.tsx:37 React.jsx: type is invalid`,根因是 Expo Web 下 `SvgXml` 实际取到 `undefined`;已改成 `Svg + Path` 渲染,三枚 path 数据逐字来自已下载 Figma SVG。
+- 同时处理 RN Web 的 `textShadow*` / `shadow*` deprecation:Web 用 `textShadow` / `boxShadow`,原生端保留 RN 阴影字段。
+- `npm run typecheck --prefix merchant-app` 与 `npm run build:web --prefix merchant-app` 通过,`dist` 已删。
+
+**启动脚本修正**:
+
+- 用户在 `merchant-app/` 目录内执行 `npm start --prefix merchant-app` 会让 npm 查找 `merchant-app/merchant-app/package.json`;正确命令是目录内 `npm start` / `npm run dev`,或仓库根目录 `npm start --prefix merchant-app`。
+- 用户本地 `npm start` 又因访问 `https://api.expo.dev/v2/sdks/51.0.0/native-modules` TLS 断开失败;已将默认 `start/android/ios/web/dev` 改为 `--offline --port 8083`,Expo 51 中 `--offline` 与 `--localhost/--lan/--host` 互斥,因此不再显式传 host 参数。
+- `npm run typecheck --prefix merchant-app` 通过。
+
+**未做 / 下一步**:
+
+1. 继续读取后续 Figma 节点,实现注册、OTP、KYC 上传、申请状态、2FA Setup/Login、生物识别等 onboarding 全流程页面。
+2. 页面做完后再逐模块接 API;若移动端入驻/KYC API 缺口与 merchant-web 不同,单独补后端清单和计划,不要在页面阶段硬造。
+3. 需要本地浏览器/真机视觉走查首屏高度与安全区;本次只做了 typecheck 与 Web export。
+
+
 ### ★ 2026-09-07(订房 Step 3 结账选券,Figma `228:5118`,9月计划第 2 周 C-M6 的 App 部分)
 
 **范围**:复核步(Step 3)的 Price Breakdown 自动应用最优券 + 弹窗更换/移除/恢复最优券。

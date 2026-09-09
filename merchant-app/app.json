@@ -1,0 +1,29 @@
+{
+  "expo": {
+    "name": "mTrip Merchant",
+    "slug": "mtrip-merchant-app",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "mtripmerchant",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "backgroundColor": "#0D9488"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.mtrip.merchantapp"
+    },
+    "android": {
+      "package": "com.mtrip.merchantapp"
+    },
+    "web": {
+      "bundler": "metro"
+    },
+    "plugins": [
+      "expo-localization"
+    ]
+  }
+}

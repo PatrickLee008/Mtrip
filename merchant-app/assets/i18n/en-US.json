@@ -1,0 +1,76 @@
+{
+  "common": {
+    "success": "Success",
+    "networkError": "Network error, please try again",
+    "comingSoon": "Coming soon"
+  },
+  "onboarding": {
+    "title": "Become Our Partner",
+    "subtitle": "Join Myanmar's premier travel network. Manage your property, reach more guests, and grow your revenue seamlessly.",
+    "features": {
+      "bookings": {
+        "title": "Increase your bookings",
+        "desc": "Reach millions of travelers daily."
+      },
+      "mobile": {
+        "title": "Easy mobile management",
+        "desc": "Control everything from your phone."
+      },
+      "support": {
+        "title": "24/7 Merchant support",
+        "desc": "We are always here to help you."
+      }
+    },
+    "register": "Register Now",
+    "loginPrefix": "Already a partner? ",
+    "login": "Log In"
+  },
+  "auth": {
+    "loginTitle": "Merchant Login",
+    "registerTitle": "Merchant Registration",
+    "accessCode": "Merchant access code or username",
+    "password": "Initial password",
+    "twoFa": "Authenticator code",
+    "continue": "Continue",
+    "verify": "Verify and Sign In",
+    "setupHint": "2FA setup is required. Save this setup key in your Authenticator app first.",
+    "manualKey": "Setup key",
+    "registerHint": "Registration and KYC pages will follow the approved Figma onboarding flow. This scaffold keeps the route ready for the next screens.",
+    "backHome": "Back to onboarding"
+  },
+  "dashboard": {
+    "title": "Merchant Dashboard",
+    "subtitle": "Dashboard modules will be enabled after onboarding, approval, and 2FA verification."
+  },
+  "register": {
+    "back": "Back",
+    "step": "Step {{current}}/{{total}}",
+    "next": "Next",
+    "companyInfo": {
+      "title": "Company Info",
+      "subtitle": "Start by providing your company information.",
+      "businessCount": "Number of Business",
+      "companyName": "Company / Group Name",
+      "companyNamePlaceholder": "e.g., Grand Royal Group"
+    },
+    "businessDetails": {
+      "title": "Business Details",
+      "subtitle": "Provide details for each of your businesses.",
+      "cardTitle": "Business {{index}} Details",
+      "businessType": "Business Type",
+      "selectType": "Select Type",
+      "contactPerson": "Contact Person",
+      "contactPlaceholder": "Owner or Manager Name",
+      "mobile": "Mobile Number",
+      "email": "Email",
+      "city": "Headquarters City",
+      "selectCity": "Select City",
+      "termsBefore": "I agree to the ",
+      "terms": "Terms & Conditions",
+      "termsAnd": " and ",
+      "privacy": "Privacy Policy",
+      "termsAfter": " of mTrip Merchant.",
+      "submit": "Submit"
+    }
+  }
+}

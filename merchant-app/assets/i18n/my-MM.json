@@ -1,0 +1,76 @@
+{
+  "common": {
+    "success": "အောင်မြင်ပါသည်",
+    "networkError": "ကွန်ရက်အမှား ဖြစ်နေပါသည်",
+    "comingSoon": "မကြာမီ ရရှိနိုင်ပါမည်"
+  },
+  "onboarding": {
+    "title": "ကျွန်ုပ်တို့၏ ပါတနာ ဖြစ်လာပါ",
+    "subtitle": "မြန်မာနိုင်ငံ၏ ဦးဆောင်ခရီးသွားကွန်ရက်တွင် ပါဝင်ပြီး သင့်ပိုင်ဆိုင်မှုကို စီမံပါ။",
+    "features": {
+      "bookings": {
+        "title": "ဘွတ်ကင်များ တိုးမြှင့်ပါ",
+        "desc": "နေ့စဉ် ခရီးသွားသန်းချီထံ ရောက်ရှိပါ။"
+      },
+      "mobile": {
+        "title": "မိုဘိုင်းမှ လွယ်ကူစွာ စီမံပါ",
+        "desc": "ဖုန်းမှ အရာအားလုံးကို ထိန်းချုပ်ပါ။"
+      },
+      "support": {
+        "title": "24/7 Merchant support",
+        "desc": "ကျွန်ုပ်တို့ အမြဲကူညီရန် ရှိပါသည်။"
+      }
+    },
+    "register": "ယခု မှတ်ပုံတင်ပါ",
+    "loginPrefix": "ပါတနာ ဖြစ်ပြီးသားလား။ ",
+    "login": "ဝင်ရန်"
+  },
+  "auth": {
+    "loginTitle": "Merchant Login",
+    "registerTitle": "Merchant Registration",
+    "accessCode": "Merchant access code or username",
+    "password": "Initial password",
+    "twoFa": "Authenticator code",
+    "continue": "Continue",
+    "verify": "Verify and Sign In",
+    "setupHint": "2FA setup is required. Save this setup key in your Authenticator app first.",
+    "manualKey": "Setup key",
+    "registerHint": "Registration and KYC pages will follow the approved Figma onboarding flow.",
+    "backHome": "Back to onboarding"
+  },
+  "dashboard": {
+    "title": "Merchant Dashboard",
+    "subtitle": "Dashboard modules will be enabled after onboarding approval."
+  },
+  "register": {
+    "back": "နောက်သို့",
+    "step": "အဆင့် {{current}}/{{total}}",
+    "next": "နောက်တစ်ဆင့်",
+    "companyInfo": {
+      "title": "ကုမ္ပဏီ အချက်အလက်",
+      "subtitle": "သင့်ကုမ္ပဏီ အချက်အလက်များဖြင့် စတင်ပါ။",
+      "businessCount": "လုပ်ငန်း အရေအတွက်",
+      "companyName": "ကုမ္ပဏီ / အုပ်စု အမည်",
+      "companyNamePlaceholder": "ဥပမာ Grand Royal Group"
+    },
+    "businessDetails": {
+      "title": "လုပ်ငန်း အသေးစိတ်",
+      "subtitle": "သင့်လုပ်ငန်းတစ်ခုစီ၏ အသေးစိတ်အချက်အလက်များကို ဖြည့်ပါ။",
+      "cardTitle": "လုပ်ငန်း {{index}} အသေးစိတ်",
+      "businessType": "လုပ်ငန်းအမျိုးအစား",
+      "selectType": "အမျိုးအစား ရွေးပါ",
+      "contactPerson": "ဆက်သွယ်ရန်သူ",
+      "contactPlaceholder": "ပိုင်ရှင် သို့မဟုတ် မန်နေဂျာအမည်",
+      "mobile": "ဖုန်းနံပါတ်",
+      "email": "အီးမေးလ်",
+      "city": "ရုံးချုပ်မြို့",
+      "selectCity": "မြို့ ရွေးပါ",
+      "termsBefore": "mTrip Merchant ၏ ",
+      "terms": "စည်းမျဉ်းများ",
+      "termsAnd": " နှင့် ",
+      "privacy": "ကိုယ်ရေးအချက်အလက် မူဝါဒ",
+      "termsAfter": " ကို သဘောတူပါသည်။",
+      "submit": "တင်သွင်းရန်"
+    }
+  }
+}
