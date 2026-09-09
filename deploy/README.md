@@ -34,13 +34,45 @@ cd deploy
 | 只改 PHP 代码(`app/`、`config/`、`shared/src`) | `./mtrip.sh restart user-service`(APP 端接口还要 `user-service-app`) | ~2 秒/个 |
 | 改了 `docker-compose.yml` / `.env` 环境变量 | `./mtrip.sh start`(结束后脚本自动刷网关) | ~10 秒 |
 | 新增 composer 依赖 / 改 Dockerfile | `./mtrip.sh build xxx-service` | 分钟级 |
-| 改了数据库初始化 SQL(需重跑建表) | `./mtrip.sh clean` 后 `./mtrip.sh build`(**清空数据卷,慎用**);只补新脚本用 `scripts/db-apply.ps1` | 分钟级 |
+| 新增生产数据库变更 | 新建 `database/migrations/VYYYYMMDDHHMMSS__add-example-column.sql`，运行 `bash scripts/db-migrate.sh` | 秒~分钟级 |
+| 补灌历史初始化 SQL | 开发环境可用 `scripts/db-apply.ps1`；清空重建用 `./mtrip.sh clean` 后 `build`(**慎用**) | 秒~分钟级 |
 
 **注意**:5 个共享服务各有一个 `-app` 孪生(system / user / goods / order / marketing),`/api/v1/app/*` 全走孪生。
 只重启主池不会让 APP 端接口生效,反之亦然 —— 改这 5 个服务的代码时两个都要 restart。
 
 热重启原理:`docker-compose.override.yml` 把本地 `app/`、`config/`、`backend/shared/src` 挂载进容器覆盖镜像内代码,
 `restart` 后 Hyperf 重新扫描即生效,无需重建镜像。
+
+### 2.1 生产数据库增量迁移
+
+生产增量统一放在 `database/migrations/`，命名为
+`VYYYYMMDDHHMMSS__lower-kebab-description.sql`（有效 UTC 日期时间、全局唯一）。现有 `system/`、`merchant/`、
+`goods/` 等数字 SQL 是空库初始化快照，不作为生产版本号；新增业务 SQL 放到旧目录，或把旧快照
+rename/copy 为版本迁移，都会被自动发布拒绝。
+以下命令在**仓库根目录**执行：
+
+```bash
+bash scripts/db-migrate.sh --validate  # 只校验文件名/版本重号，不连接 MySQL
+bash scripts/db-migrate.sh --status    # 对比 mtrip_system.schema_migrations，只读
+bash scripts/db-migrate.sh             # 加 MySQL 命名锁并执行全部待执行版本
+```
+
+`scripts/auto-deploy.sh --prod` 每次拉取后都会执行完整版本对比，即使上次发布迁移失败、下次没有新 commit，
+也不会直接误判为“无需部署”。迁移成功才发布代码；失败、历史文件 checksum 变化、已登记文件缺失都会阻断。
+`--apply-db` 可在非生产模式显式启用同一流程；`--skip-db` 仅用于已由外部 DBA 流程完成迁移的应急发布。
+生产 cron 必须带 `--prod`；旧的无参 cron 仍按开发安全策略只告警数据库文件变更。
+完整部署成功点保存在 `.git/mtrip-last-successful-deploy`；Git 已快进但迁移/构建/重启失败时不会推进该标记，
+所以下次 cron 仍会从上次成功点重新计算全部发布动作，而不是因 `HEAD` 已最新漏掉代码发布。
+
+账本记录版本、脚本路径、SHA-256、Git commit、执行节点、开始/结束时间、耗时和状态。MySQL DDL 会隐式提交，
+所以迁移必须幂等并采用 expand/contract；删表、删列和批量删数据不得进入无人值守自动迁移。完整约定见
+`database/migrations/README.md`。
+
+迁移账本从本机制上线后开始，不会反推旧目录历史 SQL 是否曾在生产执行；首次启用前需按 HANDOFF 核对
+已有漏项，之后新增版本才由账本持续保证。
+
+空库初始化迁移失败会登记为 `failed`；MySQL 容器健康检查要求账本不存在 `running/failed`，避免部分 DDL
+已提交后仍启动业务服务。此时先查看 MySQL init 日志和账本，确认实际结构后再修复，不要直接改状态重跑。
 
 ## 3. 已知坑:重建容器后网关 502
 

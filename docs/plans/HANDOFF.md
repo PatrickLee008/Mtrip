@@ -84,6 +84,41 @@
 2. 页面做完后再逐模块接 API;若移动端入驻/KYC API 缺口与 merchant-web 不同,单独补后端清单和计划,不要在页面阶段硬造。
 3. 需要本地浏览器/真机视觉走查首屏高度与安全区;本次只做了 typecheck 与 Web export。
 
+### ★ 2026-09-09(生产 MySQL 版本迁移接入 auto-deploy)
+
+**原缺口**:`scripts/auto-deploy.sh` 只知道本次拉取里哪些 SQL 文件变了，默认只告警；即使传
+`--apply-db`，也只是让 `db-apply.sh` 无记录地重灌这些文件。生产库曾多次因数据卷已存在而漏跑后加脚本，
+且脚本无法回答“这个版本是否执行过、由谁执行、内容后来是否被改过”。
+
+**新机制**:
+
+- 新增 `mtrip_system.schema_migrations` 与 `scripts/db-migrate.sh`，扫描完整 `database/migrations/`，
+  以版本主键 + SHA-256 对账，只执行缺失版本；记录脚本路径、Git commit、执行节点、开始/结束、耗时和状态。
+- 命名固定 `VYYYYMMDDHHMMSS__lower-kebab.sql`（有效 UTC 日期时间、全目录唯一）。现有 `database/system|merchant|...`
+  数字 SQL 不重命名，继续作为空库初始化快照；今后生产增量只进 migrations，已执行文件只增不改。自动发布会拒绝把旧快照 rename/copy 成版本迁移，避免整份历史 SQL 在生产重放。
+- 每个版本执行时持有 MySQL `GET_LOCK`；先以唯一 `attempt_id` 写 `running`，且只能由同一次 attempt 更新
+  `applied/failed`，避免锁超时的并发进程误伤真正执行者；并发成功判定同时匹配 checksum、状态与路径，批次结束后再重新读取完整账本收口。SQL 全部成功才改 `applied`。DDL 可能隐式提交，
+  所以失败记录不会自动重试，必须先人工核对部分落库情况。checksum 不一致、账本文件丢失、失败/运行中状态
+  或锁超时都会阻断。
+- `auto-deploy.sh --prod` 默认在构建/重启前执行完整对账，失败立即中止；代码没有新 commit 时也继续查迁移，
+  `.git/mtrip-last-successful-deploy` 只在整批发布成功后推进，因此 Git 已快进但迁移失败时，下个 cron 仍会
+  从旧成功点重新计算并执行同批前后端/网关动作。非生产可显式 `--apply-db`，
+  `--skip-db` 只给外部 DBA 已迁移的应急发布；强制目标支持 `database|db|mysql`。
+- compose 首次初始化先跑 `01-schema-migrations.sql` 建账本，所有历史 init SQL 结束后由
+  `99-run-migrations.sh` 遍历挂载目录；runner 独立调用 mysql 客户端，不依赖官方 entrypoint 内部函数，
+  因此无论脚本挂载后是否可执行都能工作，且后续新增版本不再逐条维护 volume 映射。首次初始化迁移失败会登记 `failed`，MySQL 健康检查也会拒绝存在 `running/failed` 的账本，避免部分初始化卷继续带起业务服务。
+
+**验证**:Git for Windows Bash 下 `bash -n scripts/auto-deploy.sh`、`bash -n scripts/db-migrate.sh`、
+`bash -n database/init/99-run-migrations.sh` 和 `bash scripts/db-migrate.sh --validate` 通过；当前迁移目录 0 个业务版本。
+`bash scripts/tests/test-db-migrate.sh` 以隔离 fake Docker/MySQL 验证非法日期/命名、首次建账本、执行成功、迁移后全账本复核、重复运行跳过、
+failed/删除历史/倒序版本/checksum 阻断、并发 attempt 所有权、旧快照 rename 拒绝、auto-deploy dry-run 衔接，以及首次无成功标记时 Git 已快进但迁移失败后下一轮仍重放
+网关动作并推进成功标记，已通过。
+统一 `scripts/check.ps1` 已尝试，但宿主机命中 PHP 7.2，无法解析仓库 PHP 8.1 语法并在后端 lint 停止；
+本次没有 PHP 改动。
+本机无 Docker CLI，尚未执行 compose config 与真实 MySQL 迁移；到有 Docker 的环境先跑
+`docker compose -f deploy/docker-compose.yml config --quiet`、`bash scripts/db-migrate.sh --status`，
+再用一份幂等测试迁移验证成功/重复执行/失败阻断。
+
 ### ★ 2026-09-09(真 bug:App 请求层按 HTTP 状态判成败,导致「删掉短信渠道后仍注册不了」)
 
 **现象**:后台把短信渠道删掉后,App 注册页仍卡在发验证码这一步 —— 而后端此时明明已按
@@ -1478,7 +1513,7 @@ Mtrip 海外旅游 SaaS 平台:后端 Hyperf 3.1 微服务(backend/)+ 平台管�
 - PHP 仅用于语法检查:`D:\BtSoft\php\80\php.exe -l 文件`(服务实际跑 Docker,联调归模块08)。
 - 前端构建:cwd 必须在 `D:\GIT\jiaxu\MTrip\admin-web` 下执行 `npm run build`(vue-tsc + vite,要求零 TS 报错;echarts 已实际引用,chunk 约 522KB 属正常)。
 - 数据库脚本目录是 `database/`(DDL 按服务分目录,种子在 `database/seed/`)。每个脚本**头部自带 `USE \`mtrip_xxx\`;` 且幂等**(`CREATE TABLE IF NOT EXISTS` / 守卫式 `ALTER`),可单独重复执行。
-- **【硬约定】新增任何 `database/**/*.sql` 后,必须同步登记到 `deploy/docker-compose.yml` 的 mysql `docker-entrypoint-initdb.d` 挂载列表**,编号体现执行顺序(建表在种子前、被引用表在关联表前)。initdb **只在空数据卷首次启动时执行**——漏登记的脚本在全新环境永不建表(2026-08 曾漏挂 merchant 集团/RBAC 共 6 个脚本,导致 `merchant_group` 等表缺失)。
+- **【硬约定】旧目录 `database/{system,merchant,...}` 是空库初始化快照，新增/调整快照 SQL 仍须同步登记到 `deploy/docker-compose.yml` 的 mysql `docker-entrypoint-initdb.d` 挂载列表**，编号体现执行顺序。生产增量则只新增 `database/migrations/VYYYYMMDDHHMMSS__lower-kebab.sql`，该目录已整体挂载并由 `99-run-migrations.sh` 遍历，**无需再逐文件登记 compose**。initdb 只在空数据卷首次启动时执行；存量生产库由 `scripts/db-migrate.sh` 对账执行。
 - **增量更新已跑起来的库,不必 `down -v` 重建**:脚本幂等,直接灌进运行中的容器即可。单文件 `Get-Content database/xxx.sql | docker exec -i mtrip-mysql-1 mysql -uroot -proot@2026`;批量用 `scripts/db-apply.ps1`(见「常用命令」)。只有想彻底清库重来时才 `docker compose down -v; docker compose up -d --build`。
 - **【硬约定】新增一个「二级模块」路由(`/api/v1/{admin|app|merchant|supplier}/{模块}/*`)后,必须同步在网关 `deploy/openresty/conf.d/mtrip.conf` 对应的 `map $*_module $*_upstream` 里登记「模块 → 上游服务」**,否则网关命中 default `""` → 404(接口和服务都正常也白搭)。改完 `docker compose restart gateway` 生效。2026-08 曾漏登记 admin 的 `config`/`chat`、app 的 `theme`/`chat`/`marketing` 共 5 处。核对口径:各服务 `config/routes.php` 的 `addGroup` 前缀 / 路由第一段 ↔ 四张 map 的键。
 - 遗留待用户手动删除:`d:\GIT\jiaxu\MTrip\.tmp-mysql-verify\` 临时目录。

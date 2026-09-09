@@ -16,7 +16,8 @@
 #   MYSQL_ROOT_PASSWORD  root 密码(默认 root@2026,与 deploy/.env 一致)
 #   DOCKER           docker 命令(无权限时设为 "sudo docker")
 #
-# 仅用于开发环境增量更新;彻底重建仍用 docker compose down -v; up -d --build。
+# 仅用于开发环境补灌历史/初始化 SQL。生产版本迁移统一使用 scripts/db-migrate.sh，
+# 由 mtrip_system.schema_migrations 记录版本与校验和。
 
 set -uo pipefail
 

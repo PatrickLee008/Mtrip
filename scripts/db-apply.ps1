@@ -26,7 +26,8 @@
   ./scripts/db-apply.ps1 database/goods/04-consumer-filter.sql
 
 .NOTES
-  仅用于开发环境增量更新;彻底重建仍用 docker compose down -v; up -d --build。
+  仅用于开发环境补灌历史/初始化 SQL。生产版本迁移统一使用 scripts/db-migrate.sh，
+  由 mtrip_system.schema_migrations 记录版本与校验和。
 #>
 [CmdletBinding()]
 param(

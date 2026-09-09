@@ -82,6 +82,7 @@ cd ../admin-web && npm install && npm run dev    # http://localhost:5173,接口�
 - **RBAC 权限**:写接口加 `#[Permission('模块:菜单:按钮')]` 注解,键必须与菜单种子 `database/seed/02-menu.sql` 的 perm_key 一致(支持多键任一匹配);前端按钮用 `v-perm` 同键防护。
 - **站点隔离**:`site_id=0` 超管全平台,其余强制本站点(`AdminContext::scopeSiteId`);新页面目录必须与菜单 component 字段完全一致(动态路由按此解析)。
 - **密钥安全**:`MTRIP_JWT_SECRET` / `MTRIP_AES_KEY` 各服务必须一致,生产必须换强随机值;密钥类字段 AES-256-GCM 加密存储、展示脱敏。
+- **数据库迁移**:生产增量只放 `database/migrations/VYYYYMMDDHHMMSS__lower-kebab.sql`（UTC 全局版本，只增不改）；`auto-deploy.sh --prod` 先迁移后发布，旧目录数字 SQL 仅作空库快照。
 
 ## 质量基线
 
@@ -97,6 +98,8 @@ cd ../admin-web && npm install && npm run dev    # http://localhost:5173,接口�
 - 工作方式:每完成一项任务,同步更新 `docs/plans/` 对应模块文件、README 进度表和 HANDOFF.md;交付前本地跑一次 `scripts/check.ps1` 作为验收入口。
 
 ## 当前状态(2026-07)
+
+生产 MySQL 版本迁移（2026-09-09）：新增 `mtrip_system.schema_migrations` 与 `scripts/db-migrate.sh`，以有效 UTC 版本、SHA-256 和 MySQL 命名锁只执行 `database/migrations/` 中账本缺失的 SQL，并记录 Git commit、执行节点、耗时和成功/失败状态；唯一 `attempt_id` 防止并发失败进程改写其他执行者，批次结束会重新核对完整账本。`scripts/auto-deploy.sh --prod` 已改为每次拉取后先对比完整账本，迁移失败、历史文件改写/删除、版本重号或旧快照 rename/copy 会在任何代码发布前阻断；即使代码已最新也会复查上次遗漏，首次发布失败也会保留拉取前基线供下轮重放。compose 空库初始化会自动遍历迁移目录，失败登记 `failed` 且健康检查拒绝未完成账本；新增版本无需再逐条登记挂载。旧 `db-apply` 仅保留为开发环境补灌历史快照工具。静态脚本、命名校验及 fake Docker 状态机测试通过；本机无 Docker CLI，真实 MySQL/compose 验证待有 Docker 的环境执行。统一质量脚本因宿主机 PHP 7.2 不识别项目 PHP 8.1 语法而停在后端 lint，本次未改 PHP。
 
 merchant-app 状态栏规范（2026-09-08）：Figma 画布中的 iPhone 状态栏只作设备环境说明,页面代码不手绘时间/信号/电池；一律使用系统透明状态栏 + `SafeAreaView`。注册 Step 1 `839:6106` 与注册 Step 2 `839:6159` 已按此规范实现。
 

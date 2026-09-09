@@ -67,6 +67,8 @@ services:
       # `SET NAMES utf8mb4;` 统一保证(已全量覆盖),无需依赖挂载文件。
       # 首次启动自动建库建表+种子(按文件名顺序执行;重建需 docker compose down -v)
       - ../database/init/00-create-databases.sql:/docker-entrypoint-initdb.d/00-create-databases.sql:ro
+      # 生产迁移账本；存量库由 scripts/db-migrate.sh 自动创建同一张表
+      - ../database/init/01-schema-migrations.sql:/docker-entrypoint-initdb.d/01-schema-migrations.sql:ro
       - ../database/system/01-admin-role-menu.sql:/docker-entrypoint-initdb.d/10-system-admin-role-menu.sql:ro
       - ../database/system/02-log.sql:/docker-entrypoint-initdb.d/11-system-log.sql:ro
       - ../database/system/03-config-site.sql:/docker-entrypoint-initdb.d/12-system-config-site.sql:ro
@@ -188,8 +190,18 @@ services:
       - ../database/marketing/08-consumer-coupon-promo.sql:/docker-entrypoint-initdb.d/99m-consumer-coupon-promo.sql:ro
       # Consumer App 短信验证码:SMSPoh Verify API V3 的渠道密钥/参数列 + 短信日志场景列
       - ../database/system/11-sms-smspoh.sql:/docker-entrypoint-initdb.d/99n-sms-smspoh.sql:ro
+      # 全局版本迁移最后执行并登记账本；目录内文件无需再逐条挂载 compose
+      - ../database/migrations:/mtrip-migrations:ro
+      - ../database/init/99-run-migrations.sh:/docker-entrypoint-initdb.d/99z-run-migrations.sh:ro
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-p${MYSQL_ROOT_PASSWORD:-root@2026}"]
+      # 连接成功且迁移账本无 running/failed 才允许业务服务启动。
+      test:
+        - CMD-SHELL
+        - >-
+          test "$$(MYSQL_PWD="$${MYSQL_ROOT_PASSWORD}"
+          mysql -h 127.0.0.1 -uroot --batch --skip-column-names
+          -e "SELECT COUNT(*) FROM mtrip_system.schema_migrations WHERE status <> 'applied';"
+          2>/dev/null)" = "0"
       interval: 5s
       timeout: 5s
       retries: 20

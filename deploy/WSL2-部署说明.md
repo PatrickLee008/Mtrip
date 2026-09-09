@@ -271,7 +271,7 @@ WSL2 **默认把 WSL 里监听的端口转发到 Windows 的 localhost**,所以:
 | 删容器保数据卷 | `./mtrip.sh down` | — |
 | 清库重来(**删数据**) | `./mtrip.sh clean` 然后 `./mtrip.sh build` | 分钟级 |
 
-> 数据库增量 SQL 走 `scripts/db-apply.ps1`(Windows 侧)或在 WSL 里对 `localhost:3307` 直接执行,不必清库。
+> 生产数据库增量统一走 `bash scripts/db-migrate.sh`；`db-apply.ps1` 只用于开发环境补灌历史初始化 SQL。
 
 ---
 
@@ -345,4 +345,4 @@ wsl --unregister Ubuntu          # 彻底删除该 Ubuntu 发行版及其中所�
 | `status.bat` | `./mtrip.sh status` + `./mtrip.sh health` |
 | `reinit.bat` | `./mtrip.sh clean` 然后 `./mtrip.sh build` |
 | `logs.bat` | `./mtrip.sh logs [服务]` |
-| `update-sql.bat` | `scripts/db-apply.ps1`(Windows 侧)或对 `localhost:3307` 直接执行 SQL |
+| `update-sql.bat` | 生产用 `bash scripts/db-migrate.sh`；开发补灌旧 SQL 才用 `scripts/db-apply.ps1` |
