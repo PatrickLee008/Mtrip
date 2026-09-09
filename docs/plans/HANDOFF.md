@@ -1,5 +1,25 @@
 # 会话交接文档(HANDOFF)
 
+### ★ 2026-09-09(真 bug:App 请求层按 HTTP 状态判成败,导致「删掉短信渠道后仍注册不了」)
+
+**现象**:后台把短信渠道删掉后,App 注册页仍卡在发验证码这一步 —— 而后端此时明明已按
+「渠道启用才强制」放行(`curl` 直打 `/app/auth/register` 不带 `verifyToken` 返 `code=0` 注册成功)。
+
+**真因在客户端 `client-app/src/api/request.ts`**:后端把业务码映射成了 HTTP 状态
+(`ErrorCode::httpStatus`:`40111→401`、`42911→429`、`50021→500`),而 axios 默认只认 2xx,
+**在读到响应体之前就 reject 掉了**。于是页面拿到的是 `ApiError(-1, "Request failed with status code 500")`,
+注册页那句 `e.code === SMS_CHANNEL_UNAVAILABLE` 的跳过分支永远不成立。
+这条不止影响注册:验证码页区分「码错/码过期」、以及 `40101/40102` 触发清登录态跳登录,**之前也全是死代码**。
+
+**修法**:`validateStatus: () => true`,成败一律以响应体 `code` 为准;
+不是本系统信封的响应(网关 502 HTML 等)才退回按 HTTP 状态报错。
+顺带给 `request/get/post/postEncrypted` 加了可选 `RequestOptions.silentCodes`,
+注册页对 `50021` 静默(它是预期内分支,再弹一句「短信服务未配置」会让用户以为注册失败了)。
+
+**验证**:`client-app` typecheck 通过;网关实打 `/app/auth/sms/send` 确认是
+`HTTP 500 + {"code":50021}`(证实上述判定路径),`/app/auth/register` 不带票据可注册成功;
+冒烟建的账号已删,`user_info` 仍只剩 id=1。SMSPoh 账号侧仍未开通(见下条),本次不涉及。
+
 ### ★ 2026-09-08(补:手机号必须补国家码 + 当前发码失败的真因在 SMSPoh 账号侧)
 
 **两件事,别混为一谈。**

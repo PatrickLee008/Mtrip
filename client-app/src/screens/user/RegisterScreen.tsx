@@ -94,7 +94,12 @@ export default function RegisterScreen() {
     try {
       // 发码放在本页而不是验证码页:号码已被占用之类的失败要在这里就说清楚,
       // 而不是把用户送进验证码页再弹错(那一页没有改号码的输入框)
-      const sent = await apiSmsSend({ mobile: draft.mobile, scene: 'register' });
+      // 50021 是本页预期内的分支(下面直接跳过验证码页),不让 request 层再弹一句
+      // 「短信服务未配置」——那会让用户以为注册失败了
+      const sent = await apiSmsSend(
+        { mobile: draft.mobile, scene: 'register' },
+        { silentCodes: [API_CODE.SMS_CHANNEL_UNAVAILABLE] },
+      );
       navigation.navigate('VerifyOtp', {
         scene: 'register',
         mobile: draft.mobile,

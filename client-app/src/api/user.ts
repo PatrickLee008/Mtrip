@@ -2,7 +2,7 @@
  * 用户接口(user-service /api/v1/app/auth|user/*)
  */
 
-import { get, post, postEncrypted } from '@/api/request';
+import { get, post, postEncrypted, type RequestOptions } from '@/api/request';
 import type { PageData, PageParams } from '@/api/types';
 import type { AuthResult, FavoriteItem, TravelerItem, UserProfile } from '@/types/models';
 
@@ -32,8 +32,11 @@ export interface SmsVerifyResult {
  * 站点未配置短信渠道时返回 `SMS_CHANNEL_UNAVAILABLE`(50021)——
  * 注册流程据此跳过验证码步骤,与后端「渠道启用才强制」的口径一致。
  */
-export function apiSmsSend(params: { mobile: string; scene: SmsScene }): Promise<SmsSendResult> {
-  return post<SmsSendResult>('/api/v1/app/auth/sms/send', params);
+export function apiSmsSend(
+  params: { mobile: string; scene: SmsScene },
+  options?: RequestOptions,
+): Promise<SmsSendResult> {
+  return post<SmsSendResult>('/api/v1/app/auth/sms/send', params, options);
 }
 
 /** 校验短信验证码,换取一次性 verifyToken */
