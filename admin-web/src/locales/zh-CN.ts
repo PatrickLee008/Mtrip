@@ -257,6 +257,7 @@ export default {
     configGlobal: '全局配置',
     configPay: '支付渠道',
     configSms: '短信渠道',
+    configEmail: '邮件渠道',
     configStorage: '存储渠道',
     configMap: '地图配置',
     configPermTpl: '权限模板',

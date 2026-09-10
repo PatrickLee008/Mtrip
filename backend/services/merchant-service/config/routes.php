@@ -17,6 +17,7 @@ use App\Controller\Admin\RankingController;
 use App\Controller\Admin\StoreController;
 use App\Controller\Admin\SupplierController;
 use App\Controller\Admin\VerifyController;
+use App\Controller\App\Merchant\RegistrationController as AppRegistrationController;
 use App\Controller\Merchant\AccountController as MerchantAccountController;
 use App\Controller\Merchant\AuthController as MerchantAuthController;
 use App\Controller\Merchant\NotificationController as MerchantNotificationController;
@@ -35,6 +36,12 @@ use Mtrip\Shared\Middleware\SupplierAuthMiddleware;
 
 // 健康检查(网关探活)
 Router::get('/healthz', static fn () => ['status' => 'ok', 'service' => 'merchant-service']);
+
+// Merchant App public onboarding: a verified SMS or Email recipient is exchanged
+// for a short-lived registration token before any application data is accepted.
+Router::get('/api/v1/app/merchant/register/config', [AppRegistrationController::class, 'config']);
+Router::post('/api/v1/app/merchant/register/otp-send', [AppRegistrationController::class, 'sendOtp']);
+Router::post('/api/v1/app/merchant/register/otp-verify', [AppRegistrationController::class, 'verifyOtp']);
 
 Router::addGroup('/api/v1/admin', static function () {
     // ---------- 商户管理(11 接口,文档 6.4.2) ----------

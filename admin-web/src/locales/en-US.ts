@@ -260,6 +260,7 @@ export default {
     configGlobal: 'Global Config',
     configPay: 'Payment Channels',
     configSms: 'SMS Channels',
+    configEmail: 'Email Channels',
     configStorage: 'Storage Channels',
     configMap: 'Map Config',
     configPermTpl: 'Permission Templates',

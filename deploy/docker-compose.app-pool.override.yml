@@ -45,3 +45,11 @@ services:
       - ../backend/services/marketing-service/config:/opt/www/config
       - ./logs/marketing-service-app:/opt/www/runtime/logs
       - *shared-src
+
+  merchant-service-app:
+    volumes:
+      - ../backend/services/merchant-service/app:/opt/www/app
+      - ../backend/services/merchant-service/config:/opt/www/config
+      - ./logs/merchant-service-app:/opt/www/runtime/logs
+      - ./uploads:/opt/www/uploads
+      - *shared-src

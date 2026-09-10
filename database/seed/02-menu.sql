@@ -295,7 +295,8 @@ INSERT IGNORE INTO `sys_menu` (`id`,`parent_id`,`menu_name`,`menu_name_en`,`i18n
 (1308,1300,'接口权限模板','Permission Templates','menu.configPermTpl','config:permtpl:list',2,'/config/permtpl','config/permtpl/index','',8),
 (1309,1300,'特性开关','Feature Toggles','','config:feature:list',2,'/config/features','config/features/index','',9),
 (1310,1300,'筛选排序配置','Filter & Sort','','goods:filter:list',2,'/cops/filter','cops/filter/index','',10),
-(1311,1300,'税费配置','Tax Config','menu.financeTax','finance:tax:list',2,'/finance/tax','finance/tax/index','',11);
+(1311,1300,'税费配置','Tax Config','menu.financeTax','finance:tax:list',2,'/finance/tax','finance/tax/index','',11),
+(1312,1300,'邮件配置','Email','menu.configEmail','config:email:list',2,'/config/email','config/email/index','',6);
 INSERT IGNORE INTO `sys_menu` (`id`,`parent_id`,`menu_name`,`menu_name_en`,`perm_key`,`menu_type`,`sort`) VALUES
 (130101,1301,'编辑参数','Edit','config:global:edit',3,1),
 (130201,1302,'新增站点','Add Site','config:site:add',3,1),
@@ -305,6 +306,10 @@ INSERT IGNORE INTO `sys_menu` (`id`,`parent_id`,`menu_name`,`menu_name_en`,`perm
 (130303,1303,'启用禁用','Enable/Disable','config:storage:status',3,3),
 (130304,1303,'删除存储/文件','Delete Storage/File','config:storage:delete',3,4),
 (130305,1303,'上传文件','Upload File','config:storage:upload',3,5),
+(131201,1312,'新增邮件渠道','Add Email Channel','config:email:add',3,1),
+(131202,1312,'编辑邮件渠道','Edit Email Channel','config:email:edit',3,2),
+(131203,1312,'启用禁用邮件渠道','Enable/Disable Email Channel','config:email:status',3,3),
+(131204,1312,'删除邮件渠道','Delete Email Channel','config:email:delete',3,4),
 (130901,1309,'保存开关','Save','config:feature:save',3,1),
 (131001,1310,'保存配置','Save','goods:filter:save',3,1);
 

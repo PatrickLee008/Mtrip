@@ -71,6 +71,15 @@ export const apiSmsTemplateUpdate = (data: Params) => post<null>('/admin/sys/sms
 export const apiSmsTemplateDelete = (id: number) => post<null>('/admin/sys/sms/template/delete', { id });
 export const apiSmsLogList = (params: Params) => get<PageData<Row>>('/admin/sys/sms/log/list', params);
 
+// ---------- 邮件 SMTP ----------
+export const apiEmailChannelList = (params: Params) => get<PageData<Row>>('/admin/sys/email/channel/list', params);
+export const apiEmailChannelAdd = (data: Params) => post<{ id: number }>('/admin/sys/email/channel/add', data);
+export const apiEmailChannelUpdate = (data: Params) => post<null>('/admin/sys/email/channel/update', data);
+export const apiEmailChannelDelete = (id: number) => post<null>('/admin/sys/email/channel/delete', { id });
+export const apiEmailChannelToggleStatus = (id: number) =>
+  post<{ status: number }>('/admin/sys/email/channel/toggle-status', { id });
+export const apiEmailLogList = (params: Params) => get<PageData<Row>>('/admin/sys/email/log/list', params);
+
 // ---------- 地图 ----------
 export const apiMapList = (params?: Params) => get<Row[]>('/admin/sys/map/list', params);
 export const apiMapSave = (data: Params) => post<{ id: number }>('/admin/sys/map/save', data);

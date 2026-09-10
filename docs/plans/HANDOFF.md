@@ -1,4 +1,20 @@
 # 会话交接文档(HANDOFF)
+### ★ 2026-09-09（商户 App 注册 OTP 后端联动第一段）
+
+**范围**：用户确认注册验证方式为 SMS/Email 二选一；补齐邮件 SMTP 渠道，KYC 仍必须在后台 Send KYC 后才能上传，二维码仅用于首次 2FA 绑定。本段仅完成邮件渠道与 M0-M2 注册 OTP，不把尚未验证的 KYC/2FA 原型状态伪装成后端已接入。
+
+**代码**：
+
+- 新增生产迁移 `database/migrations/V20260909123000__add-email-channel.sql`（新规范：生产只写 `database/migrations/VYYYYMMDDHHMMSS__lower-kebab.sql`，不可再向历史目录追加增量）。迁移创建 SMTP 配置与无 OTP 正文的投递日志，并登记后台菜单/权限键 `config:email:*`。
+- 新增 system-service `EmailController` / `SysEmailChannel` 与 `/api/v1/admin/sys/email/*`；账号和密码沿用 `SecretField` AES 存储、脱敏回显。admin-web 增加 `config/email/index` 配置页。
+- 新增 shared `SmtpClient`（STARTTLS/SSL、SMTP AUTH PLAIN、证书校验不降级）及 merchant-service `MerchantRegistrationOtpService`，路由为 `GET /api/v1/app/merchant/register/config`、`POST /register/otp-send`、`POST /register/otp-verify`。OTP 是 Redis 哈希，邮件日志不存验证码；验证成功才给 24 小时 registration token。
+- 补 `deploy/openresty/conf.d/mtrip.conf` 的 `merchant -> merchant_service_app`，并在 App 孪生池 compose/开发热挂载中增加 `merchant-service-app`；否则 App 前缀会在网关被拒绝。
+
+**遗留**：
+
+1. merchant-app 还未调用上述 M0-M2；页面的固定 SMS/Email 收件人和 OTP 状态仍是原型。
+2. M3-M12（申请保存/提交、后台 Send KYC 状态门禁、KYC 上传、Access Code、首次扫码 2FA、生物识别）尚未实现，不能宣称已联动。
+
 ### ★ 2026-09-09(merchant-app 入驻、KYC、Authenticator 2FA 完整原型流程)
 
 **范围**:补续中断的 merchant-app Figma 页面实现；本轮只交付可连续点击的移动端原型，不硬接尚未确认的入驻/KYC/扫码/生物识别 API。

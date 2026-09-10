@@ -6,6 +6,14 @@
 
 按 `PRD/mTrip_Merchant App PRD_v1.0.docx` 和 Figma `mTrip_Merchant` 原型落地商户移动端：先完成全部设计页面，再按页面业务与 PRD 逐步接入 `/api/v1/merchant/*`、商品/订单/营销/财务等商户口径 API。
 
+## 后端联动（2026-09-09，进行中）
+
+- 新增公开移动端注册 OTP 接口：`GET /api/v1/app/merchant/register/config`、`POST /register/otp-send`、`POST /register/otp-verify`；站点从 `X-Site-Id` 强制取得。
+- 网关 App 路由表及独立实例池已补 `merchant -> merchant-service-app`，移动端请求不会落到管理端主池。
+- 注册页不再以固定数据决定验证方式：后端只返回当前站点已启用的 `email` / `sms` 渠道，用户二选一；验证成功返回 24 小时的签名 registration token。
+- 新增站点级 SMTP 渠道配置、AES 加密的账号密码和不含验证码正文的投递日志。生产增量为 `database/migrations/V20260909123000__add-email-channel.sql`。
+- 尚未接入 App：申请保存/提交、后台 Send KYC 后才可上传的 KYC 接口、Access Code、首次扫码 2FA 绑定与生物识别；原型页面仍保持本地演示，后续按状态机逐段替换。
+
 ## PRD 范围摘录
 
 - 入驻与认证：Become Our Partner、注册表单、OTP、KYC 资料、状态查询、驳回重交、审批后 Merchant Access Code、强制 Authenticator 2FA、可选本机生物识别。

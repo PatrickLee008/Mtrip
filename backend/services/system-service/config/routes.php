@@ -12,6 +12,7 @@ use App\Controller\Admin\AdminController;
 use App\Controller\Admin\ApiLogController;
 use App\Controller\Admin\AuthController;
 use App\Controller\Admin\ClientController;
+use App\Controller\Admin\EmailController;
 use App\Controller\Admin\FeatureController;
 use App\Controller\Admin\FileController;
 use App\Controller\Admin\GlobalConfigController;
@@ -141,6 +142,14 @@ Router::addGroup('/api/v1/admin', static function () {
     Router::post('/sys/sms/template/update', [SmsController::class, 'updateTemplate']);
     Router::post('/sys/sms/template/delete', [SmsController::class, 'deleteTemplate']);
     Router::get('/sys/sms/log/list', [SmsController::class, 'logs']);
+
+    // ---------- 邮件 SMTP 渠道/投递日志 ----------
+    Router::get('/sys/email/channel/list', [EmailController::class, 'channels']);
+    Router::post('/sys/email/channel/add', [EmailController::class, 'createChannel']);
+    Router::post('/sys/email/channel/update', [EmailController::class, 'updateChannel']);
+    Router::post('/sys/email/channel/delete', [EmailController::class, 'deleteChannel']);
+    Router::post('/sys/email/channel/toggle-status', [EmailController::class, 'toggleChannelStatus']);
+    Router::get('/sys/email/log/list', [EmailController::class, 'logs']);
 
     // ---------- 模块10 地图服务配置 ----------
     Router::get('/sys/map/list', [MapConfigController::class, 'index']);

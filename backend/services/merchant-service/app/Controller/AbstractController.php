@@ -109,6 +109,16 @@ abstract class AbstractController
         return $ip;
     }
 
+    /** Public merchant-app requests are unauthenticated before onboarding; require site header explicitly. */
+    protected function requireAppSiteId(): int
+    {
+        $siteId = (int) $this->request->getHeaderLine('x-site-id');
+        if ($siteId <= 0) {
+            throw new BusinessException(ErrorCode::PARAM_ERROR, '缺少站点标识 X-Site-Id');
+        }
+        return $siteId;
+    }
+
     protected function aesKey(): string
     {
         return (string) $this->config->get('mtrip.aes_key', '');

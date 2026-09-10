@@ -1,7 +1,7 @@
 # Mtrip APP 端独立实例池(管理端 / APP 端物理隔离)
 # ------------------------------------------------------------------
-# 为 5 个「同一进程同时服务管理端与 APP 端」的共享服务各起一个 -app 孪生容器:
-#   system / user / goods / order / marketing
+# 为 6 个「同一进程同时服务管理端与 APP 端」的共享服务各起一个 -app 孪生容器:
+#   system / user / goods / order / marketing / merchant
 # 孪生 = 同镜像、同代码、同 HTTP_PORT,但【不发布宿主端口】,仅经网关内网访问。
 # 网关 $app_upstream 指向这些孪生(见 openresty/conf.d/mtrip.conf 的 *_service_app upstream)。
 #
@@ -97,3 +97,14 @@ services:
     environment:
       <<: *app-env
       HTTP_PORT: "9507"
+
+  merchant-service-app:
+    <<: *app-common
+    build:
+      context: ../backend
+      dockerfile: services/merchant-service/Dockerfile
+    environment:
+      <<: *app-env
+      HTTP_PORT: "9505"
+    volumes:
+      - ./uploads:/opt/www/uploads
