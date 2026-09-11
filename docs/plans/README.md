@@ -27,6 +27,8 @@ MTrip/
 
 ## 模块进度总览
 
+2026-09-10更新：merchant-web 登录页已按 Figma `mTrip_Merchant` 的 Login 节点 `1787:13875` 完成展示层对齐，落地主色顶栏、经透明留白裁切放大的原始 Logo、世界地图素材、900px 双栏安全登录卡、2FA 安全区及移动端单列布局。鉴权继续严格使用“访问码/用户名 + 密码 → challenge → TOTP”，首次绑定展示后端真实二维码；因无扫码登录接口，未实现设计稿静态扫码入口。`merchant-web npm run build` 通过，`1536×826` 与 `390×844` 首屏浏览器检查无控制台错误；未提交真实登录。详见[商户端落地记录](./13-商家端merchant-web落地.md)。
+
 2026-09-09更新：生产 MySQL 增量迁移已接入 `scripts/auto-deploy.sh`。生产发布不再只按本次 commit 猜测 SQL，也不再用无记录的 `db-apply` 重灌；现在每次 `--prod` 都会在代码发布前扫描 `database/migrations/VYYYYMMDDHHMMSS__lower-kebab.sql`，对比 `mtrip_system.schema_migrations` 后仅执行缺失版本，并记录 SHA-256、Git commit、执行节点、耗时与状态。历史版本被改写/删除、版本重号、并发锁超时、上次失败或旧快照 rename/copy 都会阻断发布；唯一 attempt 所有权避免并发误写，批次末再次核对完整账本，代码已最新或首次发布失败重试时也不会漏掉迁移及同批代码动作。compose 空库初始化已接同一账本和目录遍历，失败状态同时纳入 MySQL 健康检查。详见[模块08](./08-部署与网关.md)与 `database/migrations/README.md`。
 
 2026-09-08更新：C 端**短信验证接入 SMSPoh Verify API V3**（`https://smspoh.com/v3/developers/verify-api`），覆盖注册 / 验证码登录 / 忘记密码三个场景。链路为 `POST /app/auth/sms/send` 发码 → `sms/verify` 验码换一次性 `verifyToken`（Redis 10 分钟，绑定「站点 + 场景 + 手机号」）→ 由 `register` / `login-by-sms` / `reset-password` 兑换；验证码本身后端不持有（服务商只回 `requestId`）。凭证配在 `sys_sms_channel`（`provider_code='smspoh'`，迁移 `database/system/11-sms-smspoh.sql` 补两段密钥与三个 Verify 参数），后台「配置 → 短信配置」可维护。**强制策略是「渠道启用即强制」**——本站点有启用中的 smspoh 渠道时注册必须带票据，未配则照旧放行，App 端在收到 `50021` 时同样跳过验证码步骤。同批修掉注册的历史隐患：建号与绑推荐人已包进同一事务，推荐码填错不再留下孤儿账号。**未跑通的只有「用真实凭证发出并收到短信」**（本地无 SMSPoh 账号），已用假凭证确认整条出网链路可达服务商。详见[模块10](./10-移动端App框架.md)与 [HANDOFF](./HANDOFF.md)。

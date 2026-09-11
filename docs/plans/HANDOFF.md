@@ -1,4 +1,16 @@
 # 会话交接文档(HANDOFF)
+### ★ 2026-09-10(merchant-web 登录页 Figma 对齐)
+
+**范围**：仅调整 `merchant-web` 登录页展示层，设计来源为 `mTrip_Merchant` Login 节点 `1787:13875`；不改路由、登录 API、JWT、RBAC 或后端。
+
+**落地**：
+
+- `merchant-web/src/views/login/index.vue` 已改为 Figma 的 55px 蓝色顶栏 + mTrip Logo、世界地图背景、900px 双栏安全登录卡、浅蓝标题区、虚线安全面板、2FA 分隔和页脚；`760px` 以下自动转单列。
+- Figma 原始素材保存为 `src/assets/login/mtrip-logo.png` 与 `world-map-background.jpeg`，不引用临时远程 URL；顶部 Logo 已按素材透明留白范围裁切放大；`locales/en-US.ts`、`zh-CN.ts` 同步新增安全登录文案。
+- 业务流程保持“访问码/用户名 + 密码 → challenge → 六位 TOTP”。首次注册验证器时右栏渲染 `/merchant/auth/2fa/setup` 的真实二维码和手动密钥；当前后端无扫码登录/验证码重发接口，故没有使用设计稿静态二维码制造假功能。
+
+**验证**：`merchant-web npm run build` 通过；本地预览在 `1536×826` 和 `390×844` 完成首屏视觉检查，控制台无 warning/error。未提交账号登录，challenge 后 2FA 状态尚未做真实登录态浏览器验收。本次与 `origin/dev` 最新基线合并后本地提交，未推送。
+
 ### ★ 2026-09-10（统一申请级 KYC + merchant-app 真实文件上传）
 
 **用户确认**：后台审核人员发送一套统一 KYC 资料填写/上传请求；KYC 不按 Business Type 分流。业务类型如保留，仅用于后台运营资料，不参与模板或文件门禁。

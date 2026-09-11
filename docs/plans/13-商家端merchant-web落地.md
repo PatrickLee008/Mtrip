@@ -3,6 +3,13 @@
 > 参考 admin-web 从零搭建平行的 merchant-web(Vue3+Vite+TS+antdv),为商户账号(`merchant_admin`,account_type 1集团/2商户/3门店)落地一套完整仿 admin 的动态 RBAC:独立四表菜单/角色,登录按 `account_type` 下发菜单树+权限集,接口权限继续由 `#[Permission]` 注解按 `perm_key` 联动(与前端 `v-perm` 同一把钥匙)。
 > 承接 12-商家账号体系.md 的二期清单。
 
+## 2026-09-10 商户登录页 Figma 对齐
+
+- [x] 按 Figma `mTrip_Merchant` 节点 `1787:13875` 重做 `views/login/index.vue` 的展示层：55px 主色顶栏、真实 mTrip Logo、世界地图背景、900px 双栏安全登录卡、浅蓝标题区、虚线安全区、2FA 分隔标识和页脚。
+- [x] Figma 原始 Logo 与地图底图已保存到 `src/assets/login/`，不依赖七天后失效的临时素材 URL；顶部 Logo 已按素材透明留白范围裁切放大，中英文登录页文案同步补齐。
+- [x] 保持现有真实鉴权契约不变：第一步仍为商户访问码/用户名 + 密码，后端返回 challenge 后再验证六位 TOTP；首次 enrollment 时右栏展示 `/merchant/auth/2fa/setup` 返回的真实二维码和手动密钥。后端无扫码登录/重发验证码接口，因此未把设计稿静态二维码伪装成可用入口。
+- [x] `merchant-web npm run build` 通过；本地预览在 `1536×826` 与 `390×844` 完成首屏视觉检查，窄屏自动转单列，浏览器控制台无 warning/error。未使用账号提交登录，challenge 后的真实 2FA 状态未做登录态浏览器验收。
+
 ## 2026-09-01 M4 Booking Management 预订管理落地(阶段0～6)
 
 方案:`实现方案-Merchant-M4-酒店预订管理.md`(已全部完成并勾选)。前端交付集中在 `views/order/index.vue`:
