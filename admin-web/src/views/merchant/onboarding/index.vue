@@ -274,10 +274,8 @@ async function openDetail(row: TableRow): Promise<void> {
     // KYC Management 默认选中第一个业务单元(无业务单元时回退申请级配置)
     const firstB = businesses.value[0];
     kycBizId.value = firstB?.id ?? 0;
-    kycSetup.scope = Number(firstB?.kyc_scope) || app.value?.kyc_scope || 1;
-    kycSetup.businessType = firstB?.business_type || parsedTypes.value[0] || 'hotel';
-    kycSetup.templateId = Number(firstB?.kyc_template_id) || app.value?.kyc_template_id || undefined;
-    await loadTemplates(kycSetup.businessType);
+    kycSetup.templateId = Number(app.value?.kyc_template_id) || undefined;
+    await loadTemplates();
     if (!kycSetup.templateId) {
       kycSetup.templateId = templates.value[0]?.id;
     }
@@ -359,9 +357,7 @@ async function saveAssessment(): Promise<void> {
 }
 
 // ---------- §5 KYC Setup & Access ----------
-const kycSetup = reactive<{ scope: number; businessType: string; templateId?: number; submissionMethod: number }>({
-  scope: 1,
-  businessType: 'hotel',
+const kycSetup = reactive<{ templateId?: number; submissionMethod: number }>({
   templateId: undefined,
   submissionMethod: 1,
 });
@@ -488,33 +484,19 @@ function submitAssistVerification(): void {
   });
 }
 
-/** 展开注册企业行:载入该业务单元的 KYC 配置(企业类型/验证模板/所需文件联动) */
+/** Selecting a business only expands its registration details; KYC remains application-wide. */
 async function selectBiz(biz: TableRow): Promise<void> {
   kycBizId.value = biz.id;
-  kycSetup.scope = Number(biz.kyc_scope) || 1;
-  kycSetup.businessType = biz.business_type || 'hotel';
-  await loadTemplates(kycSetup.businessType);
-  kycSetup.templateId = Number(biz.kyc_template_id) || templates.value[0]?.id || undefined;
+  await loadTemplates();
+  kycSetup.templateId = Number(app.value?.kyc_template_id) || templates.value[0]?.id || undefined;
+  selectedTemplate.value = templates.value.find((x) => x.id === kycSetup.templateId) ?? templates.value[0] ?? null;
+}
+
+async function loadTemplates(): Promise<void> {
+  templates.value = await apiOnboardingKycTemplates();
   selectedTemplate.value = templates.value.find((x) => x.id === kycSetup.templateId) ?? null;
 }
 
-async function loadTemplates(businessType: string): Promise<void> {
-  templates.value = await apiOnboardingKycTemplates(businessType);
-  selectedTemplate.value = templates.value.find((x) => x.id === kycSetup.templateId) ?? null;
-}
-
-function pickTemplate(id: number): void {
-  kycSetup.templateId = id;
-  selectedTemplate.value = templates.value.find((x) => x.id === id) ?? null;
-  // 同步回选中业务单元(发送 KYC 时落库)
-  if (currentBiz.value) currentBiz.value.kyc_template_id = id;
-}
-
-/** 验证范围点选:同步写回选中业务单元 */
-function setScope(scope: number): void {
-  kycSetup.scope = scope;
-  if (currentBiz.value) currentBiz.value.kyc_scope = scope;
-}
 
 function templateDocs(tpl: TableRow | null): { name: string; doc_type: string; required: boolean }[] {
   if (!tpl) return [];
@@ -531,15 +513,12 @@ const editTplSaving = ref(false);
 const editTplForm = reactive<{
   id: number;
   name: string;
-  businessType: string;
   docs: { name: string; doc_type: string; required: boolean }[];
 }>({
   id: 0,
   name: '',
-  businessType: '',
   docs: [],
 });
-
 function openEditTemplate(): void {
   if (!selectedTemplate.value) {
     message.warning(t('merchant.onboardingPage.selectTemplateWarning'));
@@ -547,7 +526,6 @@ function openEditTemplate(): void {
   }
   editTplForm.id = Number(selectedTemplate.value.id);
   editTplForm.name = String(selectedTemplate.value.name || '');
-  editTplForm.businessType = String(selectedTemplate.value.business_type || '');
   editTplForm.docs = templateDocs(selectedTemplate.value).map((d) => ({ ...d }));
   editTplOpen.value = true;
 }
@@ -575,12 +553,11 @@ async function saveEditTemplate(): Promise<void> {
     await apiOnboardingKycTemplateUpdate({
       id: editTplForm.id,
       name: editTplForm.name,
-      businessType: editTplForm.businessType,
       docs,
     });
     message.success(t('merchant.onboardingPage.tplSaved'));
     editTplOpen.value = false;
-    await loadTemplates(kycSetup.businessType);
+    await loadTemplates();
     if (kycSetup.templateId) {
       selectedTemplate.value = templates.value.find((x) => x.id === kycSetup.templateId) ?? null;
     }
@@ -591,31 +568,14 @@ async function saveEditTemplate(): Promise<void> {
 
 async function sendKyc(): Promise<void> {
   if (!app.value) return;
-  if (!kycSetup.templateId) {
-    message.warning(t('merchant.onboardingPage.selectTemplateWarning'));
-    return;
-  }
   kycSending.value = true;
   try {
-    await apiOnboardingSendKyc({
-      id: app.value.id,
-      templateId: kycSetup.templateId,
-      kycScope: kycSetup.scope,
-      submissionMethod: kycSetup.submissionMethod,
-      businessId: kycBizId.value || undefined,
-    });
+    await apiOnboardingSendKyc({ id: app.value.id, submissionMethod: kycSetup.submissionMethod });
     message.success(t('merchant.onboardingPage.kycSent'));
     await loadDetail(app.value.id);
-    // 重新载入后恢复选中业务单元的 KYC 配置展示
-    const biz = businesses.value.find((b) => b.id === kycBizId.value) ?? businesses.value[0];
-    if (biz) {
-      kycBizId.value = biz.id;
-      kycSetup.scope = Number(biz.kyc_scope) || 1;
-      kycSetup.businessType = biz.business_type || kycSetup.businessType;
-      await loadTemplates(kycSetup.businessType);
-      kycSetup.templateId = Number(biz.kyc_template_id) || kycSetup.templateId;
-      selectedTemplate.value = templates.value.find((x) => x.id === kycSetup.templateId) ?? null;
-    }
+    kycSetup.templateId = Number(app.value.kyc_template_id) || templates.value[0]?.id;
+    await loadTemplates();
+    selectedTemplate.value = templates.value.find((x) => x.id === kycSetup.templateId) ?? templates.value[0] ?? null;
     await load();
   } finally {
     kycSending.value = false;
@@ -1060,49 +1020,10 @@ onMounted(() => {
             </div>
           </div>
           <div class="kyc-grid">
-            <div class="kyc-field">
-              <div class="kyc-label">{{ t('merchant.onboardingPage.verificationScope') }}</div>
-              <div class="kyc-seg">
-                <button
-                  type="button"
-                  class="kyc-seg__item"
-                  :class="{ 'is-active': kycSetup.scope === 1 }"
-                  :disabled="!editable"
-                  @click="setScope(1)"
-                >{{ t('merchant.onboardingPage.scopeNewMerchant') }}</button>
-                <button
-                  type="button"
-                  class="kyc-seg__item"
-                  :class="{ 'is-active': kycSetup.scope === 2 }"
-                  :disabled="!editable"
-                  @click="setScope(2)"
-                >{{ t('merchant.onboardingPage.scopeAdditional') }}</button>
-              </div>
-            </div>
-            <div class="kyc-field">
-              <div class="kyc-label">{{ t('merchant.onboardingPage.businessType') }}</div>
-              <div class="kyc-pills">
-                <button
-                  v-for="o in BUSINESS_TYPES"
-                  :key="o.value"
-                  type="button"
-                  class="kyc-pill"
-                  :class="{ 'is-active': (currentBiz?.business_type ?? kycSetup.businessType) === o.value }"
-                  disabled
-                >{{ o.label }}</button>
-              </div>
-            </div>
             <div class="kyc-field kyc-field--template">
-              <div class="kyc-label">{{ t('merchant.onboardingPage.verificationTemplate') }}</div>
-              <a-select
-                :value="kycSetup.templateId"
-                :disabled="!editable"
-                class="kyc-select"
-                style="width: 100%"
-                :placeholder="t('merchant.onboardingPage.selectTemplatePlaceholder')"
-                :options="templates.map((x) => ({ value: x.id, label: x.name }))"
-                @change="pickTemplate"
-              />
+              <div class="kyc-label">Unified KYC checklist</div>
+              <div class="kyc-doc-card__title">{{ selectedTemplate?.name || 'Unified Merchant KYC' }}</div>
+              <div class="oa-subtitle">The same checklist is sent for every application and is not based on business type.</div>
             </div>
           </div>
           <template v-if="templateDocs(selectedTemplate).length">
@@ -1189,18 +1110,9 @@ onMounted(() => {
             @ok="saveEditTemplate"
           >
             <a-form layout="vertical">
-              <a-row :gutter="12">
-                <a-col :span="14">
-                  <a-form-item :label="t('merchant.onboardingPage.tplName')">
-                    <a-input v-model:value="editTplForm.name" />
-                  </a-form-item>
-                </a-col>
-                <a-col :span="10">
-                  <a-form-item :label="t('merchant.onboardingPage.businessType')">
-                    <a-select v-model:value="editTplForm.businessType" :options="BUSINESS_TYPES" />
-                  </a-form-item>
-                </a-col>
-              </a-row>
+              <a-form-item :label="t('merchant.onboardingPage.tplName')">
+                <a-input v-model:value="editTplForm.name" />
+              </a-form-item>
               <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px">
                 <span style="font-size: 12px; font-weight: 600; color: #475569">{{ t('merchant.onboardingPage.requiredDocuments') }}</span>
                 <a-button type="link" size="small" style="padding: 0" @click="addTplDocRow">

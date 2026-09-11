@@ -38,6 +38,11 @@ class MerchantSecurityController extends AbstractController
         return $this->response->json(Result::success($this->security->verify($this->requireStr('challengeToken'), $this->requireStr('twoFaCode'), $this->clientIp())))->withHeader('Cache-Control', 'no-store');
     }
 
+    public function createAppPairing(): \Psr\Http\Message\ResponseInterface
+    {
+        return $this->response->json(Result::success($this->security->createAppPairing($this->requireStr('challengeToken'))))->withHeader('Cache-Control', 'no-store');
+    }
+
     public function exchange(): \Psr\Http\Message\ResponseInterface
     {
         return $this->response->json(Result::success((new MerchantImpersonationService())->exchange($this->requireStr('exchangeCode'))))->withHeader('Cache-Control', 'no-store');

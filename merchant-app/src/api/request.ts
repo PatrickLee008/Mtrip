@@ -112,3 +112,7 @@ export function postEncrypted<T>(url: string, data?: Record<string, unknown>): P
     headers: { 'X-Encrypted': '1' },
   });
 }
+
+export function postForm<T>(url: string, data: FormData): Promise<T> {
+  return request<T>({ method: 'POST', url, data, headers: { 'Content-Type': 'multipart/form-data' } });
+}

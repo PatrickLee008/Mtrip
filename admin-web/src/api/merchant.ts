@@ -387,8 +387,8 @@ export function apiOnboardingDetail(id: number): Promise<{
   return get('/admin/merchant/onboarding/detail', { id });
 }
 
-export function apiOnboardingKycTemplates(businessType?: string): Promise<Row[]> {
-  return get('/admin/merchant/onboarding/kyc-templates', businessType ? { businessType } : {});
+export function apiOnboardingKycTemplates(): Promise<Row[]> {
+  return get('/admin/merchant/onboarding/kyc-templates');
 }
 
 /** 编辑 KYC 验证模板(名称/业态/所需文档清单) */
@@ -412,7 +412,7 @@ export function apiOnboardingSaveAssessment(data: Record<string, unknown>): Prom
   return post('/admin/merchant/onboarding/save-assessment', data);
 }
 
-export function apiOnboardingSendKyc(data: { id: number; templateId: number; kycScope: number; submissionMethod: number; businessId?: number }): Promise<null> {
+export function apiOnboardingSendKyc(data: { id: number; submissionMethod: number }): Promise<null> {
   return post('/admin/merchant/onboarding/send-kyc', data);
 }
 

@@ -66,3 +66,11 @@ export interface MenusResult {
   perms: string[];
   businesses: MerchantBusiness[];
 }
+
+export type RegistrationChannel = 'email' | 'sms';
+export interface RegistrationChannelOption { channel: RegistrationChannel; label: string; }
+export interface RegistrationOtpResult { expiresIn: number; resendAfter: number; pinLength: number; recipient: string; channel: RegistrationChannel; }
+export interface RegistrationVerifyResult { registrationToken: string; expiresIn: number; }
+export interface ApplicationStatus { applicationId: number; appNo: string; stage: number; status: string; canUploadKyc: boolean; canSubmitKyc: boolean; rejectReasonCode: number; rejectNote: string; }
+export interface KycDocument { id: number; docType: string; name: string; required: boolean; fileUrl: string; fileSize: string; }
+export interface KycRequirements { applicationId: number; stage: number; documents: KycDocument[]; }

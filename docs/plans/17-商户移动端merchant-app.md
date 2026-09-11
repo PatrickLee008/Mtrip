@@ -14,6 +14,19 @@
 - 新增站点级 SMTP 渠道配置、AES 加密的账号密码和不含验证码正文的投递日志。生产增量为 `database/migrations/V20260909123000__add-email-channel.sql`。
 - 尚未接入 App：申请保存/提交、后台 Send KYC 后才可上传的 KYC 接口、Access Code、首次扫码 2FA 绑定与生物识别；原型页面仍保持本地演示，后续按状态机逐段替换。
 
+### M3-M8 后端完成（2026-09-10）
+
+- 新增 `V20260910094500__add-merchant-application-registration-owner.sql`，为申请保存经 OTP 验证的渠道和收件人哈希；不会在申请表保存原始 OTP 或 registration token。
+- `MerchantAppOnboardingService` 已实现草稿保存、正式提交、状态查询、KYC 要求、单文件上传与 KYC 提交；每次读取或写入均验证 registration token 与申请所属关系。
+- 后台未 Send KYC 前（非 `stage=3`）服务端拒绝上传和提交。KYC 提交只校验模板中的必需文件，非必需文件不会阻塞；提交后进 `stage=4`，不能继续覆盖文件。
+- merchant-app 页面尚未改为调用 M0-M8；下一步为将原型本地 state 替换成上述 API，再实施 M9-M12。
+
+### M0-M4 App 接入（2026-09-10）
+
+- 注册 Step 1/2 保存公司和首个业务联系人；Step 3 从 M0 读取站点真实启用的 SMS/Email 渠道，取消固定收件人。
+- Step 4 真正调用 OTP 发送/校验；校验成功后自动执行 M3 草稿保存和 M4 正式提交，审核页不再用定时器伪造“已批准”。
+- KYC M5-M7 的前端文件选择和上传仍待接入，当前 KYC 页面不应视为真实上传。
+
 ## PRD 范围摘录
 
 - 入驻与认证：Become Our Partner、注册表单、OTP、KYC 资料、状态查询、驳回重交、审批后 Merchant Access Code、强制 Authenticator 2FA、可选本机生物识别。
@@ -102,3 +115,10 @@
 - 实现 Merchant Access Code 登录 `839:5779`、QR 扫描 `839:6224` 的 2 秒扫描线/边框动效、Authenticator 下载提示 `839:5844`、链接二维码 `839:5889`、验证码与完成弹窗 `839:5916`/`839:5941`，再进入生物识别选择 `1603:13873` 与 Figma `1591:13854` 的首页占位页。
 - 补齐 10 个 Stack 路由，注册 Step 2 Submit 现连接到账号验证。文档上传、审批、OTP、扫码和生物识别目前均是可点击的本地原型状态，未伪造尚未确认的移动端入驻 API。
 - 验证：`npm run typecheck --prefix merchant-app` 与 `npm run build:web --prefix merchant-app` 通过；构建产物已删除。
+
+## 2026-09-10 统一 KYC 与真实上传联动
+
+- 用户确认 KYC 不按 Business Type 分流。后台审核人员仅能发送申请级的 `Unified Merchant KYC` 清单；生产迁移 `V20260910110000__unify-merchant-kyc-template.sql` 幂等创建该可维护清单，历史分类模板只保留审计用途。
+- `send-kyc` 不再接收模板、业务单元或业务类型参数；其创建 `biz_unit=''` 的申请级文档占位，并将申请置为 `stage=3`。App M5/M6/M7 同样只读取、上传和校验该统一清单，服务端继续强制 stage=3 门禁。
+- merchant-app 已以 `expo-document-picker` 替换 KYC 点击模拟：管理员发送请求后，审核状态页轮询 M8 开放上传；资料页读取 M5、选择 PDF/JPG/PNG/WebP、以 multipart 调 M6，并只在所有必需资料上传后调用 M7。注册 Step 2 已删除 Business Type 字段。
+- 验证：`npm run typecheck --prefix merchant-app`、`npm run build:web --prefix merchant-app`、`npm run build --prefix admin-web`、`bash scripts/db-migrate.sh --validate` 与 `git diff --check` 通过；Web 构建产物已清理。

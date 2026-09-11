@@ -24,6 +24,7 @@ import PrimaryButton from '@/components/common/PrimaryButton';
 import { colors, PAGE_PADDING, radius, spacing } from '@/config/theme';
 import { fonts } from '@/config/typography';
 import { useCommonStore } from '@/store/commonStore';
+import { useRegistrationStore } from '@/store/registrationStore';
 
 const cardShadow = Platform.select({
   web: { boxShadow: '0px 4px 4px rgba(0, 0, 0, 0.08)' } as unknown as ViewStyle,
@@ -100,7 +101,7 @@ interface BusinessCardProps {
 function BusinessCard({ index }: BusinessCardProps) {
   const { t } = useTranslation();
   const showToast = useCommonStore((s) => s.showToast);
-  const [type] = useState('');
+  const setBusiness = useRegistrationStore((s) => s.setBusiness);
   const [contact, setContact] = useState('');
   const [mobile, setMobile] = useState('');
   const [email, setEmail] = useState('');
@@ -117,18 +118,12 @@ function BusinessCard({ index }: BusinessCardProps) {
         <Text style={styles.cardTitle}>{t('register.businessDetails.cardTitle', { index })}</Text>
       </View>
 
-      <FloatingField label={t('register.businessDetails.businessType')} required>
-        <Pressable style={({ pressed }) => [styles.selectInner, pressed && styles.pressed]} onPress={selectComingSoon}>
-          <Text style={[styles.fieldText, !type && styles.placeholder]}>{type || t('register.businessDetails.selectType')}</Text>
-          <ChevronDownIcon />
-        </Pressable>
-      </FloatingField>
 
       <FloatingField label={t('register.businessDetails.contactPerson')} required>
         <TextInput
           style={styles.input}
           value={contact}
-          onChangeText={setContact}
+          onChangeText={(value) => { setContact(value); setBusiness({ contactName: value }); }}
           placeholder={t('register.businessDetails.contactPlaceholder')}
           placeholderTextColor="rgba(30, 41, 59, 0.6)"
           autoCapitalize="words"
@@ -143,7 +138,7 @@ function BusinessCard({ index }: BusinessCardProps) {
           <TextInput
             style={styles.phoneInput}
             value={mobile}
-            onChangeText={setMobile}
+            onChangeText={(value) => { setMobile(value); setBusiness({ contactPhone: value.replace(/\s/g, '') }); }}
             placeholder="9 123 456 789"
             placeholderTextColor="rgba(30, 41, 59, 0.6)"
             keyboardType="phone-pad"
@@ -155,7 +150,7 @@ function BusinessCard({ index }: BusinessCardProps) {
         <TextInput
           style={styles.input}
           value={email}
-          onChangeText={setEmail}
+          onChangeText={(value) => { setEmail(value); setBusiness({ contactEmail: value.trim().toLowerCase() }); }}
           placeholder="contact@property.com"
           placeholderTextColor="rgba(30, 41, 59, 0.6)"
           keyboardType="email-address"
@@ -178,6 +173,9 @@ export default function RegisterBusinessDetailsScreen() {
   const insets = useSafeAreaInsets();
   const { t } = useTranslation();
   const [accepted, setAccepted] = useState(false);
+  const companyName = useRegistrationStore((s) => s.companyName);
+  const business = useRegistrationStore((s) => s.business);
+  const showToast = useCommonStore((s) => s.showToast);
 
   return (
     <SafeAreaView style={styles.root} edges={['top', 'bottom']}>
@@ -216,7 +214,6 @@ export default function RegisterBusinessDetailsScreen() {
 
         <View style={styles.form}>
           <BusinessCard index={1} />
-          <BusinessCard index={2} />
 
           <Pressable
             style={({ pressed }) => [styles.termsRow, pressed && styles.pressed]}
@@ -240,7 +237,7 @@ export default function RegisterBusinessDetailsScreen() {
       <View style={[styles.footer, { paddingBottom: 24 + insets.bottom }]}> 
         <PrimaryButton
           label={t('register.businessDetails.submit')}
-          onPress={() => navigation.navigate('RegisterVerification')}
+          onPress={() => { if (!accepted || (!business.contactPhone && !business.contactEmail) || !companyName) { showToast('Enter a phone or email and accept the terms'); return; } navigation.navigate('RegisterVerification'); }}
           style={styles.submitDisabledLook}
           textStyle={styles.submitText}
         />

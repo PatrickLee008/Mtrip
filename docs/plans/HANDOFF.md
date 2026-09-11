@@ -1,4 +1,29 @@
 # 会话交接文档(HANDOFF)
+### ★ 2026-09-10（统一申请级 KYC + merchant-app 真实文件上传）
+
+**用户确认**：后台审核人员发送一套统一 KYC 资料填写/上传请求；KYC 不按 Business Type 分流。业务类型如保留，仅用于后台运营资料，不参与模板或文件门禁。
+
+**代码**：新增生产迁移 `V20260910110000__unify-merchant-kyc-template.sql`，幂等建立可编辑的 `Unified Merchant KYC` 清单；`OnboardingController::sendKyc()` 不再接受 `templateId`、`businessId`、业务类型或范围，统一创建申请级（`biz_unit=''`）文件占位并置 `stage=3`。M5-M7 同步改成申请级文档读、multipart 上传和必需文件校验。admin-web Send KYC 页面不再按业态选模板；merchant-app 使用 `expo-document-picker` 调真实 M5/M6/M7，并以 M8 轮询取代原先假审批定时器；注册 Step 2 移除 Business Type。
+
+**验证**：`npm run typecheck --prefix merchant-app`、`npm run build:web --prefix merchant-app`、`npm run build --prefix admin-web`、`bash scripts/db-migrate.sh --validate`、`git diff --check` 通过；Web `dist` 已清理。后端 PHP 8 lint 仍需有 Docker socket 权限或 PHP 8.1 容器环境执行。
+
+**下一步**：M9-M12 Access Code、首次扫码 Authenticator 绑定、2FA 校验/退出与端侧生物识别仍未真实联动。
+### ★ 2026-09-10（商户 App M3-M8 申请与 KYC 后端联动）
+
+
+
+**代码**：
+
+- 新增生产迁移 `database/migrations/V20260910094500__add-merchant-application-registration-owner.sql`：申请保存 `registration_channel` 和收件人 SHA-256 哈希，以 M2 的 signed registration token 做归属检查；不落原始收件人、验证码或 token。
+- 新增 `MerchantAppOnboardingService` 和 `Controller/App/Merchant/ApplicationController`，注册 M3-M8：`application/save|submit|status|kyc-requirements`、`kyc/upload|submit`。
+- KYC 读要求可在 stage=3/4；上传与提交严格只在 stage=3（后台 `sendKyc` 后）允许。上传的 docType 必须是后台生成的占位文档，提交只检查启用模板的 required 文件，提交后置 stage=4 且禁止覆盖。
+
+**验证**：`bash scripts/db-migrate.sh --validate`（2 个迁移）和 `git diff --check` 通过。尝试在用户刚重建的 merchant-service 容器执行 PHP 8 lint，但本机 Docker socket 无权限，未能做容器内语法检查；宿主 PHP 7.2 不适用于项目 PHP 8.1 语法。
+
+**遗留**：merchant-app 仍未调用 M0-M8；M9-M12（Access Code、首次扫码 Authenticator 绑定、2FA 验证/退出）尚未实现。
+
+**后续更新（2026-09-10）**：merchant-app 已接入 M0-M4：渠道由后端配置读取，SMS/Email OTP 真实发送校验，成功后调用申请草稿和正式提交；`npm run typecheck --prefix merchant-app` 通过。M5-M7 页面尚为本地文件原型。
+
 ### ★ 2026-09-09（商户 App 注册 OTP 后端联动第一段）
 
 **范围**：用户确认注册验证方式为 SMS/Email 二选一；补齐邮件 SMTP 渠道，KYC 仍必须在后台 Send KYC 后才能上传，二维码仅用于首次 2FA 绑定。本段仅完成邮件渠道与 M0-M2 注册 OTP，不把尚未验证的 KYC/2FA 原型状态伪装成后端已接入。

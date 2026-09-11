@@ -15,9 +15,11 @@ use App\Controller\Admin\OnboardingController;
 use App\Controller\Admin\PlatformRuleController;
 use App\Controller\Admin\RankingController;
 use App\Controller\Admin\StoreController;
+use App\Controller\App\Merchant\AuthController as AppMerchantAuthController;
 use App\Controller\Admin\SupplierController;
 use App\Controller\Admin\VerifyController;
 use App\Controller\App\Merchant\RegistrationController as AppRegistrationController;
+use App\Controller\App\Merchant\ApplicationController as AppApplicationController;
 use App\Controller\Merchant\AccountController as MerchantAccountController;
 use App\Controller\Merchant\AuthController as MerchantAuthController;
 use App\Controller\Merchant\NotificationController as MerchantNotificationController;
@@ -42,6 +44,21 @@ Router::get('/healthz', static fn () => ['status' => 'ok', 'service' => 'merchan
 Router::get('/api/v1/app/merchant/register/config', [AppRegistrationController::class, 'config']);
 Router::post('/api/v1/app/merchant/register/otp-send', [AppRegistrationController::class, 'sendOtp']);
 Router::post('/api/v1/app/merchant/register/otp-verify', [AppRegistrationController::class, 'verifyOtp']);
+Router::post('/api/v1/app/merchant/application/save', [AppApplicationController::class, 'save']);
+Router::post('/api/v1/app/merchant/application/submit', [AppApplicationController::class, 'submit']);
+Router::get('/api/v1/app/merchant/application/status', [AppApplicationController::class, 'status']);
+Router::get('/api/v1/app/merchant/application/kyc-requirements', [AppApplicationController::class, 'kycRequirements']);
+Router::post('/api/v1/app/merchant/kyc/upload', [AppApplicationController::class, 'kycUpload']);
+Router::post('/api/v1/app/merchant/kyc/submit', [AppApplicationController::class, 'kycSubmit']);
+Router::post('/api/v1/app/merchant/auth/access-code-verify', [AppMerchantAuthController::class, 'accessCodeVerify']);
+Router::post('/api/v1/app/merchant/auth/2fa/setup-info', [AppMerchantAuthController::class, 'setupInfo']);
+Router::post('/api/v1/app/merchant/auth/2fa/verify', [AppMerchantAuthController::class, 'verify']);
+Router::post('/api/v1/app/merchant/auth/2fa/pairing-exchange', [AppMerchantAuthController::class, 'pairingExchange']);
+Router::addGroup('/api/v1/app/merchant', static function () {
+    Router::post('/auth/logout', [AppMerchantAuthController::class, 'logout']);
+}, [
+    'middleware' => [MerchantAuthMiddleware::class, OperationLogMiddleware::class],
+]);
 
 Router::addGroup('/api/v1/admin', static function () {
     // ---------- 商户管理(11 接口,文档 6.4.2) ----------
@@ -201,6 +218,7 @@ Router::addGroup('/api/v1/admin/compliance', static function () {
 Router::post('/api/v1/merchant/auth/login', [MerchantAuthController::class, 'login']);
 Router::post('/api/v1/merchant/auth/2fa/setup', [\App\Controller\MerchantSecurityController::class, 'setup']);
 Router::post('/api/v1/merchant/auth/2fa/verify', [\App\Controller\MerchantSecurityController::class, 'verify']);
+Router::post('/api/v1/merchant/auth/2fa/pairing/create', [\App\Controller\MerchantSecurityController::class, 'createAppPairing']);
 Router::post('/api/v1/merchant/auth/impersonation/exchange', [\App\Controller\MerchantSecurityController::class, 'exchange']);
 
 Router::addGroup('/api/v1/merchant', static function () {

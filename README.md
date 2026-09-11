@@ -170,3 +170,5 @@ Git补充(2026-08-27)：用户已单次授权S3本地提交，不推送；提交
 模块 01~07、09、10 已完成;模块 08(部署与网关)完成 82%——deploy 基础设施、auto-deploy 指定目标强制发布、权限键统一与 **08-6 部署后四步验证(2026-07-30 全部通过:11 容器全 Up、八服务 healthz ok、网关 8081 无签名 401、.env 注入生效)** 已落地,剩余 08-7 全链路联调待执行,清单见 [docs/plans/08-部署与网关.md](docs/plans/08-部署与网关.md)。
 
 补充(2026-08-23):商家端 `merchant-web` 已完成全局样式同步与 M5/M6/M8/M9/M10 首轮页面/接口增量,详见 [docs/plans/13-商家端merchant-web落地.md](docs/plans/13-商家端merchant-web落地.md)、[docs/plans/实现方案-Merchant-全模块差距与样式同步.md](docs/plans/实现方案-Merchant-全模块差距与样式同步.md) 与 [docs/plans/实现方案-Merchant-M8-营销活动.md](docs/plans/实现方案-Merchant-M8-营销活动.md)。
+
+商户 App KYC 联动（2026-09-10）：后台审核发送的是申请级统一资料清单，不按 Business Type 分流；merchant-app 已从本地点击原型改为读取状态、选择真实文件并上传/提交，服务端仍以 `stage=3` 强制门禁。增量迁移为 `database/migrations/V20260910110000__unify-merchant-kyc-template.sql`；M9-M12 的 Access Code/首次 2FA 绑定尚待实现。

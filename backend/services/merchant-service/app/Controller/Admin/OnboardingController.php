@@ -180,15 +180,12 @@ class OnboardingController extends AbstractController
         ]);
     }
 
-    /** KYC 模板列表(按业态过滤可选) */
+    /** 唯一的申请级 KYC 资料清单；不按商户业务类型分流。 */
     #[Permission('merchant:onboarding:list')]
     public function kycTemplates(): array
     {
-        $query = Db::table('merchant_kyc_template')->where('status', 1);
-        if (($type = $this->strInput('businessType')) !== '') {
-            $query->where('business_type', $type);
-        }
-        return Result::success($query->orderBy('sort')->get()->map(static fn ($r) => (array) $r)->all());
+        $query = Db::table('merchant_kyc_template')->where('business_type', 'unified')->where('status', 1);
+        return Result::success($query->orderByDesc('site_id')->orderBy('sort')->get()->map(static fn ($r) => (array) $r)->all());
     }
 
     /** 编辑 KYC 验证模板:名称/业态/所需文档清单(含必填标记),平台级配置 */
@@ -204,7 +201,9 @@ class OnboardingController extends AbstractController
         $this->assertSiteScope((int) $tpl['site_id']);
 
         $name = $this->requireStr('name');
-        $businessType = $this->requireStr('businessType');
+        if ((string) $tpl['business_type'] !== 'unified') {
+            throw new BusinessException(ErrorCode::FORBIDDEN, '仅可编辑统一 KYC 资料清单');
+        }
         $docs = [];
         foreach ((array) $this->input('docs', []) as $doc) {
             $doc = (array) $doc;
@@ -223,7 +222,7 @@ class OnboardingController extends AbstractController
         }
         Db::table('merchant_kyc_template')->where('id', $id)->update([
             'name' => mb_substr($name, 0, 100),
-            'business_type' => mb_substr($businessType, 0, 30),
+            'business_type' => 'unified',
             'docs' => json_encode($docs, JSON_UNESCAPED_UNICODE),
             'status' => in_array($this->intInput('status', 1), [1, 2], true) ? $this->intInput('status', 1) : 1,
             'sort' => $this->intInput('sort', (int) $tpl['sort']),
@@ -365,78 +364,45 @@ class OnboardingController extends AbstractController
         return Result::success(null, '评估已保存');
     }
 
-    /** 发送 KYC 请求:按模板生成文档占位行,阶段 → KYC已开放;businessId 可选(业务单元级 scope/模板同步) */
+    /** Send one application-level KYC request using the platform's unified document list. */
     #[Permission('merchant:onboarding:kyc')]
     public function sendKyc(): array
     {
         $app = $this->findApplication($this->requireId());
         $this->assertEditable($app);
-        $templateId = $this->requireId('templateId');
-        $template = Db::table('merchant_kyc_template')->where('id', $templateId)->where('status', 1)->first();
-        if (! $template) {
-            throw new BusinessException(ErrorCode::NOT_FOUND, 'KYC模板不存在');
-        }
-        $kycScope = in_array($this->intInput('kycScope', 1), [1, 2], true) ? $this->intInput('kycScope', 1) : 1;
-        $businessId = $this->intInput('businessId');
-        $businessIds = Db::table('merchant_application_business')
-            ->where('application_id', (int) $app['id'])->orderBy('id')->pluck('id')->all();
-        if ($businessId <= 0) {
-            if (count($businessIds) === 1) {
-                $businessId = (int) $businessIds[0];
-            } elseif (count($businessIds) > 1) {
-                throw new BusinessException(ErrorCode::PARAM_ERROR, '多商家申请发送 KYC 请求时必须指定业务单元');
-            }
-        } elseif (! in_array($businessId, array_map('intval', $businessIds), true)) {
-            throw new BusinessException(ErrorCode::PARAM_ERROR, '业务单元不属于该申请');
-        }
-        $docs = json_decode((string) $template->docs, true) ?: [];
+        $template = Db::table('merchant_kyc_template')
+            ->whereIn('site_id', [0, (int) $app['site_id']])
+            ->where('business_type', 'unified')->where('status', 1)
+            ->orderByDesc('site_id')->orderBy('sort')->first();
+        if (! $template) throw new BusinessException(ErrorCode::NOT_FOUND, '未配置启用的统一 KYC 资料清单');
+        $docs = json_decode((string) $template->docs, true);
+        if (! is_array($docs) || $docs === []) throw new BusinessException(ErrorCode::DATA_CONFLICT, '统一 KYC 资料清单为空');
         $now = date('Y-m-d H:i:s');
+        $submissionMethod = in_array($this->intInput('submissionMethod', 1), [1, 2], true) ? $this->intInput('submissionMethod', 1) : 1;
 
-        Db::transaction(function () use ($app, $templateId, $template, $docs, $now, $kycScope, $businessId) {
+        Db::transaction(function () use ($app, $template, $docs, $now, $submissionMethod): void {
             Db::table('merchant_application')->where('id', $app['id'])->update([
-                'stage' => 3,
-                'kyc_scope' => $kycScope,
-                'kyc_template_id' => $templateId,
-                'submission_method' => in_array($this->intInput('submissionMethod', 1), [1, 2], true) ? $this->intInput('submissionMethod', 1) : 1,
-                'last_updated_at' => $now,
+                'stage' => 3, 'kyc_scope' => 1, 'kyc_template_id' => (int) $template->id,
+                'submission_method' => $submissionMethod, 'last_updated_at' => $now,
             ]);
-            // 业务单元级 KYC 配置(原型 KYC Management 按注册企业卡片切换)
-            if ($businessId > 0) {
-                Db::table('merchant_application_business')
-                    ->where('id', $businessId)->where('application_id', $app['id'])
-                    ->update([
-                        'kyc_scope' => $kycScope,
-                        'kyc_template_id' => $templateId,
-                        'kyc_status' => 0,
-                        'kyc_submitted_at' => null,
-                        'kyc_submitted_by' => 0,
-                    ]);
-            }
-            // 占位文档按业务单元隔离；同一申请下不同商家可使用不同模板。
-            $bizUnit = $businessId > 0 ? (string) $businessId : '';
-            $exists = Db::table('merchant_verify_document')
-                ->where('application_id', $app['id'])
-                ->where('biz_unit', $bizUnit)
-                ->whereNull('deleted_at')
-                ->exists();
-            if (! $exists) {
-                foreach ($docs as $doc) {
-                    $doc = (array) $doc;
-                    Db::table('merchant_verify_document')->insert([
-                        'site_id' => (int) $app['site_id'],
-                        'merchant_id' => 0,
-                        'application_id' => (int) $app['id'],
-                        'biz_unit' => $bizUnit,
-                        'doc_type' => mb_substr((string) ($doc['doc_type'] ?? ''), 0, 50),
-                        'name' => mb_substr((string) ($doc['name'] ?? ''), 0, 100),
-                        'status' => 2,
-                        'uploaded_at' => $now,
-                    ]);
-                }
+            Db::table('merchant_application_business')->where('application_id', $app['id'])->update([
+                'kyc_scope' => 1, 'kyc_template_id' => (int) $template->id, 'kyc_status' => 0,
+                'kyc_submitted_at' => null, 'kyc_submitted_by' => 0,
+            ]);
+            $exists = Db::table('merchant_verify_document')->where('application_id', $app['id'])->where('biz_unit', '')->whereNull('deleted_at')->exists();
+            if (! $exists) foreach ($docs as $doc) {
+                $doc = (array) $doc;
+                $docType = trim((string) ($doc['doc_type'] ?? ''));
+                if ($docType === '') continue;
+                Db::table('merchant_verify_document')->insert([
+                    'site_id' => (int) $app['site_id'], 'merchant_id' => 0, 'application_id' => (int) $app['id'], 'biz_unit' => '',
+                    'doc_type' => mb_substr($docType, 0, 50), 'name' => mb_substr((string) ($doc['name'] ?? $docType), 0, 100),
+                    'status' => 2, 'uploaded_at' => $now,
+                ]);
             }
         });
-        $this->pushTimeline($app, 'kyc_sent', (string) $template->name);
-        return Result::success(null, 'KYC 请求已发送');
+        $this->pushTimeline($app, 'kyc_sent', 'Unified KYC request: ' . (string) $template->name);
+        return Result::success(null, '统一 KYC 请求已发送');
     }
 
     /** 发送提醒(暂仅审计留痕,真实通知通道后续接) */

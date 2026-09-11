@@ -71,7 +71,7 @@ MTrip/
 | 10 | [10-移动端App框架.md](./10-移动端App框架.md) | client-app Expo51+RN+TS 多端工程 | 已完成(冒烟联调归模块08) | 100% |
 | 15 | [15-M12-merchant-management.md](./15-M12-merchant-management.md) | PRD模块12：酒店优先的商户管理，餐厅资料展示、运营延期 | 8/29列表整改已提交；追加取消详情餐厅隐藏，admin构建及Browser混合业务核验通过，追加改动未提交；S7整体原型待收口 | 列表及餐厅展示已验证，S7进行中 |
 | M4 | [实现方案-Merchant-M4-酒店预订管理.md](./实现方案-Merchant-M4-酒店预订管理.md) | Merchant PRD 模块4：酒店预订列表、履约状态、库存、退款、通知、同步框架及原型 UI | 阶段0～6全部完成：生命周期+过期任务、商户API(22/22)、原型UI真实登录态验收、通知/住客消息/同步框架(23/23)、PermissionAspect平台级修复、跨端回归与check.ps1全绿 | 100% |
-| 17 | [17-商户移动端merchant-app.md](./17-商户移动端merchant-app.md) | Merchant PRD 移动端：入驻/认证/KYC、Dashboard、酒店运营、预订、结算、通知、RBAC、营销、评价、帮助中心 | 入驻原型完成；已新增后端 SMTP 配置和 App 注册 OTP（SMS/Email 二选一）接口，申请/KYC/2FA 尚待接入 | 进行中 |
+| 17 | [17-商户移动端merchant-app.md](./17-商户移动端merchant-app.md) | Merchant PRD 移动端：入驻/认证/KYC、Dashboard、酒店运营、预订、结算、通知、RBAC、营销、评价、帮助中心 | 注册 OTP/申请提交已联动；统一申请级 KYC 清单、后台 Send KYC 门禁、真实文件选择/上传/提交已接入；M9-M12 待实现 | 进行中 |
 
 ## 实施顺序(首期里程碑)
 
@@ -83,7 +83,9 @@ MTrip/
 | 日期 | 变更内容 |
 |------|---------|
 | 2026-09-09 | merchant-app 入驻原型续接：完成 Figma 注册 Step 3/4、OTP、KYC 文档上传/审批、Merchant Access Code、QR 扫描与 Authenticator 2FA、可选生物识别和首页待设计占位；全部为本地可点击演示，尚未接入移动端入驻 API。TypeScript 与 Expo Web build 通过，构建产物已清理。 |
+| 2026-09-10 | 商户 App KYC 联动收敛：确认不按 Business Type 分流；新增 `V20260910110000__unify-merchant-kyc-template.sql` 创建唯一可配置的统一资料清单，后台 Send KYC 仅对申请生成占位资料并开放 stage=3；App 已接 M5-M8 轮询、读取清单、真实文件选择 multipart 上传和提交，注册页移除 Business Type。merchant-app typecheck/Web build、admin-web build、迁移校验和 diff 检查通过。 |
 | 2026-09-09 | 商户 App 后端联动第一段：新增版本化迁移 `V20260909123000__add-email-channel.sql`，system-service 提供站点级 SMTP 邮件渠道、日志与后台配置页；merchant-service 新增注册渠道读取与 SMS/Email OTP 二选一接口，registration token 仅在验证后签发。 |
+| 2026-09-10 | 商户 App 后端联动第二段：M3-M8 申请草稿/提交/状态、KYC 要求、上传和提交接口已加入 merchant-service；新增申请注册所有权哈希迁移，后端强制仅后台 Send KYC 后的 stage=3 可上传/提交，且按模板必需文件校验。 |
 | 2026-09-08 | 新增独立商户移动端 `merchant-app/` 与计划 `17-商户移动端merchant-app.md`：技术栈对齐 `client-app`，接入商户 API 前缀 `/api/v1/merchant`，完成 Figma `839:5721` 引导首屏、`839:6106` 注册 Step 1、`839:6159` 注册 Step 2，并确立“Figma 手机状态栏不手绘、使用系统透明状态栏”的后续页面规范；登录/2FA 数据流骨架完成，`typecheck` 与 Expo Web build 通过。 |
 | 2026-09-02 | `auto-deploy.sh` 支持指定目标强制发布：如 `scripts/auto-deploy.sh admin-web` 跳过 fetch/merge/落后检查并直接构建发布后台静态文件；后端 `*-service`、APP 孪生 `*-service-app` 与 `gateway` 支持直接重启，移动端仍提示单独 Expo 发版。 |
 | 2026-09-02 | 入驻线索站点归属修复：超级管理员创建线索必须选择具体站点，后端拒绝站点0；新增并应用 `39-mch-5019-site-fix.sql`，将 `MCH-5019` 全部现有申请/KYC/商户/物业/账号/商品/房型链路迁移至站点1，数据库一致性与 `CN/南宁` 排名候选查询通过。 |

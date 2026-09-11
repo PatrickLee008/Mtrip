@@ -15,6 +15,7 @@ import PrimaryButton from '@/components/common/PrimaryButton';
 import { colors, PAGE_PADDING, radius, spacing } from '@/config/theme';
 import { fonts } from '@/config/typography';
 import { useCommonStore } from '@/store/commonStore';
+import { useRegistrationStore } from '@/store/registrationStore';
 
 function BackIcon() {
   return (
@@ -72,6 +73,7 @@ export default function RegisterScreen() {
   const showToast = useCommonStore((state) => state.showToast);
   const [businessCount] = useState('1 Business');
   const [companyName, setCompanyName] = useState('');
+  const setDraftCompany = useRegistrationStore((state) => state.setCompanyName);
 
   return (
     <SafeAreaView style={styles.root} edges={['top', 'bottom']}>
@@ -136,7 +138,7 @@ export default function RegisterScreen() {
       <View style={[styles.footer, { paddingBottom: 24 + insets.bottom }]}> 
         <PrimaryButton
           label={t('register.next')}
-          onPress={() => navigation.navigate('RegisterBusinessDetails')}
+          onPress={() => { if (!companyName.trim()) { showToast(t('register.companyInfo.companyName')); return; } setDraftCompany(companyName.trim()); navigation.navigate('RegisterBusinessDetails'); }}
           style={styles.nextDisabledLook}
           textStyle={styles.nextText}
         />
