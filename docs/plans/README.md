@@ -27,6 +27,8 @@ MTrip/
 
 ## 模块进度总览
 
+2026-09-12更新：修复空库初始化漏跑增量迁移导致统一 KYC 模板为空。Docker Desktop 挂载的 `99z-run-migrations.sh` 被 entrypoint 直接执行时出现 `bad interpreter: Permission denied`；runner 改为打入 MySQL 镜像并由 entrypoint source，健康检查同时比对迁移文件数。当前本地 3 个迁移均已应用；隔离新库验证统一模板 1 条、6 项资料。详见[模块08](./08-部署与网关.md)。
+
 2026-09-10更新：merchant-web 登录页已按 Figma `mTrip_Merchant` 的 Login 节点 `1787:13875` 完成展示层对齐，落地主色顶栏、经透明留白裁切放大的原始 Logo、世界地图素材、900px 双栏安全登录卡、2FA 安全区及移动端单列布局。鉴权继续严格使用“访问码/用户名 + 密码 → challenge → TOTP”，首次绑定展示后端真实二维码；因无扫码登录接口，未实现设计稿静态扫码入口。`merchant-web npm run build` 通过，`1536×826` 与 `390×844` 首屏浏览器检查无控制台错误；未提交真实登录。详见[商户端落地记录](./13-商家端merchant-web落地.md)。
 
 2026-09-09更新：生产 MySQL 增量迁移已接入 `scripts/auto-deploy.sh`。生产发布不再只按本次 commit 猜测 SQL，也不再用无记录的 `db-apply` 重灌；现在每次 `--prod` 都会在代码发布前扫描 `database/migrations/VYYYYMMDDHHMMSS__lower-kebab.sql`，对比 `mtrip_system.schema_migrations` 后仅执行缺失版本，并记录 SHA-256、Git commit、执行节点、耗时与状态。历史版本被改写/删除、版本重号、并发锁超时、上次失败或旧快照 rename/copy 都会阻断发布；唯一 attempt 所有权避免并发误写，批次末再次核对完整账本，代码已最新或首次发布失败重试时也不会漏掉迁移及同批代码动作。compose 空库初始化已接同一账本和目录遍历，失败状态同时纳入 MySQL 健康检查。详见[模块08](./08-部署与网关.md)与 `database/migrations/README.md`。

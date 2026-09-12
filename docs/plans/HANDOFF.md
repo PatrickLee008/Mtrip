@@ -1,4 +1,8 @@
 # 会话交接文档(HANDOFF)
+### ★ 2026-09-12（空库增量迁移与统一 KYC 模板）
+
+本地首次 `./mtrip.sh build` 后，MySQL 挂载的 `99z-run-migrations.sh` 在 Docker Desktop 上被直接执行时报 `bad interpreter: Permission denied`；账本 0 条、统一 KYC 模板缺失，而旧健康检查误将空账本判为健康。已在当前本地库用容器内 runner 补跑 3 个迁移，账本均为 `applied`，统一模板 `id=10`、启用、6 项资料。`deploy/mysql/Dockerfile` 现将 runner 作为 0644 文件打进镜像（同时规范 Windows CRLF），由 MySQL entrypoint source；健康检查要求 `applied` 数量与 `database/migrations/V*.sql` 数量一致，且没有 `running/failed`。隔离新卷验证自动执行 3 个迁移并生成统一模板，测试卷已清理，现有库保留。`scripts/db-migrate.sh` 与 init runner 已兼容 macOS Bash 3.2，`--status` 显示已执行 3、待执行 0，状态机测试通过。加密登录后请求 `GET /api/v1/admin/merchant/onboarding/kyc-templates` 实测 HTTP 200、`code=0`、列表 1 条。其他环境拉取后需手工执行增量迁移并 `bash deploy/mtrip.sh build mysql`；`auto-deploy.sh` 对 compose 变化仅提示，不自动重建 MySQL。
+
 ### ★ 2026-09-10(merchant-web 登录页 Figma 对齐)
 
 **范围**：仅调整 `merchant-web` 登录页展示层，设计来源为 `mTrip_Merchant` Login 节点 `1787:13875`；不改路由、登录 API、JWT、RBAC 或后端。

@@ -53,7 +53,7 @@ MTrip/
 ```bash
 cd deploy
 cp .env.example .env
-docker compose up -d --build     # MySQL+Redis+8服务+网关,首次自动建库导种子
+./mtrip.sh build                  # 首次构建并启动完整开发栈，含 App 孪生池和增量迁移
 cd ../admin-web && npm install && npm run dev    # http://localhost:5173,接口经网关 8081
 ```
 
@@ -100,6 +100,8 @@ cd ../admin-web && npm install && npm run dev    # http://localhost:5173,接口�
 ## 当前状态(2026-07)
 
 生产 MySQL 版本迁移（2026-09-09）：新增 `mtrip_system.schema_migrations` 与 `scripts/db-migrate.sh`，以有效 UTC 版本、SHA-256 和 MySQL 命名锁只执行 `database/migrations/` 中账本缺失的 SQL，并记录 Git commit、执行节点、耗时和成功/失败状态；唯一 `attempt_id` 防止并发失败进程改写其他执行者，批次结束会重新核对完整账本。`scripts/auto-deploy.sh --prod` 已改为每次拉取后先对比完整账本，迁移失败、历史文件改写/删除、版本重号或旧快照 rename/copy 会在任何代码发布前阻断；即使代码已最新也会复查上次遗漏，首次发布失败也会保留拉取前基线供下轮重放。compose 空库初始化会自动遍历迁移目录，失败登记 `failed` 且健康检查拒绝未完成账本；新增版本无需再逐条登记挂载。旧 `db-apply` 仅保留为开发环境补灌历史快照工具。静态脚本、命名校验及 fake Docker 状态机测试通过；本机无 Docker CLI，真实 MySQL/compose 验证待有 Docker 的环境执行。统一质量脚本因宿主机 PHP 7.2 不识别项目 PHP 8.1 语法而停在后端 lint，本次未改 PHP。
+
+2026-09-12 空库迁移修复：MySQL 初始化 runner 改为放入自建 `mtrip-mysql:8.0` 镜像，以 0644 权限由 entrypoint source，规避 Docker Desktop 挂载 `.sh` 的 `bad interpreter: Permission denied`；构建时会将 Windows CRLF 转为 LF。健康检查还要求已执行版本数等于迁移文件数，避免空账本误判健康。隔离新库验证 3 个增量迁移自动执行，统一 KYC 模板 1 条、6 项资料。已有环境拉取代码后先执行 `bash scripts/db-migrate.sh`，再到 `deploy/` 执行 `bash mtrip.sh build mysql`；`auto-deploy.sh` 对 compose 变更仅提示手工重建。
 
 merchant-app 状态栏规范（2026-09-08）：Figma 画布中的 iPhone 状态栏只作设备环境说明,页面代码不手绘时间/信号/电池；一律使用系统透明状态栏 + `SafeAreaView`。注册 Step 1 `839:6106` 与注册 Step 2 `839:6159` 已按此规范实现。
 

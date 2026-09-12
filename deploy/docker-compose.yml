@@ -48,7 +48,10 @@ x-hyperf-common: &hyperf-common
 
 services:
   mysql:
-    image: mysql:8.0
+    image: mtrip-mysql:8.0
+    build:
+      context: ..
+      dockerfile: deploy/mysql/Dockerfile
     restart: unless-stopped
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root@2026}
@@ -192,13 +195,16 @@ services:
       - ../database/system/11-sms-smspoh.sql:/docker-entrypoint-initdb.d/99n-sms-smspoh.sql:ro
       # 全局版本迁移最后执行并登记账本；目录内文件无需再逐条挂载 compose
       - ../database/migrations:/mtrip-migrations:ro
-      - ../database/init/99-run-migrations.sh:/docker-entrypoint-initdb.d/99z-run-migrations.sh:ro
     healthcheck:
-      # 连接成功且迁移账本无 running/failed 才允许业务服务启动。
+      # 连接成功、已执行数等于目录内版本数，且无 running/failed 才允许业务服务启动。
       test:
         - CMD-SHELL
         - >-
           test "$$(MYSQL_PWD="$${MYSQL_ROOT_PASSWORD}"
+          mysql -h 127.0.0.1 -uroot --batch --skip-column-names
+          -e "SELECT COUNT(*) FROM mtrip_system.schema_migrations WHERE status = 'applied';"
+          2>/dev/null)" = "$$(find /mtrip-migrations -maxdepth 1 -type f -name 'V*.sql' | wc -l | tr -d '[:space:]')"
+          && test "$$(MYSQL_PWD="$${MYSQL_ROOT_PASSWORD}"
           mysql -h 127.0.0.1 -uroot --batch --skip-column-names
           -e "SELECT COUNT(*) FROM mtrip_system.schema_migrations WHERE status <> 'applied';"
           2>/dev/null)" = "0"

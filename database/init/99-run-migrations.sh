@@ -31,7 +31,7 @@ valid_utc_version() {
     [ "$day" -ge 1 ] && [ "$day" -le "$max_day" ]
 }
 
-declare -A seen_versions=()
+seen_versions='|'
 for migration in "$MIGRATION_DIR"/*.sql; do
     [ -f "$migration" ] || continue
 
@@ -50,11 +50,13 @@ for migration in "$MIGRATION_DIR"/*.sql; do
         echo "[mtrip-migrate] 迁移文件名过长: $name" >&2
         exit 1
     fi
-    if [ -n "${seen_versions[$version]:-}" ]; then
-        echo "[mtrip-migrate] 迁移版本重复: $version (${seen_versions[$version]} / $name)" >&2
-        exit 1
-    fi
-    seen_versions[$version]="$name"
+    case "$seen_versions" in
+        *"|$version|"*)
+            echo "[mtrip-migrate] 迁移版本重复: $version ($name)" >&2
+            exit 1
+            ;;
+    esac
+    seen_versions="${seen_versions}${version}|"
 done
 
 for migration in "$MIGRATION_DIR"/*.sql; do

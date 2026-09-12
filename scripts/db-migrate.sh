@@ -75,13 +75,14 @@ valid_utc_version() {
 }
 
 MIGRATIONS=()
-while IFS= read -r migration; do MIGRATIONS+=("$migration"); done < <(
+MIGRATION_COUNT=0
+while IFS= read -r migration; do MIGRATIONS+=("$migration"); MIGRATION_COUNT=$((MIGRATION_COUNT + 1)); done < <(
     find "$MIGRATION_DIR" -type f -name '*.sql' -print | LC_ALL=C sort
 )
 
-declare -A SEEN_VERSIONS=()
+SEEN_VERSIONS='|'
 VALIDATION_FAILED=0
-for migration in "${MIGRATIONS[@]}"; do
+for migration in ${MIGRATIONS[@]+"${MIGRATIONS[@]}"}; do
     name="$(basename "$migration")"
     if [ "$(dirname "$migration")" != "$MIGRATION_DIR" ]; then
         fail "迁移目录必须保持单层，不能使用子目录: ${migration#"$REPO_ROOT/"}"
@@ -89,7 +90,7 @@ for migration in "${MIGRATIONS[@]}"; do
         continue
     fi
     if [[ ! "$name" =~ ^V([0-9]{14})__([a-z0-9]+(-[a-z0-9]+)*)\.sql$ ]]; then
-        fail "非法迁移文件名: $name；要求 VYYYYMMDDHHMMSS__lower-kebab.sql"
+        fail "非法迁移文件名: ${name}；要求 VYYYYMMDDHHMMSS__lower-kebab.sql"
         VALIDATION_FAILED=1
         continue
     fi
@@ -104,16 +105,15 @@ for migration in "${MIGRATIONS[@]}"; do
         VALIDATION_FAILED=1
         continue
     fi
-    if [ -n "${SEEN_VERSIONS[$version]:-}" ]; then
-        fail "迁移版本重复: $version (${SEEN_VERSIONS[$version]} / $name)"
-        VALIDATION_FAILED=1
-    fi
-    SEEN_VERSIONS[$version]="$name"
+    case "$SEEN_VERSIONS" in
+        *"|$version|"*) fail "迁移版本重复: $version ($name)"; VALIDATION_FAILED=1 ;;
+    esac
+    SEEN_VERSIONS="${SEEN_VERSIONS}${version}|"
 done
 [ "$VALIDATION_FAILED" -eq 0 ] || exit 1
 
 if [ "$MODE" = "validate" ]; then
-    log "迁移命名校验通过，共 ${#MIGRATIONS[@]} 个版本"
+    log "迁移命名校验通过，共 $MIGRATION_COUNT 个版本"
     exit 0
 fi
 
@@ -141,8 +141,8 @@ ledger_exists="$(mysql_query "SELECT COUNT(*) FROM information_schema.TABLES WHE
 
 if [ "$ledger_exists" != "1" ]; then
     if [ "$MODE" = "status" ] || [ "$MODE" = "dry-run" ]; then
-        log "迁移账本尚未创建；当前 ${#MIGRATIONS[@]} 个版本均视为待执行"
-        for migration in "${MIGRATIONS[@]}"; do echo "  PENDING  $(basename "$migration")"; done
+        log "迁移账本尚未创建；当前 $MIGRATION_COUNT 个版本均视为待执行"
+        for migration in ${MIGRATIONS[@]+"${MIGRATIONS[@]}"}; do echo "  PENDING  $(basename "$migration")"; done
         exit 0
     fi
 
@@ -158,9 +158,10 @@ if [ "$ledger_exists" != "1" ]; then
 fi
 
 PENDING=()
+PENDING_COUNT=0
 APPLIED_SEEN=0
 INTEGRITY_FAILED=0
-for migration in "${MIGRATIONS[@]}"; do
+for migration in ${MIGRATIONS[@]+"${MIGRATIONS[@]}"}; do
     name="$(basename "$migration")"
     [[ "$name" =~ ^V([0-9]{14})__([a-z0-9]+(-[a-z0-9]+)*)\.sql$ ]]
     version="${BASH_REMATCH[1]}"
@@ -172,6 +173,7 @@ for migration in "${MIGRATIONS[@]}"; do
 
     if [ -z "$row" ]; then
         PENDING+=("$migration")
+        PENDING_COUNT=$((PENDING_COUNT + 1))
         continue
     fi
 
@@ -182,7 +184,7 @@ for migration in "${MIGRATIONS[@]}"; do
         continue
     fi
     if [ "$recorded_status" != "applied" ]; then
-        fail "版本 $version 当前状态为 $recorded_status，需人工核对后处理，自动发布已阻断"
+        fail "版本 $version 当前状态为 ${recorded_status}，需人工核对后处理，自动发布已阻断"
         INTEGRITY_FAILED=1
         continue
     fi
@@ -204,21 +206,21 @@ fi
 
 MAX_APPLIED="$(mysql_query "SELECT COALESCE(MAX(version), '') FROM mtrip_system.schema_migrations WHERE status='applied';")" \
     || { fail "查询最高迁移版本失败"; exit 1; }
-for migration in "${PENDING[@]}"; do
+for migration in ${PENDING[@]+"${PENDING[@]}"}; do
     name="$(basename "$migration")"
     version="${name:1:14}"
     if [ -n "$MAX_APPLIED" ] && [[ "$version" < "$MAX_APPLIED" ]]; then
-        fail "待执行版本 $version 低于已上线最高版本 $MAX_APPLIED；禁止倒序补迁移"
+        fail "待执行版本 $version 低于已上线最高版本 ${MAX_APPLIED}；禁止倒序补迁移"
         INTEGRITY_FAILED=1
     fi
 done
 [ "$INTEGRITY_FAILED" -eq 0 ] || exit 1
 
-log "版本对比完成: 已执行 $APPLIED_SEEN，待执行 ${#PENDING[@]}"
-for migration in "${PENDING[@]}"; do echo "  PENDING  $(basename "$migration")"; done
+log "版本对比完成: 已执行 ${APPLIED_SEEN}，待执行 $PENDING_COUNT"
+for migration in ${PENDING[@]+"${PENDING[@]}"}; do echo "  PENDING  $(basename "$migration")"; done
 
 if [ "$MODE" = "status" ] || [ "$MODE" = "dry-run" ]; then exit 0; fi
-if [ ${#PENDING[@]} -eq 0 ]; then
+if [ "$PENDING_COUNT" -eq 0 ]; then
     log "数据库已是最新版本"
     # Apply mode performs one fresh, read-only pass before reporting success. This
     # closes the window where another deploy changed the ledger after our scan.
@@ -227,7 +229,7 @@ if [ ${#PENDING[@]} -eq 0 ]; then
     exit $?
 fi
 
-for migration in "${PENDING[@]}"; do
+for migration in ${PENDING[@]+"${PENDING[@]}"}; do
     name="$(basename "$migration")"
     [[ "$name" =~ ^V([0-9]{14})__([a-z0-9]+(-[a-z0-9]+)*)\.sql$ ]]
     version="${BASH_REMATCH[1]}"
@@ -283,7 +285,7 @@ for migration in "${PENDING[@]}"; do
             log "[OK] $name 已由并发发布进程完成"
         else
             mysql_query "UPDATE mtrip_system.schema_migrations SET status='failed', finished_at=NOW(6), execution_ms=ROUND(TIMESTAMPDIFF(MICROSECOND, started_at, NOW(6)) / 1000), error_message='mysql client execution failed' WHERE version='$version' AND status='running' AND attempt_id='$attempt_id';" >/dev/null 2>&1 || true
-            fail "迁移失败并停止后续版本: $name；DDL 可能已部分提交，请人工核对"
+            fail "迁移失败并停止后续版本: ${name}；DDL 可能已部分提交，请人工核对"
             exit 1
         fi
     fi
@@ -295,4 +297,4 @@ done
 MTRIP_REPO_ROOT="$REPO_ROOT" DOCKER="$DOCKER" \
     bash "$SCRIPT_DIR/db-migrate.sh" --status \
     || { fail "迁移后完整账本复核失败"; exit 1; }
-log "全部迁移成功，共执行 ${#PENDING[@]} 个版本，完整账本复核通过"
+log "全部迁移成功，共执行 $PENDING_COUNT 个版本，完整账本复核通过"
