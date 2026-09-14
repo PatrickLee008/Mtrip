@@ -1,7 +1,7 @@
 /**
  * 登录传输加密(与后端 shared TransportCipher 对齐):
  * AES-256-CBC,key = SHA256(VITE_LOGIN_AES_KEY),输出 base64(IV 16字节 + 密文)
- * 后端 PayloadDecryptMiddleware 以 MTRIP_MERCHANT_AES_KEY(同值)解密
+ * 后端 PayloadDecryptMiddleware 以 MTRIP_ADMIN_AES_KEY(同值)解密
  */
 
 import CryptoJS from 'crypto-js';

@@ -1,4 +1,8 @@
 # 会话交接文档(HANDOFF)
+### ★ 2026-09-13（merchant-web 登录解密失败修复）
+
+商户端登录密文由 shared `PayloadDecryptMiddleware` 使用 `MTRIP_ADMIN_AES_KEY` 解密，之前 `merchant-web/.env.development` 的 `VITE_LOGIN_AES_KEY` 与本地运行容器不一致，前端注释还误称不存在的 `MTRIP_MERCHANT_AES_KEY`。已对齐开发配置、修正注释和启动指南，并重启 merchant-web；经 5174 代理发空加密请求返回 HTTP 400 / `40001`“参数 username 不能为空”，已通过解密进入字段校验。真实账号及 TOTP 未操作；其他环境若单独更换后端密钥，须同步商户/管理前端环境变量并重启 Vite。
+
 ### ★ 2026-09-12（空库增量迁移与统一 KYC 模板）
 
 本地首次 `./mtrip.sh build` 后，MySQL 挂载的 `99z-run-migrations.sh` 在 Docker Desktop 上被直接执行时报 `bad interpreter: Permission denied`；账本 0 条、统一 KYC 模板缺失，而旧健康检查误将空账本判为健康。已在当前本地库用容器内 runner 补跑 3 个迁移，账本均为 `applied`，统一模板 `id=10`、启用、6 项资料。`deploy/mysql/Dockerfile` 现将 runner 作为 0644 文件打进镜像（同时规范 Windows CRLF），由 MySQL entrypoint source；健康检查要求 `applied` 数量与 `database/migrations/V*.sql` 数量一致，且没有 `running/failed`。隔离新卷验证自动执行 3 个迁移并生成统一模板，测试卷已清理，现有库保留。`scripts/db-migrate.sh` 与 init runner 已兼容 macOS Bash 3.2，`--status` 显示已执行 3、待执行 0，状态机测试通过。加密登录后请求 `GET /api/v1/admin/merchant/onboarding/kyc-templates` 实测 HTTP 200、`code=0`、列表 1 条。其他环境拉取后需手工执行增量迁移并 `bash deploy/mtrip.sh build mysql`；`auto-deploy.sh` 对 compose 变化仅提示，不自动重建 MySQL。

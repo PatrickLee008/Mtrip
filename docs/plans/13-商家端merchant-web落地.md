@@ -3,6 +3,11 @@
 > 参考 admin-web 从零搭建平行的 merchant-web(Vue3+Vite+TS+antdv),为商户账号(`merchant_admin`,account_type 1集团/2商户/3门店)落地一套完整仿 admin 的动态 RBAC:独立四表菜单/角色,登录按 `account_type` 下发菜单树+权限集,接口权限继续由 `#[Permission]` 注解按 `perm_key` 联动(与前端 `v-perm` 同一把钥匙)。
 > 承接 12-商家账号体系.md 的二期清单。
 
+## 2026-09-13 商户登录传输密钥对齐
+
+- [x] 本地商户登录报“加密数据解密失败”：`merchant-web/.env.development` 的 `VITE_LOGIN_AES_KEY` 与运行中 merchant-service 的 `MTRIP_ADMIN_AES_KEY` 不同；`PayloadDecryptMiddleware` 对商户登录同样使用后者，旧注释所写的 `MTRIP_MERCHANT_AES_KEY` 并不存在。
+- [x] 开发配置已对齐 admin-web 与后端的登录密钥，修正商户前端配置注释和启动指南；重启 merchant-web 后，空的加密测试请求经 5174 代理返回 HTTP 400 / `40001`“参数 username 不能为空”，证明已通过解密并进入参数校验。真实账号及 TOTP 登录未代用户操作。
+
 ## 2026-09-10 商户登录页 Figma 对齐
 
 - [x] 按 Figma `mTrip_Merchant` 节点 `1787:13875` 重做 `views/login/index.vue` 的展示层：55px 主色顶栏、真实 mTrip Logo、世界地图背景、900px 双栏安全登录卡、浅蓝标题区、虚线安全区、2FA 分隔标识和页脚。

@@ -6,6 +6,8 @@
 
 ## 项目目录约定
 
+2026-09-13修复：商户后台开发登录密钥与后端 `MTRIP_ADMIN_AES_KEY` 对齐，修正误指向不存在的 `MTRIP_MERCHANT_AES_KEY` 的注释；重启 Vite 后加密空请求已通过解密，返回用户名必填校验。详见[商户端落地记录](./13-商家端merchant-web落地.md)。
+
 ```
 MTrip/
 ├── backend/                 # 后端微服务(Hyperf 3.1 + Swoole,Docker 运行)
