@@ -205,3 +205,23 @@ Expo 51 / TypeScript / Zustand / React Navigation 6 / Axios / i18next + react-i1
   格子数按后端 `pinLength` 渲染,不写死 6(后台配 4 位时写死会让 Continue 永远点不亮)。
   站点未配渠道(50021)时注册流程直接跳过验证码页,与后端「渠道启用才强制」对齐。
   完整记录见 HANDOFF「★ 2026-09-08(App 短信验证接入 SMSPoh Verify API V3)」。
+
+- [x] **开屏关怀模式选择页**(2026-09-14,Figma Splash `2485:7324`):引导流程补第三屏,
+  变成「纯开屏 → 语言选择 → 模式选择 → 主流程」。两张卡各带一个 CTA(点哪张就按哪种模式进入,
+  不是「先选中再 Continue」),选择存本地(`commonStore.liteMode` / `modeChosen`,键 `mtrip:app-mode`);
+  语言与模式各记各的状态,老用户只补问模式这一屏。「更多」页原先那个 `useState` + comingSoon 的
+  Lite Mode 开关已接到同一份状态 —— 页面脚注承诺的「随时在设置里改」这才成立。
+  开屏外壳(波浪 + logo)抽成 `components/splash/SplashBackdrop.tsx` 供两屏共用。
+  完整记录见 HANDOFF「★ 2026-09-14(开屏新增关怀模式选择页)」。
+
+- [x] **关怀模式三屏**(2026-09-14,Figma section Home Lite `2540:21120`):`liteMode` 开始真的换页面。
+  首页 / 我的精选 / 更多三屏各出 Lite 版,**在 Tab 这一层分叉**(`MainTabs` 按 `liteMode` 选组件
+  与 `LiteTabBar`),不在页面内写分支;优惠中心没有 Lite 稿,沿用完整模式那一页。
+  「我的精选」的取数抽成 `useMyPickData` 由两种模式共用 —— 同一账号在两种模式下看到的
+  订单与收藏必须是同一份。Lite 首页的四个业务线就是 `QUICK_ACTIONS` 那四个,落地规则一字不差共用;
+  插画另存 `assets/images/lite/*.png`(现有 `home/*.png` 是整块蓝色方块图标,叠在蓝卡上会出错),
+  Figma 原始分辨率 4.6MB 已按 3× 渲染尺寸压到 602KB。
+  Lite More 按用户选定**补了设计稿没有的「语言 + 退出登录」卡**(缺了这两项会把关怀模式用户卡死),
+  站点与 GDPR 按设计稿去掉。新增 `Outfit_700Bold`;i18n 三份各补 6 键(共 878)。
+  **未实现**:设计稿的「Multi Booking (2 Stay)」多住宿卡(后端一单只对一个 sku,完整模式同样没做)。
+  完整记录见 HANDOFF「★ 2026-09-14(关怀模式落地首页 / 我的精选 / 更多三屏)」。
