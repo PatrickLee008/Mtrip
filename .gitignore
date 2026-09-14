@@ -26,6 +26,9 @@ backend/**/vendor/
 backend/**/.env
 backend/**/runtime/
 backend/**/composer.lock
+# Swow(Windows 原生调试)本地依赖清单:从 composer.json 派生,不提交
+backend/**/composer-swow.json
+backend/**/composer-swow.lock
 backend/**/.phpunit.result.cache
 backend/**/.phpstorm.meta.php
 
