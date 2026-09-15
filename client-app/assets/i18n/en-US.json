@@ -246,6 +246,13 @@
     "seeAll": "See All",
     "bookNow": "Book Now",
     "comingSoon": "Coming soon",
+    "lite": {
+      "title": "Choose a Service You Want",
+      "hotels": "Book a hotel",
+      "food": "Explore nearby Restaurant",
+      "cars": "See premium transportation",
+      "package": "Hotel + Transportation"
+    },
     "quickAction": {
       "hotels": "Hotels",
       "bus": "Bus",
@@ -361,6 +368,9 @@
     "totalAmount": "Total",
     "submitOrder": "Place order",
     "payNow": "Pay now",
+    "payBalance": "Pay with wallet balance",
+    "walletBalance": "Wallet balance: {{amount}}",
+    "balanceInsufficient": "Not enough wallet balance for this order.",
     "payStripe": "Pay with Stripe",
     "payPaypal": "Pay with PayPal",
     "cancelOrder": "Cancel order",
@@ -454,6 +464,9 @@
   },
   "more": {
     "rewards": "You have {{count}} exclusive rewards",
+    "lite": {
+      "seeReward": "See Reward"
+    },
     "version": "Version {{version}}",
     "wallet": {
       "title": "mTrip Wallet",
@@ -738,7 +751,21 @@
   },
   "splash": {
     "chooseLanguage": "Choose a language to continue",
-    "continue": "Continue"
+    "continue": "Continue",
+    "chooseMode": "Choose a Mode to continue",
+    "lite": {
+      "title": "Lite Mode",
+      "tagline": "Simple and easy to use",
+      "desc": "Larger text, simpler screens, and fewer things to choose from.",
+      "cta": "Use Lite Mode"
+    },
+    "full": {
+      "title": "Full Mode",
+      "tagline": "Use all mTrip features",
+      "desc": "The complete mTrip app experience with all features and options.",
+      "cta": "Use Full Mode"
+    },
+    "modeFootnote": "You can change this anytime later in Settings"
   },
   "hotels": {
     "title": "Hotel & Homestay",
@@ -1226,6 +1253,7 @@
           "support": "24/7 SUPPORT"
         },
         "methodRequired": "Please choose a payment method.",
+        "insufficient": "Not enough wallet balance for this booking.",
         "successTitle": "Payment Success",
         "close": "Close",
         "failTitle": "Payment Fail!",

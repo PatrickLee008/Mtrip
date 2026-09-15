@@ -215,12 +215,16 @@ class OrderController extends AbstractController
         ], '下单成功,请在10分钟内完成支付');
     }
 
-    /** 支付(本期mock):payMethod 1Stripe 2PayPal,直接置为已支付并生成核销码 */
+    /**
+     * 支付:payMethod 1Stripe 2PayPal(均为 mock,直接置为已支付)3余额(真实扣 mTrip 钱包)。
+     * 余额支付在同一事务内:行锁扣 user_info.balance → 写 user_balance_log(消费,负数)
+     * → 置已支付生成核销码 → 写 finance_flow(1收入/1订单支付)。任一步失败整单回滚。
+     */
     public function pay(): array
     {
         $orderId = $this->requireId('orderId');
         $payMethod = $this->intInput('payMethod', 1);
-        if (! in_array($payMethod, [1, 2], true)) {
+        if (! in_array($payMethod, [1, 2, 3], true)) {
             throw new BusinessException(ErrorCode::PARAM_ERROR, '支付方式不正确');
         }
 
@@ -242,8 +246,40 @@ class OrderController extends AbstractController
                 throw new BusinessException(ErrorCode::DATA_CONFLICT, '订单不是待支付状态');
             }
             $verifyCode = OrderNoGenerator::verifyCode();
+            $payAmount = round((float) $order['pay_amount'], 2);
+            $tradeNo = ($payMethod === 3 ? 'WALLET' : 'MOCK') . OrderNoGenerator::flowNo();
+            // 余额支付:先真实扣款(余额不足在此抛错回滚),再走统一的支付结果入口
+            if ($payMethod === 3 && $payAmount > 0) {
+                $this->walletService->debit(
+                    (int) $order['site_id'],
+                    (int) $order['user_id'],
+                    $payAmount,
+                    2,
+                    $orderId,
+                    "订单 {$order['order_no']} 钱包支付",
+                );
+            }
             // 支付状态变更统一走 PaymentResultHandler(幂等+迟到支付拦截+时间线)
-            $verifyCode = $this->payHandler->markPaid($order, $payMethod, 'MOCK' . OrderNoGenerator::flowNo(), $verifyCode);
+            $verifyCode = $this->payHandler->markPaid($order, $payMethod, $tradeNo, $verifyCode);
+            // 资金流水:余额支付是平台真实收到的一笔钱,记 finance_flow(mock 渠道无真实资金,不记)
+            if ($payMethod === 3) {
+                Db::table('finance_flow')->insert([
+                    'flow_no' => OrderNoGenerator::flowNo(),
+                    'site_id' => (int) $order['site_id'],
+                    'flow_type' => 1,
+                    'biz_type' => 1,
+                    'amount' => $payAmount,
+                    'order_id' => $orderId,
+                    'merchant_id' => (int) $order['merchant_id'],
+                    'supplier_id' => (int) $order['supplier_id'],
+                    'user_id' => (int) $order['user_id'],
+                    'pay_channel' => 3,
+                    'trade_no' => $tradeNo,
+                    'flow_status' => 1,
+                    'remark' => "订单 {$order['order_no']} 钱包支付",
+                    'operator_id' => 0,
+                ]);
+            }
             $this->stockService->deduct($order);
             Db::table('goods_info')->where('id', (int) $order['goods_id'])
                 ->increment('sales_count', (int) $order['quantity']);

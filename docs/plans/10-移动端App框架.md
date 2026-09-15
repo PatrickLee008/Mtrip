@@ -42,7 +42,7 @@ Expo 51 / TypeScript / Zustand / React Navigation 6 / Axios / i18next + react-i1
 - [x] screens/home:首页(站点切换入口、搜索、酒店/门票入口、推荐/热门商品)
 - [x] screens/site:站点选择页(切换联动货币/语言)
 - [x] screens/goods:商品列表(排序Tab/分页)、商品详情(SKU选择/退改规则/预订守卫)
-- [x] screens/order:下单确认页(日期/数量/联系人/预估价)、订单列表(状态Tab/获焦刷新)、订单详情(mock支付/核销码/取消/退款申请)
+- [x] screens/order:下单确认页(日期/数量/联系人/预估价)、订单列表(状态Tab/获焦刷新)、订单详情(余额支付/核销码/取消/退款申请;Stripe/PayPal 置灰 Coming soon)
 - [x] screens/user:登录页、注册页(注册即 GDPR 授权)、我的(资料/余额积分/语言切换/GDPR/退出)
 
 ### 验收
@@ -205,3 +205,34 @@ Expo 51 / TypeScript / Zustand / React Navigation 6 / Axios / i18next + react-i1
   格子数按后端 `pinLength` 渲染,不写死 6(后台配 4 位时写死会让 Continue 永远点不亮)。
   站点未配渠道(50021)时注册流程直接跳过验证码页,与后端「渠道启用才强制」对齐。
   完整记录见 HANDOFF「★ 2026-09-08(App 短信验证接入 SMSPoh Verify API V3)」。
+
+- [x] **开屏关怀模式选择页**(2026-09-14,Figma Splash `2485:7324`):引导流程补第三屏,
+  变成「纯开屏 → 语言选择 → 模式选择 → 主流程」。两张卡各带一个 CTA(点哪张就按哪种模式进入,
+  不是「先选中再 Continue」),选择存本地(`commonStore.liteMode` / `modeChosen`,键 `mtrip:app-mode`);
+  语言与模式各记各的状态,老用户只补问模式这一屏。「更多」页原先那个 `useState` + comingSoon 的
+  Lite Mode 开关已接到同一份状态 —— 页面脚注承诺的「随时在设置里改」这才成立。
+  开屏外壳(波浪 + logo)抽成 `components/splash/SplashBackdrop.tsx` 供两屏共用。
+  完整记录见 HANDOFF「★ 2026-09-14(开屏新增关怀模式选择页)」。
+
+- [x] **关怀模式三屏**(2026-09-14,Figma section Home Lite `2540:21120`):`liteMode` 开始真的换页面。
+  首页 / 我的精选 / 更多三屏各出 Lite 版,**在 Tab 这一层分叉**(`MainTabs` 按 `liteMode` 选组件
+  与 `LiteTabBar`),不在页面内写分支;优惠中心没有 Lite 稿,沿用完整模式那一页。
+  「我的精选」的取数抽成 `useMyPickData` 由两种模式共用 —— 同一账号在两种模式下看到的
+  订单与收藏必须是同一份。Lite 首页的四个业务线就是 `QUICK_ACTIONS` 那四个,落地规则一字不差共用;
+  插画另存 `assets/images/lite/*.png`(现有 `home/*.png` 是整块蓝色方块图标,叠在蓝卡上会出错),
+  Figma 原始分辨率 4.6MB 已按 3× 渲染尺寸压到 602KB。
+  Lite More 按用户选定**补了设计稿没有的「语言 + 退出登录」卡**(缺了这两项会把关怀模式用户卡死),
+  站点与 GDPR 按设计稿去掉。新增 `Outfit_700Bold`;i18n 三份各补 6 键(共 878)。
+  **未实现**:设计稿的「Multi Booking (2 Stay)」多住宿卡(后端一单只对一个 sku,完整模式同样没做)。
+  完整记录见 HANDOFF「★ 2026-09-14(关怀模式落地首页 / 我的精选 / 更多三屏)」。
+
+- [x] **支付只留余额**(2026-09-15):订房向导支付步与订单详情的可用渠道收敛到 **mTrip 钱包余额**一种。
+  MMQR / KBZPay / Wave Pay / 到店付 / 银行卡 / 手机银行 / Stripe / PayPal 一律**置灰 + Coming soon 角标**,
+  点按只弹提示、不会被选中,也不再发任何支付请求(`PaymentMethodRow` 新增 `disabled` / `badge` 两个 prop)。
+  余额支付是**真扣款**:`payOrder` 默认 `PAY_METHOD.BALANCE=3`,后端在同一事务里扣
+  `user_info.balance` 并落 `user_balance_log` + `finance_flow`(见模块09 完成记录)。
+  支付页的钱包卡与余额那行改读 `/app/user/me` 的真实 `balance`(演示模式仍回落 `bookingDemo` 数值),
+  **进支付步 / 打开待支付订单详情会先刷新一次资料** —— 本地缓存的旧余额会把够钱的用户误判成余额不足。
+  余额不足在客户端就拦住(不去创建那张十分钟后才过期的待支付订单),后端 `debit()` 是第二道闸。
+  支付成功后刷新资料,钱包卡与「我的」页不会停在扣款前的数。
+  两处 `payOrder` 合并为一份(`api/pay.ts`,`api/order.ts` 只做转出);i18n 三份各补 4 键(共 882)。

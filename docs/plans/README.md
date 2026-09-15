@@ -29,6 +29,8 @@ MTrip/
 
 ## 模块进度总览
 
+2026-09-15更新：C 端支付收敛到余额一种。`/api/v1/app/order/pay` 新增 `payMethod=3` 余额支付（**唯一真实扣款渠道**：同一事务内行锁扣 `user_info.balance`、写 `user_balance_log` 消费流水与 `finance_flow` 订单支付流水，余额不足整单回滚），`WalletService` 补 `debit()`；client-app 其余渠道全部置灰 + Coming soon，不再发支付请求，钱包余额改读 `/app/user/me` 真实值并在进支付步/打开待支付订单时刷新。详见[模块09](./09-移动端微服务.md)与[模块10](./10-移动端App框架.md)。
+
 2026-09-12更新：修复空库初始化漏跑增量迁移导致统一 KYC 模板为空。Docker Desktop 挂载的 `99z-run-migrations.sh` 被 entrypoint 直接执行时出现 `bad interpreter: Permission denied`；runner 改为打入 MySQL 镜像并由 entrypoint source，健康检查同时比对迁移文件数。当前本地 3 个迁移均已应用；隔离新库验证统一模板 1 条、6 项资料。详见[模块08](./08-部署与网关.md)。
 
 2026-09-10更新：merchant-web 登录页已按 Figma `mTrip_Merchant` 的 Login 节点 `1787:13875` 完成展示层对齐，落地主色顶栏、经透明留白裁切放大的原始 Logo、世界地图素材、900px 双栏安全登录卡、2FA 安全区及移动端单列布局。鉴权继续严格使用“访问码/用户名 + 密码 → challenge → TOTP”，首次绑定展示后端真实二维码；因无扫码登录接口，未实现设计稿静态扫码入口。`merchant-web npm run build` 通过，`1536×826` 与 `390×844` 首屏浏览器检查无控制台错误；未提交真实登录。详见[商户端落地记录](./13-商家端merchant-web落地.md)。

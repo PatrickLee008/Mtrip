@@ -1,24 +1,18 @@
 /**
- * 我的精选(按 Figma M-Trip / My Pick 289:1112 重做)
+ * 关怀模式「我的精选」(按 Figma Lite My Pick `2540:21121` 实现)
  *
- * 结构与设计稿一致:顶部栏 → 三分类页签 → 预订卡列表 → 入住反馈卡 →
- * 收藏酒店(横滑)→ 收藏餐厅(横滑)→ 新用户促销卡。
- * 数据策略沿用 HomeScreen:预订列表取 /order/list、收藏酒店取 /user/favorite/list;
- * 收藏餐厅后端暂无对应品类,走 myPickSections.ts 静态数据。
+ * 取数与完整模式共用 `useMyPickData`(订单 /order/list、收藏 /user/favorite/list,含获焦重拉),
+ * 所以同一个账号在两种模式下看到的订单条数与收藏列表必然一致;本文件只负责排版。
  *
- * **取数已抽到 `useMyPickData`**,与关怀模式的 MyPickLiteScreen 共用同一份口径
- * (含「常驻 Tab 必须 useFocusEffect」这条);本文件只剩排版。
+ * 相对完整模式**去掉了两个区块**(设计稿没画,且都不是必需功能):
+ *   入住反馈卡 FeedbackCard、底部新用户促销卡 PromoCard。
+ * 保留的三段是:三分类页签 → 预订卡 → 收藏酒店 → 收藏餐厅。
  *
- * 「收藏酒店」= 真实收藏,与酒店搜索结果页的心形是同一份数据(`user_favorite` 表):
- *   - **登录后只显示真实收藏**,一条都没有时给空态文案 —— 不能拿设计稿示例卡冒充,
- *     否则看起来像「没对接后端」(设计稿示例只在**未登录**时展示,与上面的预订卡一致)。
- *   - 卡上的心形在这里是**实心且可点**,点一下调 `/user/favorite/remove` 取消收藏并就地移除。
- *   - 列表接口不返回起价(minPrice=0),StayCard 会自动隐藏价格行。
- *   - 本页是常驻的 Tab,**必须用 useFocusEffect 而不是 useEffect** —— 否则在酒店页收藏完
- *     切回来还是旧数据(挂载不会重来)。
+ * 设计稿实测:Main px16 pt16 pb20,块间距 24;区块标题 Outfit 600/24 行高 32,
+ * 右侧 See All / View all 主色 Inter 400/16。卡片量值见 components/lite/LiteMyPickCards.tsx。
  *
- * 封面另有一层兜底:真实酒店的 `cover_image` / 订单快照 `goods_image` 目前多是脏值或空值,
- * 统一用 `tempCoverFor(index)` 回落到设计稿临时图(与酒店搜索结果页同一套,免得同一家酒店两页两张图)。
+ * 设计稿里那张「Multi Booking (2 Stay)」多住宿卡**没有实现** —— 后端一个订单只对应一个 sku,
+ * 造不出「一单两段住宿」的数据,完整模式同样没做这件事(见 HotelBooking 的多住宿走 comingSoon)。
  */
 
 import React, { useState } from 'react';
@@ -35,15 +29,14 @@ import {
   tempCoverFor,
 } from '@/assets/tempImages';
 import HomeHeader from '@/components/home/HomeHeader';
-import PromoCard from '@/components/home/PromoCard';
-import SectionHeader from '@/components/home/SectionHeader';
-import StayCard, { STAY_CARD_WIDTH } from '@/components/home/StayCard';
-import BookingCard from '@/components/mypick/BookingCard';
-import FeedbackCard from '@/components/mypick/FeedbackCard';
-import PickTabs from '@/components/mypick/PickTabs';
-import SavedRestaurantCard, {
-  RESTAURANT_CARD_WIDTH,
-} from '@/components/mypick/SavedRestaurantCard';
+import {
+  LITE_HOTEL_CARD_WIDTH,
+  LITE_RESTAURANT_CARD_WIDTH,
+  LiteBookingCard,
+  LiteSavedHotelCard,
+  LiteSavedRestaurantCard,
+  LiteTabs,
+} from '@/components/lite/LiteMyPickCards';
 import { GOODS_TYPE, ORDER_STATUS_I18N } from '@/config/global';
 import { PAGE_PADDING, SECTION_GAP, colors } from '@/config/theme';
 import { fonts } from '@/config/typography';
@@ -60,17 +53,15 @@ import { useCommonStore } from '@/store/commonStore';
 import { useUserStore } from '@/store/userStore';
 import { formatDate } from '@/utils/format';
 
-export default function MyPickScreen() {
+export default function MyPickLiteScreen() {
   const { t } = useTranslation();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { width } = useWindowDimensions();
-  // 同 HomeScreen:用实测宽度而非窗口宽度,避开 web 端竖向滚动条占位
+  // 同完整模式:用实测宽度而非窗口宽度,避开 web 端竖向滚动条占位
   const [contentWidth, setContentWidth] = useState(width - PAGE_PADDING * 2);
 
   const profile = useUserStore((s) => s.profile);
   const showToast = useCommonStore((s) => s.showToast);
-
-  /* 取数与改数在 useMyPickData,两种模式共用同一份口径(含获焦重拉) */
   const { isLogin, favorites, tabOrders, tab, setTab, refreshing, refresh, unfavorite } =
     useMyPickData();
 
@@ -98,61 +89,59 @@ export default function MyPickScreen() {
         onLayout={(e) => setContentWidth(e.nativeEvent.layout.width - PAGE_PADDING * 2)}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />}
       >
-        {/* 01 三分类页签 */}
-        <PickTabs items={tabItems} value={tab} onChange={(key) => setTab(key as MyPickTab)} />
+        <LiteTabs items={tabItems} value={tab} onChange={(key) => setTab(key as MyPickTab)} />
 
-        {/* 02 预订卡列表 */}
         <View style={styles.stack}>
           {tabOrders.length > 0 ? (
             tabOrders.map((o, i) => (
-              <BookingCard
+              <LiteBookingCard
                 key={o.id}
                 width={contentWidth}
                 title={o.goods_name}
                 coverUri={o.goods_image}
-                /* 订单快照里的酒店图同样多是脏值/空值,先用设计稿临时图兜底(同酒店搜索结果页) */
+                /* 订单快照里的酒店图多是脏值/空值,先用设计稿临时图兜底(同完整模式) */
                 coverSource={tempCoverFor(i)}
                 skuName={o.sku_name}
                 statusLabel={t(ORDER_STATUS_I18N[o.order_status] ?? 'common.empty')}
                 statusColor={orderStatusColor(o.order_status)}
+                datesLabel={t('myPick.booking.dates')}
                 dates={
                   o.use_date
                     ? `${formatDate(o.use_date)}${o.end_date ? ` - ${formatDate(o.end_date)}` : ''}`
                     : formatDate(o.created_at)
                 }
-                travelers={String(o.quantity)}
                 travelersLabel={t('order.quantity')}
+                travelers={String(o.quantity)}
+                detailLabel={t('myPick.booking.viewDetails')}
                 onPressDetail={() => navigation.navigate('OrderDetail', { orderId: o.id })}
-                onPressMap={comingSoon}
               />
             ))
           ) : isLogin ? (
             <Text style={styles.empty}>{t('myPick.booking.empty')}</Text>
           ) : (
             /* 未登录:展示设计稿示例卡,点按引导登录 */
-            <BookingCard
+            <LiteBookingCard
               width={contentWidth}
               coverSource={TEMP_BOOKING_COVER}
               title={t('myPick.booking.sample.hotel')}
-              address={t('myPick.booking.sample.address')}
               skuName={t('myPick.booking.sample.room')}
               statusLabel={t('order.status.paid')}
+              datesLabel={t('myPick.booking.dates')}
               dates={t('myPick.booking.sample.dates')}
+              travelersLabel={t('myPick.booking.travelers')}
               travelers={t('myPick.booking.travelersValue', { people: 2, rooms: 1 })}
+              detailLabel={t('myPick.booking.viewDetails')}
               onPressDetail={requireLogin}
-              onPressMap={comingSoon}
             />
           )}
         </View>
 
-        {/* 03 入住反馈 */}
-        <FeedbackCard onPress={requireLogin} />
-
-        {/* 04 收藏酒店 */}
-        <View>
-          <SectionHeader
+        {/* 收藏酒店 */}
+        <View style={styles.section}>
+          <LiteSectionHeader
             title={t('myPick.savedHotels.title')}
-            onSeeAll={requireLogin}
+            action={t('home.seeAll')}
+            onPressAction={requireLogin}
           />
           {savedHotels.length === 0 ? (
             <Text style={styles.empty}>{t('myPick.savedHotels.empty')}</Text>
@@ -162,34 +151,28 @@ export default function MyPickScreen() {
               showsHorizontalScrollIndicator={false}
               style={styles.bleed}
               contentContainerStyle={styles.hList}
-              snapToInterval={STAY_CARD_WIDTH + 16}
+              snapToInterval={LITE_HOTEL_CARD_WIDTH + 16}
               decelerationRate="fast"
             >
               {savedHotels.map((g, i) => {
-                // 未登录的示例卡(id 取负数)名称/地址走设计稿文案,真实收藏一律用接口字段;
-                // 封面两者都先用设计稿临时图 —— 真实商品的 cover_image 目前多是脏值/空值
+                // 未登录的示例卡(id 取负数)走设计稿文案,真实收藏一律用接口字段
                 const sampleKey = g.id < 0 ? SAMPLE_SAVED_HOTEL_KEYS[i] : undefined;
-                const item = sampleKey
-                  ? {
-                      ...g,
-                      goods_name: t(`myPick.savedHotels.${sampleKey}.name`),
-                      address: t(`myPick.savedHotels.${sampleKey}.address`),
-                    }
-                  : g;
+                const name = sampleKey
+                  ? t(`myPick.savedHotels.${sampleKey}.name`)
+                  : g.goods_name;
                 return (
-                  <StayCard
+                  <LiteSavedHotelCard
                     key={g.id}
-                    goods={item}
+                    name={name}
                     coverSource={sampleKey ? TEMP_HOTEL_COVERS[sampleKey] : tempCoverFor(i)}
                     /* 真实收藏:实心心 + 可点取消;示例卡保持不可点的空心 */
                     favorite={!sampleKey}
                     onToggleFavorite={sampleKey ? undefined : () => void unfavorite(g.id)}
-                    onPress={(goods) => {
-                      if (goods.id <= 0) return requireLogin();
-                      // 酒店走设计稿的酒店详情页,与搜索结果页一致;其余品类回落通用商品详情
-                      return goods.goods_type === GOODS_TYPE.HOTEL
-                        ? navigation.navigate('HotelDetail', { id: goods.id })
-                        : navigation.navigate('GoodsDetail', { id: goods.id });
+                    onPress={() => {
+                      if (g.id <= 0) return requireLogin();
+                      return g.goods_type === GOODS_TYPE.HOTEL
+                        ? navigation.navigate('HotelDetail', { id: g.id })
+                        : navigation.navigate('GoodsDetail', { id: g.id });
                     }}
                   />
                 );
@@ -198,33 +181,31 @@ export default function MyPickScreen() {
           )}
         </View>
 
-        {/* 05 收藏餐厅(后端暂无餐饮品类,静态数据) */}
-        <View>
-          <SectionHeader
+        {/* 收藏餐厅(后端暂无餐饮品类,静态数据,与完整模式同一份) */}
+        <View style={styles.section}>
+          <LiteSectionHeader
             title={t('myPick.savedRestaurants.title')}
-            onSeeAll={comingSoon}
-            seeAllLabel={t('myPick.savedRestaurants.viewAll')}
+            action={t('myPick.savedRestaurants.viewAll')}
+            onPressAction={comingSoon}
           />
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
             style={styles.bleed}
             contentContainerStyle={styles.hList}
-            snapToInterval={RESTAURANT_CARD_WIDTH + 16}
+            snapToInterval={LITE_RESTAURANT_CARD_WIDTH + 16}
             decelerationRate="fast"
           >
             {SAVED_RESTAURANTS.map((r) => (
-              <SavedRestaurantCard
+              <LiteSavedRestaurantCard
                 key={r.key}
-                coverSource={TEMP_RESTAURANT_COVERS[r.key]}
                 name={t(`myPick.savedRestaurants.${r.key}.name`)}
-                rating={r.rating}
-                distance={r.distance}
-                duration={r.duration}
-                deliveryFee={r.deliveryFee}
-                premium={r.premium}
+                coverSource={TEMP_RESTAURANT_COVERS[r.key]}
+                premiumLabel={r.premium ? t('myPick.savedRestaurants.premium') : undefined}
                 discountLabel={
-                  r.hasDiscount ? t(`myPick.savedRestaurants.${r.key}.discount`) : undefined
+                  r.hasDiscount
+                    ? t(`myPick.savedRestaurants.${r.key}.discount`)
+                    : t('myPick.savedRestaurants.freeDelivery')
                 }
                 onPress={comingSoon}
                 onToggleFavorite={requireLogin}
@@ -232,18 +213,30 @@ export default function MyPickScreen() {
             ))}
           </ScrollView>
         </View>
-
-        {/* 06 新用户促销(与首页同一张卡) */}
-        <PromoCard
-          onPress={() =>
-            navigation.navigate('GoodsList', {
-              goodsType: GOODS_TYPE.HOTEL,
-              title: t('home.promo.category'),
-            })
-          }
-        />
       </ScrollView>
     </SafeAreaView>
+  );
+}
+
+/** 区块标题行(设计稿 Outfit 600/24 + 右侧主色链接) */
+function LiteSectionHeader({
+  title,
+  action,
+  onPressAction,
+}: {
+  title: string;
+  action: string;
+  onPressAction: () => void;
+}) {
+  return (
+    <View style={styles.sectionHeader}>
+      <Text style={styles.sectionTitle} numberOfLines={1}>
+        {title}
+      </Text>
+      <Text style={styles.sectionAction} onPress={onPressAction} suppressHighlighting>
+        {action}
+      </Text>
+    </View>
   );
 }
 
@@ -252,16 +245,33 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   content: {
     paddingHorizontal: PAGE_PADDING,
-    paddingTop: 8,
-    paddingBottom: 32,
+    paddingTop: 16,
+    paddingBottom: 20,
     gap: SECTION_GAP,
   },
   stack: { gap: 16 },
+  section: { gap: 16 },
+
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  sectionTitle: {
+    flexShrink: 1,
+    fontFamily: fonts.outfitSemi,
+    fontSize: 24,
+    lineHeight: 32,
+    color: colors.heading,
+  },
+  sectionAction: { fontFamily: fonts.inter, fontSize: 16, lineHeight: 24, color: colors.primary },
+
   empty: {
     paddingVertical: 32,
     textAlign: 'center',
     fontFamily: fonts.inter,
-    fontSize: 14,
+    fontSize: 16,
     color: colors.textSoft,
   },
   /* 横滑区块出血到屏幕边缘 */

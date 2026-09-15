@@ -11,6 +11,8 @@ import { colors } from '@/config/theme';
 export const fonts = {
   outfit: 'Outfit_400Regular',
   outfitSemi: 'Outfit_600SemiBold',
+  /** 关怀模式首页大标题(Figma Lite Home `2540:21342` 用的是 Outfit Bold) */
+  outfitBold: 'Outfit_700Bold',
   inter: 'Inter_400Regular',
   interSemi: 'Inter_600SemiBold',
   interBold: 'Inter_700Bold',

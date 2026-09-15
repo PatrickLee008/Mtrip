@@ -2,6 +2,12 @@
  * 导航结构:RootStack + 底部 Tab(首页/精选/优惠/更多)
  * 底部 Tab 样式还原 Figma M-Trip / Home 81:2464 的 BottomNavBar
  * 需登录页面由页面内守卫(useUserStore.isLogin)跳转 Login
+ *
+ * **关怀模式在 Tab 这一层分叉**(Figma section Home Lite `2540:21120`):
+ * 首页 / 我的精选 / 更多三个页签换成 Lite 版页面,底栏换成 LiteTabBar;
+ * 优惠中心设计稿没出 Lite 版,沿用完整模式那一页(底栏仍是 Lite 的,四个页签必须同一条栏)。
+ * 在这一层分叉而不是在各页里写分支,是因为两版的版式差得远 ——
+ * 塞进同一个组件会变成两套并行的 JSX,谁都改不动。切换模式会整棵重挂,这是预期行为。
  */
 
 import React from 'react';
@@ -13,10 +19,12 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 
 import TabBarIcon from '@/components/common/TabBarIcon';
+import LiteTabBar from '@/components/lite/LiteTabBar';
 import { colors } from '@/config/theme';
 import type { MainTabParamList, RootStackParamList } from '@/navigation/types';
 import GoodsDetailScreen from '@/screens/goods/GoodsDetailScreen';
 import GoodsListScreen from '@/screens/goods/GoodsListScreen';
+import HomeLiteScreen from '@/screens/home/HomeLiteScreen';
 import HomeScreen from '@/screens/home/HomeScreen';
 import AddGuestScreen from '@/screens/hotel/AddGuestScreen';
 import BookingSuccessScreen from '@/screens/hotel/BookingSuccessScreen';
@@ -34,6 +42,7 @@ import LegalTermsScreen from '@/screens/more/LegalTermsScreen';
 import ReferralScreen from '@/screens/more/ReferralScreen';
 import ReferralStatusScreen from '@/screens/more/ReferralStatusScreen';
 import TravelersScreen from '@/screens/more/TravelersScreen';
+import MyPickLiteScreen from '@/screens/mypick/MyPickLiteScreen';
 import MyPickScreen from '@/screens/mypick/MyPickScreen';
 import NotificationScreen from '@/screens/notification/NotificationScreen';
 import OrderConfirmScreen from '@/screens/order/OrderConfirmScreen';
@@ -45,10 +54,12 @@ import SiteSelectScreen from '@/screens/site/SiteSelectScreen';
 import ForgotPasswordScreen from '@/screens/user/ForgotPasswordScreen';
 import LoginScreen from '@/screens/user/LoginScreen';
 import MineScreen from '@/screens/user/MineScreen';
+import MoreLiteScreen from '@/screens/user/MoreLiteScreen';
 import ReferralCodeScreen from '@/screens/user/ReferralCodeScreen';
 import RegisterScreen from '@/screens/user/RegisterScreen';
 import ResetPasswordScreen from '@/screens/user/ResetPasswordScreen';
 import VerifyOtpScreen from '@/screens/user/VerifyOtpScreen';
+import { useCommonStore } from '@/store/commonStore';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const Tab = createBottomTabNavigator<MainTabParamList>();
@@ -102,17 +113,22 @@ function MainTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
 
 function MainTabs() {
   const { t } = useTranslation();
+  const liteMode = useCommonStore((s) => s.liteMode);
+
   return (
-    <Tab.Navigator tabBar={(props) => <MainTabBar {...props} />} screenOptions={{ headerTitleAlign: 'center' }}>
+    <Tab.Navigator
+      tabBar={(props) => (liteMode ? <LiteTabBar {...props} /> : <MainTabBar {...props} />)}
+      screenOptions={{ headerTitleAlign: 'center' }}
+    >
       <Tab.Screen
         name="HomeTab"
-        component={HomeScreen}
+        component={liteMode ? HomeLiteScreen : HomeScreen}
         options={{ title: t('tab.home'), headerShown: false }}
       />
       {/* 我的精选自带设计稿顶部栏(HomeHeader),隐藏 Tab 导航头 */}
       <Tab.Screen
         name="MyPickTab"
-        component={MyPickScreen}
+        component={liteMode ? MyPickLiteScreen : MyPickScreen}
         options={{ title: t('tab.myPick'), headerShown: false }}
       />
       {/* 优惠中心自带设计稿顶部栏(Promotion Center),隐藏 Tab 导航头 */}
@@ -124,7 +140,7 @@ function MainTabs() {
       {/* 「更多」页自带设计稿的 mTrip 字标顶栏(1690:4642),与另外三个 Tab 一样关掉原生导航头 */}
       <Tab.Screen
         name="MoreTab"
-        component={MineScreen}
+        component={liteMode ? MoreLiteScreen : MineScreen}
         options={{ title: t('tab.more'), headerShown: false }}
       />
     </Tab.Navigator>

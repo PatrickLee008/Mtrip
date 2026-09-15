@@ -246,6 +246,13 @@
     "seeAll": "查看全部",
     "bookNow": "立即预订",
     "comingSoon": "该业务暂未开放",
+    "lite": {
+      "title": "请选择你要的服务",
+      "hotels": "预订酒店",
+      "food": "探索附近餐厅",
+      "cars": "查看高端用车",
+      "package": "酒店 + 用车"
+    },
     "quickAction": {
       "hotels": "酒店",
       "bus": "巴士",
@@ -361,6 +368,9 @@
     "totalAmount": "合计",
     "submitOrder": "提交订单",
     "payNow": "立即支付",
+    "payBalance": "余额支付",
+    "walletBalance": "钱包余额:{{amount}}",
+    "balanceInsufficient": "钱包余额不足以支付本单。",
     "payStripe": "Stripe 支付",
     "payPaypal": "PayPal 支付",
     "cancelOrder": "取消订单",
@@ -454,6 +464,9 @@
   },
   "more": {
     "rewards": "你有 {{count}} 项专属权益",
+    "lite": {
+      "seeReward": "查看权益"
+    },
     "version": "版本 {{version}}",
     "wallet": {
       "title": "mTrip 钱包",
@@ -738,7 +751,21 @@
   },
   "splash": {
     "chooseLanguage": "请选择语言以继续",
-    "continue": "继续"
+    "continue": "继续",
+    "chooseMode": "请选择模式以继续",
+    "lite": {
+      "title": "关怀模式",
+      "tagline": "简单易用",
+      "desc": "更大的字号、更简洁的页面,更少的选择项。",
+      "cta": "使用关怀模式"
+    },
+    "full": {
+      "title": "完整模式",
+      "tagline": "使用 mTrip 全部功能",
+      "desc": "完整的 mTrip 体验,包含全部功能与选项。",
+      "cta": "使用完整模式"
+    },
+    "modeFootnote": "你之后可以随时在设置中更改"
   },
   "hotels": {
     "title": "酒店与民宿",
@@ -1226,6 +1253,7 @@
           "support": "7×24 客服"
         },
         "methodRequired": "请先选择支付方式。",
+        "insufficient": "钱包余额不足以支付本次预订。",
         "successTitle": "支付成功",
         "close": "关闭",
         "failTitle": "支付失败!",

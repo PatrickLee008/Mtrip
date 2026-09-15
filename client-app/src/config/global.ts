@@ -8,6 +8,8 @@ export const STORAGE_KEYS = {
   USER: 'mtrip:user',
   SITE: 'mtrip:site',
   LANG: 'mtrip:lang',
+  /** 关怀模式开关(值为 APP_MODES 之一),开屏模式选择页与「更多」页的开关共用 */
+  MODE: 'mtrip:app-mode',
   GDPR: 'mtrip:gdpr-consent',
   /**
    * 登录页「记住我」记住的手机号(**不含密码**)。
@@ -67,6 +69,13 @@ export const SUPPORTED_LANGS = ['en-US', 'my-MM', 'zh-CN'] as const;
 export type Lang = (typeof SUPPORTED_LANGS)[number];
 /** 取不到系统语言时的兜底语言 */
 export const FALLBACK_LANG: Lang = 'en-US';
+
+/**
+ * App 模式(见 Figma Splash 2485:7324 的模式选择页)
+ * lite = 关怀模式(更大的字、更简的页面);full = 完整模式
+ */
+export const APP_MODES = ['lite', 'full'] as const;
+export type AppMode = (typeof APP_MODES)[number];
 
 /** 货币符号(多币种展示,站点 currency 驱动) */
 export const CURRENCY_SYMBOLS: Record<string, string> = {

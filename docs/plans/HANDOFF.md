@@ -1,4 +1,134 @@
 # 会话交接文档(HANDOFF)
+### ★ 2026-09-15(C 端支付只留余额一种,余额真扣款并落流水)
+
+**范围**:client-app 的两个支付入口(订房向导 Step 4、订单详情待支付)——
+除 mTrip 钱包余额外的渠道全部停用,余额支付从 mock 变成真扣款。
+
+- **后端只加一个渠道码,不改口径**:`OrderController::pay` 的 `payMethod` 白名单
+  `[1,2]` → `[1,2,3]`,**3 = 余额**。选 3 才是真金白银:同一事务内
+  `WalletService::debit()` 行锁 `user_info` 扣款 → 写 `user_balance_log`
+  (`change_type=2` 消费,`amount` **记负数**,带前后余额快照)→ `PaymentResultHandler::markPaid`
+  置已支付并生成核销码 → 写 `finance_flow`(`flow_type=1` / `biz_type=1` / `pay_channel=3` /
+  `trade_no=WALLET+流水号`)→ 扣库存。任一步抛错整单回滚,不会出现「扣了钱订单还待支付」。
+- **`debit()` 与既有 `credit()` 成对**(退款/推荐返利走 credit)。余额不足抛
+  `DATA_CONFLICT`「钱包余额不足」;比较时留 0.005 容差 —— 余额是 `DECIMAL(12,2)`,
+  转成 float 后「刚好够」会被浮点尾差判成不足。
+- **mock 渠道不写资金流水**:1/2 没有真实资金进来,写进 `finance_flow` 会污染对账。
+- **`pay_method=3` 不是新发明**:admin-web 订单页早就有 `order.payMethod.balance` 的映射,
+  所以**没有改库表结构与列注释**(列是 TINYINT,存 3 本来就合法;为一条注释去 MODIFY
+  月分表模板不划算)。
+- **前端置灰而不是删掉**:MMQR / KBZPay / Wave Pay / 到店付 / 银行卡 / 手机银行 /
+  Stripe / PayPal 保留在页面上,`PaymentMethodRow` 新增 `disabled` + `badge` 两个 prop,
+  整行 45% 透明度 + 「Coming soon」角标,点按只弹提示、**不会被选中**,也不发请求。
+  删掉的话设计稿走查会以为漏做,而且渠道接通时要重做一遍。
+- **余额显示改吃真实值**:钱包渐变卡与「Pay with mTrip Wallet」那行读 `/app/user/me` 的
+  `balance`(演示模式仍回落 `bookingDemo.walletBalance`)。
+  **进支付步 / 打开待支付订单详情会先 `refreshProfile()` 一次** —— 本地资料是启动时从
+  AsyncStorage 恢复的,拿旧余额会把钱够的用户误判成「余额不足」。支付成功后再刷一次。
+- **余额不足在客户端就拦**(`goNext` 里,创建订单之前):否则会留下一张十分钟后才过期的
+  待支付订单。后端 `debit()` 是第二道闸,客户端拦不住也扣不动。
+- **两处 `payOrder` 合并**:`api/order.ts` 与 `api/pay.ts` 各有一份、默认渠道还不一样。
+  现在唯一实现在 `api/pay.ts`(带 `PAY_METHOD` 常量,默认 `BALANCE`),`api/order.ts` 只转出。
+
+**没有做的部分(别当成漏做)**
+
+- **`TripController::pay`(多住宿 Trip 单笔支付)仍只收 1/2**,没有接余额 ——
+  client-app 目前没有任何入口调它(多住宿在真实模式下本来就走 comingSoon)。
+  哪天开多住宿,照 `OrderController::pay` 这段抄一遍即可。
+- **没有充值入口**:余额只能靠退款、推荐返利或后台调账进账。余额为 0 的账号在 App 里
+  现在等于付不了款 —— 这是「只留余额」的直接后果,冒烟时请先用后台/SQL 给测试号加余额。
+- 未接真实 Stripe/PayPal(仍归 payment-service 模块06)。
+
+**验证**:后端 356 文件 `php -l` 零错、shared 95 用例 / 957 断言、admin-web build 通过、
+client-app `tsc --noEmit` 零报错、i18n 三份 878→882 键零 missing / 零 extra。
+**本机 PATH 没有 php**,前两步是在 `mtrip-order-service` 镜像里跑的
+(`docker run --rm --entrypoint php -v C:/Codes/Mtrip/backend:/lint mtrip-order-service ...`),
+`scripts/check.ps1` 直接跑仍会停在第 1 步。**未做真机/真库冒烟**(本地容器全停着):
+扣款链路是按 `BookingRefundService` 的退款入账镜像写的,建议联调时先验三条 ——
+余额充足支付成功、余额不足报「钱包余额不足」且订单仍为待支付、支付后
+`user_balance_log` 与 `finance_flow` 各多一条且金额对得上。
+
+### ★ 2026-09-14(关怀模式落地首页 / 我的精选 / 更多三屏,Figma section Home Lite `2540:21120`)
+
+**范围**:上一条只是「记录选择」,这一条开始 `liteMode` **真的会换页面**。
+三屏 Lite Home `2540:21338` / Lite My Pick `2540:21121` / Lite More `2540:21478` 全部落地。
+
+- **在 Tab 这一层分叉,不在页面里写分支**:`navigation/index.tsx` 的 `MainTabs` 按 `liteMode`
+  选 `HomeLiteScreen` / `MyPickLiteScreen` / `MoreLiteScreen` 与 `LiteTabBar`。
+  两版版式差得远(完整首页是搜索+九宫格+七八个横滑区块,Lite 首页只有一句标题+四张大卡),
+  塞进同一个组件会变成两套并行 JSX。**切模式会整棵重挂**,这是预期行为。
+- **优惠中心没有 Lite 稿**,沿用完整模式那一页(底栏仍是 Lite 的 —— 四个页签必须共用同一条栏)。
+- **取数必须同源**:抽了 `screens/mypick/useMyPickData.ts`(订单 / 收藏 / 取消收藏 / 获焦重拉 /
+  `orderStatusColor`),两个「我的精选」共用。不这么做的话同一个账号在两种模式下
+  看到的订单条数或状态颜色会对不上。`MyPickScreen` 已改用它,行为未变。
+- **底栏图标是同一批 fluent 的两个网格**,不是两种图案:`TabBarIcon` 新增 `variant="lite"`
+  的 24 网格字形。**刻意不复用 12 网格那套放大** —— 放大会把描边一起放大。
+- **Lite Home 的四个业务线就是 `QUICK_ACTIONS` 那四个**,落地规则(route → goodsType → comingSoon)
+  一字不差地共用,所以两种模式点 Hotels 去的是同一个页面。
+- **插画不能复用 `assets/images/home/*.png`** —— 那四张是**整块满幅的蓝色方形图标**
+  (见 QuickActionGrid 头部注释),叠在 Lite 的蓝色卡上会多出一个蓝方块。
+  另存了去底插画 `assets/images/lite/*.png`;Figma 导出的是原始分辨率(cars 有 2426×1760、2.3MB),
+  **已按 3× 渲染尺寸压到共 602KB**(原 4.6MB)—— 不压的话四张图就顶掉整个包的体积预算。
+- **Lite More 补了一张设计稿没有的卡:语言 + 退出登录**(用户明确选定)。
+  设计稿把完整模式那张「订单 / 站点 / 语言 / GDPR」整张删了,但**退出登录与切换语言是会把人卡死的两项**
+  —— 关怀模式用户退不出账号、改不回看得懂的语言,就只能卸载重装。站点与 GDPR 按设计稿去掉。
+- `Outfit_700Bold` 新增进 `useFonts` 与 `fonts.outfitBold`(Lite 首页大标题用的是 Outfit Bold,
+  项目原先只加载了 400 / 600)。
+- i18n 三份各补 6 键(共 **878** 键,脚本比对 missing / extra 均为空)。缅甸语仍是机器翻译。
+
+**没有实现的部分(别当成漏做)**
+
+- 设计稿 Lite My Pick 里那张「Multi Booking (2 Stay)」多住宿卡**没做** ——
+  后端一个订单只对应一个 sku,造不出「一单两段住宿」的数据;完整模式同样没做这件事。
+- Lite My Pick 按设计稿**去掉了**入住反馈卡与底部促销卡(两者都不是必需功能)。
+
+**与设计稿的偏差(都是设计稿自身的不一致,不是实现取巧)**
+
+- Lite Home 的 Hotels 卡副标行高写 36、其余三张写 24,统一取 24(留着会让四张卡文案基线对不齐)。
+- Lite Home 标题复用 `home.quickAction.*`,故 Car 一项显示 "Cars"(设计稿写 "Car")——
+  同一业务线不该在两种模式下有两个名字。
+- Lite More 的 GOLD 徽章设计稿写 `20px/行高 15`,**行高小于字号在 Android 上会切字**,抬到 24。
+- Lite Home 右上角光斑 RN 没有等价 blur 滤镜,用 SVG 径向渐变近似(纯色圆会是硬边,更不像)。
+
+**验证**:`client-app` typecheck 零报错、`expo export -p web` 通过
+(已确认四张 Lite 插画与新文案、`Outfit_700Bold` 都进包,dist 已删);
+i18n 872→878 三份零 missing / 零 extra。本次只动 client-app,
+后端 356 文件 `php -l` 零错、shared 95 用例/957 断言、admin-web build 为同日上一条目的结果,仍然有效。
+
+### ★ 2026-09-14(开屏新增关怀模式选择页,Figma Splash `2485:7324`)
+
+**范围**:设计稿在 Splash section `752:9379` 里新加了第三屏 "Choose Mode",落地为
+`client-app/src/screens/splash/ChooseModeScreen.tsx`,引导流程变成
+**纯开屏 → 语言选择 → 模式选择 → 主流程**(编排仍在 `App.tsx`,不进 Stack 导航)。
+
+- **两道选择各记各的状态**:`commonStore` 新增 `liteMode` / `modeChosen` / `setMode()`,
+  存储键 `STORAGE_KEYS.MODE`(`'lite' | 'full'`,见 `config/global.ts` 的 `APP_MODES`)。
+  这样**老用户本地已有语言、没有模式记录时只补问模式这一屏**,不会把语言再问一遍。
+- **不是「先选中再 Continue」**:设计稿两张卡各配一个 CTA,点哪张就按哪种模式直接进入 ——
+  与语言选择页那种「选中 + Continue」的交互刻意不同,照设计稿走。
+- **「更多」页那个 Lite Mode 开关不再是占位**:原来是 `useState` + `comingSoon()`,
+  现已接到同一份 `commonStore.liteMode`。模式选择页脚注写的
+  「You can change this anytime later in Settings」指的就是它,不接上这句话就是假的。
+- **图标**:`accessibility` 已在 `HomeIcon` 里且与导出资产 `fluent:accessibility-20-filled`
+  逐字节一致,直接复用;新增 `grid`(`fluent:grid-20-filled`)。两者 path 均与导出 SVG 校验相同。
+- **开屏外壳抽公共件**:波浪 + logo 抽到 `components/splash/SplashBackdrop.tsx`
+  (`SplashWaves` / `SplashLogo`),`SplashScreen` 与新页共用,视觉未改。
+  logo 外框由调用方传:纯开屏/语言页 286×211,模式页 217×160(**设计稿本来就是两个尺寸**)。
+- i18n 三份各补 10 键(共 **872** 键,脚本比对 missing / extra 均为空)。缅甸语仍是机器翻译。
+
+**明确没做(别误以为已经有了)**:`liteMode` **目前只记录选择,不改变任何页面的字号与信息密度**。
+设计稿对 Lite Mode 的描述是「更大的字、更简的页面、更少的选项」,那是一整套页面降级规则,
+需要单独设计(至少要定义字号档位与各页的精简清单),不在本次范围内。
+
+**已知与设计稿的不一致(未改,待定)**:设计稿里语言选择页 `2163:8057` 的 logo 也是 217×160,
+而现有 `SplashScreen` 的语言阶段用的是 286×211 —— 这是本次之前就有的偏差。
+两屏前后脚出现,logo 会有一次尺寸跳变;要不要把语言页一并改成 217×160 需产品确认,本次没动。
+
+**验证**:`client-app` typecheck 通过、`expo export -p web` 打包通过(已确认新页文案与 grid 图标进包,dist 已删);
+i18n 三份键集零 missing / 零 extra;两枚图标 path 与 Figma 导出 SVG 逐字节比对相同。
+**`scripts/check.ps1` 跑不完**:本机 PATH 里没有 php,脚本第 1 步 `backend php -l` 直接 CommandNotFound 退出
+(与本次改动无关,本次没动任何 PHP 文件)。
+
 ### ★ 2026-09-13（merchant-web 登录解密失败修复）
 
 商户端登录密文由 shared `PayloadDecryptMiddleware` 使用 `MTRIP_ADMIN_AES_KEY` 解密，之前 `merchant-web/.env.development` 的 `VITE_LOGIN_AES_KEY` 与本地运行容器不一致，前端注释还误称不存在的 `MTRIP_MERCHANT_AES_KEY`。已对齐开发配置、修正注释和启动指南，并重启 merchant-web；经 5174 代理发空加密请求返回 HTTP 400 / `40001`“参数 username 不能为空”，已通过解密进入字段校验。真实账号及 TOTP 未操作；其他环境若单独更换后端密钥，须同步商户/管理前端环境变量并重启 Vite。

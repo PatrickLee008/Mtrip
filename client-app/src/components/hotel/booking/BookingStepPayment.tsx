@@ -5,8 +5,9 @@
  *      (钱包 / 到店 / 可展开的卡组织 / 可展开的手机银行)→ COUPONS 卡 → 返现横幅 →
  *      Payment Summary 折叠卡 → Secure Payment Guarantee → 三枚合规标。
  *
- * 静态页阶段:支付方式是**真的能单选**,但不发任何请求;优惠券、Payment Summary 展开、
- * 新增卡片、Pay by other/Share 一律走 comingSoon。
+ * **本期只有 mTrip 钱包余额是真渠道**:余额那行可单选并真扣款,其余渠道(MMQR / KBZPay /
+ * Wave Pay / 到店付 / 银行卡 / 手机银行)统一置灰挂 Coming soon 角标,点按只弹提示不选中。
+ * 优惠券、Payment Summary 展开、新增卡片、Pay by other/Share 同样走 comingSoon。
  */
 
 import React from 'react';
@@ -50,6 +51,10 @@ interface Props {
   summary: React.ReactNode;
   method: PaymentMethodKey | null;
   expanded: 'card' | 'mobileBanking' | null;
+  /** 钱包可用余额:真实模式取 `/app/user/me`,演示模式回落设计稿数值 */
+  balance: number;
+  /** 余额不足以支付本单(由页面用实付金额比出来),在钱包卡下方给一行红字提示 */
+  insufficient?: boolean;
   onSelect: (key: PaymentMethodKey) => void;
   onToggleExpand: (key: 'card' | 'mobileBanking') => void;
   onComingSoon: () => void;
@@ -59,12 +64,15 @@ export default function BookingStepPayment({
   summary,
   method,
   expanded,
+  balance,
+  insufficient = false,
   onSelect,
   onToggleExpand,
   onComingSoon,
 }: Props) {
   const { t } = useTranslation();
   const currency = useSiteStore((s) => s.currency);
+  const comingSoonBadge = t('home.comingSoon');
 
   const brands = CARD_BRANDS.map((brand) => ({
     key: brand.key,
@@ -100,9 +108,7 @@ export default function BookingStepPayment({
           </View>
           <View style={styles.walletAmountRow}>
             <Text style={styles.walletCurrency}>{currency}</Text>
-            <Text style={styles.walletAmount}>
-              {formatAmount(BOOKING_DEMO.walletBalance, currency)}
-            </Text>
+            <Text style={styles.walletAmount}>{formatAmount(balance, currency)}</Text>
           </View>
           <Text style={styles.walletHint}>{t('hotels.booking.payment.availableBalance')}</Text>
         </View>
@@ -110,6 +116,10 @@ export default function BookingStepPayment({
           <HomeIcon name="infoCircle" size={20} color="#FFFFFF" />
         </Pressable>
       </View>
+
+      {insufficient ? (
+        <Text style={styles.insufficient}>{t('hotels.booking.payment.insufficient')}</Text>
+      ) : null}
 
       <View style={styles.group}>
         <Text style={styles.groupTitle}>{t('hotels.booking.payment.popular')}</Text>
@@ -120,29 +130,38 @@ export default function BookingStepPayment({
             iconInset={key === 'mmqr'}
             title={t(`hotels.booking.payment.methods.${key}.title`)}
             desc={t(`hotels.booking.payment.methods.${key}.desc`)}
-            checked={method === key}
-            onPress={() => onSelect(key)}
+            disabled
+            badge={comingSoonBadge}
+            onPress={onComingSoon}
           />
         ))}
 
         <Text style={styles.groupTitle}>{t('hotels.booking.payment.other')}</Text>
-        {PAYMENT_OTHER.map((key) => (
-          <PaymentMethodRow
-            key={key}
-            icon={TEMP_PAY_ICONS[key]}
-            deepTile={key === 'wallet'}
-            title={t(`hotels.booking.payment.methods.${key}.title`)}
-            desc={
-              key === 'wallet'
-                ? t('hotels.booking.payment.methods.wallet.desc', {
-                    amount: formatMoney(BOOKING_DEMO.walletBalance, currency),
-                  })
-                : t('hotels.booking.payment.methods.hotel.desc')
-            }
-            checked={method === key}
-            onPress={() => onSelect(key)}
-          />
-        ))}
+        {PAYMENT_OTHER.map((key) =>
+          key === 'wallet' ? (
+            <PaymentMethodRow
+              key={key}
+              icon={TEMP_PAY_ICONS.wallet}
+              deepTile
+              title={t('hotels.booking.payment.methods.wallet.title')}
+              desc={t('hotels.booking.payment.methods.wallet.desc', {
+                amount: formatMoney(balance, currency),
+              })}
+              checked={method === 'wallet'}
+              onPress={() => onSelect('wallet')}
+            />
+          ) : (
+            <PaymentMethodRow
+              key={key}
+              icon={TEMP_PAY_ICONS[key]}
+              title={t('hotels.booking.payment.methods.hotel.title')}
+              desc={t('hotels.booking.payment.methods.hotel.desc')}
+              disabled
+              badge={comingSoonBadge}
+              onPress={onComingSoon}
+            />
+          ),
+        )}
 
         <PaymentMethodRow
           icon={TEMP_PAY_ICONS.card}
@@ -150,13 +169,15 @@ export default function BookingStepPayment({
           brands={brands}
           expandable
           expanded={expanded === 'card'}
+          disabled
+          badge={comingSoonBadge}
           onPress={() => onToggleExpand('card')}
         >
           {SAVED_CARDS.map((card) => (
             <Pressable
               key={card.key}
-              style={({ pressed }) => [styles.savedCard, pressed && bookingShared.pressed]}
-              onPress={() => onSelect('card')}
+              style={({ pressed }) => [styles.savedCard, styles.disabled, pressed && bookingShared.pressed]}
+              onPress={onComingSoon}
             >
               <View style={styles.savedLeft}>
                 <View style={styles.savedTile}>
@@ -171,11 +192,7 @@ export default function BookingStepPayment({
                   </Text>
                 </View>
               </View>
-              <HomeIcon
-                name={method === 'card' ? 'checkboxIndeterminate' : 'checkbox'}
-                size={24}
-                color={method === 'card' ? colors.primary : colors.softBlue}
-              />
+              <HomeIcon name="checkbox" size={24} color={colors.softBlue} />
             </Pressable>
           ))}
           <Pressable
@@ -194,20 +211,18 @@ export default function BookingStepPayment({
           brands={bankBrands}
           expandable
           expanded={expanded === 'mobileBanking'}
+          disabled
+          badge={comingSoonBadge}
           onPress={() => onToggleExpand('mobileBanking')}
         >
           <Pressable
-            style={({ pressed }) => [styles.addCard, pressed && bookingShared.pressed]}
-            onPress={() => onSelect('mobileBanking')}
+            style={({ pressed }) => [styles.addCard, styles.disabled, pressed && bookingShared.pressed]}
+            onPress={onComingSoon}
           >
             <Text style={styles.savedDesc}>
               {t('hotels.booking.payment.methods.mobileBanking.title')}
             </Text>
-            <HomeIcon
-              name={method === 'mobileBanking' ? 'checkboxIndeterminate' : 'checkbox'}
-              size={24}
-              color={method === 'mobileBanking' ? colors.primary : colors.softBlue}
-            />
+            <HomeIcon name="checkbox" size={24} color={colors.softBlue} />
           </Pressable>
         </PaymentMethodRow>
 
@@ -286,6 +301,16 @@ export default function BookingStepPayment({
 const styles = StyleSheet.create({
   root: { gap: 24 },
   flex: { flex: 1, minWidth: 0 },
+  /** 未开通渠道展开后的内容,与 PaymentMethodRow 的置灰口径一致 */
+  disabled: { opacity: 0.45 },
+  insufficient: {
+    marginTop: -12,
+    fontFamily: fonts.interSemi,
+    fontSize: 12,
+    lineHeight: 16,
+    letterSpacing: 0.6,
+    color: colors.danger,
+  },
 
   /* ---- 钱包卡 ---- */
   wallet: {

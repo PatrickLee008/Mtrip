@@ -1,5 +1,7 @@
 /**
- * 订单详情:状态/商品/金额/联系人 + 操作(支付mock/取消/退款/核销码)
+ * 订单详情:状态/商品/金额/联系人 + 操作(余额支付/取消/退款/核销码)
+ *
+ * 支付本期只开通 mTrip 钱包余额(真扣款并落流水);Stripe / PayPal 置灰只弹 Coming soon。
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
@@ -19,8 +21,10 @@ import { ORDER_STATUS, ORDER_STATUS_I18N } from '@/config/global';
 import { colors, fontSize, radius, spacing } from '@/config/theme';
 import type { RootStackParamList } from '@/navigation/types';
 import { useCommonStore } from '@/store/commonStore';
+import { useSiteStore } from '@/store/siteStore';
+import { useUserStore } from '@/store/userStore';
 import type { OrderDetail, VerifyCodeData } from '@/types/models';
-import { formatDate } from '@/utils/format';
+import { formatDate, formatMoney } from '@/utils/format';
 import { isNotEmpty } from '@/utils/validate';
 
 export default function OrderDetailScreen() {
@@ -28,6 +32,10 @@ export default function OrderDetailScreen() {
   const route = useRoute<RouteProp<RootStackParamList, 'OrderDetail'>>();
   const orderId = route.params.orderId;
   const showToast = useCommonStore((s) => s.showToast);
+  const currency = useSiteStore((s) => s.currency);
+  const profile = useUserStore((s) => s.profile);
+  const refreshProfile = useUserStore((s) => s.refreshProfile);
+  const balance = Number(profile?.balance ?? 0);
 
   const [order, setOrder] = useState<OrderDetail | null>(null);
   const [verifyData, setVerifyData] = useState<VerifyCodeData | null>(null);
@@ -53,12 +61,16 @@ export default function OrderDetailScreen() {
       } else {
         setVerifyData(null);
       }
+      /* 待支付订单要按余额决定能不能付,本地缓存的资料可能是旧的,顺手刷一次 */
+      if (data.order_status === ORDER_STATUS.PENDING) {
+        void refreshProfile().catch(() => undefined);
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Error');
     } finally {
       setLoading(false);
     }
-  }, [orderId]);
+  }, [orderId, refreshProfile]);
 
   useEffect(() => {
     void load();
@@ -79,6 +91,21 @@ export default function OrderDetailScreen() {
     } finally {
       setActing(false);
     }
+  };
+
+  const comingSoon = () => showToast(t('home.comingSoon'));
+
+  /** 余额支付:前置比一次余额(后端同样会拦),成功后刷新本地余额 */
+  const payByBalance = async () => {
+    if (acting) return;
+    if (balance < Number(order.pay_amount)) {
+      showToast(t('order.balanceInsufficient'));
+      return;
+    }
+    await act(async () => {
+      await payOrder(orderId);
+      void refreshProfile().catch(() => undefined);
+    });
   };
 
   const submitRefund = () => {
@@ -135,17 +162,22 @@ export default function OrderDetailScreen() {
 
       {status === ORDER_STATUS.PENDING ? (
         <View style={styles.actions}>
+          <Text style={styles.balanceLine}>
+            {t('order.walletBalance', { amount: formatMoney(balance, currency) })}
+          </Text>
           <CustomButton
-            title={t('order.payStripe')}
+            title={t('order.payBalance')}
             loading={acting}
-            onPress={() => void act(() => payOrder(orderId, 1))}
+            onPress={() => void payByBalance()}
           />
           <View style={styles.actionGap} />
-          <CustomButton
-            title={t('order.payPaypal')}
-            loading={acting}
-            onPress={() => void act(() => payOrder(orderId, 2))}
-          />
+          {/* 未开通渠道:整块置灰,标一行 Coming soon,点按只提示(按钮高度固定,文案不并排以免顶破) */}
+          <View style={styles.soonBlock}>
+            <Text style={styles.soonLabel}>{t('home.comingSoon')}</Text>
+            <CustomButton title={t('order.payStripe')} type="default" onPress={comingSoon} />
+            <View style={styles.actionGap} />
+            <CustomButton title={t('order.payPaypal')} type="default" onPress={comingSoon} />
+          </View>
           <View style={styles.actionGap} />
           <CustomButton
             title={t('order.cancelOrder')}
@@ -224,4 +256,12 @@ const styles = StyleSheet.create({
   amountLabel: { fontSize: fontSize.sm, color: colors.textSecondary },
   actions: { marginBottom: spacing.xl },
   actionGap: { height: spacing.md },
+  balanceLine: {
+    marginBottom: spacing.sm,
+    fontSize: fontSize.sm,
+    color: colors.textSecondary,
+    textAlign: 'right',
+  },
+  soonBlock: { opacity: 0.5 },
+  soonLabel: { marginBottom: spacing.xs, fontSize: fontSize.xs, color: colors.textSecondary },
 });
