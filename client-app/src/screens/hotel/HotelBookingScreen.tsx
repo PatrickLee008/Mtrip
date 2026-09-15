@@ -15,8 +15,8 @@
  * **两种模式**:
  *   - **真实模式**(从详情页房型卡进来,带 `goodsId` + `skuId`):酒店名 / 房型名 / 单价来自
  *     `/app/goods/detail`,支付步骤真的调 `/app/order/create` + `/app/order/pay` 落单。
- *     支付渠道本身仍未接通 —— 后端 `pay` 目前就是 mock(直接把订单置为已支付并返回核销码),
- *     所以选哪个渠道都直接成功,这与「暂不处理支付流程」的当前范围一致。
+ *     **渠道只开通了 mTrip 钱包余额**(`payMethod=3`):后端真的扣 `user_info.balance`、
+ *     写 `user_balance_log` 与 `finance_flow`;其余渠道一律置灰 + Coming soon,不发请求。
  *   - **演示模式**(不带参数直接进,如设计稿走查):数值来自 `bookingDemo.ts`,不发任何请求。
  *
  * 真实模式下**不提交**的两项(页面照旧展示,提交时忽略,避免与实付金额对不上):
@@ -123,10 +123,14 @@ export default function HotelBookingScreen() {
   const route = useRoute<RouteProp<RootStackParamList, 'HotelBooking'>>();
   const insets = useSafeAreaInsets();
   const isLogin = useUserStore((s) => s.isLogin);
+  const profile = useUserStore((s) => s.profile);
+  const refreshProfile = useUserStore((s) => s.refreshProfile);
   const currency = useSiteStore((s) => s.currency);
   const showToast = useCommonStore((s) => s.showToast);
 
   const comingSoon = () => showToast(t('home.comingSoon'));
+  /** 钱包可用余额:登录后取 `/app/user/me` 的 balance(字符串),演示模式回落设计稿数值 */
+  const walletBalance = isLogin ? Number(profile?.balance ?? 0) : BOOKING_DEMO.walletBalance;
 
   const [step, setStep] = useState<BookingStepKey>('dates');
   /**
@@ -149,7 +153,8 @@ export default function HotelBookingScreen() {
     email: '',
     saveInfo: false,
   });
-  const [method, setMethod] = useState<PaymentMethodKey | null>(null);
+  /** 本期只有钱包余额是真渠道,直接预选上(其余渠道点了只弹 Coming soon) */
+  const [method, setMethod] = useState<PaymentMethodKey | null>('wallet');
   const [expanded, setExpanded] = useState<'card' | 'mobileBanking' | null>(null);
   const [payResult, setPayResult] = useState<'success' | 'error' | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -185,6 +190,12 @@ export default function HotelBookingScreen() {
       })
       .catch(() => undefined);
   }, [isLogin]);
+
+  /* 进支付步先把余额刷新一次:本地资料可能是上次启动时缓存的,拿旧余额会误判「余额不足」 */
+  useEffect(() => {
+    if (step !== 'payment' || !isLogin) return;
+    void refreshProfile().catch(() => undefined);
+  }, [step, isLogin, refreshProfile]);
 
   /**
    * 从常旅客页选回来。依赖用的是 `picked` 的**对象身份**:React Navigation 只在 params 真的变化时
@@ -414,7 +425,10 @@ export default function HotelBookingScreen() {
           },
         ],
       });
+      /* 余额支付(payOrder 默认 PAY_METHOD.BALANCE):后端真扣 user_info.balance 并落流水 */
       const paidResult = await payOrder(order.orderId);
+      /* 余额变了,把本地资料刷一次,钱包卡与「我的」页不至于还显示扣款前的数 */
+      void refreshProfile().catch(() => undefined);
       setPaid({
         orderNo: order.orderNo,
         payAmount: order.priceDetail.payAmount,
@@ -469,6 +483,11 @@ export default function HotelBookingScreen() {
       }
       if (!isLogin) {
         navigation.navigate('Login');
+        return;
+      }
+      /* 余额是唯一真渠道:不够就别去创建订单,免得留一单十分钟后才过期的待支付 */
+      if (walletBalance < payableTotal) {
+        showToast(t('hotels.booking.payment.insufficient'));
         return;
       }
       void submit();
@@ -622,6 +641,8 @@ export default function HotelBookingScreen() {
             }
             method={method}
             expanded={expanded}
+            balance={walletBalance}
+            insufficient={!current.demo && isLogin && walletBalance < payableTotal}
             onSelect={setMethod}
             onToggleExpand={(key) => setExpanded((prev) => (prev === key ? null : key))}
             onComingSoon={comingSoon}

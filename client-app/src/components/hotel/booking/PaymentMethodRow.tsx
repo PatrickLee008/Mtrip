@@ -38,6 +38,10 @@ interface Props {
   expandable?: boolean;
   expanded?: boolean;
   checked?: boolean;
+  /** 渠道未开通:整行降透明度且不可选中(仍可点,由调用方弹 Coming soon) */
+  disabled?: boolean;
+  /** 标题右侧的小角标,未开通渠道用来挂 Coming soon */
+  badge?: string | null;
   brands?: BrandLogo[];
   onPress: () => void;
   children?: React.ReactNode;
@@ -53,6 +57,8 @@ export default function PaymentMethodRow({
   expandable = false,
   expanded = false,
   checked = false,
+  disabled = false,
+  badge,
   brands,
   onPress,
   children,
@@ -60,7 +66,7 @@ export default function PaymentMethodRow({
   return (
     <View style={[bookingShared.panel, styles.card]}>
       <Pressable
-        style={({ pressed }) => [styles.row, pressed && bookingShared.pressed]}
+        style={({ pressed }) => [styles.row, disabled && styles.rowDisabled, pressed && bookingShared.pressed]}
         onPress={onPress}
       >
         <View style={styles.left}>
@@ -75,9 +81,18 @@ export default function PaymentMethodRow({
             ) : null}
           </View>
           <View style={styles.flex}>
-            <Text style={styles.title} numberOfLines={1}>
-              {title}
-            </Text>
+            <View style={styles.titleRow}>
+              <Text style={styles.title} numberOfLines={1}>
+                {title}
+              </Text>
+              {badge ? (
+                <View style={styles.badge}>
+                  <Text style={styles.badgeText} numberOfLines={1}>
+                    {badge}
+                  </Text>
+                </View>
+              ) : null}
+            </View>
             {desc ? (
               <Text style={styles.desc} numberOfLines={1}>
                 {desc}
@@ -120,6 +135,8 @@ export default function PaymentMethodRow({
 const styles = StyleSheet.create({
   card: { gap: 12 },
   row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+  /** 未开通渠道:整行压暗,和可选的余额那行拉开对比 */
+  rowDisabled: { opacity: 0.45 },
   left: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 16 },
   flex: { flex: 1, minWidth: 0 },
 
@@ -137,7 +154,17 @@ const styles = StyleSheet.create({
   tileImageInset: { width: '55%', height: '84%' },
   tileOverlay: { ...StyleSheet.absoluteFillObject, width: '100%', height: '100%' },
 
-  title: { fontFamily: fonts.interBold, fontSize: 16, lineHeight: 24, color: colors.heading },
+  titleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  title: { flexShrink: 1, fontFamily: fonts.interBold, fontSize: 16, lineHeight: 24, color: colors.heading },
+  badge: {
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: colors.softBlue,
+    backgroundColor: PAY_TILE_BG,
+  },
+  badgeText: { fontFamily: fonts.interSemi, fontSize: 10, lineHeight: 14, color: colors.textSoft },
   desc: { fontFamily: fonts.inter, fontSize: 16, lineHeight: 24, color: colors.textSoft },
 
   brands: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginTop: 4 },

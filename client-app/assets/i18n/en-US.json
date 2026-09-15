@@ -368,6 +368,9 @@
     "totalAmount": "Total",
     "submitOrder": "Place order",
     "payNow": "Pay now",
+    "payBalance": "Pay with wallet balance",
+    "walletBalance": "Wallet balance: {{amount}}",
+    "balanceInsufficient": "Not enough wallet balance for this order.",
     "payStripe": "Pay with Stripe",
     "payPaypal": "Pay with PayPal",
     "cancelOrder": "Cancel order",
@@ -1250,6 +1253,7 @@
           "support": "24/7 SUPPORT"
         },
         "methodRequired": "Please choose a payment method.",
+        "insufficient": "Not enough wallet balance for this booking.",
         "successTitle": "Payment Success",
         "close": "Close",
         "failTitle": "Payment Fail!",

@@ -368,6 +368,9 @@
     "totalAmount": "合计",
     "submitOrder": "提交订单",
     "payNow": "立即支付",
+    "payBalance": "余额支付",
+    "walletBalance": "钱包余额:{{amount}}",
+    "balanceInsufficient": "钱包余额不足以支付本单。",
     "payStripe": "Stripe 支付",
     "payPaypal": "PayPal 支付",
     "cancelOrder": "取消订单",
@@ -1250,6 +1253,7 @@
           "support": "7×24 客服"
         },
         "methodRequired": "请先选择支付方式。",
+        "insufficient": "钱包余额不足以支付本次预订。",
         "successTitle": "支付成功",
         "close": "关闭",
         "failTitle": "支付失败!",

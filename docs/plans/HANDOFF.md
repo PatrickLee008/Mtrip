@@ -1,4 +1,53 @@
 # 会话交接文档(HANDOFF)
+### ★ 2026-09-15(C 端支付只留余额一种,余额真扣款并落流水)
+
+**范围**:client-app 的两个支付入口(订房向导 Step 4、订单详情待支付)——
+除 mTrip 钱包余额外的渠道全部停用,余额支付从 mock 变成真扣款。
+
+- **后端只加一个渠道码,不改口径**:`OrderController::pay` 的 `payMethod` 白名单
+  `[1,2]` → `[1,2,3]`,**3 = 余额**。选 3 才是真金白银:同一事务内
+  `WalletService::debit()` 行锁 `user_info` 扣款 → 写 `user_balance_log`
+  (`change_type=2` 消费,`amount` **记负数**,带前后余额快照)→ `PaymentResultHandler::markPaid`
+  置已支付并生成核销码 → 写 `finance_flow`(`flow_type=1` / `biz_type=1` / `pay_channel=3` /
+  `trade_no=WALLET+流水号`)→ 扣库存。任一步抛错整单回滚,不会出现「扣了钱订单还待支付」。
+- **`debit()` 与既有 `credit()` 成对**(退款/推荐返利走 credit)。余额不足抛
+  `DATA_CONFLICT`「钱包余额不足」;比较时留 0.005 容差 —— 余额是 `DECIMAL(12,2)`,
+  转成 float 后「刚好够」会被浮点尾差判成不足。
+- **mock 渠道不写资金流水**:1/2 没有真实资金进来,写进 `finance_flow` 会污染对账。
+- **`pay_method=3` 不是新发明**:admin-web 订单页早就有 `order.payMethod.balance` 的映射,
+  所以**没有改库表结构与列注释**(列是 TINYINT,存 3 本来就合法;为一条注释去 MODIFY
+  月分表模板不划算)。
+- **前端置灰而不是删掉**:MMQR / KBZPay / Wave Pay / 到店付 / 银行卡 / 手机银行 /
+  Stripe / PayPal 保留在页面上,`PaymentMethodRow` 新增 `disabled` + `badge` 两个 prop,
+  整行 45% 透明度 + 「Coming soon」角标,点按只弹提示、**不会被选中**,也不发请求。
+  删掉的话设计稿走查会以为漏做,而且渠道接通时要重做一遍。
+- **余额显示改吃真实值**:钱包渐变卡与「Pay with mTrip Wallet」那行读 `/app/user/me` 的
+  `balance`(演示模式仍回落 `bookingDemo.walletBalance`)。
+  **进支付步 / 打开待支付订单详情会先 `refreshProfile()` 一次** —— 本地资料是启动时从
+  AsyncStorage 恢复的,拿旧余额会把钱够的用户误判成「余额不足」。支付成功后再刷一次。
+- **余额不足在客户端就拦**(`goNext` 里,创建订单之前):否则会留下一张十分钟后才过期的
+  待支付订单。后端 `debit()` 是第二道闸,客户端拦不住也扣不动。
+- **两处 `payOrder` 合并**:`api/order.ts` 与 `api/pay.ts` 各有一份、默认渠道还不一样。
+  现在唯一实现在 `api/pay.ts`(带 `PAY_METHOD` 常量,默认 `BALANCE`),`api/order.ts` 只转出。
+
+**没有做的部分(别当成漏做)**
+
+- **`TripController::pay`(多住宿 Trip 单笔支付)仍只收 1/2**,没有接余额 ——
+  client-app 目前没有任何入口调它(多住宿在真实模式下本来就走 comingSoon)。
+  哪天开多住宿,照 `OrderController::pay` 这段抄一遍即可。
+- **没有充值入口**:余额只能靠退款、推荐返利或后台调账进账。余额为 0 的账号在 App 里
+  现在等于付不了款 —— 这是「只留余额」的直接后果,冒烟时请先用后台/SQL 给测试号加余额。
+- 未接真实 Stripe/PayPal(仍归 payment-service 模块06)。
+
+**验证**:后端 356 文件 `php -l` 零错、shared 95 用例 / 957 断言、admin-web build 通过、
+client-app `tsc --noEmit` 零报错、i18n 三份 878→882 键零 missing / 零 extra。
+**本机 PATH 没有 php**,前两步是在 `mtrip-order-service` 镜像里跑的
+(`docker run --rm --entrypoint php -v C:/Codes/Mtrip/backend:/lint mtrip-order-service ...`),
+`scripts/check.ps1` 直接跑仍会停在第 1 步。**未做真机/真库冒烟**(本地容器全停着):
+扣款链路是按 `BookingRefundService` 的退款入账镜像写的,建议联调时先验三条 ——
+余额充足支付成功、余额不足报「钱包余额不足」且订单仍为待支付、支付后
+`user_balance_log` 与 `finance_flow` 各多一条且金额对得上。
+
 ### ★ 2026-09-14(关怀模式落地首页 / 我的精选 / 更多三屏,Figma section Home Lite `2540:21120`)
 
 **范围**:上一条只是「记录选择」,这一条开始 `liteMode` **真的会换页面**。

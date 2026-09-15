@@ -49,14 +49,8 @@ export function createOrder(params: CreateOrderParams): Promise<CreateOrderResul
   return post('/api/v1/app/order/create', params);
 }
 
-/**
- * 支付。后端 `OrderController::pay` **本来就是 mock** —— 直接置为已支付、扣库存、发确认通知,
- * 流水号写成 `MOCK...`,没有接真实渠道。所以「点支付即成功」不需要前端造假。
- * payMethod:1 / 2(后端白名单),当前订房向导统一传 1。
- */
-export function payOrder(orderId: number, payMethod = 1): Promise<{ verifyCode: string }> {
-  return post('/api/v1/app/order/pay', { orderId, payMethod });
-}
+/** 支付统一在 `@/api/pay`(唯一一份 payOrder,当前只走余额),这里转出方便订单相关的集中引入 */
+export { PAY_METHOD, payOrder, type PayMethod } from '@/api/pay';
 
 export function fetchOrderList(
   params: PageParams & { status?: number },
