@@ -17,7 +17,8 @@ import type { TravelerItem } from '@/types/models';
 export interface SignupDraft {
   mobile: string;
   password: string;
-  email?: string;
+  /** 姓名(取代原邮箱栏),落库进 `user_info.real_name` 加密列 */
+  realName: string;
 }
 
 /** 底部 Tab(对应 Figma M-Trip / Home 81:2464 的 BottomNavBar) */
@@ -149,6 +150,11 @@ export type RootStackParamList = {
    * `verifyToken` 由验证码页透传;站点没配短信渠道时为空(后端此时也不强制)。
    */
   ReferralCode: { draft: SignupDraft; verifyToken?: string };
+  /**
+   * 【临时】固定验证码页(只认 123456,纯前端校验,不发请求)。
+   * 真实短信 OTP 接通后删掉本行与 `screens/user/FixedOtpScreen.tsx`。
+   */
+  FixedOtp: { draft: SignupDraft };
   /** 忘记密码第一步:输入手机号发码(设计稿未画,见页面头部注释) */
   ForgotPassword: undefined;
   /** 忘记密码第二步:凭 verifyToken 设置新密码(设计稿未画,见页面头部注释) */

@@ -59,6 +59,8 @@ import ReferralCodeScreen from '@/screens/user/ReferralCodeScreen';
 import RegisterScreen from '@/screens/user/RegisterScreen';
 import ResetPasswordScreen from '@/screens/user/ResetPasswordScreen';
 import VerifyOtpScreen from '@/screens/user/VerifyOtpScreen';
+// 【临时】固定码页(只认 123456),接通真实 OTP 时连同这一行与下面的 Stack.Screen 一起删
+import FixedOtpScreen from '@/screens/user/FixedOtpScreen';
 import { useCommonStore } from '@/store/commonStore';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -293,6 +295,12 @@ export default function AppNavigator() {
         <Stack.Screen
           name="VerifyOtp"
           component={VerifyOtpScreen}
+          options={{ title: t('user.otp.title'), headerShown: false }}
+        />
+        {/* 【临时】纯前端固定码页,真实 OTP 接通后删 */}
+        <Stack.Screen
+          name="FixedOtp"
+          component={FixedOtpScreen}
           options={{ title: t('user.otp.title'), headerShown: false }}
         />
         <Stack.Screen

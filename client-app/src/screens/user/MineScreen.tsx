@@ -20,8 +20,9 @@
  * 未实现的能力(设计稿有、后端没有),一律走 comingSoon:
  *   钱包与 Top Up、会员权益数、编辑资料、About、FAQ、Rate this app。
  *
- * 关怀模式开关与开屏的模式选择页(Figma Splash 2485:7324)共用 commonStore 的 liteMode,
- * 只落本地(后端无此字段);**当前只记录选择,尚未改变任何页面的字号与信息密度**。
+ * 关怀模式开关落在 commonStore 的 liteMode(只存本地,后端无此字段),关掉就换回完整版三屏。
+ * **关怀模式现在是默认模式**,开屏不再问(见 App.tsx 的 `ASK_MODE_ON_LAUNCH`),
+ * 所以这个开关是改回完整模式的**唯一入口** —— 别把它从页面上拿掉。
  */
 
 import React, { useCallback, useState } from 'react';

@@ -21,9 +21,9 @@ interface CommonState {
   hydrate: () => Promise<void>;
   setLang: (lang: Lang) => Promise<void>;
 
-  /** 关怀模式(Figma Splash 2485:7324 的 Lite Mode) */
+  /** 关怀模式(Figma Splash 2485:7324 的 Lite Mode),**默认开启** */
   liteMode: boolean;
-  /** 用户是否选过模式(false = 首次进入,选完语言后要弹模式选择) */
+  /** 用户是否显式选过模式(本地存过 mtrip:app-mode);当前启动不再弹模式选择,只有「更多」页的开关会置 true */
   modeChosen: boolean;
   setMode: (mode: AppMode) => Promise<void>;
 
@@ -55,7 +55,9 @@ export const useCommonStore = create<CommonState>((set) => ({
     set({ lang, langChosen: true });
   },
 
-  liteMode: false,
+  /* 关怀模式是默认模式:没选过、也没存过的账号一律按 lite 起步。
+     老用户本地存过 full 的,hydrate 会把它读回来 —— 显式选择优先于默认值。 */
+  liteMode: true,
   modeChosen: false,
   async setMode(mode) {
     await storage.setString(STORAGE_KEYS.MODE, mode);

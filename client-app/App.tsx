@@ -7,8 +7,9 @@
  * 首次进入(本地没存过语言)不静默套用系统语言,而是把系统语言作为**默认选中项**
  * 弹出语言选择卡,用户按 Continue 才落地。
  *
- * 两道选择各自独立记状态(langChosen / modeChosen):老用户本地已有语言、但没有模式记录,
- * 下次启动只补问模式这一屏,不会把语言再问一遍。
+ * **模式选择这一屏当前不问**(`ASK_MODE_ON_LAUNCH=false`):关怀模式已是默认模式
+ * (`commonStore.liteMode` 初值 true),选完语言直接进主流程,改模式去「更多」页的开关。
+ * 页面与整条 phase 链路**刻意原样保留**,把那个常量翻回 true 就恢复成三段引导。
  */
 
 import React, { useEffect, useState } from 'react';
@@ -40,6 +41,12 @@ applyWebGlobalStyles();
 
 /** 开屏最短停留(ms):引导跑得比这快时也不让 logo 一闪而过 */
 const MIN_SPLASH_MS = 1200;
+
+/**
+ * 启动时是否弹模式选择页(Figma Splash 2485:7324)。
+ * 关怀模式设为默认模式后这一屏不再问,置 false;页面与下面的 'mode' 分支保留,翻回 true 即恢复。
+ */
+const ASK_MODE_ON_LAUNCH = false;
 
 export default function App() {
   /** boot=纯开屏 language=语言选择 mode=模式选择 app=进主流程 */
@@ -79,7 +86,7 @@ export default function App() {
         await new Promise((resolve) => setTimeout(resolve, rest));
       }
       if (!langChosen) setPhase('language');
-      else setPhase(modeChosen ? 'app' : 'mode');
+      else setPhase(!ASK_MODE_ON_LAUNCH || modeChosen ? 'app' : 'mode');
     })();
   }, []);
 
@@ -87,8 +94,10 @@ export default function App() {
     void (async () => {
       await setLang(picked);
       changeLanguage(picked);
-      // 语言选完接着问模式;已选过模式的(理论上不会,两道都是首次才问)直接进主流程
-      setPhase(useCommonStore.getState().modeChosen ? 'app' : 'mode');
+      // 语言选完直接进主流程(关怀模式为默认);ASK_MODE_ON_LAUNCH 翻回 true 才接着问模式
+      setPhase(
+        !ASK_MODE_ON_LAUNCH || useCommonStore.getState().modeChosen ? 'app' : 'mode',
+      );
     })();
   };
 

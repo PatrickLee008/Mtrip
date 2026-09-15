@@ -419,12 +419,14 @@
     "rememberMe": "Remember me",
     "orLoginWith": "Or login with",
     "emailPlaceholder": "name@example.com",
+    "namePlaceholder": "Enter your name",
     "confirmPasswordPlaceholder": "Confirm your password",
     "agreePrefix": "I agree to the ",
     "terms": "Terms & Conditions",
     "agreeAnd": " and ",
     "privacyPolicy": "Privacy Policy",
     "invalidEmail": "Invalid email address",
+    "nameRequired": "Please enter your name",
     "passwordMismatch": "The two passwords do not match",
     "agreeRequired": "Please agree to the Terms & Conditions and Privacy Policy",
     "agreeSuffix": "",
@@ -436,7 +438,8 @@
       "resent": "A new code has been sent",
       "continue": "Continue",
       "changePhone": "Change phone number",
-      "invalid": "Please enter the 6-digit code"
+      "invalid": "Please enter the 6-digit code",
+      "fixedHint": "SMS is not live yet — enter {{code}} to continue"
     },
     "referral": {
       "title": "Enter Referral Code",

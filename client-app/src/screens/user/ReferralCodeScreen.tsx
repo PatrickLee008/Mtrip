@@ -52,7 +52,7 @@ export default function ReferralCodeScreen() {
     setSubmitting(true);
     try {
       await register(draft.mobile, draft.password, {
-        email: draft.email || undefined,
+        realName: draft.realName || undefined,
         referralCode: referralCode || undefined,
         // 短信验证票据(站点没配渠道时为空,后端此时也不强制)
         verifyToken,
