@@ -53,6 +53,18 @@ MTrip/
 
 ## 模块进度总览
 
+2026-09-15更新：client-app **关怀模式订房流程**落地(Figma `Booking Flow` `759:9777`):新增 `HotelBookingLite`(日期→入住人→复核→支付 4 步)与 `BookingSuccessLite` 两个路由 + `liteBookingShared` 与四个步骤组件,Lite 详情/房型详情的 Choose 改跳 Lite 向导,关怀模式从搜索到下单成功全程同一套字号。**该 section 与完整模式已实现的 `1675:5776` 逐屏同构、设计侧没有 Lite 稿**,故按既定换算规则推导。**下单逻辑抽成共享 `useBookingWizard`**,完整版只改取值来源、渲染零变化,两种模式的实付与用券口径必然一致;日历、选券弹窗、常旅客/新增旅客/保险子页一律复用完整模式,文案复用 `hotels.booking.*`(i18n 零新增)。多住宿 `trip` 步与 Add More Stay **刻意不做**(后端一单一个 sku)。详见[模块10](./10-移动端App框架.md)。
+
+2026-09-15更新：client-app **关怀模式酒店详情七屏**落地(Figma `Hotel Details Lite` `2352:5591`):主详情页(单选/多选一页两态)、房型详情、信息页、政策页、评价页、实景预览共 6 个路由 + `LiteRoomCard`/`liteShared`;内容与完整模式同源(复用 `detailDemo` 与 `hotels.detail.*`),退改规则接真实 `refundRules`;结果页卡片改跳 Lite 详情。多选只算合计不多间下单(后端一单一个 sku),订房流程 Lite 版另排。详见[模块10](./10-移动端App框架.md)。
+
+2026-09-15更新：client-app **关怀模式酒店搜索三屏**落地(Figma `Hotel Search Lite` `2312:6435`):Lite 搜索页 `HotelsLite` + 结果页 `HotelResultsLite` + 筛选浮层(复用完整模式的 `HotelFilterSheet`),关怀模式首页 Hotels 卡改跳新页。数据与完整版同一套 `/app/goods/list`;最近搜索存本地,联想/地图/语音等无依赖能力走 comingSoon。详见[模块10](./10-移动端App框架.md)。
+
+2026-09-15更新：client-app 注册页**邮箱栏换成姓名**(必填,AES 加密落 `user_info.real_name`;后端 `register` 新收 `realName`,不动 `real_name_status`、不写 `nickname`),登录/注册右上角入口按改版稿 Figma Onboarding `2540:13083` 改成黑 25% 底的药丸按钮(改在共用的 `AuthShell`,五屏同时生效;其余样式未动)。详见[模块09](./09-移动端微服务.md)与[模块10](./10-移动端App框架.md)。
+
+2026-09-15更新：【临时】注册验证码改为**纯前端固定码页**(client-app 新增 `FixedOtpScreen`,只认 123456、不发请求;注册流程 `Register → FixedOtp → ReferralCode`)。后端未改 —— 当前没有启用中的短信渠道,`register` 本就不强制 `verifyToken`;先前那版后端万能码 `MTRIP_SMS_BYPASS_CODE` 已整体回滚。接通真实 OTP 时按四处「临时」注释删除即可恢复原链路。详见[模块10](./10-移动端App框架.md)与 [HANDOFF](./HANDOFF.md)。
+
+2026-09-15更新：client-app **关怀模式改为默认模式**,开屏选完语言直接进主流程,不再问模式(`liteMode` 初值改 true;模式选择页与整条 phase 链路保留,由 `App.tsx` 的 `ASK_MODE_ON_LAUNCH=false` 跳过)。本地存过模式的用户仍按自己的选择走;改模式走「更多」页的开关。详见[模块10](./10-移动端App框架.md)。
+
 2026-09-15更新：C 端支付收敛到余额一种。`/api/v1/app/order/pay` 新增 `payMethod=3` 余额支付（**唯一真实扣款渠道**：同一事务内行锁扣 `user_info.balance`、写 `user_balance_log` 消费流水与 `finance_flow` 订单支付流水，余额不足整单回滚），`WalletService` 补 `debit()`；client-app 其余渠道全部置灰 + Coming soon，不再发支付请求，钱包余额改读 `/app/user/me` 真实值并在进支付步/打开待支付订单时刷新。详见[模块09](./09-移动端微服务.md)与[模块10](./10-移动端App框架.md)。
 
 2026-09-12更新：修复空库初始化漏跑增量迁移导致统一 KYC 模板为空。Docker Desktop 挂载的 `99z-run-migrations.sh` 被 entrypoint 直接执行时出现 `bad interpreter: Permission denied`；runner 改为打入 MySQL 镜像并由 entrypoint source，健康检查同时比对迁移文件数。当前本地 3 个迁移均已应用；隔离新库验证统一模板 1 条、6 项资料。详见[模块08](./08-部署与网关.md)。

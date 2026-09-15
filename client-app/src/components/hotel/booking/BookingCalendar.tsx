@@ -41,9 +41,14 @@ interface Props {
   checkOut: string;
   /** 点日期格:调用方决定是重新起头还是收尾(这里只上报) */
   onPickDate: (key: string) => void;
+  /**
+   * 关怀模式:整块放大一档(标题 20→24、日期 16→22、格高 12→16)。
+   * 排布与选区逻辑两种模式完全一样,所以这里只叠尺寸,不复制一份日历。
+   */
+  lite?: boolean;
 }
 
-export default function BookingCalendar({ checkIn, checkOut, onPickDate }: Props) {
+export default function BookingCalendar({ checkIn, checkOut, onPickDate, lite = false }: Props) {
   const { t, i18n } = useTranslation();
   const { width } = useWindowDimensions();
 
@@ -86,14 +91,18 @@ export default function BookingCalendar({ checkIn, checkOut, onPickDate }: Props
   return (
     <View style={[bookingShared.panel, styles.card]}>
       <View style={styles.head}>
-        <Text style={styles.headTitle}>{t('hotels.booking.dates.selectedDates')}</Text>
-        <Text style={styles.headMonth}>{monthLabel}</Text>
+        <Text style={[styles.headTitle, lite && styles.headTitleLite]}>
+          {t('hotels.booking.dates.selectedDates')}
+        </Text>
+        <Text style={[styles.headMonth, lite && styles.headMonthLite]}>{monthLabel}</Text>
       </View>
 
       <View style={styles.grid}>
         {weekdays.map((w, i) => (
           <View key={`w${i}`} style={[styles.weekCell, { width: cellWidth }]}>
-            <Text style={[styles.weekText, i >= 5 && styles.weekend]}>{w}</Text>
+            <Text style={[styles.weekText, lite && styles.weekTextLite, i >= 5 && styles.weekend]}>
+              {w}
+            </Text>
           </View>
         ))}
 
@@ -109,6 +118,7 @@ export default function BookingCalendar({ checkIn, checkOut, onPickDate }: Props
               key={key}
               style={[
                 styles.dayCell,
+                lite && styles.dayCellLite,
                 { width: cellWidth },
                 inRange && styles.dayInRange,
                 (isStart || isEnd) && styles.dayEdge,
@@ -122,6 +132,7 @@ export default function BookingCalendar({ checkIn, checkOut, onPickDate }: Props
               <Text
                 style={[
                   styles.dayText,
+                  lite && styles.dayTextLite,
                   inRange && styles.dayTextRange,
                   (isStart || isEnd) && styles.dayTextEdge,
                   past && styles.dayTextPast,
@@ -167,4 +178,11 @@ const styles = StyleSheet.create({
   dayTextRange: { fontFamily: fonts.interSemi, color: colors.primary },
   dayTextEdge: { fontFamily: fonts.interSemi, color: '#FFFFFF' },
   dayTextPast: { color: colors.textSoft },
+
+  /* ---- 关怀模式:只叠尺寸,颜色与选区样式与完整模式共用上面那几条 ---- */
+  headTitleLite: { fontSize: 24, lineHeight: 32 },
+  headMonthLite: { fontSize: 24, lineHeight: 32 },
+  weekTextLite: { fontSize: 16, lineHeight: 20, letterSpacing: 1.2 },
+  dayCellLite: { paddingVertical: 16 },
+  dayTextLite: { fontSize: 22, lineHeight: 28 },
 });

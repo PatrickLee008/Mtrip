@@ -35,6 +35,38 @@ export type RootStackParamList = {
   SiteSelect: undefined;
   /** 酒店搜索页(Figma 91:200),首页快捷入口 hotels 的落地页 */
   Hotels: undefined;
+  /**
+   * 关怀模式酒店搜索页(Figma section `Hotel Search Lite` `2312:6435`),
+   * liteMode 下首页 Hotels 卡的落地页;完整模式仍走 `Hotels`
+   */
+  HotelsLite: undefined;
+  /**
+   * 关怀模式酒店详情族(Figma section `Hotel Details Lite` `2352:5591`)。
+   * 五页共用同一个商品 id;`checkIn/checkOut` 一路透传到订房向导,免得选完房日期跳回默认值。
+   */
+  HotelDetailLite: { id: number; checkIn?: string; checkOut?: string };
+  /** 房型详情(Rooms Details `2352:6030`) */
+  RoomDetailLite: { goodsId: number; skuId: number; checkIn?: string; checkOut?: string };
+  /** 酒店信息页(View Hotel Detail `2352:8182`) */
+  HotelInfoLite: { id: number };
+  /** 酒店政策(Lite Hotel Details Policies `2352:8890`) */
+  HotelPolicyLite: { id: number };
+  /** 住客评价(Hotel Details Reviews Page `2352:6648`) */
+  HotelReviewsLite: { id: number };
+  /** 实景预览(Property Preview `2352:7051`) */
+  PropertyPreviewLite: { id: number };
+  /** 关怀模式酒店搜索结果页(同上 section 的 Search Results `2312:6745`) */
+  HotelResultsLite: {
+    keyword?: string;
+    checkIn?: string;
+    checkOut?: string;
+    flexDays?: number;
+    citizen?: boolean;
+    /** 房间/成人/儿童:列表接口用不上,带过来只为结果页顶部回显与后续透传 */
+    rooms?: number;
+    adults?: number;
+    children?: number;
+  };
   /** 酒店搜索结果页(Figma 1695:6325),酒店搜索页 Search 的落地页 */
   HotelResults: {
     countryCode?: string;
@@ -78,6 +110,21 @@ export type RootStackParamList = {
       }
     | undefined;
   /**
+   * 关怀模式订房向导(Figma section `Booking Flow` `759:9777`)。
+   * 参数与 `HotelBooking` 同形 —— 两页共用 `useBookingWizard`,只是排版与步骤序列不同
+   * (关怀版恒 4 步,没有多住宿 trip 步)。Lite 详情 / 房型详情的 Choose 落到这里。
+   */
+  HotelBookingLite:
+    | {
+        roomKey?: string;
+        checkIn?: string;
+        checkOut?: string;
+        propertyId?: number;
+        roomTypeId?: number;
+        leadGuest?: { firstName: string; lastName: string };
+      }
+    | undefined;
+  /**
    * 新增 / 编辑常旅客(1675:5777),向导第 2 步与「更多 / 常用旅客」共用。
    * 带 `traveler` 即编辑态 —— 列表接口已返回全部可编辑字段,不再单独请求详情。
    */
@@ -91,6 +138,23 @@ export type RootStackParamList = {
     | {
         orderNo?: string;
         /** 支付接口返回的核销码,成功页的二维码就是它 */
+        verifyCode?: string;
+        hotelName?: string;
+        address?: string;
+        checkIn?: string;
+        checkOut?: string;
+        adults?: number;
+        rooms?: number;
+        paidTotal?: number;
+      }
+    | undefined;
+  /**
+   * 关怀模式预订成功(同 `Booking Flow` `759:9777` 的 Booking Success `224:3826`)。
+   * 参数与 `BookingSuccess` 同形,Lite 向导支付成功后 replace 到这里。
+   */
+  BookingSuccessLite:
+    | {
+        orderNo?: string;
         verifyCode?: string;
         hotelName?: string;
         address?: string;

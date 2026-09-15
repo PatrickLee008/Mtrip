@@ -238,3 +238,95 @@ Expo 51 / TypeScript / Zustand / React Navigation 6 / Axios / i18next + react-i1
   余额不足在客户端就拦住(不去创建那张十分钟后才过期的待支付订单),后端 `debit()` 是第二道闸。
   支付成功后刷新资料,钱包卡与「我的」页不会停在扣款前的数。
   两处 `payOrder` 合并为一份(`api/pay.ts`,`api/order.ts` 只做转出);i18n 三份各补 4 键(共 882)。
+
+- [x] **关怀模式设为默认模式**(2026-09-15):引导缩回「纯开屏 → 语言 → 主流程」,
+  `commonStore.liteMode` 初值 `false` → `true`,新装用户与从未选过模式的老用户直接进关怀版三屏。
+  **模式选择页原样保留**:`App.tsx` 新增 `ASK_MODE_ON_LAUNCH = false`,`'mode'` 段 phase、
+  `ChooseModeScreen` 渲染分支与 `onPickMode` 回调全部留着,翻回 `true` 即恢复三段引导。
+  `hydrate()` 未改 —— 本地存过 `mtrip:app-mode` 的照旧读回,**显式选择优先于默认值**。
+  改模式的唯一入口是「更多」页的 Lite Mode 开关(`MineScreen` / `MoreLiteScreen` 各一个,同一份状态)。
+
+- [x] **【临时】注册验证码走纯前端固定码页**(2026-09-15):新增 `screens/user/FixedOtpScreen.tsx`
+  (路由 `FixedOtp`),**只认 `123456`、纯前端校验、不发任何网络请求**;
+  注册流程 `Register → FixedOtp → ReferralCode`,**后端一行没改**。
+  可行的前提:后台没有启用中的短信渠道 → `SmsVerifyService::enabled()` 为 false →
+  `register` 不强制 `verifyToken`(已实测 `sms/send`、`sms/verify` 均回 50021,
+  不带 token 的 `register` 成功)。
+  真页 `VerifyOtpScreen` **原样保留、一行未动**;新页刻意不复用它的组件(混在一起会让
+  「哪段是临时的」难分辨,删除时容易误伤),版式照搬但去掉倒计时与 Resend(本页没发过码)。
+  **接通真实 OTP 时的删除清单**:`FixedOtpScreen.tsx` + `RegisterScreen` 的 `USE_FIXED_OTP`
+  与那段 if + `navigation/index.tsx` 的 import 与 `Stack.Screen` + `types.ts` 的 `FixedOtp`
+  路由项,四处都带同一句「临时 · 接通真实 OTP 时删掉」注释,删完原链路自动恢复。
+  提示文案复用 `user.otp.fixedHint`(三语);
+  **先前那版后端万能码 `MTRIP_SMS_BYPASS_CODE` 已整体回滚**(它是真的认证绕过,
+  且与渠道解耦 —— 删光短信渠道也关不掉)。
+
+- [x] **注册页邮箱换姓名 + 右上角按钮改版**(2026-09-15,Figma Onboarding `2540:13083`):
+  注册表单第二栏由邮箱改为**姓名且必填**(原邮箱是选填),图标用设计稿同款
+  `fluent:rename-a-20-filled`(`HomeIcon.renameA`),占位符 `user.namePlaceholder`
+  = "Enter your name"(三语,i18n 883→885);`SignupDraft.email?` → `realName: string`,
+  `apiRegister` 入参同步替换,提交后落 `user_info.real_name`(见模块09)。
+  `user.emailPlaceholder` / `user.invalidEmail` 两键保留,后续「完善资料」页还要用。
+  右上角登录/注册入口(Login `2540:13084` 的 `2540:13182`、Signup `2540:13284` 同款)
+  由纯白文字链改成**黑 25% 底、圆角 20、px12 py8 药丸**,文字 Inter SemiBold 20/24 白色;
+  改在共用的 `AuthShell`,**登录/注册/验证码/推荐码/忘记密码五屏同时生效**。
+  **左侧返回键(改版稿把图标 20 放大到 32)与其余样式按要求未动**;
+  改版稿的「完善资料」两屏(`2540:13764` / `2540:13908`)整体未做。
+
+- [x] **关怀模式酒店搜索三屏**(2026-09-15,Figma section `Hotel Search Lite` `2312:6435`):
+  新增 `screens/hotel/HotelsLiteScreen.tsx`(路由 `HotelsLite`,设计稿 Search 14/15/16/18 四态合一)、
+  `screens/hotel/HotelResultsLiteScreen.tsx`(路由 `HotelResultsLite`,Search Results `2312:6745`)、
+  `components/hotel/lite/LiteHotelCard.tsx` 与 `components/hotel/lite/GuestRoomSheet.tsx`
+  (`2516:14575`,三行加减复用订房向导的 `GuestCounterRow`)。
+  **筛选浮层复用完整模式 `HotelFilterSheet`**(Lite 稿 `2485:7101` 与 408:1824 逐段同构);
+  日期复用 `DatePickerSheet`;结果页取数、收藏、上拉加载与完整版同一套。
+  入口:`LITE_SERVICES.hotels.route` 由 `Hotels` 改 `HotelsLite`(完整模式不受影响)。
+  新增 `HomeIcon.mic`(字形取自设计稿导出 SVG)与本地键 `mtrip:hotel-recent`(最近搜索,最多 3 条)。
+  **未照抄**:设计稿「输入中」的联想列表(没有地点库,不编造联想词);
+  Nearby / Search on Map / 语音 / how do I book 走 comingSoon;
+  房间与入住人只回显不进请求(`/app/goods/list` 无此参数,日期同理)。
+  i18n 三份各补 26 键(共 912)。
+
+- [x] **关怀模式酒店详情七屏**(2026-09-15,Figma section `Hotel Details Lite` `2352:5591`):
+  新增 6 个路由 —— `HotelDetailLite`(主详情,`2492:10399` 单选 + `2707:13098` 多选**一页两态**:
+  房卡 Choose ⇄ 加减器,多选时底部出 Total Price + 购物车 + Continue 合计栏)、
+  `RoomDetailLite`(`2352:6030`)、`HotelInfoLite`(`2352:8182`)、`HotelPolicyLite`(`2352:8890`)、
+  `HotelReviewsLite`(`2352:6648`)、`PropertyPreviewLite`(`2352:7051`);
+  新增 `components/hotel/lite/LiteRoomCard.tsx` 与四个内容页共用的 `liteShared.ts`。
+  **内容与完整模式同源**:设施 / 周边 / 评价 / 政策复用 `screens/hotel/detailDemo.ts` 与
+  `hotels.detail.*` 文案(完整版页签用的就是这份),不另造 Lite 数据;
+  **退改规则接真实 `refundRules`**(rule_type 1 免费 / 2 阶梯 / 3 不可退,无规则=免费取消,
+  与 order-service `computeRefund` 兜底一致)。
+  入口:Lite 结果页卡片由 `HotelDetail` 改跳 `HotelDetailLite`(完整模式不受影响)。
+  新增图标 `eyeCircle` / `cart` / `documentList`(字形取自设计稿导出 SVG;
+  `imageCopy` 项目里本来就有 —— 第一版加重了,typecheck 报 TS1117 才发现,已去重复用原有那枚)。
+  **未做**:多选只算合计、**不多间下单**(后端一单一个 sku,Continue 带第一个选中房型进订房向导);
+  房型详情不画「Tax & Service Fees (15%)」(结账实付里没有这笔)与 Loyalty 模块;
+  设施不分 ESSENTIALS/RECREATION/DINING 三组(`facilities` 无分类字段);
+  评分 / 评论 / 周边景点仍是设计稿数值(无评价接口);360°、地图、区域页签 comingSoon。
+
+- [x] **关怀模式订房流程**(2026-09-15,Figma section `Booking Flow` `759:9777`):关怀模式的下单链路补齐,
+      从搜索 → 详情 → 订房 → 成功页全程同一套字号(此前 Lite 详情的 Choose 会掉回完整版向导)。
+      **设计侧没有出订房流程的 Lite 稿** —— 用户指定的这个 section 与完整模式已实现的
+      `Multi Booking Hotel Booking Flow` `1675:5776` 逐屏同构(逐帧比对 `224:4808` ≡ `1675:6292`),
+      故按仓库已确立的关怀模式换算规则从该稿**推导**:版式不变、每个元素放大一档,
+      换算表写在 `components/hotel/booking/lite/liteBookingShared.ts` 头部。
+      **业务逻辑抽成共享 Hook**:新增 `screens/hotel/useBookingWizard.ts`,承载原
+      `HotelBookingScreen` 的全部状态 / 副作用 / 下单支付(真实与演示两种模式、只开通钱包余额渠道、
+      加购与多住宿不提交、优惠券服务端试算);完整版页面只改取值来源,**JSX 与像素零变化**
+      (与「我的精选」`useMyPickData` 同一做法)。
+      新增 2 个路由 —— `HotelBookingLite`(4 步同一路由内切换)、`BookingSuccessLite`;
+      新增 `components/hotel/booking/lite/` 下 `liteBookingShared.ts` + 四个步骤组件。
+      入口:`HotelDetailLite` / `RoomDetailLite` 由 `HotelBooking` 改跳 `HotelBookingLite`(完整模式不受影响)。
+      **复用不重写**:日历给 `BookingCalendar` 加了个 `lite` 尺寸开关(排布与选区数学两种模式同一份,不复制);
+      选券弹窗 `CouponPickerSheet`、支付结果 `AlertDialog`、常旅客 `Travelers`、新增旅客 `AddGuest`、
+      保险 `Insurance` 全部复用完整模式那几个;**文案复用 `hotels.booking.*`,i18n 零新增键**(仍 971)。
+      **未做 / 刻意砍掉**:多住宿(`trip` 步 + Add More Stay)—— 后端一次 `create` 只收一个 sku,
+      完整模式真实下单下本就 `comingSoon`,关怀版不给死路(Hook 传 `enableMultiStay:false`);
+      支付页银行卡 / 手机银行两行不做展开(展开后是写死的示例卡,渠道还没开通);
+      支付汇总卡不放 View Details(跳的是完整版版式的 `StayDetail`,字号会突然变小);
+      成功页去掉「探索当地玩乐」引流卡(comingSoon 死链)。
+      加购、税费、渠道置灰的口径与完整模式逐条一致,不另立规矩。
+      **顺带修掉 3 处既有类型错**(都在上一批未提交的 Lite 文件里):`HotelDetailLite` /
+      `RoomDetailLite` 传给向导的 `goodsId/skuId` 应为 `propertyId/roomTypeId`;
+      `HotelResultsLite` 的收藏映射 `f.goods_id` 应为 `f.property_id`(`FavoriteItem` 早已改名)。

@@ -114,6 +114,18 @@ export interface BookingStay {
   points: number;
 }
 
+/**
+ * 主要入住人表单(Step 2)。完整模式 `BookingStepGuests` 与关怀模式 `LiteStepGuests`
+ * 是两套排版、同一份字段,所以形状放在这里,两边都从这里取。
+ */
+export interface LeadGuestForm {
+  firstName: string;
+  lastName: string;
+  phone: string;
+  email: string;
+  saveInfo: boolean;
+}
+
 /** 第二段住宿(Add More Stay 之后加进 Trip 的那条,设计稿 1675:9406 的 Stay 2) */
 export const BOOKING_SECOND_STAY = {
   hotelKey: 'heritageBagan',
