@@ -131,4 +131,50 @@ class MerchantContext
     {
         return self::accountType() === 3 ? self::storeId() : null;
     }
+
+    /** 当前账号被授权的酒店物业；选择单物业时自动收窄。 */
+    public static function scopePropertyIds(): array
+    {
+        $authorized = self::authorizedPropertyIds();
+        $selected = self::selectedPropertyId();
+        return $selected > 0 ? (in_array($selected, $authorized, true) ? [$selected] : []) : $authorized;
+    }
+
+    public static function authorizedPropertyIds(): array
+    {
+        $context = self::get();
+        if (array_key_exists('property_ids', $context)) {
+            return array_values(array_unique(array_map('intval', (array) $context['property_ids'])));
+        }
+        $query = Db::table('merchant_store')->where('site_id', self::siteId())
+            ->where('business_type', 'hotel')->whereNull('deleted_at');
+        if (self::accountType() === 3) {
+            $query->where('id', self::storeId());
+        } else {
+            $query->whereIn('merchant_id', self::scopeMerchantIds());
+            if (! self::isOwner()) {
+                $query->whereIn('id', Db::table('merchant_employee_property')
+                    ->where('site_id', self::siteId())->where('admin_id', self::adminId())->select('property_id'));
+            }
+        }
+        return $query->orderBy('id')->pluck('id')->map(static fn ($id) => (int) $id)->all();
+    }
+
+    public static function selectedPropertyId(): int
+    {
+        return (int) (self::get()['selected_property_id'] ?? 0);
+    }
+
+    public static function assertPropertyAccess(int $propertyId, bool $requireSelected = false): void
+    {
+        if ($propertyId <= 0 || ! in_array($propertyId, self::scopePropertyIds(), true)) {
+            throw new \Mtrip\Shared\Exception\BusinessException(\Mtrip\Shared\Constants\ErrorCode::NO_DATA_PERMISSION);
+        }
+        if ($requireSelected && array_key_exists('selected_property_id', self::get()) && self::selectedPropertyId() <= 0) {
+            throw new \Mtrip\Shared\Exception\BusinessException(
+                \Mtrip\Shared\Constants\ErrorCode::DATA_CONFLICT,
+                '请先选择具体物业'
+            );
+        }
+    }
 }

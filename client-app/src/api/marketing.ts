@@ -81,6 +81,8 @@ export function redeemPromoCode(code: string): Promise<PromoRedeemResult> {
 
 export interface BestCouponParams {
   orderType?: number;
+  propertyId?: number;
+  roomTypeId?: number;
   goodsId?: number;
   skuId?: number;
   amount: number;

@@ -15,25 +15,26 @@ use Mtrip\Shared\Support\Result;
  */
 class AdminReviewController extends AbstractAdminController
 {
-    /** 评价列表:筛选 goodsId/status/rating */
+    /** 评价列表:筛选 propertyId/status/rating */
     public function index(): array
     {
         [$page, $pageSize] = $this->pageParams();
-        $query = Db::table('goods_review')->whereNull('deleted_at');
-        $this->applySiteScope($query);
-        if (($goodsId = $this->intInput('goodsId')) > 0) {
-            $query->where('goods_id', $goodsId);
+        $query = Db::table('goods_review as r')->leftJoin('merchant_store as p', 'p.id', '=', 'r.property_id')
+            ->whereNull('r.deleted_at');
+        $this->applySiteScope($query, 'r.site_id');
+        if (($propertyId = $this->intInput('propertyId')) > 0) {
+            $query->where('r.property_id', $propertyId);
         }
         $status = $this->input('status');
         if ($status !== null && $status !== '') {
-            $query->where('status', (int) $status);
+            $query->where('r.status', (int) $status);
         }
         if (($rating = $this->intInput('rating')) > 0) {
-            $query->where('rating', $rating);
+            $query->where('r.rating', $rating);
         }
         $total = (clone $query)->count();
-        $list = $query->orderByDesc('id')->forPage($page, $pageSize)
-            ->get()->map(static function ($row) {
+        $list = $query->orderByDesc('r.id')->forPage($page, $pageSize)
+            ->get(['r.*', 'p.store_name as property_name'])->map(static function ($row) {
                 $row = (array) $row;
                 $row['images'] = $row['images'] ? json_decode((string) $row['images'], true) : [];
                 unset($row['deleted_at']);

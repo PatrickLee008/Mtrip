@@ -233,6 +233,9 @@
         "allHotels": "全部酒店订单可用",
         "allGoods": "全部商品可用",
         "rooms": "仅限指定房型:{{list}}",
+        "allTickets": "全部门票商品可用",
+        "ticketGoods": "仅限指定门票商品:{{list}}",
+        "ticketTypes": "仅限指定票种:{{list}}",
         "stackable": "可与其他优惠叠加",
         "notStackable": "不可与其他优惠叠加",
         "period": "有效期 {{start}} 至 {{end}}"
@@ -419,12 +422,14 @@
     "rememberMe": "记住我",
     "orLoginWith": "或使用以下方式登录",
     "emailPlaceholder": "name@example.com",
+    "namePlaceholder": "请输入姓名",
     "confirmPasswordPlaceholder": "请再次输入密码",
     "agreePrefix": "我已阅读并同意",
     "terms": "服务条款",
     "agreeAnd": "和",
     "privacyPolicy": "隐私政策",
     "invalidEmail": "邮箱格式不正确",
+    "nameRequired": "请输入姓名",
     "passwordMismatch": "两次输入的密码不一致",
     "agreeRequired": "请先同意服务条款与隐私政策",
     "agreeSuffix": "",
@@ -436,7 +441,8 @@
       "resent": "验证码已重新发送",
       "continue": "继续",
       "changePhone": "更换手机号",
-      "invalid": "请输入 6 位验证码"
+      "invalid": "请输入 6 位验证码",
+      "fixedHint": "短信通道尚未开通,请输入 {{code}} 继续"
     },
     "referral": {
       "title": "输入推荐码",
@@ -1320,6 +1326,113 @@
         "save": "省 {{amount}}",
         "noCoupon": "不使用优惠券",
         "useBest": "使用最优券"
+      }
+    },
+    "lite": {
+      "title": "酒店与民宿",
+      "howToBook": "怎么订",
+      "searchHint": "搜索",
+      "searchFocusHint": "城市、地标",
+      "nearby": "附近",
+      "searchOnMap": "在地图上找",
+      "recentSearch": "最近搜索",
+      "checkIn": "入住",
+      "checkOut": "离店",
+      "pickDate": "选择",
+      "guests": "入住人",
+      "guestSummary": "{{adults}} 位成人,{{rooms}} 间房",
+      "search": "搜索",
+      "chooseHotel": "选择酒店",
+      "choose": "选择",
+      "perNight": "/ 晚",
+      "anywhere": "不限目的地",
+      "guestSheet": {
+        "title": "房间与入住人",
+        "reset": "重置",
+        "room": "房间",
+        "roomHint": "每间可住 2 位成人 + 1 位儿童",
+        "adults": "成人",
+        "adultsHint": "13 岁及以上",
+        "children": "儿童",
+        "childrenHint": "2 - 12 岁",
+        "save": "保存"
+      },
+      "detailTitle": "酒店详情",
+      "hotelPolicy": "酒店政策",
+      "seeMap": "查看地图",
+      "viewHotelDetail": "查看酒店详情",
+      "chooseRoom": "选择房型",
+      "chooseMultiRoom": "选择多个房型",
+      "switchMulti": "+ 多选房型",
+      "switchSingle": "+ 单选房型",
+      "seeRoom": "查看房型",
+      "bestseller": "热销",
+      "guestsCount": "可住 {{count}} 人",
+      "totalPrice": "合计",
+      "continue": "继续",
+      "room": {
+        "title": "房型详情",
+        "pricePerNight": "每晚价格",
+        "pricePerNightPlain": "每晚价格",
+        "nights": "晚数",
+        "amenities": "房内设施",
+        "breakfastTitle": "含早餐",
+        "breakfastDesc": "入住期间每天早晨提供免费早餐。",
+        "priceSummary": "价格明细",
+        "bookThisRoom": "预订该房型",
+        "freeCancelNote": "入住前 48 小时可免费取消",
+        "startAt": "起价",
+        "reserveNow": "立即预订"
+      },
+      "info": {
+        "title": "酒店详情",
+        "whyChoose": "住客为什么选择这里"
+      },
+      "policy": {
+        "freeCancel": "入住前可免费取消,全额退回 mTrip 钱包。",
+        "tieredRefund": "阶梯退款:可退金额按距入住时间的长短计算。",
+        "nonRefundable": "该价格预订后不可退款。"
+      },
+      "preview": {
+        "title": "实景预览",
+        "video360": "360° 与视频",
+        "video360Hint": "预订前先线上走一圈,看看真实环境。",
+        "facilities": "设施实景",
+        "tabs": {
+          "all": "全部",
+          "rooms": "客房",
+          "pool": "泳池",
+          "dining": "餐饮"
+        }
+      },
+      "reviews": {
+        "outOfTen": "/10",
+        "replyFrom": "酒店回复",
+        "helpful": "有用({{count}})",
+        "report": "举报",
+        "items": {
+          "elena": {
+            "author": "Elena Rodriguez",
+            "meta": "2024 年 8 月 14 日 • 独自出行",
+            "title": "难忘的日出景色",
+            "body": "这是我缅甸之行最难忘的一站。顶层泳池正对着古老的佛塔群,日出时的景色让人屏息。工作人员每天早上都能叫出我的名字,早餐的品质也非常高。",
+            "reply": "亲爱的 Elena,非常感谢您的评价!很高兴您喜欢这里的日出景色与早餐,期待很快再次见到您。"
+          },
+          "marco": {
+            "author": "Marco Bianchi",
+            "meta": "2024 年 7 月 2 日 • 情侣出行",
+            "title": "房间安静,服务贴心",
+            "body": "房间宽敞,夜里很安静。前台临时帮我们安排了热气球行程,还准备了早餐打包盒。",
+            "reply": ""
+          },
+          "aye": {
+            "author": "Aye Chan",
+            "meta": "2024 年 6 月 20 日 • 家庭出行",
+            "title": "很适合带孩子",
+            "body": "孩子很喜欢这里的泳池,我们只说了一次就加好了床。位置也方便,一早就能去看佛塔。",
+            "reply": ""
+          }
+        }
       }
     }
   }

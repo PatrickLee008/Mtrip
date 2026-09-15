@@ -13,7 +13,7 @@ const userStore = useUserStore();
 const isSuper = userStore.profile?.isSuper === true;
 
 const { loading, list, query, load, search, reset, pagination } = useTable(apiReviewList, {
-  goodsId: undefined,
+  propertyId: undefined,
   status: undefined,
   rating: undefined,
   siteId: 0,
@@ -27,7 +27,8 @@ const STATUS: Record<number, { text: string; color: string }> = {
 
 const columns = [
   { title: 'ID', dataIndex: 'id', width: 70 },
-  { title: '酒店ID', dataIndex: 'goods_id', width: 90 },
+  { title: '物业ID', dataIndex: 'property_id', width: 90 },
+  { title: '物业名称', dataIndex: 'property_name', width: 180 },
   { title: '用户ID', dataIndex: 'user_id', width: 90 },
   { title: '评分', dataIndex: 'rating', width: 80 },
   { title: '内容', dataIndex: 'content', ellipsis: true },
@@ -73,8 +74,8 @@ onMounted(() => void load());
   <PageContainer>
     <a-card :bordered="false" class="mtrip-card-shadow" style="margin-bottom: 16px">
       <a-form layout="inline">
-        <a-form-item label="酒店ID">
-          <a-input-number v-model:value="query.goodsId" placeholder="酒店ID" style="width: 120px" />
+        <a-form-item label="物业ID">
+          <a-input-number v-model:value="query.propertyId" placeholder="物业ID" style="width: 120px" />
         </a-form-item>
         <a-form-item label="状态">
           <a-select v-model:value="query.status" placeholder="全部" allow-clear style="width: 120px">

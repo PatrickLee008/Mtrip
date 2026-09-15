@@ -27,10 +27,20 @@ import GoodsListScreen from '@/screens/goods/GoodsListScreen';
 import HomeLiteScreen from '@/screens/home/HomeLiteScreen';
 import HomeScreen from '@/screens/home/HomeScreen';
 import AddGuestScreen from '@/screens/hotel/AddGuestScreen';
+import BookingSuccessLiteScreen from '@/screens/hotel/BookingSuccessLiteScreen';
 import BookingSuccessScreen from '@/screens/hotel/BookingSuccessScreen';
+import HotelBookingLiteScreen from '@/screens/hotel/HotelBookingLiteScreen';
 import HotelBookingScreen from '@/screens/hotel/HotelBookingScreen';
 import HotelDetailScreen from '@/screens/hotel/HotelDetailScreen';
 import HotelResultsScreen from '@/screens/hotel/HotelResultsScreen';
+import HotelDetailLiteScreen from '@/screens/hotel/HotelDetailLiteScreen';
+import HotelInfoLiteScreen from '@/screens/hotel/HotelInfoLiteScreen';
+import HotelPolicyLiteScreen from '@/screens/hotel/HotelPolicyLiteScreen';
+import HotelResultsLiteScreen from '@/screens/hotel/HotelResultsLiteScreen';
+import HotelReviewsLiteScreen from '@/screens/hotel/HotelReviewsLiteScreen';
+import PropertyPreviewLiteScreen from '@/screens/hotel/PropertyPreviewLiteScreen';
+import RoomDetailLiteScreen from '@/screens/hotel/RoomDetailLiteScreen';
+import HotelsLiteScreen from '@/screens/hotel/HotelsLiteScreen';
 import HotelsScreen from '@/screens/hotel/HotelsScreen';
 import InsuranceScreen from '@/screens/hotel/InsuranceScreen';
 import StayDetailScreen from '@/screens/hotel/StayDetailScreen';
@@ -59,6 +69,8 @@ import ReferralCodeScreen from '@/screens/user/ReferralCodeScreen';
 import RegisterScreen from '@/screens/user/RegisterScreen';
 import ResetPasswordScreen from '@/screens/user/ResetPasswordScreen';
 import VerifyOtpScreen from '@/screens/user/VerifyOtpScreen';
+// 【临时】固定码页(只认 123456),接通真实 OTP 时连同这一行与下面的 Stack.Screen 一起删
+import FixedOtpScreen from '@/screens/user/FixedOtpScreen';
 import { useCommonStore } from '@/store/commonStore';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -168,6 +180,49 @@ export default function AppNavigator() {
           component={HotelResultsScreen}
           options={{ title: t('hotels.title'), headerShown: false }}
         />
+        {/* 关怀模式的酒店搜索 / 结果页(Figma section Hotel Search Lite 2312:6435),
+            两页都自带设计稿顶部栏,同样关掉 Stack 头 */}
+        <Stack.Screen
+          name="HotelsLite"
+          component={HotelsLiteScreen}
+          options={{ title: t('hotels.title'), headerShown: false }}
+        />
+        <Stack.Screen
+          name="HotelResultsLite"
+          component={HotelResultsLiteScreen}
+          options={{ title: t('hotels.title'), headerShown: false }}
+        />
+        {/* 关怀模式酒店详情族(Figma section Hotel Details Lite 2352:5591),五页都自带顶栏 */}
+        <Stack.Screen
+          name="HotelDetailLite"
+          component={HotelDetailLiteScreen}
+          options={{ title: t('hotels.title'), headerShown: false }}
+        />
+        <Stack.Screen
+          name="RoomDetailLite"
+          component={RoomDetailLiteScreen}
+          options={{ title: t('hotels.title'), headerShown: false }}
+        />
+        <Stack.Screen
+          name="HotelInfoLite"
+          component={HotelInfoLiteScreen}
+          options={{ title: t('hotels.title'), headerShown: false }}
+        />
+        <Stack.Screen
+          name="HotelPolicyLite"
+          component={HotelPolicyLiteScreen}
+          options={{ title: t('hotels.title'), headerShown: false }}
+        />
+        <Stack.Screen
+          name="HotelReviewsLite"
+          component={HotelReviewsLiteScreen}
+          options={{ title: t('hotels.title'), headerShown: false }}
+        />
+        <Stack.Screen
+          name="PropertyPreviewLite"
+          component={PropertyPreviewLiteScreen}
+          options={{ title: t('hotels.title'), headerShown: false }}
+        />
         {/* 详情页自带设计稿顶部栏(返回 / 提醒 / 分享)且图库要铺到状态栏,故关掉 Stack 头 */}
         <Stack.Screen
           name="HotelDetail"
@@ -178,6 +233,12 @@ export default function AppNavigator() {
         <Stack.Screen
           name="HotelBooking"
           component={HotelBookingScreen}
+          options={{ title: t('hotels.booking.steps.dates'), headerShown: false }}
+        />
+        {/* 关怀模式订房流程(Figma section Booking Flow 759:9777),同样自带顶栏与吸底栏 */}
+        <Stack.Screen
+          name="HotelBookingLite"
+          component={HotelBookingLiteScreen}
           options={{ title: t('hotels.booking.steps.dates'), headerShown: false }}
         />
         <Stack.Screen
@@ -198,6 +259,11 @@ export default function AppNavigator() {
         <Stack.Screen
           name="BookingSuccess"
           component={BookingSuccessScreen}
+          options={{ title: t('hotels.booking.success.title'), headerShown: false }}
+        />
+        <Stack.Screen
+          name="BookingSuccessLite"
+          component={BookingSuccessLiteScreen}
           options={{ title: t('hotels.booking.success.title'), headerShown: false }}
         />
         <Stack.Screen
@@ -293,6 +359,12 @@ export default function AppNavigator() {
         <Stack.Screen
           name="VerifyOtp"
           component={VerifyOtpScreen}
+          options={{ title: t('user.otp.title'), headerShown: false }}
+        />
+        {/* 【临时】纯前端固定码页,真实 OTP 接通后删 */}
+        <Stack.Screen
+          name="FixedOtp"
+          component={FixedOtpScreen}
           options={{ title: t('user.otp.title'), headerShown: false }}
         />
         <Stack.Screen

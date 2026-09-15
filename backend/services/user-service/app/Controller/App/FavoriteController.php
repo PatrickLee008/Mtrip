@@ -10,6 +10,7 @@ use Hyperf\DbConnection\Db;
 use Mtrip\Shared\Constants\ErrorCode;
 use Mtrip\Shared\Context\UserContext;
 use Mtrip\Shared\Exception\BusinessException;
+use Mtrip\Shared\Merchant\MarketplaceReader;
 use Mtrip\Shared\Support\Result;
 
 /**
@@ -18,19 +19,29 @@ use Mtrip\Shared\Support\Result;
  */
 class FavoriteController extends AbstractController
 {
-    /** 收藏列表:join 商品输出图片/名称/位置/星级(仅未删商品) */
+    /** 收藏列表:物业名称、图片、位置与星级 */
     public function list(): array
     {
+        $siteId = $this->requireSiteId();
         [$page, $pageSize] = $this->pageParams();
         $query = Db::table('user_favorite as f')
-            ->join('goods_info as g', 'g.id', '=', 'f.goods_id')
+            ->join('merchant_store as p', 'p.id', '=', 'f.property_id')
+            ->where('f.site_id', $siteId)
+            ->where('p.site_id', $siteId)
             ->where('f.user_id', UserContext::userId())
-            ->whereNull('g.deleted_at');
+            ->whereNull('p.deleted_at');
         $total = (clone $query)->count();
         $list = $query->orderByDesc('f.id')->forPage($page, $pageSize)
-            ->get(['f.id', 'f.goods_id', 'f.created_at',
-                'g.goods_name', 'g.cover_image', 'g.address', 'g.star_level', 'g.goods_type', 'g.status'])
-            ->map(static fn ($row) => (array) $row)->all();
+            ->get(['f.id', 'f.property_id', 'f.created_at', 'p.store_name', 'p.images', 'p.address', 'p.star_level',
+                'p.status', 'p.kyc_status', 'p.content_status', 'p.publish_status', 'p.operating_status', 'p.display_enabled'])
+            ->map(static function ($row): array {
+                $item = (array) $row;
+                $images = json_decode((string) ($item['images'] ?? '[]'), true);
+                $item['cover_image'] = is_array($images) && is_string($images[0] ?? null) ? $images[0] : '';
+                $item['property_name'] = $item['store_name'];
+                unset($item['images']);
+                return $item;
+            })->all();
         return Result::page($list, $total, $page, $pageSize);
     }
 
@@ -38,28 +49,31 @@ class FavoriteController extends AbstractController
     public function add(): array
     {
         $siteId = $this->requireSiteId();
-        $goodsId = $this->requireId('goodsId');
-        $exists = Db::table('goods_info')
-            ->where('id', $goodsId)->where('site_id', $siteId)->whereNull('deleted_at')
-            ->exists();
-        if (! $exists) {
-            throw new BusinessException(ErrorCode::NOT_FOUND, '商品不存在');
-        }
+        $propertyId = $this->requireId('propertyId');
+        $property = Db::table('merchant_store')->where('id', $propertyId)->where('site_id', $siteId)
+            ->whereNull('deleted_at')->first(['country_code', 'city_key']);
+        $visible = $property ? array_map('intval', array_column(MarketplaceReader::searchable(
+            $siteId, (string) $property->country_code, (string) $property->city_key
+        ), 'property_id')) : [];
+        if (! in_array($propertyId, $visible, true)) throw new BusinessException(ErrorCode::NOT_FOUND, '酒店物业不存在或不可见');
         Db::table('user_favorite')->insertOrIgnore([
             'site_id' => $siteId,
             'user_id' => UserContext::userId(),
-            'goods_id' => $goodsId,
+            'property_id' => $propertyId,
+            'goods_id' => 0,
         ]);
         return Result::success(null, '已收藏');
     }
 
-    /** 取消收藏(按 goodsId,幂等) */
+    /** 取消收藏(按 propertyId,幂等) */
     public function remove(): array
     {
-        $goodsId = $this->requireId('goodsId');
+        $siteId = $this->requireSiteId();
+        $propertyId = $this->requireId('propertyId');
         Db::table('user_favorite')
+            ->where('site_id', $siteId)
             ->where('user_id', UserContext::userId())
-            ->where('goods_id', $goodsId)
+            ->where('property_id', $propertyId)
             ->delete();
         return Result::success(null, '已取消收藏');
     }

@@ -9,19 +9,19 @@ import { type TableRow } from '@/composables/useTable';
 import { useUserStore } from '@/stores/user';
 import { apiCategoryList, apiCategorySave, apiCategoryDelete } from '@/api/goods';
 
-/** 商品分类管理:两级树,酒店/门票分开维护;删除须无子分类且无关联商品 */
+/** 门票商品分类管理:两级树;删除须无子分类且无关联商品 */
 const userStore = useUserStore();
 const isSuper = userStore.profile?.isSuper === true;
 const { t } = useI18n();
 
-const goodsType = ref(1);
+const goodsType = 2;
 const loading = ref(false);
 const tree = ref<TableRow[]>([]);
 
 async function load(): Promise<void> {
   loading.value = true;
   try {
-    tree.value = await apiCategoryList({ goodsType: goodsType.value });
+    tree.value = await apiCategoryList({ goodsType });
   } finally {
     loading.value = false;
   }
@@ -81,7 +81,7 @@ async function saveCategory(): Promise<void> {
   try {
     await apiCategorySave({
       id: editingId.value || undefined,
-      goodsType: goodsType.value,
+      goodsType,
       ...form,
     });
     message.success(t('tip.saveSuccess'));
@@ -107,10 +107,7 @@ onMounted(() => {
   <PageContainer>
     <a-card :bordered="false" class="mtrip-card-shadow">
       <template #title>
-        <a-radio-group v-model:value="goodsType" button-style="solid" @change="load">
-          <a-radio-button :value="1">{{ t('goods.category.hotel') }}</a-radio-button>
-          <a-radio-button :value="2">{{ t('goods.category.ticket') }}</a-radio-button>
-        </a-radio-group>
+        {{ t('goods.category.ticket') }}
       </template>
       <template #extra>
         <a-space>

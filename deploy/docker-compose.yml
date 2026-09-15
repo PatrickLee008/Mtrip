@@ -27,6 +27,8 @@ x-hyperf-common: &hyperf-common
     MTRIP_JWT_TTL: "7200"
     MTRIP_APP_JWT_TTL: "604800"
     MTRIP_AES_KEY: ${MTRIP_AES_KEY:-mtrip-dev-aes-key-change-me}
+    MTRIP_GOOGLE_CLIENT_IDS: ${MTRIP_GOOGLE_CLIENT_IDS:-}
+    MTRIP_MERCHANT_AUTH_TEST_MODE: ${MTRIP_MERCHANT_AUTH_TEST_MODE:-false}
     # 全量请求日志开关(排查模式:请求/响应/异常写 request.log,生产保持 false)
     MTRIP_REQUEST_LOG: ${MTRIP_REQUEST_LOG:-false}
     # 客户端签名鉴权(app 接口 HMAC-SHA256,生产必须 true;时间窗口秒)

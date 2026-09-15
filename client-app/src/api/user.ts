@@ -68,11 +68,10 @@ export function apiRegister(params: {
   password: string;
   nickname?: string;
   /**
-   * 注册页(Figma 505:1498)有邮箱栏,`user_info.email` 列也在,
-   * 但 user-service AuthController::register 目前只读 mobile/password/nickname/referralCode,
-   * 这里先按设计稿把值传上去,后端补上入参即可落库,无需再动前端
+   * 姓名(注册页取代了原邮箱栏):后端 `AuthController::register` 收 `realName`,
+   * AES 加密后落 `user_info.real_name`;不改 `real_name_status`(填名字不等于实名认证)
    */
-  email?: string;
+  realName?: string;
   /**
    * 推荐人的推荐码(Figma Onboarding 的 Referral Code 页,选填)。
    * 后端 `UserAuthService::setupReferral` 会据此写 `user_referral`;**填错会直接注册失败**(推荐码无效)
@@ -129,12 +128,12 @@ export function fetchFavoriteList(params: PageParams): Promise<PageData<Favorite
   return get('/api/v1/app/user/favorite/list', { ...params });
 }
 
-export function addFavorite(goodsId: number): Promise<null> {
-  return post<null>('/api/v1/app/user/favorite/add', { goodsId });
+export function addFavorite(propertyId: number): Promise<null> {
+  return post<null>('/api/v1/app/user/favorite/add', { propertyId });
 }
 
-export function removeFavorite(goodsId: number): Promise<null> {
-  return post<null>('/api/v1/app/user/favorite/remove', { goodsId });
+export function removeFavorite(propertyId: number): Promise<null> {
+  return post<null>('/api/v1/app/user/favorite/remove', { propertyId });
 }
 
 /* ---- 常旅客(Frequent Traveler,需登录) ---- */

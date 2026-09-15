@@ -32,10 +32,20 @@ class PricingService
 
     /**
      * 校验优惠券并计算抵扣(须在事务内调用,行锁领券记录防并发)。
-     * 券在此不消耗,支付成功时才置已用。多酒店 Trip 传 goodsId=0(不支持指定商品券)。
+     * 券在此不消耗,支付成功时才置已用。多酒店 Trip 传 propertyId=0(不支持指定物业券)。
      * @return array{0:int,1:float} [领券记录ID, 抵扣金额]
      */
-    public function resolveCoupon(int $siteId, int $userId, int $receiveId, int $orderType, int $goodsId, float $base): array
+    public function resolveCoupon(
+        int $siteId,
+        int $userId,
+        int $receiveId,
+        int $orderType,
+        int $propertyId,
+        int $roomTypeId,
+        int $goodsId,
+        int $skuId,
+        float $base
+    ): array
     {
         $rec = Db::table('marketing_coupon_receive')
             ->where('id', $receiveId)
@@ -69,10 +79,18 @@ class PricingService
             throw new BusinessException(ErrorCode::DATA_CONFLICT, '该券仅限门票订单');
         }
         if ($scope === 3) {
-            $ids = is_string($coupon['goods_ids']) ? (json_decode($coupon['goods_ids'], true) ?: []) : (array) ($coupon['goods_ids'] ?? []);
-            if (! in_array($goodsId, array_map('intval', $ids), true)) {
-                throw new BusinessException(ErrorCode::DATA_CONFLICT, '该券不适用于本商品');
+            $field = $orderType === 1 ? 'property_ids' : 'goods_ids';
+            $targetId = $orderType === 1 ? $propertyId : $goodsId;
+            $ids = is_string($coupon[$field] ?? null) ? (json_decode($coupon[$field], true) ?: []) : (array) ($coupon[$field] ?? []);
+            if (! in_array($targetId, array_map('intval', $ids), true)) {
+                throw new BusinessException(ErrorCode::DATA_CONFLICT, $orderType === 1 ? '该券不适用于本物业' : '该券不适用于本商品');
             }
+        }
+        $itemField = $orderType === 1 ? 'room_type_ids' : 'sku_ids';
+        $itemId = $orderType === 1 ? $roomTypeId : $skuId;
+        $itemIds = is_string($coupon[$itemField] ?? null) ? (json_decode($coupon[$itemField], true) ?: []) : (array) ($coupon[$itemField] ?? []);
+        if ($itemIds !== [] && ! in_array($itemId, array_map('intval', $itemIds), true)) {
+            throw new BusinessException(ErrorCode::DATA_CONFLICT, '该券不适用于本房型/票种');
         }
         // 门槛
         $min = (float) $coupon['min_amount'];

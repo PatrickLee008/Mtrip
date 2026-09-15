@@ -50,6 +50,24 @@ final class MerchantAccessGuard
         }
     }
 
+    /** 商户锁之后锁酒店物业，防止下单期间物业下线或变更归属。 */
+    public static function lockProperties(array $snapshots, int $siteId): void
+    {
+        usort($snapshots, static function ($a, $b) {
+            return (int) ($a['property_id'] ?? $a['id']) <=> (int) ($b['property_id'] ?? $b['id']);
+        });
+        foreach ($snapshots as $snapshot) {
+            $propertyId = (int) ($snapshot['property_id'] ?? $snapshot['id']);
+            $property = Db::table('merchant_store')->where('id', $propertyId)->where('site_id', $siteId)
+                ->where('business_type', 'hotel')->where('status', 1)->where('kyc_status', 1)
+                ->where('content_status', 2)->where('publish_status', 1)->where('operating_status', 1)
+                ->whereNull('deleted_at')->lockForUpdate()->first();
+            if (! $property || (int) $property->merchant_id !== (int) $snapshot['merchant_id']) {
+                throw new BusinessException(ErrorCode::DATA_CONFLICT, '酒店物业已下线或归属变更，请刷新后重试');
+            }
+        }
+    }
+
     public static function assertMerchant(int $id, int $siteId): void
     {
         $merchant = Db::table('merchant_info')->where('id', $id)->where('site_id', $siteId)->whereNull('deleted_at')->first();
@@ -71,8 +89,9 @@ final class MerchantAccessGuard
                 throw new BusinessException(ErrorCode::UNAUTHORIZED, '账号授权范围已变更，请重新登录');
             }
         }
+        $strongMethods = ['totp', 'email_otp', 'sms_otp', 'google_mtrip_otp', 'activation_email_otp', 'activation_sms_otp'];
         if ((int) ($claims['auth_version'] ?? 0) !== (int) $account->auth_version
-            || (! isset($claims['impersonation_session_id']) && ((int) $account->two_fa_status !== 1 || ($claims['amr'] ?? '') !== 'totp'))) {
+            || (! isset($claims['impersonation_session_id']) && ! in_array((string) ($claims['amr'] ?? ''), $strongMethods, true))) {
             throw new BusinessException(ErrorCode::UNAUTHORIZED, '账号认证已失效，请重新登录并完成2FA');
         }
         self::assertSubject((array) $account);

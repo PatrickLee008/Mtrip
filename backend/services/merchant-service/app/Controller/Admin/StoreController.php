@@ -41,6 +41,9 @@ class StoreController extends AbstractController
         if (($name = $this->strInput('storeName')) !== '') {
             $query->where('merchant_store.store_name', 'like', "%{$name}%");
         }
+        if (($businessType = $this->strInput('businessType')) !== '') {
+            $query->where('merchant_store.business_type', $businessType);
+        }
         $status = $this->input('status');
         if ($status !== null && $status !== '') {
             $query->where('merchant_store.status', (int) $status);

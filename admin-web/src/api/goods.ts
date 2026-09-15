@@ -53,17 +53,9 @@ export function apiCategoryDelete(id: number): Promise<null> {
   return post('/admin/goods/category/delete', { id });
 }
 
-// ---------- 酒店房型 ----------
-export function apiRoomList(goodsId: number): Promise<Row[]> {
-  return get('/admin/goods/room/list', { goodsId });
-}
-
-export function apiRoomSave(data: Record<string, unknown>): Promise<{ id: number }> {
-  return post('/admin/goods/room/save', data);
-}
-
-export function apiRoomDelete(goodsId: number, id: number): Promise<null> {
-  return post('/admin/goods/room/delete', { goodsId, id });
+// ---------- 物业房型只读选项 ----------
+export function apiPropertyRoomList(propertyId: number): Promise<Row[]> {
+  return get('/admin/goods/room/list', { propertyId });
 }
 
 export function apiRoomReviewList(params: Record<string, unknown>): Promise<PageData<Row>> {

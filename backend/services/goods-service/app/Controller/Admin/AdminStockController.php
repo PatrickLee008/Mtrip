@@ -191,13 +191,10 @@ class AdminStockController extends AbstractAdminController
     public function logs(): array
     {
         [$page, $pageSize] = $this->pageParams();
-        $query = Db::table('goods_stock_log');
+        $query = Db::table('goods_stock_log')->where('sku_type', 2);
         $this->applySiteScope($query);
         if (($goodsId = $this->intInput('goodsId')) > 0) {
             $query->where('goods_id', $goodsId);
-        }
-        if (($skuType = $this->intInput('skuType')) > 0) {
-            $query->where('sku_type', $skuType);
         }
         if (($skuId = $this->intInput('skuId')) > 0) {
             $query->where('sku_id', $skuId);
@@ -227,6 +224,7 @@ class AdminStockController extends AbstractAdminController
         $endDate = date('Y-m-d', strtotime("+{$daysAhead} days"));
 
         $query = Db::table('goods_daily_stock')
+            ->where('sku_type', 2)
             ->whereBetween('stock_date', [$startDate, $endDate])
             ->where('is_closed', 0)->whereNull('deleted_at')
             ->whereRaw('stock_total - stock_sold - stock_locked <= ?', [$threshold]);
@@ -261,13 +259,10 @@ class AdminStockController extends AbstractAdminController
         $endDate = date('Y-m-d', strtotime("+{$daysAhead} days"));
 
         $goodsQuery = Db::table('goods_info')
-            ->whereIn('status', [3, 4])->whereNull('deleted_at');
+            ->where('goods_type', 2)->whereIn('status', [3, 4])->whereNull('deleted_at');
         $this->applySiteScope($goodsQuery);
         if (($name = $this->strInput('goodsName')) !== '') {
             $goodsQuery->where('goods_name', 'like', "%{$name}%");
-        }
-        if (($type = $this->intInput('goodsType')) > 0) {
-            $goodsQuery->where('goods_type', $type);
         }
         $total = (clone $goodsQuery)->count();
         $goodsRows = $goodsQuery->orderByDesc('id')->forPage($page, $pageSize)
@@ -299,19 +294,18 @@ class AdminStockController extends AbstractAdminController
     private function resolveSku(): array
     {
         $goods = Db::table('goods_info')
-            ->where('id', $this->requireId('goodsId'))->whereNull('deleted_at')->first();
+            ->where('id', $this->requireId('goodsId'))->where('goods_type', 2)->whereNull('deleted_at')->first();
         if (! $goods) {
             throw new BusinessException(ErrorCode::NOT_FOUND, '商品不存在');
         }
         $goods = (array) $goods;
         $this->assertSiteScope((int) $goods['site_id']);
 
-        $skuType = $this->intInput('skuType', (int) $goods['goods_type']);
-        if (! in_array($skuType, [1, 2], true) || $skuType !== (int) $goods['goods_type']) {
-            throw new BusinessException(ErrorCode::PARAM_ERROR, '参数 skuType 与商品类型不符');
+        $skuType = $this->intInput('skuType', 2);
+        if ($skuType !== 2) {
+            throw new BusinessException(ErrorCode::PARAM_ERROR, '参数 skuType 只能为 2票种');
         }
-        $skuTable = $skuType === 1 ? 'hotel_room_type' : 'ticket_type';
-        $sku = Db::table($skuTable)
+        $sku = Db::table('ticket_type')
             ->where('id', $this->requireId('skuId'))->where('goods_id', $goods['id'])
             ->whereNull('deleted_at')->first();
         if (! $sku) {

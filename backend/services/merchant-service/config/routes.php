@@ -23,6 +23,7 @@ use App\Controller\App\Merchant\ApplicationController as AppApplicationControlle
 use App\Controller\Merchant\AccountController as MerchantAccountController;
 use App\Controller\Merchant\AuthController as MerchantAuthController;
 use App\Controller\Merchant\NotificationController as MerchantNotificationController;
+use App\Controller\Merchant\PropertyController as MerchantPropertyController;
 use App\Controller\Merchant\RoleController as MerchantRoleController;
 use App\Controller\Merchant\StoreController as MerchantStoreController;
 use App\Controller\Supplier\AccountController as SupplierAccountController;
@@ -44,16 +45,35 @@ Router::get('/healthz', static fn () => ['status' => 'ok', 'service' => 'merchan
 Router::get('/api/v1/app/merchant/register/config', [AppRegistrationController::class, 'config']);
 Router::post('/api/v1/app/merchant/register/otp-send', [AppRegistrationController::class, 'sendOtp']);
 Router::post('/api/v1/app/merchant/register/otp-verify', [AppRegistrationController::class, 'verifyOtp']);
+Router::get('/api/v1/app/merchant/application/detail', [AppApplicationController::class, 'detail']);
 Router::post('/api/v1/app/merchant/application/save', [AppApplicationController::class, 'save']);
 Router::post('/api/v1/app/merchant/application/submit', [AppApplicationController::class, 'submit']);
 Router::get('/api/v1/app/merchant/application/status', [AppApplicationController::class, 'status']);
 Router::get('/api/v1/app/merchant/application/kyc-requirements', [AppApplicationController::class, 'kycRequirements']);
 Router::post('/api/v1/app/merchant/kyc/upload', [AppApplicationController::class, 'kycUpload']);
+Router::get('/api/v1/app/merchant/agreements/current', [AppApplicationController::class, 'agreement']);
+Router::post('/api/v1/app/merchant/agreements/read-confirm', [AppApplicationController::class, 'agreementRead']);
+Router::post('/api/v1/app/merchant/agreements/sign', [AppApplicationController::class, 'agreementSign']);
 Router::post('/api/v1/app/merchant/kyc/submit', [AppApplicationController::class, 'kycSubmit']);
 Router::post('/api/v1/app/merchant/auth/access-code-verify', [AppMerchantAuthController::class, 'accessCodeVerify']);
 Router::post('/api/v1/app/merchant/auth/2fa/setup-info', [AppMerchantAuthController::class, 'setupInfo']);
 Router::post('/api/v1/app/merchant/auth/2fa/verify', [AppMerchantAuthController::class, 'verify']);
 Router::post('/api/v1/app/merchant/auth/2fa/pairing-exchange', [AppMerchantAuthController::class, 'pairingExchange']);
+Router::get('/api/v1/app/merchant/auth/config', [AppMerchantAuthController::class, 'authConfig']);
+Router::post('/api/v1/app/merchant/activation/start', [AppMerchantAuthController::class, 'activationStart']);
+Router::get('/api/v1/app/merchant/activation/profile', [AppMerchantAuthController::class, 'activationProfile']);
+Router::post('/api/v1/app/merchant/activation/otp-send', [AppMerchantAuthController::class, 'activationOtpSend']);
+Router::post('/api/v1/app/merchant/activation/otp-verify', [AppMerchantAuthController::class, 'activationOtpVerify']);
+Router::post('/api/v1/app/merchant/activation/totp/setup', [AppMerchantAuthController::class, 'activationTotpSetup']);
+Router::post('/api/v1/app/merchant/activation/totp/verify', [AppMerchantAuthController::class, 'activationTotpVerify']);
+Router::post('/api/v1/app/merchant/activation/google-link', [AppMerchantAuthController::class, 'activationGoogleLink']);
+Router::post('/api/v1/app/merchant/activation/finish', [AppMerchantAuthController::class, 'activationFinish']);
+Router::post('/api/v1/app/merchant/auth/challenge', [AppMerchantAuthController::class, 'challenge']);
+Router::post('/api/v1/app/merchant/auth/challenge/verify', [AppMerchantAuthController::class, 'challengeVerify']);
+Router::post('/api/v1/app/merchant/auth/recovery/challenge', [AppMerchantAuthController::class, 'recoveryChallenge']);
+Router::post('/api/v1/app/merchant/auth/recovery/verify', [AppMerchantAuthController::class, 'recoveryVerify']);
+Router::post('/api/v1/app/merchant/auth/recovery/totp/setup', [AppMerchantAuthController::class, 'recoveryTotpSetup']);
+Router::post('/api/v1/app/merchant/auth/recovery/totp/verify', [AppMerchantAuthController::class, 'recoveryTotpVerify']);
 Router::addGroup('/api/v1/app/merchant', static function () {
     Router::post('/auth/logout', [AppMerchantAuthController::class, 'logout']);
 }, [
@@ -66,6 +86,9 @@ Router::addGroup('/api/v1/admin', static function () {
     Router::get('/merchant/detail', [MerchantController::class, 'detail']);
     Router::post('/merchant/property/bind', [\App\Controller\Admin\MerchantPropertyController::class, 'bind']);
     Router::get('/merchant/property/history', [\App\Controller\Admin\MerchantPropertyController::class, 'history']);
+    Router::get('/merchant/property/content-list', [\App\Controller\Admin\MerchantPropertyController::class, 'contentList']);
+    Router::get('/merchant/property/content-detail', [\App\Controller\Admin\MerchantPropertyController::class, 'contentDetail']);
+    Router::post('/merchant/property/content-audit', [\App\Controller\Admin\MerchantPropertyController::class, 'contentAudit']);
     Router::post('/merchant/add', [MerchantController::class, 'create']);
     Router::post('/merchant/update', [MerchantController::class, 'update']);
     Router::post('/merchant/audit', [MerchantController::class, 'audit']);
@@ -143,10 +166,16 @@ Router::addGroup('/api/v1/admin', static function () {
     Router::post('/merchant/onboarding/send-kyc', [OnboardingController::class, 'sendKyc']);
     Router::post('/merchant/onboarding/send-reminder', [OnboardingController::class, 'sendReminder']);
     Router::post('/merchant/onboarding/note-add', [OnboardingController::class, 'addNote']);
+    Router::post('/merchant/onboarding/registration-review-start', [OnboardingController::class, 'registrationReviewStart']);
+    Router::post('/merchant/onboarding/registration-resubmit', [OnboardingController::class, 'registrationResubmit']);
     Router::post('/merchant/onboarding/confirm', [OnboardingController::class, 'confirm']);
+    Router::post('/merchant/onboarding/test-confirm-agreement', [OnboardingController::class, 'testConfirmAgreement']);
     Router::post('/merchant/onboarding/submit-verification', [OnboardingController::class, 'submitVerification']);
     Router::post('/merchant/onboarding/kyc-upload', [OnboardingController::class, 'kycUpload']);
     Router::post('/merchant/onboarding/approve', [OnboardingController::class, 'approve']);
+    Router::post('/merchant/onboarding/final-approve', [OnboardingController::class, 'finalApprove']);
+    Router::post('/merchant/onboarding/credential-retry', [OnboardingController::class, 'credentialRetry']);
+    Router::post('/merchant/onboarding/test-credentials', [OnboardingController::class, 'testCredentials']);
     Router::post('/merchant/onboarding/reject', [OnboardingController::class, 'reject']);
 
     // ---------- 集团管理(计划 11:管理/授权实体,商户授权绑定) ----------
@@ -216,6 +245,21 @@ Router::addGroup('/api/v1/admin/compliance', static function () {
 // ============================================================
 // 登录(组外,免鉴权)
 Router::post('/api/v1/merchant/auth/login', [MerchantAuthController::class, 'login']);
+Router::get('/api/v1/merchant/auth/config', [MerchantAuthController::class, 'authConfig']);
+Router::post('/api/v1/merchant/activation/start', [MerchantAuthController::class, 'activationStart']);
+Router::get('/api/v1/merchant/activation/profile', [MerchantAuthController::class, 'activationProfile']);
+Router::post('/api/v1/merchant/activation/otp-send', [MerchantAuthController::class, 'activationOtpSend']);
+Router::post('/api/v1/merchant/activation/otp-verify', [MerchantAuthController::class, 'activationOtpVerify']);
+Router::post('/api/v1/merchant/activation/totp/setup', [MerchantAuthController::class, 'activationTotpSetup']);
+Router::post('/api/v1/merchant/activation/totp/verify', [MerchantAuthController::class, 'activationTotpVerify']);
+Router::post('/api/v1/merchant/activation/google-link', [MerchantAuthController::class, 'activationGoogleLink']);
+Router::post('/api/v1/merchant/activation/finish', [MerchantAuthController::class, 'activationFinish']);
+Router::post('/api/v1/merchant/auth/challenge', [MerchantAuthController::class, 'challenge']);
+Router::post('/api/v1/merchant/auth/challenge/verify', [MerchantAuthController::class, 'challengeVerify']);
+Router::post('/api/v1/merchant/auth/recovery/challenge', [MerchantAuthController::class, 'recoveryChallenge']);
+Router::post('/api/v1/merchant/auth/recovery/verify', [MerchantAuthController::class, 'recoveryVerify']);
+Router::post('/api/v1/merchant/auth/recovery/totp/setup', [MerchantAuthController::class, 'recoveryTotpSetup']);
+Router::post('/api/v1/merchant/auth/recovery/totp/verify', [MerchantAuthController::class, 'recoveryTotpVerify']);
 Router::post('/api/v1/merchant/auth/2fa/setup', [\App\Controller\MerchantSecurityController::class, 'setup']);
 Router::post('/api/v1/merchant/auth/2fa/verify', [\App\Controller\MerchantSecurityController::class, 'verify']);
 Router::post('/api/v1/merchant/auth/2fa/pairing/create', [\App\Controller\MerchantSecurityController::class, 'createAppPairing']);
@@ -232,10 +276,13 @@ Router::addGroup('/api/v1/merchant', static function () {
     // ---------- 子账号管理 ----------
     Router::get('/account/list', [MerchantAccountController::class, 'index']);
     Router::get('/account/quota', [MerchantAccountController::class, 'quota']);
+    Router::get('/account/property-options', [MerchantAccountController::class, 'propertyOptions']);
+    Router::get('/account/properties', [MerchantAccountController::class, 'accountProperties']);
     Router::post('/account/add', [MerchantAccountController::class, 'create']);
     Router::post('/account/update', [MerchantAccountController::class, 'update']);
     Router::post('/account/toggle-status', [MerchantAccountController::class, 'toggleStatus']);
     Router::post('/account/reset-password', [MerchantAccountController::class, 'resetPassword']);
+    Router::post('/account/properties/assign', [MerchantAccountController::class, 'assignProperties']);
 
     // ---------- 角色管理 ----------
     Router::get('/role/list', [MerchantRoleController::class, 'index']);
@@ -255,6 +302,16 @@ Router::addGroup('/api/v1/merchant', static function () {
     Router::post('/store/update', [MerchantStoreController::class, 'update']);
     Router::post('/store/set-main', [MerchantStoreController::class, 'setMain']);
     Router::post('/store/toggle-status', [MerchantStoreController::class, 'toggleStatus']);
+
+    // ---------- 酒店物业与物业专项 KYC ----------
+    Router::get('/properties/list', [MerchantPropertyController::class, 'index']);
+    Router::get('/properties/kyc', [MerchantPropertyController::class, 'kyc']);
+    Router::get('/properties/profile', [MerchantPropertyController::class, 'profile']);
+    Router::post('/properties/save', [MerchantPropertyController::class, 'save']);
+    Router::post('/properties/profile/save', [MerchantPropertyController::class, 'saveProfile']);
+    Router::post('/properties/publish', [MerchantPropertyController::class, 'publish']);
+    Router::post('/properties/kyc/upload', [MerchantPropertyController::class, 'upload']);
+    Router::post('/properties/kyc/submit', [MerchantPropertyController::class, 'submit']);
 
     // ---------- 通知中心(Merchant App M6) ----------
     Router::get('/notifications/list', [MerchantNotificationController::class, 'index']);

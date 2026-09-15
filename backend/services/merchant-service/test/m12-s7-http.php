@@ -80,7 +80,7 @@ function enroll(string $name, ?string $password = null): array {
 }
 
 $key = 's7-' . bin2hex(random_bytes(5));
-$fixture = ['key' => $key, 'client' => $key . '-web', 'admins' => [], 'accounts' => [], 'goods' => [], 'properties' => []];
+$fixture = ['key' => $key, 'client' => $key . '-web', 'admins' => [], 'accounts' => [], 'properties' => []];
 Db::connection('system')->transaction(function () use (&$fixture, $key) {
     foreach (['super' => [1, 0], 'ops' => [0, 991], 'reader' => [0, 991], 'foreign' => [0, 992], 'zero' => [0, 0]] as $name => [$super, $site]) {
         $username = $key . '-' . $name;
@@ -109,9 +109,16 @@ Db::transaction(function () use (&$fixture, $key) {
     $app = Db::table('merchant_application')->insertGetId(['site_id' => 991, 'merchant_id' => $m, 'app_no' => $key, 'company_name' => 'S7 Synthetic Hotel', 'country' => 'Myanmar']);
     for ($i = 0; $i < 3; ++$i) {
         $b = Db::table('merchant_application_business')->insertGetId(['site_id' => 991, 'application_id' => $app, 'business_name' => 'S7 Hotel ' . $i, 'business_type' => 'hotel', 'kyc_status' => 1]);
-        $fixture['properties'][] = (int) Db::table('merchant_store')->insertGetId(['site_id' => 991, 'merchant_id' => $m, 'source_business_id' => $b, 'store_name' => 'S7 Property ' . $i, 'business_type' => 'hotel', 'country_code' => 'MM', 'city_key' => $key, 'status' => 1]);
-        $g = $fixture['goods'][] = (int) Db::table('goods_info')->insertGetId(['site_id' => 991, 'merchant_id' => $m, 'goods_name' => 'S7 Hotel ' . $i . ' ' . $key, 'goods_type' => 1, 'status' => 3]);
-        Db::table('hotel_room_type')->insert(['site_id' => 991, 'goods_id' => $g, 'room_name' => 'S7 Room', 'base_price' => 100 + $i, 'status' => 1, 'publish_status' => 2]);
+        $property = $fixture['properties'][] = (int) Db::table('merchant_store')->insertGetId([
+            'site_id' => 991, 'merchant_id' => $m, 'source_business_id' => $b,
+            'store_name' => 'S7 Property ' . $i, 'business_type' => 'hotel',
+            'country_code' => 'MM', 'city_key' => $key, 'status' => 1, 'kyc_status' => 1,
+            'content_status' => 2, 'content_approved_version' => 1, 'publish_status' => 1, 'operating_status' => 1,
+        ]);
+        Db::table('hotel_room_type')->insert([
+            'site_id' => 991, 'property_id' => $property, 'room_name' => 'S7 Room',
+            'base_price' => 100 + $i, 'status' => 1, 'publish_status' => 2, 'approved_version' => 1,
+        ]);
     }
     $fixture['document'] = (int) Db::table('merchant_verify_document')->insertGetId(['site_id' => 991, 'merchant_id' => $m, 'doc_type' => 'hotel_license', 'name' => 'S7 hotel license', 'status' => 2]);
 });
@@ -201,19 +208,19 @@ $market = ['siteId' => 991, 'businessType' => 'hotel', 'countryCode' => 'MM', 'c
 $version = 0; $listingIds = [];
 foreach ($fixture['properties'] as $i => $property) {
     api('/api/v1/admin/merchant/ranking/property-display', $market + ['propertyId' => $property, 'expectedPropertyVersion' => 0, 'displayEnabled' => 1, 'note' => 'S7 display'], $super);
-    $listing = api('/api/v1/admin/merchant/ranking/listing/add', $market + ['propertyId' => $property, 'goodsId' => $fixture['goods'][$i], 'expectedVersion' => $version, 'note' => 'S7 mapping'], $super);
+    $listing = api('/api/v1/admin/merchant/ranking/listing/add', $market + ['propertyId' => $property, 'expectedVersion' => $version, 'note' => 'S7 mapping'], $super);
     $version = $listing['version']; $listingIds[] = $listing['id'];
 }
-$search = '/api/v1/app/goods/list?' . http_build_query(['goodsType' => 1, 'countryCode' => 'MM', 'cityKey' => $key]);
+$search = '/api/v1/app/hotels/list?' . http_build_query(['countryCode' => 'MM', 'cityKey' => $key]);
 check(api($search, null, '', 0, false, true)['total'] === 0, 'ranking draft absent from signed consumer search');
 $listing = api('/api/v1/admin/merchant/ranking/pin', $market + ['id' => $listingIds[2], 'pinned' => 1, 'expectedVersion' => $version, 'note' => 'S7 pin'], $super);
 $version = $listing['version'];
 api('/api/v1/admin/merchant/ranking/publish', $market + ['expectedVersion' => $version, 'note' => 'S7 publish'], $ops, 40301);
 api('/api/v1/admin/merchant/ranking/publish', $market + ['expectedVersion' => $version, 'note' => 'S7 publish'], $super);
 $live = api($search, null, '', 0, false, true);
-check(array_column($live['list'], 'id') === [$fixture['goods'][2], $fixture['goods'][0], $fixture['goods'][1]], 'consumer default order follows published pinned ranking');
-check(array_column(api($search . '&sortBy=price_asc', null, '', 0, false, true)['list'], 'id') === $fixture['goods'], 'consumer explicit price ordering preserved');
-api('/api/v1/app/goods/detail?id=' . $fixture['goods'][0], null, '', 0, false, true);
+check(array_column($live['list'], 'id') === [$fixture['properties'][2], $fixture['properties'][0], $fixture['properties'][1]], 'consumer default order follows published pinned ranking');
+check(array_column(api($search . '&sortBy=price_asc', null, '', 0, false, true)['list'], 'id') === $fixture['properties'], 'consumer explicit price ordering preserved');
+api('/api/v1/app/hotels/detail?propertyId=' . $fixture['properties'][0], null, '', 0, false, true);
 
 $rule = api('/api/v1/admin/compliance/rule/save', ['title' => 'S7 hotel policy ' . $key, 'category' => 'Booking', 'severity' => 2, 'body' => 'Keep booking descriptions accurate', 'siteId' => 991, 'expectedVersion' => 0, 'note' => 'S7 draft'], $super);
 $rule = api('/api/v1/admin/compliance/rule/publish', ['id' => $rule['id'], 'expectedVersion' => 1, 'action' => 'publish', 'note' => 'S7 publish'], $super);

@@ -61,6 +61,8 @@ class AuthController extends AbstractController
             $this->registerSource(),
             $this->clientIp(),
             $this->strInput('referralCode'),
+            // 姓名:注册页取代邮箱栏的那一栏,落 user_info.real_name(加密列)
+            mb_substr($this->strInput('realName'), 0, 50),
         );
 
         // 建号成功后才作废票据:推荐码填错会在上一步回滚并抛错,此时票据仍可用于重试

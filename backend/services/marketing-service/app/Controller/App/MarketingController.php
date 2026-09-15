@@ -311,6 +311,8 @@ class MarketingController extends AppAbstractController
         $userId = UserContext::userId();
         $ctx = [
             'orderType' => $this->intInput('orderType', 1),
+            'propertyId' => $this->intInput('propertyId'),
+            'roomTypeId' => $this->intInput('roomTypeId'),
             'goodsId' => $this->intInput('goodsId'),
             'skuId' => $this->intInput('skuId'),
             'amount' => round($this->floatInput('amount'), 2),
@@ -364,6 +366,8 @@ class MarketingController extends AppAbstractController
         $userId = UserContext::userId();
         $ctx = [
             'orderType' => $this->intInput('orderType', 1),
+            'propertyId' => $this->intInput('propertyId'),
+            'roomTypeId' => $this->intInput('roomTypeId'),
             'goodsId' => $this->intInput('goodsId'),
             'skuId' => $this->intInput('skuId'),
             'amount' => round($this->floatInput('amount'), 2),

@@ -233,6 +233,9 @@
         "allHotels": "Valid on all hotel bookings",
         "allGoods": "Valid on all products",
         "rooms": "Valid for selected room types: {{list}}",
+        "allTickets": "Valid on all ticket goods",
+        "ticketGoods": "Valid for selected ticket goods: {{list}}",
+        "ticketTypes": "Valid for selected ticket types: {{list}}",
         "stackable": "Can be combined with other offers",
         "notStackable": "Cannot be combined with other offers",
         "period": "Valid from {{start}} to {{end}}"
@@ -419,12 +422,14 @@
     "rememberMe": "Remember me",
     "orLoginWith": "Or login with",
     "emailPlaceholder": "name@example.com",
+    "namePlaceholder": "Enter your name",
     "confirmPasswordPlaceholder": "Confirm your password",
     "agreePrefix": "I agree to the ",
     "terms": "Terms & Conditions",
     "agreeAnd": " and ",
     "privacyPolicy": "Privacy Policy",
     "invalidEmail": "Invalid email address",
+    "nameRequired": "Please enter your name",
     "passwordMismatch": "The two passwords do not match",
     "agreeRequired": "Please agree to the Terms & Conditions and Privacy Policy",
     "agreeSuffix": "",
@@ -436,7 +441,8 @@
       "resent": "A new code has been sent",
       "continue": "Continue",
       "changePhone": "Change phone number",
-      "invalid": "Please enter the 6-digit code"
+      "invalid": "Please enter the 6-digit code",
+      "fixedHint": "SMS is not live yet — enter {{code}} to continue"
     },
     "referral": {
       "title": "Enter Referral Code",
@@ -1320,6 +1326,113 @@
         "save": "Save {{amount}}",
         "noCoupon": "Don't use a coupon",
         "useBest": "Use best coupon"
+      }
+    },
+    "lite": {
+      "title": "Hotel & Homestay",
+      "howToBook": "how do I book",
+      "searchHint": "Search",
+      "searchFocusHint": "Location, landmark.",
+      "nearby": "Nearby",
+      "searchOnMap": "Search on Map",
+      "recentSearch": "Recent search",
+      "checkIn": "Check In",
+      "checkOut": "Check Out",
+      "pickDate": "Select",
+      "guests": "Guests",
+      "guestSummary": "{{adults}} Adults, {{rooms}} room",
+      "search": "Search",
+      "chooseHotel": "Choose a Hotel",
+      "choose": "Choose",
+      "perNight": "/ night",
+      "anywhere": "Anywhere",
+      "guestSheet": {
+        "title": "Edit Room & Guest",
+        "reset": "Reset",
+        "room": "Room",
+        "roomHint": "Allow 2 Adult & 1 Child",
+        "adults": "Adults",
+        "adultsHint": "Ages 13 or above",
+        "children": "Children",
+        "childrenHint": "Ages 2 - 12",
+        "save": "Save"
+      },
+      "detailTitle": "Hotel Details",
+      "hotelPolicy": "Hotel Policy",
+      "seeMap": "See Map",
+      "viewHotelDetail": "View Hotel Detail",
+      "chooseRoom": "Choose a Room",
+      "chooseMultiRoom": "Choose Multiple Room",
+      "switchMulti": "+ Choose Multiple",
+      "switchSingle": "+ Choose Single",
+      "seeRoom": "See Room",
+      "bestseller": "Bestseller",
+      "guestsCount": "{{count}} Guests",
+      "totalPrice": "Total Price",
+      "continue": "Continue",
+      "room": {
+        "title": "Room Details",
+        "pricePerNight": "PRICE PER NIGHT",
+        "pricePerNightPlain": "Price per night",
+        "nights": "Nights",
+        "amenities": "Room Amenities",
+        "breakfastTitle": "Breakfast Included",
+        "breakfastDesc": "A complimentary breakfast is served every morning during your stay.",
+        "priceSummary": "Price Summary",
+        "bookThisRoom": "Book This Room",
+        "freeCancelNote": "Free cancellation until 48h before check-in",
+        "startAt": "Start at",
+        "reserveNow": "Reserve now"
+      },
+      "info": {
+        "title": "Hotel Detail",
+        "whyChoose": "Why Guests Choose Us"
+      },
+      "policy": {
+        "freeCancel": "Free cancellation before check-in; the full amount is refunded to your mTrip wallet.",
+        "tieredRefund": "Tiered refund: the refundable amount depends on how long before check-in you cancel.",
+        "nonRefundable": "This rate is non-refundable once booked."
+      },
+      "preview": {
+        "title": "Property Preview",
+        "video360": "360° & Video",
+        "video360Hint": "Take a virtual walk through the property before you book.",
+        "facilities": "Facilities",
+        "tabs": {
+          "all": "All",
+          "rooms": "Rooms",
+          "pool": "Pool",
+          "dining": "Dining"
+        }
+      },
+      "reviews": {
+        "outOfTen": "/10",
+        "replyFrom": "Reply from the property",
+        "helpful": "Helpful ({{count}})",
+        "report": "Report",
+        "items": {
+          "elena": {
+            "author": "Elena Rodriguez",
+            "meta": "August 14, 2024 • Solo traveler",
+            "title": "Unforgettable Sunrise Views",
+            "body": "Staying here was the highlight of my Myanmar trip. The rooftop pool offers a direct line of sight to the ancient stupas during sunrise that is honestly breathtaking. The staff greeted me by name every morning and the breakfast spread was exceptionally high-quality.",
+            "reply": "Dear Elena, thank you so much for your kind words! We are thrilled that you enjoyed the sunrise views and our breakfast spread. We look forward to welcoming you back soon."
+          },
+          "marco": {
+            "author": "Marco Bianchi",
+            "meta": "July 2, 2024 • Couple",
+            "title": "Quiet rooms, warm service",
+            "body": "The room was spacious and very quiet at night. Reception helped us arrange a balloon tour at short notice and even packed us an early breakfast box.",
+            "reply": ""
+          },
+          "aye": {
+            "author": "Aye Chan",
+            "meta": "June 20, 2024 • Family",
+            "title": "Great for families",
+            "body": "Our kids loved the pool and the staff brought an extra bed without us asking twice. The location makes it easy to reach the temples early in the morning.",
+            "reply": ""
+          }
+        }
       }
     }
   }

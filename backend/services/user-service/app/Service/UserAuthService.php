@@ -23,14 +23,14 @@ class UserAuthService
     {
     }
 
-    public function register(int $siteId, string $mobile, string $password, string $nickname, int $source, string $ip, string $referralCode = ''): array
+    public function register(int $siteId, string $mobile, string $password, string $nickname, int $source, string $ip, string $referralCode = '', string $realName = ''): array
     {
         $mobileHash = $this->mobileHash($mobile);
 
         // 同手机号并发注册加 Redis 分布式锁串行,业务完成即释放;
         // 拦截不同设备/客户端同时提交同一手机号导致的"先查后插"竞态
         $lockKey = "mtrip:lock:user:register:{$siteId}:{$mobileHash}";
-        return $this->lock->run($lockKey, 10, function () use ($siteId, $mobile, $mobileHash, $password, $nickname, $source, $ip, $referralCode): array {
+        return $this->lock->run($lockKey, 10, function () use ($siteId, $mobile, $mobileHash, $password, $nickname, $source, $ip, $referralCode, $realName): array {
             $exists = Db::table('user_info')
                 ->where('site_id', $siteId)->where('mobile_hash', $mobileHash)
                 ->whereNull('deleted_at')->exists();
@@ -46,11 +46,14 @@ class UserAuthService
              * 反而被告知「该手机号已注册」,等于一次输入错误把号码废掉。
              * (接入短信验证后更要紧:重试还得再发一条短信。)
              */
-            $userId = Db::transaction(function () use ($siteId, $mobile, $mobileHash, $password, $nickname, $source, $ip, $now, $referralCode): int {
+            $userId = Db::transaction(function () use ($siteId, $mobile, $mobileHash, $password, $nickname, $source, $ip, $now, $referralCode, $realName): int {
                 try {
                     $userId = Db::table('user_info')->insertGetId([
                         'site_id' => $siteId,
                         'nickname' => $nickname !== '' ? $nickname : 'User' . substr($mobile, -4),
+                        // 注册页收的姓名(取代原邮箱栏):与手机号同级的加密列;
+                        // **不动 real_name_status** —— 自己填的名字不等于通过实名认证
+                        'real_name' => $realName !== '' ? CryptoHelper::encrypt($realName, $this->aesKey()) : '',
                         'mobile' => CryptoHelper::encrypt($mobile, $this->aesKey()),
                         'mobile_hash' => $mobileHash,
                         'password' => password_hash($password, PASSWORD_BCRYPT),

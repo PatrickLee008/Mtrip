@@ -16,6 +16,6 @@ class RegistrationController extends AbstractController
     protected MerchantRegistrationOtpService $otp;
 
     public function config(): array { return Result::success(['channels' => $this->otp->availableChannels($this->requireAppSiteId())]); }
-    public function sendOtp(): array { return Result::success($this->otp->send($this->requireAppSiteId(), $this->requireStr('channel'), $this->requireStr('recipient'), $this->clientIp()), '验证码已发送'); }
-    public function verifyOtp(): array { return Result::success($this->otp->verify($this->requireAppSiteId(), $this->requireStr('channel'), $this->requireStr('recipient'), $this->requireStr('code')), '验证通过'); }
+    public function sendOtp(): array { return Result::success($this->otp->send($this->requireAppSiteId(), $this->requireStr('phone'), $this->requireStr('email'), $this->requireStr('otpChannel'), $this->clientIp()), '验证码已发送'); }
+    public function verifyOtp(): array { return Result::success($this->otp->verify($this->requireAppSiteId(), $this->requireStr('phone'), $this->requireStr('email'), $this->requireStr('otpChannel'), $this->requireStr('otpCode')), '验证通过'); }
 }

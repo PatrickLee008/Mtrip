@@ -2,7 +2,7 @@
  * 注册页(按 Figma M-Trip / Signup 505:1498 重做)
  *
  * 与登录页 505:1293 同一套版式,外壳(主色底 + 插画 + 顶部栏 + logo/标语)收在
- * `components/user/AuthShell`,本页只负责白色表单卡。卡内自上而下:手机号(+95 区号)→ 邮箱
+ * `components/user/AuthShell`,本页只负责白色表单卡。卡内自上而下:手机号(+95 区号)→ 姓名
  * → 密码 → 确认密码 → 条款勾选 → 注册按钮 → 分隔线 → 三方登录。尺寸取值见 LoginScreen 顶部注释。
  *
  * **本页不再直接落库**:设计稿 Onboarding 的注册流程是「注册表单 → 短信验证码 → 推荐码」,
@@ -21,8 +21,9 @@
  * 未实现的能力(设计稿有、后端没有),一律走 comingSoon:
  *   区号选择(固定 +95)、三方登录、条款/隐私政策详情页
  *
- * 邮箱:设计稿有此栏且 user_info.email 列也在,但 user-service 的注册接口暂未接收该入参
- * (见 api/user.ts 的注释),故这里按「选填 + 填了才校验」处理,值照常上送。
+ * **姓名取代了原来的邮箱栏**(用户要求):落库进 `user_info.real_name`(AES 加密列),
+ * 必填。注意它不是实名认证 —— `real_name_status` 仍为 0 未认证,后端只存名字不改认证状态。
+ * 昵称照旧不收:留空时后端自动取「User+手机后四位」。
  */
 
 import React, { useState } from 'react';
@@ -41,10 +42,16 @@ import { colors, radius } from '@/config/theme';
 import { fonts } from '@/config/typography';
 import type { RootStackParamList } from '@/navigation/types';
 import { useCommonStore } from '@/store/commonStore';
-import { isEmail, isMobile, isPassword } from '@/utils/validate';
+import { isMobile, isPassword } from '@/utils/validate';
 
 /** 设计稿固定展示 +95(缅甸),区号选择未实现 */
 const COUNTRY_CODE = '+95';
+
+/**
+ * 【临时】真实短信 OTP 未接通期间,注册走纯前端的固定码页(`FixedOtpScreen`,只认 123456)。
+ * 接通后置为 false(或直接删掉这个常量与下面那段 if),即恢复「发码 → VerifyOtp」的真实链路。
+ */
+const USE_FIXED_OTP = true;
 const SOCIALS: SocialProvider[] = ['google', 'facebook', 'apple'];
 
 export default function RegisterScreen() {
@@ -53,7 +60,7 @@ export default function RegisterScreen() {
   const showToast = useCommonStore((s) => s.showToast);
 
   const [mobile, setMobile] = useState('');
-  const [email, setEmail] = useState('');
+  const [realName, setRealName] = useState('');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [securePwd, setSecurePwd] = useState(true);
@@ -63,7 +70,12 @@ export default function RegisterScreen() {
 
   /* 设计稿的 CTA 是 50% 透明的禁用态,对应必填项没填完或未勾选条款 */
   const canSubmit =
-    mobile.trim().length > 0 && password.length > 0 && confirm.length > 0 && agreed && !sending;
+    mobile.trim().length > 0 &&
+    realName.trim().length > 0 &&
+    password.length > 0 &&
+    confirm.length > 0 &&
+    agreed &&
+    !sending;
 
   const comingSoon = () => showToast(t('home.comingSoon'));
 
@@ -72,8 +84,8 @@ export default function RegisterScreen() {
       showToast(t('user.invalidMobile'));
       return;
     }
-    if (email.trim() !== '' && !isEmail(email)) {
-      showToast(t('user.invalidEmail'));
+    if (realName.trim() === '') {
+      showToast(t('user.nameRequired'));
       return;
     }
     if (!isPassword(password)) {
@@ -89,7 +101,20 @@ export default function RegisterScreen() {
       return;
     }
 
-    const draft = { mobile: mobile.trim(), password, email: email.trim() || undefined };
+    const draft = { mobile: mobile.trim(), password, realName: realName.trim() };
+
+    /**
+     * 【临时 · 接通真实 OTP 时整段删掉】
+     * 短信渠道尚未配置,走**纯前端**的固定码页(只认 123456,不发任何请求、也不验票据)。
+     * 后端此时没有启用中的渠道,`register` 不强制 `verifyToken`,所以过完这一页直接去推荐码页即可。
+     * 删除清单:本 if + 顶部 `USE_FIXED_OTP` + `screens/user/FixedOtpScreen.tsx` + 路由 `FixedOtp`;
+     * 删完下面原有的发码逻辑自动恢复,`VerifyOtpScreen` 一直原样留着没动过。
+     */
+    if (USE_FIXED_OTP) {
+      navigation.navigate('FixedOtp', { draft });
+      return;
+    }
+
     setSending(true);
     try {
       // 发码放在本页而不是验证码页:号码已被占用之类的失败要在这里就说清楚,
@@ -160,17 +185,17 @@ export default function RegisterScreen() {
             />
           </View>
 
+          {/* 姓名:图标用设计稿同款 fluent:rename-a-20-filled(「Full Name」栏用的就是它) */}
           <View style={styles.field}>
-            <HomeIcon name="mail" size={20} color={colors.primary} />
+            <HomeIcon name="renameA" size={20} color={colors.primary} />
             <TextInput
               style={styles.input}
-              value={email}
-              onChangeText={setEmail}
-              placeholder={t('user.emailPlaceholder')}
+              value={realName}
+              onChangeText={setRealName}
+              placeholder={t('user.namePlaceholder')}
               placeholderTextColor={colors.textSoft}
-              keyboardType="email-address"
-              maxLength={100}
-              autoCapitalize="none"
+              maxLength={50}
+              autoCapitalize="words"
               autoCorrect={false}
             />
           </View>

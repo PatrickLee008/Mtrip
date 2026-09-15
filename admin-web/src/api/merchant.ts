@@ -27,6 +27,18 @@ export function apiMerchantPropertyBind(data: { merchantId: number; businessId: 
   return post('/admin/merchant/property/bind', data);
 }
 
+export function apiMerchantPropertyContentList(params: Record<string, unknown>): Promise<PageData<Row>> {
+  return get('/admin/merchant/property/content-list', params);
+}
+
+export function apiMerchantPropertyContentDetail(id: number): Promise<{ revision: Row; effective: Row }> {
+  return get('/admin/merchant/property/content-detail', { id });
+}
+
+export function apiMerchantPropertyContentAudit(data: { id: number; auditStatus: number; auditRemark?: string }): Promise<null> {
+  return post('/admin/merchant/property/content-audit', data);
+}
+
 export function apiMerchantDetail(id: number): Promise<{ merchant: Row; accounts: Row[]; admins: Row[]; applications: Row[]; businesses: Row[]; properties: Row[]; group: Row | null; modules: string[] }> {
   return get('/admin/merchant/detail', { id });
 }
@@ -108,20 +120,28 @@ export function apiOnboardingConfirm(id: number): Promise<null> {
 }
 
 /** 当前业务单元正式提交核验；上传文件本身只保存草稿，不触发 KYC 状态流转。 */
-export function apiOnboardingSubmitVerification(id: number, businessId: number): Promise<null> {
+export function apiOnboardingSubmitVerification(id: number, businessId?: number): Promise<null> {
   return post('/admin/merchant/onboarding/submit-verification', { id, businessId });
 }
 
 /** 协助商户上传 KYC 文件(multipart:file + id + docType + bizUnit[可选业务单元 id];返回落库的文档记录) */
-export function apiOnboardingKycUpload(file: File, id: number, docType: string, bizUnit?: string): Promise<Row> {
+export function apiOnboardingKycUpload(file: File, id: number, docType: string, bizUnit?: string, scopeType?: string, applicationBusinessId = 0): Promise<Row> {
   const fd = new FormData();
   fd.append('file', file);
   fd.append('id', String(id));
   fd.append('docType', docType);
+  if (scopeType) {
+    fd.append('scopeType', scopeType);
+    fd.append('applicationBusinessId', String(applicationBusinessId));
+  }
   if (bizUnit !== undefined && bizUnit !== '') {
     fd.append('bizUnit', bizUnit);
   }
   return post<Row>('/admin/merchant/onboarding/kyc-upload', fd);
+}
+
+export function apiOnboardingTestConfirmAgreement(data: { id: number; agreementId: number; version: string; reason: string }): Promise<Row> {
+  return post('/admin/merchant/onboarding/test-confirm-agreement', data);
 }
 
 // ---------- Marketplace Ranking(整改 Phase C) ----------
@@ -383,6 +403,8 @@ export function apiOnboardingDetail(id: number): Promise<{
   timeline: Row[];
   notes: Row[];
   template: Row | null;
+  kyc: Row | null;
+  finalApproval: Row | null;
 }> {
   return get('/admin/merchant/onboarding/detail', { id });
 }
@@ -424,9 +446,29 @@ export function apiOnboardingAddNote(id: number, note: string): Promise<null> {
   return post('/admin/merchant/onboarding/note-add', { id, note });
 }
 
-/** 入驻通过:转正式商户进入 Pending Verification */
-export function apiOnboardingApprove(id: number): Promise<{ merchant_id: number; merchant_code: string }> {
+export function apiOnboardingRegistrationReviewStart(id: number): Promise<null> {
+  return post('/admin/merchant/onboarding/registration-review-start', { id });
+}
+
+export function apiOnboardingRegistrationResubmit(id: number, reason: string): Promise<null> {
+  return post('/admin/merchant/onboarding/registration-resubmit', { id, reason });
+}
+
+/** 基础注册通过：只开放 KYC，不创建正式商户实体。 */
+export function apiOnboardingApprove(id: number): Promise<null> {
   return post('/admin/merchant/onboarding/approve', { id });
+}
+
+export function apiOnboardingFinalApprove(data: { id: number; requestId: string; channels: string[] }): Promise<Row> {
+  return post('/admin/merchant/onboarding/final-approve', data);
+}
+
+export function apiOnboardingCredentialRetry(deliveryId: number): Promise<Row> {
+  return post('/admin/merchant/onboarding/credential-retry', { deliveryId });
+}
+
+export function apiOnboardingTestCredentials(id: number): Promise<Row> {
+  return post('/admin/merchant/onboarding/test-credentials', { id });
 }
 
 /** 入驻驳回:预置原因码(1-9) + 可选补充说明 */

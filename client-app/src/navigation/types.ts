@@ -17,7 +17,8 @@ import type { TravelerItem } from '@/types/models';
 export interface SignupDraft {
   mobile: string;
   password: string;
-  email?: string;
+  /** 姓名(取代原邮箱栏),落库进 `user_info.real_name` 加密列 */
+  realName: string;
 }
 
 /** 底部 Tab(对应 Figma M-Trip / Home 81:2464 的 BottomNavBar) */
@@ -34,6 +35,38 @@ export type RootStackParamList = {
   SiteSelect: undefined;
   /** 酒店搜索页(Figma 91:200),首页快捷入口 hotels 的落地页 */
   Hotels: undefined;
+  /**
+   * 关怀模式酒店搜索页(Figma section `Hotel Search Lite` `2312:6435`),
+   * liteMode 下首页 Hotels 卡的落地页;完整模式仍走 `Hotels`
+   */
+  HotelsLite: undefined;
+  /**
+   * 关怀模式酒店详情族(Figma section `Hotel Details Lite` `2352:5591`)。
+   * 五页共用同一个商品 id;`checkIn/checkOut` 一路透传到订房向导,免得选完房日期跳回默认值。
+   */
+  HotelDetailLite: { id: number; checkIn?: string; checkOut?: string };
+  /** 房型详情(Rooms Details `2352:6030`) */
+  RoomDetailLite: { goodsId: number; skuId: number; checkIn?: string; checkOut?: string };
+  /** 酒店信息页(View Hotel Detail `2352:8182`) */
+  HotelInfoLite: { id: number };
+  /** 酒店政策(Lite Hotel Details Policies `2352:8890`) */
+  HotelPolicyLite: { id: number };
+  /** 住客评价(Hotel Details Reviews Page `2352:6648`) */
+  HotelReviewsLite: { id: number };
+  /** 实景预览(Property Preview `2352:7051`) */
+  PropertyPreviewLite: { id: number };
+  /** 关怀模式酒店搜索结果页(同上 section 的 Search Results `2312:6745`) */
+  HotelResultsLite: {
+    keyword?: string;
+    checkIn?: string;
+    checkOut?: string;
+    flexDays?: number;
+    citizen?: boolean;
+    /** 房间/成人/儿童:列表接口用不上,带过来只为结果页顶部回显与后续透传 */
+    rooms?: number;
+    adults?: number;
+    children?: number;
+  };
   /** 酒店搜索结果页(Figma 1695:6325),酒店搜索页 Search 的落地页 */
   HotelResults: {
     countryCode?: string;
@@ -53,7 +86,7 @@ export type RootStackParamList = {
    * `checkIn`/`checkOut` 是搜索页选好的日期,只是过一道手透传给订房向导 ——
    * 否则选完房日期会跳回向导自己挑的默认值。
    */
-  HotelDetail: { id?: number; checkIn?: string; checkOut?: string } | undefined;
+  HotelDetail: { propertyId?: number; checkIn?: string; checkOut?: string } | undefined;
   /**
    * 订房向导(Figma section 1675:5776),房型卡 Select 的落地页。
    * 4 步在同一个路由内切换,`roomKey` 只用来指定进来时选中的房型(演示模式下可缺省)。
@@ -64,15 +97,30 @@ export type RootStackParamList = {
         /** 搜索页选好的入离日期(`YYYY-MM-DD`),缺省时向导用明天起 1 晚 */
         checkIn?: string;
         checkOut?: string;
-        /** 真实商品 id;带上即「真实模式」,向导会拉 /goods/detail 并真的下单 */
-        goodsId?: number;
+        /** 真实物业 id;带上即「真实模式」 */
+        propertyId?: number;
         /** 选中的房型 id(hotel_room_type.id) */
-        skuId?: number;
+        roomTypeId?: number;
         /**
          * 从常旅客页选回来的主要入住人。**只有姓名** ——
          * `user_traveler` 没有联系方式列,`/app/user/me` 的手机号与邮箱又是脱敏的,
          * 拿不到可直接提交的原值,所以电话/邮箱仍由用户自己填。
          */
+        leadGuest?: { firstName: string; lastName: string };
+      }
+    | undefined;
+  /**
+   * 关怀模式订房向导(Figma section `Booking Flow` `759:9777`)。
+   * 参数与 `HotelBooking` 同形 —— 两页共用 `useBookingWizard`,只是排版与步骤序列不同
+   * (关怀版恒 4 步,没有多住宿 trip 步)。Lite 详情 / 房型详情的 Choose 落到这里。
+   */
+  HotelBookingLite:
+    | {
+        roomKey?: string;
+        checkIn?: string;
+        checkOut?: string;
+        propertyId?: number;
+        roomTypeId?: number;
         leadGuest?: { firstName: string; lastName: string };
       }
     | undefined;
@@ -90,6 +138,23 @@ export type RootStackParamList = {
     | {
         orderNo?: string;
         /** 支付接口返回的核销码,成功页的二维码就是它 */
+        verifyCode?: string;
+        hotelName?: string;
+        address?: string;
+        checkIn?: string;
+        checkOut?: string;
+        adults?: number;
+        rooms?: number;
+        paidTotal?: number;
+      }
+    | undefined;
+  /**
+   * 关怀模式预订成功(同 `Booking Flow` `759:9777` 的 Booking Success `224:3826`)。
+   * 参数与 `BookingSuccess` 同形,Lite 向导支付成功后 replace 到这里。
+   */
+  BookingSuccessLite:
+    | {
+        orderNo?: string;
         verifyCode?: string;
         hotelName?: string;
         address?: string;
@@ -149,6 +214,11 @@ export type RootStackParamList = {
    * `verifyToken` 由验证码页透传;站点没配短信渠道时为空(后端此时也不强制)。
    */
   ReferralCode: { draft: SignupDraft; verifyToken?: string };
+  /**
+   * 【临时】固定验证码页(只认 123456,纯前端校验,不发请求)。
+   * 真实短信 OTP 接通后删掉本行与 `screens/user/FixedOtpScreen.tsx`。
+   */
+  FixedOtp: { draft: SignupDraft };
   /** 忘记密码第一步:输入手机号发码(设计稿未画,见页面头部注释) */
   ForgotPassword: undefined;
   /** 忘记密码第二步:凭 verifyToken 设置新密码(设计稿未画,见页面头部注释) */

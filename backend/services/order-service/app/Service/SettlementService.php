@@ -56,6 +56,8 @@ class SettlementService
             'order_id' => $orderId,
             'order_no' => (string) $order['order_no'],
             'merchant_id' => (int) $order['merchant_id'],
+            'property_id' => (int) ($order['property_id'] ?? 0),
+            'room_type_id' => (int) ($order['room_type_id'] ?? 0),
             'coupon_id' => (int) $order['coupon_id'],
             'order_amount' => $orderAmount,
             'commission' => $commission,

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 import { message } from 'ant-design-vue';
 import { PlusOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons-vue';
 import { useI18n } from 'vue-i18n';
@@ -19,6 +20,8 @@ import {
 /** 门店管理:列表筛选 / 新增编辑 / 详情 / 设主 / 启停(1营业 2停业);数据范围由后端按主体裁剪 */
 const { t } = useI18n();
 const userStore = useUserStore();
+const route = useRoute();
+const router = useRouter();
 /** 集团账号(account_type=1)可跨商户,需显式选择所属商户 */
 const isGroup = computed(() => userStore.accountType === 1);
 
@@ -154,6 +157,12 @@ async function toggleStatus(row: TableRow): Promise<void> {
 
 onMounted(() => {
   void load();
+  if (route.query.create === '1' && userStore.hasPerm('mch:store:add')) {
+    openCreate();
+    form.storeName = String(route.query.storeName || '');
+    form.address = String(route.query.address || '');
+    void router.replace({ path: route.path, query: { ...route.query, create: undefined, storeName: undefined, address: undefined } });
+  }
 });
 </script>
 

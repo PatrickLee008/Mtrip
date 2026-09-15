@@ -39,7 +39,7 @@ export interface GoodsListParams extends PageParams {
   /* ---- 以下对应后端 applyFilters(PRD 模块3 可配置筛选) ---- */
   priceMin?: number;
   priceMax?: number;
-  /** 设施标签,后端按 JSON_CONTAINS 逐项与 goods_info.facilities 匹配 */
+  /** 设施标签,酒店列表按物业 facilities 匹配 */
   amenities?: string;
   /** 1=只看含早 */
   breakfast?: number;
@@ -55,6 +55,23 @@ export function fetchGoodsList(params: GoodsListParams): Promise<PageData<GoodsI
 
 export function fetchGoodsDetail(id: number): Promise<GoodsDetail> {
   return get('/api/v1/app/goods/detail', { id });
+}
+
+export function fetchHotelList(params: Omit<GoodsListParams, 'goodsType'>): Promise<PageData<GoodsItem>> {
+  return get('/api/v1/app/hotels/list', { ...params });
+}
+
+export function fetchHotelDetail(propertyId: number): Promise<GoodsDetail> {
+  return get('/api/v1/app/hotels/detail', { propertyId });
+}
+
+export function fetchHotelCalendar(params: {
+  propertyId: number;
+  roomTypeId: number;
+  startDate?: string;
+  days?: number;
+}): Promise<{ propertyId: number; roomTypeId: number; calendar: CalendarDay[] }> {
+  return get('/api/v1/app/hotels/calendar', { ...params });
 }
 
 export function fetchCalendar(params: {

@@ -78,14 +78,15 @@ class TripController extends AbstractController
 
         $tripNo = OrderNoGenerator::orderNo($siteId);
         $result = Db::transaction(function () use ($siteId, $userId, $prepared, $couponId, $tripNo) {
-            $goods = array_column($prepared, 'goods');
-            MerchantAccessGuard::lockBookable($goods, $siteId);
-            MerchantAccessGuard::lockGoods($goods, $siteId);
-            // 商品行已按ID排序锁定；同商品的库存请求串行，不改变用户预订顺序及券分摊顺序。
+            $properties = array_column($prepared, 'property');
+            MerchantAccessGuard::lockBookable($properties, $siteId);
+            MerchantAccessGuard::lockProperties($properties, $siteId);
+            // 物业行已按ID排序锁定；同物业的库存请求串行，不改变用户预订顺序及券分摊顺序。
             foreach ($prepared as &$item) {
-                $item['sku'] = (array) Db::table('hotel_room_type')->where('id', $item['skuId'])
-                    ->where('goods_id', $item['goodsId'])->where('status', 1)->whereNull('deleted_at')->lockForUpdate()->first();
-                if ($item['sku'] === []) {
+                $item['room'] = (array) Db::table('hotel_room_type')->where('id', $item['roomTypeId'])
+                    ->where('property_id', $item['propertyId'])->where('status', 1)->where('publish_status', 2)
+                    ->whereNull('deleted_at')->lockForUpdate()->first();
+                if ($item['room'] === []) {
                     throw new BusinessException(ErrorCode::DATA_CONFLICT, '房型已停售');
                 }
             }
@@ -95,7 +96,7 @@ class TripController extends AbstractController
             $tripTotal = 0.0;
             foreach ($prepared as $p) {
                 [$original, $changes] = $this->stockService->lock(
-                    $siteId, $p['goodsId'], 1, $p['skuId'], $p['sku'], $p['dates'], $p['quantity'], $p['isCitizen']
+                    $siteId, $p['propertyId'], 0, 1, $p['roomTypeId'], $p['room'], $p['dates'], $p['quantity'], $p['isCitizen']
                 );
                 $longstay = $this->pricingService->longstayDiscount($siteId, count($p['dates']), $original);
                 $net = round($original - $longstay, 2);
@@ -108,7 +109,7 @@ class TripController extends AbstractController
             $couponDiscount = 0.0;
             if ($couponId > 0) {
                 [$couponRefId, $couponDiscount] = $this->pricingService->resolveCoupon(
-                    $siteId, $userId, $couponId, 1, 0, $tripTotal
+                    $siteId, $userId, $couponId, 1, 0, 0, 0, 0, $tripTotal
                 );
             }
             $allocs = $this->allocate($couponDiscount, array_column($legs, 'net'), $tripTotal);
@@ -141,16 +142,18 @@ class TripController extends AbstractController
                     'trip_id' => $tripId,
                     'order_type' => 1,
                     'is_citizen' => $leg['isCitizen'] ? 1 : 0,
-                    'merchant_id' => (int) $leg['goods']['merchant_id'],
-                    'supplier_id' => (int) $leg['goods']['supplier_id'],
-                    'goods_id' => $leg['goodsId'],
-                    'goods_name' => (string) $leg['goods']['goods_name'],
-                    'goods_image' => (string) $leg['goods']['cover_image'],
-                    'sku_id' => $leg['skuId'],
-                    'sku_name' => (string) ($leg['sku']['room_name'] ?? ''),
+                    'merchant_id' => (int) $leg['property']['merchant_id'],
+                    'supplier_id' => 0,
+                    'property_id' => $leg['propertyId'],
+                    'goods_id' => 0,
+                    'goods_name' => (string) $leg['property']['store_name'],
+                    'goods_image' => $leg['propertyImage'],
+                    'sku_id' => 0,
+                    'room_type_id' => $leg['roomTypeId'],
+                    'sku_name' => (string) ($leg['room']['room_name'] ?? ''),
                     'quantity' => $leg['quantity'],
                     'unit_price' => $unitPrice,
-                    'original_price' => (float) $leg['sku']['base_price'],
+                    'original_price' => (float) $leg['room']['base_price'],
                     'total_amount' => $leg['original'],
                     'discount_amount' => round($leg['longstay'] + $alloc, 2),
                     'longstay_discount' => $leg['longstay'],
@@ -165,17 +168,17 @@ class TripController extends AbstractController
                     'contact_phone' => CryptoHelper::encrypt($leg['contactPhone'], $this->aesKey()),
                     'guests' => $leg['guests'] !== [] ? CryptoHelper::encrypt(json_encode($leg['guests'], JSON_UNESCAPED_UNICODE), $this->aesKey()) : null,
                     'remark' => $leg['remark'],
-                    'meal_plan_snapshot' => mb_substr((string) ($leg['sku']['meal_plan'] ?? ''), 0, 255),
-                ] + $this->bookingLifecycle->buildCreateFields(1, $leg['goodsId'], $leg['skuId'], (string) $leg['remark']));
+                    'meal_plan_snapshot' => mb_substr((string) ($leg['room']['meal_plan'] ?? ''), 0, 255),
+                ] + $this->bookingLifecycle->buildCreateFields(1, $leg['propertyId'], $leg['roomTypeId'], (string) $leg['remark']));
                 $this->stockService->logChanges($orderId, $leg['changes']);
                 $this->bookingEvents->log([
                     'id' => $orderId, 'order_no' => $orderNo, 'site_id' => $siteId,
-                    'merchant_id' => (int) $leg['goods']['merchant_id'],
+                    'merchant_id' => (int) $leg['property']['merchant_id'], 'property_id' => $leg['propertyId'],
                 ], 'created', \App\Constants\BookingConst::OPERATOR_GUEST, $userId, '', 1, [
                     'trip' => true,
                     'payAmount' => $payAmount,
                 ]);
-                $bookings[] = ['orderId' => $orderId, 'orderNo' => $orderNo, 'goodsName' => $leg['goods']['goods_name'], 'payAmount' => $payAmount];
+                $bookings[] = ['orderId' => $orderId, 'orderNo' => $orderNo, 'propertyName' => $leg['property']['store_name'], 'payAmount' => $payAmount];
             }
 
             return [
@@ -211,6 +214,7 @@ class TripController extends AbstractController
             ->map(static fn ($row) => (array) $row)->all();
         $snap = Db::transaction(function () use ($tripId, $payMethod, $siteId, $snapshots) {
             MerchantAccessGuard::lockBookable($snapshots, $siteId);
+            MerchantAccessGuard::lockProperties($snapshots, $siteId);
             $trip = Db::table('order_trip')->where('id', $tripId)->where('site_id', $siteId)
                 ->where('user_id', UserContext::userId())->whereNull('deleted_at')
                 ->lockForUpdate()->first();
@@ -226,7 +230,7 @@ class TripController extends AbstractController
                 throw new BusinessException(ErrorCode::DATA_CONFLICT, 'Trip预订已变更');
             }
             foreach ($bookings as $index => $booking) {
-                foreach (['id', 'merchant_id', 'site_id', 'user_id', 'order_type', 'supplier_id'] as $field) {
+                foreach (['id', 'merchant_id', 'site_id', 'user_id', 'order_type', 'supplier_id', 'property_id', 'room_type_id'] as $field) {
                     if ((int) $booking->{$field} !== (int) $snapshots[$index][$field]) {
                         throw new BusinessException(ErrorCode::DATA_CONFLICT, 'Trip预订归属已变更');
                     }
@@ -254,7 +258,6 @@ class TripController extends AbstractController
                 // 支付状态变更统一走 PaymentResultHandler(幂等+时间线)
                 $verifyCode = $this->payHandler->markPaid($b, $payMethod, 'MOCK' . OrderNoGenerator::flowNo(), $verifyCode);
                 $this->stockService->deduct($b);
-                Db::table('goods_info')->where('id', (int) $b['goods_id'])->increment('sales_count', (int) $b['quantity']);
                 $this->settlementService->recordBooking($b);
                 $codes[] = ['orderNo' => $b['order_no'], 'verifyCode' => $verifyCode];
             }
@@ -330,11 +333,11 @@ class TripController extends AbstractController
     /** 校验并取数单个行程项(无副作用) */
     private function prepareItem(int $siteId, array $item, int $idx): array
     {
-        $goodsId = (int) ($item['goodsId'] ?? 0);
-        $skuId = (int) ($item['skuId'] ?? 0);
+        $propertyId = (int) ($item['propertyId'] ?? 0);
+        $roomTypeId = (int) ($item['roomTypeId'] ?? 0);
         $quantity = (int) ($item['quantity'] ?? 1);
-        if ($goodsId <= 0 || $skuId <= 0) {
-            throw new BusinessException(ErrorCode::PARAM_ERROR, "第" . ($idx + 1) . "项缺少 goodsId/skuId");
+        if ($propertyId <= 0 || $roomTypeId <= 0) {
+            throw new BusinessException(ErrorCode::PARAM_ERROR, "第" . ($idx + 1) . "项缺少 propertyId/roomTypeId");
         }
         if ($quantity < 1 || $quantity > 10) {
             throw new BusinessException(ErrorCode::PARAM_ERROR, "第" . ($idx + 1) . "项数量须为1-10");
@@ -347,35 +350,40 @@ class TripController extends AbstractController
             throw new BusinessException(ErrorCode::PARAM_ERROR, "第" . ($idx + 1) . "项缺少入离店日期或联系人");
         }
 
-        $goods = Db::table('goods_info')->where('id', $goodsId)->where('site_id', $siteId)
-            ->where('status', 3)->whereNull('deleted_at')->first();
-        if (! $goods) {
-            throw new BusinessException(ErrorCode::NOT_FOUND, "第" . ($idx + 1) . "项酒店不存在或已下架");
+        $property = Db::table('merchant_store')->where('id', $propertyId)->where('site_id', $siteId)
+            ->where('business_type', 'hotel')->where('status', 1)->where('kyc_status', 1)
+            ->where('content_status', 2)->where('publish_status', 1)->where('operating_status', 1)
+            ->whereNull('deleted_at')->first();
+        if (! $property) {
+            throw new BusinessException(ErrorCode::NOT_FOUND, "第" . ($idx + 1) . "项酒店物业不存在或暂不可预订");
         }
-        $goods = (array) $goods;
-        if ((int) $goods['goods_type'] !== 1) {
-            throw new BusinessException(ErrorCode::DATA_CONFLICT, 'Trip 仅支持酒店预订');
-        }
-        $sku = Db::table('hotel_room_type')->where('id', $skuId)->where('goods_id', $goodsId)
-            ->where('status', 1)->whereNull('deleted_at')->first();
-        if (! $sku) {
+        $room = Db::table('hotel_room_type')->where('id', $roomTypeId)->where('property_id', $propertyId)
+            ->where('status', 1)->where('publish_status', 2)->whereNull('deleted_at')->first();
+        if (! $room) {
             throw new BusinessException(ErrorCode::NOT_FOUND, "第" . ($idx + 1) . "项房型不存在或已停售");
         }
-        $sku = (array) $sku;
+        $room = (array) $room;
         $dates = $this->stockService->datesOf(1, $useDate, $endDate);
         if (strtotime($dates[0]) < strtotime(date('Y-m-d'))) {
             throw new BusinessException(ErrorCode::PARAM_ERROR, "第" . ($idx + 1) . "项入住日期不能早于今天");
         }
 
         return [
-            'goodsId' => $goodsId, 'skuId' => $skuId, 'quantity' => $quantity,
+            'propertyId' => $propertyId, 'roomTypeId' => $roomTypeId, 'quantity' => $quantity,
             'useDate' => $useDate, 'endDate' => $endDate, 'dates' => $dates,
             'isCitizen' => (int) ($item['isCitizen'] ?? 0) === 1,
             'contactName' => $contactName, 'contactPhone' => $contactPhone,
             'guests' => $this->pricingService->normalizeGuests($item['travelers'] ?? null, $quantity),
             'remark' => mb_substr(trim((string) ($item['remark'] ?? '')), 0, 500),
-            'goods' => $goods, 'sku' => $sku,
+            'property' => (array) $property, 'room' => $room,
+            'propertyImage' => $this->propertyImage($property->images ?? null),
         ];
+    }
+
+    private function propertyImage(mixed $value): string
+    {
+        $images = is_string($value) ? (json_decode($value, true) ?: []) : (array) $value;
+        return is_string($images[0] ?? null) ? $images[0] : '';
     }
 
     /** 券按各项净额占比分摊,末项吸收四舍五入余数,保证合计=券额 */

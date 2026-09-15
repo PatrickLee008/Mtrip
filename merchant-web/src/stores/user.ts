@@ -1,7 +1,8 @@
 import { defineStore } from 'pinia';
 import { apiLogin, apiLogout, apiMenus, type MenusResult, type LoginResult, type ChallengeResult } from '@/api/auth';
-import type { MerchantBusiness, MerchantProfile, MenuNode } from '@/api/types';
+import type { MerchantProfile, MerchantProperty, MenuNode } from '@/api/types';
 import { clearAuth, getToken, setToken, setSupportToken } from '@/utils/auth';
+import { getSelectedPropertyId, setSelectedPropertyId } from '@/utils/propertyContext';
 
 interface UserState {
   token: string;
@@ -10,10 +11,10 @@ interface UserState {
   menus: MenuNode[];
   /** 按钮权限标识集合 */
   perms: string[];
-  /** 当前账号可切换的真实注册业务 */
-  businesses: MerchantBusiness[];
-  /** null=全局业务视图 */
-  selectedBusinessId: number | null;
+  /** 当前账号可切换的真实酒店物业 */
+  properties: MerchantProperty[];
+  /** null=全部已授权物业视图 */
+  selectedPropertyId: number | null;
   /** 动态路由是否已注入 */
   routesLoaded: boolean;
 }
@@ -24,8 +25,8 @@ export const useUserStore = defineStore('user', {
     profile: null,
     menus: [],
     perms: [],
-    businesses: [],
-    selectedBusinessId: null,
+    properties: [],
+    selectedPropertyId: getSelectedPropertyId(),
     routesLoaded: false,
   }),
   getters: {
@@ -34,9 +35,9 @@ export const useUserStore = defineStore('user', {
     isOwner: (state) => state.profile?.isOwner === true,
     /** 账号类型:1集团 2商户 3门店 */
     accountType: (state) => state.profile?.accountType ?? 0,
-    selectedBusiness: (state) => state.businesses.find((item) => item.id === state.selectedBusinessId) ?? null,
+    selectedProperty: (state) => state.properties.find((item) => item.id === state.selectedPropertyId) ?? null,
     visibleMenus: (state): MenuNode[] => {
-      const selected = state.businesses.find((item) => item.id === state.selectedBusinessId);
+      const selected = state.properties.find((item) => item.id === state.selectedPropertyId);
       const moduleKey = selected?.business_type ?? '';
       const filter = (nodes: MenuNode[]): MenuNode[] => nodes.flatMap((node) => {
         const children = filter(node.children ?? []);
@@ -54,21 +55,24 @@ export const useUserStore = defineStore('user', {
       this.token = result.token;
       this.profile = result.admin;
       this.routesLoaded = false;
-      this.menus = []; this.perms = []; this.businesses = []; this.selectedBusinessId = null;
+      this.menus = []; this.perms = []; this.properties = []; this.selectedPropertyId = null;
+      setSelectedPropertyId(null);
       if (support) setSupportToken(result.token); else setToken(result.token);
     },
     async loadMenus(): Promise<MenusResult> {
       const result = await apiMenus();
       this.menus = result.menus;
       this.perms = result.perms;
-      this.businesses = result.businesses;
-      if (!this.businesses.some((item) => item.id === this.selectedBusinessId)) {
-        this.selectedBusinessId = null;
+      this.properties = result.businesses;
+      if (!this.properties.some((item) => item.id === this.selectedPropertyId)) {
+        this.selectedPropertyId = null;
+        setSelectedPropertyId(null);
       }
       return result;
     },
-    selectBusiness(id: number | null): void {
-      this.selectedBusinessId = id !== null && this.businesses.some((item) => item.id === id) ? id : null;
+    selectProperty(id: number | null): void {
+      this.selectedPropertyId = id !== null && this.properties.some((item) => item.id === id) ? id : null;
+      setSelectedPropertyId(this.selectedPropertyId);
     },
     /** 按钮权限判断:主账号恒真 */
     hasPerm(perm: string): boolean {

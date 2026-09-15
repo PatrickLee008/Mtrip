@@ -27,14 +27,10 @@ import {
 } from '@/components/hotel/booking/bookingShared';
 import { colors, radius } from '@/config/theme';
 import { fonts } from '@/config/typography';
+import type { LeadGuestForm } from '@/screens/hotel/bookingDemo';
 
-export interface LeadGuestForm {
-  firstName: string;
-  lastName: string;
-  phone: string;
-  email: string;
-  saveInfo: boolean;
-}
+/* 表单形状与关怀模式共用一份(`bookingDemo.ts`),这里转出去保持原有引用路径可用 */
+export type { LeadGuestForm };
 
 interface Props {
   form: LeadGuestForm;

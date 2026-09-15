@@ -16,22 +16,21 @@ use Mtrip\Shared\Exception\BusinessException;
 use Mtrip\Shared\Support\Result;
 
 /**
- * 商户端客房/房型管理:围绕酒店商品(goods_type=1)维护 hotel_room_type。
- * 数据范围只按 MerchantContext::scopeMerchantIds() 裁剪,门店账号暂无 goods_info.store_id 可用。
+ * 商户端客房/房型管理:房型直接归属酒店物业 merchant_store.id。
  */
 class RoomController extends AbstractAdminController
 {
-    /** 酒店下拉选项:仅返回当前商户范围内的酒店商品 */
+    /** 酒店下拉选项:仅返回当前账号可管理且 KYC 已通过的物业 */
     public function hotelOptions(): array
     {
-        $query = Db::table('goods_info')
-            ->where('goods_type', 1)
-            ->where('status', '<>', 5)
+        $query = Db::table('merchant_store')
+            ->where('business_type', 'hotel')
+            ->where('kyc_status', 1)
             ->whereNull('deleted_at');
-        $this->applyMerchantScope($query, 'goods_info.merchant_id');
+        $this->applyPropertyScope($query, 'merchant_store.');
 
-        $rows = $query->orderByDesc('sort_weight')->orderByDesc('id')
-            ->get(['id', 'merchant_id', 'goods_name', 'cover_image', 'address', 'status'])
+        $rows = $query->orderByDesc('id')
+            ->get(['id', 'merchant_id', 'store_name', 'images', 'address', 'operating_status'])
             ->map(static fn ($row) => (array) $row)->all();
         $merchantNames = $this->pluckNames('merchant_info', array_column($rows, 'merchant_id'), 'merchant_name');
 
@@ -40,10 +39,10 @@ class RoomController extends AbstractAdminController
                 'id' => (int) $row['id'],
                 'merchant_id' => (int) $row['merchant_id'],
                 'merchant_name' => (string) ($merchantNames[$row['merchant_id']] ?? ''),
-                'goods_name' => (string) $row['goods_name'],
-                'cover_image' => (string) $row['cover_image'],
+                'property_name' => (string) $row['store_name'],
+                'cover_image' => (string) (((array) json_decode((string) ($row['images'] ?? ''), true))[0] ?? ''),
                 'address' => (string) $row['address'],
-                'status' => (int) $row['status'],
+                'status' => (int) $row['operating_status'],
             ];
         }, $rows));
     }
@@ -53,21 +52,20 @@ class RoomController extends AbstractAdminController
     {
         [$page, $pageSize] = $this->pageParams();
         $query = Db::table('hotel_room_type as r')
-            ->join('goods_info as g', 'g.id', '=', 'r.goods_id')
-            ->where('g.goods_type', 1)
+            ->join('merchant_store as p', 'p.id', '=', 'r.property_id')
+            ->where('p.business_type', 'hotel')
             ->whereNull('r.deleted_at')
-            ->whereNull('g.deleted_at')
-            ->where('g.status', '<>', 5);
-        $this->applyMerchantScope($query, 'g.merchant_id');
+            ->whereNull('p.deleted_at');
+        $this->applyPropertyScope($query, 'p.');
 
-        if (($goodsId = $this->intInput('goodsId')) > 0) {
-            $query->where('r.goods_id', $goodsId);
+        if (($propertyId = $this->intInput('propertyId')) > 0) {
+            $query->where('r.property_id', $propertyId);
         }
         if (($keyword = $this->strInput('keyword')) !== '') {
             $query->where(static function (Builder $q) use ($keyword) {
                 $q->where('r.room_name', 'like', "%{$keyword}%")
                     ->orWhere('r.room_code', 'like', "%{$keyword}%")
-                    ->orWhere('g.goods_name', 'like', "%{$keyword}%");
+                    ->orWhere('p.store_name', 'like', "%{$keyword}%");
             });
         }
         $status = $this->input('status');
@@ -83,7 +81,7 @@ class RoomController extends AbstractAdminController
         $rows = $query->orderByDesc('r.updated_at')->orderBy('r.sort')->orderByDesc('r.id')
             ->forPage($page, $pageSize)
             ->get([
-                'r.*', 'g.goods_name', 'g.merchant_id', 'g.cover_image as hotel_cover', 'g.address as hotel_address',
+                'r.*', 'p.store_name as property_name', 'p.merchant_id', 'p.images as property_images', 'p.address as property_address',
             ])->map(fn ($row) => $this->formatRoom((array) $row))->all();
 
         $rows = $this->appendAvailability($rows);
@@ -125,17 +123,18 @@ class RoomController extends AbstractAdminController
         if (! MerchantContext::hasPermission($requiredPerm)) {
             throw new BusinessException(ErrorCode::FORBIDDEN);
         }
-        $goods = $id > 0
-            ? $this->findScopedHotel((int) $this->findScopedRoom($id)['goods_id'])
-            : $this->findScopedHotel($this->requireId('goodsId'));
+        $property = $id > 0
+            ? $this->findScopedProperty((int) $this->findScopedRoom($id)['property_id'])
+            : $this->findScopedProperty($this->requireId('propertyId'));
+        MerchantContext::assertPropertyAccess((int) $property['id'], true);
 
         $data = $this->collectRoomFields($id <= 0);
-        $data['goods_id'] = (int) $goods['id'];
-        $data['site_id'] = (int) $goods['site_id'];
+        $data['property_id'] = (int) $property['id'];
+        $data['site_id'] = (int) $property['site_id'];
 
         $submit = (int) $data['publish_status'] === 1;
         unset($data['publish_status'], $data['submitted_at']);
-        $result = (new RoomReviewService())->save($goods, $id, $data, $submit);
+        $result = (new RoomReviewService())->save($property, $id, $data, $submit);
         return Result::success($result, $submit ? '房型已提交审核' : '房型草稿已保存');
     }
 
@@ -144,15 +143,16 @@ class RoomController extends AbstractAdminController
     public function copy(): array
     {
         $room = $this->findScopedRoom($this->requireId());
-        $goods = $this->findScopedHotel((int) $room['goods_id']);
-        return Result::success((new RoomReviewService())->copy($goods, $room), '房型已复制为草稿');
+        $property = $this->findScopedProperty((int) $room['property_id']);
+        MerchantContext::assertPropertyAccess((int) $property['id'], true);
+        return Result::success((new RoomReviewService())->copy($property, $room), '房型已复制为草稿');
     }
 
     /** 撤回待审核版本。 */
     #[Permission('mch:rooms:edit')]
     public function withdraw(): array
     {
-        (new RoomReviewService())->withdraw($this->requireId('revisionId'), MerchantContext::scopeMerchantIds());
+        (new RoomReviewService())->withdraw($this->requireId('revisionId'));
         return Result::success(null, '已撤回审核');
     }
 
@@ -196,6 +196,7 @@ class RoomController extends AbstractAdminController
     public function toggleStatus(): array
     {
         $room = $this->findScopedRoom($this->requireId());
+        MerchantContext::assertPropertyAccess((int) $room['property_id'], true);
         $next = (int) $room['status'] === 1 ? 2 : 1;
         Db::table('hotel_room_type')->where('id', $room['id'])->update(['status' => $next]);
         return Result::success(['status' => $next], $next === 1 ? '房型已启用' : '房型已停用');
@@ -206,6 +207,7 @@ class RoomController extends AbstractAdminController
     public function delete(): array
     {
         $room = $this->findScopedRoom($this->requireId());
+        MerchantContext::assertPropertyAccess((int) $room['property_id'], true);
         $pending = Db::table('order_main')
             ->where('order_type', 1)
             ->where('sku_id', $room['id'])
@@ -215,8 +217,8 @@ class RoomController extends AbstractAdminController
         if ($pending > 0) {
             throw new BusinessException(ErrorCode::DATA_CONFLICT, "存在 {$pending} 笔进行中订单,禁止删除");
         }
-        $goods = $this->findScopedHotel((int) $room['goods_id']);
-        $result = (new RoomReviewService())->remove($goods, $room);
+        $property = $this->findScopedProperty((int) $room['property_id']);
+        $result = (new RoomReviewService())->remove($property, $room);
         return Result::success($result, $result['reviewRequired'] ? '下线申请已提交审核' : '房型草稿已删除');
     }
 
@@ -286,44 +288,42 @@ class RoomController extends AbstractAdminController
     private function findScopedRoom(int $id): array
     {
         $row = Db::table('hotel_room_type as r')
-            ->join('goods_info as g', 'g.id', '=', 'r.goods_id')
+            ->join('merchant_store as p', 'p.id', '=', 'r.property_id')
             ->where('r.id', $id)
-            ->where('g.goods_type', 1)
+            ->where('p.business_type', 'hotel')
             ->whereNull('r.deleted_at')
-            ->whereNull('g.deleted_at')
-            ->get(['r.*', 'g.goods_name', 'g.merchant_id', 'g.cover_image as hotel_cover', 'g.address as hotel_address'])
+            ->whereNull('p.deleted_at')
+            ->get(['r.*', 'p.store_name as property_name', 'p.merchant_id', 'p.images as property_images', 'p.address as property_address'])
             ->first();
         if (! $row) {
             throw new BusinessException(ErrorCode::NOT_FOUND, '房型不存在');
         }
         $room = (array) $row;
-        if (! in_array((int) $room['merchant_id'], MerchantContext::scopeMerchantIds(), true)) {
-            throw new BusinessException(ErrorCode::NO_DATA_PERMISSION);
-        }
+        MerchantContext::assertPropertyAccess((int) $room['property_id']);
         return $room;
     }
 
-    private function findScopedHotel(int $goodsId): array
+    private function findScopedProperty(int $propertyId): array
     {
-        $goods = Db::table('goods_info')
-            ->where('id', $goodsId)
-            ->where('goods_type', 1)
+        $property = Db::table('merchant_store')
+            ->where('id', $propertyId)
+            ->where('site_id', MerchantContext::siteId())
+            ->where('business_type', 'hotel')
+            ->where('kyc_status', 1)
             ->whereNull('deleted_at')
             ->first();
-        if (! $goods) {
-            throw new BusinessException(ErrorCode::NOT_FOUND, '酒店商品不存在');
+        if (! $property) {
+            throw new BusinessException(ErrorCode::NOT_FOUND, '酒店物业不存在或 KYC 未通过');
         }
-        $goods = (array) $goods;
-        if (! in_array((int) $goods['merchant_id'], MerchantContext::scopeMerchantIds(), true)) {
-            throw new BusinessException(ErrorCode::NO_DATA_PERMISSION);
-        }
-        return $goods;
+        $property = (array) $property;
+        MerchantContext::assertPropertyAccess((int) $property['id']);
+        return $property;
     }
 
-    private function applyMerchantScope(Builder $query, string $column): void
+    private function applyPropertyScope(Builder $query, string $prefix): void
     {
-        $merchantIds = MerchantContext::scopeMerchantIds();
-        $query->whereIn($column, $merchantIds === [] ? [0] : $merchantIds);
+        $query->where($prefix . 'site_id', MerchantContext::siteId());
+        $query->whereIn($prefix . 'id', MerchantContext::scopePropertyIds());
     }
 
     private function formatRoom(array $row): array

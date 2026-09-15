@@ -84,9 +84,9 @@ export interface BookingStay {
    * 照着设计稿凭空展示 10% 税费会与实际扣款对不上。
    */
   demo: boolean;
-  /** 真实模式下的商品与房型 id,用于下单 */
-  goodsId?: number;
-  skuId?: number;
+  /** 真实模式下的物业与房型 id,用于下单 */
+  propertyId?: number;
+  roomTypeId?: number;
   /**
    * **每晚每间**的价格基数。展示用的 `originalPrice`/`roomPrice`/`taxes`/`total`/`points`
    * 一律由它 × 晚数 × 间数推出(见 `scaleStay`),所以改日期或加减房间时金额会跟着动。
@@ -112,6 +112,18 @@ export interface BookingStay {
   taxes: number;
   total: number;
   points: number;
+}
+
+/**
+ * 主要入住人表单(Step 2)。完整模式 `BookingStepGuests` 与关怀模式 `LiteStepGuests`
+ * 是两套排版、同一份字段,所以形状放在这里,两边都从这里取。
+ */
+export interface LeadGuestForm {
+  firstName: string;
+  lastName: string;
+  phone: string;
+  email: string;
+  saveInfo: boolean;
 }
 
 /** 第二段住宿(Add More Stay 之后加进 Trip 的那条,设计稿 1675:9406 的 Stay 2) */

@@ -12,7 +12,7 @@ use Mtrip\Shared\Support\Result;
 
 /**
  * 商户端经营看板统计(Merchant App M5)。
- * 数据范围统一由 MerchantContext::scopeMerchantIds() 强制裁剪。
+ * 酒店经营数据统一由 MerchantContext::scopePropertyIds() 强制裁剪。
  */
 class StatsController extends AbstractAdminController
 {
@@ -20,42 +20,48 @@ class StatsController extends AbstractAdminController
     public function dashboard(): array
     {
         $merchantIds = $this->scopeMerchantIds();
+        $propertyIds = $this->scopePropertyIds();
         $today = date('Y-m-d');
         [$startDate, $endDate] = $this->dateRange();
 
         $todayOrders = Db::table('order_main')
             ->whereNull('deleted_at')
-            ->whereIn('merchant_id', $merchantIds)
+            ->where('site_id', MerchantContext::siteId())
+            ->where('order_type', 1)
+            ->whereIn('property_id', $propertyIds)
             ->whereBetween('created_at', ["{$today} 00:00:00", "{$today} 23:59:59"]);
 
         $paidToday = Db::table('order_main')
             ->whereNull('deleted_at')
-            ->whereIn('merchant_id', $merchantIds)
+            ->where('site_id', MerchantContext::siteId())
+            ->where('order_type', 1)
+            ->whereIn('property_id', $propertyIds)
             ->whereIn('order_status', [1, 2, 3])
             ->whereBetween('pay_time', ["{$today} 00:00:00", "{$today} 23:59:59"]);
 
         $pendingSettle = Db::table('finance_merchant_settle')
             ->whereNull('deleted_at')
-            ->whereIn('merchant_id', $merchantIds)
+            ->where('site_id', MerchantContext::siteId())
+            ->whereIn('property_id', $propertyIds)
             ->whereIn('status', [0, 1]);
 
         return Result::success([
             'updatedAt' => date('Y-m-d H:i:s'),
             'kpi' => [
-                'totalPropertyCount' => $this->propertyCount($merchantIds),
+                'totalPropertyCount' => $this->propertyCount($propertyIds),
                 'todayBookingCount' => (clone $todayOrders)->count(),
-                'todayCheckInCount' => $this->dateOrderCount($merchantIds, 'use_date', $today),
-                'todayCheckOutCount' => $this->dateOrderCount($merchantIds, 'end_date', $today),
-                'currentGuestCount' => $this->currentGuestCount($merchantIds, $today),
-                'occupancyRate' => null, // M2/M3 房型与房量域未完成,避免伪造入住率。
+                'todayCheckInCount' => $this->dateOrderCount($propertyIds, 'use_date', $today),
+                'todayCheckOutCount' => $this->dateOrderCount($propertyIds, 'end_date', $today),
+                'currentGuestCount' => $this->currentGuestCount($propertyIds, $today),
+                'occupancyRate' => null,
                 'revenueToday' => round((float) (clone $paidToday)->sum('pay_amount'), 2),
-                'pendingConfirmationCount' => $this->pendingConfirmationCount($merchantIds),
+                'pendingConfirmationCount' => $this->pendingConfirmationCount($propertyIds),
                 'pendingSettleAmount' => round((float) (clone $pendingSettle)->sum('settle_amount'), 2),
-                'activePromotionCount' => $this->activePromotionCount($merchantIds),
+                'activePromotionCount' => $this->activePromotionCount($propertyIds),
             ],
-            'trend' => $this->trend($merchantIds, $startDate, $endDate),
-            'propertyPerformance' => $this->propertyPerformance($merchantIds, $today),
-            'todayOperations' => $this->todayOperations($merchantIds, $today),
+            'trend' => $this->trend($propertyIds, $startDate, $endDate),
+            'propertyPerformance' => $this->propertyPerformance($propertyIds, $today),
+            'todayOperations' => $this->todayOperations($propertyIds, $today),
             'alerts' => $this->alerts(),
         ]);
     }
@@ -64,6 +70,11 @@ class StatsController extends AbstractAdminController
     {
         $ids = MerchantContext::scopeMerchantIds();
         return $ids === [] ? [0] : $ids;
+    }
+
+    private function scopePropertyIds(): array
+    {
+        return MerchantContext::scopePropertyIds() ?: [-1];
     }
 
     private function dateRange(): array
@@ -82,31 +93,30 @@ class StatsController extends AbstractAdminController
         return [$start, $end];
     }
 
-    private function propertyCount(array $merchantIds): int
+    private function propertyCount(array $propertyIds): int
     {
-        $query = Db::table('merchant_store')->whereNull('deleted_at')->whereIn('merchant_id', $merchantIds);
-        $storeId = MerchantContext::scopeStoreId();
-        if ($storeId !== null && $storeId > 0) {
-            $query->where('id', $storeId);
-        }
-        return $query->count();
+        return Db::table('merchant_store')->whereNull('deleted_at')
+            ->where('site_id', MerchantContext::siteId())->where('business_type', 'hotel')
+            ->whereIn('id', $propertyIds)->count();
     }
 
-    private function dateOrderCount(array $merchantIds, string $column, string $date): int
+    private function dateOrderCount(array $propertyIds, string $column, string $date): int
     {
         return Db::table('order_main')
             ->whereNull('deleted_at')
-            ->whereIn('merchant_id', $merchantIds)
+            ->where('site_id', MerchantContext::siteId())->where('order_type', 1)
+            ->whereIn('property_id', $propertyIds)
             ->whereIn('order_status', [1, 2, 3])
             ->where($column, $date)
             ->count();
     }
 
-    private function currentGuestCount(array $merchantIds, string $date): int
+    private function currentGuestCount(array $propertyIds, string $date): int
     {
         return Db::table('order_main')
             ->whereNull('deleted_at')
-            ->whereIn('merchant_id', $merchantIds)
+            ->where('site_id', MerchantContext::siteId())->where('order_type', 1)
+            ->whereIn('property_id', $propertyIds)
             ->whereIn('order_status', [1, 2])
             ->where('use_date', '<=', $date)
             ->where(static function ($query) use ($date) {
@@ -115,21 +125,23 @@ class StatsController extends AbstractAdminController
             ->count();
     }
 
-    private function pendingConfirmationCount(array $merchantIds): int
+    private function pendingConfirmationCount(array $propertyIds): int
     {
         return Db::table('order_main')
             ->whereNull('deleted_at')
-            ->whereIn('merchant_id', $merchantIds)
+            ->where('site_id', MerchantContext::siteId())->where('order_type', 1)
+            ->whereIn('property_id', $propertyIds)
             ->where('order_status', 1)
             ->count();
     }
 
-    private function activePromotionCount(array $merchantIds): int
+    private function activePromotionCount(array $propertyIds): int
     {
         $now = date('Y-m-d H:i:s');
         return Db::table('marketing_coupon')
             ->whereNull('deleted_at')
-            ->whereIn('merchant_id', $merchantIds)
+            ->where('site_id', MerchantContext::siteId())
+            ->whereRaw('JSON_OVERLAPS(COALESCE(property_ids, JSON_ARRAY()), ?)', [json_encode($propertyIds)])
             ->where('status', 1)
             ->where(static function ($query) use ($now) {
                 $query->where('valid_type', 2)
@@ -142,11 +154,12 @@ class StatsController extends AbstractAdminController
             ->count();
     }
 
-    private function trend(array $merchantIds, string $startDate, string $endDate): array
+    private function trend(array $propertyIds, string $startDate, string $endDate): array
     {
         $rows = Db::table('order_main')
             ->whereNull('deleted_at')
-            ->whereIn('merchant_id', $merchantIds)
+            ->where('site_id', MerchantContext::siteId())->where('order_type', 1)
+            ->whereIn('property_id', $propertyIds)
             ->whereIn('order_status', [1, 2, 3])
             ->whereBetween('pay_time', ["{$startDate} 00:00:00", "{$endDate} 23:59:59"])
             ->groupBy(Db::raw('DATE(pay_time)'))
@@ -156,7 +169,8 @@ class StatsController extends AbstractAdminController
 
         $counts = Db::table('order_main')
             ->whereNull('deleted_at')
-            ->whereIn('merchant_id', $merchantIds)
+            ->where('site_id', MerchantContext::siteId())->where('order_type', 1)
+            ->whereIn('property_id', $propertyIds)
             ->whereIn('order_status', [1, 2, 3])
             ->whereBetween('pay_time', ["{$startDate} 00:00:00", "{$endDate} 23:59:59"])
             ->groupBy(Db::raw('DATE(pay_time)'))
@@ -179,53 +193,57 @@ class StatsController extends AbstractAdminController
         return $list;
     }
 
-    private function propertyPerformance(array $merchantIds, string $today): array
+    private function propertyPerformance(array $propertyIds, string $today): array
     {
-        $merchants = Db::table('merchant_info')
+        $properties = Db::table('merchant_store')
             ->whereNull('deleted_at')
-            ->whereIn('id', $merchantIds)
-            ->get(['id', 'merchant_name', 'status'])
+            ->where('site_id', MerchantContext::siteId())->where('business_type', 'hotel')
+            ->whereIn('id', $propertyIds)
+            ->get(['id', 'store_name', 'operating_status'])
             ->map(static fn ($row) => (array) $row)
             ->all();
 
         $bookingRows = Db::table('order_main')
             ->whereNull('deleted_at')
-            ->whereIn('merchant_id', $merchantIds)
+            ->where('site_id', MerchantContext::siteId())->where('order_type', 1)
+            ->whereIn('property_id', $propertyIds)
             ->whereBetween('created_at', ["{$today} 00:00:00", "{$today} 23:59:59"])
-            ->groupBy('merchant_id')
-            ->selectRaw('merchant_id, COUNT(*) AS cnt')
-            ->pluck('cnt', 'merchant_id')
+            ->groupBy('property_id')
+            ->selectRaw('property_id, COUNT(*) AS cnt')
+            ->pluck('cnt', 'property_id')
             ->all();
 
         $revenueRows = Db::table('order_main')
             ->whereNull('deleted_at')
-            ->whereIn('merchant_id', $merchantIds)
+            ->where('site_id', MerchantContext::siteId())->where('order_type', 1)
+            ->whereIn('property_id', $propertyIds)
             ->whereIn('order_status', [1, 2, 3])
             ->whereBetween('pay_time', ["{$today} 00:00:00", "{$today} 23:59:59"])
-            ->groupBy('merchant_id')
-            ->selectRaw('merchant_id, COALESCE(SUM(pay_amount),0) AS total')
-            ->pluck('total', 'merchant_id')
+            ->groupBy('property_id')
+            ->selectRaw('property_id, COALESCE(SUM(pay_amount),0) AS total')
+            ->pluck('total', 'property_id')
             ->all();
 
-        return array_map(static function (array $merchant) use ($bookingRows, $revenueRows) {
-            $id = (int) $merchant['id'];
+        return array_map(static function (array $property) use ($bookingRows, $revenueRows) {
+            $id = (int) $property['id'];
             return [
                 'propertyId' => $id,
-                'propertyName' => (string) $merchant['merchant_name'],
+                'propertyName' => (string) $property['store_name'],
                 'todayBookings' => (int) ($bookingRows[$id] ?? 0),
                 'occupancyRate' => null,
                 'revenueToday' => round((float) ($revenueRows[$id] ?? 0), 2),
-                'status' => (int) $merchant['status'],
+                'status' => (int) $property['operating_status'],
             ];
-        }, $merchants);
+        }, $properties);
     }
 
-    private function todayOperations(array $merchantIds, string $today): array
+    private function todayOperations(array $propertyIds, string $today): array
     {
         return Db::table('order_main as o')
-            ->leftJoin('merchant_info as m', 'm.id', '=', 'o.merchant_id')
+            ->leftJoin('merchant_store as p', 'p.id', '=', 'o.property_id')
             ->whereNull('o.deleted_at')
-            ->whereIn('o.merchant_id', $merchantIds)
+            ->where('o.site_id', MerchantContext::siteId())->where('o.order_type', 1)
+            ->whereIn('o.property_id', $propertyIds)
             ->where(static function ($query) use ($today) {
                 $query->where('o.use_date', $today)
                     ->orWhere('o.end_date', $today)
@@ -235,14 +253,14 @@ class StatsController extends AbstractAdminController
             ->limit(12)
             ->get([
                 'o.id', 'o.order_no', 'o.contact_name', 'o.contact_phone', 'o.sku_name',
-                'o.use_date', 'o.end_date', 'o.order_status', 'm.merchant_name',
+                'o.use_date', 'o.end_date', 'o.order_status', 'p.store_name',
             ])
             ->map(function ($row) {
                 $row = (array) $row;
                 return [
                     'orderId' => (int) $row['id'],
                     'orderNo' => (string) $row['order_no'],
-                    'hotel' => (string) ($row['merchant_name'] ?? ''),
+                    'hotel' => (string) ($row['store_name'] ?? ''),
                     'guest' => (string) $row['contact_name'],
                     'guestPhone' => MaskHelper::mobile($this->decryptField((string) $row['contact_phone'])),
                     'room' => (string) $row['sku_name'],

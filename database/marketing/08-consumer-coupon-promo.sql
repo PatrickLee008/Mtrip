@@ -18,7 +18,7 @@ SET NAMES utf8mb4;
 -- ============================================================
 USE `mtrip_business`;
 
--- ---- 1. marketing_coupon.sku_ids:适用房型(为空 = 该酒店全部房型) ----
+-- ---- 1. marketing_coupon.sku_ids:旧商品 SKU 范围；酒店使用后续 property 字段 ----
 SET @sql := (
   SELECT IF(
     EXISTS(

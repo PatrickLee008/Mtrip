@@ -25,6 +25,8 @@ export interface MerchantPromotion {
   funding_source: number;
   goods_scope: number;
   goods_ids: number[];
+  property_ids: number[];
+  room_type_ids: number[];
   total_count: number;
   received_count: number;
   used_count: number;

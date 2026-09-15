@@ -68,7 +68,8 @@ CREATE TABLE IF NOT EXISTS `goods_info` (
 CREATE TABLE IF NOT EXISTS `hotel_room_type` (
   `id`           BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '主键',
   `site_id`      BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '所属站点ID',
-  `goods_id`     BIGINT UNSIGNED NOT NULL COMMENT '所属酒店商品ID',
+  `property_id`  BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '所属酒店物业ID',
+  `goods_id`     BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '旧酒店商品ID,仅迁移审计',
   `room_name`    VARCHAR(100) NOT NULL COMMENT '房型名称',
   `room_code`    VARCHAR(50)  NOT NULL DEFAULT '' COMMENT '房型内部编码',
   `description`  VARCHAR(1000) NOT NULL DEFAULT '' COMMENT '房型描述',
@@ -104,6 +105,7 @@ CREATE TABLE IF NOT EXISTS `hotel_room_type` (
   `deleted_at`   DATETIME     NULL DEFAULT NULL COMMENT '删除时间(软删)',
   PRIMARY KEY (`id`),
   KEY `idx_site_id` (`site_id`),
+  KEY `idx_property_id` (`property_id`),
   KEY `idx_goods_id` (`goods_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin COMMENT='酒店房型表';
 
@@ -111,7 +113,8 @@ CREATE TABLE IF NOT EXISTS `hotel_room_type_revision` (
   `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   `site_id` BIGINT UNSIGNED NOT NULL DEFAULT 0,
   `merchant_id` BIGINT UNSIGNED NOT NULL,
-  `goods_id` BIGINT UNSIGNED NOT NULL,
+  `property_id` BIGINT UNSIGNED NOT NULL DEFAULT 0,
+  `goods_id` BIGINT UNSIGNED NOT NULL DEFAULT 0,
   `room_id` BIGINT UNSIGNED NOT NULL,
   `version` INT UNSIGNED NOT NULL,
   `action` VARCHAR(20) NOT NULL DEFAULT 'upsert',
@@ -129,6 +132,7 @@ CREATE TABLE IF NOT EXISTS `hotel_room_type_revision` (
   UNIQUE KEY `uk_room_version` (`room_id`,`version`),
   KEY `idx_review_queue` (`site_id`,`status`,`submitted_at`),
   KEY `idx_merchant_room` (`merchant_id`,`room_id`,`id`),
+  KEY `idx_property_revision` (`property_id`,`id`),
   KEY `idx_goods` (`goods_id`,`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin COMMENT='酒店房型草稿及审核版本';
 
@@ -160,7 +164,8 @@ CREATE TABLE IF NOT EXISTS `ticket_type` (
 CREATE TABLE IF NOT EXISTS `goods_daily_stock` (
   `id`          BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '主键',
   `site_id`     BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '所属站点ID',
-  `goods_id`    BIGINT UNSIGNED NOT NULL COMMENT '商品ID',
+  `property_id` BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '酒店物业ID,门票为0',
+  `goods_id`    BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '门票商品ID,酒店旧值仅迁移审计',
   `sku_type`    TINYINT      NOT NULL DEFAULT 1 COMMENT 'SKU类型:1房型 2票种',
   `sku_id`      BIGINT UNSIGNED NOT NULL COMMENT '房型ID/票种ID',
   `stock_date`  DATE         NOT NULL COMMENT '库存日期',
@@ -181,6 +186,7 @@ CREATE TABLE IF NOT EXISTS `goods_daily_stock` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_sku_date` (`sku_type`, `sku_id`, `stock_date`),
   KEY `idx_site_id` (`site_id`),
+  KEY `idx_property_stock` (`property_id`,`stock_date`),
   KEY `idx_goods_id` (`goods_id`),
   KEY `idx_stock_date` (`stock_date`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin COMMENT='分时库存价格日历表';
@@ -189,7 +195,8 @@ CREATE TABLE IF NOT EXISTS `goods_daily_stock` (
 CREATE TABLE IF NOT EXISTS `goods_refund_rule` (
   `id`          BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '主键',
   `site_id`     BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '所属站点ID',
-  `goods_id`    BIGINT UNSIGNED NOT NULL COMMENT '商品ID',
+  `property_id` BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '酒店物业ID,门票为0',
+  `goods_id`    BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '门票商品ID,酒店旧值仅迁移审计',
   `sku_type`    TINYINT      NOT NULL DEFAULT 0 COMMENT 'SKU类型:0商品级 1房型 2票种',
   `sku_id`      BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '房型ID/票种ID,0=商品级规则',
   `rule_type`   TINYINT      NOT NULL DEFAULT 1 COMMENT '规则类型:1免费取消 2阶梯退款 3不可退',
@@ -200,6 +207,7 @@ CREATE TABLE IF NOT EXISTS `goods_refund_rule` (
   `deleted_at`  DATETIME     NULL DEFAULT NULL COMMENT '删除时间(软删)',
   PRIMARY KEY (`id`),
   KEY `idx_site_id` (`site_id`),
+  KEY `idx_property_refund` (`property_id`,`sku_type`,`sku_id`),
   KEY `idx_goods_id` (`goods_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin COMMENT='商品退改规则表';
 
@@ -207,7 +215,8 @@ CREATE TABLE IF NOT EXISTS `goods_refund_rule` (
 CREATE TABLE IF NOT EXISTS `goods_stock_log` (
   `id`          BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '主键',
   `site_id`     BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '所属站点ID',
-  `goods_id`    BIGINT UNSIGNED NOT NULL COMMENT '商品ID',
+  `property_id` BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '酒店物业ID,门票为0',
+  `goods_id`    BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '门票商品ID,酒店旧值仅迁移审计',
   `sku_type`    TINYINT      NOT NULL DEFAULT 1 COMMENT 'SKU类型:1房型 2票种',
   `sku_id`      BIGINT UNSIGNED NOT NULL COMMENT '房型ID/票种ID',
   `stock_date`  DATE         NOT NULL COMMENT '库存日期',
@@ -219,6 +228,7 @@ CREATE TABLE IF NOT EXISTS `goods_stock_log` (
   `created_at`  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   PRIMARY KEY (`id`),
   KEY `idx_site_id` (`site_id`),
+  KEY `idx_property_stock_log` (`property_id`,`sku_id`,`stock_date`),
   KEY `idx_sku` (`sku_type`, `sku_id`, `stock_date`),
   KEY `idx_order_id` (`order_id`),
   KEY `idx_created_at` (`created_at`)

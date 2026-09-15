@@ -49,11 +49,18 @@ class MerchantAuthService
         }
         $admin = (array) $admin;
 
+        if ((int) $admin['status'] === 2 && (int) $admin['is_owner'] === 1 && (int) $admin['account_type'] === 2
+            && password_verify($password, (string) $admin['password'])
+            && Db::table('merchant_application')->where('merchant_id', $admin['merchant_id'])->where('site_id', $admin['site_id'])
+                ->where('account_status', 1)->whereNotNull('final_approved_at')->whereNull('deleted_at')->exists()) {
+            throw new BusinessException(ErrorCode::DATA_CONFLICT, '账号尚未激活，请在首次激活页面使用访问码或用户名和一次性密码完成激活');
+        }
+
         return (new \App\Service\MerchantAccountSecurityService())->begin((int) $admin['id'], $password);
     }
 
     /** Only called after a consumed 2FA challenge or a validated one-time support exchange. */
-    public function issueSession(array $admin, array $support = []): array
+    public function issueSession(array $admin, array $support = [], string $amr = 'totp'): array
     {
         $permissions = $this->profile($admin)['permissions'];
         $claims = [
@@ -62,7 +69,7 @@ class MerchantAuthService
             'account_type' => (int) $admin['account_type'], 'group_id' => (int) $admin['group_id'],
             'merchant_id' => (int) $admin['merchant_id'], 'store_id' => (int) $admin['store_id'],
             'is_owner' => (int) $admin['is_owner'] === 1, 'permissions' => $permissions,
-            'auth_version' => (int) $admin['auth_version'], 'amr' => $support === [] ? 'totp' : 'support',
+            'auth_version' => (int) $admin['auth_version'], 'amr' => $support === [] ? $amr : 'support',
         ];
         $ttl = (int) config('mtrip.jwt_ttl', 7200);
         if ($support !== []) {
@@ -140,39 +147,32 @@ class MerchantAuthService
         return [
             'menus' => MenuTreeHelper::build($menus),
             'perms' => $perms,
-            'businesses' => $this->businesses($merchantIds, $storeId),
+            'businesses' => $this->businesses(\Mtrip\Shared\Context\MerchantContext::authorizedPropertyIds()),
         ];
     }
 
     /**
-     * 左上角业务切换器的数据源:只返回当前账号数据范围内、已关联正式商户的注册业务。
-     * 门店账号进一步收窄到当前门店绑定的业务,避免展示同商户的其他业务。
+     * 左上角物业切换器的数据源:返回当前请求上下文中实际可访问的酒店物业。
      */
-    private function businesses(array $merchantIds, ?int $storeId): array
+    private function businesses(array $propertyIds): array
     {
-        $merchantIds = array_values(array_filter(array_map('intval', $merchantIds), static fn (int $id) => $id > 0));
-        if ($merchantIds === []) {
+        $propertyIds = array_values(array_filter(array_map('intval', $propertyIds), static fn (int $id) => $id > 0));
+        if ($propertyIds === []) {
             return [];
         }
 
-        $query = Db::table('merchant_application_business as b')
-            ->join('merchant_application as a', 'a.id', '=', 'b.application_id')
-            ->join('merchant_info as m', 'm.id', '=', 'a.merchant_id')
-            ->whereIn('a.merchant_id', $merchantIds)
+        return Db::table('merchant_store as p')
+            ->join('merchant_info as m', 'm.id', '=', 'p.merchant_id')
+            ->whereIn('p.id', $propertyIds)
+            ->where('p.business_type', 'hotel')
             ->whereIn('m.status', [3, 4])
+            ->whereNull('p.deleted_at')
             ->whereNull('m.deleted_at')
-            ->where('b.kyc_status', 1);
-
-        if ($storeId !== null) {
-            $businessId = (int) (Db::table('merchant_store')
-                ->where('id', $storeId)->whereNull('deleted_at')->value('source_business_id') ?? 0);
-            $query->where('b.id', $businessId > 0 ? $businessId : -1);
-        }
-
-        return $query->orderBy('b.business_type')->orderBy('b.id')
+            ->orderBy('p.store_name')->orderBy('p.id')
             ->get([
-                'b.id', 'a.merchant_id', 'm.merchant_name', 'b.business_name',
-                'b.business_type', 'b.city',
+                'p.id', 'p.merchant_id', 'm.merchant_name', 'p.store_name as business_name',
+                'p.business_type', 'p.city_key as city', 'p.kyc_status', 'p.content_status',
+                'p.publish_status', 'p.operating_status',
             ])
             ->map(static fn ($row) => (array) $row)
             ->all();

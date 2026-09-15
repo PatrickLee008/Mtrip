@@ -43,7 +43,7 @@ class MerchantAccountSecurityService
         return $result;
     }
 
-    /** Access Code is an App-only bootstrap credential; it only issues a five-minute 2FA challenge. */
+    /** Access Code only issues a five-minute 2FA challenge; it never creates a business session directly. */
     public function beginWithAccessCode(string $accessCode): array
     {
         $normalized = strtoupper(trim($accessCode));
@@ -52,6 +52,7 @@ class MerchantAccountSecurityService
             $merchant = Db::table('merchant_info')->where('access_code', $normalized)->whereIn('status', [3, 4])->whereNull('deleted_at')->lockForUpdate()->first();
             if (! $merchant) throw new BusinessException(ErrorCode::UNAUTHORIZED, '访问码无效');
             $account = $this->account((int) Db::table('merchant_admin')->where('merchant_id', $merchant->id)->where('account_type', 2)->where('is_owner', 1)->whereNull('deleted_at')->value('id'));
+            if ((int) $account['two_fa_status'] !== 1) throw new BusinessException(ErrorCode::UNAUTHORIZED, '访问码登录尚未关联身份验证器');
             $this->unlocked($account);
             return $this->issueChallenge($account);
         });

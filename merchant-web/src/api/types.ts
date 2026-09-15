@@ -38,14 +38,18 @@ export interface MenuNode {
   children?: MenuNode[];
 }
 
-/** 商户已注册且通过业务级 KYC 的可切换业务 */
-export interface MerchantBusiness {
+/** 当前商户账号已授权的酒店物业 */
+export interface MerchantProperty {
   id: number;
   merchant_id: number;
   merchant_name: string;
   business_name: string;
   business_type: string;
   city: string;
+  kyc_status: number;
+  content_status: number;
+  publish_status: number;
+  operating_status: number;
 }
 
 /**

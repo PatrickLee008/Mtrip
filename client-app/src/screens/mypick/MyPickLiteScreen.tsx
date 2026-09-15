@@ -171,7 +171,7 @@ export default function MyPickLiteScreen() {
                     onPress={() => {
                       if (g.id <= 0) return requireLogin();
                       return g.goods_type === GOODS_TYPE.HOTEL
-                        ? navigation.navigate('HotelDetail', { id: g.id })
+                        ? navigation.navigate('HotelDetail', { propertyId: g.id })
                         : navigation.navigate('GoodsDetail', { id: g.id });
                     }}
                   />

@@ -18,7 +18,7 @@
  *          促销小行 10px 两列:左列划线原价(可多条,--text-2)、右列说明标签(可多条)
  *
  * 数据来源分两路:
- *   - 真实数据(`/api/v1/app/goods/list`):评分接口暂不下发 → `goods.rating` 为空时评分行不渲染;
+ *   - 真实数据(`/api/v1/app/hotels/list`):评分接口暂不下发 → `goods.rating` 为空时评分行不渲染;
  *     徽章按 is_recommend → PREFERRED、is_hot → HIGH DEMAND 推导;
  *     促销小行由**公民价**推导(勾了 Myanmar Citizen 且公民起价更低时,划掉原价并显示省了多少)。
  *   - 演示数据(`screens/hotel/demoResults.ts`):`ratingTier` / `promo` / `badge` 三个可选属性

@@ -17,7 +17,7 @@ INSERT IGNORE INTO `merchant_menu` (`id`, `parent_id`, `menu_name`, `menu_name_e
 (200, 0, '组织与权限', 'Org',       'menu.org',       'mch:org',         1, '/account',   '',                'TeamOutlined',      2, '1,2'),
 (300, 0, '门店管理',   'Stores',    'menu.store',     'mch:store:list',  2, '/store',     'store/index',     'ShopOutlined',      3, '1,2,3'),
 (400, 0, '预订管理',   'Booking Management', 'menu.booking', 'mch:order:list',  2, '/order',     'order/index',     'ProfileOutlined',   4, '1,2,3'),
-(500, 0, '商品管理',   'Goods',     'menu.goods',     'mch:goods:list',  2, '/goods',     'goods/index',     'GoldOutlined',      5, '1,2,3'),
+(500, 0, '门票商品',   'Ticket Products', 'menu.goods', 'mch:goods:list',  2, '/goods',     'goods/index',     'GoldOutlined',      5, '1,2,3'),
 (600, 0, '客房管理',   'Rooms',     'menu.rooms',     'mch:rooms:list',  2, '/rooms',     'rooms/index',     'HomeOutlined',      6, '1,2,3'),
 (700, 0, '房量与价格', 'Availability & Pricing', 'menu.availability', 'mch:availability:list', 2, '/availability', 'availability/index', 'CalendarOutlined', 7, '1,2,3'),
 (800, 0, '收益结算',   'Earnings',  'menu.earnings',  'mch:earnings:list', 2, '/earnings', 'earnings/index', 'AccountBookOutlined', 8, '1,2,3'),
@@ -26,6 +26,16 @@ INSERT IGNORE INTO `merchant_menu` (`id`, `parent_id`, `menu_name`, `menu_name_e
 (1100, 0, '评价管理',  'Reviews', 'menu.reviews', 'mch:reviews:list', 2, '/reviews', 'reviews/index', 'StarOutlined', 11, '1,2,3'),
 (1200, 0, '帮助中心',  'Support', 'menu.support', 'mch:support:list', 2, '/support', 'support/index', 'CustomerServiceOutlined', 12, '1,2,3'),
 (1300, 0, '设置',      'Settings', 'menu.settings', 'mch:settings:list', 2, '/settings', 'settings/index', 'SettingOutlined', 13, '1,2,3');
+
+INSERT IGNORE INTO merchant_menu (id, parent_id, menu_name, menu_name_en, i18n_key, perm_key, menu_type, route_path, component, icon, sort, account_scope)
+VALUES (1400, 0, '所有物业', 'All Properties', 'sidebar.allProperties', 'mch:properties:list', 2, '/properties', 'properties/index', 'HomeOutlined', 0, '1,2,3');
+INSERT IGNORE INTO merchant_menu (id,parent_id,menu_name,menu_name_en,perm_key,menu_type,sort,account_scope) VALUES
+(140001,1400,'新增物业','Add Property','mch:properties:add',3,1,'1,2'),
+(140002,1400,'上传物业KYC','Upload Property KYC','mch:properties:kyc-upload',3,2,'1,2'),
+(140003,1400,'提交物业KYC','Submit Property KYC','mch:properties:kyc-submit',3,3,'1,2'),
+(140004,1400,'编辑物业资料','Edit Property Profile','mch:properties:profile-edit',3,4,'1,2,3'),
+(140005,1400,'提交物业资料','Submit Property Profile','mch:properties:profile-submit',3,5,'1,2,3'),
+(140006,1400,'发布物业','Publish Property','mch:properties:publish',3,6,'1,2,3');
 
 -- ---------- 组织与权限:子账号管理 + 角色管理 ----------
 INSERT IGNORE INTO `merchant_menu` (`id`, `parent_id`, `menu_name`, `menu_name_en`, `i18n_key`, `perm_key`, `menu_type`, `route_path`, `component`, `icon`, `sort`, `account_scope`) VALUES
@@ -36,6 +46,7 @@ INSERT IGNORE INTO `merchant_menu` (`id`, `parent_id`, `menu_name`, `menu_name_e
 (20102, 201, '编辑子账号', 'Edit Account',   'mch:account:edit',      3, 2, '1,2'),
 (20103, 201, '启用禁用',   'Enable/Disable', 'mch:account:status',    3, 3, '1,2'),
 (20104, 201, '重置密码',   'Reset Password', 'mch:account:reset-pwd', 3, 4, '1,2'),
+(20105, 201, '分配物业',   'Assign Properties','mch:account:property-assign',3,5,'1,2'),
 (20201, 202, '新增角色',   'Add Role',       'mch:role:add',          3, 1, '1,2'),
 (20202, 202, '编辑角色',   'Edit Role',      'mch:role:edit',         3, 2, '1,2'),
 (20203, 202, '删除角色',   'Delete Role',    'mch:role:delete',       3, 3, '1,2'),
@@ -66,10 +77,10 @@ INSERT IGNORE INTO `merchant_menu` (`id`, `parent_id`, `menu_name`, `menu_name_e
 (40013, 400, '预订凭证',     'Booking Voucher',  'mch:order:voucher',       3, 13, '1,2,3'),
 (40014, 400, '查看住客联系方式', 'View Guest Contact', 'mch:order:guest-contact', 3, 14, '1,2,3');
 
--- ---------- 商品管理按钮 ----------
+-- ---------- 门票商品按钮 ----------
 INSERT IGNORE INTO `merchant_menu` (`id`, `parent_id`, `menu_name`, `menu_name_en`, `perm_key`, `menu_type`, `sort`, `account_scope`) VALUES
-(50001, 500, '新增商品', 'Add Goods',      'mch:goods:add',    3, 1, '1,2'),
-(50002, 500, '编辑商品', 'Edit Goods',     'mch:goods:edit',   3, 2, '1,2'),
+(50001, 500, '新增门票', 'Add Ticket',     'mch:goods:add',    3, 1, '1,2'),
+(50002, 500, '编辑门票', 'Edit Ticket',    'mch:goods:edit',   3, 2, '1,2'),
 (50003, 500, '上下架',   'On/Off Shelf',   'mch:goods:status', 3, 3, '1,2');
 
 -- ---------- 客房管理按钮 ----------

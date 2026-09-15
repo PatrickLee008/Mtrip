@@ -13,7 +13,7 @@ use Mtrip\Shared\Exception\BusinessException;
 use Mtrip\Shared\Support\Result;
 
 /**
- * 商户端商品管理:数据范围强制 MerchantContext 商户集合
+ * 商户端门票商品管理:数据范围强制 MerchantContext 商户集合
  * 集团→本集团绑定商户全部商品;商户/门店→本商户商品
  * 状态机沿用平台口径:0草稿 →1待审核 →3已上架/2驳回;3⇄4上下架;5软删
  */
@@ -23,13 +23,10 @@ class GoodsController extends AbstractAdminController
     public function index(): array
     {
         [$page, $pageSize] = $this->pageParams();
-        $query = Db::table('goods_info')->whereNull('deleted_at')->where('status', '<>', 5);
+        $query = Db::table('goods_info')->where('goods_type', 2)->whereNull('deleted_at')->where('status', '<>', 5);
         $this->applyMerchantScope($query);
         if (($name = $this->strInput('goodsName')) !== '') {
             $query->where('goods_name', 'like', "%{$name}%");
-        }
-        if (($type = $this->intInput('goodsType')) > 0) {
-            $query->where('goods_type', $type);
         }
         if (($categoryId = $this->intInput('categoryId')) > 0) {
             $query->where('category_id', $categoryId);
@@ -55,7 +52,7 @@ class GoodsController extends AbstractAdminController
         return Result::page($list, $total, $page, $pageSize);
     }
 
-    /** 商品详情:含房型/票种子表与退改规则 */
+    /** 门票商品详情:含票种与退改规则 */
     public function detail(): array
     {
         $goods = $this->findScoped($this->requireId());
@@ -63,8 +60,7 @@ class GoodsController extends AbstractAdminController
         $goods['facilities'] = $this->jsonDecode($goods['facilities']);
         unset($goods['deleted_at']);
 
-        $skuTable = (int) $goods['goods_type'] === 1 ? 'hotel_room_type' : 'ticket_type';
-        $skus = Db::table($skuTable)
+        $skus = Db::table('ticket_type')
             ->where('goods_id', $goods['id'])->whereNull('deleted_at')
             ->orderBy('sort')->orderBy('id')->get()
             ->map(function ($row) {
@@ -98,9 +94,9 @@ class GoodsController extends AbstractAdminController
     #[Permission('mch:goods:add')]
     public function create(): array
     {
-        $goodsType = $this->intInput('goodsType', 1);
-        if (! in_array($goodsType, [1, 2], true)) {
-            throw new BusinessException(ErrorCode::PARAM_ERROR, '参数 goodsType 不正确');
+        $goodsType = $this->intInput('goodsType', 2);
+        if ($goodsType !== 2) {
+            throw new BusinessException(ErrorCode::PARAM_ERROR, '当前商品接口仅支持门票');
         }
         $merchantId = $this->resolveMerchantId();
         $siteId = (int) (Db::table('merchant_info')->where('id', $merchantId)->value('site_id') ?? 0);
@@ -146,13 +142,11 @@ class GoodsController extends AbstractAdminController
         if (! in_array((int) $goods['status'], [0, 2], true)) {
             throw new BusinessException(ErrorCode::DATA_CONFLICT, '仅草稿/驳回商品可提交审核');
         }
-        $skuTable = (int) $goods['goods_type'] === 1 ? 'hotel_room_type' : 'ticket_type';
-        $skuCount = Db::table($skuTable)
+        $skuCount = Db::table('ticket_type')
             ->where('goods_id', $goods['id'])->where('status', 1)
             ->whereNull('deleted_at')->count();
         if ($skuCount === 0) {
-            $skuLabel = (int) $goods['goods_type'] === 1 ? '房型' : '票种';
-            throw new BusinessException(ErrorCode::DATA_CONFLICT, "请先添加至少一个在售{$skuLabel}");
+            throw new BusinessException(ErrorCode::DATA_CONFLICT, '请先添加至少一个在售票种');
         }
         Db::table('goods_info')->where('id', $goods['id'])->update(['status' => 1, 'audit_remark' => '']);
         return Result::success(null, '已提交审核');
@@ -199,7 +193,7 @@ class GoodsController extends AbstractAdminController
     /** 取商品并校验商户数据权限 */
     private function findScoped(int $id): array
     {
-        $goods = Db::table('goods_info')->where('id', $id)->whereNull('deleted_at')->first();
+        $goods = Db::table('goods_info')->where('id', $id)->where('goods_type', 2)->whereNull('deleted_at')->first();
         if (! $goods) {
             throw new BusinessException(ErrorCode::NOT_FOUND, '商品不存在');
         }

@@ -5,8 +5,13 @@ declare(strict_types=1);
 namespace App\Controller\Admin;
 
 use App\Controller\AbstractController;
+use App\Service\OnboardingAdminContactService;
+use App\Service\OnboardingCredentialDeliveryService;
+use App\Service\OnboardingFinalApprovalService;
+use App\Service\OnboardingKycService;
 
 use Hyperf\DbConnection\Db;
+use Hyperf\Di\Annotation\Inject;
 use Hyperf\HttpMessage\Upload\UploadedFile;
 use Mtrip\Shared\Annotation\Permission;
 use Mtrip\Shared\Constants\ErrorCode;
@@ -18,14 +23,28 @@ use Mtrip\Shared\Support\Result;
  * 商户入驻流水线(Onboarding,原型 stir-long v4.2.1 / Merchant Verification)
  * 设计源:docs/plans 商户验证原型对齐整改方案;docs/redesign 模块 02
  *
- * 阶段机(merchant_application.stage,对齐 stir-long 原型四节点流程):
- *   1 New Lead → 2 Contacted → 3 KYC Access Granted(Send KYC) → 4 KYC In Progress
- *   → 5 Approved(approve 转 merchant_info status=0 进入 Pending Verification) / 6 Rejected(reject 关闭入驻)
- * 队列口径:queues/index 的 queue 参数 pending=stage1,2,3,4 / approved=5 / rejected=6
+ * 基础注册状态由 merchant_application.registration_status 驱动；stage 仅供旧流程读取。
  * 每个写动作写入 merchant_verify_timeline(application_id 维度)。
  */
 class OnboardingController extends AbstractController
 {
+    #[Inject]
+    protected OnboardingKycService $onboardingKyc;
+
+    #[Inject]
+    protected OnboardingFinalApprovalService $finalApproval;
+
+    #[Inject]
+    protected OnboardingCredentialDeliveryService $credentialDelivery;
+
+    #[Inject]
+    protected OnboardingAdminContactService $adminContacts;
+
+    #[Inject]
+    protected \Hyperf\HttpServer\Contract\ResponseInterface $response;
+
+    private const BUSINESS_TYPES = ['hotel', 'car_rental', 'restaurant', 'airline', 'attraction'];
+
     /** 阶段文案(审计/日志用) */
     private const STAGE_LABEL = [
         1 => 'New Lead',
@@ -35,9 +54,6 @@ class OnboardingController extends AbstractController
         5 => 'Approved',
         6 => 'Rejected',
     ];
-
-    /** 业态 → merchant_info.merchant_type */
-    private const TYPE_MAP = ['hotel' => 1, 'attraction' => 2];
 
     /** 协助商户上传 KYC 文件允许的扩展名(PDF/图片) */
     private const UPLOAD_ALLOWED_EXT = ['pdf', 'jpg', 'jpeg', 'png', 'webp'];
@@ -61,23 +77,24 @@ class OnboardingController extends AbstractController
         if (($queue = $this->strInput('queue')) !== '') {
             switch ($queue) {
                 case 'pending':
-                    $query->whereBetween('stage', [1, 4]);
+                    $query->whereIn('registration_status', [1, 2]);
                     break;
                 case 'approved':
-                    $query->where('stage', 5);
+                    $query->where('registration_status', 3);
                     break;
                 case 'rejected':
-                    $query->where('stage', 6);
+                    $query->where('registration_status', 5);
                     break;
                 case 'resubmission':
-                    $query->where('stage', 4);
+                    $query->where('registration_status', 4);
                     break;
                 default:
                     break;
             }
         }
-        if (($stage = $this->intInput('stage')) > 0) {
-            $query->where('stage', $stage);
+        if ($this->strInput('registrationStatus') !== '') {
+            $status = $this->intInput('registrationStatus', -1);
+            if ($status >= 0 && $status <= 5) $query->where('registration_status', $status);
         }
         if (($country = $this->strInput('country')) !== '') {
             $query->where('country', $country);
@@ -136,10 +153,10 @@ class OnboardingController extends AbstractController
         $base = Db::table('merchant_application')->whereNull('deleted_at');
         $this->applySiteScope($base);
         return Result::success([
-            'pending' => (clone $base)->whereBetween('stage', [1, 4])->count(),
-            'approved' => (clone $base)->where('stage', 5)->count(),
-            'rejected' => (clone $base)->where('stage', 6)->count(),
-            'resubmission' => (clone $base)->where('stage', 4)->count(),
+            'pending' => (clone $base)->whereIn('registration_status', [1, 2])->count(),
+            'approved' => (clone $base)->where('registration_status', 3)->count(),
+            'rejected' => (clone $base)->where('registration_status', 5)->count(),
+            'resubmission' => (clone $base)->where('registration_status', 4)->count(),
         ]);
     }
 
@@ -170,6 +187,13 @@ class OnboardingController extends AbstractController
             ? (array) Db::table('merchant_kyc_template')->where('id', $app['kyc_template_id'])->first()
             : null;
 
+        $kyc = null;
+        if ((int) ($app['state_model_version'] ?? 0) >= 1
+            && (int) $app['registration_status'] === 3 && (int) $app['merchant_kyc_status'] > 0) {
+            $kyc = $this->onboardingKyc->requirements($app);
+            $kyc['testAgreementAvailable'] = $this->onboardingKyc->testAgreementEnabled() && AdminContext::isSuper();
+        }
+
         return Result::success([
             'application' => $app,
             'businesses' => $businesses,
@@ -177,6 +201,8 @@ class OnboardingController extends AbstractController
             'timeline' => $timeline,
             'notes' => $notes,
             'template' => $template,
+            'kyc' => $kyc,
+            'finalApproval' => $this->finalApproval->status((int) $app['id']),
         ]);
     }
 
@@ -230,7 +256,7 @@ class OnboardingController extends AbstractController
         return Result::success(null, '验证模板已更新');
     }
 
-    /** 录入线索:公司信息 + 至少一个注册商家,初始 New Lead */
+    /** 管理端代录完整基础注册申请，直接进入待审核队列。 */
     #[Permission('merchant:onboarding:create')]
     public function create(): array
     {
@@ -254,12 +280,20 @@ class OnboardingController extends AbstractController
         if ($businesses === []) {
             throw new BusinessException(ErrorCode::PARAM_ERROR, '请至少录入一家注册商家');
         }
-        $numBusinesses = max(1, $this->intInput('numBusinesses', count($businesses)), count($businesses));
+        $businessTypes = [];
+        foreach ($businesses as $business) {
+            $type = strtolower(trim((string) ((array) $business)['businessType'] ?? ''));
+            if (! in_array($type, self::BUSINESS_TYPES, true)) throw new BusinessException(ErrorCode::PARAM_ERROR, '请选择有效的业务类型');
+            if (! in_array($type, $businessTypes, true)) $businessTypes[] = $type;
+        }
+        $numBusinesses = count($businesses);
         $now = date('Y-m-d H:i:s');
+        $contacts = $this->adminContacts->fields($siteId, $this->requireStr('registrationPhone'), $this->requireStr('registrationEmail'));
 
         $appId = 0;
-        Db::transaction(function () use ($companyName, $merchantName, $regNumber, $siteId, $businesses, $numBusinesses, $now, &$appId) {
+        Db::transaction(function () use ($companyName, $merchantName, $regNumber, $siteId, $businesses, $businessTypes, $numBusinesses, $now, $contacts, &$appId) {
             $appId = Db::table('merchant_application')->insertGetId([
+                ...$contacts,
                 'site_id' => $siteId,
                 'app_no' => $this->nextAppNo(),
                 'merchant_name' => mb_substr($merchantName, 0, 100),
@@ -269,18 +303,21 @@ class OnboardingController extends AbstractController
                 'country' => mb_substr($this->strInput('country'), 0, 50),
                 'city' => mb_substr($this->strInput('city'), 0, 50),
                 'address' => mb_substr($this->strInput('address'), 0, 255),
-                'business_types' => mb_substr($this->strInput('businessTypes'), 0, 100),
+                'business_types' => implode(',', $businessTypes),
+                'primary_business_type' => $businessTypes[0],
                 'num_businesses' => $numBusinesses,
-                'stage' => 1,
+                'registration_status' => 1,
+                'merchant_kyc_status' => 0,
+                'account_status' => 0,
+                'state_model_version' => 1,
+                'current_step' => 4,
+                'completion_percent' => 100,
                 'operator_type' => mb_substr($this->strInput('operatorType'), 0, 30),
                 'expected_launch_date' => $this->strInput('expectedLaunchDate') ?: null,
                 'operations_notes' => mb_substr($this->strInput('operationsNotes'), 0, 500),
                 'submitted_at' => $now,
+                'last_activity_at' => $now,
                 'last_updated_at' => $now,
-            ]);
-            $merchantCode = $this->nextMerchantCode();
-            Db::table('merchant_application')->where('id', $appId)->update([
-                'merchant_code' => $merchantCode,
             ]);
             foreach ($businesses as $biz) {
                 $biz = (array) $biz;
@@ -290,6 +327,9 @@ class OnboardingController extends AbstractController
                     'business_name' => mb_substr((string) $biz['businessName'], 0, 100),
                     'business_type' => mb_substr((string) ($biz['businessType'] ?? ''), 0, 30),
                     'city' => mb_substr((string) ($biz['city'] ?? ''), 0, 50),
+                    'country_code' => strtoupper(mb_substr((string) ($biz['countryCode'] ?? ''), 0, 2)),
+                    'city_key' => mb_substr((string) ($biz['cityKey'] ?? ''), 0, 80),
+                    'address' => mb_substr((string) ($biz['address'] ?? ''), 0, 255),
                     'kyc_scope' => in_array((int) ($biz['kycScope'] ?? 1), [1, 2], true) ? (int) ($biz['kycScope'] ?? 1) : 1,
                     'contact_name' => mb_substr((string) ($biz['contactName'] ?? ''), 0, 50),
                     'contact_phone' => $this->encryptField(mb_substr((string) ($biz['contactPhone'] ?? ''), 0, 30)),
@@ -298,10 +338,12 @@ class OnboardingController extends AbstractController
                     'kyc_status' => 0,
                 ]);
             }
+            $app = $this->findApplication($appId);
+            $this->pushTimeline($app, 'lead_created', '入驻线索录入');
+            $this->pushTimeline($app, 'registration_contacts_admin_confirmed', '后台代录注册手机号和邮箱，默认由管理员确认；未执行 OTP，账号凭证默认投递至注册邮箱');
         });
 
         $app = $this->findApplication($appId);
-        $this->pushTimeline($app, 'lead_created', '入驻线索录入');
         return Result::success($app, '线索已录入');
     }
 
@@ -310,6 +352,7 @@ class OnboardingController extends AbstractController
     public function updateStage(): array
     {
         $app = $this->findApplication($this->requireId());
+        $this->assertLegacyWorkflow($app);
         $this->assertEditable($app);
         $stage = $this->intInput('stage');
         if ($stage < 1 || $stage > 4) {
@@ -369,6 +412,7 @@ class OnboardingController extends AbstractController
     public function sendKyc(): array
     {
         $app = $this->findApplication($this->requireId());
+        $this->assertLegacyWorkflow($app);
         $this->assertEditable($app);
         $template = Db::table('merchant_kyc_template')
             ->whereIn('site_id', [0, (int) $app['site_id']])
@@ -430,74 +474,94 @@ class OnboardingController extends AbstractController
         return Result::success(null, '备注已添加');
     }
 
-    /**
-     * 入驻通过(KYC 完成):生成 merchant_info(status=0 待审核)进入 Pending Verification,
-     * KYC 占位文档迁移挂到新商户
-     */
-    #[Permission('merchant:onboarding:approve')]
+    /** 已提交的基础注册进入人工审核。 */
+    #[Permission('merchant:onboarding:update')]
+    public function registrationReviewStart(): array
+    {
+        $app = $this->findApplication($this->requireId());
+        $now = date('Y-m-d H:i:s');
+        $updated = Db::table('merchant_application')->where('id', $app['id'])->where('registration_status', 1)->update([
+            'registration_status' => 2,
+            'registration_reviewed_by' => AdminContext::adminId(),
+            'registration_reviewed_at' => $now,
+            'registration_review_reason' => '',
+            'last_updated_at' => $now,
+        ]);
+        if ($updated !== 1) throw new BusinessException(ErrorCode::DATA_CONFLICT, '仅已提交申请可以开始审核');
+        $this->pushTimeline($app, 'registration_review_started', '基础注册开始审核');
+        return Result::success(null, '已开始基础注册审核');
+    }
+
+    /** 审核中的基础注册退回申请人补正。 */
+    #[Permission('merchant:onboarding:update')]
+    public function registrationResubmit(): array
+    {
+        $app = $this->findApplication($this->requireId());
+        $reason = mb_substr($this->requireStr('reason'), 0, 500);
+        $now = date('Y-m-d H:i:s');
+        $updated = Db::table('merchant_application')->where('id', $app['id'])->where('registration_status', 2)->update([
+            'registration_status' => 4,
+            'registration_reviewed_by' => AdminContext::adminId(),
+            'registration_reviewed_at' => $now,
+            'registration_review_reason' => $reason,
+            'last_updated_at' => $now,
+        ]);
+        if ($updated !== 1) throw new BusinessException(ErrorCode::DATA_CONFLICT, '仅审核中的申请可以要求补正');
+        $this->pushTimeline($app, 'registration_resubmit_required', $reason, true);
+        return Result::success(null, '已要求申请人补正基础资料');
+    }
+
+    /** 基础注册通过：只开放 KYC，不创建正式商户、账号、物业或访问码。 */
+    #[Permission('merchant:onboarding:registration-approve')]
     public function approve(): array
     {
         $app = $this->findApplication($this->requireId());
-        $this->assertEditable($app);
-        $businessCount = Db::table('merchant_application_business')
-            ->where('application_id', (int) $app['id'])->count();
-        $unsubmittedCount = Db::table('merchant_application_business')
-            ->where('application_id', (int) $app['id'])
-            ->where(function ($query) {
-                $query->where('kyc_status', '!=', 2)->orWhereNull('kyc_submitted_at');
-            })->count();
-        if ($businessCount === 0 || $unsubmittedCount > 0) {
-            throw new BusinessException(ErrorCode::DATA_CONFLICT, '所有注册商家完成 KYC 提交核验后才能通过入驻');
-        }
-        $regNumber = (string) $app['reg_number'];
-        $creditCode = $regNumber !== '' ? $regNumber : (string) $app['app_no'];
-        if (Db::table('merchant_info')->where('credit_code', $creditCode)->whereNull('deleted_at')->exists()) {
-            throw new BusinessException(ErrorCode::DATA_CONFLICT, '注册号已存在对应商户,不可重复入驻');
-        }
-
-        $merchantCode = trim((string) ($app['merchant_code'] ?? ''));
-        $merchantId = 0;
-        Db::transaction(function () use ($app, $creditCode, &$merchantCode, &$merchantId) {
-            if ($merchantCode === '' || Db::table('merchant_info')->where('merchant_code', $merchantCode)->exists()) {
-                $merchantCode = $this->nextMerchantCode();
-            }
-            $template = (int) $app['kyc_template_id'] > 0
-                ? Db::table('merchant_kyc_template')->where('id', $app['kyc_template_id'])->first()
-                : null;
-            $bizType = $template ? (string) $template->business_type : explode(',', (string) $app['business_types'])[0];
-            $merchantId = Db::table('merchant_info')->insertGetId([
-                'merchant_code' => $merchantCode,
-                'site_id' => (int) $app['site_id'],
-                'merchant_name' => (string) $app['company_name'],
-                'merchant_short_name' => (string) $app['company_name'],
-                'merchant_type' => self::TYPE_MAP[$bizType] ?? 3,
-                'credit_code' => $creditCode,
-                'legal_person' => '',
-                'contact_name' => (string) $app['company_name'],
-                'contact_phone' => '',
-                'contact_email' => '',
-                'address' => (string) $app['country'],
-                'status' => 0,
-                'remark' => 'Onboarding ' . (string) $app['app_no'] . ' 通过入驻验证',
+        $now = date('Y-m-d H:i:s');
+        Db::transaction(function () use ($app, $now): void {
+            $updated = Db::table('merchant_application')->where('id', $app['id'])->where('registration_status', 2)->update([
+                'registration_status' => 3,
+                'merchant_kyc_status' => 1,
+                'registration_reviewed_by' => AdminContext::adminId(),
+                'registration_reviewed_at' => $now,
+                'registration_review_reason' => '',
+                'last_updated_at' => $now,
             ]);
-            Db::table('merchant_verify_document')
-                ->where('application_id', $app['id'])->where('merchant_id', 0)
-                ->update(['merchant_id' => $merchantId]);
-            Db::table('merchant_application')->where('id', $app['id'])->update([
-                'stage' => 5,
-                'merchant_code' => $merchantCode,
-                'merchant_id' => $merchantId,
-                'last_updated_at' => date('Y-m-d H:i:s'),
-            ]);
-            Db::table('merchant_application_business')
-                ->where('application_id', $app['id'])
-                ->update(['kyc_status' => 3]);
+            if ($updated !== 1) throw new BusinessException(ErrorCode::DATA_CONFLICT, '仅审核中的申请可以批准');
+            $this->onboardingKyc->initialize(array_replace($app, ['registration_status' => 3, 'merchant_kyc_status' => 1]));
         });
-        $this->pushTimeline($app, 'approved', '入驻通过,转商户 ' . $merchantCode . ' 进入待审核');
-        return Result::success([
-            'merchant_id' => $merchantId,
-            'merchant_code' => $merchantCode,
-        ], '入驻已通过,商户进入待审核');
+        $this->pushTimeline($app, 'registration_approved', '基础注册已批准，KYC 已开放');
+        return Result::success(null, '基础注册已批准，KYC 已开放');
+    }
+
+    /** 最终批准：原子创建正式商户、待激活主账号、全部首批物业和凭证 outbox。 */
+    #[Permission('merchant:onboarding:final-approve')]
+    public function finalApprove(): array
+    {
+        $app = $this->findApplication($this->requireId());
+        $channels = $this->input('channels', []);
+        if (! is_array($channels)) {
+            throw new BusinessException(ErrorCode::PARAM_ERROR, 'channels 格式不正确');
+        }
+        $result = $this->finalApproval->approve((int) $app['id'], $this->requireStr('requestId'), $channels);
+        return Result::success($result, '最终批准已完成，账号等待激活');
+    }
+
+    /** 只重试已落库的凭证投递，不重复创建任何正式实体。 */
+    #[Permission('merchant:onboarding:credential-retry')]
+    public function credentialRetry(): array
+    {
+        if (! AdminContext::isSuper()) {
+            throw new BusinessException(ErrorCode::FORBIDDEN, '仅超级管理员可重试凭证投递');
+        }
+        return Result::success($this->credentialDelivery->retry($this->requireId('deliveryId')), '已完成一次投递尝试');
+    }
+
+    #[Permission('merchant:onboarding:final-approve')]
+    public function testCredentials(): \Psr\Http\Message\ResponseInterface
+    {
+        $app = $this->findApplication($this->requireId());
+        $data = $this->credentialDelivery->testCredentials((int) $app['id']);
+        return $this->response->json(Result::success($data))->withHeader('Cache-Control', 'no-store');
     }
 
     /** 入驻驳回:预置原因码 + 补充说明,关闭入驻 */
@@ -511,14 +575,29 @@ class OnboardingController extends AbstractController
             throw new BusinessException(ErrorCode::PARAM_ERROR, '请选择驳回原因');
         }
         $note = $this->strInput('note');
-        Db::table('merchant_application')->where('id', $app['id'])->update([
-            'stage' => 6,
+        $reason = 'reason_code:' . $reasonCode . ($note !== '' ? ' ' . mb_substr($note, 0, 450) : '');
+        $now = date('Y-m-d H:i:s');
+        $updated = Db::table('merchant_application')->where('id', $app['id'])->where('registration_status', 2)->update([
+            'registration_status' => 5,
+            'registration_reviewed_by' => AdminContext::adminId(),
+            'registration_reviewed_at' => $now,
+            'registration_review_reason' => mb_substr($reason, 0, 500),
             'reject_reason_code' => $reasonCode,
             'reject_note' => mb_substr($note, 0, 500),
-            'last_updated_at' => date('Y-m-d H:i:s'),
+            'last_updated_at' => $now,
         ]);
+        if ($updated !== 1) throw new BusinessException(ErrorCode::DATA_CONFLICT, '仅审核中的申请可以驳回');
         $this->pushTimeline($app, 'rejected', '原因码#' . $reasonCode . ($note !== '' ? ':' . $note : ''), true);
         return Result::success(null, '入驻申请已驳回');
+    }
+
+    #[Permission('merchant:onboarding:kyc')]
+    public function testConfirmAgreement(): array
+    {
+        $app = $this->findApplication($this->requireId());
+        return Result::success($this->onboardingKyc->testConfirmAgreement(
+            $app, $this->requireId('agreementId'), $this->requireStr('version'), $this->requireStr('reason')
+        ), '测试协议确认已记录（非商户真实签署）');
     }
 
     /** 商户确认 KYC 信息与提交授权；与“提交核验”工作流动作相互独立。 */
@@ -526,6 +605,7 @@ class OnboardingController extends AbstractController
     public function confirm(): array
     {
         $app = $this->findApplication($this->requireId());
+        $this->assertLegacyWorkflow($app);
         Db::table('merchant_application')->where('id', $app['id'])->update([
             'confirmation_status' => 1,
             'confirmed_at' => date('Y-m-d H:i:s'),
@@ -540,6 +620,10 @@ class OnboardingController extends AbstractController
     public function submitVerification(): array
     {
         $app = $this->findApplication($this->requireId());
+        if ((int) ($app['state_model_version'] ?? 0) >= 1) {
+            return Result::success($this->onboardingKyc->submit($app, true), '已协助提交 KYC 核验');
+        }
+        $this->assertLegacyWorkflow($app);
         $this->assertEditable($app);
         $businessId = $this->requireId('businessId');
         $business = Db::table('merchant_application_business')
@@ -614,6 +698,13 @@ class OnboardingController extends AbstractController
     public function kycUpload(): array
     {
         $app = $this->findApplication($this->requireId());
+        if ((int) ($app['state_model_version'] ?? 0) >= 1) {
+            return Result::success($this->onboardingKyc->upload(
+                $app, $this->requireStr('scopeType'), $this->intInput('applicationBusinessId'),
+                $this->requireStr('docType'), $this->request->file('file'), true
+            ), '已协助上传 KYC 文件');
+        }
+        $this->assertLegacyWorkflow($app);
         $this->assertEditable($app);
         $docType = $this->requireStr('docType');
         // 业务单元维度(协助 KYC 关联所选注册商户);biz_unit 存业务单元 id
@@ -769,11 +860,24 @@ class OnboardingController extends AbstractController
         return $app;
     }
 
-    /** 已通过(5)/已驳回(6)的申请不可再编辑 */
+    /** 终态申请不可再修改运营信息。 */
     private function assertEditable(array $app): void
     {
+        if ((int) ($app['state_model_version'] ?? 0) >= 1) {
+            if (in_array((int) $app['registration_status'], [3, 5], true)) {
+                throw new BusinessException(ErrorCode::DATA_CONFLICT, '该申请已终结,不可操作');
+            }
+            return;
+        }
         if (in_array((int) $app['stage'], [5, 6], true)) {
             throw new BusinessException(ErrorCode::DATA_CONFLICT, '该申请已终结,不可操作');
+        }
+    }
+
+    private function assertLegacyWorkflow(array $app): void
+    {
+        if ((int) ($app['state_model_version'] ?? 0) >= 1) {
+            throw new BusinessException(ErrorCode::DATA_CONFLICT, '新入驻流程不再使用旧阶段或旧 KYC 操作');
         }
     }
 
@@ -787,26 +891,6 @@ class OnboardingController extends AbstractController
             ++$seq;
         } while (Db::table('merchant_application')->where('app_no', $appNo)->exists());
         return $appNo;
-    }
-
-    /** 商户业务编号:MCH- + 至少4位全局序号,序列表行锁保证并发唯一 */
-    private function nextMerchantCode(): string
-    {
-        Db::table('merchant_code_sequence')->insertOrIgnore([
-            'id' => 1,
-            'next_value' => 1,
-        ]);
-        $sequence = Db::table('merchant_code_sequence')->where('id', 1)->lockForUpdate()->first();
-        $nextValue = max(1, (int) $sequence->next_value);
-        do {
-            $merchantCode = 'MCH-' . str_pad((string) $nextValue, 4, '0', STR_PAD_LEFT);
-            ++$nextValue;
-        } while (
-            Db::table('merchant_application')->where('merchant_code', $merchantCode)->exists()
-            || Db::table('merchant_info')->where('merchant_code', $merchantCode)->exists()
-        );
-        Db::table('merchant_code_sequence')->where('id', 1)->update(['next_value' => $nextValue]);
-        return $merchantCode;
     }
 
     /** 写申请维度时间线 */

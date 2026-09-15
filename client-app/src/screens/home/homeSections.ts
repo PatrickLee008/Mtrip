@@ -66,7 +66,8 @@ export interface LiteService {
    * Food 与 Car 两张设计稿把图往下压了 20%~27%,不照做的话插画会偏高、与文字不在一条基线上。
    */
   crop?: { left: number; top: number; width: number; height: number };
-  route?: 'Hotels';
+  /** 专属落地页:关怀模式走 Lite 版酒店搜索页 */
+  route?: 'Hotels' | 'HotelsLite';
   goodsType?: number;
 }
 
@@ -76,7 +77,9 @@ export const LITE_SERVICES: LiteService[] = [
     image: require('../../../assets/images/lite/hotels.png'),
     imageWidth: 140,
     textPaddingRight: 140,
-    route: 'Hotels',
+    /* 关怀模式走 Lite 版搜索页(Figma `Hotel Search Lite` 2312:6435);
+       完整模式首页的 QUICK_ACTIONS 仍走 `Hotels`,两种模式各走各的 */
+    route: 'HotelsLite',
   },
   {
     key: 'food',

@@ -26,7 +26,7 @@ use Psr\Http\Message\ResponseInterface;
 /**
  * 商户端酒店预订管理(实现方案-Merchant-M4 §7):
  * 列表/统计/详情/时间线/确认/入住/退房/取消/No-show/退款/备注/同步/导出/凭证。
- * 数据范围:集团→绑定商户;商户→本商户;门店子账号→仅获授权酒店商品(merchant_store_goods)。
+ * 数据范围由 MerchantContext 的已授权/已选择物业集合强制裁剪。
  * 越权访问按 404 处理,不泄露预订是否存在。
  */
 class BookingController extends AbstractAdminController
@@ -408,7 +408,7 @@ class BookingController extends AbstractAdminController
             'site_id' => (int) $order['site_id'],
             'user_id' => (int) $order['user_id'],
             'type' => 1, // 酒店咨询会话
-            'target_id' => (int) $order['goods_id'],
+            'target_id' => (int) $order['property_id'],
             'order_id' => (int) $order['id'],
             'title' => mb_substr((string) $order['goods_name'], 0, 200),
             'status' => 0,
@@ -416,17 +416,11 @@ class BookingController extends AbstractAdminController
         return (array) Db::table('chat_conversation')->where('id', $id)->first();
     }
 
-    /** 数据范围:门店子账号仅获授权酒店商品;越权返回空集(列表) */
+    /** 数据范围:只允许当前账号已授权且当前选择范围内的物业。 */
     private function applyBookingScope($query): void
     {
         $query->where('site_id', MerchantContext::siteId());
-        $storeId = MerchantContext::scopeStoreId();
-        if ($storeId !== null) {
-            $query->whereIn('goods_id', Db::table('merchant_store_goods')
-                ->where('store_id', $storeId)->whereNull('deleted_at')->select('goods_id'));
-        } else {
-            $query->whereIn('merchant_id', MerchantContext::scopeMerchantIds());
-        }
+        $query->whereIn('property_id', MerchantContext::scopePropertyIds() ?: [-1]);
     }
 
     /** 详情/操作前置范围校验:越权按 404 处理,不泄露预订是否存在 */
@@ -440,15 +434,7 @@ class BookingController extends AbstractAdminController
         if ((int) $order['site_id'] !== MerchantContext::siteId()) {
             throw new BusinessException(ErrorCode::NOT_FOUND, '预订不存在');
         }
-        $storeId = MerchantContext::scopeStoreId();
-        if ($storeId !== null) {
-            $granted = Db::table('merchant_store_goods')
-                ->where('store_id', $storeId)->where('goods_id', (int) $order['goods_id'])
-                ->whereNull('deleted_at')->exists();
-            if (! $granted) {
-                throw new BusinessException(ErrorCode::NOT_FOUND, '预订不存在');
-            }
-        } elseif (! in_array((int) $order['merchant_id'], MerchantContext::scopeMerchantIds(), true)) {
+        if (! in_array((int) $order['property_id'], MerchantContext::scopePropertyIds(), true)) {
             throw new BusinessException(ErrorCode::NOT_FOUND, '预订不存在');
         }
         return $order;
@@ -470,11 +456,15 @@ class BookingController extends AbstractAdminController
                 }
             });
         }
-        if (($hotelId = $this->intInput('hotelId')) > 0) {
-            $query->where('goods_id', $hotelId);
+        $propertyId = $this->intInput('propertyId');
+        if ($propertyId <= 0) {
+            $propertyId = $this->intInput('hotelId');
+        }
+        if ($propertyId > 0) {
+            $query->where('property_id', $propertyId);
         }
         if (($roomTypeId = $this->intInput('roomTypeId')) > 0) {
-            $query->where('sku_id', $roomTypeId);
+            $query->where('room_type_id', $roomTypeId);
         }
         $bookingStatus = $this->input('bookingStatus');
         if ($bookingStatus !== null && $bookingStatus !== '') {

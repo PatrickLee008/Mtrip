@@ -21,11 +21,11 @@ class RoomReviewService
         'images', 'video_url', 'facilities', 'status', 'sort',
     ];
 
-    public function save(array $goods, int $roomId, array $payload, bool $submit): array
+    public function save(array $property, int $roomId, array $payload, bool $submit): array
     {
-        return Db::transaction(function () use ($goods, $roomId, $payload, $submit) {
+        return Db::transaction(function () use ($property, $roomId, $payload, $submit) {
             $now = date('Y-m-d H:i:s');
-            $merchantId = (int) $goods['merchant_id'];
+            $merchantId = (int) $property['merchant_id'];
             $payload = $this->normalizePayload($payload);
             if ((string) ($payload['room_name'] ?? '') === '' || (string) ($payload['bed_type'] ?? '') === '' || (string) ($payload['area'] ?? '') === '') {
                 throw new BusinessException(ErrorCode::PARAM_ERROR, '房型名称、床型和面积不能为空');
@@ -36,7 +36,7 @@ class RoomReviewService
             if ($submit && $this->decode((string) ($payload['images'] ?? '[]')) === []) {
                 throw new BusinessException(ErrorCode::PARAM_ERROR, '提交审核前至少上传一张房型图片');
             }
-            $this->assertRoomCodeUnique((int) $goods['id'], $roomId, (string) $payload['room_code']);
+            $this->assertRoomCodeUnique((int) $property['id'], $roomId, (string) $payload['room_code']);
 
             $room = null;
             if ($roomId > 0) {
@@ -47,8 +47,8 @@ class RoomReviewService
                 $room = (array) $room;
             } else {
                 $draft = $payload;
-                $draft['site_id'] = (int) $goods['site_id'];
-                $draft['goods_id'] = (int) $goods['id'];
+                $draft['site_id'] = (int) $property['site_id'];
+                $draft['property_id'] = (int) $property['id'];
                 $draft['status'] = 2;
                 $draft['publish_status'] = 0;
                 $draft['approved_version'] = 0;
@@ -80,9 +80,9 @@ class RoomReviewService
             } else {
                 $version = max((int) ($room['approved_version'] ?? 0), (int) ($latest->version ?? 0)) + 1;
                 $revisionId = (int) Db::table('hotel_room_type_revision')->insertGetId([
-                    'site_id' => (int) $goods['site_id'],
+                    'site_id' => (int) $property['site_id'],
                     'merchant_id' => $merchantId,
-                    'goods_id' => (int) $goods['id'],
+                    'property_id' => (int) $property['id'],
                     'room_id' => $roomId,
                     'version' => $version,
                     'action' => 'upsert',
@@ -107,7 +107,7 @@ class RoomReviewService
         });
     }
 
-    public function copy(array $goods, array $source): array
+    public function copy(array $property, array $source): array
     {
         $payload = array_intersect_key($source, array_flip(self::LIVE_FIELDS));
         $payload['room_name'] = mb_substr((string) $payload['room_name'] . ' Copy', 0, 100);
@@ -115,10 +115,10 @@ class RoomReviewService
         $payload['base_stock'] = 0;
         $payload['launch_stock'] = 0;
         $payload['status'] = 1;
-        return $this->save($goods, 0, $payload, false);
+        return $this->save($property, 0, $payload, false);
     }
 
-    public function remove(array $goods, array $room): array
+    public function remove(array $property, array $room): array
     {
         if ((int) ($room['approved_version'] ?? 0) === 0) {
             Db::transaction(function () use ($room) {
@@ -128,15 +128,15 @@ class RoomReviewService
             return ['reviewRequired' => false];
         }
 
-        return Db::transaction(function () use ($goods, $room) {
+        return Db::transaction(function () use ($property, $room) {
             $pending = Db::table('hotel_room_type_revision')->where('room_id', $room['id'])->where('status', 1)->lockForUpdate()->exists();
             if ($pending) {
                 throw new BusinessException(ErrorCode::DATA_CONFLICT, '房型已有待审核变更');
             }
             $version = max((int) $room['approved_version'], (int) Db::table('hotel_room_type_revision')->where('room_id', $room['id'])->max('version')) + 1;
             $id = (int) Db::table('hotel_room_type_revision')->insertGetId([
-                'site_id' => (int) $goods['site_id'], 'merchant_id' => (int) $goods['merchant_id'],
-                'goods_id' => (int) $goods['id'], 'room_id' => (int) $room['id'], 'version' => $version,
+                'site_id' => (int) $property['site_id'], 'merchant_id' => (int) $property['merchant_id'],
+                'property_id' => (int) $property['id'], 'room_id' => (int) $room['id'], 'version' => $version,
                 'action' => 'delete', 'status' => 1, 'payload_json' => $this->encode(array_intersect_key($room, array_flip(self::LIVE_FIELDS))),
                 'submitted_by' => MerchantContext::adminId(), 'submitted_at' => date('Y-m-d H:i:s'),
             ]);
@@ -144,12 +144,13 @@ class RoomReviewService
         });
     }
 
-    public function withdraw(int $revisionId, array $merchantIds): void
+    public function withdraw(int $revisionId): void
     {
         $revision = Db::table('hotel_room_type_revision')->where('id', $revisionId)->first();
-        if (! $revision || ! in_array((int) $revision->merchant_id, $merchantIds, true)) {
+        if (! $revision) {
             throw new BusinessException(ErrorCode::NO_DATA_PERMISSION);
         }
+        MerchantContext::assertPropertyAccess((int) $revision->property_id, true);
         if ((int) $revision->status !== 1) {
             throw new BusinessException(ErrorCode::DATA_CONFLICT, '仅待审核版本可撤回');
         }
@@ -223,10 +224,10 @@ class RoomReviewService
         return $data;
     }
 
-    private function assertRoomCodeUnique(int $goodsId, int $roomId, string $code): void
+    private function assertRoomCodeUnique(int $propertyId, int $roomId, string $code): void
     {
         if ($code === '') return;
-        $query = Db::table('hotel_room_type')->where('goods_id', $goodsId)->where('room_code', $code)->whereNull('deleted_at');
+        $query = Db::table('hotel_room_type')->where('property_id', $propertyId)->where('room_code', $code)->whereNull('deleted_at');
         if ($roomId > 0) $query->where('id', '<>', $roomId);
         if ($query->exists()) throw new BusinessException(ErrorCode::DATA_CONFLICT, '同一酒店内房型编码不能重复');
     }

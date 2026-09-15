@@ -65,7 +65,7 @@ async function loadStats(): Promise<void> {
 // ---------- 筛选条件 ----------
 const q = ref('');
 const dateRange = ref<string[]>([]);
-const hotelId = ref<number | undefined>(undefined);
+const propertyId = ref<number | undefined>(undefined);
 const moreFilters = reactive<{ roomTypeId?: number; bookingStatus?: number; paymentStatus?: number; channel?: string }>({});
 const moreOpen = ref(false);
 const sort = reactive<{ field: string; dir: 'asc' | 'desc' }>({ field: 'booked', dir: 'desc' });
@@ -87,7 +87,7 @@ function currentParams(): Record<string, unknown> {
     q: q.value || undefined,
     dateFrom: dateRange.value?.[0] || undefined,
     dateTo: dateRange.value?.[1] || undefined,
-    hotelId: hotelId.value,
+    propertyId: propertyId.value,
     roomTypeId: moreFilters.roomTypeId,
     bookingStatus: activeTab.value !== 'all' ? TAB_STATUS[activeTab.value] : moreFilters.bookingStatus,
     paymentStatus: moreFilters.paymentStatus,
@@ -122,7 +122,7 @@ function resetMoreFilters(): void {
 // ---------- 酒店/房型选项(真实数据) ----------
 const hotels = ref<AvailabilityHotel[]>([]);
 const roomOptions = computed<AvailabilityRoom[]>(() => {
-  const source = hotelId.value ? hotels.value.filter((h) => h.id === hotelId.value) : hotels.value;
+  const source = propertyId.value ? hotels.value.filter((h) => h.id === propertyId.value) : hotels.value;
   return source.flatMap((h) => h.rooms ?? []);
 });
 
@@ -177,7 +177,7 @@ function pastDeadline(useDate: string | null): boolean {
 }
 
 // ---------- 表格列与排序 ----------
-const showHotelColumn = computed(() => !hotelId.value);
+const showHotelColumn = computed(() => !propertyId.value);
 const columns = computed(() => {
   const cols: Record<string, unknown>[] = [
     { title: t('booking.columns.bookingId'), dataIndex: 'order_no', width: 150 },
@@ -553,7 +553,7 @@ onMounted(() => {
           <template #prefix><SearchOutlined style="color: #94a3b8" /></template>
         </a-input>
         <a-range-picker v-model:value="dateRange" value-format="YYYY-MM-DD" style="width: 250px" @change="search" />
-        <a-select v-model:value="hotelId" allow-clear :placeholder="t('booking.allHotels')" style="width: 193px" @change="search">
+        <a-select v-model:value="propertyId" allow-clear :placeholder="t('booking.allHotels')" style="width: 193px" @change="search">
           <a-select-option v-for="h in hotels" :key="h.id" :value="h.id">{{ h.name }}</a-select-option>
         </a-select>
         <a-popover v-model:open="moreOpen" trigger="click" placement="bottomRight" overlay-class-name="bm-more-pop">

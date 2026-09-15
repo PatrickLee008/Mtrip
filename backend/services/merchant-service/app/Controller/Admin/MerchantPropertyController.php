@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace App\Controller\Admin;
 
 use App\Controller\AbstractController;
+use App\Service\PropertyProfileService;
 
 use Hyperf\DbConnection\Db;
 use Mtrip\Shared\Annotation\Permission;
@@ -15,6 +16,27 @@ use Mtrip\Shared\Support\Result;
 /** S2：显式关联KYC业务与酒店物业，不发布展示、不赋予门店订单权限。 */
 class MerchantPropertyController extends AbstractController
 {
+    public function contentList(): array
+    {
+        [$page, $pageSize] = $this->pageParams();
+        $status = $this->input('status');
+        $data = (new PropertyProfileService())->reviewList($page, $pageSize,
+            $status === null || $status === '' ? null : (int) $status, $this->strInput('keyword'));
+        return Result::page($data['list'], $data['total'], $data['page'], $data['pageSize']);
+    }
+
+    public function contentDetail(): array
+    {
+        return Result::success((new PropertyProfileService())->reviewDetail($this->requireId()));
+    }
+
+    #[Permission('merchant:property:content-audit')]
+    public function contentAudit(): array
+    {
+        (new PropertyProfileService())->audit($this->requireId(), $this->intInput('auditStatus'), $this->strInput('auditRemark'));
+        return Result::success(null, $this->intInput('auditStatus') === 1 ? '物业资料审核通过' : '物业资料已驳回');
+    }
+
     public function history(): array
     {
         $merchant = Db::table('merchant_info')->where('id', $this->requireId('merchantId'))->whereNull('deleted_at')->first();

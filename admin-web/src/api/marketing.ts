@@ -22,6 +22,9 @@ export type CouponPayload = {
   maxDiscount: number;
   goodsScope: number;
   goodsIds?: number[];
+  propertyIds?: number[];
+  skuIds?: number[];
+  roomTypeIds?: number[];
   totalCount: number;
   perUserLimit: number;
   validType: number;

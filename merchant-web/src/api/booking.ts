@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { get, post } from '@/utils/http';
 import { getToken } from '@/utils/auth';
+import { getSelectedPropertyId } from '@/utils/propertyContext';
 import type { PageData } from '@/api/types';
 
 /** 酒店预订管理 API(实现方案-Merchant-M4 §7.2;后端 order_main snake_case 直出) */
@@ -24,9 +25,11 @@ export interface BookingRow {
   order_no: string;
   contact_name: string;
   contact_phone: string;
-  goods_id: number;
+  property_id: number;
+  room_type_id: number;
+  goods_id?: number;
   goods_name: string;
-  sku_id: number;
+  sku_id?: number;
   sku_name: string;
   quantity: number;
   unit_price: string | number;
@@ -221,10 +224,14 @@ export function apiGuestMessage(id: number, content: string): Promise<{ messageI
 
 /** 导出 CSV(二进制流,不走统一 JSON 解包) */
 export async function downloadBookingCsv(params: Record<string, unknown>): Promise<void> {
+  const propertyId = getSelectedPropertyId();
   const response = await axios.get(`${import.meta.env.VITE_API_BASE}/merchant/order/export`, {
     params,
     responseType: 'blob',
-    headers: { Authorization: `Bearer ${getToken() ?? ''}` },
+    headers: {
+      Authorization: `Bearer ${getToken() ?? ''}`,
+      ...(propertyId !== null ? { 'X-Mtrip-Property-Id': String(propertyId) } : {}),
+    },
   });
   const disposition = (response.headers['content-disposition'] ?? '') as string;
   const match = /filename=([^;]+)/.exec(disposition);

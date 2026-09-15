@@ -20,6 +20,9 @@ CREATE TABLE IF NOT EXISTS `marketing_coupon` (
   `max_discount`   DECIMAL(12,2) NOT NULL DEFAULT 0.00 COMMENT '折扣券最高优惠金额,0=不限',
   `goods_scope`    TINYINT      NOT NULL DEFAULT 0 COMMENT '适用范围:0全部商品 1酒店 2门票 3指定商品',
   `goods_ids`      JSON         NULL COMMENT '指定商品ID列表(goods_scope=3)',
+  `property_ids`   JSON         NULL COMMENT '指定酒店物业ID列表',
+  `sku_ids`        JSON         NULL COMMENT '旧房型/票种ID列表(批次G收敛酒店含义)',
+  `room_type_ids`  JSON         NULL COMMENT '指定酒店房型ID列表',
   `total_count`    INT          NOT NULL DEFAULT 0 COMMENT '发行总量,0=不限',
   `received_count` INT          NOT NULL DEFAULT 0 COMMENT '已领取数量',
   `used_count`     INT          NOT NULL DEFAULT 0 COMMENT '已使用数量',
@@ -88,9 +91,11 @@ CREATE TABLE IF NOT EXISTS `marketing_activity_goods` (
   `id`             BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '主键',
   `activity_id`    BIGINT UNSIGNED NOT NULL COMMENT '活动ID',
   `site_id`        BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '所属站点ID',
-  `goods_id`       BIGINT UNSIGNED NOT NULL COMMENT '商品ID',
+  `property_id`    BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '酒店物业ID',
+  `goods_id`       BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '非酒店商品ID',
   `sku_type`       TINYINT      NOT NULL DEFAULT 0 COMMENT 'SKU类型:0商品级 1房型 2票种',
   `sku_id`         BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '房型ID/票种ID,0=商品级',
+  `room_type_id`   BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '酒店房型ID',
   `activity_price` DECIMAL(12,2) NOT NULL DEFAULT 0.00 COMMENT '活动价',
   `activity_stock` INT          NOT NULL DEFAULT 0 COMMENT '活动库存,0=不限',
   `sold_count`     INT          NOT NULL DEFAULT 0 COMMENT '活动已售',
@@ -100,8 +105,9 @@ CREATE TABLE IF NOT EXISTS `marketing_activity_goods` (
   `updated_at`     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   `deleted_at`     DATETIME     NULL DEFAULT NULL COMMENT '删除时间(软删)',
   PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_activity_sku` (`activity_id`, `goods_id`, `sku_type`, `sku_id`),
+  UNIQUE KEY `uk_activity_target` (`activity_id`, `property_id`, `goods_id`, `sku_type`, `room_type_id`, `sku_id`),
   KEY `idx_site_id` (`site_id`),
+  KEY `idx_property_room` (`property_id`, `room_type_id`),
   KEY `idx_goods_id` (`goods_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin COMMENT='活动商品关联表';
 

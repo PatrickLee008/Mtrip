@@ -52,7 +52,7 @@ class MerchantAuthMiddleware implements MiddlewareInterface
             $allowed = \Mtrip\Shared\Merchant\MerchantImpersonationGuard::allowed(strtoupper($request->getMethod()), $request->getUri()->getPath());
             \Mtrip\Shared\Merchant\MerchantImpersonationGuard::audit($support, $allowed ? 'request' : 'denied', $request->getMethod() . ' ' . $request->getUri()->getPath());
             if (! $allowed) throw new BusinessException(ErrorCode::FORBIDDEN, '代为登录为只读支持模式，禁止安全、财务及经营写操作');
-        } elseif (($claims['amr'] ?? '') !== 'totp') {
+        } elseif (! in_array((string) ($claims['amr'] ?? ''), ['totp', 'email_otp', 'sms_otp', 'google_mtrip_otp', 'activation_email_otp', 'activation_sms_otp'], true)) {
             throw new BusinessException(ErrorCode::UNAUTHORIZED);
         }
 
@@ -67,6 +67,22 @@ class MerchantAuthMiddleware implements MiddlewareInterface
             'is_owner' => (bool) ($claims['is_owner'] ?? false),
             'permissions' => $permissions,
         ]);
+
+        $propertyIds = MerchantContext::authorizedPropertyIds();
+        $propertyHeader = $request->getUri()->getPath() === '/api/v1/merchant/auth/menus'
+            ? ''
+            : trim($request->getHeaderLine('X-Mtrip-Property-Id'));
+        if ($propertyHeader !== '' && (! ctype_digit($propertyHeader) || (int) $propertyHeader <= 0)) {
+            throw new BusinessException(ErrorCode::PARAM_ERROR, '物业上下文格式不正确');
+        }
+        $selectedPropertyId = $propertyHeader === '' ? 0 : (int) $propertyHeader;
+        if ($selectedPropertyId > 0 && ! in_array($selectedPropertyId, $propertyIds, true)) {
+            throw new BusinessException(ErrorCode::NO_DATA_PERMISSION, '无权访问所选物业');
+        }
+        MerchantContext::set(array_merge(MerchantContext::get(), [
+            'property_ids' => $propertyIds,
+            'selected_property_id' => $selectedPropertyId,
+        ]));
 
         if ($support !== null) {
             MerchantContext::set(array_merge(MerchantContext::get(), [

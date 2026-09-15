@@ -21,7 +21,7 @@ import PageContainer from '@/components/PageContainer.vue';
 import AmountText from '@/components/AmountText.vue';
 import StatusTag, { type StatusItem } from '@/components/StatusTag.vue';
 import { useTable } from '@/composables/useTable';
-import { apiGoodsList, type MerchantGoods } from '@/api/goods';
+import { apiPropertyList, type PropertyRow } from '@/api/properties';
 import {
   apiPromotionAdd,
   apiPromotionDelete,
@@ -41,8 +41,8 @@ const userStore = useUserStore();
 
 const summary = ref<PromotionSummary>({ total: 0, draft: 0, active: 0, paused: 0, ended: 0, claimed: 0, used: 0, estimatedBudget: 0 });
 const summaryLoading = ref(false);
-const goodsLoading = ref(false);
-const goodsOptions = ref<MerchantGoods[]>([]);
+const propertyLoading = ref(false);
+const propertyOptions = ref<PropertyRow[]>([]);
 
 const { loading, list, query, load, search, reset, pagination } = useTable<MerchantPromotion>(apiPromotionList, {
   keyword: '',
@@ -89,7 +89,7 @@ const form = reactive({
   perUserLimit: 1,
   validType: 1,
   validDays: 30,
-  goodsIds: [] as number[],
+  propertyIds: [] as number[],
   remark: '',
 });
 
@@ -104,13 +104,13 @@ async function loadSummary(): Promise<void> {
   }
 }
 
-async function loadGoodsOptions(): Promise<void> {
-  goodsLoading.value = true;
+async function loadPropertyOptions(): Promise<void> {
+  propertyLoading.value = true;
   try {
-    const data = await apiGoodsList({ page: 1, pageSize: 200, goodsType: 1 });
-    goodsOptions.value = data.list;
+    const data = await apiPropertyList({ page: 1, pageSize: 200 });
+    propertyOptions.value = data.list;
   } finally {
-    goodsLoading.value = false;
+    propertyLoading.value = false;
   }
 }
 
@@ -130,7 +130,7 @@ function resetForm(): void {
     perUserLimit: 1,
     validType: 1,
     validDays: 30,
-    goodsIds: [],
+    propertyIds: [],
     remark: '',
   });
   dateRange.value = [dayjs(), dayjs().add(30, 'day')];
@@ -154,7 +154,7 @@ async function openEdit(row: MerchantPromotion): Promise<void> {
     perUserLimit: Number(detail.per_user_limit || 1),
     validType: detail.valid_type,
     validDays: Number(detail.valid_days || 30),
-    goodsIds: detail.goods_ids || [],
+    propertyIds: detail.property_ids || [],
     remark: detail.remark || '',
   });
   dateRange.value = detail.valid_type === 1 && detail.valid_start && detail.valid_end ? [dayjs(detail.valid_start), dayjs(detail.valid_end)] : null;
@@ -166,7 +166,7 @@ async function submitForm(): Promise<void> {
     message.warning(t('promotions.validation.name'));
     return;
   }
-  if (form.goodsIds.length === 0) {
+  if (form.propertyIds.length === 0) {
     message.warning(t('promotions.validation.goods'));
     return;
   }
@@ -189,7 +189,7 @@ async function submitForm(): Promise<void> {
     perUserLimit: form.perUserLimit,
     validType: form.validType,
     validDays: form.validDays,
-    goodsIds: form.goodsIds,
+    propertyIds: form.propertyIds,
     remark: form.remark.trim(),
   };
   if (form.validType === 1 && dateRange.value) {
@@ -233,7 +233,7 @@ async function remove(row: MerchantPromotion): Promise<void> {
 }
 
 function selectedMerchantIds(): number[] {
-  const ids = goodsOptions.value.filter((item) => form.goodsIds.includes(item.id)).map((item) => item.merchant_id);
+  const ids = propertyOptions.value.filter((item) => form.propertyIds.includes(item.id)).map((item) => item.merchant_id);
   return Array.from(new Set(ids));
 }
 
@@ -266,7 +266,7 @@ watch(() => route.query.notificationTarget, async (value) => {
   }
 }, { immediate: true });
 onMounted(() => {
-  void Promise.all([refreshAll(), loadGoodsOptions()]);
+  void Promise.all([refreshAll(), loadPropertyOptions()]);
 });
 </script>
 
@@ -391,20 +391,20 @@ onMounted(() => {
         </a-form-item>
         <a-form-item :label="t('promotions.applyGoods')" required>
           <a-select
-            v-model:value="form.goodsIds"
+            v-model:value="form.propertyIds"
             mode="multiple"
             show-search
-            :loading="goodsLoading"
+            :loading="propertyLoading"
             :placeholder="t('promotions.goodsPlaceholder')"
             option-filter-prop="label"
           >
             <a-select-option
-              v-for="item in goodsOptions"
+              v-for="item in propertyOptions"
               :key="item.id"
               :value="item.id"
-              :label="`${item.goods_name} ${item.merchant_name || ''}`"
+              :label="`${item.store_name} ${item.merchant_name || ''}`"
             >
-              {{ item.goods_name }}<span class="option-sub"> / {{ item.merchant_name || `#${item.merchant_id}` }}</span>
+              {{ item.store_name }}<span class="option-sub"> / {{ item.merchant_name || `#${item.merchant_id}` }}</span>
             </a-select-option>
           </a-select>
         </a-form-item>

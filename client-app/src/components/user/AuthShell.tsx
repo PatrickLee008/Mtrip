@@ -68,8 +68,13 @@ export default function AuthShell({ actionLabel, onAction, onBack, children }: A
             <HomeIcon name="arrowLeft" size={20} color="#FFFFFF" />
           </Pressable>
 
+          {/**
+           * 右上角登录/注册入口:改版稿(Figma Onboarding `2540:13083` 的 Login `2540:13084`
+           * 与 Signup `2540:13284`)把原来的纯文字链改成**深色药丸按钮** ——
+           * 黑 25% 底、圆角 20、px12 py8,文字 Inter SemiBold 20/24 白色(原为 16/24 纯文字)。
+           */}
           <Pressable
-            style={({ pressed }) => pressed && styles.pressed}
+            style={({ pressed }) => [styles.actionPill, pressed && styles.pressed]}
             onPress={onAction}
             hitSlop={8}
           >
@@ -126,11 +131,21 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.25)',
     opacity: 0.8,
   },
+  /* 设计稿 2540:13182:黑 25% 底、圆角 20、px12 py8(与左侧返回键同一套深色浮层) */
+  actionPill: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: 'rgba(0, 0, 0, 0.25)',
+  },
   action: {
     fontFamily: fonts.interSemi,
-    fontSize: 16,
+    fontSize: 20,
     lineHeight: 24,
     color: '#FFFFFF',
+    textAlign: 'right',
   },
 
   main: {

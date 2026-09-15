@@ -49,6 +49,8 @@ export interface AuthResult {
 /** 商品列表行(goods-service,含起价) */
 export interface GoodsItem {
   id: number;
+  property_id?: number;
+  property_name?: string;
   goods_type: number;
   category_id: number;
   goods_name: string;
@@ -78,13 +80,12 @@ export interface GoodsItem {
  */
 export interface FavoriteItem {
   id: number;
-  goods_id: number;
+  property_id: number;
   created_at: string;
-  goods_name: string;
+  property_name: string;
   cover_image: string;
   address: string;
   star_level: number;
-  goods_type: number;
   status: number;
 }
 
@@ -302,9 +303,13 @@ export interface CouponView {
   /** 0 全部 1 酒店 2 门票 3 指定商品 */
   goods_scope: number;
   goods_ids: number[];
+  property_ids: number[];
   sku_ids: number[];
-  applicable_hotels: { goods_id: number; goods_name: string }[];
-  applicable_rooms: { sku_id: number; goods_id: number; room_name: string }[];
+  room_type_ids: number[];
+  applicable_hotels: { property_id: number; property_name: string }[];
+  applicable_rooms: { room_type_id: number; property_id: number; room_name: string }[];
+  applicable_goods: { goods_id: number; goods_name: string }[];
+  applicable_ticket_types: { sku_id: number; goods_id: number; ticket_name: string }[];
   /** 0 不可与其他优惠叠加 1 可叠加 */
   stackable: number;
   valid_start: string | null;

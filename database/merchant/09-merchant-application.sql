@@ -75,6 +75,7 @@ CREATE TABLE IF NOT EXISTS `merchant_application_business` (
 CREATE TABLE IF NOT EXISTS `merchant_kyc_template` (
   `id`            BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '主键',
   `site_id`       BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '所属站点ID',
+  `scope_type`    VARCHAR(20)  NOT NULL DEFAULT 'merchant' COMMENT '模板范围:merchant/property',
   `name`          VARCHAR(100) NOT NULL COMMENT '模板名称(Hotel – Single Property...)',
   `business_type` VARCHAR(30)  NOT NULL COMMENT '业态(hotel/restaurant/airline/car_rental/attraction)',
   `docs`          JSON         NULL COMMENT '所需文档清单[{name,doc_type,required}]',
@@ -84,7 +85,8 @@ CREATE TABLE IF NOT EXISTS `merchant_kyc_template` (
   `updated_at`    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   PRIMARY KEY (`id`),
   KEY `idx_site_id` (`site_id`),
-  KEY `idx_business_type` (`business_type`)
+  KEY `idx_business_type` (`business_type`),
+  KEY `idx_scope_business` (`scope_type`,`business_type`,`status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin COMMENT='平台KYC验证模板';
 
 -- 入驻申请内部备注(仅运营/管理员可见)
@@ -107,6 +109,7 @@ CREATE TABLE IF NOT EXISTS `merchant_verify_document_revision` (
   `site_id`       BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '所属站点ID',
   `doc_id`        BIGINT UNSIGNED NOT NULL COMMENT '文档ID(merchant_verify_document)',
   `merchant_id`   BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '商户ID(冗余便于查询)',
+  `property_id`   BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '物业ID,商户级文档为0',
   `version`       INT UNSIGNED NOT NULL DEFAULT 1 COMMENT '版本号(1=原始提交)',
   `file_url`      VARCHAR(500) NOT NULL DEFAULT '' COMMENT '文件URL',
   `file_size`     VARCHAR(20)  NOT NULL DEFAULT '' COMMENT '文件大小(展示用)',
@@ -118,7 +121,8 @@ CREATE TABLE IF NOT EXISTS `merchant_verify_document_revision` (
   PRIMARY KEY (`id`),
   KEY `idx_site_id` (`site_id`),
   KEY `idx_doc_id` (`doc_id`),
-  KEY `idx_merchant_id` (`merchant_id`)
+  KEY `idx_merchant_id` (`merchant_id`),
+  KEY `idx_property_revision` (`property_id`,`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin COMMENT='资质文档重交版本历史';
 
 -- ============================================================
@@ -186,3 +190,10 @@ INSERT IGNORE INTO `merchant_kyc_template` (`id`,`site_id`,`name`,`business_type
 (7,0,'Car Rental – Large Fleet','car_rental','[{"name":"Business Registration Certificate","doc_type":"business_reg","required":true},{"name":"Tourism Operator License","doc_type":"tourism_license","required":true},{"name":"Owner NRC / Passport","doc_type":"id_doc","required":true},{"name":"Bank Certificate","doc_type":"bank_letter","required":true},{"name":"Vehicle Registration & Insurance (fleet list)","doc_type":"vehicle_reg","required":true}]',7),
 (8,0,'Attraction – Single Venue','attraction','[{"name":"Business Registration Certificate","doc_type":"business_reg","required":true},{"name":"Tourism Operator License","doc_type":"tourism_license","required":true},{"name":"Owner NRC / Passport","doc_type":"id_doc","required":true},{"name":"Bank Certificate","doc_type":"bank_letter","required":true},{"name":"Safety / Insurance Certification","doc_type":"insurance_cert","required":false}]',8),
 (9,0,'Attraction – Multi Venue','attraction','[{"name":"Business Registration Certificate","doc_type":"business_reg","required":true},{"name":"Tourism Operator License","doc_type":"tourism_license","required":true},{"name":"Owner NRC / Passport","doc_type":"id_doc","required":true},{"name":"Bank Certificate","doc_type":"bank_letter","required":true},{"name":"Safety / Insurance Certification (each venue)","doc_type":"insurance_cert","required":false}]',9);
+
+INSERT INTO `merchant_kyc_template` (`site_id`,`scope_type`,`name`,`business_type`,`docs`,`status`,`sort`)
+SELECT 0,'property','Hotel Property KYC','hotel','[{"name":"Business Registration","doc_type":"business_reg","required":true},{"name":"Hotel Operating License","doc_type":"hotel_license","required":true},{"name":"Owner ID / Passport","doc_type":"id_doc","required":true}]',1,1
+WHERE NOT EXISTS (
+  SELECT 1 FROM `merchant_kyc_template`
+  WHERE `site_id`=0 AND `scope_type`='property' AND `business_type`='hotel' AND `status`=1
+);

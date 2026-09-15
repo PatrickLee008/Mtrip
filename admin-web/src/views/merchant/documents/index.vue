@@ -67,6 +67,7 @@ const DOC_STATUS = computed<Record<number, StatusItem>>(() => ({
 
 const DOC_TYPES = [
   'business_reg',
+  'operating_license',
   'hotel_license',
   'id_doc',
   'bank_letter',
@@ -128,6 +129,7 @@ function filterByStat(key: string): void {
 
 const columns = computed(() => [
   { title: t('merchant.documentsPage.colMerchant'), dataIndex: 'merchant_name', width: 190 },
+  { title: t('merchant.documentsPage.colScope'), dataIndex: 'scope_type', width: 150 },
   { title: t('merchant.documentsPage.colType'), dataIndex: 'doc_type', width: 280 },
   { title: t('merchant.documentsPage.colStatus'), dataIndex: 'status', width: 170 },
   { title: t('merchant.documentsPage.colExpiry'), dataIndex: 'expiry_date', width: 130 },
@@ -204,6 +206,9 @@ function openHistory(row: TableRow): void {
 }
 
 function downloadDoc(row: TableRow): void { void openMerchantDocument(row.id); }
+function isOnboarding(row: TableRow): boolean { return Number(row.application_id || 0) > 0 && Number(row.merchant_id || 0) === 0; }
+function reviewPermission(row: TableRow): string { return isOnboarding(row) ? 'merchant:onboarding:kyc' : 'merchant:document:verify'; }
+function downloadPermission(row: TableRow): string { return isOnboarding(row) ? 'merchant:onboarding:kyc' : 'merchant:document:download'; }
 
 /** 导出当前筛选结果(整改 D2,分页上限 200) */
 async function exportList(): Promise<void> {
@@ -356,7 +361,13 @@ onMounted(() => {
         <template #bodyCell="{ column, record }">
           <template v-if="column.dataIndex === 'merchant_name'">
             <div class="merchant-name">{{ record.merchant_name || '-' }}</div>
-            <div class="merchant-meta">#{{ record.merchant_id }}</div>
+            <div class="merchant-meta">{{ record.application_no ? record.application_no : `#${record.merchant_id}` }}</div>
+            <div v-if="record.property_name" class="merchant-meta">{{ record.property_name }} · #{{ record.application_business_id || record.property_id }}</div>
+          </template>
+          <template v-else-if="column.dataIndex === 'scope_type'">
+            <a-tag :color="record.scope_type === 'property' ? 'blue' : 'green'">
+              {{ t(record.scope_type === 'property' ? 'merchant.documentsPage.scopeProperty' : 'merchant.documentsPage.scopeMerchant') }}
+            </a-tag>
           </template>
           <template v-else-if="column.dataIndex === 'doc_type'">
             <div class="document-cell">
@@ -392,7 +403,7 @@ onMounted(() => {
                 <a-button type="link" size="small" @click="openPreview(record)"><template #icon><EyeOutlined /></template></a-button>
               </a-tooltip>
               <a-tooltip :title="t('merchant.documentsPage.download')">
-                <a-button v-perm="'merchant:document:download'" type="link" size="small" @click="downloadDoc(record)"><template #icon><DownloadOutlined /></template></a-button>
+                <a-button v-perm="downloadPermission(record)" type="link" size="small" @click="downloadDoc(record)"><template #icon><DownloadOutlined /></template></a-button>
               </a-tooltip>
               <a-tooltip :title="t('merchant.documentsPage.history')">
                 <a-button type="link" size="small" @click="openHistory(record)"><template #icon><HistoryOutlined /></template></a-button>
@@ -400,7 +411,7 @@ onMounted(() => {
               <a-tooltip :title="t('merchant.documentsPage.verify')">
                 <a-button
                   v-if="record.status === 2"
-                  v-perm="'merchant:document:verify'"
+                  v-perm="reviewPermission(record)"
                   type="link"
                   size="small"
                   style="color: #059669"
@@ -408,12 +419,12 @@ onMounted(() => {
                 ><template #icon><CheckCircleOutlined /></template></a-button>
               </a-tooltip>
               <a-tooltip v-if="record.status === 2" :title="t('merchant.verifyPage.docRejectModalTitle')">
-                <a-button v-perm="'merchant:document:verify'" type="link" danger size="small" @click="openReject(record)"><template #icon><ExclamationCircleOutlined /></template></a-button>
+                <a-button v-perm="reviewPermission(record)" type="link" danger size="small" @click="openReject(record)"><template #icon><ExclamationCircleOutlined /></template></a-button>
               </a-tooltip>
-              <a-tooltip :title="t('merchant.s3.replace')">
+              <a-tooltip v-if="!isOnboarding(record)" :title="t('merchant.s3.replace')">
                 <a-button v-perm="'merchant:document:replace'" type="link" size="small" @click="replaceDoc(record)"><template #icon><SyncOutlined /></template></a-button>
               </a-tooltip>
-              <a-tooltip :title="t('merchant.documentsPage.resubmit')">
+              <a-tooltip v-if="!isOnboarding(record)" :title="t('merchant.documentsPage.resubmit')">
                 <a-button
                   v-if="record.status !== 5"
                   v-perm="'merchant:document:verify'"
@@ -435,7 +446,7 @@ onMounted(() => {
       <template #title>
         <div v-if="docDetail" class="drawer-title-block">
           <div class="drawer-title">{{ docTypeLabel(docDetail.doc_type) }}</div>
-          <div class="drawer-subtitle">{{ docDetail.merchant_name }} · #{{ docDetail.merchant_id }}</div>
+          <div class="drawer-subtitle">{{ docDetail.merchant_name }} · {{ docDetail.application_no || `#${docDetail.merchant_id}` }}<template v-if="docDetail.property_name"> · {{ docDetail.property_name }} #{{ docDetail.application_business_id || docDetail.property_id }}</template></div>
         </div>
       </template>
       <a-spin :spinning="drawerLoading">
@@ -471,7 +482,7 @@ onMounted(() => {
               </div>
 
               <div v-if="docDetail.has_file" class="inline-preview-action">
-                <a-button v-perm="'merchant:document:download'" :loading="previewLoading" @click="previewFile">
+                <a-button v-perm="downloadPermission(docDetail)" :loading="previewLoading" @click="previewFile">
                   <template #icon><EyeOutlined /></template>{{ t('merchant.documentsPage.preview') }}
                 </a-button>
               </div>
@@ -480,7 +491,9 @@ onMounted(() => {
               <img v-else-if="previewUrl && previewMime.startsWith('image/')" :src="previewUrl" :alt="docDetail.name" class="file-preview-image" />
               <a-descriptions :column="1" size="small" bordered class="document-details">
                 <a-descriptions-item :label="t('merchant.documentsPage.documentType')">{{ docTypeLabel(docDetail.doc_type) }}</a-descriptions-item>
-                <a-descriptions-item :label="t('merchant.documentsPage.merchant')">{{ docDetail.merchant_name }} (#{{ docDetail.merchant_id }})</a-descriptions-item>
+                <a-descriptions-item :label="t('merchant.documentsPage.merchant')">{{ docDetail.merchant_name }} ({{ docDetail.application_no || `#${docDetail.merchant_id}` }})</a-descriptions-item>
+                <a-descriptions-item :label="t('merchant.documentsPage.colScope')">{{ t(docDetail.scope_type === 'property' ? 'merchant.documentsPage.scopeProperty' : 'merchant.documentsPage.scopeMerchant') }}</a-descriptions-item>
+                <a-descriptions-item v-if="docDetail.property_name" :label="t('merchant.documentsPage.property')">{{ docDetail.property_name }} (#{{ docDetail.application_business_id || docDetail.property_id }})</a-descriptions-item>
                 <a-descriptions-item :label="t('merchant.documentsPage.fileName')">{{ docDetail.name }}</a-descriptions-item>
                 <a-descriptions-item :label="t('merchant.documentsPage.uploadedDate')">{{ displayDate(docDetail.uploaded_at) }}</a-descriptions-item>
                 <a-descriptions-item :label="t('merchant.documentsPage.expiryDate')">{{ displayDate(docDetail.expiry_date) }}</a-descriptions-item>
@@ -488,7 +501,7 @@ onMounted(() => {
                 <a-descriptions-item :label="t('merchant.documentsPage.assignedReviewer')">{{ docDetail.reviewer_name || '-' }}</a-descriptions-item>
               </a-descriptions>
 
-              <a-button v-if="docDetail.has_file" v-perm="'merchant:document:download'" block class="download-original" @click="downloadDoc(docDetail)">
+              <a-button v-if="docDetail.has_file" v-perm="downloadPermission(docDetail)" block class="download-original" @click="downloadDoc(docDetail)">
                 <template #icon><DownloadOutlined /></template>{{ t('merchant.documentsPage.downloadOriginal') }}
               </a-button>
             </a-tab-pane>
@@ -499,7 +512,7 @@ onMounted(() => {
               <a-list :data-source="docRevisions" size="small">
                 <template #renderItem="{ item }"><a-list-item>
                   <span>{{ item.lifecycle_version === null ? t('merchant.s3.legacy') : `v${item.lifecycle_version}` }} · {{ item.file_name || item.source }} · {{ item.uploaded_at }}</span>
-                  <a-button v-if="item.has_file" v-perm="'merchant:document:download'" type="link" @click="openMerchantDocument(docDetail.id, item.id)">{{ t('merchant.documentsPage.download') }}</a-button>
+                  <a-button v-if="item.has_file" v-perm="downloadPermission(docDetail)" type="link" @click="openMerchantDocument(docDetail.id, item.id)">{{ t('merchant.documentsPage.download') }}</a-button>
                 </a-list-item></template>
               </a-list>
               <a-timeline>

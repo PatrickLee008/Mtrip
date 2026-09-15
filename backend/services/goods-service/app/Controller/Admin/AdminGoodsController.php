@@ -18,17 +18,14 @@ use Mtrip\Shared\Support\Result;
  */
 class AdminGoodsController extends AbstractAdminController
 {
-    /** 商品列表:筛选 名称/类型/分类/商户/状态/推荐热门,附带分类与商户名称 */
+    /** 门票商品列表:筛选名称/分类/商户/状态/推荐热门,附带分类与商户名称 */
     public function index(): array
     {
         [$page, $pageSize] = $this->pageParams();
-        $query = Db::table('goods_info')->whereNull('deleted_at')->where('status', '<>', 5);
+        $query = Db::table('goods_info')->where('goods_type', 2)->whereNull('deleted_at')->where('status', '<>', 5);
         $this->applySiteScope($query);
         if (($name = $this->strInput('goodsName')) !== '') {
             $query->where('goods_name', 'like', "%{$name}%");
-        }
-        if (($type = $this->intInput('goodsType')) > 0) {
-            $query->where('goods_type', $type);
         }
         if (($categoryId = $this->intInput('categoryId')) > 0) {
             $query->where('category_id', $categoryId);
@@ -65,7 +62,7 @@ class AdminGoodsController extends AbstractAdminController
         return Result::page($list, $total, $page, $pageSize);
     }
 
-    /** 商品详情:含房型/票种子表与退改规则 */
+    /** 门票商品详情:含票种与退改规则 */
     public function detail(): array
     {
         $goods = $this->findScoped($this->requireId());
@@ -73,8 +70,7 @@ class AdminGoodsController extends AbstractAdminController
         $goods['facilities'] = $this->jsonDecode($goods['facilities']);
         unset($goods['deleted_at']);
 
-        $skuTable = (int) $goods['goods_type'] === 1 ? 'hotel_room_type' : 'ticket_type';
-        $skus = Db::table($skuTable)
+        $skus = Db::table('ticket_type')
             ->where('goods_id', $goods['id'])->whereNull('deleted_at')
             ->orderBy('sort')->orderBy('id')->get()
             ->map(function ($row) {
@@ -105,12 +101,12 @@ class AdminGoodsController extends AbstractAdminController
     }
 
     /** 新增商品(草稿) */
-    #[Permission(['goods:hotel:add', 'goods:ticket:add'])]
+    #[Permission('goods:ticket:add')]
     public function create(): array
     {
-        $goodsType = $this->intInput('goodsType', 1);
-        if (! in_array($goodsType, [1, 2], true)) {
-            throw new BusinessException(ErrorCode::PARAM_ERROR, '参数 goodsType 不正确');
+        $goodsType = $this->intInput('goodsType', 2);
+        if ($goodsType !== 2) {
+            throw new BusinessException(ErrorCode::PARAM_ERROR, '当前商品接口仅支持门票');
         }
         $siteId = AdminContext::isSuper() ? $this->requireId('siteId') : AdminContext::siteId();
         $data = $this->collectFields();
@@ -126,7 +122,7 @@ class AdminGoodsController extends AbstractAdminController
     }
 
     /** 编辑商品:上架中不可编辑(须先下架);驳回状态编辑后保持驳回,由 submit 重提 */
-    #[Permission(['goods:hotel:edit', 'goods:ticket:edit'])]
+    #[Permission('goods:ticket:edit')]
     public function update(): array
     {
         $goods = $this->findScoped($this->requireId());
@@ -155,20 +151,18 @@ class AdminGoodsController extends AbstractAdminController
     }
 
     /** 提交审核:0草稿/2驳回 → 1待审核;须至少一个在售 SKU */
-    #[Permission(['goods:hotel:edit', 'goods:ticket:edit'])]
+    #[Permission('goods:ticket:edit')]
     public function submit(): array
     {
         $goods = $this->findScoped($this->requireId());
         if (! in_array((int) $goods['status'], [0, 2], true)) {
             throw new BusinessException(ErrorCode::DATA_CONFLICT, '仅草稿/驳回商品可提交审核');
         }
-        $skuTable = (int) $goods['goods_type'] === 1 ? 'hotel_room_type' : 'ticket_type';
-        $skuCount = Db::table($skuTable)
+        $skuCount = Db::table('ticket_type')
             ->where('goods_id', $goods['id'])->where('status', 1)
             ->whereNull('deleted_at')->count();
         if ($skuCount === 0) {
-            $skuLabel = (int) $goods['goods_type'] === 1 ? '房型' : '票种';
-            throw new BusinessException(ErrorCode::DATA_CONFLICT, "请先添加至少一个在售{$skuLabel}");
+            throw new BusinessException(ErrorCode::DATA_CONFLICT, '请先添加至少一个在售票种');
         }
         Db::table('goods_info')->where('id', $goods['id'])
             ->update(['status' => 1, 'audit_remark' => '']);
@@ -197,16 +191,11 @@ class AdminGoodsController extends AbstractAdminController
             'audit_by' => AdminContext::adminId(),
             'audit_time' => date('Y-m-d H:i:s'),
         ]);
-        if ($auditStatus === 1 && (int) $goods['goods_type'] === 1) {
-            Db::table('hotel_room_type')->where('goods_id', $goods['id'])->where('status', 1)
-                ->where('publish_status', 0)->whereNull('deleted_at')
-                ->update(['publish_status' => 2, 'approved_version' => 1]);
-        }
         return Result::success(null, $auditStatus === 1 ? '审核通过,商品已上架' : '已驳回,商户可修改后重新提交');
     }
 
     /** 上下架:3已上架 ⇄ 4已下架 */
-    #[Permission(['goods:hotel:edit', 'goods:ticket:edit', 'goods:audit:off'])]
+    #[Permission(['goods:ticket:edit', 'goods:audit:off'])]
     public function toggleStatus(): array
     {
         $goods = $this->findScoped($this->requireId());
@@ -220,7 +209,7 @@ class AdminGoodsController extends AbstractAdminController
     }
 
     /** 删除商品(软删,终态):上架中禁止;存在进行中订单禁止 */
-    #[Permission(['goods:hotel:delete', 'goods:ticket:delete'])]
+    #[Permission('goods:ticket:delete')]
     public function remove(): array
     {
         $goods = $this->findScoped($this->requireId());
@@ -244,7 +233,7 @@ class AdminGoodsController extends AbstractAdminController
     /** 取商品并校验站点数据权限 */
     private function findScoped(int $id): array
     {
-        $goods = Db::table('goods_info')->where('id', $id)->whereNull('deleted_at')->first();
+        $goods = Db::table('goods_info')->where('id', $id)->where('goods_type', 2)->whereNull('deleted_at')->first();
         if (! $goods) {
             throw new BusinessException(ErrorCode::NOT_FOUND, '商品不存在');
         }

@@ -4,7 +4,7 @@ import type { PageData } from '@/api/types';
 export interface MerchantReview {
   id: number;
   site_id: number;
-  goods_id: number;
+  property_id: number;
   user_id: number;
   order_id: number;
   rating: number;
@@ -17,7 +17,7 @@ export interface MerchantReview {
   merchant_flag_status: number;
   merchant_flag_reason: string;
   merchant_flagged_at: string | null;
-  goods_name: string;
+  property_name: string;
   merchant_id: number;
   order_no: string | null;
   nickname: string | null;

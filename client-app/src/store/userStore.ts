@@ -21,7 +21,8 @@ interface UserState {
   register: (
     mobile: string,
     password: string,
-    extra?: { nickname?: string; email?: string; referralCode?: string; verifyToken?: string },
+    /** realName = 注册页的姓名栏(取代原邮箱栏),后端落 `user_info.real_name` */
+    extra?: { nickname?: string; realName?: string; referralCode?: string; verifyToken?: string },
   ) => Promise<void>;
   logout: () => Promise<void>;
   /** 仅清本地(401 时由请求层调用) */

@@ -72,8 +72,12 @@ class OrderController extends AbstractController
     {
         $siteId = $this->requireSiteId();
         $userId = UserContext::userId();
-        $goodsId = $this->requireId('goodsId');
-        $skuId = $this->requireId('skuId');
+        $target = $this->resolveCreateTarget($siteId);
+        $orderType = $target['orderType'];
+        $propertyId = $target['propertyId'];
+        $roomTypeId = $target['roomTypeId'];
+        $goodsId = $target['goodsId'];
+        $skuId = $target['skuId'];
         $quantity = $this->intInput('quantity', 1);
         if ($quantity < 1 || $quantity > 10) {
             throw new BusinessException(ErrorCode::PARAM_ERROR, '购买数量须为1-10');
@@ -82,26 +86,8 @@ class OrderController extends AbstractController
         $contactName = $this->requireStr('contactName');
         $contactPhone = $this->requireStr('contactPhone');
 
-        $goods = Db::table('goods_info')
-            ->where('id', $goodsId)->where('site_id', $siteId)
-            ->where('status', 3)->whereNull('deleted_at')
-            ->first();
-        if (! $goods) {
-            throw new BusinessException(ErrorCode::NOT_FOUND, '商品不存在或已下架');
-        }
-        $goods = (array) $goods;
-        $orderType = (int) $goods['goods_type'];
         $endDate = $orderType === 1 ? $this->requireStr('endDate') : null;
-
-        $skuTable = $orderType === 1 ? 'hotel_room_type' : 'ticket_type';
-        $sku = Db::table($skuTable)
-            ->where('id', $skuId)->where('goods_id', $goodsId)
-            ->where('status', 1)->whereNull('deleted_at')
-            ->first();
-        if (! $sku) {
-            throw new BusinessException(ErrorCode::NOT_FOUND, '房型/票种不存在或已停售');
-        }
-        $sku = (array) $sku;
+        $sku = $target['sku'];
         if ($orderType === 2 && (int) $sku['book_limit'] > 0 && $quantity > (int) $sku['book_limit']) {
             throw new BusinessException(ErrorCode::PARAM_ERROR, "该票种单人限购{$sku['book_limit']}张");
         }
@@ -119,41 +105,52 @@ class OrderController extends AbstractController
         $orderNo = OrderNoGenerator::orderNo($siteId);
         // M4:预订字段(状态/10分钟支付截止/特殊请求/政策快照),非酒店订单仅双写基础状态字段
         $priced = Db::transaction(function () use (
-            $siteId, $userId, $goods, $sku, $orderType, $goodsId, $skuId,
+            $siteId, $userId, $target, $sku, $orderType, $propertyId, $roomTypeId, $goodsId, $skuId,
             $quantity, $dates, $useDate, $endDate, $orderNo, $contactName, $contactPhone,
             $isCitizen, $couponId, $guests, $remark
         ) {
-            MerchantAccessGuard::lockBookable([$goods], $siteId);
-            MerchantAccessGuard::lockGoods([$goods], $siteId);
-            $sku = (array) Db::table($orderType === 1 ? 'hotel_room_type' : 'ticket_type')
-                ->where('id', $skuId)->where('goods_id', $goodsId)->where('status', 1)->whereNull('deleted_at')->lockForUpdate()->first();
+            MerchantAccessGuard::lockBookable([$target['owner']], $siteId);
+            if ($orderType === 1) {
+                MerchantAccessGuard::lockProperties([$target['owner']], $siteId);
+                $sku = (array) Db::table('hotel_room_type')->where('id', $roomTypeId)
+                    ->where('property_id', $propertyId)->where('status', 1)->where('publish_status', 2)
+                    ->whereNull('deleted_at')->lockForUpdate()->first();
+            } else {
+                MerchantAccessGuard::lockGoods([$target['owner']], $siteId);
+                $sku = (array) Db::table('ticket_type')->where('id', $skuId)
+                    ->where('goods_id', $goodsId)->where('status', 1)->whereNull('deleted_at')->lockForUpdate()->first();
+            }
             if ($sku === []) {
                 throw new BusinessException(ErrorCode::DATA_CONFLICT, '房型/票种已停售');
             }
             [$totalAmount, $changes] = $this->stockService->lock(
-                $siteId, $goodsId, $orderType, $skuId, $sku, $dates, $quantity, $isCitizen
+                $siteId, $propertyId, $goodsId, $orderType, $orderType === 1 ? $roomTypeId : $skuId,
+                $sku, $dates, $quantity, $isCitizen
             );
             // 长住优惠:仅酒店,按住宿夜数命中最高梯度,对原总价打折
             $longstay = $orderType === 1 ? $this->pricingService->longstayDiscount($siteId, count($dates), $totalAmount) : 0.0;
             // 优惠券(可选):校验归属/状态/有效期/适用范围/门槛,计算抵扣(不在此消耗,支付时消耗)
             [$couponRefId, $couponDiscount] = $couponId > 0
-                ? $this->pricingService->resolveCoupon($siteId, $userId, $couponId, $orderType, $goodsId, round($totalAmount - $longstay, 2))
+                ? $this->pricingService->resolveCoupon($siteId, $userId, $couponId, $orderType,
+                    $propertyId, $roomTypeId, $goodsId, $skuId, round($totalAmount - $longstay, 2))
                 : [0, 0.0];
             $payAmount = max(0.0, round($totalAmount - $longstay - $couponDiscount, 2));
             $unitPrice = round($totalAmount / max(1, count($dates)) / $quantity, 2);
-            $bookingFields = $this->bookingLifecycle->buildCreateFields($orderType, $goodsId, $skuId, $remark);
+            $bookingFields = $this->bookingLifecycle->buildCreateFields($orderType, $propertyId, $roomTypeId, $remark);
             $orderId = (int) Db::table('order_main')->insertGetId([
                 'order_no' => $orderNo,
                 'site_id' => $siteId,
                 'user_id' => $userId,
                 'order_type' => $orderType,
                 'is_citizen' => $isCitizen ? 1 : 0,
-                'merchant_id' => (int) $goods['merchant_id'],
-                'supplier_id' => (int) $goods['supplier_id'],
+                'merchant_id' => $target['merchantId'],
+                'supplier_id' => $target['supplierId'],
+                'property_id' => $propertyId,
                 'goods_id' => $goodsId,
-                'goods_name' => (string) $goods['goods_name'],
-                'goods_image' => (string) $goods['cover_image'],
+                'goods_name' => $target['name'],
+                'goods_image' => $target['image'],
                 'sku_id' => $skuId,
+                'room_type_id' => $roomTypeId,
                 'sku_name' => (string) ($sku['room_name'] ?? $sku['ticket_name'] ?? ''),
                 'quantity' => $quantity,
                 'unit_price' => $unitPrice,
@@ -179,8 +176,9 @@ class OrderController extends AbstractController
                 'id' => $orderId,
                 'order_no' => $orderNo,
                 'site_id' => $siteId,
-                'merchant_id' => (int) $goods['merchant_id'],
-                'goods_name' => (string) $goods['goods_name'],
+                'merchant_id' => $target['merchantId'],
+                'property_id' => $propertyId,
+                'goods_name' => $target['name'],
                 'sku_name' => (string) ($sku['room_name'] ?? $sku['ticket_name'] ?? ''),
                 'quantity' => $quantity,
                 'use_date' => $useDate,
@@ -236,8 +234,18 @@ class OrderController extends AbstractController
         $snapshot = (array) $snapshot;
         $result = Db::transaction(function () use ($orderId, $payMethod, $snapshot) {
             MerchantAccessGuard::lockBookable([$snapshot], (int) $snapshot['site_id']);
+            if ((int) $snapshot['order_type'] === 1) {
+                MerchantAccessGuard::lockProperties([$snapshot], (int) $snapshot['site_id']);
+            }
             $order = $this->lockOwnOrder($orderId);
-            foreach (['merchant_id', 'site_id', 'order_type', 'supplier_id'] as $field) {
+            $identityFields = ['merchant_id', 'site_id', 'order_type', 'supplier_id'];
+            $identityFields = array_merge(
+                $identityFields,
+                (int) $order['order_type'] === 1
+                    ? ['property_id', 'room_type_id']
+                    : ['goods_id', 'sku_id'],
+            );
+            foreach ($identityFields as $field) {
                 if ((int) $order[$field] !== (int) $snapshot[$field]) {
                     throw new BusinessException(ErrorCode::DATA_CONFLICT, '订单归属已变更');
                 }
@@ -281,8 +289,10 @@ class OrderController extends AbstractController
                 ]);
             }
             $this->stockService->deduct($order);
-            Db::table('goods_info')->where('id', (int) $order['goods_id'])
-                ->increment('sales_count', (int) $order['quantity']);
+            if ((int) $order['order_type'] === 2) {
+                Db::table('goods_info')->where('id', (int) $order['goods_id'])
+                    ->increment('sales_count', (int) $order['quantity']);
+            }
             // 支付成功消耗优惠券:领券记录置已用 + 模板已用数+1(仅当仍未使用)
             if ((int) $order['coupon_id'] > 0) {
                 $rec = Db::table('marketing_coupon_receive')
@@ -311,6 +321,7 @@ class OrderController extends AbstractController
                 'userId' => (int) $order['user_id'],
                 'goodsName' => (string) $order['goods_name'],
                 'orderNo' => (string) $order['order_no'],
+                'order' => $order,
             ];
         });
 
@@ -325,8 +336,7 @@ class OrderController extends AbstractController
         } catch (\Throwable) {
         }
         // 商户通知:新预订支付确认(事件后置容错)
-        $order['order_no'] = $result['orderNo'];
-        $this->payHandler->notifyMerchantConfirmed($order);
+        $this->payHandler->notifyMerchantConfirmed($result['order']);
 
         return Result::success(['verifyCode' => $result['verifyCode']], '支付成功');
     }
@@ -345,8 +355,8 @@ class OrderController extends AbstractController
         }
         $total = (clone $query)->count();
         $list = $query->forPage($page, $pageSize)
-            ->get(['id', 'order_no', 'order_type', 'goods_id', 'goods_name', 'goods_image',
-                'sku_name', 'quantity', 'pay_amount', 'order_status', 'refund_status',
+            ->get(['id', 'order_no', 'order_type', 'property_id', 'goods_id', 'goods_name', 'goods_image',
+                'room_type_id', 'sku_id', 'sku_name', 'quantity', 'pay_amount', 'order_status', 'refund_status',
                 'use_date', 'end_date', 'created_at'])
             ->map(static fn ($row) => (array) $row)->all();
         return Result::page($list, $total, $page, $pageSize);
@@ -435,6 +445,8 @@ class OrderController extends AbstractController
                 'order_no' => (string) $order['order_no'],
                 'user_id' => (int) $order['user_id'],
                 'merchant_id' => (int) $order['merchant_id'],
+                'property_id' => (int) $order['property_id'],
+                'room_type_id' => (int) $order['room_type_id'],
                 'refund_type' => $q['refundAmount'] >= (float) $order['pay_amount'] ? 1 : 2,
                 'apply_amount' => $q['refundAmount'],
                 'refund_channel' => 1,
@@ -489,12 +501,14 @@ class OrderController extends AbstractController
     private function computeRefund(array $order): array
     {
         $pay = (float) $order['pay_amount'];
-        $rule = Db::table('goods_refund_rule')
-            ->where('goods_id', (int) $order['goods_id'])
-            ->whereNull('deleted_at')
-            ->where(static function ($q) use ($order) {
-                $q->where(static function ($q2) use ($order) {
-                    $q2->where('sku_type', (int) $order['order_type'])->where('sku_id', (int) $order['sku_id']);
+        $orderType = (int) $order['order_type'];
+        $rule = Db::table('goods_refund_rule')->whereNull('deleted_at')
+            ->when($orderType === 1, static fn ($query) => $query->where('property_id', (int) $order['property_id']))
+            ->when($orderType !== 1, static fn ($query) => $query->where('goods_id', (int) $order['goods_id']))
+            ->where(static function ($q) use ($order, $orderType) {
+                $q->where(static function ($q2) use ($order, $orderType) {
+                    $skuId = $orderType === 1 ? (int) $order['room_type_id'] : (int) $order['sku_id'];
+                    $q2->where('sku_type', $orderType)->where('sku_id', $skuId);
                 })->orWhere('sku_type', 0);
             })
             ->orderByDesc('sku_type') // SKU 级(1/2)优先于商品级(0)
@@ -572,6 +586,68 @@ class OrderController extends AbstractController
             'quantity' => (int) $order['quantity'],
             'useDate' => $order['use_date'],
         ]);
+    }
+
+    /** 酒店强制使用物业/房型主键，门票使用商品/票种主键。 */
+    private function resolveCreateTarget(int $siteId): array
+    {
+        $propertyId = $this->intInput('propertyId');
+        $roomTypeId = $this->intInput('roomTypeId');
+        if (($propertyId > 0) !== ($roomTypeId > 0)) {
+            throw new BusinessException(ErrorCode::PARAM_ERROR, '酒店预订必须同时提供 propertyId 和 roomTypeId');
+        }
+        if ($propertyId > 0) {
+            return $this->hotelTarget($siteId, $propertyId, $roomTypeId);
+        }
+
+        $goodsId = $this->requireId('goodsId');
+        $skuId = $this->requireId('skuId');
+        $goods = Db::table('goods_info')->where('id', $goodsId)->where('site_id', $siteId)
+            ->where('status', 3)->whereNull('deleted_at')->first();
+        if (! $goods) {
+            throw new BusinessException(ErrorCode::NOT_FOUND, '商品不存在或已下架');
+        }
+        $goods = (array) $goods;
+        if ((int) $goods['goods_type'] !== 2) {
+            throw new BusinessException(ErrorCode::DATA_CONFLICT, '该商品类型不支持下单');
+        }
+        $sku = Db::table('ticket_type')->where('id', $skuId)->where('goods_id', $goodsId)
+            ->where('status', 1)->whereNull('deleted_at')->first();
+        if (! $sku) {
+            throw new BusinessException(ErrorCode::NOT_FOUND, '票种不存在或已停售');
+        }
+        return [
+            'orderType' => 2, 'propertyId' => 0, 'roomTypeId' => 0,
+            'goodsId' => $goodsId, 'skuId' => $skuId, 'sku' => (array) $sku,
+            'merchantId' => (int) $goods['merchant_id'], 'supplierId' => (int) $goods['supplier_id'],
+            'name' => (string) $goods['goods_name'], 'image' => (string) $goods['cover_image'], 'owner' => $goods,
+        ];
+    }
+
+    private function hotelTarget(int $siteId, int $propertyId, int $roomTypeId): array
+    {
+        $property = Db::table('merchant_store')->where('id', $propertyId)->where('site_id', $siteId)
+            ->where('business_type', 'hotel')->where('status', 1)->where('kyc_status', 1)
+            ->where('content_status', 2)->where('publish_status', 1)->where('operating_status', 1)
+            ->whereNull('deleted_at')->first();
+        if (! $property) {
+            throw new BusinessException(ErrorCode::NOT_FOUND, '酒店物业不存在或暂不可预订');
+        }
+        $room = Db::table('hotel_room_type')->where('id', $roomTypeId)->where('property_id', $propertyId)
+            ->where('status', 1)->where('publish_status', 2)->whereNull('deleted_at')->first();
+        if (! $room) {
+            throw new BusinessException(ErrorCode::NOT_FOUND, '房型不存在或已停售');
+        }
+        $images = is_string($property->images ?? null)
+            ? (json_decode((string) $property->images, true) ?: [])
+            : (array) ($property->images ?? []);
+        return [
+            'orderType' => 1, 'propertyId' => $propertyId, 'roomTypeId' => $roomTypeId,
+            'goodsId' => 0, 'skuId' => 0, 'sku' => (array) $room,
+            'merchantId' => (int) $property->merchant_id, 'supplierId' => 0,
+            'name' => (string) $property->store_name,
+            'image' => is_string($images[0] ?? null) ? $images[0] : '', 'owner' => (array) $property,
+        ];
     }
 
     /** 取本人订单,不存在抛404 */
