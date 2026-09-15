@@ -8,7 +8,7 @@
  *   - 本页是常驻 Tab,**必须用 useFocusEffect 而不是 useEffect** ——
  *     否则在酒店页收藏 / 下单后切回来还是旧数据(挂载不会重来)。
  *   - 登录后一律显示真实数据(可能为空);未登录时清空,由页面决定是否拿设计稿示例卡占位。
- *   - 收藏接口 join 商品直出、不含起价,补齐成 StayCard 需要的 GoodsItem 形状(minPrice=0)。
+ *   - 收藏接口返回物业摘要、不含起价,补齐成 StayCard 需要的 GoodsItem 形状(minPrice=0)。
  */
 
 import { useCallback, useMemo, useState } from 'react';
@@ -17,7 +17,7 @@ import { useTranslation } from 'react-i18next';
 
 import { fetchOrderList } from '@/api/order';
 import { fetchFavoriteList, removeFavorite } from '@/api/user';
-import { ORDER_STATUS } from '@/config/global';
+import { GOODS_TYPE, ORDER_STATUS } from '@/config/global';
 import { colors } from '@/config/theme';
 import { TAB_STATUS, type MyPickTab } from '@/screens/mypick/myPickSections';
 import { useCommonStore } from '@/store/commonStore';
@@ -45,7 +45,7 @@ export interface MyPickData {
   refreshing: boolean;
   refresh: () => void;
   /** 取消收藏:先请求再就地移除(失败不动列表) */
-  unfavorite: (goodsId: number) => Promise<void>;
+  unfavorite: (propertyId: number) => Promise<void>;
 }
 
 export function useMyPickData(): MyPickData {
@@ -74,10 +74,12 @@ export function useMyPickData(): MyPickData {
         setOrders(orderPage.list);
         setFavorites(
           favoritePage.list.map((f) => ({
-            id: f.goods_id,
-            goods_type: f.goods_type,
+            id: f.property_id,
+            property_id: f.property_id,
+            property_name: f.property_name,
+            goods_type: GOODS_TYPE.HOTEL,
             category_id: 0,
-            goods_name: f.goods_name,
+            goods_name: f.property_name,
             goods_brief: '',
             cover_image: f.cover_image,
             address: f.address,
@@ -108,10 +110,10 @@ export function useMyPickData(): MyPickData {
   );
 
   const unfavorite = useCallback(
-    async (goodsId: number) => {
+    async (propertyId: number) => {
       try {
-        await removeFavorite(goodsId);
-        setFavorites((prev) => prev.filter((g) => g.id !== goodsId));
+        await removeFavorite(propertyId);
+        setFavorites((prev) => prev.filter((g) => g.id !== propertyId));
         showToast(t('myPick.savedHotels.removed'));
       } catch (e) {
         showToast(e instanceof Error ? e.message : 'Error');

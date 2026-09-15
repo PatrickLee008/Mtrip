@@ -12,9 +12,11 @@ CREATE TABLE IF NOT EXISTS `user_favorite` (
   `id`         BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '主键',
   `site_id`    BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '所属站点ID',
   `user_id`    BIGINT UNSIGNED NOT NULL COMMENT '用户ID',
-  `goods_id`   BIGINT UNSIGNED NOT NULL COMMENT '酒店商品ID',
+  `property_id` BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '酒店物业ID',
+  `goods_id`   BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '旧酒店商品ID(批次G删除)',
   `created_at` DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '收藏时间',
   PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_user_goods` (`user_id`, `goods_id`),
+  UNIQUE KEY `uk_user_target` (`site_id`, `user_id`, `property_id`, `goods_id`),
+  KEY `idx_property_user` (`property_id`, `user_id`),
   KEY `idx_site_user` (`site_id`, `user_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin COMMENT='用户收藏酒店表';

@@ -10,7 +10,8 @@ import { useTable, type TableRow } from '@/composables/useTable';
 import { useUserStore } from '@/stores/user';
 import { formatAmount } from '@/utils/format';
 import type { StatusItem } from '@/components/StatusTag.vue';
-import { apiGoodsList } from '@/api/goods';
+import { apiGoodsList, apiPropertyRoomList, apiTicketList } from '@/api/goods';
+import { apiStoreList } from '@/api/merchant';
 import {
   apiCouponAdd,
   apiCouponDelete,
@@ -46,9 +47,9 @@ const TYPE_TEXT = computed<Record<number, string>>(() => ({
 }));
 const SCOPE_TEXT = computed<Record<number, string>>(() => ({
   0: t('marketing.coupon.scopeAll'),
-  1: t('marketing.coupon.scopeCategory'),
-  2: t('marketing.coupon.scopeGoods'),
-  3: t('marketing.coupon.scopeGoods'),
+  1: t('marketing.coupon.scopeHotels'),
+  2: t('marketing.coupon.scopeTickets'),
+  3: t('marketing.coupon.scopeSpecific'),
 }));
 const RECEIVE_STATUS_MAP = computed<Record<number, StatusItem>>(() => ({
   0: { text: t('marketing.coupon.receiveLog.unused'), color: 'processing' },
@@ -107,6 +108,9 @@ const form = reactive({
   maxDiscount: 0,
   goodsScope: 0,
   goodsIds: [] as number[],
+  propertyIds: [] as number[],
+  skuIds: [] as number[],
+  roomTypeIds: [] as number[],
   totalCount: 0,
   perUserLimit: 1,
   validType: 1,
@@ -125,14 +129,14 @@ function openCreate(): void {
     minAmount: 0,
     maxDiscount: 0,
     goodsScope: 0,
-    goodsIds: [],
+    goodsIds: [], propertyIds: [], skuIds: [], roomTypeIds: [],
     totalCount: 0,
     perUserLimit: 1,
     validType: 1,
     validRange: [],
     validDays: 30,
     remark: '',
-    siteId: 0,
+    siteId: userStore.profile?.siteId || 0,
   });
   formOpen.value = true;
 }
@@ -147,6 +151,9 @@ function openEdit(row: TableRow): void {
     maxDiscount: Number(row.max_discount),
     goodsScope: row.goods_scope,
     goodsIds: Array.isArray(row.goods_ids) ? row.goods_ids : [],
+    propertyIds: Array.isArray(row.property_ids) ? row.property_ids : [],
+    skuIds: Array.isArray(row.sku_ids) ? row.sku_ids : [],
+    roomTypeIds: Array.isArray(row.room_type_ids) ? row.room_type_ids : [],
     totalCount: row.total_count,
     perUserLimit: row.per_user_limit,
     validType: row.valid_type,
@@ -155,9 +162,11 @@ function openEdit(row: TableRow): void {
     remark: row.remark || '',
     siteId: row.site_id,
   });
-  if (form.goodsScope === 3 && form.goodsIds.length > 0) {
-    // 编辑回显:指定商品选项用 ID 占位
-    goodsOptions.value = form.goodsIds.map((id) => ({ label: `${id}`, value: id }));
+  if (form.goodsScope === 3) {
+    propertyOptions.value = form.propertyIds.map((id) => ({ label: `#${id}`, value: id }));
+    goodsOptions.value = form.goodsIds.map((id) => ({ label: `#${id}`, value: id }));
+    void loadRoomOptions();
+    void loadTicketOptions();
   }
   formOpen.value = true;
 }
@@ -175,7 +184,7 @@ async function submitForm(): Promise<void> {
     message.warning(t('marketing.coupon.form.inputDiscount'));
     return;
   }
-  if (form.goodsScope === 3 && form.goodsIds.length === 0) {
+  if (form.goodsScope === 3 && form.goodsIds.length === 0 && form.propertyIds.length === 0) {
     message.warning(t('marketing.coupon.form.inputValue'));
     return;
   }
@@ -201,6 +210,9 @@ async function submitForm(): Promise<void> {
       maxDiscount: form.couponType === 2 ? form.maxDiscount : 0,
       goodsScope: form.goodsScope,
       goodsIds: form.goodsScope === 3 ? form.goodsIds : undefined,
+      propertyIds: form.goodsScope === 3 ? form.propertyIds : undefined,
+      skuIds: form.goodsScope === 3 ? form.skuIds : undefined,
+      roomTypeIds: form.goodsScope === 3 ? form.roomTypeIds : undefined,
       totalCount: form.totalCount,
       perUserLimit: form.perUserLimit,
       validType: form.validType,
@@ -223,20 +235,77 @@ async function submitForm(): Promise<void> {
   }
 }
 
-// ---------- 商品远程搜索(指定商品范围) ----------
+type ScopeOption = { label: string; value: number };
+
+// ---------- 指定范围:酒店物业/房型与门票商品/票种分开 ----------
+const propertyOptions = ref<ScopeOption[]>([]);
+const propertySearching = ref(false);
 const goodsOptions = ref<{ label: string; value: number }[]>([]);
 const goodsSearching = ref(false);
+const roomOptions = ref<ScopeOption[]>([]);
+const roomLoading = ref(false);
+const ticketOptions = ref<ScopeOption[]>([]);
+const ticketLoading = ref(false);
+
+async function searchProperties(keyword: string): Promise<void> {
+  propertySearching.value = true;
+  try {
+    const data = await apiStoreList({
+      siteId: isSuper ? form.siteId : undefined,
+      storeName: keyword,
+      businessType: 'hotel',
+      page: 1,
+      pageSize: 50,
+    });
+    propertyOptions.value = data.list.map((row: TableRow) => ({
+      label: `#${row.id} ${row.store_name}`,
+      value: Number(row.id),
+    }));
+  } finally {
+    propertySearching.value = false;
+  }
+}
+
+async function loadRoomOptions(): Promise<void> {
+  roomLoading.value = true;
+  try {
+    const lists = await Promise.all(form.propertyIds.map((id) => apiPropertyRoomList(id)));
+    roomOptions.value = lists.flat().map((row: TableRow) => ({
+      label: `#${row.id} ${row.room_name}`,
+      value: Number(row.id),
+    }));
+    const allowed = new Set(roomOptions.value.map((item) => item.value));
+    form.roomTypeIds = form.roomTypeIds.filter((id) => allowed.has(id));
+  } finally {
+    roomLoading.value = false;
+  }
+}
 
 async function searchGoods(keyword: string): Promise<void> {
   goodsSearching.value = true;
   try {
-    const data = await apiGoodsList({ goodsName: keyword, page: 1, pageSize: 20 });
+    const data = await apiGoodsList({ siteId: isSuper ? form.siteId : undefined, goodsType: 2, goodsName: keyword, page: 1, pageSize: 20 });
     goodsOptions.value = data.list.map((row: TableRow) => ({
       label: `#${row.id} ${row.goods_name}`,
       value: row.id,
     }));
   } finally {
     goodsSearching.value = false;
+  }
+}
+
+async function loadTicketOptions(): Promise<void> {
+  ticketLoading.value = true;
+  try {
+    const lists = await Promise.all(form.goodsIds.map((id) => apiTicketList(id)));
+    ticketOptions.value = lists.flat().map((row: TableRow) => ({
+      label: `#${row.id} ${row.ticket_name}`,
+      value: Number(row.id),
+    }));
+    const allowed = new Set(ticketOptions.value.map((item) => item.value));
+    form.skuIds = form.skuIds.filter((id) => allowed.has(id));
+  } finally {
+    ticketLoading.value = false;
   }
 }
 
@@ -324,6 +393,14 @@ watch(activeTab, (tab) => {
     receiveLoaded = true;
     void receive.load();
   }
+});
+watch(() => form.siteId, (siteId, previous) => {
+  if (!formOpen.value || editingId.value !== 0 || siteId === previous) return;
+  Object.assign(form, { propertyIds: [], roomTypeIds: [], goodsIds: [], skuIds: [] });
+  propertyOptions.value = [];
+  roomOptions.value = [];
+  goodsOptions.value = [];
+  ticketOptions.value = [];
 });
 </script>
 
@@ -513,23 +590,66 @@ watch(activeTab, (tab) => {
           <a-input-number v-model:value="form.maxDiscount" :min="0" :precision="2" style="width: 180px" />
           <span style="margin-left: 8px; color: rgba(0, 0, 0, 0.45)">{{ t('marketing.coupon.perUserLimitTip') }}</span>
         </a-form-item>
+        <a-form-item v-if="isSuper && editingId === 0" :label="t('common.site')" required>
+          <SiteTreeSelect v-model:value="form.siteId" style="width: 240px" />
+        </a-form-item>
         <a-form-item :label="t('marketing.coupon.scope')" required>
           <a-select v-model:value="form.goodsScope" style="width: 180px">
             <a-select-option v-for="(text, key) in SCOPE_TEXT" :key="key" :value="Number(key)">{{ text }}</a-select-option>
           </a-select>
         </a-form-item>
-        <a-form-item v-if="form.goodsScope === 3" :label="t('marketing.coupon.scopeGoods')" required>
-          <a-select
-            v-model:value="form.goodsIds"
-            mode="multiple"
-            show-search
-            :placeholder="t('common.pleaseInput')"
-            :filter-option="false"
-            :options="goodsOptions"
-            :loading="goodsSearching"
-            @search="searchGoods"
-          />
-        </a-form-item>
+        <template v-if="form.goodsScope === 3">
+          <a-divider orientation="left">{{ t('marketing.coupon.hotelScope') }}</a-divider>
+          <a-form-item :label="t('marketing.coupon.properties')">
+            <a-select
+              v-model:value="form.propertyIds"
+              mode="multiple"
+              show-search
+              :placeholder="t('marketing.coupon.propertyPlaceholder')"
+              :filter-option="false"
+              :options="propertyOptions"
+              :loading="propertySearching"
+              @focus="searchProperties('')"
+              @search="searchProperties"
+              @change="loadRoomOptions()"
+            />
+          </a-form-item>
+          <a-form-item :label="t('marketing.coupon.roomTypes')">
+            <a-select
+              v-model:value="form.roomTypeIds"
+              mode="multiple"
+              :disabled="form.propertyIds.length === 0"
+              :placeholder="t('marketing.coupon.roomPlaceholder')"
+              :options="roomOptions"
+              :loading="roomLoading"
+            />
+          </a-form-item>
+          <a-divider orientation="left">{{ t('marketing.coupon.ticketScope') }}</a-divider>
+          <a-form-item :label="t('marketing.coupon.ticketGoods')">
+            <a-select
+              v-model:value="form.goodsIds"
+              mode="multiple"
+              show-search
+              :placeholder="t('marketing.coupon.ticketPlaceholder')"
+              :filter-option="false"
+              :options="goodsOptions"
+              :loading="goodsSearching"
+              @focus="searchGoods('')"
+              @search="searchGoods"
+              @change="loadTicketOptions()"
+            />
+          </a-form-item>
+          <a-form-item :label="t('marketing.coupon.ticketTypes')">
+            <a-select
+              v-model:value="form.skuIds"
+              mode="multiple"
+              :disabled="form.goodsIds.length === 0"
+              :placeholder="t('marketing.coupon.ticketTypePlaceholder')"
+              :options="ticketOptions"
+              :loading="ticketLoading"
+            />
+          </a-form-item>
+        </template>
         <a-form-item :label="t('marketing.coupon.totalCount')" required>
           <a-input-number v-model:value="form.totalCount" :min="0" :precision="0" style="width: 180px" />
           <span style="margin-left: 8px; color: rgba(0, 0, 0, 0.45)">{{ t('marketing.coupon.perUserLimitTip') }}</span>
@@ -548,9 +668,6 @@ watch(activeTab, (tab) => {
         </a-form-item>
         <a-form-item v-if="form.validType === 2" :label="t('marketing.coupon.validTo')" required>
           <a-input-number v-model:value="form.validDays" :min="1" :precision="0" style="width: 180px" />
-        </a-form-item>
-        <a-form-item v-if="isSuper && editingId === 0" :label="t('common.site')" required>
-          <SiteTreeSelect v-model:value="form.siteId" style="width: 240px" />
         </a-form-item>
         <a-form-item :label="t('common.remark')">
           <a-textarea v-model:value="form.remark" :rows="3" :maxlength="500" :placeholder="t('common.optional')" />

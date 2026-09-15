@@ -42,18 +42,21 @@ function mediaIsPublic(string $url): bool
         && str_starts_with((string) curl_getinfo($ch, CURLINFO_CONTENT_TYPE), 'image/');
 }
 
-$goodsId = $roomId = 0; $uploadedUrl = '';
+$propertyId = $roomId = 0; $uploadedUrl = '';
 try {
     $account = (array) Db::table('merchant_admin')->where('username', 'codex_menu_context')->first();
     check($account !== [], 'HTTP fixture merchant account exists');
-    $goodsId = (int) Db::table('goods_info')->insertGetId(['site_id' => $account['site_id'], 'merchant_id' => $account['merchant_id'], 'goods_name' => 'Room HTTP hotel', 'goods_type' => 1, 'status' => 3]);
+    $propertyId = (int) Db::table('merchant_store')->insertGetId([
+        'site_id' => $account['site_id'], 'merchant_id' => $account['merchant_id'], 'store_name' => 'Room HTTP hotel',
+        'business_type' => 'hotel', 'status' => 1, 'kyc_status' => 1,
+    ]);
     $secret = (string) config('mtrip.jwt_secret');
     $merchantToken = JwtHelper::issue(['admin_id' => (int) $account['id'], 'admin_name' => 'Room HTTP merchant', 'site_id' => (int) $account['site_id'], 'aud' => 'merchant', 'account_type' => 2, 'group_id' => 0, 'merchant_id' => (int) $account['merchant_id'], 'store_id' => 0, 'is_owner' => true, 'permissions' => ['mch:rooms:add', 'mch:rooms:edit', 'mch:rooms:delete', 'mch:rooms:status'], 'auth_version' => (int) $account['auth_version'], 'amr' => 'totp'], $secret, 600);
     $adminToken = JwtHelper::issue(['admin_id' => 1, 'admin_name' => 'Room HTTP reviewer', 'site_id' => 0, 'is_super' => true, 'permissions' => ['goods:audit:audit'], 'aud' => 'admin'], $secret, 600);
     $media = upload($merchantToken); $uploadedUrl = (string) $media['url'];
     check(str_starts_with($uploadedUrl, '/uploads/rooms/'), 'merchant HTTP media upload returns shared URL');
     check(mediaIsPublic($uploadedUrl), 'uploaded room image is publicly readable through gateway');
-    $payload = ['goodsId' => $goodsId, 'roomName' => 'HTTP Room v1', 'roomCode' => 'HTTP-RR', 'description' => 'HTTP review', 'bedType' => '1 King Bed', 'bedCount' => 1, 'area' => '38', 'maxAdults' => 2, 'maxChildren' => 1, 'maxGuests' => 3, 'floorName' => '4-8', 'roomView' => 'Ocean View', 'smoking' => 0, 'mealPlan' => 'Breakfast Included', 'cancellationPolicy' => 'Flexible', 'checkinNotes' => 'ID', 'currency' => 'THB', 'basePrice' => 1000, 'weekendPrice' => 1200, 'extraBedPrice' => 200, 'baseStock' => 8, 'launchStock' => 4, 'images' => [$uploadedUrl], 'videoUrl' => '', 'facilities' => ['WiFi'], 'status' => 1, 'publishStatus' => 1];
+    $payload = ['propertyId' => $propertyId, 'roomName' => 'HTTP Room v1', 'roomCode' => 'HTTP-RR', 'description' => 'HTTP review', 'bedType' => '1 King Bed', 'bedCount' => 1, 'area' => '38', 'maxAdults' => 2, 'maxChildren' => 1, 'maxGuests' => 3, 'floorName' => '4-8', 'roomView' => 'Ocean View', 'smoking' => 0, 'mealPlan' => 'Breakfast Included', 'cancellationPolicy' => 'Flexible', 'checkinNotes' => 'ID', 'currency' => 'THB', 'basePrice' => 1000, 'weekendPrice' => 1200, 'extraBedPrice' => 200, 'baseStock' => 8, 'launchStock' => 4, 'images' => [$uploadedUrl], 'videoUrl' => '', 'facilities' => ['WiFi'], 'status' => 1, 'publishStatus' => 1];
     $created = api('/api/v1/merchant/rooms/save', $merchantToken, $payload);
     echo 'HTTP save keys: ' . implode(',', array_keys($created)) . "\n";
     $roomId = (int) $created['id'];
@@ -73,7 +76,7 @@ try {
 } finally {
     if ($roomId > 0) Db::table('hotel_room_type_revision')->where('room_id', $roomId)->delete();
     if ($roomId > 0) Db::table('hotel_room_type')->where('id', $roomId)->delete();
-    if ($goodsId > 0) Db::table('goods_info')->where('id', $goodsId)->delete();
+    if ($propertyId > 0) Db::table('merchant_store')->where('id', $propertyId)->delete();
     if ($uploadedUrl !== '') @unlink('/opt/www' . $uploadedUrl);
     Db::table('merchant_activity_log')->where('performed_by_id', 4025)->where('description', 'like', '%/merchant/rooms/%')->delete();
 }

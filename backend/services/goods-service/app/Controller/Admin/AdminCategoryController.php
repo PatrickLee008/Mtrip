@@ -12,7 +12,7 @@ use Mtrip\Shared\Exception\BusinessException;
 use Mtrip\Shared\Support\Result;
 
 /**
- * 商品分类管理:树形列表 / 保存(带 id 编辑,不带新增) / 删除
+ * 门票商品分类管理:树形列表 / 保存(带 id 编辑,不带新增) / 删除
  * 两级分类,parent_id=0 为根;删除须无子分类且无关联商品
  */
 class AdminCategoryController extends AbstractAdminController
@@ -20,11 +20,8 @@ class AdminCategoryController extends AbstractAdminController
     /** 分类树:按类型筛选,children 嵌套(两级) */
     public function index(): array
     {
-        $query = Db::table('goods_category')->whereNull('deleted_at');
+        $query = Db::table('goods_category')->where('goods_type', 2)->whereNull('deleted_at');
         $this->applySiteScope($query);
-        if (($type = $this->intInput('goodsType')) > 0) {
-            $query->where('goods_type', $type);
-        }
         $status = $this->input('status');
         if ($status !== null && $status !== '') {
             $query->where('status', (int) $status);
@@ -80,9 +77,9 @@ class AdminCategoryController extends AbstractAdminController
             return Result::success(['id' => (int) $category['id']], '分类已更新');
         }
 
-        $goodsType = $this->intInput('goodsType', 1);
-        if (! in_array($goodsType, [1, 2], true)) {
-            throw new BusinessException(ErrorCode::PARAM_ERROR, '参数 goodsType 不正确');
+        $goodsType = $this->intInput('goodsType', 2);
+        if ($goodsType !== 2) {
+            throw new BusinessException(ErrorCode::PARAM_ERROR, '当前分类接口仅支持门票');
         }
         $siteId = AdminContext::isSuper() ? $this->requireId('siteId') : AdminContext::siteId();
         $data['site_id'] = $siteId;
@@ -116,7 +113,7 @@ class AdminCategoryController extends AbstractAdminController
     /** 取分类并校验站点数据权限 */
     private function findScoped(int $id): array
     {
-        $category = Db::table('goods_category')->where('id', $id)->whereNull('deleted_at')->first();
+        $category = Db::table('goods_category')->where('id', $id)->where('goods_type', 2)->whereNull('deleted_at')->first();
         if (! $category) {
             throw new BusinessException(ErrorCode::NOT_FOUND, '分类不存在');
         }

@@ -11,7 +11,7 @@ import {
   LogoutOutlined,
   ShopOutlined,
 } from '@ant-design/icons-vue';
-import type { MerchantBusiness, MenuNode } from '@/api/types';
+import type { MerchantProperty, MenuNode } from '@/api/types';
 import { useUserStore } from '@/stores/user';
 import SupportBanner from '@/components/SupportBanner.vue';
 import AppHeader from './components/AppHeader.vue';
@@ -23,15 +23,15 @@ const route = useRoute();
 const router = useRouter();
 
 const switcherOpen = ref(false);
-const currentBusiness = computed(() => userStore.selectedBusiness);
-const businessGroups = computed(() => {
-  const groups = new Map<string, MerchantBusiness[]>();
-  for (const business of userStore.businesses) {
-    const list = groups.get(business.business_type) ?? [];
-    list.push(business);
-    groups.set(business.business_type, list);
+const currentProperty = computed(() => userStore.selectedProperty);
+const propertyGroups = computed(() => {
+  const groups = new Map<string, MerchantProperty[]>();
+  for (const property of userStore.properties) {
+    const list = groups.get(property.business_type) ?? [];
+    list.push(property);
+    groups.set(property.business_type, list);
   }
-  return Array.from(groups.entries()).map(([type, businesses]) => ({ type, businesses }));
+  return Array.from(groups.entries()).map(([type, properties]) => ({ type, properties }));
 });
 
 function businessTypeLabel(type: string): string {
@@ -47,11 +47,11 @@ function toggleSwitcher(): void {
   switcherOpen.value = !switcherOpen.value;
 }
 
-function selectBusiness(id: number | null): void {
-  userStore.selectBusiness(id);
+function selectProperty(id: number | null): void {
+  userStore.selectProperty(id);
   switcherOpen.value = false;
-  if (route.path !== '/dashboard' && !containsPath(userStore.visibleMenus, route.path)) {
-    void router.push('/dashboard');
+  if (!['/dashboard', '/properties'].includes(route.path) && !route.path.startsWith('/properties/') && !containsPath(userStore.visibleMenus, route.path)) {
+    void router.push('/properties');
   }
 }
 
@@ -93,21 +93,21 @@ function onLogout(): void {
         </div>
       </div>
 
-      <!-- 业务切换器:默认全局视图,选择具体注册业务后显示该业务模块菜单 -->
+      <!-- 物业切换器:默认全部物业,选择后收窄后端数据范围 -->
       <div class="switcher-area">
         <div :class="['subject-switcher', { open: switcherOpen }]" @click="toggleSwitcher">
-          <HomeOutlined v-if="!currentBusiness" class="switcher-icon" />
-          <BankOutlined v-else-if="currentBusiness.business_type === 'hotel'" class="switcher-icon hotel" />
-          <CoffeeOutlined v-else-if="currentBusiness.business_type === 'restaurant'" class="switcher-icon restaurant" />
+          <HomeOutlined v-if="!currentProperty" class="switcher-icon" />
+          <BankOutlined v-else-if="currentProperty.business_type === 'hotel'" class="switcher-icon hotel" />
+          <CoffeeOutlined v-else-if="currentProperty.business_type === 'restaurant'" class="switcher-icon restaurant" />
           <ShopOutlined v-else class="switcher-icon" />
           <div class="switcher-text">
             <div class="switcher-title">
-              {{ currentBusiness ? currentBusiness.business_name : t('sidebar.allBusinesses') }}
+              {{ currentProperty ? currentProperty.business_name : t('sidebar.allProperties') }}
             </div>
             <div class="switcher-sub">
               {{
-                currentBusiness
-                  ? [businessTypeLabel(currentBusiness.business_type), currentBusiness.city].filter(Boolean).join(' · ')
+                currentProperty
+                  ? [businessTypeLabel(currentProperty.business_type), currentProperty.city].filter(Boolean).join(' · ')
                   : t('sidebar.portfolioView')
               }}
             </div>
@@ -115,40 +115,40 @@ function onLogout(): void {
           <DownOutlined :class="['switcher-chevron', { rotated: switcherOpen }]" />
         </div>
 
-        <!-- 下拉面板:真实注册业务按业态分组 -->
+        <!-- 下拉面板:真实酒店物业 -->
         <div v-if="switcherOpen" class="switcher-panel" @click.stop>
           <div
-            :class="['panel-item', 'panel-all', { selected: userStore.selectedBusinessId === null }]"
-            @click="selectBusiness(null)"
+            :class="['panel-item', 'panel-all', { selected: userStore.selectedPropertyId === null }]"
+            @click="selectProperty(null)"
           >
             <HomeOutlined class="panel-item-icon" />
             <div class="panel-item-text">
-              <div class="panel-item-title">{{ t('sidebar.allBusinesses') }}</div>
+              <div class="panel-item-title">{{ t('sidebar.allProperties') }}</div>
               <div class="panel-item-sub">{{ t('sidebar.portfolioOverview') }}</div>
             </div>
           </div>
 
-          <template v-for="group in businessGroups" :key="group.type">
+          <template v-for="group in propertyGroups" :key="group.type">
             <div class="panel-group-title">{{ businessTypeLabel(group.type) }}</div>
             <div
-              v-for="business in group.businesses"
-              :key="business.id"
-              :class="['panel-item', { selected: userStore.selectedBusinessId === business.id }]"
-              @click="selectBusiness(business.id)"
+              v-for="property in group.properties"
+              :key="property.id"
+              :class="['panel-item', { selected: userStore.selectedPropertyId === property.id }]"
+              @click="selectProperty(property.id)"
             >
-              <BankOutlined v-if="business.business_type === 'hotel'" class="panel-item-icon hotel" />
-              <CoffeeOutlined v-else-if="business.business_type === 'restaurant'" class="panel-item-icon restaurant" />
+              <BankOutlined v-if="property.business_type === 'hotel'" class="panel-item-icon hotel" />
+              <CoffeeOutlined v-else-if="property.business_type === 'restaurant'" class="panel-item-icon restaurant" />
               <ShopOutlined v-else class="panel-item-icon" />
               <div class="panel-item-text">
-                <div class="panel-item-title">{{ business.business_name }}</div>
+                <div class="panel-item-title">{{ property.business_name }}</div>
                 <div class="panel-item-sub">
-                  {{ business.city || business.merchant_name }}
+                  {{ property.city || property.merchant_name }}
                 </div>
               </div>
             </div>
           </template>
 
-          <div v-if="userStore.businesses.length === 0" class="panel-empty">
+          <div v-if="userStore.properties.length === 0" class="panel-empty">
             {{ t('sidebar.noBusinesses') }}
           </div>
         </div>

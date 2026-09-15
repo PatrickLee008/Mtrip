@@ -233,6 +233,9 @@
         "allHotels": "Valid on all hotel bookings",
         "allGoods": "Valid on all products",
         "rooms": "Valid for selected room types: {{list}}",
+        "allTickets": "Valid on all ticket goods",
+        "ticketGoods": "Valid for selected ticket goods: {{list}}",
+        "ticketTypes": "Valid for selected ticket types: {{list}}",
         "stackable": "Can be combined with other offers",
         "notStackable": "Cannot be combined with other offers",
         "period": "Valid from {{start}} to {{end}}"

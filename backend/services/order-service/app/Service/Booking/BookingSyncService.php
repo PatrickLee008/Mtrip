@@ -32,7 +32,7 @@ class BookingSyncService
     protected BookingEventService $events;
 
     /** 酒店是否已配置同步连接器(本期无连接器资料,恒为未连接) */
-    public function isConnected(int $siteId, int $merchantId, int $goodsId): bool
+    public function isConnected(int $siteId, int $merchantId, int $propertyId): bool
     {
         // 后续接入:按酒店读取连接器配置;本期没有服务商资料,恒未连接
         return $this->connector() !== null;
@@ -41,7 +41,7 @@ class BookingSyncService
     /** 订单同步状态展示值 */
     public function statusOf(array $order): string
     {
-        $connected = $this->isConnected((int) $order['site_id'], (int) $order['merchant_id'], (int) $order['goods_id']);
+        $connected = $this->isConnected((int) $order['site_id'], (int) $order['merchant_id'], (int) $order['property_id']);
         if (! $connected) {
             return BookingConst::SYNC_NOT_CONNECTED;
         }
@@ -54,7 +54,7 @@ class BookingSyncService
      */
     public function forceSync(array $order, string $target = 'pms'): array
     {
-        if (! $this->isConnected((int) $order['site_id'], (int) $order['merchant_id'], (int) $order['goods_id'])) {
+        if (! $this->isConnected((int) $order['site_id'], (int) $order['merchant_id'], (int) $order['property_id'])) {
             throw new BusinessException(ErrorCode::DATA_CONFLICT, 'PMS/Channel Manager 未连接,无法同步');
         }
         $key = $target . ':' . (int) $order['id'] . ':' . (int) $order['version'];
@@ -68,7 +68,11 @@ class BookingSyncService
             'status' => 0,
             'next_retry_at' => date('Y-m-d H:i:s'),
             'idempotency_key' => $key,
-            'payload' => json_encode(['orderNo' => $order['order_no'], 'bookingStatus' => $order['booking_status']], JSON_UNESCAPED_UNICODE),
+            'payload' => json_encode([
+                'orderNo' => $order['order_no'],
+                'propertyId' => (int) $order['property_id'],
+                'bookingStatus' => $order['booking_status'],
+            ], JSON_UNESCAPED_UNICODE),
         ]);
         // 真实状态展示:入队即置待同步,页面不显示 synced 直到任务成功
         $statusColumn = $target === 'channel' ? 'channel_sync_status' : 'pms_sync_status';

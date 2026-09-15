@@ -4,12 +4,12 @@
       <div class="toolbar">
         <div class="selector-wrap">
           <HomeOutlined class="selector-icon" />
-          <a-select v-model:value="filters.goodsId" class="hotel-filter" :placeholder="t('availability.filters.allHotels')" allow-clear @change="handleHotelChange">
+          <a-select v-model:value="filters.propertyId" class="hotel-filter" :placeholder="t('availability.filters.allHotels')" allow-clear @change="handleHotelChange">
             <a-select-option v-for="hotel in hotelOptions" :key="hotel.id" :value="hotel.id">{{ hotel.name }}</a-select-option>
           </a-select>
         </div>
         <span class="property-pill"><HomeOutlined />{{ t('availability.propertyCount', { count: hotelOptions.length }) }}</span>
-        <a-select v-if="filters.goodsId" v-model:value="filters.roomId" class="room-filter" :placeholder="t('availability.filters.allRooms')" allow-clear @change="loadCalendar">
+        <a-select v-if="filters.propertyId" v-model:value="filters.roomId" class="room-filter" :placeholder="t('availability.filters.allRooms')" allow-clear @change="loadCalendar">
           <a-select-option v-for="room in roomsForSelectedHotel" :key="room.id" :value="room.id">{{ room.name }}</a-select-option>
         </a-select>
         <a-range-picker v-model:value="dateRange" value-format="YYYY-MM-DD" class="date-range" @change="loadCalendar" />
@@ -31,10 +31,10 @@
           <a-spin :spinning="loading">
             <div class="calendar-card">
               <table class="calendar-table">
-                <thead><tr><th class="sticky room-col">{{ filters.goodsId ? t('availability.columns.roomType') : t('availability.columns.hotelRoom') }}</th><th v-for="date in dates" :key="date" :class="{ weekend: isWeekend(date) }"><strong>{{ dayNumber(date) }}</strong><span>{{ weekdayLabel(date) }}</span></th></tr></thead>
+                <thead><tr><th class="sticky room-col">{{ filters.propertyId ? t('availability.columns.roomType') : t('availability.columns.hotelRoom') }}</th><th v-for="date in dates" :key="date" :class="{ weekend: isWeekend(date) }"><strong>{{ dayNumber(date) }}</strong><span>{{ weekdayLabel(date) }}</span></th></tr></thead>
                 <tbody>
                   <template v-for="hotel in hotels" :key="hotel.id">
-                    <tr v-if="!filters.goodsId" class="hotel-row"><td :colspan="dates.length + 1"><span></span><strong>{{ hotel.name }}</strong><em>{{ t('availability.roomTypeCount', { count: hotel.rooms.length }) }}</em></td></tr>
+                    <tr v-if="!filters.propertyId" class="hotel-row"><td :colspan="dates.length + 1"><span></span><strong>{{ hotel.name }}</strong><em>{{ t('availability.roomTypeCount', { count: hotel.rooms.length }) }}</em></td></tr>
                     <tr v-for="room in hotel.rooms" :key="room.id">
                       <td class="sticky room-col room-cell"><strong>{{ room.name }}</strong><span>{{ t('availability.roomMeta', { total: room.base_stock, available: room.base_stock }) }}</span></td>
                       <td v-for="day in room.days || []" :key="day.date" :class="{ weekend: isWeekend(day.date) }" @click="openCell(hotel, room, day)">
@@ -92,7 +92,7 @@ const bulkTab = ref('prices');
 const hotels = ref<AvailabilityHotel[]>([]);
 const dates = ref<string[]>([]);
 const summary = reactive({ hotelCount: 0, roomCount: 0, lowInventoryCells: 0, closedCells: 0, pms: '', channelManager: '', lastSyncAt: '' });
-const filters = reactive<{ goodsId?: number; roomId?: number }>({});
+const filters = reactive<{ propertyId?: number; roomId?: number }>({});
 const dateRange = ref<[string, string]>([dayjs().format('YYYY-MM-DD'), dayjs().add(13, 'day').format('YYYY-MM-DD')]);
 const activeCell = ref<{ hotel: AvailabilityHotel; room: AvailabilityRoom; day: AvailabilityDay } | null>(null);
 const logs = ref<StockLogRow[]>([]);
@@ -101,11 +101,11 @@ const bulkForm = reactive<{ range?: [string, string]; roomIds: number[]; price?:
 const alerts = reactive([{ key: 'low', title: computed(() => t('availability.alerts.lowTitle')), desc: computed(() => t('availability.alerts.lowDesc')), resolved: false }, { key: 'sync', title: computed(() => t('availability.alerts.syncTitle')), desc: computed(() => t('availability.alerts.syncDesc')), resolved: false }]);
 const pricingRules = computed(() => [{ id: 'weekend', label: t('availability.rules.weekend'), value: '1.28x', active: true }, { id: 'early', label: t('availability.rules.earlyBird'), value: '-10%', active: true }, { id: 'min', label: t('availability.rules.minStay'), value: '2', active: true }]);
 const hotelOptions = computed(() => hotels.value.map(({ id, name }) => ({ id, name })));
-const roomsForSelectedHotel = computed(() => hotels.value.find((hotel) => hotel.id === filters.goodsId)?.rooms || []);
+const roomsForSelectedHotel = computed(() => hotels.value.find((hotel) => hotel.id === filters.propertyId)?.rooms || []);
 const allRooms = computed(() => hotels.value.flatMap((hotel) => hotel.rooms));
 const activeAlertCount = computed(() => alerts.filter((item) => !item.resolved).length);
 
-async function loadCalendar() { loading.value = true; try { const data = await apiAvailabilityCalendar({ goodsId: filters.goodsId, roomId: filters.roomId, startDate: dateRange.value?.[0], endDate: dateRange.value?.[1] }); hotels.value = data.hotels; dates.value = data.dates; Object.assign(summary, data.summary); } finally { loading.value = false; } }
+async function loadCalendar() { loading.value = true; try { const data = await apiAvailabilityCalendar({ propertyId: filters.propertyId, roomId: filters.roomId, startDate: dateRange.value?.[0], endDate: dateRange.value?.[1] }); hotels.value = data.hotels; dates.value = data.dates; Object.assign(summary, data.summary); } finally { loading.value = false; } }
 function handleHotelChange() { filters.roomId = undefined; void loadCalendar(); }
 function isWeekend(date: string) { const day = dayjs(date).day(); return day === 5 || day === 6; }
 function dayNumber(date: string) { return dayjs(date).format('DD'); }
@@ -113,8 +113,8 @@ function weekdayLabel(date: string) { return dayjs(date).format('ddd'); }
 function priceShort(price: number) { return price >= 1000 ? `${(price / 1000).toFixed(1)}K` : String(price); }
 function cellTone(day: AvailabilityDay) { if (day.isClosed) return 'closed'; if (day.stockLeft === 0) return 'sold'; if (day.stockLeft <= 2) return 'low'; return 'available'; }
 function isActiveCell(roomId: number, date: string) { return activeCell.value?.room.id === roomId && activeCell.value?.day.date === date; }
-async function openCell(hotel: AvailabilityHotel, room: AvailabilityRoom, day: AvailabilityDay) { activeCell.value = { hotel, room, day }; Object.assign(cellForm, { price: day.price, stockTotal: day.stockTotal, minStay: day.minStay, maxStay: day.maxStay, isClosed: day.isClosed === 1, closedToArrival: day.closedToArrival === 1, closedToDeparture: day.closedToDeparture === 1 }); logs.value = await apiAvailabilityLogs({ goodsId: hotel.id, skuId: room.id, stockDate: day.date }); }
-async function saveCell() { if (!activeCell.value) return; saving.value = true; try { await apiAvailabilitySaveDay({ goodsId: activeCell.value.hotel.id, skuId: activeCell.value.room.id, stockDate: activeCell.value.day.date, price: cellForm.price, stockTotal: cellForm.stockTotal, minStay: cellForm.minStay, maxStay: cellForm.maxStay, isClosed: cellForm.isClosed ? 1 : 0, closedToArrival: cellForm.closedToArrival ? 1 : 0, closedToDeparture: cellForm.closedToDeparture ? 1 : 0, source: 'manual' }); message.success(t('common.saveSuccess')); await loadCalendar(); } finally { saving.value = false; } }
+async function openCell(hotel: AvailabilityHotel, room: AvailabilityRoom, day: AvailabilityDay) { activeCell.value = { hotel, room, day }; Object.assign(cellForm, { price: day.price, stockTotal: day.stockTotal, minStay: day.minStay, maxStay: day.maxStay, isClosed: day.isClosed === 1, closedToArrival: day.closedToArrival === 1, closedToDeparture: day.closedToDeparture === 1 }); logs.value = await apiAvailabilityLogs({ propertyId: hotel.id, roomTypeId: room.id, stockDate: day.date }); }
+async function saveCell() { if (!activeCell.value) return; saving.value = true; try { await apiAvailabilitySaveDay({ propertyId: activeCell.value.hotel.id, roomTypeId: activeCell.value.room.id, stockDate: activeCell.value.day.date, price: cellForm.price, stockTotal: cellForm.stockTotal, minStay: cellForm.minStay, maxStay: cellForm.maxStay, isClosed: cellForm.isClosed ? 1 : 0, closedToArrival: cellForm.closedToArrival ? 1 : 0, closedToDeparture: cellForm.closedToDeparture ? 1 : 0, source: 'manual' }); message.success(t('common.saveSuccess')); await loadCalendar(); } finally { saving.value = false; } }
 async function applyBulk() { if (!bulkForm.range?.[0] || !bulkForm.range?.[1] || bulkForm.roomIds.length === 0) { message.warning(t('availability.bulk.requiredTip')); return; } bulkSaving.value = true; try { const payload: Record<string, unknown> = { startDate: bulkForm.range[0], endDate: bulkForm.range[1], roomIds: bulkForm.roomIds }; if (bulkTab.value === 'prices') payload.price = bulkForm.price; if (bulkTab.value === 'inventory') payload.stockTotal = bulkForm.stockTotal; if (bulkTab.value === 'restrictions') { payload.isClosed = bulkForm.isClosed ? 1 : 0; payload.closedToArrival = bulkForm.closedToArrival ? 1 : 0; payload.closedToDeparture = bulkForm.closedToDeparture ? 1 : 0; } await apiAvailabilityBatchSet(payload); message.success(t('common.opSuccess')); bulkOpen.value = false; await loadCalendar(); } finally { bulkSaving.value = false; } }
 async function syncNow() { syncing.value = true; try { const data = await apiAvailabilitySyncNow(); summary.lastSyncAt = data.lastSyncAt; message.success(t('common.opSuccess')); } finally { syncing.value = false; } }
 

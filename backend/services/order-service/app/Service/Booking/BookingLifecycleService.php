@@ -31,7 +31,7 @@ class BookingLifecycleService
      * 下单时组装预订字段(须在下单事务内调用):
      * 预订/支付状态、10 分钟支付截止、特殊请求与政策快照(政策此后不再随规则修改变化)。
      */
-    public function buildCreateFields(int $orderType, int $goodsId, int $skuId, string $remark): array
+    public function buildCreateFields(int $orderType, int $propertyId, int $roomTypeId, string $remark): array
     {
         $fields = [
             'booking_status' => BookingConst::STATUS_PENDING_PAYMENT,
@@ -41,7 +41,7 @@ class BookingLifecycleService
             'special_requests' => mb_substr($remark, 0, 1000),
         ];
         if ($orderType === 1) {
-            $policy = $this->currentRefundPolicy($goodsId, $skuId);
+            $policy = $this->currentRefundPolicy($propertyId, $roomTypeId);
             $fields['cancellation_policy_snapshot'] = $policy !== null
                 ? json_encode($policy + ['snapshotAt' => date('Y-m-d H:i:s')], JSON_UNESCAPED_UNICODE)
                 : null;
@@ -52,13 +52,13 @@ class BookingLifecycleService
     }
 
     /** 下单时冻结的取消政策(房型级优先于商品级;无规则=免费取消) */
-    public function currentRefundPolicy(int $goodsId, int $skuId): ?array
+    public function currentRefundPolicy(int $propertyId, int $roomTypeId): ?array
     {
         $rule = Db::table('goods_refund_rule')
-            ->where('goods_id', $goodsId)->whereNull('deleted_at')
-            ->where(static function ($q) use ($skuId) {
-                $q->where(static function ($q2) use ($skuId) {
-                    $q2->where('sku_type', 1)->where('sku_id', $skuId);
+            ->where('property_id', $propertyId)->whereNull('deleted_at')
+            ->where(static function ($q) use ($roomTypeId) {
+                $q->where(static function ($q2) use ($roomTypeId) {
+                    $q2->where('sku_type', 1)->where('sku_id', $roomTypeId);
                 })->orWhere('sku_type', 0);
             })
             ->orderByDesc('sku_type')->first();

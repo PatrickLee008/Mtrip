@@ -84,9 +84,9 @@ export interface BookingStay {
    * 照着设计稿凭空展示 10% 税费会与实际扣款对不上。
    */
   demo: boolean;
-  /** 真实模式下的商品与房型 id,用于下单 */
-  goodsId?: number;
-  skuId?: number;
+  /** 真实模式下的物业与房型 id,用于下单 */
+  propertyId?: number;
+  roomTypeId?: number;
   /**
    * **每晚每间**的价格基数。展示用的 `originalPrice`/`roomPrice`/`taxes`/`total`/`points`
    * 一律由它 × 晚数 × 间数推出(见 `scaleStay`),所以改日期或加减房间时金额会跟着动。

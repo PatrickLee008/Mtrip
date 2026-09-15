@@ -21,7 +21,7 @@ class RankingController extends AbstractController
     {
         $params = [];
         foreach (['siteId', 'businessType', 'countryCode', 'cityKey', 'region', 'entityType', 'expectedVersion', 'note',
-            'id', 'ids', 'propertyId', 'goodsId', 'pinned', 'featured', 'status', 'name', 'tagline', 'imageUrl',
+            'id', 'ids', 'propertyId', 'pinned', 'featured', 'status', 'name', 'tagline', 'imageUrl',
             'destinationCountry', 'destinationCity', 'displayEnabled', 'expectedPropertyVersion'] as $key) {
             $value = $this->input($key);
             if ($value !== null) $params[$key] = $value;

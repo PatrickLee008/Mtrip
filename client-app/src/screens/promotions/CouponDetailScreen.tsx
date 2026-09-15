@@ -269,7 +269,7 @@ function buildTerms(coupon: CouponView, t: TFunction, currency: string): string[
       }),
     );
   }
-  const hotels = coupon.applicable_hotels.map((h) => h.goods_name).filter(Boolean);
+  const hotels = coupon.applicable_hotels.map((h) => h.property_name).filter(Boolean);
   if (hotels.length > 0) {
     terms.push(t('promotions.detail.rules.hotels', { list: hotels.join('、') }));
   } else if (coupon.goods_scope === 1) {
@@ -280,6 +280,16 @@ function buildTerms(coupon: CouponView, t: TFunction, currency: string): string[
   const rooms = coupon.applicable_rooms.map((r) => r.room_name).filter(Boolean);
   if (rooms.length > 0) {
     terms.push(t('promotions.detail.rules.rooms', { list: rooms.join('、') }));
+  }
+  const ticketGoods = coupon.applicable_goods.map((g) => g.goods_name).filter(Boolean);
+  if (ticketGoods.length > 0) {
+    terms.push(t('promotions.detail.rules.ticketGoods', { list: ticketGoods.join('、') }));
+  } else if (coupon.goods_scope === 2) {
+    terms.push(t('promotions.detail.rules.allTickets'));
+  }
+  const ticketTypes = coupon.applicable_ticket_types.map((item) => item.ticket_name).filter(Boolean);
+  if (ticketTypes.length > 0) {
+    terms.push(t('promotions.detail.rules.ticketTypes', { list: ticketTypes.join('、') }));
   }
   terms.push(
     t(coupon.stackable === 1 ? 'promotions.detail.rules.stackable' : 'promotions.detail.rules.notStackable'),

@@ -22,30 +22,23 @@ import {
   apiGoodsUpdate,
   apiRefundRuleList,
   apiRefundRuleSave,
-  apiRoomDelete,
-  apiRoomList,
-  apiRoomSave,
   apiTicketDelete,
   apiTicketList,
   apiTicketSave,
 } from '@/api/goods';
 
 /**
- * 商品管理通用页(酒店 goodsType=1 / 门票 goodsType=2 复用)
+ * 门票商品管理页
  * 状态机:0草稿→(提交)1待审核→(通过)3已上架/(驳回)2驳回;3⇄4下架;5软删终态
  */
-const props = defineProps<{
-  goodsType: number;
-  permPrefix: string; // goods:hotel / goods:ticket
-  skuPerm: string; // goods:hotel:room / goods:ticket:type
-}>();
-
 const { t } = useI18n();
 
 const userStore = useUserStore();
 const isSuper = userStore.profile?.isSuper === true;
-const isHotel = computed(() => props.goodsType === 1);
-const skuLabel = computed(() => (isHotel.value ? t('goods.common.roomType') : t('goods.common.ticketType')));
+const GOODS_TYPE = 2;
+const PERM_PREFIX = 'goods:ticket';
+const SKU_PERM = 'goods:ticket:type';
+const skuLabel = computed(() => t('goods.common.ticketType'));
 
 const STATUS_MAP = computed<Record<number, StatusItem>>(() => ({
   0: { text: t('goods.common.statusDraft'), color: 'default' },
@@ -61,7 +54,7 @@ const filterCategory = ref<number[]>();
 const { loading, list, query, load, search, reset, pagination } = useTable(
   (params) => apiGoodsList({
     ...params,
-    goodsType: props.goodsType,
+    goodsType: GOODS_TYPE,
     categoryId: filterCategory.value?.length ? filterCategory.value[filterCategory.value.length - 1] : undefined,
   }),
   { goodsName: '', merchantId: undefined, status: undefined, siteId: 0 },
@@ -89,7 +82,7 @@ const columns = [
 const categoryTree = ref<TableRow[]>([]);
 
 async function loadCategories(): Promise<void> {
-  categoryTree.value = await apiCategoryList({ goodsType: props.goodsType, status: 1 });
+  categoryTree.value = await apiCategoryList({ goodsType: GOODS_TYPE, status: 1 });
 }
 
 const categoryOptions = computed(() =>
@@ -147,7 +140,7 @@ function ruleScope(rule: TableRow): string {
     return t('goods.common.ruleLevelGoods');
   }
   const sku = detailSkus.value.find((item) => item.id === rule.sku_id);
-  return `${skuLabel.value}#${rule.sku_id} ${sku ? (sku.room_name ?? sku.ticket_name ?? '') : ''}`;
+  return `${skuLabel.value}#${rule.sku_id} ${sku ? (sku.ticket_name ?? '') : ''}`;
 }
 
 // ---------- 新增/编辑商品 ----------
@@ -255,7 +248,7 @@ async function saveGoods(): Promise<void> {
   const { imagesText, ...rest } = form;
   const payload: Record<string, unknown> = {
     ...rest,
-    goodsType: props.goodsType,
+    goodsType: GOODS_TYPE,
     categoryId: formCategory.value?.length ? formCategory.value[formCategory.value.length - 1] : 0,
     images: imagesText.split('\n').map((line) => line.trim()).filter((line) => line !== ''),
   };
@@ -312,23 +305,12 @@ async function loadSkus(): Promise<void> {
   }
   skuLoading.value = true;
   try {
-    skuList.value = isHotel.value ? await apiRoomList(skuGoods.value.id) : await apiTicketList(skuGoods.value.id);
+    skuList.value = await apiTicketList(skuGoods.value.id);
   } finally {
     skuLoading.value = false;
   }
 }
 
-const roomColumns = [
-  { title: t('common.id'), dataIndex: 'id', width: 60 },
-  { title: t('goods.common.roomType'), dataIndex: 'room_name', ellipsis: true },
-  { title: t('goods.common.bedType'), dataIndex: 'bed_type', width: 90 },
-  { title: t('goods.common.maxGuests'), dataIndex: 'max_guests', width: 60 },
-  { title: t('goods.common.breakfast'), dataIndex: 'breakfast', width: 70 },
-  { title: t('goods.common.basePrice'), dataIndex: 'base_price', width: 90 },
-  { title: t('goods.common.baseStock'), dataIndex: 'base_stock', width: 80 },
-  { title: t('common.status'), dataIndex: 'status', width: 70 },
-  { title: t('common.action'), key: 'action_col', width: 110 },
-];
 const ticketColumns = [
   { title: t('common.id'), dataIndex: 'id', width: 60 },
   { title: t('goods.common.ticketType'), dataIndex: 'ticket_name', ellipsis: true },
@@ -340,11 +322,6 @@ const ticketColumns = [
   { title: t('common.status'), dataIndex: 'status', width: 70 },
   { title: t('common.action'), key: 'action_col', width: 110 },
 ];
-const BREAKFAST_TEXT = computed<Record<number, string>>(() => ({
-  0: t('goods.common.breakfast0'),
-  1: t('goods.common.breakfast1'),
-  2: t('goods.common.breakfast2'),
-}));
 const TICKET_KIND_TEXT = computed<Record<number, string>>(() => ({
   1: t('goods.common.ticketKind1'),
   2: t('goods.common.ticketKind2'),
@@ -356,10 +333,6 @@ const skuSaving = ref(false);
 const skuEditingId = ref(0);
 const skuForm = reactive({
   name: '',
-  bedType: '',
-  area: '',
-  maxGuests: 2,
-  breakfast: 0,
   ticketKind: 1,
   validDays: 1,
   bookLimit: 0,
@@ -376,10 +349,6 @@ function openSkuCreate(): void {
   skuEditingId.value = 0;
   Object.assign(skuForm, {
     name: '',
-    bedType: '',
-    area: '',
-    maxGuests: 2,
-    breakfast: 0,
     ticketKind: 1,
     validDays: 1,
     bookLimit: 0,
@@ -397,11 +366,7 @@ function openSkuCreate(): void {
 function openSkuEdit(row: TableRow): void {
   skuEditingId.value = row.id;
   Object.assign(skuForm, {
-    name: row.room_name ?? row.ticket_name ?? '',
-    bedType: row.bed_type ?? '',
-    area: row.area ?? '',
-    maxGuests: row.max_guests ?? 2,
-    breakfast: row.breakfast ?? 0,
+    name: row.ticket_name ?? '',
     ticketKind: row.ticket_kind ?? 1,
     validDays: row.valid_days ?? 1,
     bookLimit: row.book_limit ?? 0,
@@ -434,32 +399,21 @@ async function saveSku(): Promise<void> {
   };
   skuSaving.value = true;
   try {
-    if (isHotel.value) {
-      await apiRoomSave({
-        ...base,
-        roomName: skuForm.name,
-        bedType: skuForm.bedType,
-        area: skuForm.area,
-        maxGuests: skuForm.maxGuests,
-        breakfast: skuForm.breakfast,
-      });
-    } else {
-      const timeSlots = skuForm.timeSlotsText.split('\n').map((line) => line.trim()).filter((line) => line !== '');
-      if (skuForm.ticketKind === 2 && timeSlots.length === 0) {
-        message.warning(t('goods.common.warningTicketSlots'));
-        return;
-      }
-      await apiTicketSave({
-        ...base,
-        ticketName: skuForm.name,
-        ticketKind: skuForm.ticketKind,
-        validDays: skuForm.validDays,
-        bookLimit: skuForm.bookLimit,
-        advanceHours: skuForm.advanceHours,
-        verifyTimes: skuForm.verifyTimes,
-        timeSlots,
-      });
+    const timeSlots = skuForm.timeSlotsText.split('\n').map((line) => line.trim()).filter((line) => line !== '');
+    if (skuForm.ticketKind === 2 && timeSlots.length === 0) {
+      message.warning(t('goods.common.warningTicketSlots'));
+      return;
     }
+    await apiTicketSave({
+      ...base,
+      ticketName: skuForm.name,
+      ticketKind: skuForm.ticketKind,
+      validDays: skuForm.validDays,
+      bookLimit: skuForm.bookLimit,
+      advanceHours: skuForm.advanceHours,
+      verifyTimes: skuForm.verifyTimes,
+      timeSlots,
+    });
     message.success(t('goods.common.skuSaveSuccess', { skuLabel: skuLabel.value }));
     skuModalOpen.value = false;
     await loadSkus();
@@ -472,11 +426,7 @@ async function removeSku(row: TableRow): Promise<void> {
   if (!skuGoods.value) {
     return;
   }
-  if (isHotel.value) {
-    await apiRoomDelete(skuGoods.value.id, row.id);
-  } else {
-    await apiTicketDelete(skuGoods.value.id, row.id);
-  }
+  await apiTicketDelete(skuGoods.value.id, row.id);
   message.success(t('goods.common.skuDeleteSuccess', { skuLabel: skuLabel.value }));
   await loadSkus();
 }
@@ -503,7 +453,7 @@ async function openRule(row: TableRow): Promise<void> {
   try {
     [ruleList.value, ruleSkus.value] = await Promise.all([
       apiRefundRuleList(row.id),
-      isHotel.value ? apiRoomList(row.id) : apiTicketList(row.id),
+      apiTicketList(row.id),
     ]);
   } finally {
     ruleLoading.value = false;
@@ -526,7 +476,7 @@ async function saveRule(): Promise<void> {
   try {
     await apiRefundRuleSave({
       goodsId: ruleGoods.value.id,
-      skuType: ruleForm.skuScope > 0 ? props.goodsType : 0,
+      skuType: ruleForm.skuScope > 0 ? GOODS_TYPE : 0,
       skuId: ruleForm.skuScope > 0 ? ruleForm.skuScope : 0,
       ruleType: ruleForm.ruleType,
       rules: ruleForm.ruleType === 2 ? ruleForm.steps : undefined,
@@ -597,9 +547,9 @@ onMounted(() => {
     </a-card>
 
     <a-card :bordered="false" class="mtrip-card-shadow">
-      <template #title>{{ isHotel ? t('goods.common.titleHotel') : t('goods.common.titleTicket') }}</template>
+      <template #title>{{ t('goods.common.titleTicket') }}</template>
       <template #extra>
-        <a-button v-perm="permPrefix + ':add'" type="primary" @click="openCreate">
+        <a-button v-perm="PERM_PREFIX + ':add'" type="primary" @click="openCreate">
           <template #icon><PlusOutlined /></template>{{ t('goods.common.addGoods') }}
         </a-button>
       </template>
@@ -634,26 +584,26 @@ onMounted(() => {
               <a-button type="link" size="small" @click="openDetail(record)">{{ t('common.detail') }}</a-button>
               <a-button
                 v-if="record.status !== 1 && record.status !== 3"
-                v-perm="permPrefix + ':edit'"
+                v-perm="PERM_PREFIX + ':edit'"
                 type="link"
                 size="small"
                 @click="openEdit(record)"
               >{{ t('common.edit') }}</a-button>
-              <a-button v-perm="skuPerm" type="link" size="small" @click="openSku(record)">{{ skuLabel }}</a-button>
-              <a-button v-perm="permPrefix + ':edit'" type="link" size="small" @click="openRule(record)">{{ t('goods.common.refund') }}</a-button>
+              <a-button v-perm="SKU_PERM" type="link" size="small" @click="openSku(record)">{{ skuLabel }}</a-button>
+              <a-button v-perm="PERM_PREFIX + ':edit'" type="link" size="small" @click="openRule(record)">{{ t('goods.common.refund') }}</a-button>
               <a-popconfirm
                 v-if="record.status === 0 || record.status === 2"
                 :title="t('goods.common.confirmSubmitAudit')"
                 @confirm="submitAudit(record)"
               >
-                <a-button v-perm="permPrefix + ':edit'" type="link" size="small" style="color: var(--mtrip-warning, #faad14)">{{ t('goods.common.submitAudit') }}</a-button>
+                <a-button v-perm="PERM_PREFIX + ':edit'" type="link" size="small" style="color: var(--mtrip-warning, #faad14)">{{ t('goods.common.submitAudit') }}</a-button>
               </a-popconfirm>
               <a-popconfirm
                 v-if="record.status === 3 || record.status === 4"
                 :title="record.status === 3 ? t('goods.common.confirmOffshelf') : t('goods.common.confirmOnshelf')"
                 @confirm="toggleStatus(record)"
               >
-                <a-button v-perm="permPrefix + ':edit'" type="link" size="small" :danger="record.status === 3">
+                <a-button v-perm="PERM_PREFIX + ':edit'" type="link" size="small" :danger="record.status === 3">
                   {{ record.status === 3 ? t('goods.common.offshelf') : t('goods.common.onshelf') }}
                 </a-button>
               </a-popconfirm>
@@ -663,7 +613,7 @@ onMounted(() => {
                 :ok-button-props="{ danger: true }"
                 @confirm="removeGoods(record)"
               >
-                <a-button v-perm="permPrefix + ':delete'" type="link" size="small" danger>{{ t('common.delete') }}</a-button>
+                <a-button v-perm="PERM_PREFIX + ':delete'" type="link" size="small" danger>{{ t('common.delete') }}</a-button>
               </a-popconfirm>
             </a-space>
           </template>
@@ -679,8 +629,7 @@ onMounted(() => {
             <a-descriptions-item :label="t('goods.common.goodsName')" :span="2">{{ detail.goods_name }}</a-descriptions-item>
             <a-descriptions-item :label="t('common.status')"><StatusTag :value="detail.status" :map="STATUS_MAP" /></a-descriptions-item>
             <a-descriptions-item :label="t('goods.audit.columns.salesCount')">{{ detail.sales_count }}</a-descriptions-item>
-            <a-descriptions-item v-if="isHotel" :label="t('goods.common.starLevel')">{{ detail.star_level }} {{ t('goods.common.starUnit') }}</a-descriptions-item>
-            <a-descriptions-item v-else :label="t('goods.common.businessHours')">{{ detail.open_time }} ~ {{ detail.close_time }}</a-descriptions-item>
+            <a-descriptions-item :label="t('goods.common.businessHours')">{{ detail.open_time }} ~ {{ detail.close_time }}</a-descriptions-item>
             <a-descriptions-item :label="t('goods.common.weight')">{{ detail.sort_weight }}</a-descriptions-item>
             <a-descriptions-item :label="t('common.address')" :span="2">{{ detail.address || '-' }}</a-descriptions-item>
             <a-descriptions-item :label="t('goods.common.brief')" :span="2">{{ detail.goods_brief || '-' }}</a-descriptions-item>
@@ -696,15 +645,14 @@ onMounted(() => {
           </template>
           <a-divider orientation="left">{{ t('goods.common.breadcrumbSkuList', { skuLabel: skuLabel, count: detailSkus.length }) }}</a-divider>
           <a-table
-            :columns="isHotel ? roomColumns.slice(0, 8) : ticketColumns.slice(0, 8)"
+            :columns="ticketColumns.slice(0, 8)"
             :data-source="detailSkus"
             row-key="id"
             size="small"
             :pagination="false"
           >
             <template #bodyCell="{ column, record }">
-              <template v-if="column.dataIndex === 'breakfast'">{{ BREAKFAST_TEXT[record.breakfast] ?? '-' }}</template>
-              <template v-else-if="column.dataIndex === 'ticket_kind'">{{ TICKET_KIND_TEXT[record.ticket_kind] ?? '-' }}</template>
+              <template v-if="column.dataIndex === 'ticket_kind'">{{ TICKET_KIND_TEXT[record.ticket_kind] ?? '-' }}</template>
               <template v-else-if="column.dataIndex === 'base_price'">{{ formatAmount(record.base_price) }}</template>
               <template v-else-if="column.dataIndex === 'status'">
                 <a-tag :color="record.status === 1 ? 'success' : 'default'">{{ record.status === 1 ? t('goods.common.onSale') : t('goods.common.offSale') }}</a-tag>
@@ -778,10 +726,7 @@ onMounted(() => {
         <a-form-item :label="t('common.address')">
           <a-input v-model:value="form.address" />
         </a-form-item>
-        <a-form-item v-if="isHotel" :label="t('goods.common.starLevel')">
-          <a-rate v-model:value="form.starLevel" :count="5" />
-        </a-form-item>
-        <a-form-item v-else :label="t('goods.common.businessHours')">
+        <a-form-item :label="t('goods.common.businessHours')">
           <a-space>
             <a-input v-model:value="form.openTime" :placeholder="t('goods.common.openTimePlaceholder')" style="width: 120px" />
             <span>~</span>
@@ -807,13 +752,13 @@ onMounted(() => {
     <!-- SKU 管理抽屉 -->
     <a-drawer v-model:open="skuOpen" :title="t('goods.common.drawerSkuManageTitle', { skuLabel: skuLabel, name: skuGoods?.goods_name ?? '' })" width="820">
       <a-space style="margin-bottom: 12px">
-        <a-button v-perm="skuPerm" type="primary" @click="openSkuCreate">
+        <a-button v-perm="SKU_PERM" type="primary" @click="openSkuCreate">
           <template #icon><PlusOutlined /></template>{{ t('goods.common.addSku', { skuLabel: skuLabel }) }}
         </a-button>
         <a-button @click="loadSkus"><template #icon><ReloadOutlined /></template>{{ t('common.refresh') }}</a-button>
       </a-space>
       <a-table
-        :columns="isHotel ? roomColumns : ticketColumns"
+        :columns="ticketColumns"
         :data-source="skuList"
         :loading="skuLoading"
         row-key="id"
@@ -821,16 +766,15 @@ onMounted(() => {
         :pagination="false"
       >
         <template #bodyCell="{ column, record }">
-          <template v-if="column.dataIndex === 'breakfast'">{{ BREAKFAST_TEXT[record.breakfast] ?? '-' }}</template>
-          <template v-else-if="column.dataIndex === 'ticket_kind'">{{ TICKET_KIND_TEXT[record.ticket_kind] ?? '-' }}</template>
+          <template v-if="column.dataIndex === 'ticket_kind'">{{ TICKET_KIND_TEXT[record.ticket_kind] ?? '-' }}</template>
           <template v-else-if="column.dataIndex === 'base_price'">{{ formatAmount(record.base_price) }}</template>
           <template v-else-if="column.dataIndex === 'status'">
             <a-tag :color="record.status === 1 ? 'success' : 'default'">{{ record.status === 1 ? t('goods.common.onSale') : t('goods.common.offSale') }}</a-tag>
           </template>
           <template v-else-if="column.key === 'action_col'">
-            <a-button v-perm="skuPerm" type="link" size="small" @click="openSkuEdit(record)">{{ t('common.edit') }}</a-button>
+            <a-button v-perm="SKU_PERM" type="link" size="small" @click="openSkuEdit(record)">{{ t('common.edit') }}</a-button>
             <a-popconfirm :title="t('goods.common.confirmDeleteSku')" :ok-button-props="{ danger: true }" @confirm="removeSku(record)">
-              <a-button v-perm="skuPerm" type="link" size="small" danger>{{ t('common.delete') }}</a-button>
+              <a-button v-perm="SKU_PERM" type="link" size="small" danger>{{ t('common.delete') }}</a-button>
             </a-popconfirm>
           </template>
         </template>
@@ -849,48 +793,28 @@ onMounted(() => {
         <a-form-item :label="`${skuLabel}${t('common.name')}`" required>
           <a-input v-model:value="skuForm.name" :maxlength="100" />
         </a-form-item>
-        <template v-if="isHotel">
-          <a-form-item :label="t('goods.common.bedType')">
-            <a-input v-model:value="skuForm.bedType" :placeholder="t('goods.common.bedTypePlaceholder')" />
-          </a-form-item>
-          <a-form-item :label="t('goods.common.area')">
-            <a-input v-model:value="skuForm.area" :placeholder="t('goods.common.areaPlaceholder')" style="width: 160px" />
-          </a-form-item>
-          <a-form-item :label="t('goods.common.maxGuests')">
-            <a-input-number v-model:value="skuForm.maxGuests" :min="1" :max="10" />
-          </a-form-item>
-          <a-form-item :label="t('goods.common.breakfast')">
-            <a-radio-group v-model:value="skuForm.breakfast">
-              <a-radio :value="0">{{ t('goods.common.breakfast0') }}</a-radio>
-              <a-radio :value="1">{{ t('goods.common.breakfast1') }}</a-radio>
-              <a-radio :value="2">{{ t('goods.common.breakfast2') }}</a-radio>
-            </a-radio-group>
-          </a-form-item>
-        </template>
-        <template v-else>
-          <a-form-item :label="t('goods.common.ticketType')">
-            <a-radio-group v-model:value="skuForm.ticketKind">
-              <a-radio :value="1">{{ t('goods.common.ticketKind1') }}</a-radio>
-              <a-radio :value="2">{{ t('goods.common.ticketKind2') }}</a-radio>
-              <a-radio :value="3">{{ t('goods.common.ticketKind3') }}</a-radio>
-            </a-radio-group>
-          </a-form-item>
-          <a-form-item v-if="skuForm.ticketKind === 2" :label="t('goods.common.timeSlots')" required>
-            <a-textarea v-model:value="skuForm.timeSlotsText" :rows="3" :placeholder="t('goods.common.timeSlotsPlaceholder')" />
-          </a-form-item>
-          <a-form-item :label="t('goods.common.validDays')">
-            <a-input-number v-model:value="skuForm.validDays" :min="1" :max="365" :addon-after="t('goods.common.daysUnit')" />
-          </a-form-item>
-          <a-form-item :label="t('common.sort')">
-            <a-space>
-              <a-input-number v-model:value="skuForm.bookLimit" :min="0" :addon-before="t('goods.common.bookLimitAddonBefore')" :placeholder="t('goods.common.bookLimitPlaceholder')" style="width: 170px" />
-              <a-input-number v-model:value="skuForm.advanceHours" :min="0" :addon-before="t('goods.common.advanceHoursAddonBefore')" :addon-after="t('goods.common.hoursUnit')" style="width: 200px" />
-            </a-space>
-          </a-form-item>
-          <a-form-item :label="t('goods.common.verifyTimes')">
-            <a-input-number v-model:value="skuForm.verifyTimes" :min="1" :max="99" />
-          </a-form-item>
-        </template>
+        <a-form-item :label="t('goods.common.ticketType')">
+          <a-radio-group v-model:value="skuForm.ticketKind">
+            <a-radio :value="1">{{ t('goods.common.ticketKind1') }}</a-radio>
+            <a-radio :value="2">{{ t('goods.common.ticketKind2') }}</a-radio>
+            <a-radio :value="3">{{ t('goods.common.ticketKind3') }}</a-radio>
+          </a-radio-group>
+        </a-form-item>
+        <a-form-item v-if="skuForm.ticketKind === 2" :label="t('goods.common.timeSlots')" required>
+          <a-textarea v-model:value="skuForm.timeSlotsText" :rows="3" :placeholder="t('goods.common.timeSlotsPlaceholder')" />
+        </a-form-item>
+        <a-form-item :label="t('goods.common.validDays')">
+          <a-input-number v-model:value="skuForm.validDays" :min="1" :max="365" :addon-after="t('goods.common.daysUnit')" />
+        </a-form-item>
+        <a-form-item :label="t('common.sort')">
+          <a-space>
+            <a-input-number v-model:value="skuForm.bookLimit" :min="0" :addon-before="t('goods.common.bookLimitAddonBefore')" :placeholder="t('goods.common.bookLimitPlaceholder')" style="width: 170px" />
+            <a-input-number v-model:value="skuForm.advanceHours" :min="0" :addon-before="t('goods.common.advanceHoursAddonBefore')" :addon-after="t('goods.common.hoursUnit')" style="width: 200px" />
+          </a-space>
+        </a-form-item>
+        <a-form-item :label="t('goods.common.verifyTimes')">
+          <a-input-number v-model:value="skuForm.verifyTimes" :min="1" :max="99" />
+        </a-form-item>
         <a-form-item :label="t('goods.common.basePrice')" required>
           <a-input-number v-model:value="skuForm.basePrice" :min="0" :precision="2" style="width: 160px" />
         </a-form-item>
@@ -945,7 +869,7 @@ onMounted(() => {
             <a-select v-model:value="ruleForm.skuScope" style="width: 100%">
               <a-select-option :value="0">{{ t('goods.common.ruleScopeAll') }}</a-select-option>
               <a-select-option v-for="sku in ruleSkus" :key="sku.id" :value="sku.id">
-                {{ skuLabel }}#{{ sku.id }} {{ sku.room_name ?? sku.ticket_name }}
+                {{ skuLabel }}#{{ sku.id }} {{ sku.ticket_name }}
               </a-select-option>
             </a-select>
           </a-form-item>
@@ -970,7 +894,7 @@ onMounted(() => {
             <a-input v-model:value="ruleForm.remark" :maxlength="500" />
           </a-form-item>
           <a-form-item :wrapper-col="{ offset: 4 }">
-            <a-button v-perm="permPrefix + ':edit'" type="primary" :loading="ruleSaving" @click="saveRule">{{ t('goods.common.saveRule') }}</a-button>
+            <a-button v-perm="PERM_PREFIX + ':edit'" type="primary" :loading="ruleSaving" @click="saveRule">{{ t('goods.common.saveRule') }}</a-button>
           </a-form-item>
         </a-form>
       </a-spin>

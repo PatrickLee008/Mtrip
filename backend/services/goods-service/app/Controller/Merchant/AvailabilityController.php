@@ -82,13 +82,14 @@ class AvailabilityController extends AbstractAdminController
     #[Permission('mch:availability:edit')]
     public function saveDay(): array
     {
-        [$goods, $room] = $this->resolveRoom();
+        [$property, $room] = $this->resolveRoom();
+        MerchantContext::assertPropertyAccess((int) $property['id'], true);
         $date = $this->requireDate('stockDate');
         if ($date < date('Y-m-d')) {
             throw new BusinessException(ErrorCode::PARAM_ERROR, '不能修改过去日期');
         }
         $payload = $this->collectStockFields($room);
-        $this->upsertStock($goods, $room, $date, $payload, '商户单日更新');
+        $this->upsertStock($property, $room, $date, $payload, '商户单日更新');
         return Result::success(null, '房量价格已保存');
     }
 
@@ -99,9 +100,12 @@ class AvailabilityController extends AbstractAdminController
         [$startDate, $endDate] = $this->dateRange(true, self::MAX_RANGE_DAYS);
         $roomIds = $this->input('roomIds');
         $roomIds = is_array($roomIds) ? array_values(array_unique(array_map('intval', $roomIds))) : [];
-        $rooms = $this->scopedRooms($roomIds);
-        if ($rooms === []) {
+        if ($roomIds === []) {
             throw new BusinessException(ErrorCode::PARAM_ERROR, '请选择房型');
+        }
+        $rooms = $this->scopedRooms($roomIds);
+        if (count($rooms) !== count($roomIds)) {
+            throw new BusinessException(ErrorCode::NO_DATA_PERMISSION);
         }
         $weekdays = $this->input('weekdays');
         $weekdays = is_array($weekdays) ? array_values(array_unique(array_map('intval', $weekdays))) : null;
@@ -118,8 +122,8 @@ class AvailabilityController extends AbstractAdminController
                 }
                 $date = date('Y-m-d', $ts);
                 foreach ($rooms as $room) {
-                    $goods = ['id' => (int) $room['goods_id'], 'site_id' => (int) $room['site_id']];
-                    $this->upsertStock($goods, $room, $date, $payload, '商户批量更新', false);
+                    $property = ['id' => (int) $room['property_id'], 'site_id' => (int) $room['site_id']];
+                    $this->upsertStock($property, $room, $date, $payload, '商户批量更新', false);
                     ++$count;
                 }
             }
@@ -158,38 +162,38 @@ class AvailabilityController extends AbstractAdminController
 
     private function roomTree(): array
     {
-        $goodsId = $this->intInput('goodsId');
+        $propertyId = $this->intInput('propertyId');
         $roomId = $this->intInput('roomId');
 
         $query = Db::table('hotel_room_type as r')
-            ->join('goods_info as g', 'g.id', '=', 'r.goods_id')
-            ->where('g.goods_type', 1)
-            ->where('g.status', '<>', 5)
+            ->join('merchant_store as p', 'p.id', '=', 'r.property_id')
+            ->where('p.business_type', 'hotel')
+            ->where('p.kyc_status', 1)
             ->whereNull('r.deleted_at')
-            ->whereNull('g.deleted_at');
-        $this->applyMerchantScope($query, 'g.merchant_id');
-        if ($goodsId > 0) {
-            $query->where('r.goods_id', $goodsId);
+            ->whereNull('p.deleted_at');
+        $this->applyPropertyScope($query, 'p.');
+        if ($propertyId > 0) {
+            $query->where('r.property_id', $propertyId);
         }
         if ($roomId > 0) {
             $query->where('r.id', $roomId);
         }
 
-        $rows = $query->orderBy('g.id')->orderBy('r.sort')->orderBy('r.id')
+        $rows = $query->orderBy('p.id')->orderBy('r.sort')->orderBy('r.id')
             ->get([
-                'r.id', 'r.site_id', 'r.goods_id', 'r.room_name', 'r.bed_type', 'r.base_price', 'r.weekend_price', 'r.base_stock', 'r.status',
-                'g.goods_name', 'g.merchant_id', 'g.cover_image', 'g.address',
+                'r.id', 'r.site_id', 'r.property_id', 'r.room_name', 'r.bed_type', 'r.base_price', 'r.weekend_price', 'r.base_stock', 'r.status',
+                'p.store_name as property_name', 'p.merchant_id', 'p.images as property_images', 'p.address',
             ])->map(static fn ($row) => (array) $row)->all();
 
         $hotels = [];
         foreach ($rows as $row) {
-            $hotelId = (int) $row['goods_id'];
+            $hotelId = (int) $row['property_id'];
             if (! isset($hotels[$hotelId])) {
                 $hotels[$hotelId] = [
                     'id' => $hotelId,
-                    'name' => (string) $row['goods_name'],
+                    'name' => (string) $row['property_name'],
                     'merchant_id' => (int) $row['merchant_id'],
-                    'cover_image' => (string) $row['cover_image'],
+                    'cover_image' => (string) (((array) json_decode((string) ($row['property_images'] ?? ''), true))[0] ?? ''),
                     'address' => (string) $row['address'],
                     'rooms' => [],
                 ];
@@ -197,7 +201,7 @@ class AvailabilityController extends AbstractAdminController
             $hotels[$hotelId]['rooms'][] = [
                 'id' => (int) $row['id'],
                 'site_id' => (int) $row['site_id'],
-                'goods_id' => $hotelId,
+                'property_id' => $hotelId,
                 'name' => (string) $row['room_name'],
                 'bed_type' => (string) $row['bed_type'],
                 'base_price' => (float) $row['base_price'],
@@ -212,39 +216,39 @@ class AvailabilityController extends AbstractAdminController
     private function scopedRooms(array $roomIds): array
     {
         $query = Db::table('hotel_room_type as r')
-            ->join('goods_info as g', 'g.id', '=', 'r.goods_id')
-            ->where('g.goods_type', 1)
+            ->join('merchant_store as p', 'p.id', '=', 'r.property_id')
+            ->where('p.business_type', 'hotel')
+            ->where('p.kyc_status', 1)
             ->whereNull('r.deleted_at')
-            ->whereNull('g.deleted_at')
+            ->whereNull('p.deleted_at')
             ->where('r.status', 1);
-        $this->applyMerchantScope($query, 'g.merchant_id');
+        $this->applyPropertyScope($query, 'p.');
         if ($roomIds !== []) {
             $query->whereIn('r.id', $roomIds);
         }
-        return $query->get(['r.*', 'g.merchant_id'])->map(static fn ($row) => (array) $row)->all();
+        return $query->get(['r.*', 'p.merchant_id'])->map(static fn ($row) => (array) $row)->all();
     }
 
     private function resolveRoom(): array
     {
-        $goodsId = $this->requireId('goodsId');
-        $skuId = $this->requireId('skuId');
+        $propertyId = $this->requireId('propertyId');
+        $roomTypeId = $this->requireId('roomTypeId');
         $row = Db::table('hotel_room_type as r')
-            ->join('goods_info as g', 'g.id', '=', 'r.goods_id')
-            ->where('r.id', $skuId)
-            ->where('r.goods_id', $goodsId)
-            ->where('g.goods_type', 1)
+            ->join('merchant_store as p', 'p.id', '=', 'r.property_id')
+            ->where('r.id', $roomTypeId)
+            ->where('r.property_id', $propertyId)
+            ->where('p.business_type', 'hotel')
+            ->where('p.kyc_status', 1)
             ->whereNull('r.deleted_at')
-            ->whereNull('g.deleted_at')
-            ->get(['r.*', 'g.merchant_id'])
+            ->whereNull('p.deleted_at')
+            ->get(['r.*', 'p.merchant_id'])
             ->first();
         if (! $row) {
             throw new BusinessException(ErrorCode::NOT_FOUND, '房型不存在');
         }
         $room = (array) $row;
-        if (! in_array((int) $room['merchant_id'], MerchantContext::scopeMerchantIds(), true)) {
-            throw new BusinessException(ErrorCode::NO_DATA_PERMISSION);
-        }
-        return [['id' => $goodsId, 'site_id' => (int) $room['site_id']], $room];
+        MerchantContext::assertPropertyAccess((int) $room['property_id']);
+        return [['id' => $propertyId, 'site_id' => (int) $room['site_id']], $room];
     }
 
     private function collectStockFields(?array $room, bool $partial = false): array
@@ -289,9 +293,9 @@ class AvailabilityController extends AbstractAdminController
         return $fields;
     }
 
-    private function upsertStock(array $goods, array $room, string $date, array $payload, string $remark, bool $transaction = true): void
+    private function upsertStock(array $property, array $room, string $date, array $payload, string $remark, bool $transaction = true): void
     {
-        $work = function () use ($goods, $room, $date, $payload, $remark) {
+        $work = function () use ($property, $room, $date, $payload, $remark) {
             $row = Db::table('goods_daily_stock')
                 ->where('sku_type', 1)
                 ->where('sku_id', $room['id'])
@@ -309,13 +313,13 @@ class AvailabilityController extends AbstractAdminController
                 $data['deleted_at'] = null;
                 Db::table('goods_daily_stock')->where('id', $row->id)->update($data);
                 if (array_key_exists('stock_total', $payload) && $newTotal !== $oldTotal) {
-                    $this->writeLog($goods, (int) $room['id'], $date, $newTotal - $oldTotal, $remark);
+                    $this->writeLog($property, (int) $room['id'], $date, $newTotal - $oldTotal, $remark);
                 }
                 return;
             }
             $insert = array_merge([
-                'site_id' => (int) $goods['site_id'],
-                'goods_id' => (int) $goods['id'],
+                'site_id' => (int) $property['site_id'],
+                'property_id' => (int) $property['id'],
                 'sku_type' => 1,
                 'sku_id' => (int) $room['id'],
                 'stock_date' => $date,
@@ -325,7 +329,7 @@ class AvailabilityController extends AbstractAdminController
             ], $data);
             Db::table('goods_daily_stock')->insert($insert);
             if (array_key_exists('stock_total', $payload)) {
-                $this->writeLog($goods, (int) $room['id'], $date, (int) $insert['stock_total'], $remark);
+                $this->writeLog($property, (int) $room['id'], $date, (int) $insert['stock_total'], $remark);
             }
         };
 
@@ -426,20 +430,20 @@ class AvailabilityController extends AbstractAdminController
         return [$startDate, $endDate];
     }
 
-    private function applyMerchantScope(Builder $query, string $column): void
+    private function applyPropertyScope(Builder $query, string $prefix): void
     {
-        $merchantIds = MerchantContext::scopeMerchantIds();
-        $query->whereIn($column, $merchantIds === [] ? [0] : $merchantIds);
+        $query->where($prefix . 'site_id', MerchantContext::siteId());
+        $query->whereIn($prefix . 'id', MerchantContext::scopePropertyIds());
     }
 
-    private function writeLog(array $goods, int $roomId, string $date, int $changeQty, string $remark): void
+    private function writeLog(array $property, int $roomId, string $date, int $changeQty, string $remark): void
     {
         if ($changeQty === 0) {
             return;
         }
         Db::table('goods_stock_log')->insert([
-            'site_id' => (int) $goods['site_id'],
-            'goods_id' => (int) $goods['id'],
+            'site_id' => (int) $property['site_id'],
+            'property_id' => (int) $property['id'],
             'sku_type' => 1,
             'sku_id' => $roomId,
             'stock_date' => $date,
@@ -450,4 +454,3 @@ class AvailabilityController extends AbstractAdminController
         ]);
     }
 }
-

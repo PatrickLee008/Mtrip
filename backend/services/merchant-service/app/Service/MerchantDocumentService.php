@@ -42,11 +42,12 @@ class MerchantDocumentService
         if (Db::table('merchant_verify_document_revision')->where('doc_id', $doc['id'])->where('lifecycle_version', $doc['document_version'])->exists()) return;
         Db::table('merchant_verify_document_revision')->insert([
             'site_id' => $doc['site_id'], 'doc_id' => $doc['id'], 'merchant_id' => $doc['merchant_id'],
+            'property_id' => $doc['property_id'] ?? 0,
             'version' => $doc['document_version'], 'lifecycle_version' => $doc['document_version'],
             'file_url' => $doc['file_url'], 'file_size' => $doc['file_size'], 'file_name' => $doc['name'],
             'status' => $doc['status'], 'reject_reason' => $doc['reject_reason'], 'reviewer_name' => $doc['reviewer_name'],
             'uploaded_at' => $doc['uploaded_at'], 'expiry_date' => $doc['expiry_date'], 'source' => $source,
-            'file_sha256' => $sha, 'uploader_id' => in_array($source, ['admin_replacement', 'onboarding_draft'], true) ? AdminContext::adminId() : 0,
+            'file_sha256' => $sha, 'uploader_id' => in_array($source, ['admin_replacement', 'onboarding_draft', 'admin_assisted'], true) ? AdminContext::adminId() : 0,
         ]);
     }
 
@@ -102,8 +103,9 @@ class MerchantDocumentService
     {
         return Db::transaction(function () use ($id, $input) {
             $doc = $this->document($id, true);
-            $this->permission($this->approved($doc) ? 'merchant:document:verify' : 'merchant:verify:doc');
-            if ((int) $doc['merchant_id'] === 0) throw new BusinessException(ErrorCode::DATA_CONFLICT, '草稿必须先提交核验');
+            $this->permission((int) ($doc['application_id'] ?? 0) > 0 && (int) $doc['merchant_id'] === 0
+                ? 'merchant:onboarding:kyc'
+                : ($this->approved($doc) ? 'merchant:document:verify' : 'merchant:verify:doc'));
             $this->version($doc, $input);
             if ((int) $doc['status'] !== 2 || $doc['file_url'] === '') throw new BusinessException(ErrorCode::DATA_CONFLICT, '仅当前待审文件可审核');
             $action = (string) ($input['action'] ?? '');
@@ -179,7 +181,7 @@ class MerchantDocumentService
         $actor = $system ? 'system' : 'admin';
         $name = $system ? 'System' : AdminContext::adminName();
         $actorId = $system ? 0 : AdminContext::adminId();
-        Db::table('merchant_document_event')->insert(['site_id' => $doc['site_id'], 'merchant_id' => $doc['merchant_id'], 'doc_id' => $doc['id'], 'version' => $doc['document_version'], 'action' => $action, 'status' => $doc['status'], 'reason' => $reason, 'actor_type' => $actor, 'actor_id' => $actorId, 'actor_name' => $name]);
+        Db::table('merchant_document_event')->insert(['site_id' => $doc['site_id'], 'merchant_id' => $doc['merchant_id'], 'property_id' => $doc['property_id'] ?? 0, 'doc_id' => $doc['id'], 'version' => $doc['document_version'], 'action' => $action, 'status' => $doc['status'], 'reason' => $reason, 'actor_type' => $actor, 'actor_id' => $actorId, 'actor_name' => $name]);
         Db::table('merchant_activity_log')->insert(['site_id' => $doc['site_id'], 'merchant_id' => $doc['merchant_id'], 'activity_type' => $action === 'replace' ? 'document_upload' : 'verification', 'description' => 'Document ' . $doc['id'] . ' v' . $doc['document_version'] . ': ' . $action, 'performed_by' => $name, 'performed_by_id' => $actorId, 'actor_type' => $actor, 'entity_type' => 'document', 'entity_id' => $doc['id']]);
     }
 
@@ -216,6 +218,14 @@ class MerchantDocumentService
 
     private function syncKyc(array $doc): void
     {
+        if ((int) ($doc['application_id'] ?? 0) > 0 && (int) ($doc['merchant_id'] ?? 0) === 0) {
+            (new OnboardingKycService())->syncScope($doc);
+            return;
+        }
+        if (($doc['scope_type'] ?? 'merchant') === 'property' && (int) ($doc['property_id'] ?? 0) > 0) {
+            $this->syncPropertyKyc($doc);
+            return;
+        }
         if (! $doc['application_id'] || ! ctype_digit((string) $doc['biz_unit'])) return;
         $app = Db::table('merchant_application')->where('id', $doc['application_id'])->where('site_id', $doc['site_id'])->first();
         $business = Db::table('merchant_application_business')->where('id', (int) $doc['biz_unit'])->where('application_id', $doc['application_id'])->where('site_id', $doc['site_id'])->first();
@@ -230,5 +240,69 @@ class MerchantDocumentService
         $verified = $rows->filter(static fn ($r) => (int) $r->status === 1 && $r->file_url !== '' && (! $r->expiry_date || $r->expiry_date >= gmdate('Y-m-d')))->pluck('doc_type')->all();
         $complete = $required !== [] ? array_diff($required, $verified) === [] : ($rows->isNotEmpty() && count($verified) === $rows->count());
         Db::table('merchant_application_business')->where('id', $business->id)->update(['kyc_status' => $complete ? 1 : 3]);
+    }
+
+    private function syncPropertyKyc(array $doc): void
+    {
+        $property = Db::table('merchant_store')->where('id', $doc['property_id'])
+            ->where('site_id', $doc['site_id'])->where('merchant_id', $doc['merchant_id'])
+            ->whereNull('deleted_at')->lockForUpdate()->first();
+        if (! $property) {
+            throw new BusinessException(ErrorCode::DATA_CONFLICT, '物业 KYC 文档与物业归属不一致');
+        }
+        $template = Db::table('merchant_kyc_template')->where('id', $property->kyc_template_id)
+            ->where('scope_type', 'property')->where('status', 1)->first();
+        if (! $template) {
+            throw new BusinessException(ErrorCode::DATA_CONFLICT, '物业 KYC 模板不存在或已停用');
+        }
+        $requirements = json_decode((string) $template->docs, true);
+        $required = [];
+        foreach (is_array($requirements) ? $requirements : [] as $item) {
+            if (($item['required'] ?? true) !== false && trim((string) ($item['doc_type'] ?? '')) !== '') {
+                $required[] = (string) $item['doc_type'];
+            }
+        }
+        $rows = Db::table('merchant_verify_document')->where('scope_type', 'property')
+            ->where('property_id', $property->id)->whereNull('deleted_at')->get()->keyBy('doc_type');
+        $next = 3;
+        $reason = '';
+        $complete = $required !== [];
+        foreach ($required as $docType) {
+            $row = $rows->get($docType);
+            $status = $row ? (int) $row->status : 0;
+            if ($status === 3) {
+                $next = 4;
+                $reason = (string) $row->reject_reason;
+                $complete = false;
+                break;
+            }
+            if (in_array($status, [4, 5], true)) {
+                $next = 5;
+                $reason = (string) $row->reject_reason;
+                $complete = false;
+                break;
+            }
+            if ($status !== 1 || ! $row->file_url || ($row->expiry_date && $row->expiry_date < gmdate('Y-m-d'))) {
+                $complete = false;
+            }
+        }
+        if ($complete) {
+            $next = 1;
+        }
+        $from = (int) $property->kyc_status;
+        Db::table('merchant_store')->where('id', $property->id)->update([
+            'kyc_status' => $next,
+            'kyc_approved_at' => $next === 1 ? gmdate('Y-m-d H:i:s') : null,
+            'kyc_reject_reason' => mb_substr($reason, 0, 500),
+        ]);
+        $actorId = AdminContext::adminId();
+        Db::table('merchant_property_kyc_event')->insert([
+            'site_id' => $property->site_id, 'merchant_id' => $property->merchant_id,
+            'property_id' => $property->id, 'kyc_version' => $property->kyc_version,
+            'action' => 'document_' . ((int) $doc['status'] === 1 ? 'verified' : ((int) $doc['status'] === 3 ? 'rejected' : 'changed')),
+            'from_status' => $from, 'to_status' => $next, 'reason' => mb_substr($reason, 0, 500),
+            'actor_type' => $actorId > 0 ? 'admin' : 'system', 'actor_id' => $actorId,
+            'actor_name' => $actorId > 0 ? AdminContext::adminName() : 'System',
+        ]);
     }
 }

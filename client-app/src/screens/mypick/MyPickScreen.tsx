@@ -188,7 +188,7 @@ export default function MyPickScreen() {
                       if (goods.id <= 0) return requireLogin();
                       // 酒店走设计稿的酒店详情页,与搜索结果页一致;其余品类回落通用商品详情
                       return goods.goods_type === GOODS_TYPE.HOTEL
-                        ? navigation.navigate('HotelDetail', { id: goods.id })
+                        ? navigation.navigate('HotelDetail', { propertyId: goods.id })
                         : navigation.navigate('GoodsDetail', { id: goods.id });
                     }}
                   />

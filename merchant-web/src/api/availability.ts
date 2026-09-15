@@ -20,7 +20,7 @@ export interface AvailabilityDay {
 export interface AvailabilityRoom {
   id: number;
   site_id: number;
-  goods_id: number;
+  property_id: number;
   name: string;
   bed_type: string;
   base_price: number;

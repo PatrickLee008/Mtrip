@@ -58,6 +58,52 @@ class AccountController extends AbstractController
         return Result::success($this->quotaInfo());
     }
 
+    /** 当前账号可分配给员工的物业。 */
+    public function propertyOptions(): array
+    {
+        $rows = Db::table('merchant_store as p')->leftJoin('merchant_info as m', 'm.id', '=', 'p.merchant_id')
+            ->whereIn('p.id', MerchantContext::scopePropertyIds())->whereNull('p.deleted_at')
+            ->orderBy('p.store_name')->get(['p.id', 'p.store_name', 'p.merchant_id', 'm.merchant_name'])
+            ->map(static fn ($row) => (array) $row)->all();
+        return Result::success($rows);
+    }
+
+    public function accountProperties(): array
+    {
+        $account = $this->findScopedAccount($this->requireId('adminId'));
+        $ids = Db::table('merchant_employee_property')->where('site_id', MerchantContext::siteId())
+            ->where('admin_id', $account['id'])
+            ->pluck('property_id')->map(static fn ($id) => (int) $id)->all();
+        return Result::success(['propertyIds' => array_values(array_intersect($ids, MerchantContext::scopePropertyIds()))]);
+    }
+
+    #[Permission('mch:account:property-assign')]
+    public function assignProperties(): array
+    {
+        $account = $this->findScopedAccount($this->requireId('adminId'));
+        if ((int) $account['is_owner'] === 1) {
+            throw new BusinessException(ErrorCode::DATA_CONFLICT, '主账号自动拥有主体内全部物业');
+        }
+        $propertyIds = array_values(array_filter(array_unique(array_map(
+            'intval', (array) $this->input('propertyIds', [])
+        )), static fn (int $id) => $id > 0));
+        $allowed = MerchantContext::scopePropertyIds();
+        if (count(array_intersect($propertyIds, $allowed)) !== count($propertyIds)) {
+            throw new BusinessException(ErrorCode::NO_DATA_PERMISSION);
+        }
+        Db::transaction(static function () use ($account, $propertyIds, $allowed) {
+            Db::table('merchant_employee_property')->where('site_id', MerchantContext::siteId())
+                ->where('admin_id', $account['id'])->whereIn('property_id', $allowed)->delete();
+            if ($propertyIds !== []) {
+                Db::table('merchant_employee_property')->insert(array_map(static fn (int $propertyId) => [
+                    'site_id' => MerchantContext::siteId(), 'admin_id' => (int) $account['id'],
+                    'property_id' => $propertyId, 'created_by' => MerchantContext::adminId(),
+                ], $propertyIds));
+            }
+        });
+        return Result::success(null, '员工物业范围已保存');
+    }
+
     /** 新增子账号(is_owner=0,与主账号同主体、同 account_type) */
     #[Permission('mch:account:add')]
     public function create(): array

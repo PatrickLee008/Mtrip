@@ -1,6 +1,6 @@
 <template>
   <PageContainer>
-    <div class="property-strip"><a-select v-model:value="query.goodsId" class="hotel-select" :placeholder="t('rooms.filters.hotel')" allow-clear @change="search"><a-select-option v-for="hotel in hotels" :key="hotel.id" :value="hotel.id">{{ hotel.goods_name }}</a-select-option></a-select></div>
+    <div class="property-strip"><a-select v-model:value="query.propertyId" class="hotel-select" :placeholder="t('rooms.filters.hotel')" allow-clear @change="search"><a-select-option v-for="hotel in hotels" :key="hotel.id" :value="hotel.id">{{ hotel.property_name }}</a-select-option></a-select></div>
     <div class="merchant-page-header compact">
       <div><p class="eyebrow">{{ t('rooms.eyebrow') }}</p><h1>{{ t('rooms.title') }}</h1><p>{{ t('rooms.subtitle') }}</p></div>
       <div class="header-actions">
@@ -13,7 +13,7 @@
       <a-table row-key="id" :columns="columns" :data-source="list" :loading="loading" :pagination="pagination" :custom-row="rowEvents" @change="changePage">
         <template #bodyCell="{ column, record }">
           <template v-if="column.key === 'cover'"><div class="room-thumb"><img v-if="record.images?.[0]" :src="record.images[0]" :alt="record.room_name" /><HomeOutlined v-else /></div></template>
-          <template v-else-if="column.key === 'room'"><div class="room-main"><strong>{{ record.room_name }}</strong><span>{{ record.room_code || record.goods_name }}</span><small v-if="record.reject_reason">{{ record.reject_reason }}</small></div></template>
+          <template v-else-if="column.key === 'room'"><div class="room-main"><strong>{{ record.room_name }}</strong><span>{{ record.room_code || record.property_name }}</span><small v-if="record.reject_reason">{{ record.reject_reason }}</small></div></template>
           <template v-else-if="column.key === 'capacity'">{{ t('rooms.capacityShort', { adults: record.max_adults, children: record.max_children }) }}</template>
           <template v-else-if="column.key === 'facilities'"><div class="facility-tags"><span v-for="item in record.facilities.slice(0, 3)" :key="item">{{ item }}</span><em v-if="record.facilities.length > 3">+{{ record.facilities.length - 3 }}</em></div></template>
           <template v-else-if="column.key === 'available'"><span :class="['stock-left', stockTone(record.today_stock_left ?? record.base_stock)]">{{ record.today_stock_left ?? record.base_stock }}</span></template>
@@ -37,15 +37,15 @@ import PageContainer from '@/components/PageContainer.vue';
 import { apiRoomCopy, apiRoomDelete, apiRoomHotels, apiRoomList, apiRoomToggleStatus, type MerchantRoom, type RoomHotelOption } from '@/api/rooms';
 
 const { t } = useI18n(); const router = useRouter(); const loading = ref(false); const hotels = ref<RoomHotelOption[]>([]); const list = ref<MerchantRoom[]>([]);
-const query = reactive({ page: 1, pageSize: 20, goodsId: undefined as number | undefined, keyword: '', reviewStatus: undefined as number | undefined });
+const query = reactive({ page: 1, pageSize: 20, propertyId: undefined as number | undefined, keyword: '', reviewStatus: undefined as number | undefined });
 const pagination = reactive<TablePaginationConfig>({ current: 1, pageSize: 20, total: 0, showSizeChanger: true });
 const columns = computed(() => [{ title: '', key: 'cover', width: 70 }, { title: t('rooms.columns.roomType'), key: 'room', width: 220 }, { title: t('rooms.columns.bedType'), dataIndex: 'bed_type', width: 145 }, { title: t('rooms.columns.capacity'), key: 'capacity', width: 100 }, { title: t('rooms.columns.size'), dataIndex: 'area', width: 80 }, { title: t('rooms.columns.facilities'), key: 'facilities', minWidth: 180 }, { title: t('rooms.columns.total'), dataIndex: 'base_stock', width: 70 }, { title: t('rooms.columns.available'), key: 'available', width: 75 }, { title: t('rooms.columns.reviewStatus'), key: 'review', width: 120 }, { title: t('rooms.columns.saleStatus'), key: 'status', width: 90 }, { title: t('common.operation'), key: 'actions', width: 190, fixed: 'right' as const }]);
 function reviewMeta(status: number) { const map = [{ label: t('rooms.review.draft'), color: 'default' }, { label: t('rooms.review.pending'), color: 'processing' }, { label: t('rooms.review.approved'), color: 'success' }, { label: t('rooms.review.rejected'), color: 'error' }]; return map[status] || map[0]; }
 function stockTone(value: number) { return value === 0 ? 'danger' : value <= 2 ? 'warning' : 'success'; }
-async function loadHotels() { hotels.value = await apiRoomHotels(); if (!query.goodsId && hotels.value.length) query.goodsId = hotels.value[0].id; }
+async function loadHotels() { hotels.value = await apiRoomHotels(); if (!query.propertyId && hotels.value.length) query.propertyId = hotels.value[0].id; }
 async function loadList() { loading.value = true; try { const data = await apiRoomList({ ...query }); list.value = data.list; Object.assign(pagination, { current: data.page, pageSize: data.pageSize, total: data.total }); } finally { loading.value = false; } }
 function search() { query.page = 1; void loadList(); } function changePage(page: TablePaginationConfig) { query.page = Number(page.current || 1); query.pageSize = Number(page.pageSize || 20); void loadList(); }
-function createRoom() { void router.push({ path: '/rooms/create', query: query.goodsId ? { goodsId: String(query.goodsId) } : {} }); } function viewRoom(row: MerchantRoom) { void router.push(`/rooms/${row.id}`); } function editRoom(row: MerchantRoom) { void router.push(`/rooms/${row.id}/edit`); } function rowEvents(row: MerchantRoom) { return { onClick: () => viewRoom(row) }; }
+function createRoom() { void router.push({ path: '/rooms/create', query: query.propertyId ? { propertyId: String(query.propertyId) } : {} }); } function viewRoom(row: MerchantRoom) { void router.push(`/rooms/${row.id}`); } function editRoom(row: MerchantRoom) { void router.push(`/rooms/${row.id}/edit`); } function rowEvents(row: MerchantRoom) { return { onClick: () => viewRoom(row) }; }
 async function copyRoom(row: MerchantRoom) { const result = await apiRoomCopy(row.id); message.success(t('rooms.messages.copied')); await router.push(`/rooms/${result.id}/edit`); } async function toggleRoom(row: MerchantRoom) { await apiRoomToggleStatus(row.id); message.success(t('common.opSuccess')); await loadList(); } async function removeRoom(row: MerchantRoom) { const result = await apiRoomDelete(row.id); message.success(result.reviewRequired ? t('rooms.messages.deleteSubmitted') : t('rooms.messages.deleted')); await loadList(); }
 onMounted(async () => { await loadHotels(); await loadList(); });
 </script>

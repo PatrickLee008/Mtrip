@@ -22,10 +22,11 @@ class EarningsController extends AbstractController
     public function overview(): array
     {
         [$startDate, $endDate] = $this->dateRange(true);
-        $merchantIds = $this->scopeMerchantIds();
+        $propertyIds = $this->scopePropertyIds();
 
         $entry = (array) Db::table('finance_account_entry')
-            ->whereIn('merchant_id', $merchantIds)
+            ->where('site_id', MerchantContext::siteId())
+            ->whereIn('property_id', $propertyIds)
             ->whereBetween('created_at', ["{$startDate} 00:00:00", "{$endDate} 23:59:59"])
             ->first([
                 Db::raw('COUNT(*) AS booking_count'),
@@ -39,7 +40,8 @@ class EarningsController extends AbstractController
 
         $settleRows = Db::table('finance_merchant_settle')
             ->whereNull('deleted_at')
-            ->whereIn('merchant_id', $merchantIds)
+            ->where('site_id', MerchantContext::siteId())
+            ->whereIn('property_id', $propertyIds)
             ->groupBy('status')
             ->selectRaw('status, COUNT(*) AS cnt, COALESCE(SUM(settle_amount),0) AS amount')
             ->get()
@@ -95,7 +97,8 @@ class EarningsController extends AbstractController
         [$page, $pageSize] = $this->pageParams();
         $query = Db::table('finance_merchant_settle')
             ->whereNull('deleted_at')
-            ->whereIn('merchant_id', $this->scopeMerchantIds());
+            ->where('site_id', MerchantContext::siteId())
+            ->whereIn('property_id', $this->scopePropertyIds());
 
         if (($settleNo = $this->strInput('settleNo')) !== '') {
             $query->where('settle_no', $settleNo);
@@ -129,6 +132,8 @@ class EarningsController extends AbstractController
         [$startDate, $endDate] = $this->cycleRange((string) $settle['settle_cycle']);
         $entries = Db::table('finance_account_entry')
             ->where('merchant_id', (int) $settle['merchant_id'])
+            ->where('site_id', MerchantContext::siteId())
+            ->where('property_id', (int) $settle['property_id'])
             ->whereBetween('created_at', ["{$startDate} 00:00:00", "{$endDate} 23:59:59"])
             ->orderByDesc('id')
             ->limit(200)
@@ -160,10 +165,9 @@ class EarningsController extends AbstractController
         return Result::success(null, '申诉已提交');
     }
 
-    private function scopeMerchantIds(): array
+    private function scopePropertyIds(): array
     {
-        $ids = MerchantContext::scopeMerchantIds();
-        return $ids === [] ? [0] : $ids;
+        return MerchantContext::scopePropertyIds() ?: [-1];
     }
 
     private function findScopedSettle(int $id): array
@@ -173,7 +177,8 @@ class EarningsController extends AbstractController
             throw new BusinessException(ErrorCode::NOT_FOUND, '结算单不存在');
         }
         $row = (array) $settle;
-        if (! in_array((int) $row['merchant_id'], $this->scopeMerchantIds(), true)) {
+        if ((int) $row['site_id'] !== MerchantContext::siteId()
+            || ! in_array((int) $row['property_id'], $this->scopePropertyIds(), true)) {
             throw new BusinessException(ErrorCode::NO_DATA_PERMISSION);
         }
         return $row;

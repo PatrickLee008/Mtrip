@@ -14,8 +14,7 @@ use Mtrip\Shared\Support\MaskHelper;
 use Mtrip\Shared\Support\Result;
 
 /**
- * 商户端订单与核销:数据范围强制 MerchantContext 商户集合
- * 集团→可访问的绑定商户订单；商户→本商户订单；门店在订单归属模型补齐前不开放。
+ * 商户端订单与核销:酒店按物业范围，门票保留商户范围。
  */
 class OrderController extends AbstractAdminController
 {
@@ -99,13 +98,19 @@ class OrderController extends AbstractAdminController
         return Result::success(['orderId' => (int) $order['id']], '核销成功');
     }
 
-    /** 商户数据范围:按可见商户集合过滤 */
+    /** 酒店按已授权物业过滤，门票继续按可见商户过滤。 */
     private function applyMerchantScope($query): void
     {
-        $merchantIds = MerchantContext::scopeMerchantIds();
-        // 订单尚无门店归属字段，不能把商户全集授权给门店账号。
         $query->where('site_id', MerchantContext::siteId());
-        $query->whereIn('merchant_id', MerchantContext::scopeStoreId() !== null ? [] : $merchantIds);
+        $propertyIds = MerchantContext::scopePropertyIds() ?: [-1];
+        $merchantIds = MerchantContext::scopeMerchantIds();
+        $query->where(static function ($scope) use ($propertyIds, $merchantIds) {
+            $scope->where(static function ($hotel) use ($propertyIds) {
+                $hotel->where('order_type', 1)->whereIn('property_id', $propertyIds);
+            })->orWhere(static function ($ticket) use ($merchantIds) {
+                $ticket->where('order_type', '<>', 1)->whereIn('merchant_id', $merchantIds);
+            });
+        });
     }
 
     private function findScoped(int $id): array
@@ -115,7 +120,7 @@ class OrderController extends AbstractAdminController
             throw new BusinessException(ErrorCode::NOT_FOUND, '订单不存在');
         }
         $order = (array) $order;
-        $this->assertMerchantScope((int) $order['merchant_id']);
+        $this->assertOrderScope($order);
         return $order;
     }
 
@@ -133,13 +138,19 @@ class OrderController extends AbstractAdminController
             throw new BusinessException(ErrorCode::NOT_FOUND, '订单不存在');
         }
         $order = (array) $order;
-        $this->assertMerchantScope((int) $order['merchant_id']);
+        $this->assertOrderScope($order);
         return $order;
     }
 
-    private function assertMerchantScope(int $merchantId): void
+    private function assertOrderScope(array $order): void
     {
-        if (MerchantContext::scopeStoreId() !== null || ! in_array($merchantId, MerchantContext::scopeMerchantIds(), true)) {
+        $allowed = (int) $order['site_id'] === MerchantContext::siteId();
+        if ((int) $order['order_type'] === 1) {
+            $allowed = $allowed && in_array((int) $order['property_id'], MerchantContext::scopePropertyIds(), true);
+        } else {
+            $allowed = $allowed && in_array((int) $order['merchant_id'], MerchantContext::scopeMerchantIds(), true);
+        }
+        if (! $allowed) {
             throw new BusinessException(ErrorCode::NO_DATA_PERMISSION);
         }
     }

@@ -5,5 +5,5 @@ import GoodsManage from '@/views/goods/components/GoodsManage.vue';
 </script>
 
 <template>
-  <GoodsManage :goods-type="2" perm-prefix="goods:ticket" sku-perm="goods:ticket:type" />
+  <GoodsManage />
 </template>

@@ -11,19 +11,25 @@ use Mtrip\Shared\Exception\BusinessException;
 use Mtrip\Shared\Support\Result;
 
 /**
- * 商品 SKU 管理:酒店房型 / 门票票种 CRUD + 退改规则
+ * 商品 SKU 管理:物业房型只读列表 / 门票票种 CRUD + 门票退改规则
  * 保存均为 upsert 风格:带 id 编辑,不带 id 新增;删除为软删(校验进行中订单)
  */
 class AdminSkuController extends AbstractAdminController
 {
     // ---------- 酒店房型 ----------
 
-    /** 房型列表(按商品) */
+    /** 房型列表:仅按物业主键供管理端选择器使用。 */
     public function roomList(): array
     {
-        $goods = $this->findGoods($this->requireId('goodsId'), 1);
+        $propertyId = $this->requireId('propertyId');
+        $property = Db::table('merchant_store')->where('id', $propertyId)->whereNull('deleted_at')->first();
+        if (! $property || (string) $property->business_type !== 'hotel') {
+            throw new BusinessException(ErrorCode::NOT_FOUND, '酒店物业不存在');
+        }
+        $this->assertSiteScope((int) $property->site_id);
         $list = Db::table('hotel_room_type')
-            ->where('goods_id', $goods['id'])->whereNull('deleted_at')
+            ->where('property_id', $propertyId)->where('site_id', (int) $property->site_id)
+            ->whereNull('deleted_at')
             ->orderBy('sort')->orderBy('id')->get()
             ->map(function ($row) {
                 $row = (array) $row;
@@ -33,56 +39,6 @@ class AdminSkuController extends AbstractAdminController
                 return $row;
             })->all();
         return Result::success($list);
-    }
-
-    /** 保存房型:床型/面积/人数/早餐/门市价/每日库存 */
-    #[Permission('goods:hotel:room')]
-    public function roomSave(): array
-    {
-        $goods = $this->findGoods($this->requireId('goodsId'), 1);
-        $data = [
-            'bed_type' => $this->strInput('bedType'),
-            'area' => $this->strInput('area'),
-            'max_guests' => max(1, $this->intInput('maxGuests', 2)),
-            'breakfast' => in_array($this->intInput('breakfast'), [0, 1, 2], true) ? $this->intInput('breakfast') : 0,
-            'base_price' => $this->validPrice('basePrice'),
-            'base_stock' => max(0, $this->intInput('baseStock')),
-            'sort' => $this->intInput('sort'),
-            'status' => $this->intInput('status', 1) === 2 ? 2 : 1,
-        ];
-        foreach (['images', 'facilities'] as $col) {
-            $value = $this->input($col);
-            if (is_array($value)) {
-                $data[$col] = json_encode($value, JSON_UNESCAPED_UNICODE);
-            }
-        }
-
-        $id = $this->intInput('id');
-        if ($id > 0) {
-            $row = $this->findSku('hotel_room_type', $id, (int) $goods['id']);
-            if (($name = $this->strInput('roomName')) !== '') {
-                $data['room_name'] = $name;
-            }
-            Db::table('hotel_room_type')->where('id', $row['id'])->update($data);
-            return Result::success(['id' => (int) $row['id']], '房型已更新');
-        }
-        $data['site_id'] = (int) $goods['site_id'];
-        $data['goods_id'] = (int) $goods['id'];
-        $data['room_name'] = $this->requireStr('roomName');
-        $newId = (int) Db::table('hotel_room_type')->insertGetId($data);
-        return Result::success(['id' => $newId], '房型已创建');
-    }
-
-    /** 删除房型(软删):存在进行中订单禁止 */
-    #[Permission('goods:hotel:room')]
-    public function roomDelete(): array
-    {
-        $goods = $this->findGoods($this->requireId('goodsId'), 1);
-        $row = $this->findSku('hotel_room_type', $this->requireId(), (int) $goods['id']);
-        $this->assertSkuNoPendingOrder(1, (int) $row['id']);
-        Db::table('hotel_room_type')->where('id', $row['id'])
-            ->update(['deleted_at' => date('Y-m-d H:i:s')]);
-        return Result::success(null, '房型已删除');
     }
 
     // ---------- 门票票种 ----------
@@ -168,7 +124,7 @@ class AdminSkuController extends AbstractAdminController
     /** 退改规则列表(按商品,含商品级与 SKU 级) */
     public function ruleList(): array
     {
-        $goods = $this->findGoods($this->requireId('goodsId'));
+        $goods = $this->findGoods($this->requireId('goodsId'), 2);
         $list = Db::table('goods_refund_rule')
             ->where('goods_id', $goods['id'])->whereNull('deleted_at')
             ->orderBy('sku_type')->orderBy('sku_id')->get()
@@ -182,21 +138,21 @@ class AdminSkuController extends AbstractAdminController
     }
 
     /** 保存退改规则:同 goods+sku 维度唯一(存在则覆盖);阶梯退款须配 rules */
-    #[Permission(['goods:hotel:edit', 'goods:ticket:edit'])]
+    #[Permission('goods:ticket:edit')]
     public function ruleSave(): array
     {
-        $goods = $this->findGoods($this->requireId('goodsId'));
+        $goods = $this->findGoods($this->requireId('goodsId'), 2);
         $ruleType = $this->intInput('ruleType', 1);
         if (! in_array($ruleType, [1, 2, 3], true)) {
             throw new BusinessException(ErrorCode::PARAM_ERROR, '参数 ruleType 不正确');
         }
         $skuType = $this->intInput('skuType');
-        if (! in_array($skuType, [0, 1, 2], true)) {
-            throw new BusinessException(ErrorCode::PARAM_ERROR, '参数 skuType 不正确');
+        if (! in_array($skuType, [0, 2], true)) {
+            throw new BusinessException(ErrorCode::PARAM_ERROR, '参数 skuType 只能为 0商品或 2票种');
         }
         $skuId = $skuType === 0 ? 0 : $this->requireId('skuId');
-        if ($skuType > 0) {
-            $this->findSku($skuType === 1 ? 'hotel_room_type' : 'ticket_type', $skuId, (int) $goods['id']);
+        if ($skuType === 2) {
+            $this->findSku('ticket_type', $skuId, (int) $goods['id']);
         }
 
         $rules = $this->input('rules');

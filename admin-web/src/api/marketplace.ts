@@ -22,7 +22,7 @@ export interface MarketState {
 const base = '/admin/merchant/ranking';
 export const readMarket = (scope: MarketScope): Promise<{ list: TableRow[]; market: MarketState }> =>
   get(`${base}/${scope.entityType === 'listing' ? 'list' : 'destinations'}`, { ...scope });
-export const readCandidates = (scope: MarketScope): Promise<{ properties: TableRow[]; goods: TableRow[] }> =>
+export const readCandidates = (scope: MarketScope): Promise<{ properties: TableRow[] }> =>
   get(`${base}/candidates`, { ...scope });
 export const readPreview = (scope: MarketScope, view: string): Promise<{ list: TableRow[]; version: number }> =>
   get(`${base}/preview`, { ...scope, view });

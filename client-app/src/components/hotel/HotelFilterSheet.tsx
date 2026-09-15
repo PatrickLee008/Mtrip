@@ -15,8 +15,8 @@
  *   输入框   1px --secondary 描边、圆角 4、padding 8、高 36;内部 MMK 12px + 数值 16px
  *   CTA      主色、圆角 8、px16/py8,Inter 600/14 白字
  *
- * 与后端的关系:goods 列表接口(/api/v1/app/goods/list)只有 goodsType/categoryId/keyword,
- * 没有价格区间与设施筛选参数,**所以这些选择目前只留在前端状态里**,不参与请求;
+ * 与后端的关系:酒店列表接口(/api/v1/app/hotels/list)尚不支持价格区间与设施筛选参数,
+ * **所以这些选择目前只留在前端状态里**,不参与请求;
  * 各项右侧的计数(600+/1200+…)与 CTA 里的总数同样是设计稿静态值。
  * 计价口径下拉与 Show more 在设计稿里没有第二组选项,统一走 onComingSoon。
  */

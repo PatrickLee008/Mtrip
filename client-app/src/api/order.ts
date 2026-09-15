@@ -14,9 +14,12 @@ export interface OrderTraveler {
 }
 
 export interface CreateOrderParams {
-  goodsId: number;
-  /** 酒店=hotel_room_type.id,门票=ticket_type.id */
-  skuId: number;
+  /** 酒店订单使用物业与房型主键 */
+  propertyId?: number;
+  roomTypeId?: number;
+  /** 门票订单保持商品与票种主键 */
+  goodsId?: number;
+  skuId?: number;
   /** 酒店即间数,后端限制 1-10 */
   quantity: number;
   /** 入住日,不能早于今天(后端校验) */

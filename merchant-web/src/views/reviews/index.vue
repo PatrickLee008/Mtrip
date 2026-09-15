@@ -36,7 +36,7 @@ const statusMap = computed<Record<number, StatusItem>>(() => ({
 const columns = computed(() => [
   { title: t('reviews.review'), dataIndex: 'content', width: 360 },
   { title: t('reviews.rating'), dataIndex: 'rating', width: 120 },
-  { title: t('reviews.property'), dataIndex: 'goods_name', width: 220 },
+  { title: t('reviews.property'), dataIndex: 'property_name', width: 220 },
   { title: t('order.orderNo'), dataIndex: 'order_no', width: 170 },
   { title: t('common.status'), dataIndex: 'status', width: 120 },
   { title: t('reviews.reply'), dataIndex: 'reply_content', width: 220 },

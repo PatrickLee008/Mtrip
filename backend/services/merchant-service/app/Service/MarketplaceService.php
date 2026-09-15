@@ -41,10 +41,10 @@ final class MarketplaceService
         return ($ranks ? (int) max($ranks) : 0) + 1;
     }
 
-    /** Destination copy is snapshotted; listing snapshots only contain real IDs and configuration. */
+    /** Destination copy is snapshotted; listing snapshots only contain Property IDs and display configuration. */
     public function configs(array $rows, string $type): array
     {
-        $fields = $type === 'listing' ? ['id', 'property_id', 'goods_id', 'business_id', 'rank', 'pinned', 'featured', 'status']
+        $fields = $type === 'listing' ? ['id', 'property_id', 'rank', 'pinned', 'featured', 'status']
             : ['id', 'name', 'region', 'tagline', 'image_url', 'country_code', 'city_key', 'rank', 'featured', 'status'];
         return MarketplaceReader::ordered(array_map(static fn ($r) => array_intersect_key($r, array_flip($fields)), $rows));
     }
@@ -67,11 +67,7 @@ final class MarketplaceService
 
     public function candidates(array $scope): array
     {
-        $properties = array_values(MarketplaceReader::properties($scope));
-        $goods = Db::table('goods_info')->where('site_id', $scope['site_id'])->where('goods_type', 1)
-            ->whereIn('merchant_id', array_column($properties, 'merchant_id'))->where('status', 3)->whereNull('deleted_at')
-            ->orderBy('id')->get(['id', 'merchant_id', 'goods_name'])->map(static fn ($r) => (array) $r)->all();
-        return ['properties' => $properties, 'goods' => $goods];
+        return ['properties' => array_values(MarketplaceReader::properties($scope))];
     }
 
     private function authorize(string $permission): void
@@ -126,20 +122,16 @@ final class MarketplaceService
     {
         return $this->mutate($scope, $input, 'bind_hotel', 'merchant:property:bind', function ($market) use ($scope, $input) {
             $propertyId = (int) ($input['propertyId'] ?? 0);
-            $goodsId = (int) ($input['goodsId'] ?? 0);
             Db::table('merchant_store')->where('id', $propertyId)->where('site_id', $scope['site_id'])->lockForUpdate()->first();
-            Db::table('goods_info')->where('id', $goodsId)->where('site_id', $scope['site_id'])->lockForUpdate()->first();
             $property = MarketplaceReader::properties($scope)[$propertyId] ?? null;
-            $goods = Db::table('goods_info')->where('id', $goodsId)->where('site_id', $scope['site_id'])
-                ->where('goods_type', 1)->where('status', 3)->whereNull('deleted_at')->first();
-            if (! $property || ! MarketplaceReader::qualified($property) || ! $goods || (int) $goods->merchant_id !== (int) $property['merchant_id']) {
-                throw new BusinessException(ErrorCode::DATA_CONFLICT, '必须显式选择同一商户且已获展示资格的酒店物业与已上架酒店商品');
+            if (! $property || ! MarketplaceReader::qualified($property)) {
+                throw new BusinessException(ErrorCode::DATA_CONFLICT, '必须选择已获展示资格的酒店物业');
             }
-            if (Db::table('ranking_listing')->where('property_id', $propertyId)->orWhere('goods_id', $goodsId)->exists()) {
-                throw new BusinessException(ErrorCode::DATA_CONFLICT, '物业或酒店商品已有关联，禁止重复或跨市场复用');
+            if (Db::table('ranking_listing')->where('property_id', $propertyId)->exists()) {
+                throw new BusinessException(ErrorCode::DATA_CONFLICT, '物业已有排名配置，禁止重复或跨市场复用');
             }
             $id = Db::table('ranking_listing')->insertGetId(['market_id' => $market['id'], 'site_id' => $scope['site_id'],
-                'property_id' => $propertyId, 'goods_id' => $goodsId, 'business_id' => $property['source_business_id'],
+                'property_id' => $propertyId,
                 'business_type' => 'hotel', 'merchant_id' => $property['merchant_id'], 'city' => $scope['market_key'],
                 'rank' => $this->nextNormalRank($market), 'status' => 1]);
             return ['id' => $id];
@@ -252,7 +244,7 @@ final class MarketplaceService
             $data = ['display_enabled' => $enabled, 'mapping_version' => $version + 1];
             Db::table('merchant_store')->where('id', $id)->update($data);
             Db::table('merchant_property_history')->insert(['site_id' => $scope['site_id'], 'merchant_id' => $p['merchant_id'],
-                'store_id' => $id, 'source_business_id' => $p['source_business_id'], 'version' => $version + 1,
+                'store_id' => $id, 'source_business_id' => (int) ($p['source_business_id'] ?? 0), 'version' => $version + 1,
                 'before_json' => json_encode(['display_enabled' => $p['display_enabled'], 'mapping_version' => $version]),
                 'after_json' => json_encode($data), 'note' => $note,
                 'actor_id' => AdminContext::adminId(), 'actor_name' => AdminContext::adminName()]);

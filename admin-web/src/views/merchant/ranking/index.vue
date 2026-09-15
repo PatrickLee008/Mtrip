@@ -28,7 +28,7 @@ const status = ref<number>();
 const eligibility = ref<string>();
 const filtered = computed(() => rows.value.filter((r) => (!status.value || Number(r.status) === status.value)
   && (!eligibility.value || String(Boolean(r.eligible)) === eligibility.value)
-  && `${r.business_name || r.name} ${r.merchant_name || ''}`.toLowerCase().includes(keyword.value.trim().toLowerCase())));
+  && `${r.property_name || r.name} ${r.merchant_name || ''}`.toLowerCase().includes(keyword.value.trim().toLowerCase())));
 const group = (r: TableRow) => Number(r.pinned) === 1 ? 0 : Number(r.featured) === 1 ? 1 : 2;
 const draggable = computed(() => loaded.value && user.isSuper && user.hasPerm('merchant:ranking:save') && !loading.value && !keyword.value && !status.value && !eligibility.value);
 let requestId = 0;
@@ -114,14 +114,10 @@ function merchantProfile(row: TableRow) { void router.push({ path: '/merchant/li
 
 const bindOpen = ref(false);
 const properties = ref<TableRow[]>([]);
-const goods = ref<TableRow[]>([]);
 const propertyId = ref<number>();
-const goodsId = ref<number>();
 const selectedProperty = computed(() => properties.value.find((p) => Number(p.id) === propertyId.value));
-const goodsOptions = computed(() => goods.value.filter((g) => Number(g.merchant_id) === Number(selectedProperty.value?.merchant_id)).map((g) => ({ value: Number(g.id), label: `#${g.id} ${g.goods_name}` })));
-async function candidates() { const data = await readCandidates({ ...scope }); properties.value = data.properties; goods.value = data.goods; }
-async function openBind() { propertyId.value = undefined; goodsId.value = undefined; await candidates(); bindOpen.value = true; }
-function changeProperty() { goodsId.value = undefined; }
+async function candidates() { const data = await readCandidates({ ...scope }); properties.value = data.properties; }
+async function openBind() { propertyId.value = undefined; await candidates(); bindOpen.value = true; }
 function displayProperty() {
   const p = selectedProperty.value;
   if (!p) return;
@@ -194,7 +190,7 @@ onMounted(async () => {
         <a-table :columns="columns" :data-source="filtered" row-key="id" :pagination="false" :custom-row="rowProps" :scroll="{ x: 1100 }">
           <template #bodyCell="{ column, record }">
             <template v-if="column.dataIndex === 'rank'">⠿ {{ record.rank }}</template>
-            <template v-else-if="column.key === 'name'"><a @click="showDetail(record)">{{ record.business_name || record.name || `#${record.id}` }}</a></template>
+            <template v-else-if="column.key === 'name'"><a @click="showDetail(record)">{{ record.property_name || record.name || `#${record.id}` }}</a></template>
             <template v-else-if="column.key === 'eligible'"><a-tag :color="record.eligible ? 'green' : 'red'">{{ record.eligible ? tr('eligible') : tr('ineligible') }}</a-tag></template>
             <template v-else-if="column.key === 'status'">{{ Number(record.status) === 1 ? tr('visible') : tr('hidden') }}</template>
             <template v-else-if="column.key === 'group'"><a-tag>{{ group(record) === 0 ? tr('pinned') : group(record) === 1 ? tr('featured') : tr('normal') }}</a-tag></template>
@@ -217,11 +213,10 @@ onMounted(async () => {
     <a-modal v-model:open="bindOpen" :title="tr('bind')" :footer="null" width="650">
       <a-alert :message="tr('bindingHint')" type="info" />
       <a-form layout="vertical">
-        <a-form-item :label="tr('property')"><a-select v-model:value="propertyId" show-search option-filter-prop="label" @change="changeProperty"><a-select-option v-for="p in properties" :key="p.id" :value="Number(p.id)" :label="`#${p.id} ${p.store_name}`">#{{ p.id }} {{ p.store_name }} · {{ p.merchant_name }}</a-select-option></a-select></a-form-item>
+        <a-form-item :label="tr('property')"><a-select v-model:value="propertyId" show-search option-filter-prop="label"><a-select-option v-for="p in properties" :key="p.id" :value="Number(p.id)" :label="`#${p.id} ${p.store_name}`">#{{ p.id }} {{ p.store_name }} · {{ p.merchant_name }}</a-select-option></a-select></a-form-item>
         <p v-if="selectedProperty">{{ tr('eligibility') }}: {{ Number(selectedProperty.display_enabled) === 1 ? tr('visible') : tr('hidden') }} · KYC {{ selectedProperty.kyc_status }} · {{ tr('merchantStatus') }} {{ selectedProperty.merchant_status }}</p>
         <a-button v-perm="'merchant:property:bind'" :disabled="!selectedProperty" @click="displayProperty">{{ tr('toggleEligibility') }}</a-button>
-        <a-form-item :label="tr('goods')"><a-select v-model:value="goodsId" :options="goodsOptions" show-search option-filter-prop="label" /></a-form-item>
-        <a-button v-perm="'merchant:property:bind'" type="primary" :disabled="!propertyId || !goodsId" @click="confirmAction(tr('bind'), 'listing/add', { propertyId, goodsId })">{{ tr('bind') }}</a-button>
+        <a-button v-perm="'merchant:property:bind'" type="primary" :disabled="!propertyId" @click="confirmAction(tr('bind'), 'listing/add', { propertyId })">{{ tr('bind') }}</a-button>
       </a-form>
     </a-modal>
     <a-modal v-model:open="destinationOpen" :title="tr('destination')" @ok="saveDestination">
@@ -236,7 +231,7 @@ onMounted(async () => {
     <a-modal v-model:open="previewOpen" :title="tr('preview')" :footer="null" width="520">
       <a-radio-group v-model:value="previewView" @change="preview"><a-radio-button value="draft">{{ tr('draft') }}</a-radio-button><a-radio-button value="published">{{ tr('published') }}</a-radio-button></a-radio-group>
       <p>{{ scope.entityType === 'listing' ? `${scope.countryCode} / ${scope.cityKey}` : scope.region }} · v{{ previewVersion }}</p>
-      <a-list :data-source="previewRows"><template #renderItem="{ item }"><a-list-item><a-list-item-meta :title="item.goods_name || item.name" :description="item.address || item.tagline"><template #avatar><a-avatar shape="square" :src="item.cover_image || item.image_url" /></template></a-list-item-meta><span>{{ item.rating ?? '' }}</span></a-list-item></template></a-list>
+      <a-list :data-source="previewRows"><template #renderItem="{ item }"><a-list-item><a-list-item-meta :title="item.property_name || item.name" :description="item.address || item.tagline"><template #avatar><a-avatar shape="square" :src="item.cover_image || item.image_url" /></template></a-list-item-meta><span>{{ item.rating ?? '' }}</span></a-list-item></template></a-list>
       <p class="muted">{{ tr('previewHint') }}</p>
     </a-modal>
     <a-drawer v-model:open="historyOpen" :title="tr('history')" :width="620">
@@ -245,13 +240,13 @@ onMounted(async () => {
     </a-drawer>
     <a-drawer v-model:open="detailOpen" :title="tr('details')" :width="500">
       <a-descriptions v-if="detail" :column="1" bordered>
-        <a-descriptions-item :label="tr('name')">{{ detail.business_name || detail.name }}</a-descriptions-item>
+        <a-descriptions-item :label="tr('name')">{{ detail.property_name || detail.name }}</a-descriptions-item>
         <a-descriptions-item :label="tr('market')">{{ scope.siteId }} / {{ scope.countryCode }} / {{ scope.cityKey || scope.region }}</a-descriptions-item>
         <a-descriptions-item :label="tr('rank')">{{ detail.rank }}</a-descriptions-item>
         <a-descriptions-item :label="tr('rating')">{{ detail.rating ?? '—' }}</a-descriptions-item>
         <a-descriptions-item :label="tr('status')">{{ Number(detail.status) === 1 ? tr('visible') : tr('hidden') }}</a-descriptions-item>
         <a-descriptions-item v-if="scope.entityType === 'listing'" :label="tr('merchant')"><a v-perm="'merchant:list:list'" @click="merchantProfile(detail)">{{ detail.merchant_name }}</a></a-descriptions-item>
-        <a-descriptions-item v-if="scope.entityType === 'listing'" :label="tr('property')">#{{ detail.property_id }} {{ detail.property_name }} / {{ tr('goods') }} #{{ detail.goods_id }}</a-descriptions-item>
+        <a-descriptions-item v-if="scope.entityType === 'listing'" :label="tr('property')">#{{ detail.property_id }} {{ detail.property_name }}</a-descriptions-item>
         <a-descriptions-item v-if="scope.entityType === 'listing'" :label="tr('eligibility')">{{ detail.eligible ? tr('eligible') : tr('ineligible') }} / KYC {{ detail.kyc_status }} / {{ tr('merchantStatus') }} {{ detail.merchant_status }}</a-descriptions-item>
       </a-descriptions>
     </a-drawer>

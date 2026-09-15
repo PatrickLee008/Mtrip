@@ -19,7 +19,7 @@ class AdminRoomReviewController extends AbstractAdminController
         [$page, $pageSize] = $this->pageParams();
         $query = Db::table('hotel_room_type_revision as v')
             ->join('hotel_room_type as r', 'r.id', '=', 'v.room_id')
-            ->join('goods_info as g', 'g.id', '=', 'v.goods_id')
+            ->join('merchant_store as p', 'p.id', '=', 'v.property_id')
             ->leftJoin('merchant_info as m', 'm.id', '=', 'v.merchant_id')
             ->whereNull('r.deleted_at');
         $this->applySiteScope($query, 'v.site_id');
@@ -28,14 +28,14 @@ class AdminRoomReviewController extends AbstractAdminController
         if (($keyword = $this->strInput('keyword')) !== '') {
             $query->where(static function ($q) use ($keyword) {
                 $q->where('r.room_name', 'like', "%{$keyword}%")
-                    ->orWhere('g.goods_name', 'like', "%{$keyword}%")
+                    ->orWhere('p.store_name', 'like', "%{$keyword}%")
                     ->orWhere('m.merchant_name', 'like', "%{$keyword}%");
             });
         }
         $total = (clone $query)->count();
         $list = $query->orderByDesc('v.submitted_at')->orderByDesc('v.id')->forPage($page, $pageSize)
             ->get(['v.id', 'v.site_id', 'v.room_id', 'v.version', 'v.action', 'v.status', 'v.reject_reason',
-                'v.submitted_at', 'v.reviewed_at', 'r.room_name', 'r.approved_version', 'g.goods_name',
+                'v.submitted_at', 'v.reviewed_at', 'r.room_name', 'r.approved_version', 'p.store_name as property_name',
                 'm.merchant_name'])->map(static fn ($row) => (array) $row)->all();
         return Result::page($list, $total, $page, $pageSize);
     }
@@ -44,10 +44,10 @@ class AdminRoomReviewController extends AbstractAdminController
     {
         $revision = Db::table('hotel_room_type_revision as v')
             ->join('hotel_room_type as r', 'r.id', '=', 'v.room_id')
-            ->join('goods_info as g', 'g.id', '=', 'v.goods_id')
+            ->join('merchant_store as p', 'p.id', '=', 'v.property_id')
             ->leftJoin('merchant_info as m', 'm.id', '=', 'v.merchant_id')
             ->where('v.id', $this->requireId())->whereNull('r.deleted_at')
-            ->first(['v.*', 'g.goods_name', 'm.merchant_name']);
+            ->first(['v.*', 'p.store_name as property_name', 'm.merchant_name']);
         if (! $revision) throw new BusinessException(ErrorCode::NOT_FOUND, '审核版本不存在');
         $this->assertSiteScope((int) $revision->site_id);
         $room = Db::table('hotel_room_type')->where('id', $revision->room_id)->first();

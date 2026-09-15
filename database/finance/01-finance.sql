@@ -21,6 +21,8 @@ CREATE TABLE IF NOT EXISTS `finance_flow` (
   `amount`      DECIMAL(12,2) NOT NULL DEFAULT 0.00 COMMENT '金额',
   `order_id`    BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '关联订单ID',
   `merchant_id` BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '关联商户ID',
+  `property_id` BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '酒店物业ID,非酒店为0',
+  `room_type_id` BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '酒店房型ID,非酒店为0',
   `supplier_id` BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '关联供应商ID',
   `user_id`     BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '关联用户ID',
   `pay_channel` TINYINT      NOT NULL DEFAULT 0 COMMENT '支付渠道:1Stripe 2PayPal',
@@ -34,6 +36,7 @@ CREATE TABLE IF NOT EXISTS `finance_flow` (
   KEY `idx_site_id` (`site_id`),
   KEY `idx_flow_type` (`flow_type`),
   KEY `idx_biz_type` (`biz_type`),
+  KEY `idx_property_flow` (`property_id`,`created_at`),
   KEY `idx_created_at` (`created_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin COMMENT='资金流水表(月分表模板 finance_flow_YYYYMM)';
 
@@ -43,6 +46,7 @@ CREATE TABLE IF NOT EXISTS `finance_merchant_settle` (
   `settle_no`      VARCHAR(32)  NOT NULL COMMENT '结算单号(唯一)',
   `site_id`        BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '所属站点ID',
   `merchant_id`    BIGINT UNSIGNED NOT NULL COMMENT '商户ID',
+  `property_id`    BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '物业ID,0=历史商户级汇总',
   `settle_cycle`   VARCHAR(20)  NOT NULL COMMENT '结算周期(如 2026-07 或 2026-07-01~2026-07-07)',
   `order_count`    INT          NOT NULL DEFAULT 0 COMMENT '结算订单数',
   `order_amount`   DECIMAL(12,2) NOT NULL DEFAULT 0.00 COMMENT '订单总金额',
@@ -61,8 +65,9 @@ CREATE TABLE IF NOT EXISTS `finance_merchant_settle` (
   `deleted_at`     DATETIME     NULL DEFAULT NULL COMMENT '删除时间(软删)',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_settle_no` (`settle_no`),
-  UNIQUE KEY `uk_merchant_cycle` (`merchant_id`, `settle_cycle`),
+  UNIQUE KEY `uk_merchant_property_cycle` (`merchant_id`, `property_id`, `settle_cycle`),
   KEY `idx_site_id` (`site_id`),
+  KEY `idx_property_status` (`property_id`,`status`),
   KEY `idx_status` (`status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin COMMENT='商户结算单表';
 

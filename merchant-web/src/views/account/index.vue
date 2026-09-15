@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue';
+import { computed, onMounted, reactive, ref } from 'vue';
 import { message } from 'ant-design-vue';
 import { PlusOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons-vue';
 import { useI18n } from 'vue-i18n';
@@ -8,16 +8,22 @@ import StatusTag from '@/components/StatusTag.vue';
 import { useTable, type TableRow } from '@/composables/useTable';
 import {
   apiAccountAdd,
+  apiAccountAssignProperties,
   apiAccountList,
+  apiAccountProperties,
+  apiAccountPropertyOptions,
   apiAccountQuota,
   apiAccountResetPassword,
   apiAccountToggleStatus,
   apiAccountUpdate,
+  type PropertyOption,
 } from '@/api/account';
 import { apiAccountRoles, apiRoleGrant, apiRoleList, type MerchantRole } from '@/api/role';
+import { useUserStore } from '@/stores/user';
 
 /** 子账号管理:列表筛选 / 新增编辑 / 重置密码 / 启停(主账号不可停用) / 赋角色 */
 const { t } = useI18n();
+const userStore = useUserStore();
 
 const { loading, list, query, load, search, reset, pagination } = useTable(apiAccountList, {
   keyword: '',
@@ -134,19 +140,35 @@ const roleSaving = ref(false);
 const roleTarget = ref<TableRow | null>(null);
 const roleOptions = ref<MerchantRole[]>([]);
 const selectedRoleIds = ref<number[]>([]);
+const propertyOptions = ref<PropertyOption[]>([]);
+const selectedPropertyIds = ref<number[]>([]);
+const canGrantRoles = computed(() => userStore.hasPerm('mch:role:grant'));
+const canAssignProperties = computed(() => userStore.hasPerm('mch:account:property-assign'));
 
 async function openGrant(row: TableRow): Promise<void> {
   roleTarget.value = row;
   roleOpen.value = true;
-  const [roles, owned] = await Promise.all([apiRoleList(), apiAccountRoles(row.id)]);
-  roleOptions.value = roles;
-  selectedRoleIds.value = owned.roleIds;
+  if (canGrantRoles.value) {
+    const [roles, owned] = await Promise.all([apiRoleList(), apiAccountRoles(row.id)]);
+    roleOptions.value = roles;
+    selectedRoleIds.value = owned.roleIds;
+  }
+  if (canAssignProperties.value) {
+    const [properties, assigned] = await Promise.all([apiAccountPropertyOptions(), apiAccountProperties(row.id)]);
+    propertyOptions.value = properties;
+    selectedPropertyIds.value = assigned.propertyIds;
+  }
 }
 
 async function saveGrant(): Promise<void> {
   roleSaving.value = true;
   try {
-    await apiRoleGrant(roleTarget.value!.id, selectedRoleIds.value);
+    if (canGrantRoles.value) {
+      await apiRoleGrant(roleTarget.value!.id, selectedRoleIds.value);
+    }
+    if (canAssignProperties.value) {
+      await apiAccountAssignProperties(roleTarget.value!.id, selectedPropertyIds.value);
+    }
     message.success(t('common.opSuccess'));
     roleOpen.value = false;
   } finally {
@@ -215,7 +237,7 @@ onMounted(() => {
             <a-space :size="0" wrap>
               <a-button v-perm="'mch:account:edit'" type="link" size="small" :disabled="record.isOwner" @click="openEdit(record)">{{ t('common.edit') }}</a-button>
               <a-button v-perm="'mch:account:reset-pwd'" type="link" size="small" @click="openResetPwd(record)">{{ t('account.resetPwd') }}</a-button>
-              <a-button v-if="!record.isOwner" v-perm="'mch:role:grant'" type="link" size="small" @click="openGrant(record)">{{ t('account.assignRole') }}</a-button>
+              <a-button v-if="!record.isOwner" v-perm="['mch:role:grant', 'mch:account:property-assign']" type="link" size="small" @click="openGrant(record)">{{ t('account.assignRole') }}</a-button>
               <a-popconfirm
                 v-if="!record.isOwner"
                 :title="record.status === 1 ? t('common.disable') + '?' : t('common.enable') + '?'"
@@ -265,10 +287,18 @@ onMounted(() => {
     </a-modal>
 
     <!-- 赋角色 -->
-    <a-modal v-model:open="roleOpen" :title="`${t('account.assignRole')} - ${roleTarget?.username ?? ''}`" :confirm-loading="roleSaving" width="460px" @ok="saveGrant">
-      <a-checkbox-group v-model:value="selectedRoleIds" style="display: flex; flex-direction: column; gap: 8px; margin-top: 12px">
+    <a-modal v-model:open="roleOpen" :title="`${t('account.assignRole')} - ${roleTarget?.username ?? ''}`" :confirm-loading="roleSaving" width="520px" @ok="saveGrant">
+      <a-checkbox-group v-if="canGrantRoles" v-model:value="selectedRoleIds" style="display: flex; flex-direction: column; gap: 8px; margin-top: 12px">
         <a-checkbox v-for="role in roleOptions" :key="role.id" :value="role.id">{{ role.roleName }}</a-checkbox>
       </a-checkbox-group>
+      <a-divider v-if="canGrantRoles && canAssignProperties" />
+      <a-form-item v-if="canAssignProperties" v-perm="'mch:account:property-assign'" :label="t('account.assignProperties')">
+        <a-select v-model:value="selectedPropertyIds" mode="multiple" style="width: 100%" :placeholder="t('account.selectProperties')">
+          <a-select-option v-for="property in propertyOptions" :key="property.id" :value="property.id">
+            {{ property.store_name }} · {{ property.merchant_name }}
+          </a-select-option>
+        </a-select>
+      </a-form-item>
     </a-modal>
   </PageContainer>
 </template>

@@ -16,7 +16,7 @@ import {
   apiGoodsUpdate,
 } from '@/api/goods';
 
-/** 商品管理:列表筛选 / 新增编辑 / 提交审核 / 上下架;数据范围由后端按主体裁剪 */
+/** 门票商品管理:列表筛选 / 新增编辑 / 提交审核 / 上下架;数据范围由后端按主体裁剪 */
 const { t } = useI18n();
 const userStore = useUserStore();
 /** 集团账号可跨商户,新增须显式指定所属商户 */
@@ -24,7 +24,6 @@ const isGroup = computed(() => userStore.accountType === 1);
 
 const { loading, list, query, load, search, reset, pagination } = useTable(apiGoodsList, {
   goodsName: '',
-  goodsType: undefined,
   status: undefined,
 });
 
@@ -40,7 +39,6 @@ const GOODS_STATUS_MAP: Record<number, StatusItem> = {
 const columns = [
   { title: t('common.id'), dataIndex: 'id', width: 70 },
   { title: t('goods.goodsName'), dataIndex: 'goods_name', width: 220, ellipsis: true },
-  { title: t('goods.goodsType'), dataIndex: 'goods_type', width: 100 },
   { title: t('goods.category'), dataIndex: 'category_name', width: 130 },
   { title: t('store.merchant'), dataIndex: 'merchant_name', width: 150 },
   { title: t('goods.salesCount'), dataIndex: 'sales_count', width: 90 },
@@ -53,7 +51,6 @@ const modalOpen = ref(false);
 const modalSaving = ref(false);
 const editingId = ref(0);
 const form = reactive({
-  goodsType: 2,
   goodsName: '',
   merchantId: undefined as number | undefined,
   supplierId: undefined as number | undefined,
@@ -65,7 +62,6 @@ const form = reactive({
 function openCreate(): void {
   editingId.value = 0;
   Object.assign(form, {
-    goodsType: 2,
     goodsName: '',
     merchantId: undefined,
     supplierId: undefined,
@@ -81,7 +77,6 @@ async function openEdit(row: TableRow): Promise<void> {
   const detail = await apiGoodsDetail(row.id);
   const goods = (detail.goods ?? {}) as TableRow;
   Object.assign(form, {
-    goodsType: goods.goods_type,
     goodsName: goods.goods_name,
     merchantId: goods.merchant_id,
     supplierId: goods.supplier_id,
@@ -104,7 +99,7 @@ async function saveGoods(): Promise<void> {
   modalSaving.value = true;
   try {
     const payload: Record<string, unknown> = {
-      goodsType: form.goodsType,
+      goodsType: 2,
       goodsName: form.goodsName.trim(),
       supplierId: form.supplierId,
       categoryId: form.categoryId,
@@ -149,12 +144,6 @@ onMounted(() => {
         <a-form-item :label="t('goods.goodsName')">
           <a-input v-model:value="query.goodsName" :placeholder="t('common.pleaseInput')" allow-clear style="width: 180px" @press-enter="search" />
         </a-form-item>
-        <a-form-item :label="t('goods.goodsType')">
-          <a-select v-model:value="query.goodsType" allow-clear :placeholder="t('common.all')" style="width: 120px">
-            <a-select-option :value="1">{{ t('goods.hotel') }}</a-select-option>
-            <a-select-option :value="2">{{ t('goods.ticket') }}</a-select-option>
-          </a-select>
-        </a-form-item>
         <a-form-item :label="t('common.status')">
           <a-select v-model:value="query.status" allow-clear :placeholder="t('common.all')" style="width: 130px">
             <a-select-option :value="0">{{ t('goods.goodsStatus.draft') }}</a-select-option>
@@ -190,10 +179,7 @@ onMounted(() => {
         :scroll="{ x: 1200 }"
       >
         <template #bodyCell="{ column, record }">
-          <template v-if="column.dataIndex === 'goods_type'">
-            <a-tag :color="record.goods_type === 1 ? 'blue' : 'cyan'">{{ record.goods_type === 1 ? t('goods.hotel') : t('goods.ticket') }}</a-tag>
-          </template>
-          <template v-else-if="column.dataIndex === 'status'">
+          <template v-if="column.dataIndex === 'status'">
             <StatusTag :value="record.status" :map="GOODS_STATUS_MAP" />
           </template>
           <template v-else-if="column.key === 'action'">
@@ -226,12 +212,6 @@ onMounted(() => {
       @ok="saveGoods"
     >
       <a-form :label-col="{ span: 6 }" :wrapper-col="{ span: 17 }" style="margin-top: 16px">
-        <a-form-item :label="t('goods.goodsType')" required>
-          <a-select v-model:value="form.goodsType" :disabled="editingId !== 0" style="width: 160px">
-            <a-select-option :value="1">{{ t('goods.hotel') }}</a-select-option>
-            <a-select-option :value="2">{{ t('goods.ticket') }}</a-select-option>
-          </a-select>
-        </a-form-item>
         <a-form-item :label="t('goods.goodsName')" required>
           <a-input v-model:value="form.goodsName" />
         </a-form-item>

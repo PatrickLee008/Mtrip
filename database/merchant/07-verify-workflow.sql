@@ -18,6 +18,8 @@ CREATE TABLE IF NOT EXISTS `merchant_verify_document` (
   `id`               BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '主键',
   `site_id`          BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '所属站点ID',
   `merchant_id`      BIGINT UNSIGNED NOT NULL COMMENT '商户ID',
+  `scope_type`       VARCHAR(20) NOT NULL DEFAULT 'merchant' COMMENT '认证范围:merchant/property',
+  `property_id`      BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '物业ID,仅scope_type=property时有效',
   `biz_unit`         VARCHAR(64)  NOT NULL DEFAULT '' COMMENT '业务单元标识(多业态时区分,空=主体)',
   `doc_type`         VARCHAR(50)  NOT NULL COMMENT '文档类型(business_license/operating_license/owner_id/bank_cert/tax_cert/...)',
   `name`             VARCHAR(100) NOT NULL DEFAULT '' COMMENT '文档名称',
@@ -37,6 +39,7 @@ CREATE TABLE IF NOT EXISTS `merchant_verify_document` (
   PRIMARY KEY (`id`),
   KEY `idx_site_id` (`site_id`),
   KEY `idx_merchant_id` (`merchant_id`),
+  KEY `idx_property_document` (`site_id`,`property_id`,`status`),
   KEY `idx_status` (`status`),
   KEY `idx_expiry` (`expiry_date`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin COMMENT='商户资质文档核验表';

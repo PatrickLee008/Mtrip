@@ -128,12 +128,12 @@ export function fetchFavoriteList(params: PageParams): Promise<PageData<Favorite
   return get('/api/v1/app/user/favorite/list', { ...params });
 }
 
-export function addFavorite(goodsId: number): Promise<null> {
-  return post<null>('/api/v1/app/user/favorite/add', { goodsId });
+export function addFavorite(propertyId: number): Promise<null> {
+  return post<null>('/api/v1/app/user/favorite/add', { propertyId });
 }
 
-export function removeFavorite(goodsId: number): Promise<null> {
-  return post<null>('/api/v1/app/user/favorite/remove', { goodsId });
+export function removeFavorite(propertyId: number): Promise<null> {
+  return post<null>('/api/v1/app/user/favorite/remove', { propertyId });
 }
 
 /* ---- 常旅客(Frequent Traveler,需登录) ---- */

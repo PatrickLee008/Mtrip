@@ -211,6 +211,8 @@ class AdminRefundController extends AbstractAdminController
                 'amount' => $refundAmount,
                 'order_id' => (int) $refund['order_id'],
                 'merchant_id' => (int) $refund['merchant_id'],
+                'property_id' => (int) ($refund['property_id'] ?? 0),
+                'room_type_id' => (int) ($refund['room_type_id'] ?? 0),
                 'user_id' => (int) $order['user_id'],
                 'pay_channel' => $toWallet ? 0 : (int) $order['pay_method'],
                 'trade_no' => $tradeNo,

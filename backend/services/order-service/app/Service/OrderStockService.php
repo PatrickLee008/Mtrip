@@ -43,15 +43,16 @@ class OrderStockService
      * $isCitizen=true 且当日/基础配有公民价(>0)时按公民价计;否则回退外国人价 price/base_price
      * @return array{0: float, 1: array} [总价, 变动明细(供 logChanges)]
      */
-    public function lock(int $siteId, int $goodsId, int $skuType, int $skuId, array $sku, array $dates, int $qty, bool $isCitizen = false): array
+    public function lock(int $siteId, int $propertyId, int $goodsId, int $skuType, int $skuId, array $sku, array $dates, int $qty, bool $isCitizen = false): array
     {
         $total = 0.0;
         $changes = [];
         foreach ($dates as $date) {
-            $row = $this->lockRow($skuType, $skuId, $date);
+            $row = $this->lockRow($propertyId, $goodsId, $skuType, $skuId, $date);
             if (! $row) {
                 Db::table('goods_daily_stock')->insertOrIgnore([
                     'site_id' => $siteId,
+                    'property_id' => $propertyId,
                     'goods_id' => $goodsId,
                     'sku_type' => $skuType,
                     'sku_id' => $skuId,
@@ -60,7 +61,7 @@ class OrderStockService
                     'price_citizen' => $sku['base_price_citizen'] ?? 0,
                     'stock_total' => $sku['base_stock'],
                 ]);
-                $row = $this->lockRow($skuType, $skuId, $date);
+                $row = $this->lockRow($propertyId, $goodsId, $skuType, $skuId, $date);
             }
             if (! $row || (int) $row['is_closed'] === 1) {
                 throw new BusinessException(ErrorCode::DATA_CONFLICT, "{$date} 已停售");
@@ -77,6 +78,7 @@ class OrderStockService
             $total += $unitPrice * $qty;
             $changes[] = [
                 'site_id' => $siteId,
+                'property_id' => $propertyId,
                 'goods_id' => $goodsId,
                 'sku_type' => $skuType,
                 'sku_id' => $skuId,
@@ -137,15 +139,19 @@ class OrderStockService
         $dates = $this->datesOf($skuType, (string) $order['use_date'], $order['end_date'] ? (string) $order['end_date'] : null);
         $logs = [];
         foreach ($dates as $date) {
-            $row = $this->lockRow($skuType, (int) $order['sku_id'], $date);
+            $propertyId = (int) ($order['property_id'] ?? 0);
+            $goodsId = $skuType === 1 ? 0 : (int) ($order['goods_id'] ?? 0);
+            $skuId = $skuType === 1 ? (int) ($order['room_type_id'] ?? 0) : (int) $order['sku_id'];
+            $row = $this->lockRow($propertyId, $goodsId, $skuType, $skuId, $date);
             if ($row) {
                 $apply((int) $row['id'], $qty);
             }
             $logs[] = [
                 'site_id' => (int) $order['site_id'],
-                'goods_id' => (int) $order['goods_id'],
+                'property_id' => $propertyId,
+                'goods_id' => $goodsId,
                 'sku_type' => $skuType,
-                'sku_id' => (int) $order['sku_id'],
+                'sku_id' => $skuId,
                 'stock_date' => $date,
                 'change_type' => $changeType,
                 'change_qty' => in_array($changeType, [3, 4], true) ? $qty : -$qty,
@@ -155,15 +161,16 @@ class OrderStockService
         Db::table('goods_stock_log')->insert($logs);
     }
 
-    private function lockRow(int $skuType, int $skuId, string $date): ?array
+    private function lockRow(int $propertyId, int $goodsId, int $skuType, int $skuId, string $date): ?array
     {
         $row = Db::table('goods_daily_stock')
             ->where('sku_type', $skuType)
             ->where('sku_id', $skuId)
             ->where('stock_date', $date)
             ->whereNull('deleted_at')
-            ->lockForUpdate()
-            ->first();
+            ->when($skuType === 1, static fn ($query) => $query->where('property_id', $propertyId))
+            ->when($skuType !== 1, static fn ($query) => $query->where('goods_id', $goodsId))
+            ->lockForUpdate()->first();
         return $row ? (array) $row : null;
     }
 }

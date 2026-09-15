@@ -30,6 +30,24 @@ function resolveComponent(component: string, name: string): Component {
 export function buildRoutes(menus: MenuNode[]): RouteRecordRaw {
   const children: RouteRecordRaw[] = [
     {
+      path: '/properties',
+      name: 'AllProperties',
+      component: wrapView('../views/properties/index.vue', 'AllProperties'),
+      meta: { title: 'sidebar.allProperties', keepAlive: true },
+    },
+    {
+      path: '/properties/new',
+      name: 'AddProperty',
+      component: wrapView('../views/properties/new.vue', 'AddProperty'),
+      meta: { title: 'sidebar.addProperty', keepAlive: false },
+    },
+    {
+      path: '/properties/:id/profile',
+      name: 'PropertyProfile',
+      component: wrapView('../views/properties/profile.vue', 'PropertyProfile'),
+      meta: { title: 'properties.profile.title', keepAlive: false },
+    },
+    {
       path: '/dashboard',
       name: 'Dashboard',
       component: wrapView('../views/dashboard/index.vue', 'Dashboard'),
@@ -39,7 +57,7 @@ export function buildRoutes(menus: MenuNode[]): RouteRecordRaw {
 
   const walk = (nodes: MenuNode[]): void => {
     for (const node of nodes) {
-      if (node.menu_type === 2 && node.route_path) {
+      if (node.menu_type === 2 && node.route_path && node.route_path !== '/properties') {
         const name = `menu-${node.id}`;
         children.push({
           path: node.route_path,
@@ -89,7 +107,7 @@ export function buildRoutes(menus: MenuNode[]): RouteRecordRaw {
     path: '/',
     name: 'Layout',
     component: () => import('@/layouts/BasicLayout.vue'),
-    redirect: '/dashboard',
+    redirect: '/properties',
     children,
   };
 }

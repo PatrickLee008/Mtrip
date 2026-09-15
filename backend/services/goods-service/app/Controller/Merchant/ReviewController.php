@@ -14,7 +14,7 @@ use Mtrip\Shared\Support\Result;
 
 /**
  * 商户端评价管理(Merchant App M9)。
- * goods_review 本身无 merchant_id,通过 goods_info 做商户数据范围裁剪。
+ * 评价通过 property_id 按当前选中物业范围裁剪。
  */
 class ReviewController extends AbstractAdminController
 {
@@ -27,7 +27,7 @@ class ReviewController extends AbstractAdminController
         if (($keyword = $this->strInput('keyword')) !== '') {
             $query->where(static function ($q) use ($keyword) {
                 $q->where('r.content', 'like', "%{$keyword}%")
-                    ->orWhere('g.goods_name', 'like', "%{$keyword}%")
+                    ->orWhere('p.store_name', 'like', "%{$keyword}%")
                     ->orWhere('o.order_no', 'like', "%{$keyword}%");
             });
         }
@@ -120,21 +120,23 @@ class ReviewController extends AbstractAdminController
     private function baseQuery()
     {
         return Db::table('goods_review as r')
-            ->join('goods_info as g', 'g.id', '=', 'r.goods_id')
+            ->join('merchant_store as p', 'p.id', '=', 'r.property_id')
             ->leftJoin('order_main as o', 'o.id', '=', 'r.order_id')
             ->leftJoin('user_info as u', 'u.id', '=', 'r.user_id')
+            ->where('r.site_id', MerchantContext::siteId())
+            ->where('p.site_id', MerchantContext::siteId())
             ->whereNull('r.deleted_at')
-            ->whereNull('g.deleted_at')
-            ->whereIn('g.merchant_id', $this->scopeMerchantIds());
+            ->whereNull('p.deleted_at')
+            ->whereIn('r.property_id', $this->scopePropertyIds());
     }
 
     private function columns(): array
     {
         return [
-            'r.id', 'r.site_id', 'r.goods_id', 'r.user_id', 'r.order_id', 'r.rating', 'r.content',
+            'r.id', 'r.site_id', 'r.property_id', 'r.user_id', 'r.order_id', 'r.rating', 'r.content',
             'r.images', 'r.reply_content', 'r.status', 'r.created_at', 'r.updated_at',
             'r.merchant_flag_status', 'r.merchant_flag_reason', 'r.merchant_flagged_at',
-            'g.goods_name', 'g.merchant_id', 'o.order_no', 'u.nickname', 'u.avatar',
+            'p.store_name as property_name', 'p.merchant_id', 'o.order_no', 'u.nickname', 'u.avatar',
         ];
     }
 
@@ -147,9 +149,9 @@ class ReviewController extends AbstractAdminController
         return (array) $review;
     }
 
-    private function scopeMerchantIds(): array
+    private function scopePropertyIds(): array
     {
-        $ids = MerchantContext::scopeMerchantIds();
+        $ids = MerchantContext::scopePropertyIds();
         return $ids === [] ? [0] : $ids;
     }
 

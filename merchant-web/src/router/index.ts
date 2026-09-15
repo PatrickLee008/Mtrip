@@ -10,6 +10,18 @@ export const staticRoutes: RouteRecordRaw[] = [
     meta: { title: 'login.title', public: true },
   },
   {
+    path: '/activate',
+    name: 'Activate',
+    component: () => import('@/views/activate/index.vue'),
+    meta: { title: 'activation.title', public: true },
+  },
+  {
+    path: '/recover',
+    name: 'Recover',
+    component: () => import('@/views/recover/index.vue'),
+    meta: { title: 'recovery.title', public: true },
+  },
+  {
     path: '/403',
     name: 'Forbidden',
     component: () => import('@/views/error/403.vue'),

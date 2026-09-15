@@ -306,7 +306,7 @@ class VerifyController extends AbstractController
         }
 
         return Result::success([
-            'merchant' => array_diff_key($merchant, array_flip(['access_code', 'two_fa_secret_enc'])),
+            'merchant' => array_diff_key($merchant, array_flip(['access_code', 'access_code_normalized', 'two_fa_secret_enc'])),
             'documents' => $documents,
             'businesses' => $businesses,
             'timeline' => $timeline,
@@ -534,7 +534,7 @@ class VerifyController extends AbstractController
     }
 
     /** 逐份文档核验:action=verify 核验通过 / reject 驳回(必填原因) */
-    #[Permission(['merchant:verify:doc', 'merchant:document:verify'])]
+    #[Permission(['merchant:verify:doc', 'merchant:document:verify', 'merchant:onboarding:kyc'])]
     public function docReview(): array
     {
         return Result::success((new \App\Service\MerchantDocumentService())->review($this->requireId('docId'), $this->request->all()));
@@ -548,9 +548,25 @@ class VerifyController extends AbstractController
     public function documents(): array
     {
         [$page, $pageSize] = $this->pageParams();
-        $approvedIds = Db::table('merchant_info')->whereIn('status', [3, 4])->whereNull('deleted_at')->select('id');
-        $query = Db::table('merchant_verify_document')->whereNull('deleted_at')->whereIn('merchant_id', $approvedIds);
-        $this->applySiteScope($query);
+        $baseQuery = function () {
+            $approvedIds = Db::table('merchant_info')->whereIn('status', [3, 4])->whereNull('deleted_at')->select('id');
+            $onboardingIds = Db::table('merchant_application')->where('state_model_version', '>=', 1)
+                ->where('registration_status', 3)->whereNull('deleted_at')->select('id');
+            $query = Db::table('merchant_verify_document')->whereNull('deleted_at')
+                ->where('scope_resolution_status', '<>', 2)
+                ->where(function ($q) use ($approvedIds, $onboardingIds) {
+                    $q->whereIn('merchant_id', $approvedIds)
+                        ->orWhere(function ($draft) use ($onboardingIds) {
+                            $draft->where('merchant_id', 0)->whereIn('application_id', $onboardingIds)->where('file_url', '<>', '');
+                        });
+                })
+                ->where(static function ($q) {
+                    $q->where('scope_type', '<>', 'property')->orWhere('status', '<>', 0);
+                });
+            $this->applySiteScope($query);
+            return $query;
+        };
+        $query = $baseQuery();
         if (($mid = $this->intInput('merchantId')) > 0) {
             $query->where('merchant_id', $mid);
         }
@@ -564,11 +580,18 @@ class VerifyController extends AbstractController
         if (($kw = $this->strInput('keyword')) !== '') {
             $kwMerchantIds = Db::table('merchant_info')
                 ->where('merchant_name', 'like', "%{$kw}%")->pluck('id')->all();
-            $query->where(function ($q) use ($kw, $kwMerchantIds) {
+            $kwApplicationIds = Db::table('merchant_application')->whereNull('deleted_at')
+                ->where(function ($applications) use ($kw) {
+                    $applications->where('company_name', 'like', "%{$kw}%")->orWhere('app_no', 'like', "%{$kw}%");
+                })->pluck('id')->all();
+            $query->where(function ($q) use ($kw, $kwMerchantIds, $kwApplicationIds) {
                 $q->where('name', 'like', "%{$kw}%")
                     ->orWhere('doc_type', 'like', "%{$kw}%");
                 if ($kwMerchantIds !== []) {
                     $q->orWhereIn('merchant_id', $kwMerchantIds);
+                }
+                if ($kwApplicationIds !== []) {
+                    $q->orWhereIn('application_id', $kwApplicationIds);
                 }
             });
         }
@@ -577,8 +600,7 @@ class VerifyController extends AbstractController
             ->map(static fn ($r) => (array) $r)->all();
 
         // 统计卡(不受 keyword/status/docType 过滤影响,仅站点口径,可作点击入口)
-        $statsQuery = Db::table('merchant_verify_document')->whereNull('deleted_at')->whereIn('merchant_id', $approvedIds);
-        $this->applySiteScope($statsQuery);
+        $statsQuery = $baseQuery();
         $grouped = [];
         foreach ($statsQuery->selectRaw('status, count(*) as cnt')->groupBy('status')->get() as $row) {
             $grouped[(int) $row->status] = (int) $row->cnt;
@@ -594,9 +616,22 @@ class VerifyController extends AbstractController
         // 补充商户名与临期标记(≤30 天且未过期 → expiring soon)
         $ids = array_column($list, 'merchant_id');
         $names = $ids === [] ? [] : Db::table('merchant_info')->whereIn('id', $ids)->pluck('merchant_name', 'id')->all();
+        $applicationIds = array_values(array_filter(array_map('intval', array_column($list, 'application_id'))));
+        $applications = $applicationIds === [] ? [] : Db::table('merchant_application')->whereIn('id', $applicationIds)
+            ->get()->keyBy('id')->map(static fn ($row) => (array) $row)->all();
+        $applicationBusinessIds = array_values(array_filter(array_map('intval', array_column($list, 'application_business_id'))));
+        $applicationBusinesses = $applicationBusinessIds === [] ? [] : Db::table('merchant_application_business')
+            ->whereIn('id', $applicationBusinessIds)->get()->keyBy('id')->map(static fn ($row) => (array) $row)->all();
+        $propertyIds = array_values(array_filter(array_map('intval', array_column($list, 'property_id'))));
+        $propertyNames = $propertyIds === [] ? [] : Db::table('merchant_store')->whereIn('id', $propertyIds)->pluck('store_name', 'id')->all();
         $now = time();
         foreach ($list as &$row) {
-            $row['merchant_name'] = (string) ($names[$row['merchant_id']] ?? '');
+            $application = $applications[(int) ($row['application_id'] ?? 0)] ?? null;
+            $applicationBusiness = $applicationBusinesses[(int) ($row['application_business_id'] ?? 0)] ?? null;
+            $row['merchant_name'] = (string) ($names[$row['merchant_id']] ?? ($application['company_name'] ?? ''));
+            $row['application_no'] = (string) ($application['app_no'] ?? '');
+            $row['property_name'] = (string) ($propertyNames[$row['property_id'] ?? 0] ?? ($applicationBusiness['business_name'] ?? ''));
+            $row['scope_name'] = (string) $row['scope_type'] === 'property' ? 'property' : 'merchant';
             $row['has_file'] = $row['file_url'] !== '';
             unset($row['file_url']);
             $row['expiring_soon'] = 0;

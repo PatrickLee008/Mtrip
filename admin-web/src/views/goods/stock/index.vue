@@ -8,7 +8,6 @@ import { useTable, type TableRow } from '@/composables/useTable';
 import { formatAmount } from '@/utils/format';
 import {
   apiGoodsList,
-  apiRoomList,
   apiStockAdjust,
   apiStockBatchSet,
   apiStockCalendar,
@@ -53,24 +52,22 @@ function defaultRange(): string[] {
 }
 
 // ---------- 商品/SKU 选择 ----------
-const goodsOptions = ref<{ label: string; value: number; goodsType: number }[]>([]);
+const goodsOptions = ref<{ label: string; value: number }[]>([]);
 const goodsSearching = ref(false);
 const goodsId = ref<number>();
 const skuOptions = ref<{ label: string; value: number }[]>([]);
 const skuId = ref<number>();
 const dateRange = ref<string[]>(defaultRange());
 
-const selectedGoods = computed(() => goodsOptions.value.find((item) => item.value === goodsId.value));
-const skuType = computed(() => selectedGoods.value?.goodsType ?? 0);
+const skuType = 2;
 
 async function searchGoods(keyword: string): Promise<void> {
   goodsSearching.value = true;
   try {
-    const data = await apiGoodsList({ goodsName: keyword, page: 1, pageSize: 20 });
+    const data = await apiGoodsList({ goodsName: keyword, goodsType: 2, page: 1, pageSize: 20 });
     goodsOptions.value = data.list.map((row: TableRow) => ({
-      label: `#${row.id} [${row.goods_type === 1 ? t('goods.common.typeHotel') : t('goods.common.typeTicket')}] ${row.goods_name}`,
+      label: `#${row.id} [${t('goods.common.typeTicket')}] ${row.goods_name}`,
       value: row.id,
-      goodsType: row.goods_type,
     }));
   } finally {
     goodsSearching.value = false;
@@ -83,9 +80,9 @@ async function onGoodsChange(): Promise<void> {
   if (!goodsId.value) {
     return;
   }
-  const skus = skuType.value === 1 ? await apiRoomList(goodsId.value) : await apiTicketList(goodsId.value);
+  const skus = await apiTicketList(goodsId.value);
   skuOptions.value = skus.map((sku: TableRow) => ({
-    label: `#${sku.id} ${sku.room_name ?? sku.ticket_name}`,
+    label: `#${sku.id} ${sku.ticket_name}`,
     value: sku.id,
   }));
 }
@@ -108,7 +105,7 @@ async function loadCalendar(): Promise<void> {
   try {
     const data = await apiStockCalendar({
       goodsId: goodsId.value,
-      skuType: skuType.value,
+      skuType,
       skuId: skuId.value,
       startDate: dateRange.value[0],
       endDate: dateRange.value[1],
@@ -186,7 +183,7 @@ async function saveBatch(): Promise<void> {
   try {
     const result = await apiStockBatchSet({
       goodsId: goodsId.value,
-      skuType: skuType.value,
+      skuType,
       skuId: skuId.value,
       startDate: batchForm.range[0],
       endDate: batchForm.range[1],
@@ -225,7 +222,7 @@ async function saveAdjust(): Promise<void> {
   try {
     const result = await apiStockAdjust({
       goodsId: goodsId.value,
-      skuType: skuType.value,
+      skuType,
       skuId: skuId.value,
       ...adjustForm,
     });
@@ -238,7 +235,7 @@ async function saveAdjust(): Promise<void> {
 }
 
 // ---------- 库存总览 / 低库存预警 / 变动流水 ----------
-const overview = useTable(apiStockOverview, { goodsName: '', goodsType: undefined, daysAhead: 30 });
+const overview = useTable(apiStockOverview, { goodsName: '', goodsType: 2, daysAhead: 30 });
 const warning = useTable(apiStockLowWarning, { threshold: LOW_STOCK_THRESHOLD, daysAhead: 30 });
 const logs = useTable(
   (params) => apiStockLogs({ ...params, goodsId: goodsId.value || undefined }),
@@ -308,7 +305,7 @@ onMounted(() => {
                 @change="onGoodsChange"
               />
             </a-form-item>
-            <a-form-item :label="skuType === 2 ? t('goods.common.ticketType') : t('goods.common.roomType')">
+            <a-form-item :label="t('goods.common.ticketType')">
               <a-select v-model:value="skuId" :options="skuOptions" :placeholder="t('goods.stock.placeholderSelectSku')" style="width: 220px" />
             </a-form-item>
             <a-form-item :label="t('goods.stock.filter.dateRange')">
@@ -364,12 +361,6 @@ onMounted(() => {
             <a-form-item :label="t('goods.stock.columns.goodsName')">
               <a-input v-model:value="overview.query.goodsName" allow-clear style="width: 180px" @press-enter="overview.search()" />
             </a-form-item>
-            <a-form-item :label="t('goods.stock.columns.type')">
-              <a-select v-model:value="overview.query.goodsType" allow-clear :placeholder="t('common.all')" style="width: 110px">
-                <a-select-option :value="1">{{ t('goods.common.typeHotel') }}</a-select-option>
-                <a-select-option :value="2">{{ t('goods.common.typeTicket') }}</a-select-option>
-              </a-select>
-            </a-form-item>
             <a-form-item :label="t('goods.stock.fieldDaysAhead')">
               <a-input-number v-model:value="overview.query.daysAhead" :min="1" :max="90" />
             </a-form-item>
@@ -386,7 +377,7 @@ onMounted(() => {
             size="middle"
           >
             <template #bodyCell="{ column, record }">
-              <template v-if="column.dataIndex === 'goods_type'">{{ record.goods_type === 1 ? t('goods.common.typeHotel') : t('goods.common.typeTicket') }}</template>
+              <template v-if="column.dataIndex === 'goods_type'">{{ t('goods.common.typeTicket') }}</template>
               <template v-else-if="column.dataIndex === 'stock_left'">
                 <span :style="record.stock_left <= LOW_STOCK_THRESHOLD ? 'color: #f5222d; font-weight: 600' : ''">{{ record.stock_left }}</span>
               </template>

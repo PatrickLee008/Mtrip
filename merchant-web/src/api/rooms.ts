@@ -5,7 +5,7 @@ export interface RoomHotelOption {
   id: number;
   merchant_id: number;
   merchant_name: string;
-  goods_name: string;
+  property_name: string;
   cover_image: string;
   address: string;
   status: number;
@@ -14,8 +14,8 @@ export interface RoomHotelOption {
 export interface MerchantRoom {
   id: number;
   site_id: number;
-  goods_id: number;
-  goods_name: string;
+  property_id: number;
+  property_name: string;
   merchant_id: number;
   room_name: string;
   room_code: string;

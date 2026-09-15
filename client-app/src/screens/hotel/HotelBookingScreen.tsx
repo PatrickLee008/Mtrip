@@ -13,8 +13,8 @@
  * 进度条固定 4 格;**多住宿的支付页没有进度条**(设计稿 1675:9158 确实没画)。
  *
  * **两种模式**:
- *   - **真实模式**(从详情页房型卡进来,带 `goodsId` + `skuId`):酒店名 / 房型名 / 单价来自
- *     `/app/goods/detail`,支付步骤真的调 `/app/order/create` + `/app/order/pay` 落单。
+ *   - **真实模式**(从详情页房型卡进来,带 `propertyId` + `roomTypeId`):酒店名 / 房型名 / 单价来自
+ *     `/app/hotels/detail`,支付步骤真的调 `/app/order/create` + `/app/order/pay` 落单。
  *     **渠道只开通了 mTrip 钱包余额**(`payMethod=3`):后端真的扣 `user_info.balance`、
  *     写 `user_balance_log` 与 `finance_flow`;其余渠道一律置灰 + Coming soon,不发请求。
  *   - **演示模式**(不带参数直接进,如设计稿走查):数值来自 `bookingDemo.ts`,不发任何请求。
@@ -34,7 +34,7 @@ import { useNavigation, useRoute, type RouteProp } from '@react-navigation/nativ
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTranslation } from 'react-i18next';
 
-import { fetchGoodsDetail } from '@/api/goods';
+import { fetchHotelDetail } from '@/api/goods';
 import { fetchCouponMatchList, type BestCoupon } from '@/api/marketing';
 import { createOrder, payOrder } from '@/api/order';
 import { fetchTravelerList } from '@/api/user';
@@ -210,7 +210,7 @@ export default function HotelBookingScreen() {
   }, [picked]);
 
   /**
-   * 真实模式:房型卡带 `goodsId` / `skuId` 进来时,拉一次 `/goods/detail`,
+   * 真实模式:房型卡带 `propertyId` / `roomTypeId` 进来时,拉一次 `/hotels/detail`,
    * 用真实酒店名、房型名与 `base_price` 覆盖演示数据。
    *
    * 价格口径按后端来:房费 = `base_price × 晚数 × 间数`;**不加税费、不加加购**
@@ -221,27 +221,27 @@ export default function HotelBookingScreen() {
    * 日期默认取明天起 1 晚 —— 演示数据那组 2026-06-04 已经是过去,
    * 后端 `create` 会以「使用日期不能早于今天」直接拒掉。
    */
-  const goodsId = route.params?.goodsId;
-  const skuId = route.params?.skuId;
-  const realMode = Boolean(goodsId && skuId);
+  const propertyId = route.params?.propertyId;
+  const roomTypeId = route.params?.roomTypeId;
+  const realMode = Boolean(propertyId && roomTypeId);
   const [loadingGoods, setLoadingGoods] = useState(realMode);
 
   useEffect(() => {
-    if (!goodsId || !skuId) return;
+    if (!propertyId || !roomTypeId) return;
     let alive = true;
     setLoadingGoods(true);
-    void fetchGoodsDetail(goodsId)
+    void fetchHotelDetail(propertyId)
       .then((detail) => {
         if (!alive) return;
-        const sku = (detail.skus ?? []).find((r) => r.id === skuId);
+        const sku = (detail.skus ?? []).find((r) => r.id === roomTypeId);
         if (!sku) return;
         const unit = Number(sku.base_price) || 0;
         setStays([
           scaleStay({
-            key: `goods-${goodsId}-sku-${skuId}`,
+            key: `property-${propertyId}-room-${roomTypeId}`,
             demo: false,
-            goodsId,
-            skuId,
+            propertyId,
+            roomTypeId,
             hotelName: detail.goods_name,
             roomName: sku.room_name ?? '',
             address: detail.address ?? '',
@@ -271,7 +271,7 @@ export default function HotelBookingScreen() {
     return () => {
       alive = false;
     };
-  }, [goodsId, skuId, initialDates]);
+  }, [propertyId, roomTypeId, initialDates]);
 
   const multi = stays.length > 1;
   const current = stays[0];
@@ -283,7 +283,7 @@ export default function HotelBookingScreen() {
    * (与下单时 `PricingService::resolveCoupon` 同一公式),前端不自己算 —— 否则这里显示的
    * 优惠会和实际扣款对不上。改日期/间数后房费变了会重新拉一次,即「切换后重新试算」。
    *
-   * 只在**真实模式且已登录**时启用:演示模式没有 goodsId,券接口也要登录态。
+   * 只在**真实模式且已登录**时启用:演示模式没有 propertyId,券接口也要登录态。
    */
   const [couponList, setCouponList] = useState<CouponView[]>([]);
   const [bestCoupon, setBestCoupon] = useState<BestCoupon | null>(null);
@@ -298,14 +298,14 @@ export default function HotelBookingScreen() {
   const couponBase = current.roomPrice;
 
   useEffect(() => {
-    if (!couponEnabled || !goodsId || !skuId || couponBase <= 0) {
+    if (!couponEnabled || !propertyId || !roomTypeId || couponBase <= 0) {
       setCouponList([]);
       setBestCoupon(null);
       return;
     }
     let alive = true;
     setCouponLoading(true);
-    void fetchCouponMatchList({ orderType: 1, goodsId, skuId, amount: couponBase })
+    void fetchCouponMatchList({ orderType: 1, propertyId, roomTypeId, amount: couponBase })
       .then((data) => {
         if (!alive) return;
         setCouponList(data.list);
@@ -330,7 +330,7 @@ export default function HotelBookingScreen() {
     return () => {
       alive = false;
     };
-  }, [couponEnabled, goodsId, skuId, couponBase, couponTouched]);
+  }, [couponEnabled, propertyId, roomTypeId, couponBase, couponTouched]);
 
   /** 真正生效的券:选中的那张必须仍在可用列表里,否则当作没有券 */
   const appliedCoupon = useMemo(() => {
@@ -392,7 +392,7 @@ export default function HotelBookingScreen() {
    * (形如 `09****1234`),提交上去就是一条联系不上的假号码。
    */
   const submit = async () => {
-    if (!current.goodsId || !current.skuId) {
+    if (!current.propertyId || !current.roomTypeId) {
       comingSoon();
       return;
     }
@@ -405,8 +405,8 @@ export default function HotelBookingScreen() {
     setSubmitting(true);
     try {
       const order = await createOrder({
-        goodsId: current.goodsId,
-        skuId: current.skuId,
+        propertyId: current.propertyId,
+        roomTypeId: current.roomTypeId,
         quantity: current.rooms,
         useDate: current.checkIn,
         endDate: current.checkOut,

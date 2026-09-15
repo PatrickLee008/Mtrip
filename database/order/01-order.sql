@@ -18,10 +18,12 @@ CREATE TABLE IF NOT EXISTS `order_main` (
   `order_type`          TINYINT      NOT NULL DEFAULT 1 COMMENT '订单类型:1酒店 2门票',
   `merchant_id`         BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '商户ID',
   `supplier_id`         BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '供应商ID',
+  `property_id`         BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '酒店物业ID,门票为0',
   `goods_id`            BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '商品ID',
   `goods_name`          VARCHAR(200) NOT NULL COMMENT '商品名称',
   `goods_image`         VARCHAR(255) NOT NULL DEFAULT '' COMMENT '商品图片',
   `sku_id`              BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '房型/票种ID',
+  `room_type_id`        BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '酒店房型ID,门票为0',
   `sku_name`            VARCHAR(100) NOT NULL COMMENT '规格名称(房型/票种)',
   `quantity`            INT          NOT NULL DEFAULT 1 COMMENT '购买数量',
   `unit_price`          DECIMAL(12,2) NOT NULL DEFAULT 0.00 COMMENT '单价',
@@ -82,6 +84,8 @@ CREATE TABLE IF NOT EXISTS `order_main` (
   KEY `idx_booking_channel` (`booking_channel`),
   KEY `idx_payment_expires_at` (`payment_expires_at`),
   KEY `idx_site_merchant_goods_date` (`site_id`, `merchant_id`, `goods_id`, `use_date`),
+  KEY `idx_site_property_date` (`site_id`, `property_id`, `use_date`),
+  KEY `idx_property_room` (`property_id`, `room_type_id`),
   KEY `idx_created_at` (`created_at`),
   KEY `idx_pay_time` (`pay_time`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin COMMENT='订单主表(月分表模板 order_main_YYYYMM)';
@@ -95,6 +99,8 @@ CREATE TABLE IF NOT EXISTS `order_refund` (
   `order_no`       VARCHAR(32)  NOT NULL COMMENT '订单号',
   `user_id`        BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '用户ID',
   `merchant_id`    BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '商户ID',
+  `property_id`    BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '酒店物业ID,门票为0',
+  `room_type_id`   BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '酒店房型ID,门票为0',
   `refund_type`    TINYINT      NOT NULL DEFAULT 1 COMMENT '退款类型:1全额 2部分',
   `apply_amount`   DECIMAL(12,2) NOT NULL DEFAULT 0.00 COMMENT '申请退款金额',
   `refund_amount`  DECIMAL(12,2) NOT NULL DEFAULT 0.00 COMMENT '实际退款金额',
@@ -117,6 +123,7 @@ CREATE TABLE IF NOT EXISTS `order_refund` (
   KEY `idx_site_id` (`site_id`),
   KEY `idx_order_id` (`order_id`),
   KEY `idx_status` (`status`),
+  KEY `idx_property_refund` (`property_id`,`created_at`),
   KEY `idx_created_at` (`created_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin COMMENT='退款单表';
 

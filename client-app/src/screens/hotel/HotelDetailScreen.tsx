@@ -32,7 +32,7 @@ import { useNavigation, useRoute, type RouteProp } from '@react-navigation/nativ
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTranslation } from 'react-i18next';
 
-import { fetchGoodsDetail } from '@/api/goods';
+import { fetchHotelDetail } from '@/api/goods';
 import { TEMP_HOTEL_GALLERY } from '@/assets/tempImages';
 import { ErrorView, LoadingView } from '@/components/common/StateViews';
 import HomeIcon from '@/components/home/HomeIcon';
@@ -69,23 +69,23 @@ export default function HotelDetailScreen() {
   const showToast = useCommonStore((s) => s.showToast);
 
   const [tab, setTab] = useState<DetailTabKey>('overview');
-  const goodsId = route.params?.id;
+  const propertyId = route.params?.propertyId;
   const [detail, setDetail] = useState<GoodsDetail | null>(null);
-  const [loading, setLoading] = useState(Boolean(goodsId));
+  const [loading, setLoading] = useState(Boolean(propertyId));
   const [error, setError] = useState('');
 
   const loadDetail = useCallback(async () => {
-    if (!goodsId) return;
+    if (!propertyId) return;
     setLoading(true);
     try {
-      setDetail(await fetchGoodsDetail(goodsId));
+      setDetail(await fetchHotelDetail(propertyId));
       setError('');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Error');
     } finally {
       setLoading(false);
     }
-  }, [goodsId]);
+  }, [propertyId]);
 
   useEffect(() => {
     void loadDetail();
@@ -104,8 +104,8 @@ export default function HotelDetailScreen() {
       /* 搜索页选好的日期原样透传,向导不再自己挑默认日期 */
       checkIn: route.params?.checkIn,
       checkOut: route.params?.checkOut,
-      goodsId: sku && detail ? detail.id : undefined,
-      skuId: sku?.id,
+      propertyId: sku && detail ? detail.id : undefined,
+      roomTypeId: sku?.id,
     });
 
   if (loading) return <LoadingView />;

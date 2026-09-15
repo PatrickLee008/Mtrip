@@ -3,6 +3,14 @@
 > 参考 admin-web 从零搭建平行的 merchant-web(Vue3+Vite+TS+antdv),为商户账号(`merchant_admin`,account_type 1集团/2商户/3门店)落地一套完整仿 admin 的动态 RBAC:独立四表菜单/角色,登录按 `account_type` 下发菜单树+权限集,接口权限继续由 `#[Permission]` 注解按 `perm_key` 联动(与前端 `v-perm` 同一把钥匙)。
 > 承接 12-商家账号体系.md 的二期清单。
 
+## 2026-09-14 All Properties 与全局菜单 Figma 对齐
+
+- [x] 续接 Figma `585:7146` 的 Add New Property 第 1 步：新增 `/properties/new` 独立页面，完成面包屑、Basic Information/KYC Documents 步骤提示、物业名称/类型/房型数量/位置、图片拖放预览及底部操作栏；所有新增入口改进该页。用户确认本轮仍使用现有门店新增流程，Next 将名称和位置预填至 `/store` 新增弹窗；类型、房型数量、图片仅作页面预览，明确提示尚不保存。未新增物业专项 KYC 或上传接口。`merchant-web npm run build` 通过；1536×826 本地隔离预览截图已核对布局，临时预览文件已删除；无商户登录态，真实提交仍待验收。
+- [x] 按 mTrip_Merchant 节点 `580:6100` 新增 `/properties`：四张统计卡、按酒店/餐厅分组的三列业务卡和新增卡；列表读取 `/merchant/auth/menus` 中当前账号已验证且有数据权限的 `businesses`，不写死设计稿示例名称、数量或审核状态。酒店卡使用本地保存的 Figma 图片作展示素材，状态只显示接口已证实的“已验证”；第四统计卡也明确标为“已验证业务”，避免把 KYC 结果冒充发布状态。
+- [x] 左侧菜单按设计分为 Portfolio、Business、Team、System；为了保留既有门店/商品/客房/房量等入口，另设 Operations 分组。菜单仍从后端授权树提取页面，未修改原页面路由、接口或按钮权限。设计中的 Guest Messages 无独立列表，现有住客消息仍从预订详情进入。
+- [x] 新页组件路径 `properties/index` 与商户菜单种子一致；增量迁移 `V20260914090000__add-merchant-properties-menu.sql` 为已有 Dashboard 权限的角色授予新菜单。“Add New Property”先进入新增物业基本信息页，再沿用门店新增弹窗；“Manage”和“Dashboard”分别进入已有门店页/看板，不新增入驻或独立物业看板接口。
+- [x] `merchant-web npm run build`、迁移命名校验通过；本地迁移账本由 3 个已执行版本更新至 4 个，待执行 0。临时本地展示数据在 1536×995 浏览器视口对照节点检查，并将酒店卡片间距修到设计尺寸；预览数据与鉴权绕行代码已撤销。无可复用商户登录态，真实账号联动验收待补。
+
 ## 2026-09-13 商户登录传输密钥对齐
 
 - [x] 本地商户登录报“加密数据解密失败”：`merchant-web/.env.development` 的 `VITE_LOGIN_AES_KEY` 与运行中 merchant-service 的 `MTRIP_ADMIN_AES_KEY` 不同；`PayloadDecryptMiddleware` 对商户登录同样使用后者，旧注释所写的 `MTRIP_MERCHANT_AES_KEY` 并不存在。

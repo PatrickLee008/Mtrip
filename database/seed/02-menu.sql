@@ -71,8 +71,10 @@ INSERT IGNORE INTO `sys_menu` (`id`,`parent_id`,`menu_name`,`menu_name_en`,`perm
 (20502,205,'更新阶段','Update Stage','merchant:onboarding:update',3,2),
 (20503,205,'指派运营','Assign Ops','merchant:onboarding:assign',3,3),
 (20504,205,'发送KYC','Send KYC','merchant:onboarding:kyc',3,4),
-(20505,205,'入驻通过','Approve Onboarding','merchant:onboarding:approve',3,5),
-(20506,205,'入驻驳回','Reject Onboarding','merchant:onboarding:reject',3,6);
+(20505,205,'基础注册通过','Approve Registration','merchant:onboarding:registration-approve',3,5),
+(20506,205,'入驻驳回','Reject Onboarding','merchant:onboarding:reject',3,6),
+(20507,205,'最终批准','Final Approval','merchant:onboarding:final-approve',3,7),
+(20508,205,'重试凭证投递','Retry Credentials','merchant:onboarding:credential-retry',3,8);
 
 -- ================= 300 商户管理 =================
 INSERT IGNORE INTO `sys_menu` (`id`,`parent_id`,`menu_name`,`menu_name_en`,`i18n_key`,`perm_key`,`menu_type`,`route_path`,`component`,`icon`,`sort`) VALUES
@@ -102,6 +104,7 @@ INSERT IGNORE INTO `sys_menu` (`id`,`parent_id`,`menu_name`,`menu_name_en`,`perm
 (30113,301,'商户状态历史','Merchant status history','merchant:status:history',3,13),
 (30114,301,'关联酒店物业','Link hotel property','merchant:property:bind',3,14),
 (30115,301,'功能模块授权','Grant modules','merchant:list:module',3,15),
+(30116,301,'审核物业资料','Review Property Profile','merchant:property:content-audit',3,16),
 (30201,302,'替换证件','Replace Document','merchant:document:replace',3,1),
 (30202,302,'审核证件','Review Document','merchant:document:verify',3,2),
 (30203,302,'下载证件','Download Document','merchant:document:download',3,3),
@@ -325,19 +328,23 @@ INSERT IGNORE INTO `sys_menu` (`id`,`parent_id`,`menu_name`,`menu_name_en`,`perm
 (140301,1403,'确认对账','Confirm','supplier:settle:confirm',3,1),
 (140302,1403,'标记打款','Mark Paid','supplier:settle:pay',3,2);
 
--- ================= 遗留:1500 商品(门票/分类/审核/评价/酒店基础)=================
+-- ================= 遗留:1500 商品(门票/分类/审核/评价)=================
 INSERT IGNORE INTO `sys_menu` (`id`,`parent_id`,`menu_name`,`menu_name_en`,`i18n_key`,`perm_key`,`menu_type`,`route_path`,`component`,`icon`,`sort`) VALUES
-(1501,1500,'酒店管理','Hotels','menu.goodsHotel','goods:hotel:list',2,'/goods/hotel','goods/hotel/index','',1),
 (1502,1500,'门票管理','Tickets','menu.goodsTicket','goods:ticket:list',2,'/goods/ticket','goods/ticket/index','',2),
 (1503,1500,'商品分类','Categories','menu.goodsCategory','goods:category:list',2,'/goods/category','goods/category/index','',3),
 (1504,1500,'库存管控','Stock','menu.goodsStock','goods:stock:list',2,'/goods/stock','goods/stock/index','',4),
 (1505,1500,'上下架审核','Listing Audit','menu.goodsAudit','goods:audit:list',2,'/goods/audit','goods/audit/index','',5),
 (1506,1500,'评价审核','Reviews','','goods:review:list',2,'/cops/review','cops/review/index','',6);
 INSERT IGNORE INTO `sys_menu` (`id`,`parent_id`,`menu_name`,`menu_name_en`,`perm_key`,`menu_type`,`sort`) VALUES
-(150101,1501,'新增酒店','Add','goods:hotel:add',3,1),
-(150102,1501,'编辑酒店','Edit','goods:hotel:edit',3,2),
 (150201,1502,'新增门票','Add','goods:ticket:add',3,1),
+(150202,1502,'编辑门票','Edit','goods:ticket:edit',3,2),
+(150203,1502,'删除门票','Delete','goods:ticket:delete',3,3),
+(150204,1502,'管理票种','Manage Ticket Types','goods:ticket:type',3,4),
+(150301,1503,'新增分类','Add Category','goods:category:add',3,1),
+(150302,1503,'编辑分类','Edit Category','goods:category:edit',3,2),
+(150303,1503,'删除分类','Delete Category','goods:category:delete',3,3),
 (150501,1505,'审核商品','Audit','goods:audit:audit',3,1),
+(150502,1505,'强制下架','Force Off Shelf','goods:audit:off',3,2),
 (150601,1506,'审核评价','Audit Review','goods:review:audit',3,1),
 (150602,1506,'回复评价','Reply','goods:review:reply',3,2);
 

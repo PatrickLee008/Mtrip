@@ -13,6 +13,7 @@ CREATE TABLE IF NOT EXISTS merchant_document_event (
  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
  site_id BIGINT UNSIGNED NOT NULL,
  merchant_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+ property_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
  doc_id BIGINT UNSIGNED NOT NULL,
  version INT UNSIGNED NOT NULL,
  action VARCHAR(30) NOT NULL,
@@ -22,7 +23,25 @@ CREATE TABLE IF NOT EXISTS merchant_document_event (
  actor_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
  actor_name VARCHAR(50) NOT NULL DEFAULT '',
  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
- KEY idx_doc_event(doc_id,id), KEY idx_merchant_event(site_id,merchant_id,id)
+ KEY idx_doc_event(doc_id,id), KEY idx_merchant_event(site_id,merchant_id,id), KEY idx_property_event(property_id,id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+
+CREATE TABLE IF NOT EXISTS merchant_property_kyc_event (
+ id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+ site_id BIGINT UNSIGNED NOT NULL,
+ merchant_id BIGINT UNSIGNED NOT NULL,
+ property_id BIGINT UNSIGNED NOT NULL,
+ kyc_version INT UNSIGNED NOT NULL,
+ action VARCHAR(30) NOT NULL,
+ from_status TINYINT NOT NULL,
+ to_status TINYINT NOT NULL,
+ reason VARCHAR(500) NOT NULL DEFAULT '',
+ actor_type VARCHAR(20) NOT NULL,
+ actor_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+ actor_name VARCHAR(50) NOT NULL DEFAULT '',
+ created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ KEY idx_property_kyc_event(site_id,property_id,id),
+ KEY idx_merchant_kyc_event(site_id,merchant_id,id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
 SET @ddl = IF((SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='merchant_activity_log' AND COLUMN_NAME='actor_type')=0,

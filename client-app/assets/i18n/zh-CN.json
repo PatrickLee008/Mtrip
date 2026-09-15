@@ -233,6 +233,9 @@
         "allHotels": "全部酒店订单可用",
         "allGoods": "全部商品可用",
         "rooms": "仅限指定房型:{{list}}",
+        "allTickets": "全部门票商品可用",
+        "ticketGoods": "仅限指定门票商品:{{list}}",
+        "ticketTypes": "仅限指定票种:{{list}}",
         "stackable": "可与其他优惠叠加",
         "notStackable": "不可与其他优惠叠加",
         "period": "有效期 {{start}} 至 {{end}}"

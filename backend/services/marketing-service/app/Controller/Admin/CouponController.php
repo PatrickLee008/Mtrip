@@ -41,6 +41,9 @@ class CouponController extends AbstractController
             ->map(function ($row) {
                 $row = (array) $row;
                 $row['goods_ids'] = $this->jsonDecode($row['goods_ids']);
+                $row['property_ids'] = $this->jsonDecode($row['property_ids'] ?? null);
+                $row['sku_ids'] = $this->jsonDecode($row['sku_ids'] ?? null);
+                $row['room_type_ids'] = $this->jsonDecode($row['room_type_ids'] ?? null);
                 unset($row['deleted_at']);
                 return $row;
             })->all();
@@ -52,6 +55,9 @@ class CouponController extends AbstractController
     {
         $coupon = $this->findScoped($this->requireId());
         $coupon['goods_ids'] = $this->jsonDecode($coupon['goods_ids']);
+        $coupon['property_ids'] = $this->jsonDecode($coupon['property_ids'] ?? null);
+        $coupon['sku_ids'] = $this->jsonDecode($coupon['sku_ids'] ?? null);
+        $coupon['room_type_ids'] = $this->jsonDecode($coupon['room_type_ids'] ?? null);
         unset($coupon['deleted_at']);
         return Result::success($coupon);
     }
@@ -60,8 +66,9 @@ class CouponController extends AbstractController
     #[Permission('marketing:coupon:add')]
     public function add(): array
     {
-        $data = $this->validatedPayload();
-        $data['site_id'] = AdminContext::isSuper() ? $this->intInput('siteId') : (int) AdminContext::siteId();
+        $siteId = AdminContext::isSuper() ? $this->requireId('siteId') : (int) AdminContext::siteId();
+        $data = $this->validatedPayload($siteId);
+        $data['site_id'] = $siteId;
         $data['status'] = 0;
         $id = Db::table('marketing_coupon')->insertGetId($data);
         return Result::success(['id' => $id], '优惠券已创建');
@@ -74,7 +81,7 @@ class CouponController extends AbstractController
         $coupon = $this->findScoped($this->requireId());
         $status = (int) $coupon['status'];
         if ($status === 0) {
-            Db::table('marketing_coupon')->where('id', $coupon['id'])->update($this->validatedPayload());
+            Db::table('marketing_coupon')->where('id', $coupon['id'])->update($this->validatedPayload((int) $coupon['site_id']));
             return Result::success(null, '优惠券已更新');
         }
         if ($status === 1) {
@@ -165,7 +172,7 @@ class CouponController extends AbstractController
     }
 
     /** 组装并校验优惠券入参 */
-    private function validatedPayload(): array
+    private function validatedPayload(int $siteId): array
     {
         $couponType = $this->intInput('couponType');
         if (! in_array($couponType, [1, 2, 3], true)) {
@@ -179,10 +186,17 @@ class CouponController extends AbstractController
             throw new BusinessException(ErrorCode::PARAM_ERROR, '折扣率须小于10(如8.50=85折)');
         }
         $goodsScope = $this->intInput('goodsScope');
-        $goodsIds = (array) ($this->input('goodsIds') ?? []);
-        if ($goodsScope === 3 && $goodsIds === []) {
-            throw new BusinessException(ErrorCode::PARAM_ERROR, '指定商品范围必须选择商品');
+        if (! in_array($goodsScope, [0, 1, 2, 3], true)) {
+            throw new BusinessException(ErrorCode::PARAM_ERROR, '参数 goodsScope 不正确');
         }
+        $goodsIds = $goodsScope === 3 ? $this->idList($this->input('goodsIds')) : [];
+        $propertyIds = $goodsScope === 3 ? $this->idList($this->input('propertyIds')) : [];
+        $skuIds = $goodsScope === 3 ? $this->idList($this->input('skuIds')) : [];
+        $roomTypeIds = $goodsScope === 3 ? $this->idList($this->input('roomTypeIds')) : [];
+        if ($goodsScope === 3 && $goodsIds === [] && $propertyIds === []) {
+            throw new BusinessException(ErrorCode::PARAM_ERROR, '指定范围必须选择物业或门票商品');
+        }
+        $this->validateScopeIds($siteId, $propertyIds, $roomTypeIds, $goodsIds, $skuIds);
         $validType = $this->intInput('validType', 1);
         $validStart = $this->strInput('validStart');
         $validEnd = $this->strInput('validEnd');
@@ -202,7 +216,10 @@ class CouponController extends AbstractController
             'funding_source' => in_array($this->intInput('fundingSource', 1), [1, 2, 3, 4], true) ? $this->intInput('fundingSource', 1) : 1,
             'funding_rules' => is_array($fr = $this->input('fundingRules')) ? json_encode($fr, JSON_UNESCAPED_UNICODE) : null,
             'goods_scope' => $goodsScope,
-            'goods_ids' => $goodsScope === 3 ? json_encode(array_map('intval', $goodsIds)) : null,
+            'goods_ids' => $goodsIds === [] ? null : json_encode($goodsIds),
+            'property_ids' => $propertyIds === [] ? null : json_encode($propertyIds),
+            'sku_ids' => $skuIds === [] ? null : json_encode(array_map('intval', $skuIds)),
+            'room_type_ids' => $roomTypeIds === [] ? null : json_encode(array_map('intval', $roomTypeIds)),
             'total_count' => max(0, $this->intInput('totalCount')),
             'per_user_limit' => max(1, $this->intInput('perUserLimit', 1)),
             'valid_type' => $validType,
@@ -211,6 +228,36 @@ class CouponController extends AbstractController
             'valid_days' => $validType === 2 ? $validDays : 0,
             'remark' => mb_substr($this->strInput('remark'), 0, 500),
         ];
+    }
+
+    private function validateScopeIds(int $siteId, array $propertyIds, array $roomTypeIds, array $goodsIds, array $skuIds): void
+    {
+        if ($propertyIds !== [] && Db::table('merchant_store')->whereIn('id', $propertyIds)
+            ->where('site_id', $siteId)->where('business_type', 'hotel')->whereNull('deleted_at')->count() !== count($propertyIds)) {
+            throw new BusinessException(ErrorCode::NO_DATA_PERMISSION, '物业不属于优惠券站点');
+        }
+        if ($roomTypeIds !== [] && ($propertyIds === [] || Db::table('hotel_room_type')->whereIn('id', $roomTypeIds)
+            ->whereIn('property_id', $propertyIds)->where('site_id', $siteId)->whereNull('deleted_at')->count() !== count($roomTypeIds))) {
+            throw new BusinessException(ErrorCode::PARAM_ERROR, '房型必须属于所选物业');
+        }
+        if ($goodsIds !== [] && Db::table('goods_info')->whereIn('id', $goodsIds)
+            ->where('site_id', $siteId)->where('goods_type', 2)->whereNull('deleted_at')->count() !== count($goodsIds)) {
+            throw new BusinessException(ErrorCode::NO_DATA_PERMISSION, '门票商品不属于优惠券站点');
+        }
+        if ($skuIds !== [] && ($goodsIds === [] || Db::table('ticket_type')->whereIn('id', $skuIds)
+            ->whereIn('goods_id', $goodsIds)->where('site_id', $siteId)->whereNull('deleted_at')->count() !== count($skuIds))) {
+            throw new BusinessException(ErrorCode::PARAM_ERROR, '票种必须属于所选门票商品');
+        }
+    }
+
+    private function idList(mixed $value): array
+    {
+        if (! is_array($value)) return [];
+        $ids = array_values(array_unique(array_map('intval', $value)));
+        foreach ($ids as $id) {
+            if ($id <= 0) throw new BusinessException(ErrorCode::PARAM_ERROR, '适用范围 ID 不正确');
+        }
+        return $ids;
     }
 
     /** 取优惠券并校验站点数据权限 */

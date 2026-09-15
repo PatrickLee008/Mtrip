@@ -50,7 +50,7 @@ class CouponView
     /** 券模板需要的列(领券中心 / 活动详情 / 券详情) */
     public const TEMPLATE_COLUMNS = [
         'id', 'coupon_name', 'coupon_type', 'discount_value', 'min_amount', 'max_discount',
-        'goods_scope', 'goods_ids', 'sku_ids', 'total_count', 'received_count', 'per_user_limit',
+        'goods_scope', 'goods_ids', 'property_ids', 'sku_ids', 'room_type_ids', 'total_count', 'received_count', 'per_user_limit',
         'valid_type', 'valid_start', 'valid_end', 'valid_days', 'stackable', 'status', 'remark',
     ];
 
@@ -59,7 +59,7 @@ class CouponView
         'r.id as receive_id', 'r.coupon_code', 'r.status as receive_status',
         'r.valid_start', 'r.valid_end', 'r.order_id',
         'c.id', 'c.coupon_name', 'c.coupon_type', 'c.discount_value', 'c.min_amount',
-        'c.max_discount', 'c.goods_scope', 'c.goods_ids', 'c.sku_ids', 'c.stackable',
+        'c.max_discount', 'c.goods_scope', 'c.goods_ids', 'c.property_ids', 'c.sku_ids', 'c.room_type_ids', 'c.stackable',
         'c.status as template_status', 'c.remark',
     ];
 
@@ -136,7 +136,9 @@ class CouponView
         // 有下单上下文时再叠一层「这单能不能用」的判定
         $view['discount'] = 0.0;
         if ($ctx !== null && $view['unusableReason'] === null) {
-            $scopeOk = $this->matchScope($row, (int) ($ctx['orderType'] ?? 1), (int) ($ctx['goodsId'] ?? 0), (int) ($ctx['skuId'] ?? 0));
+            $scopeOk = $this->matchScope($row, (int) ($ctx['orderType'] ?? 1),
+                (int) ($ctx['propertyId'] ?? 0), (int) ($ctx['roomTypeId'] ?? 0),
+                (int) ($ctx['goodsId'] ?? 0), (int) ($ctx['skuId'] ?? 0));
             $amount = round((float) ($ctx['amount'] ?? 0), 2);
             if (! $scopeOk) {
                 $view['status'] = self::STATUS_UNUSABLE;
@@ -159,39 +161,56 @@ class CouponView
      */
     public function attachApplicable(array &$views): void
     {
+        $propertyIds = [];
+        $roomTypeIds = [];
         $goodsIds = [];
         $skuIds = [];
         foreach ($views as $view) {
-            foreach ($view['goods_ids'] as $id) {
-                $goodsIds[$id] = true;
+            foreach ($view['property_ids'] as $id) {
+                $propertyIds[$id] = true;
             }
-            foreach ($view['sku_ids'] as $id) {
-                $skuIds[$id] = true;
+            foreach ($view['room_type_ids'] as $id) {
+                $roomTypeIds[$id] = true;
             }
+            foreach ($view['goods_ids'] as $id) $goodsIds[$id] = true;
+            foreach ($view['sku_ids'] as $id) $skuIds[$id] = true;
         }
-        $goodsNames = $goodsIds === [] ? [] : Db::table('goods_info')
-            ->whereIn('id', array_keys($goodsIds))->whereNull('deleted_at')
-            ->pluck('goods_name', 'id');
-        $rooms = $skuIds === [] ? [] : Db::table('hotel_room_type')
-            ->whereIn('id', array_keys($skuIds))->whereNull('deleted_at')
-            ->get(['id', 'goods_id', 'room_name'])->keyBy('id');
+        $propertyNames = $propertyIds === [] ? [] : Db::table('merchant_store')
+            ->whereIn('id', array_keys($propertyIds))->whereNull('deleted_at')->pluck('store_name', 'id');
+        $rooms = $roomTypeIds === [] ? [] : Db::table('hotel_room_type')
+            ->whereIn('id', array_keys($roomTypeIds))->whereNull('deleted_at')
+            ->get(['id', 'property_id', 'room_name'])->keyBy('id');
+        $goodsNames = $goodsIds === [] ? [] : Db::table('goods_info')->whereIn('id', array_keys($goodsIds))
+            ->whereNull('deleted_at')->pluck('goods_name', 'id');
+        $tickets = $skuIds === [] ? [] : Db::table('ticket_type')->whereIn('id', array_keys($skuIds))
+            ->whereNull('deleted_at')->get(['id', 'goods_id', 'ticket_name'])->keyBy('id');
 
         foreach ($views as &$view) {
             $view['applicable_hotels'] = [];
-            foreach ($view['goods_ids'] as $id) {
+            foreach ($view['property_ids'] as $id) {
                 $view['applicable_hotels'][] = [
-                    'goods_id' => $id,
-                    'goods_name' => (string) ($goodsNames[$id] ?? ''),
+                    'property_id' => $id,
+                    'property_name' => (string) ($propertyNames[$id] ?? ''),
                 ];
             }
             $view['applicable_rooms'] = [];
-            foreach ($view['sku_ids'] as $id) {
+            foreach ($view['room_type_ids'] as $id) {
                 $room = $rooms[$id] ?? null;
                 $view['applicable_rooms'][] = [
-                    'sku_id' => $id,
-                    'goods_id' => $room ? (int) $room->goods_id : 0,
+                    'room_type_id' => $id,
+                    'property_id' => $room ? (int) $room->property_id : 0,
                     'room_name' => $room ? (string) $room->room_name : '',
                 ];
+            }
+            $view['applicable_goods'] = [];
+            foreach ($view['goods_ids'] as $id) {
+                $view['applicable_goods'][] = ['goods_id' => $id, 'goods_name' => (string) ($goodsNames[$id] ?? '')];
+            }
+            $view['applicable_ticket_types'] = [];
+            foreach ($view['sku_ids'] as $id) {
+                $ticket = $tickets[$id] ?? null;
+                $view['applicable_ticket_types'][] = ['sku_id' => $id, 'goods_id' => $ticket ? (int) $ticket->goods_id : 0,
+                    'ticket_name' => $ticket ? (string) $ticket->ticket_name : ''];
             }
         }
         unset($view);
@@ -226,21 +245,20 @@ class CouponView
     }
 
     /** 适用范围判定:品类 → 指定酒店 → 指定房型 */
-    public function matchScope(array $coupon, int $orderType, int $goodsId, int $skuId = 0): bool
+    public function matchScope(array $coupon, int $orderType, int $propertyId, int $roomTypeId, int $goodsId, int $skuId = 0): bool
     {
         $scope = (int) $coupon['goods_scope'];
         if (($scope === 1 && $orderType !== 1) || ($scope === 2 && $orderType !== 2)) {
             return false;
         }
         if ($scope === 3) {
-            $ids = $this->idList($coupon['goods_ids'] ?? null);
-            if (! in_array($goodsId, $ids, true)) {
+            $ids = $this->idList($coupon[$orderType === 1 ? 'property_ids' : 'goods_ids'] ?? null);
+            if (! in_array($orderType === 1 ? $propertyId : $goodsId, $ids, true)) {
                 return false;
             }
         }
-        // 房型限制独立于 goods_scope:为空 = 不限房型
-        $skus = $this->idList($coupon['sku_ids'] ?? null);
-        if ($skus !== [] && $skuId > 0 && ! in_array($skuId, $skus, true)) {
+        $itemIds = $this->idList($coupon[$orderType === 1 ? 'room_type_ids' : 'sku_ids'] ?? null);
+        if ($itemIds !== [] && ! in_array($orderType === 1 ? $roomTypeId : $skuId, $itemIds, true)) {
             return false;
         }
         return true;
@@ -283,7 +301,9 @@ class CouponView
             'max_discount' => (float) $row['max_discount'],
             'goods_scope' => (int) $row['goods_scope'],
             'goods_ids' => $this->idList($row['goods_ids'] ?? null),
+            'property_ids' => $this->idList($row['property_ids'] ?? null),
             'sku_ids' => $this->idList($row['sku_ids'] ?? null),
+            'room_type_ids' => $this->idList($row['room_type_ids'] ?? null),
             'stackable' => (int) ($row['stackable'] ?? 0),
             'valid_start' => $row['valid_start'] ?? null,
             'valid_end' => $row['valid_end'] ?? null,

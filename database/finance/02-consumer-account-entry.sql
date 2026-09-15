@@ -15,6 +15,8 @@ CREATE TABLE IF NOT EXISTS `finance_account_entry` (
   `order_id`            BIGINT UNSIGNED NOT NULL COMMENT '订单ID',
   `order_no`            VARCHAR(32)  NOT NULL COMMENT '订单号',
   `merchant_id`         BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '商户ID',
+  `property_id`         BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '酒店物业ID,非酒店为0',
+  `room_type_id`        BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '酒店房型ID,非酒店为0',
   `coupon_id`           BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '领券记录ID(无券=0)',
   `order_amount`        DECIMAL(12,2) NOT NULL DEFAULT 0.00 COMMENT '订单原总额',
   `commission`          DECIMAL(12,2) NOT NULL DEFAULT 0.00 COMMENT '平台佣金',
@@ -29,5 +31,6 @@ CREATE TABLE IF NOT EXISTS `finance_account_entry` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_order` (`order_id`),
   KEY `idx_site_merchant` (`site_id`, `merchant_id`),
+  KEY `idx_property_created` (`property_id`,`created_at`),
   KEY `idx_created_at` (`created_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin COMMENT='按订单结算分录表';

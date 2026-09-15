@@ -11,7 +11,8 @@ USE `mtrip_business`;
 CREATE TABLE IF NOT EXISTS `goods_review` (
   `id`            BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '主键',
   `site_id`       BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '所属站点ID',
-  `goods_id`      BIGINT UNSIGNED NOT NULL COMMENT '酒店商品ID',
+  `property_id`   BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '酒店物业ID',
+  `goods_id`      BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '旧酒店商品ID(批次G删除)',
   `user_id`       BIGINT UNSIGNED NOT NULL COMMENT '用户ID',
   `order_id`      BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '关联订单ID(每单限评一次)',
   `rating`        TINYINT      NOT NULL DEFAULT 5 COMMENT '评分1-5',
@@ -28,6 +29,7 @@ CREATE TABLE IF NOT EXISTS `goods_review` (
   `deleted_at`    DATETIME     NULL DEFAULT NULL COMMENT '删除时间(软删)',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_order` (`order_id`),
+  KEY `idx_property_status` (`site_id`, `property_id`, `status`),
   KEY `idx_goods_status` (`site_id`, `goods_id`, `status`),
   KEY `idx_merchant_flag` (`merchant_flag_status`, `merchant_flagged_at`),
   KEY `idx_user_id` (`user_id`)

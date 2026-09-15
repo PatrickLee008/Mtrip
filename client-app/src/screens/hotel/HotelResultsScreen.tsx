@@ -13,9 +13,9 @@
  *            右「View map」15px 图标 + Inter 600/14 主色
  *   卡片间距 24(Section - Hotel Grid 的 itemSpacing)
  *
- * 数据:`/api/v1/app/goods/list`(goodsType=1)。chips 与排序都落到真实查询参数上——
+ * 数据:`/api/v1/app/hotels/list`。chips 与排序都落到真实查询参数上——
  *   Rating 4+ → reviewScore=4、Free Cancellation → freeCancel=1、Breakfast → breakfast=1、
- *   Free Wifi → amenities=Wifi(按 goods_info.facilities 的 JSON 值匹配),Sort by → sortBy 白名单。
+ *   Free Wifi → amenities=Wifi(按物业 facilities 的 JSON 值匹配),Sort by → sortBy 白名单。
  *   搜索卡里改目的地/日期/公民身份后要点 Search 才生效(设计稿有 CTA);chips 与排序即时生效。
  *
  * **演示数据**:接口没连通或没返回结果时,列表回落到 `demoResults.ts` —— 设计稿那四张卡的原始数值与文案
@@ -47,7 +47,7 @@ import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
 
-import { fetchGoodsList, type GoodsSortBy } from '@/api/goods';
+import { fetchHotelList, type GoodsSortBy } from '@/api/goods';
 import { TEMP_HOTEL_COVERS, tempCoverFor } from '@/assets/tempImages';
 import { addFavorite, fetchFavoriteList, removeFavorite } from '@/api/user';
 import { LoadingView, EmptyView, ErrorView } from '@/components/common/StateViews';
@@ -62,7 +62,6 @@ import HotelFilterSheet, {
 } from '@/components/hotel/HotelFilterSheet';
 import HotelResultCard from '@/components/hotel/HotelResultCard';
 import SortSheet, { type SortAnchor } from '@/components/hotel/SortSheet';
-import { GOODS_TYPE } from '@/config/global';
 import { PAGE_PADDING, colors, radius, shadows } from '@/config/theme';
 import { fonts } from '@/config/typography';
 import type { RootStackParamList } from '@/navigation/types';
@@ -145,7 +144,6 @@ export default function HotelResultsScreen() {
 
   const query = useMemo(
     () => ({
-      goodsType: GOODS_TYPE.HOTEL,
       countryCode: params?.countryCode,
       cityKey: params?.cityKey,
       keyword: applied.keyword || undefined,
@@ -167,7 +165,7 @@ export default function HotelResultsScreen() {
       if (mode === 'refresh') setRefreshing(true);
       if (mode === 'more') setLoadingMore(true);
       try {
-        const data = await fetchGoodsList({ ...query, page, pageSize: PAGE_SIZE });
+        const data = await fetchHotelList({ ...query, page, pageSize: PAGE_SIZE });
         if (version !== loadVersion.current) return;
         pageRef.current = page;
         setItems((prev) => (page === 1 ? data.list : [...prev, ...data.list]));
@@ -208,7 +206,7 @@ export default function HotelResultsScreen() {
       return;
     }
     fetchFavoriteList({ page: 1, pageSize: 100 })
-      .then((data) => setFavorites(data.list.map((f) => f.goods_id)))
+      .then((data) => setFavorites(data.list.map((f) => f.property_id)))
       .catch(() => setFavorites([]));
   }, [isLogin]);
 
@@ -446,7 +444,7 @@ export default function HotelResultsScreen() {
                   /* 带上已选日期,一路透传到订房向导 —— 否则选完房日期会跳回默认值 */
                   onPress={(g) =>
                     navigation.navigate('HotelDetail', {
-                      id: g.id,
+                      propertyId: g.id,
                       checkIn: range.checkIn,
                       checkOut: range.checkOut,
                     })

@@ -146,12 +146,14 @@ class PromotionController extends AbstractController
             return Db::table('marketing_coupon as c')
                 ->leftJoin('merchant_info as m', 'm.id', '=', 'c.merchant_id')
                 ->whereNull('c.deleted_at')
-                ->whereIn('c.merchant_id', $this->scopeMerchantIds());
+                ->whereIn('c.merchant_id', $this->scopeMerchantIds())
+                ->whereRaw('JSON_OVERLAPS(COALESCE(c.property_ids, JSON_ARRAY()), ?)', [json_encode($this->scopePropertyIds())]);
         }
 
         return Db::table('marketing_coupon')
             ->whereNull('deleted_at')
-            ->whereIn('merchant_id', $this->scopeMerchantIds());
+            ->whereIn('merchant_id', $this->scopeMerchantIds())
+            ->whereRaw('JSON_OVERLAPS(COALESCE(property_ids, JSON_ARRAY()), ?)', [json_encode($this->scopePropertyIds())]);
     }
 
     private function columns(): array
@@ -159,7 +161,7 @@ class PromotionController extends AbstractController
         return [
             'c.id', 'c.site_id', 'c.merchant_id', 'c.coupon_name', 'c.coupon_type',
             'c.discount_value', 'c.min_amount', 'c.max_discount', 'c.funding_source',
-            'c.goods_scope', 'c.goods_ids', 'c.total_count', 'c.received_count',
+            'c.goods_scope', 'c.goods_ids', 'c.property_ids', 'c.sku_ids', 'c.room_type_ids', 'c.total_count', 'c.received_count',
             'c.used_count', 'c.per_user_limit', 'c.valid_type', 'c.valid_start',
             'c.valid_end', 'c.valid_days', 'c.status', 'c.remark', 'c.created_at',
             'c.updated_at', 'm.merchant_name',
@@ -190,10 +192,11 @@ class PromotionController extends AbstractController
             throw new BusinessException(ErrorCode::PARAM_ERROR, 'discount coupon must be less than 10');
         }
 
-        $goodsIds = $this->validGoodsIds($merchantId, (array) ($this->input('goodsIds') ?? []));
-        if ($goodsIds === []) {
-            throw new BusinessException(ErrorCode::PARAM_ERROR, 'please select at least one goods item');
+        $propertyIds = $this->validPropertyIds($merchantId, (array) ($this->input('propertyIds') ?? []));
+        if ($propertyIds === []) {
+            throw new BusinessException(ErrorCode::PARAM_ERROR, 'please select at least one property');
         }
+        $roomTypeIds = $this->validRoomTypeIds($propertyIds, (array) ($this->input('roomTypeIds') ?? []));
 
         $validType = $this->intInput('validType', 1);
         if (! in_array($validType, [1, 2], true)) {
@@ -218,7 +221,10 @@ class PromotionController extends AbstractController
             'funding_source' => 2,
             'funding_rules' => json_encode(['merchant' => 100], JSON_UNESCAPED_UNICODE),
             'goods_scope' => 3,
-            'goods_ids' => json_encode($goodsIds, JSON_UNESCAPED_UNICODE),
+            'goods_ids' => null,
+            'property_ids' => json_encode($propertyIds, JSON_UNESCAPED_UNICODE),
+            'sku_ids' => null,
+            'room_type_ids' => $roomTypeIds === [] ? null : json_encode($roomTypeIds, JSON_UNESCAPED_UNICODE),
             'total_count' => max(0, $this->intInput('totalCount')),
             'per_user_limit' => max(1, $this->intInput('perUserLimit', 1)),
             'valid_type' => $validType,
@@ -229,18 +235,20 @@ class PromotionController extends AbstractController
         ];
     }
 
-    private function validGoodsIds(int $merchantId, array $inputIds): array
+    private function validPropertyIds(int $merchantId, array $inputIds): array
     {
         $ids = array_values(array_unique(array_filter(array_map('intval', $inputIds))));
         if ($ids === []) {
             return [];
         }
 
-        $valid = Db::table('goods_info')
+        $valid = Db::table('merchant_store')
             ->where('merchant_id', $merchantId)
+            ->where('site_id', MerchantContext::siteId())
+            ->where('business_type', 'hotel')
             ->whereIn('id', $ids)
             ->whereNull('deleted_at')
-            ->where('status', '<>', 5)
+            ->whereIn('id', $this->scopePropertyIds())
             ->pluck('id')
             ->map(fn ($id) => (int) $id)
             ->all();
@@ -248,9 +256,21 @@ class PromotionController extends AbstractController
         sort($valid);
         sort($ids);
         if ($valid !== $ids) {
-            throw new BusinessException(ErrorCode::NO_DATA_PERMISSION, 'selected goods are out of scope');
+            throw new BusinessException(ErrorCode::NO_DATA_PERMISSION, 'selected properties are out of scope');
         }
 
+        return $ids;
+    }
+
+    private function validRoomTypeIds(array $propertyIds, array $inputIds): array
+    {
+        $ids = array_values(array_unique(array_filter(array_map('intval', $inputIds))));
+        if ($ids === []) return [];
+        $valid = Db::table('hotel_room_type')->where('site_id', MerchantContext::siteId())
+            ->whereIn('property_id', $propertyIds)->whereIn('id', $ids)->whereNull('deleted_at')
+            ->pluck('id')->map(fn ($id) => (int) $id)->all();
+        sort($valid); sort($ids);
+        if ($valid !== $ids) throw new BusinessException(ErrorCode::NO_DATA_PERMISSION, 'selected room types are out of scope');
         return $ids;
     }
 
@@ -279,6 +299,9 @@ class PromotionController extends AbstractController
     private function normalize(array $row): array
     {
         $row['goods_ids'] = $this->jsonDecode($row['goods_ids'] ?? null);
+        $row['property_ids'] = $this->jsonDecode($row['property_ids'] ?? null);
+        $row['sku_ids'] = $this->jsonDecode($row['sku_ids'] ?? null);
+        $row['room_type_ids'] = $this->jsonDecode($row['room_type_ids'] ?? null);
         $row['budget_estimate'] = round(((int) ($row['total_count'] ?? 0)) * ((float) ($row['discount_value'] ?? 0)), 2);
         unset($row['deleted_at']);
 
@@ -288,6 +311,12 @@ class PromotionController extends AbstractController
     private function scopeMerchantIds(): array
     {
         $ids = MerchantContext::scopeMerchantIds();
+        return $ids === [] ? [0] : $ids;
+    }
+
+    private function scopePropertyIds(): array
+    {
+        $ids = MerchantContext::scopePropertyIds();
         return $ids === [] ? [0] : $ids;
     }
 

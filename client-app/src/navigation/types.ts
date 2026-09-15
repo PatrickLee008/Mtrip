@@ -54,7 +54,7 @@ export type RootStackParamList = {
    * `checkIn`/`checkOut` 是搜索页选好的日期,只是过一道手透传给订房向导 ——
    * 否则选完房日期会跳回向导自己挑的默认值。
    */
-  HotelDetail: { id?: number; checkIn?: string; checkOut?: string } | undefined;
+  HotelDetail: { propertyId?: number; checkIn?: string; checkOut?: string } | undefined;
   /**
    * 订房向导(Figma section 1675:5776),房型卡 Select 的落地页。
    * 4 步在同一个路由内切换,`roomKey` 只用来指定进来时选中的房型(演示模式下可缺省)。
@@ -65,10 +65,10 @@ export type RootStackParamList = {
         /** 搜索页选好的入离日期(`YYYY-MM-DD`),缺省时向导用明天起 1 晚 */
         checkIn?: string;
         checkOut?: string;
-        /** 真实商品 id;带上即「真实模式」,向导会拉 /goods/detail 并真的下单 */
-        goodsId?: number;
+        /** 真实物业 id;带上即「真实模式」 */
+        propertyId?: number;
         /** 选中的房型 id(hotel_room_type.id) */
-        skuId?: number;
+        roomTypeId?: number;
         /**
          * 从常旅客页选回来的主要入住人。**只有姓名** ——
          * `user_traveler` 没有联系方式列,`/app/user/me` 的手机号与邮箱又是脱敏的,

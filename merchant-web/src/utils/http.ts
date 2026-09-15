@@ -2,6 +2,7 @@ import axios, { type AxiosRequestConfig } from 'axios';
 import { message } from 'ant-design-vue';
 import { getToken, clearAuth, isSupportSession } from '@/utils/auth';
 import type { ApiResult } from '@/api/types';
+import { getSelectedPropertyId } from '@/utils/propertyContext';
 
 /** 业务错误(code!=0),拦截器已弹出提示 */
 export class BizError extends Error {
@@ -23,6 +24,10 @@ instance.interceptors.request.use((config) => {
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
+  const propertyId = getSelectedPropertyId();
+  if (propertyId !== null && !config.headers.has('X-Mtrip-Property-Id')) {
+    config.headers.set('X-Mtrip-Property-Id', String(propertyId));
+  }
   return config;
 });
 
@@ -34,7 +39,8 @@ function handleBizResult(result: ApiResult): void {
     clearAuth();
     if (support) { window.location.replace('/support-session'); return; }
     message.warning(result.message || '登录已失效,请重新登录');
-    if (!window.location.pathname.startsWith('/login')) {
+    const publicAuthPaths = ['/login', '/activate', '/recover'];
+    if (!publicAuthPaths.includes(window.location.pathname)) {
       window.location.href = '/login';
     }
   } else if (result.code === 40301 || result.code === 40302) {

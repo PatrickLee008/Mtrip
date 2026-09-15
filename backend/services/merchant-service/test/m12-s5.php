@@ -16,7 +16,7 @@ if (($argv[1] ?? '') === '--reorder') {
     catch (\Mtrip\Shared\Exception\BusinessException $e) { if ($e->getCode() !== 40901) throw $e; echo 'S5-CONFLICT'; }
     exit;
 }
-$merchants = $apps = $businesses = $properties = $goods = $markets = [];
+$merchants = $properties = $rooms = $markets = [];
 $constraint = false;
 $key = 's5-' . bin2hex(random_bytes(5));
 $input = ['siteId' => 991, 'businessType' => 'hotel', 'countryCode' => 'MM', 'cityKey' => $key];
@@ -29,60 +29,75 @@ $change = function (string $method, array $data = []) use ($service, $scope, &$v
 };
 try {
     $m = $merchants[] = merchantFixture();
-    $app = $apps[] = (int) Db::table('merchant_application')->insertGetId(['site_id' => 991, 'merchant_id' => $m, 'app_no' => $key, 'company_name' => 'S5 fixture', 'country' => 'Myanmar']);
     for ($i = 0; $i < 4; $i++) {
-        $b = $businesses[] = (int) Db::table('merchant_application_business')->insertGetId(['site_id' => 991, 'application_id' => $app, 'business_name' => 'S5 Hotel ' . $i, 'business_type' => 'hotel', 'kyc_status' => 1]);
-        $p = $properties[] = (int) Db::table('merchant_store')->insertGetId(['site_id' => 991, 'merchant_id' => $m, 'source_business_id' => $b, 'store_name' => 'S5 Property ' . $i, 'business_type' => 'hotel', 'country_code' => 'MM', 'city_key' => $key, 'status' => 1]);
-        $g = $goods[] = (int) Db::table('goods_info')->insertGetId(['site_id' => 991, 'merchant_id' => $m, 'goods_name' => 'S5 Product ' . $i, 'goods_type' => 1, 'status' => 3]);
-        Db::table('hotel_room_type')->insert(['site_id' => 991, 'goods_id' => $g, 'room_name' => 'S5 Room', 'base_price' => 100 - $i, 'status' => 1, 'publish_status' => 2]);
+        $p = $properties[] = (int) Db::table('merchant_store')->insertGetId([
+            'site_id' => 991, 'merchant_id' => $m, 'source_business_id' => null,
+            'store_name' => 'S5 Property ' . $i, 'business_type' => 'hotel',
+            'country_code' => 'MM', 'city_key' => $key, 'status' => 1,
+            'kyc_status' => 1, 'content_status' => 2, 'content_approved_version' => 1, 'publish_status' => 1,
+            'operating_status' => 1, 'display_enabled' => 0,
+        ]);
+        $rooms[] = (int) Db::table('hotel_room_type')->insertGetId([
+            'site_id' => 991, 'property_id' => $p,
+            'room_name' => 'S5 Room', 'base_price' => 100 - $i,
+            'status' => 1, 'publish_status' => 2, 'approved_version' => 1,
+        ]);
     }
     check($service->read($scope)['list'] === [], 'S5 ignores legacy demo rows');
     foreach ([array_replace($input, ['siteId' => 0]), array_replace($input, ['cityKey' => '']), array_replace($input, ['countryCode' => '']), array_replace($input, ['businessType' => 'restaurant'])] as $bad) {
         rejects(40001, fn () => $service->scope($bad, 'listing'), 'S5 explicit valid hotel market required');
     }
-    rejects(40901, fn () => $change('addListing', ['propertyId' => $properties[0], 'goodsId' => $goods[0]]), 'S5 display eligibility starts disabled');
+    rejects(40901, fn () => $change('addListing', ['propertyId' => $properties[0]]), 'S5 display eligibility starts disabled');
+    $candidate = Reader::properties($scope)[$properties[0]] ?? [];
+    check(Reader::qualified($candidate, false), 'S5 property satisfies live gates before display');
     $listingIds = [];
-    foreach ($properties as $i => $p) {
+    foreach ($properties as $p) {
         $service->propertyDisplay($scope, ['propertyId' => $p, 'expectedPropertyVersion' => 0, 'displayEnabled' => 1, 'note' => 'S5 enable']);
-        $listingIds[] = (int) $change('addListing', ['propertyId' => $p, 'goodsId' => $goods[$i]])['id'];
+        $listingIds[] = (int) $change('addListing', ['propertyId' => $p])['id'];
     }
     $markets[] = (int) Db::table('ranking_market')->where($scope)->value('id');
     check(count($service->read($scope)['list']) === 4, 'S5 real properties mapped without per-room ranking');
     check(Reader::published(991, 'listing', 'MM', $key) === [], 'S5 never publishes draft automatically');
     check(count($service->preview($scope, false)['list']) === 4, 'S5 draft consumer projection reads real entities');
-    rejects(40901, fn () => $change('addListing', ['propertyId' => $properties[0], 'goodsId' => $goods[1]]), 'S5 duplicate property/product rejected');
+    rejects(40901, fn () => $change('addListing', ['propertyId' => $properties[0]]), 'S5 duplicate property rejected');
     rejects(40901, fn () => $service->reorder($scope, ['ids' => $listingIds, 'expectedVersion' => 0, 'note' => 'stale']), 'S5 optimistic conflict');
     foreach ([[], [$listingIds[0]], [$listingIds[0], $listingIds[0]], [999999999]] as $ids) {
         rejects($ids === [] ? 40001 : 40901, fn () => $change('reorder', ['ids' => $ids]), 'S5 partial/duplicate/unknown reorder rejected atomically');
     }
     $change('flags', ['id' => $listingIds[1], 'featured' => 1]);
     $change('flags', ['id' => $listingIds[2], 'pinned' => 1, 'featured' => 1]);
-    check(array_column($service->preview($scope, false)['list'], 'id') === [$goods[2], $goods[1], $goods[0], $goods[3]], 'S5 pinned > featured > normal, dual flag shown once');
+    check(array_column($service->preview($scope, false)['list'], 'id') === [$properties[2], $properties[1], $properties[0], $properties[3]], 'S5 pinned > featured > normal, dual flag shown once');
     rejects(40901, fn () => $change('reorder', ['ids' => $listingIds]), 'S5 cross-group drag rejected');
     $change('reorder', ['ids' => [$listingIds[3], $listingIds[0]]]);
     $change('publish');
     $live = Reader::published(991, 'listing', 'MM', $key);
-    check(array_column($live, 'id') === [$goods[2], $goods[1], $goods[3], $goods[0]], 'S5 group-local order published');
+    check(array_column($live, 'id') === [$properties[2], $properties[1], $properties[3], $properties[0]], 'S5 group-local order published');
     check($live === $service->preview($scope, true)['list'], 'S5 live and published preview match exactly');
     check(!isset($live[0]['merchant_id'], $live[0]['kyc_status'], $live[0]['status']), 'S5 consumer whitelist excludes internal data');
+    $publishedJson = (string) Db::table('ranking_market')->where($scope)->value('published_json');
+    check(! str_contains($publishedJson, 'goods_id') && ! str_contains($publishedJson, 'business_id'), 'S5 published snapshot contains Property IDs only');
     check(Reader::published(992, 'listing', 'MM', $key) === [], 'S5 published site isolation');
     check(Reader::published(991, 'listing', 'TH', $key) === [], 'S5 published country isolation');
     $change('flags', ['id' => $listingIds[2], 'pinned' => 0, 'featured' => 0]);
     check($live === Reader::published(991, 'listing', 'MM', $key), 'S5 edits after publish do not leak');
     foreach ([['merchant_info', $m, 'status', 4, 3], ['merchant_store', $properties[0], 'status', 0, 1],
-        ['merchant_application_business', $businesses[0], 'kyc_status', 0, 1], ['goods_info', $goods[0], 'status', 4, 3],
-        ['merchant_store', $properties[0], 'display_enabled', 0, 1], ['goods_info', $goods[0], 'merchant_id', 0, $m]] as [$table, $id, $column, $bad, $good]) {
+        ['merchant_store', $properties[0], 'kyc_status', 0, 1], ['merchant_store', $properties[0], 'content_status', 1, 2],
+        ['merchant_store', $properties[0], 'content_approved_version', 0, 1],
+        ['merchant_store', $properties[0], 'publish_status', 0, 1], ['merchant_store', $properties[0], 'operating_status', 0, 1],
+        ['merchant_store', $properties[0], 'display_enabled', 0, 1], ['hotel_room_type', $rooms[0], 'publish_status', 1, 2],
+        ['hotel_room_type', $rooms[0], 'approved_version', 0, 1],
+        ['merchant_store', $properties[0], 'merchant_id', 0, $m]] as [$table, $id, $column, $bad, $good]) {
         Db::table($table)->where('id', $id)->update([$column => $bad]);
-        check(!in_array($goods[0], array_column(Reader::published(991, 'listing', 'MM', $key), 'id')), 'S5 live exclusion ' . $table . '.' . $column);
+        check(!in_array($properties[0], array_column(Reader::published(991, 'listing', 'MM', $key), 'id')), 'S5 live exclusion ' . $table . '.' . $column);
         rejects(40901, fn () => $change('publish'), 'S5 publishing visible ineligible hotel rejected');
         Db::table($table)->where('id', $id)->update([$column => $good]);
     }
     $blacklist = (int) Db::table('merchant_blacklist')->insertGetId(['site_id' => 991, 'merchant_id' => $m, 'reason' => 'S5', 'status' => 1]);
     check(Reader::published(991, 'listing', 'MM', $key) === [], 'S5 blacklist immediately excludes all properties');
     Db::table('merchant_blacklist')->where('id', $blacklist)->delete();
-    Db::table('merchant_application_business')->where('id', $businesses[0])->update(['business_name' => 'S5 Renamed']);
-    $names = array_column($service->read($scope)['list'], 'business_name');
-    check(in_array('S5 Renamed', $names), 'S5 current KYC business name, not ranking snapshot');
+    Db::table('merchant_store')->where('id', $properties[0])->update(['store_name' => 'S5 Renamed']);
+    $names = array_column($service->read($scope)['list'], 'property_name');
+    check(in_array('S5 Renamed', $names), 'S5 current property name, not ranking snapshot');
     $service->propertyDisplay($scope, ['propertyId' => $properties[0], 'expectedPropertyVersion' => 1, 'displayEnabled' => 0, 'note' => 'S5 revoke']);
     check(count(Reader::published(991, 'listing', 'MM', $key)) === 3, 'S5 explicit live display revoke');
     rejects(40901, fn () => $service->propertyDisplay($scope, ['propertyId' => $properties[0], 'expectedPropertyVersion' => 1, 'displayEnabled' => 1, 'note' => 'stale']), 'S5 property display version conflict');
@@ -91,7 +106,7 @@ try {
     check(count(Reader::published(991, 'listing', 'MM', $key)) === 3, 'S5 hidden disqualified draft allows other hotels publish');
 
     $other = $service->scope(array_replace($input, ['cityKey' => $key . '-other']), 'listing');
-    rejects(40901, fn () => $service->addListing($other, ['propertyId' => $properties[1], 'goodsId' => $goods[1], 'expectedVersion' => 0, 'note' => 'cross city']), 'S5 no cross-city property mapping');
+    rejects(40901, fn () => $service->addListing($other, ['propertyId' => $properties[1], 'expectedVersion' => 0, 'note' => 'cross city']), 'S5 no cross-city property mapping');
     AdminContext::set(['site_id' => 992, 'is_super' => false, 'permissions' => ['merchant:ranking:save', 'merchant:ranking:publish']]);
     check($service->scope($input, 'listing')['site_id'] === 992, 'S5 forged site forced to actor site');
     rejects(40301, fn () => $change('publish'), 'S5 non-super cannot publish even with button permission');
@@ -149,11 +164,8 @@ try {
     foreach (['ranking_history', 'ranking_listing', 'ranking_destination'] as $table) Db::table($table)->whereIn('market_id', $markets)->delete();
     Db::table('ranking_market')->whereIn('id', $markets)->delete();
     Db::table('merchant_property_history')->whereIn('store_id', $properties)->delete();
-    Db::table('hotel_room_type')->whereIn('goods_id', $goods)->delete();
-    Db::table('goods_info')->whereIn('id', $goods)->delete();
+    Db::table('hotel_room_type')->whereIn('id', $rooms)->delete();
     Db::table('merchant_store')->whereIn('id', $properties)->delete();
-    Db::table('merchant_application_business')->whereIn('id', $businesses)->delete();
-    Db::table('merchant_application')->whereIn('id', $apps)->delete();
     Db::table('merchant_blacklist')->whereIn('merchant_id', $merchants)->delete();
     Db::table('merchant_info')->whereIn('id', $merchants)->delete();
 }

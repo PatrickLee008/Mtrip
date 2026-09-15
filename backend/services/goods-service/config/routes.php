@@ -16,6 +16,7 @@ use App\Controller\Admin\AdminRoomReviewController;
 use App\Controller\Admin\AdminSkuController;
 use App\Controller\Admin\AdminStockController;
 use App\Controller\App\GoodsController;
+use App\Controller\App\HotelController;
 use App\Controller\Merchant\AvailabilityController as MerchantAvailabilityController;
 use App\Controller\Merchant\GoodsController as MerchantGoodsController;
 use App\Controller\Merchant\ReviewController as MerchantReviewController;
@@ -35,13 +36,19 @@ Router::addGroup('/api/v1/app/goods', static function () {
     Router::get('/list', [GoodsController::class, 'list']);
     Router::get('/detail', [GoodsController::class, 'detail']);
     Router::get('/calendar', [GoodsController::class, 'calendar']);
-    Router::get('/reviews', [GoodsController::class, 'reviews']);
     Router::get('/filters', [GoodsController::class, 'filters']);
 });
 
-// C端评价提交:需登录(离店/完成后本人订单可评)
-Router::addGroup('/api/v1/app/goods', static function () {
-    Router::post('/review/add', [GoodsController::class, 'reviewAdd']);
+Router::addGroup('/api/v1/app/hotels', static function () {
+    Router::get('/list', [HotelController::class, 'list']);
+    Router::get('/detail', [HotelController::class, 'detail']);
+    Router::get('/calendar', [HotelController::class, 'calendar']);
+    Router::get('/reviews', [HotelController::class, 'reviews']);
+});
+
+// C端酒店评价提交:需登录(离店/完成后本人订单可评)
+Router::addGroup('/api/v1/app/hotels', static function () {
+    Router::post('/review/add', [HotelController::class, 'reviewAdd']);
 }, [
     'middleware' => [UserAuthMiddleware::class],
 ]);
@@ -66,10 +73,8 @@ Router::addGroup('/api/v1/admin/goods', static function () {
     Router::post('/category/save', [AdminCategoryController::class, 'save']);
     Router::post('/category/delete', [AdminCategoryController::class, 'remove']);
 
-    // 酒店房型 / 门票票种 / 退改规则
+    // 物业房型只读选项 / 门票票种 / 门票退改规则
     Router::get('/room/list', [AdminSkuController::class, 'roomList']);
-    Router::post('/room/save', [AdminSkuController::class, 'roomSave']);
-    Router::post('/room/delete', [AdminSkuController::class, 'roomDelete']);
     Router::get('/ticket/list', [AdminSkuController::class, 'ticketList']);
     Router::post('/ticket/save', [AdminSkuController::class, 'ticketSave']);
     Router::post('/ticket/delete', [AdminSkuController::class, 'ticketDelete']);
@@ -114,7 +119,7 @@ Router::addGroup('/api/v1/merchant/goods', static function () {
 ]);
 
 // ---------- 商户端客房/房型管理(/api/v1/merchant/rooms) ----------
-// 房型挂在酒店商品(goods_info.goods_type=1)下,按 goods_info.merchant_id 强制裁剪范围
+// 房型直接挂在酒店物业(merchant_store.id)下,按站点、商户及物业账号强制裁剪范围
 Router::addGroup('/api/v1/merchant/rooms', static function () {
     Router::get('/hotel-options', [MerchantRoomController::class, 'hotelOptions']);
     Router::get('/list', [MerchantRoomController::class, 'index']);
@@ -143,7 +148,7 @@ Router::addGroup('/api/v1/merchant/availability', static function () {
 ]);
 
 // ---------- 商户端评价管理(/api/v1/merchant/reviews) ----------
-// 通过 goods_info.merchant_id 强制裁剪商户数据范围
+// 通过评价所属物业强制裁剪商户和所选物业范围
 Router::addGroup('/api/v1/merchant/reviews', static function () {
     Router::get('/list', [MerchantReviewController::class, 'index']);
     Router::get('/summary', [MerchantReviewController::class, 'summary']);
