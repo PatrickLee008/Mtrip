@@ -396,6 +396,7 @@ class Ctx:
         self.goods: list[dict] = []
         self.room_types: list[dict] = []
         self.ticket_types: list[dict] = []
+        self.property_by_id: dict[int, dict] = {}
         self.users: list[dict] = []
         self.orders: list[dict] = []
         self.coupons: list[dict] = []
@@ -661,6 +662,7 @@ def build_system(ctx: Ctx, f: SqlFile) -> None:
          "status": 2, "created_at": ctx.ago(300), "updated_at": ctx.ago(300)},
     ])
     ctx.verify_samples[("mtrip_system", "sys_client", 101, "client_secret")] = "android-client-secret-0001"
+    ctx.verify_samples[("mtrip_system", "sys_client", 103, "client_secret")] = "334797325067753c917bdac037653a132083f5d053a4b400"
     f.insert(SYSTEM_DB, "sys_client", [
         {"id": 101, "site_id": 0, "client_name": "Mtrip Android", "client_id": "mtrip_android",
          "client_secret": c.encrypt("android-client-secret-0001"), "client_type": 1,
@@ -671,9 +673,10 @@ def build_system(ctx: Ctx, f: SqlFile) -> None:
          "perm_template_id": 101, "qps_limit": 50, "ip_whitelist": "", "status": 1,
          "expire_at": None, "remark": "iOS 客户端", "created_at": ctx.ago(300), "updated_at": ctx.ago(300)},
         {"id": 103, "site_id": 0, "client_name": "Mtrip H5", "client_id": "mtrip_h5",
-         "client_secret": c.encrypt("h5-client-secret-0001"), "client_type": 3,
-         "perm_template_id": 101, "qps_limit": 20, "ip_whitelist": "", "status": 2,
-         "expire_at": None, "remark": "H5(已停用)", "created_at": ctx.ago(300), "updated_at": ctx.ago(300)},
+         "client_secret": c.encrypt("334797325067753c917bdac037653a132083f5d053a4b400"), "client_type": 3,
+         "perm_template_id": 101, "qps_limit": 20, "ip_whitelist": "", "status": 1,
+         "expire_at": None, "remark": "H5 客户端(client-app .env.production 实际密钥)",
+         "created_at": ctx.ago(300), "updated_at": ctx.ago(300)},
     ])
 
     f.add("站点差异化配置(站点 4 巴黎)")
@@ -1238,7 +1241,6 @@ def build_merchant(ctx: Ctx, f: SqlFile) -> None:
         store = next((s for s in ctx.stores if s["merchant_id"] == m["id"]), None)
         listings.append({
             "id": lid2, "site_id": m["site_id"], "business_type": "hotel",
-            "business_id": store["id"] if store else 0,
             "business_name": m["merchant_short_name"],
             "merchant_id": m["id"], "merchant_name": m["merchant_name"],
             "city": ctx.stores[0]["city_key"].capitalize() if store else "Paris",
@@ -1247,7 +1249,6 @@ def build_merchant(ctx: Ctx, f: SqlFile) -> None:
             "rank": i + 1, "featured": 1 if i == 0 else 0, "pinned": 0,
             "status": 1, "published_version": 1, "publisher_id": 101,
             "market_id": None, "property_id": store["id"] if store else None,
-            "goods_id": None,
             "created_at": ctx.ago(60), "updated_at": ctx.rand_dt(10),
         })
         lid2 += 1
@@ -1294,10 +1295,9 @@ def build_goods(ctx: Ctx, f: SqlFile) -> None:
     """商品域:分类、商品、房型、票种、库存日历、退改规则、评价"""
     rng = ctx.rng
 
-    f.add("商品分类")
+    f.add("商品分类(酒店商品模型已退役,只剩门票分类)")
     cats = [
-        (ID_BASE + 0, 0, "高端酒店", 1), (ID_BASE + 1, 0, "精品酒店", 1),
-        (ID_BASE + 2, 0, "经济连锁", 1), (ID_BASE + 3, 0, "主题乐园", 2),
+        (ID_BASE + 3, 0, "主题乐园", 2),
         (ID_BASE + 4, 0, "博物馆/景点", 2),
     ]
     f.insert(BIZ_DB, "goods_category", [
@@ -1307,31 +1307,30 @@ def build_goods(ctx: Ctx, f: SqlFile) -> None:
         for i, (cid, pid, nm, gt) in enumerate(cats)
     ])
 
-    f.add("商品(酒店 + 门票,覆盖 0~5 全部状态)")
+    f.add("商品(门票,覆盖 0~5 全部状态;酒店商品模型已退役,酒店改走物业+房型)")
     enabled_merchants = [m for m in ctx.merchants if m["status"] in (1, 3)]
+    ticket_merchants = [m for m in enabled_merchants if m["merchant_type"] in (2, 3)] or enabled_merchants
     goods, gid = [], ID_BASE
     # status: 0草稿 1待审核 2审核驳回 3已上架 4已下架 5已删除
     gstatus = [3] * ctx.n(10) + [1] * 3 + [0] * 2 + [2] * 2 + [4] * 2 + [5] * 1
     for i, st in enumerate(gstatus):
-        m = enabled_merchants[i % len(enabled_merchants)]
-        is_hotel = m["merchant_type"] != 2
+        m = ticket_merchants[i % len(ticket_merchants)]
         city, country, lat, lng = rng.choice(CITY_POOL)
         goods.append({
             "id": gid, "site_id": m["site_id"], "merchant_id": m["id"], "supplier_id": 0,
-            "goods_type": 1 if is_hotel else 2,
+            "goods_type": 2,
             "category_id": rng.choice(cats)[0],
-            "goods_name": f"{m['merchant_short_name']} - {rng.choice(['豪华大床房', '行政套房', '标准双床房', '家庭房', '亲子套房'])}"
-            if is_hotel else f"{m['merchant_short_name']} - {rng.choice(['成人票', '儿童票', '家庭套票', '快速通道票'])}",
+            "goods_name": f"{m['merchant_short_name']} - {rng.choice(['成人票', '儿童票', '家庭套票', '快速通道票'])}",
             "goods_brief": f"{city} 中心位置,交通便利,设施完善。",
             "goods_detail": f"<p>{m['merchant_short_name']} 位于 {city} 市中心,提供优质服务。</p>",
             "cover_image": f"https://cdn.mtrip.test/prod/goods/cover_{gid}.jpg",
             "images": json.dumps([f"https://cdn.mtrip.test/prod/goods/{gid}_{k}.jpg" for k in range(1, 4)],
                                  ensure_ascii=False),
             "address": m["address"], "longitude": m["longitude"], "latitude": m["latitude"],
-            "star_level": rng.randint(3, 5) if is_hotel else 0,
+            "star_level": 0,
             "facilities": json.dumps(["wifi", "parking", "pool", "gym"][:rng.randint(1, 4)]),
-            "open_time": "00:00" if is_hotel else "09:00",
-            "close_time": "23:59" if is_hotel else "18:00",
+            "open_time": "09:00",
+            "close_time": "18:00",
             "status": st,
             "audit_remark": "" if st in (0, 1) else ("审核通过" if st == 3 else "图片不符合规范"),
             "audit_by": 101 if st in (2, 3) else None,
@@ -1346,15 +1345,16 @@ def build_goods(ctx: Ctx, f: SqlFile) -> None:
     f.insert(BIZ_DB, "goods_info", goods)
     ctx.goods = goods
 
-    f.add("酒店房型")
+    f.add("酒店房型(挂载物业 property_id,酒店商品模型已退役)")
     rooms, rid = [], ID_BASE
-    for g in [x for x in goods if x["goods_type"] == 1][:ctx.n(8)]:
+    hotel_stores = [s for s in ctx.stores if s["business_type"] == "hotel"][:ctx.n(8)]
+    for s in hotel_stores:
         for k in range(rng.randint(2, 3)):
             base = money(rng.choice([89, 129, 189, 259, 399, 599]))
             rooms.append({
-                "id": rid, "site_id": g["site_id"], "goods_id": g["id"],
+                "id": rid, "site_id": s["site_id"], "property_id": s["id"],
                 "room_name": rng.choice(["豪华大床房", "行政套房", "标准双床房", "家庭房"]),
-                "room_code": f"RM{g['id']}{k}",
+                "room_code": f"RM{s['id']}{k}",
                 "description": "宽敞舒适,含免费 WiFi。",
                 "bed_type": rng.choice(["1张大床", "2张单人床", "1张大床+1张沙发床"]),
                 "bed_count": rng.randint(1, 2), "area": f"{rng.randint(22, 80)}㎡",
@@ -1374,11 +1374,12 @@ def build_goods(ctx: Ctx, f: SqlFile) -> None:
                 "status": 1 if rng.random() < 0.85 else 2,
                 "publish_status": rng.choice([2, 2, 2, 1, 0, 3]),
                 "submitted_at": ctx.rand_dt(60), "sort": k + 1,
-                "created_at": g["created_at"], "updated_at": ctx.rand_dt(20),
+                "created_at": s["created_at"], "updated_at": ctx.rand_dt(20),
             })
             rid += 1
     f.insert(BIZ_DB, "hotel_room_type", rooms)
     ctx.room_types = rooms
+    ctx.property_by_id = {s["id"]: s for s in ctx.stores}
 
     f.add("门票票种")
     tickets, tid = [], ID_BASE
@@ -1401,7 +1402,8 @@ def build_goods(ctx: Ctx, f: SqlFile) -> None:
     f.insert(BIZ_DB, "ticket_type", tickets)
     ctx.ticket_types = tickets
 
-    f.add("库存价格日历(未来 30 天)")
+    f.add("库存价格日历(未来 30 天,酒店挂 property_id、门票挂 goods_id=0)")
+    room_property = {r["id"]: r["property_id"] for r in rooms}
     stock, stid = [], STOCK_ID_BASE
     skus = [(1, r["id"], r["base_price"], r["base_stock"]) for r in rooms[:12]] + \
            [(2, t["id"], t["base_price"], t["base_stock"]) for t in tickets[:4]]
@@ -1414,6 +1416,7 @@ def build_goods(ctx: Ctx, f: SqlFile) -> None:
             sold = rng.randint(0, max(1, total // 3))
             stock.append({
                 "id": stid, "site_id": MAIN_SITE, "goods_id": 0,
+                "property_id": room_property.get(sku_id, 0) if sku_type == 1 else 0,
                 "sku_type": sku_type, "sku_id": sku_id, "stock_date": day,
                 "price": p, "price_citizen": money(p * Decimal("0.8")),
                 "stock_total": total, "stock_sold": sold, "stock_locked": rng.randint(0, 2),
@@ -1426,20 +1429,31 @@ def build_goods(ctx: Ctx, f: SqlFile) -> None:
             stid += 1
     f.insert(BIZ_DB, "goods_daily_stock", stock)
 
-    f.add("退改规则")
-    f.insert(BIZ_DB, "goods_refund_rule", [
-        {"id": ID_BASE + i, "site_id": g["site_id"], "goods_id": g["id"],
+    f.add("退改规则(门票挂 goods_id、酒店挂 property_id)")
+    refund_rules = [
+        {"id": ID_BASE + i, "site_id": g["site_id"], "property_id": 0, "goods_id": g["id"],
          "sku_type": 0, "sku_id": 0, "rule_type": rng.choice([1, 2, 2, 3]),
          "rules": json.dumps([{"hours_before": 24, "refund_rate": 100},
                               {"hours_before": 2, "refund_rate": 50}], ensure_ascii=False),
          "remark": "测试数据", "created_at": g["created_at"], "updated_at": g["updated_at"]}
         for i, g in enumerate(goods)
-    ])
+    ]
+    refund_base = ID_BASE + len(goods)
+    refund_rules += [
+        {"id": refund_base + i, "site_id": s["site_id"], "property_id": s["id"], "goods_id": 0,
+         "sku_type": 0, "sku_id": 0, "rule_type": rng.choice([1, 2, 2, 3]),
+         "rules": json.dumps([{"hours_before": 24, "refund_rate": 100},
+                              {"hours_before": 2, "refund_rate": 50}], ensure_ascii=False),
+         "remark": "测试数据", "created_at": s["created_at"], "updated_at": ctx.rand_dt(20)}
+        for i, s in enumerate(hotel_stores)
+    ]
+    f.insert(BIZ_DB, "goods_refund_rule", refund_rules)
 
     f.add("库存变动流水")
     f.insert(BIZ_DB, "goods_stock_log", [
         {"id": ID_BASE + i, "site_id": MAIN_SITE, "goods_id": 0,
-         "sku_type": 1, "sku_id": s["sku_id"], "stock_date": s["stock_date"],
+         "property_id": room_property.get(s["sku_id"], 0) if s["sku_type"] == 1 else 0,
+         "sku_type": s["sku_type"], "sku_id": s["sku_id"], "stock_date": s["stock_date"],
          "change_type": rng.choice([1, 2, 3, 4, 5]), "change_qty": rng.randint(1, 3),
          "order_id": 0, "operator_id": 101, "remark": "测试数据",
          "created_at": ctx.rand_dt(30)}
@@ -1572,13 +1586,22 @@ def build_user(ctx: Ctx, f: SqlFile) -> None:
     ])
 
     f.add("收藏 / 推荐返利 / 站内通知")
-    f.insert(BIZ_DB, "user_favorite", [
+    favorites = [
         {"id": ID_BASE + i, "site_id": u["site_id"], "user_id": u["id"],
-         "goods_id": g["id"], "created_at": ctx.rand_dt(60)}
+         "property_id": 0, "goods_id": g["id"], "created_at": ctx.rand_dt(60)}
         for i, (u, g) in enumerate(zip(users[:ctx.n(10)],
                                        [ctx.goods[i % len(ctx.goods)] for i in range(ctx.n(10))]))
         if ctx.goods
-    ])
+    ]
+    if ctx.room_types:
+        fav_base = ID_BASE + len(favorites)
+        favorites += [
+            {"id": fav_base + i, "site_id": u["site_id"], "user_id": u["id"],
+             "property_id": ctx.room_types[i % len(ctx.room_types)]["property_id"], "goods_id": 0,
+             "created_at": ctx.rand_dt(60)}
+            for i, u in enumerate(users[ctx.n(10):ctx.n(10) + ctx.n(6)])
+        ]
+    f.insert(BIZ_DB, "user_favorite", favorites)
     f.insert(BIZ_DB, "user_referral", [
         {"id": ID_BASE + i, "site_id": users[i]["site_id"],
          "inviter_user_id": users[i]["id"],
@@ -1696,22 +1719,41 @@ def build_order(ctx: Ctx, f: SqlFile) -> None:
         ])
     ])
 
-    f.add("订单主表(覆盖 0~7 全部订单状态)")
+    f.add("订单主表(覆盖 0~7 全部订单状态;酒店走物业+房型,门票走商品)")
     # order_status: 0待支付 1已支付 2已入住/已核销 3已完成 4已取消 5退款中 6已退款 7已过期
     ostatus_plan = ([1] * ctx.n(15) + [3] * ctx.n(20) + [2] * ctx.n(8) + [0] * ctx.n(6) +
                     [6] * ctx.n(8) + [5] * ctx.n(6) + [4] * ctx.n(6) + [7] * ctx.n(4))
     orders, oid = [], ID_BASE
     for i, st in enumerate(ostatus_plan):
-        g = ctx.goods[i % len(ctx.goods)]
         u = ctx.users[i % len(ctx.users)]
-        m = next((x for x in ctx.merchants if x["id"] == g["merchant_id"]), ctx.merchants[0])
-        is_hotel = g["goods_type"] == 1
-        sku_list = ctx.room_types if is_hotel else ctx.ticket_types
-        sku = sku_list[i % len(sku_list)] if sku_list else None
-        nights = rng.randint(1, 5) if is_hotel else 1
+        is_hotel = bool(ctx.room_types) and (i % 2 == 0 or not ctx.goods)
+        if is_hotel:
+            room = ctx.room_types[i % len(ctx.room_types)]
+            store = ctx.property_by_id.get(room["property_id"])
+            m = next((x for x in ctx.merchants if x["id"] == store["merchant_id"]), ctx.merchants[0]) \
+                if store else ctx.merchants[0]
+            site_id = store["site_id"] if store else MAIN_SITE
+            property_id, room_type_id = room["property_id"], room["id"]
+            goods_id, sku_id = 0, room["id"]
+            goods_name = store["store_name"] if store else room["room_name"]
+            goods_image = ""
+            sku_name = room["room_name"]
+            nights = rng.randint(1, 5)
+            unit = money(room["base_price"])
+        else:
+            g = ctx.goods[i % len(ctx.goods)]
+            m = next((x for x in ctx.merchants if x["id"] == g["merchant_id"]), ctx.merchants[0])
+            site_id = g["site_id"]
+            property_id, room_type_id = 0, 0
+            goods_id = g["id"]
+            goods_name, goods_image = g["goods_name"], g["cover_image"]
+            sku = ctx.ticket_types[i % len(ctx.ticket_types)] if ctx.ticket_types else None
+            sku_id = sku["id"] if sku else 0
+            sku_name = sku["ticket_name"] if sku else "标准"
+            nights = 1
+            unit = money(sku["base_price"] if sku else rng.randint(80, 400))
         qty = rng.randint(1, 3)
-        unit = money(sku["base_price"] if sku else rng.randint(80, 400))
-        original = money(unit * qty * (nights if is_hotel else 1))
+        original = money(unit * qty * nights)
         discount = money(original * Decimal(rng.choice(["0", "0", "0.1", "0.15"])))
         total = money(original - discount)
         rate = Decimal(str(m["commission_rate"])) / Decimal("100")
@@ -1723,14 +1765,14 @@ def build_order(ctx: Ctx, f: SqlFile) -> None:
         phone = f"+3363{rng.randint(1000000, 9999999)}"
         orders.append({
             "id": oid, "order_no": f"NO{created.strftime('%Y%m%d')}{oid:06d}",
-            "site_id": g["site_id"], "user_id": u["id"], "trip_id": 0,
+            "site_id": site_id, "user_id": u["id"], "trip_id": 0,
             "order_type": 1 if is_hotel else 2, "is_citizen": 1 if rng.random() < 0.3 else 0,
-            "merchant_id": m["id"], "supplier_id": 0, "goods_id": g["id"],
-            "goods_name": g["goods_name"],
-            "goods_image": g["cover_image"],
-            "sku_id": sku["id"] if sku else 0,
-            "sku_name": (sku["room_name"] if is_hotel and sku else
-                         (sku["ticket_name"] if sku else "标准")),
+            "merchant_id": m["id"], "supplier_id": 0,
+            "property_id": property_id, "goods_id": goods_id,
+            "goods_name": goods_name,
+            "goods_image": goods_image,
+            "room_type_id": room_type_id, "sku_id": sku_id,
+            "sku_name": sku_name,
             "quantity": qty, "unit_price": unit, "original_price": original,
             "total_amount": total, "discount_amount": discount,
             "longstay_discount": money(0), "coupon_id": 0, "coupon_discount": money(0),
@@ -1835,10 +1877,11 @@ def build_order(ctx: Ctx, f: SqlFile) -> None:
         for i, o in enumerate(verified)
     ])
 
-    f.add("商品评价(关联已完成订单)")
+    f.add("商品评价(关联已完成订单;酒店挂 property_id,门票挂 goods_id)")
     completed = [o for o in orders if o["order_status"] == 3][:ctx.n(15)]
     f.insert(BIZ_DB, "goods_review", [
-        {"id": ID_BASE + i, "site_id": o["site_id"], "goods_id": o["goods_id"],
+        {"id": ID_BASE + i, "site_id": o["site_id"], "property_id": o["property_id"],
+         "goods_id": o["goods_id"],
          "user_id": o["user_id"], "order_id": o["id"],
          "rating": rng.randint(3, 5),
          "content": rng.choice(["房间干净整洁,位置很好!", "服务态度不错,下次还来。",
@@ -2698,44 +2741,15 @@ def build_mmk_market(ctx: Ctx, mch_f: SqlFile, gds_f: SqlFile, usr_f: SqlFile,
         )
 
     # ---- 商品 + 房型 + 库存 ----
-    gds_f.add("【MMK 仰光站】商品(酒店)")
-    mm_goods, gid = [], MMK_ID_BASE
-    g_status = [3, 3, 3, 1, 4]
-    for i, st in enumerate(g_status):
-        m = mm_enabled[i % len(mm_enabled)]
-        city, country, lat, lng = MM_CITY_POOL[i % len(MM_CITY_POOL)]
-        mm_goods.append({
-            "id": gid, "site_id": MMK_SITE, "merchant_id": m["id"], "supplier_id": 0,
-            "goods_type": 1, "category_id": 0,
-            "goods_name": f"{m['merchant_short_name']} - {rng.choice(MM_ROOM_NAMES)}",
-            "goods_brief": f"{city} 市中心,近大金塔/湖景,设施完善。",
-            "goods_detail": f"<p>{m['merchant_short_name']} 位于 {city},提供优质服务。</p>",
-            "cover_image": f"https://cdn.mtrip.test/prod/goods/cover_{gid}.jpg",
-            "images": json.dumps([f"https://cdn.mtrip.test/prod/goods/{gid}_{k}.jpg" for k in range(1, 4)],
-                                 ensure_ascii=False),
-            "address": m["address"], "longitude": m["longitude"], "latitude": m["latitude"],
-            "star_level": rng.randint(3, 5),
-            "facilities": json.dumps(["wifi", "parking", "pool", "gym"][:rng.randint(1, 4)]),
-            "open_time": "00:00", "close_time": "23:59", "status": st,
-            "audit_remark": "" if st in (0, 1) else ("审核通过" if st == 3 else "已下架"),
-            "audit_by": 101 if st in (3, 4) else None,
-            "audit_time": ctx.rand_dt(60) if st in (3, 4) else None,
-            "sort_weight": rng.randint(1, 100), "is_recommend": 1 if i == 0 else 0,
-            "is_hot": 1 if i == 1 else 0, "sales_count": rng.randint(0, 500),
-            "created_at": ctx.ago(rng.randint(30, 200)), "updated_at": ctx.rand_dt(20),
-        })
-        gid += 1
-    gds_f.insert(BIZ_DB, "goods_info", mm_goods)
-    mm_enabled_goods = [g for g in mm_goods if g["status"] == 3]
-
-    gds_f.add("【MMK 仰光站】酒店房型")
+    gds_f.add("【MMK 仰光站】酒店房型(挂物业 property_id;酒店商品模型已退役,不再生成 goods_info)")
+    mm_store_by_id = {s["id"]: s for s in mm_stores}
     mm_rooms, rid = [], MMK_ID_BASE
-    for g in mm_enabled_goods:
+    for s in mm_stores:
         for k in range(2):
             base = money(rng.choice([80000, 120000, 180000, 250000, 350000]))
             mm_rooms.append({
-                "id": rid, "site_id": MMK_SITE, "goods_id": g["id"],
-                "room_name": rng.choice(MM_ROOM_NAMES), "room_code": f"RM{g['id']}{k}",
+                "id": rid, "site_id": MMK_SITE, "property_id": s["id"],
+                "room_name": rng.choice(MM_ROOM_NAMES), "room_code": f"RM{s['id']}{k}",
                 "description": "宽敞舒适,含免费 WiFi。",
                 "bed_type": rng.choice(["1张大床", "2张单人床"]), "bed_count": rng.randint(1, 2),
                 "area": f"{rng.randint(24, 70)}㎡", "max_adults": rng.randint(2, 3),
@@ -2752,7 +2766,7 @@ def build_mmk_market(ctx: Ctx, mch_f: SqlFile, gds_f: SqlFile, usr_f: SqlFile,
                 "facilities": json.dumps(["wifi", "tv", "minibar", "safe"]),
                 "status": 1, "publish_status": rng.choice([2, 2, 1, 0]),
                 "submitted_at": ctx.rand_dt(60), "sort": k + 1,
-                "created_at": g["created_at"], "updated_at": ctx.rand_dt(20),
+                "created_at": s["created_at"], "updated_at": ctx.rand_dt(20),
             })
             rid += 1
     gds_f.insert(BIZ_DB, "hotel_room_type", mm_rooms)
@@ -2766,7 +2780,8 @@ def build_mmk_market(ctx: Ctx, mch_f: SqlFile, gds_f: SqlFile, usr_f: SqlFile,
             weekend = day.weekday() >= 5
             p = money(r["base_price"] * (Decimal("1.25") if weekend else Decimal("1")))
             mm_stock.append({
-                "id": stid, "site_id": MMK_SITE, "goods_id": 0, "sku_type": 1,
+                "id": stid, "site_id": MMK_SITE, "goods_id": 0, "property_id": r["property_id"],
+                "sku_type": 1,
                 "sku_id": r["id"], "stock_date": day, "price": p,
                 "price_citizen": money(p * Decimal("0.8")), "stock_total": r["base_stock"],
                 "stock_sold": rng.randint(0, max(1, r["base_stock"] // 3)),
@@ -2809,10 +2824,12 @@ def build_mmk_market(ctx: Ctx, mch_f: SqlFile, gds_f: SqlFile, usr_f: SqlFile,
     mm_orders, oid = [], MMK_ID_BASE
     o_status_plan = [1, 3, 3, 2, 0, 6, 5, 4, 1, 3]
     for i, st in enumerate(o_status_plan):
-        g = mm_enabled_goods[i % len(mm_enabled_goods)]
-        u = mm_users[i % len(mm_users)]
-        m = next(x for x in mm_merchants if x["id"] == g["merchant_id"])
         sku = mm_rooms[i % len(mm_rooms)] if mm_rooms else None
+        store = mm_store_by_id.get(sku["property_id"]) if sku else None
+        u = mm_users[i % len(mm_users)]
+        m = next(x for x in mm_merchants if x["id"] == store["merchant_id"]) if store else mm_merchants[0]
+        property_id, room_type_id = (sku["property_id"], sku["id"]) if sku else (0, 0)
+        goods_name = store["store_name"] if store else "标准客房"
         nights = rng.randint(1, 4)
         qty = 1
         unit = money(sku["base_price"] if sku else 120000)
@@ -2830,8 +2847,9 @@ def build_mmk_market(ctx: Ctx, mch_f: SqlFile, gds_f: SqlFile, usr_f: SqlFile,
             "id": oid, "order_no": f"NO{created.strftime('%Y%m%d')}{oid:06d}",
             "site_id": MMK_SITE, "user_id": u["id"], "trip_id": 0, "order_type": 1,
             "is_citizen": 1 if rng.random() < 0.3 else 0, "merchant_id": m["id"],
-            "supplier_id": 0, "goods_id": g["id"], "goods_name": g["goods_name"],
-            "goods_image": g["cover_image"], "sku_id": sku["id"] if sku else 0,
+            "supplier_id": 0, "property_id": property_id, "goods_id": 0,
+            "goods_name": goods_name,
+            "goods_image": "", "room_type_id": room_type_id, "sku_id": sku["id"] if sku else 0,
             "sku_name": sku["room_name"] if sku else "标准", "quantity": qty,
             "unit_price": unit, "original_price": original, "total_amount": total,
             "discount_amount": discount, "longstay_discount": money(0), "coupon_id": 0,

@@ -163,8 +163,11 @@ php test/verify_testdata.php
 - [ ] 站点隔离:用 `site_admin`(站点 4)看不到站点 3 的商户;`fr_admin` 反之
 
 ### 6.3 商品
-- [ ] 商品列表:按 `status 0~5`、`business_type`(酒店/门票/综合)筛选
-- [ ] 酒店房型 / 门票票种 / 每日库存(30 天日历)/ 退改规则 / 库存流水
+> 酒店商品模型已退役(`V20260915090000__retire-hotel-goods-model.sql`):`goods_info` 只剩门票
+> (`goods_type=2`),酒店改为 `merchant_store`(物业)+ `hotel_room_type`(挂 `property_id`,
+> 无 `goods_id`)。库存日历 / 退改规则 / 库存流水 / 订单 / 评价 / 收藏酒店条目均挂 `property_id`。
+- [ ] 商品列表:按 `status 0~5` 筛选(现仅门票)
+- [ ] 酒店房型(按物业) / 门票票种 / 每日库存(30 天日历)/ 退改规则 / 库存流水
 - [ ] 商品评价:按 `0 待审 / 1 显示 / 2 隐藏` 审核
 
 ### 6.4 用户
