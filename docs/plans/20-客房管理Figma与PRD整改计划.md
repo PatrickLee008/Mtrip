@@ -80,7 +80,7 @@
 ### P1：首发库存、周末价和取消政策尚未完全驱动交易
 
 - `launch_stock` 有保存和“不超过 base_stock”校验，但当前读取/下单缺省库存使用 `base_stock`。仅填写首发可售数不会限制初始可售库存。数据库还将 `base_stock` 注释为“基础每日库存”，前端则标作实际总数，需要先冻结含义。
-- **[已修复 2026-09-16]** 阶段 2–5 引入 `RoomDefaults::stock()` 把 `launch_stock` 作为无日库存时的默认可售配额，但实现写成 `launch_stock ?? base_stock`。`??` 只在键为 null/缺失时回退，而 merchant-web 新建房型的 `launch_stock` 初值就是 **0**（`RoomEditor.vue` 的 `draft` 初始值，提交校验只查“不超过 base_stock”、不查是否 > 0），因此“填了客房总数、没填默认可售配额”的房型 `stock_total` 被补建成 0，`OrderStockService::lock()` 判定 `available = 0 - 0 - 0 < 1` 抛 `DATA_CONFLICT`(409)「库存不足」；消费者日历（同一函数的另一个消费方）也长期返回 `stock=0`。已改为 `launch_stock > 0 ? launch_stock : base_stock`，0/null/缺失一律视为“未设置”（真正的“不卖”应走停售 `status=2` 或单日 `is_closed`），并在 `shared/tests/cases/SupportTest.php` 补 0/null/缺失/负数回退与周末价回退用例。开发库房型 5 的 `launch_stock` 已设为 40，日历 `stock` 由 0 恢复为 40。**遗留**：merchant-web 新建房型时该字段仍默认 0，未加“>0”校验，同类误配仍可能发生（本次只修后端语义，未改前端默认值）。
+- **[已修复 2026-09-16]** 阶段 2–5 引入 `RoomDefaults::stock()` 把 `launch_stock` 作为无日库存时的默认可售配额，但实现写成 `launch_stock ?? base_stock`。`??` 只在键为 null/缺失时回退，而 merchant-web 新建房型的 `launch_stock` 初值就是 **0**（`RoomEditor.vue` 的 `draft` 初始值，提交校验只查“不超过 base_stock”、不查是否 > 0），因此“填了客房总数、没填默认可售配额”的房型 `stock_total` 被补建成 0，`OrderStockService::lock()` 判定 `available = 0 - 0 - 0 < 1` 抛 `DATA_CONFLICT`(409)「库存不足」；消费者日历（同一函数的另一个消费方）也长期返回 `stock=0`。已改为 `launch_stock > 0 ? launch_stock : base_stock`，0/null/缺失一律视为“未设置”（真正的“不卖”应走停售 `status=2` 或单日 `is_closed`），并在 `shared/tests/cases/SupportTest.php` 补 0/null/缺失/负数回退与周末价回退用例。开发库房型 5 的 `launch_stock` 已设为 40，日历 `stock` 由 0 恢复为 40。**遗留**：无（merchant-web 侧已同轮收口：客房总数变化时自动同步尚未设置的默认可售配额、打开时按客房总数补历史 0 值、提交审核时拦截「客房总数 > 0 而配额 ≤ 0」，详见[模块13](./13-商家端merchant-web落地.md)）。
 - 商户日历 `fallbackDay()` 使用周末价；消费者日历无日库存记录时使用基础价；`OrderStockService::lock()` 首次建日库存也使用基础价。周末看见的价格可能与实际下单不一致。
 - 房型表单的 `cancellation_policy` 是展示文本；实际订单快照/退款读取 `goods_refund_rule`。选择“不可退款”文本不等于创建可执行的不可退款规则。
 - 计划：明确初始配额作用日期/默认值，统一三处缺省库存与报价规则；将取消政策映射到明确的规则 ID/规则结构并冻结订单快照。已有日历覆盖、售出和锁定数量不能被资料审核覆盖。加床价格保留，但加床收费流程另须确认，不能宣称仅存字段就能自动计费。
@@ -204,4 +204,4 @@
 - [x] 完成阶段 0–5 编码、数据库迁移、隔离回归、构建、桌面/窄屏视觉检查及文档交接。
 - [x] 本地已应用 `V20260916005000__add-room-content-media.sql`，迁移账本 18 已执行、0 待执行。
 - [x] 没有修改 `merchant-app/**` 或 `client-app/**` 功能代码；外部 VR 仅保存 HTTPS 配置且禁止启用，PMS/CM 保持后续独立阶段。
-- [x] 2026-09-16 补修 `RoomDefaults::stock()` 的 `launch_stock=0` 回退缺陷（409「库存不足」根因），shared 单测 97 用例/968 断言全绿；消费者日历 `stock` 由 0 恢复为 40。详见上方 P1 条目。
+- [x] 2026-09-16 补修 `RoomDefaults::stock()` 的 `launch_stock=0` 回退缺陷（409「库存不足」根因），shared 单测 97 用例/968 断言全绿；消费者日历 `stock` 由 0 恢复为 40。同日 merchant-web `RoomEditor.vue` 同步收口默认可售配额（自动同步/打开补值/提交拦截），13 条 Vue 响应式断言与生产构建通过。详见上方 P1 条目。

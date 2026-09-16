@@ -22,7 +22,7 @@ base_stock”、不校验 >0)。于是“填了客房总数、没填默认可售
 的 `launch_stock` 由 0 设为 40,消费者日历 `stock` 由 0 恢复为 40;`goods_daily_stock` 补建 INSERT 的
 无默认值非空列(仅 `sku_id`/`stock_date`)已核对,均显式提供;`./mtrip.sh health` 全绿。
 
-**遗留**:merchant-web 表单该字段默认值仍是 0、未加 >0 校验,本次只修后端语义,同类误配仍可能发生。
+**遗留**:无。同日已把 merchant-web 侧一并收口(`merchant-web/src/views/rooms/components/RoomEditor.vue`):**①** 客房总数变化时,尚未设置(`0`)或仍在跟随(等于上一个客房总数)的默认可售配额自动同步,商户显式填过的更小值不覆盖;**②** 打开编辑器时把历史 `launch_stock=0` 按客房总数补上(存量坏数据由此自愈),且补值写在 `baseline` 捕获之前,不会出现"打开即脏/误弹放弃修改";**③** 提交审核时若 `base_stock > 0` 而 `launch_stock <= 0` 直接拦截并提示(仅提交拦截,草稿仍允许不完整,与原有校验口径一致;`base_stock = 0` 的复制草稿不拦)。验证:用 merchant-web 自带 `vue` 在 Node 里以**真实 `watch` 语义**跑 13 条断言覆盖上述分支(含 pre-flush 时机与 baseline 交互)全绿,`npm run build`(`vue-tsc --noEmit` + vite)通过。
 
 **本轮排查顺带确认的三个环境陷阱**(已按用户授权临时处理,**勿当成已修复**):
 
