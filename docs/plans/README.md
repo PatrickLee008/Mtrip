@@ -1,5 +1,9 @@
 # Mtrip 开发工作计划总览
 
+2026-09-16修复：merchant-web 客房列表兼容 `/merchant/rooms/list` 未返回 `metrics` 或返回空值的响应，不再把 `undefined` 写入页面状态并触发 `totalRooms` 渲染异常；失败响应同时清空列表、总数和统计，避免显示上一物业的旧数据。当前 goods-service 仍按标准契约返回真实统计；merchant-web 生产构建通过。详见[客房管理整改计划](./20-客房管理Figma与PRD整改计划.md)。
+
+2026-09-16 数据库增量复核：以 Git 提交 `2a32fe1996376e3b917aba838e2560ef52760217` 为起点检查到当前 `dev` 的迁移，指定提交本身无数据库变更，其后新增 16 个版本化迁移。命名校验通过；正式执行 `scripts/db-migrate.sh` 显示账本已执行 18、待执行 0，并完成二次全账本复核，当前数据库已是最新版本。
+
 2026-09-15 本地提交归档：按用户授权统一提交当前商户入驻、酒店物业模型、三端适配、迁移及测试文档，基于 dev `29614ea` 保留双方改动；由用户自行推送。详见[提交记录](audits/2026-09-15-local-dev-commit.md)。
 
 2026-09-15 dev 同步：已从 `14bbd94` 快进至 `29614ea`，保留本地未提交改动及远端余额支付、关怀模式和登录注册更新。三个冲突文件已整合，物业收藏逻辑迁入共享 `useMyPickData`，关怀模式酒店详情参数同步为 `propertyId`。本地原始改动保留于 stash `codex-backup-before-dev-sync-2026-09-15`；client-app 类型检查通过。
@@ -55,6 +59,8 @@ MTrip/
 
 2026-09-16更新：修复 C 端 `order/create` 报 409「库存不足」的根因 —— `RoomDefaults::stock()` 的 `launch_stock ?? base_stock` 在 `launch_stock=0`（merchant-web 新建房型初值）时不回退，导致无日库存记录的日期被补建成 `stock_total=0`（消费者日历同样显示 `stock=0`）。已改为 `launch_stock > 0 ? launch_stock : base_stock`，shared 单测补 0/null/缺失/负数与周末价回退用例（95/957 → 97/968 全绿）；开发库房型 5 的 `launch_stock` 设为 40，日历 `stock` 恢复为 40。同日 merchant-web `RoomEditor.vue` 收口默认可售配额（自动同步/打开补历史 0 值/提交拦截），13 条 Vue 响应式断言与生产构建通过。详见[模块20](./20-客房管理Figma与PRD整改计划.md)。
 
+2026-09-16更新：client-app **恢复注册的真实短信 OTP 链路**(SMSPoh 可测试、后台已配渠道):按既定删除清单移除临时固定码页(`FixedOtpScreen` + `USE_FIXED_OTP` + 路由 + import 四处),注册恢复为 `Register →(sms/send)→ VerifyOtp →(sms/verify 换 verifyToken)→ ReferralCode`;`VerifyOtpScreen` 一直原样保留,删完即自动接回,**没有新写代码**。**这是必修而非清理**:新配的全局渠道(`sys_sms_channel` id=4)已让 `enabled()` 恒 true,而 register 是「渠道启用即强制」,固定码页拿不到 `verifyToken`,留着会让每次注册都被 `40111` 打回。已实证:容器内用服务自身 `MTRIP_AES_KEY` 成功解密渠道 key/secret;不带 token 调 register 返 `40111` 且用户数 6→6 无副作用。真实收发短信待用户用真号自测。详见[模块10](./10-移动端App框架.md)。
+
 2026-09-16更新：修复客房管理首次进入时的“物业上下文格式不正确”；未选物业时不再发送 `X-Mtrip-Property-Id: 0`，有效物业 ID 和通用拦截器逻辑保持不变。merchant-web 生产构建通过。
 
 2026-09-16更新：[客房管理 Figma 与 PRD 整改计划](./20-客房管理Figma与PRD整改计划.md) 阶段 0–5 已完成。merchant-web 已落地房型卡片列表、More Details 及四步编辑，后端收口站点币种、默认库存/周末价、取消规则快照、媒体归属与审核、订单删除门禁，admin-web 可审核完整媒体。迁移 18/18，客房专项、物业发布/消费者、389 PHP lint、shared 95/957、双 Web 构建与 client 类型检查通过。外部 VR/PMS 等待服务商；两个 App 功能代码未改。
@@ -75,7 +81,7 @@ MTrip/
 
 2026-09-15更新：client-app 注册页**邮箱栏换成姓名**(必填,AES 加密落 `user_info.real_name`;后端 `register` 新收 `realName`,不动 `real_name_status`、不写 `nickname`),登录/注册右上角入口按改版稿 Figma Onboarding `2540:13083` 改成黑 25% 底的药丸按钮(改在共用的 `AuthShell`,五屏同时生效;其余样式未动)。详见[模块09](./09-移动端微服务.md)与[模块10](./10-移动端App框架.md)。
 
-2026-09-15更新：【临时】注册验证码改为**纯前端固定码页**(client-app 新增 `FixedOtpScreen`,只认 123456、不发请求;注册流程 `Register → FixedOtp → ReferralCode`)。后端未改 —— 当前没有启用中的短信渠道,`register` 本就不强制 `verifyToken`;先前那版后端万能码 `MTRIP_SMS_BYPASS_CODE` 已整体回滚。接通真实 OTP 时按四处「临时」注释删除即可恢复原链路。详见[模块10](./10-移动端App框架.md)与 [HANDOFF](./HANDOFF.md)。
+2026-09-15更新(**已于 2026-09-16 撤销,见上**)：【临时】注册验证码改为**纯前端固定码页**(client-app 新增 `FixedOtpScreen`,只认 123456、不发请求;注册流程 `Register → FixedOtp → ReferralCode`)。后端未改 —— 当前没有启用中的短信渠道,`register` 本就不强制 `verifyToken`;先前那版后端万能码 `MTRIP_SMS_BYPASS_CODE` 已整体回滚。接通真实 OTP 时按四处「临时」注释删除即可恢复原链路。详见[模块10](./10-移动端App框架.md)与 [HANDOFF](./HANDOFF.md)。
 
 2026-09-15更新：client-app **关怀模式改为默认模式**,开屏选完语言直接进主流程,不再问模式(`liteMode` 初值改 true;模式选择页与整条 phase 链路保留,由 `App.tsx` 的 `ASK_MODE_ON_LAUNCH=false` 跳过)。本地存过模式的用户仍按自己的选择走;改模式走「更多」页的开关。详见[模块10](./10-移动端App框架.md)。
 

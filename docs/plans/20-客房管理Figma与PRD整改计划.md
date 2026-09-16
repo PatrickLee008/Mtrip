@@ -205,3 +205,10 @@
 - [x] 本地已应用 `V20260916005000__add-room-content-media.sql`，迁移账本 18 已执行、0 待执行。
 - [x] 没有修改 `merchant-app/**` 或 `client-app/**` 功能代码；外部 VR 仅保存 HTTPS 配置且禁止启用，PMS/CM 保持后续独立阶段。
 - [x] 2026-09-16 补修 `RoomDefaults::stock()` 的 `launch_stock=0` 回退缺陷（409「库存不足」根因），shared 单测 97 用例/968 断言全绿；消费者日历 `stock` 由 0 恢复为 40。同日 merchant-web `RoomEditor.vue` 同步收口默认可售配额（自动同步/打开补值/提交拦截），13 条 Vue 响应式断言与生产构建通过。详见上方 P1 条目。
+
+## 11. 2026-09-16 客房列表统计空值修复
+
+- 复现原因：页面初始化的 `metrics` 有安全默认值，但 `/merchant/rooms/list` 响应缺失或空置 `metrics` 时，`loadList()` 又把页面状态覆盖为 `undefined`，下一次渲染读取 `metrics.totalRooms` 即报错。
+- 前端契约将 `metrics` 标记为可选/可空，并在唯一赋值入口归一为 `{ totalRooms: 0, roomTypes: [] }`；有效统计继续原样显示，异常结构不再进入模板。
+- 请求失败时同时重置列表、分页总数和统计，避免展示上一物业的残留结果。goods-service 当前标准响应仍返回 `metrics`，无需修改后端接口。
+- 验证：`merchant-web npm run build` 通过；仅保留项目既有的大 chunk 提示。

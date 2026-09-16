@@ -47,6 +47,62 @@ base_stock”、不校验 >0)。于是“填了客房总数、没填默认可售
 
 本轮只做诊断与上述 `RoomDefaults` 修复,未修改两个 App 功能代码,未执行 Git 写操作。
 
+### ★ 2026-09-16(恢复注册的真实短信 OTP:撤销临时固定码页)
+
+**触发**:SMSPoh 已可测试,后台已在「配置 → 短信配置」添加渠道。
+
+**改动:按上一条留的删除清单删,四处 + 一个文件,没有新写代码**
+
+| 位置 | 删了什么 |
+|---|---|
+| `screens/user/FixedOtpScreen.tsx` | 整个文件 |
+| `screens/user/RegisterScreen.tsx` | `USE_FIXED_OTP` 常量 + 那段 `if (USE_FIXED_OTP)` 跳转 |
+| `navigation/index.tsx` | `FixedOtpScreen` 的 import 与 `<Stack.Screen name="FixedOtp">` |
+| `navigation/types.ts` | `FixedOtp: { draft: SignupDraft }` 路由项 |
+
+删完注册自动回到原链路:
+`Register →(sms/send scene=register)→ VerifyOtp →(sms/verify 换一次性 verifyToken)→ ReferralCode(带 token 提交注册)`。
+`VerifyOtpScreen` 自始至终原样保留、一行没动过,`RegisterScreen` 里原有的发码逻辑
+(含「渠道未配 → 50021 → 跳过验证码页直接去推荐码页」的兜底分支)也一直在,所以是纯删除。
+
+**这次是必修,不是清理**
+
+后台新配的渠道让 `SmsVerifyService::enabled()` 对所有站点恒为 true,
+而 `AuthController::register` 的策略是「渠道启用即强制」(`if ($smsRequired) assertTicket(...)`)——
+固定码页是纯前端校验、永远拿不到 `verifyToken`,**留着的话每一次注册都会被 `40111` 打回**。
+
+渠道行:`mtrip_system.sys_sms_channel` id=4,`provider_code=smspoh` / `status=1` /
+`site_id=0`(全局,对所有站点生效)/ `deleted_at IS NULL` / `sign_name=SMSPohTest`。
+(同表 id=2、id=3 两行分别被软删与停用,会被 `channel()` 的 `status=1 + whereNull(deleted_at)` 排掉。)
+
+**验证**
+
+1. **渠道确实能解析**:把 `api_key`/`api_secret` 密文取出,在 `mtrip-user-service-1` 容器内
+   用它自己的 `MTRIP_AES_KEY` 走 AES-256-GCM 解密成功(41 / 32 字符),`sign_name` 非空。
+   这四项正是 `channel()` 返回 null 的全部条件,故 `50021 短信服务未配置` 不可能再出现。
+2. **反证渠道已生效**:经网关不带 `verifyToken` 调 `POST /api/v1/app/auth/register`
+   → `40111 请先完成手机号短信验证`,且 `user_info` 行数 **6 → 6 无副作用**
+   (若渠道未生效,这一调用会直接建号成功)。
+3. `client-app` typecheck 零报错;全仓已无 `FixedOtp` / `USE_FIXED_OTP` 残留;
+   后端也确认没有 `MTRIP_SMS_BYPASS_CODE` 一类的万能码残留(那一版早已整体回滚)。
+
+**未做**:**真实收发短信的端到端没跑** —— 需要一个能收码的真实缅甸号码,
+且发码会真的产生一条短信与费用,留给你用自己的号码自测:
+注册页填号 → 收码 → 验证码页填入 → 推荐码页 Continue/Skip → 应建号成功。
+若发码报服务商侧错误(号码前缀、余额、凭证),看 `sys_sms_log` 与 user-service 日志。
+
+### ★ 2026-09-16(merchant-web 客房列表 `metrics` 空值兼容)
+
+**现象**：进入 `/rooms` 后，`index.vue` 渲染 `metrics.totalRooms` 时抛出 `Cannot read properties of undefined`。页面虽然为 `metrics` 提供了初始值，但列表请求成功后无条件执行 `metrics.value = data.metrics`；只要运行中的接口实例未携带新增统计字段或返回空值，安全初始值就会被覆盖为 `undefined`。
+
+**修复**：`apiRoomList` 将运行时可能缺失的 `metrics` 明确为可选/可空；页面通过 `normalizeMetrics()` 统一将缺失或结构异常的统计归一为 `{ totalRooms: 0, roomTypes: [] }`，并对 `totalRooms` 做数值归一。请求失败时同步清空 `list`、`total` 和 `metrics`，避免物业切换或重试后残留旧数据。当前 goods-service 源码仍按统一分页结构附带真实 `metrics`，正常响应不受影响。
+
+**验证**：`merchant-web npm run build` 通过（`vue-tsc --noEmit && vite build`）；仅有既有的大 chunk 提示。
+
+### ★ 2026-09-16(指定 Git 基线后的数据库增量复核)
+
+按用户要求以提交 `2a32fe1996376e3b917aba838e2560ef52760217` 为起点复核并执行数据库增量。该提交本身没有数据库变更；从该提交（含）到当前 `dev` 的版本化迁移共新增 16 个。`scripts/db-migrate.sh --validate` 校验当前 18 个版本全部通过，`--status` 与正式 apply 均显示已执行 18、待执行 0；apply 随后再次完成全账本复核，数据库已是最新版本，没有重复执行已登记 SQL，也没有失败项。
+
 ### ★ 2026-09-16(关怀模式结果页取数对齐完整版:`/app/goods/list` → `/app/hotels/list`)
 
 **问题**:`HotelResultsLiteScreen` 此前用 `fetchGoodsList({goodsType: GOODS_TYPE.HOTEL, …})`
@@ -361,7 +417,7 @@ Skip Inter 400 12 白(左 17 / 上 9);底栏宽 370 两端对齐 —— Previous
 判断依据是 `docker inspect -f '{{.State.StartedAt}}'` 与出问题那条注册记录的 `register_time`
 一比对:注册发生在容器启动之后、改代码之前。
 
-### ★ 2026-09-15(【临时】注册验证码改为纯前端固定码页 123456)
+### ★ 2026-09-15(【临时】注册验证码改为纯前端固定码页 123456)—— **已于 2026-09-16 整体撤销,见本文件顶部那条**
 
 **范围**:client-app **新增一页** `screens/user/FixedOtpScreen.tsx`(路由 `FixedOtp`),
 只认 `123456`、**纯前端校验、不发任何网络请求**。注册流程 `Register → FixedOtp → ReferralCode`。

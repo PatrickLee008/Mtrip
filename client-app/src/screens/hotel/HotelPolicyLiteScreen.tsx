@@ -19,7 +19,7 @@ import { useNavigation, useRoute, type RouteProp } from '@react-navigation/nativ
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTranslation } from 'react-i18next';
 
-import { fetchGoodsDetail } from '@/api/goods';
+import { fetchHotelDetail } from '@/api/goods';
 import { TEMP_HOTEL_COVERS } from '@/assets/tempImages';
 import { ErrorView, LoadingView } from '@/components/common/StateViews';
 import HomeIcon from '@/components/home/HomeIcon';
@@ -53,7 +53,7 @@ export default function HotelPolicyLiteScreen() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      setDetail(await fetchGoodsDetail(params.id));
+      setDetail(await fetchHotelDetail(params.id));
       setError('');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Error');

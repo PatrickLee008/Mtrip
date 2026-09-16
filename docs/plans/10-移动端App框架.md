@@ -246,7 +246,7 @@ Expo 51 / TypeScript / Zustand / React Navigation 6 / Axios / i18next + react-i1
   `hydrate()` 未改 —— 本地存过 `mtrip:app-mode` 的照旧读回,**显式选择优先于默认值**。
   改模式的唯一入口是「更多」页的 Lite Mode 开关(`MineScreen` / `MoreLiteScreen` 各一个,同一份状态)。
 
-- [x] **【临时】注册验证码走纯前端固定码页**(2026-09-15):新增 `screens/user/FixedOtpScreen.tsx`
+- [x] ~~**【临时】注册验证码走纯前端固定码页**(2026-09-15)~~ —— **已于 2026-09-16 整体撤销**,见下一条。新增 `screens/user/FixedOtpScreen.tsx`
   (路由 `FixedOtp`),**只认 `123456`、纯前端校验、不发任何网络请求**;
   注册流程 `Register → FixedOtp → ReferralCode`,**后端一行没改**。
   可行的前提:后台没有启用中的短信渠道 → `SmsVerifyService::enabled()` 为 false →
@@ -260,6 +260,22 @@ Expo 51 / TypeScript / Zustand / React Navigation 6 / Axios / i18next + react-i1
   提示文案复用 `user.otp.fixedHint`(三语);
   **先前那版后端万能码 `MTRIP_SMS_BYPASS_CODE` 已整体回滚**(它是真的认证绕过,
   且与渠道解耦 —— 删光短信渠道也关不掉)。
+
+- [x] **恢复注册的真实短信 OTP 链路**(2026-09-16,SMSPoh 已可测试、后台已配渠道):
+      按上一条留的删除清单**四处全删**,并删掉 `screens/user/FixedOtpScreen.tsx`;
+      注册恢复为 `Register →(sms/send)→ VerifyOtp →(sms/verify 换 verifyToken)→ ReferralCode`。
+      `VerifyOtpScreen` 一直原样留着没动过,所以删完即自动接回,**没有新写任何代码**。
+      **这次不是清理而是必修**:后台新配的渠道
+      (`sys_sms_channel` id=4,`provider_code=smspoh`、`status=1`、`site_id=0` 全局、未删除)
+      已使 `SmsVerifyService::enabled()` 对所有站点返回 true,
+      而 `AuthController::register` 是「渠道启用即强制」——
+      固定码页永远拿不到 `verifyToken`,留着的话每次注册都会被 `40111` 打回。
+      **验证**:① 把 `api_key`/`api_secret` 密文取出、在 user-service 容器内用它自己的
+      `MTRIP_AES_KEY` 解密成功(41 / 32 字符,`sign_name=SMSPohTest` 非空)——
+      这四项正是 `channel()` 判 null 的全部条件,故 `50021 短信服务未配置` 不可能再出现;
+      ② 经网关不带 `verifyToken` 调 `register` 返回 `40111 请先完成手机号短信验证`,
+      且 `user_info` 行数 6→6 **无副作用**,反证渠道确实已生效;③ typecheck 零报错。
+      **未做**:真实收发短信的端到端(需要一个能收码的真实缅甸号码,由用户自测)。
 
 - [x] **注册页邮箱换姓名 + 右上角按钮改版**(2026-09-15,Figma Onboarding `2540:13083`):
   注册表单第二栏由邮箱改为**姓名且必填**(原邮箱是选填),图标用设计稿同款

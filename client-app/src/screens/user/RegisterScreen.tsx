@@ -47,11 +47,6 @@ import { isMobile, isPassword } from '@/utils/validate';
 /** 设计稿固定展示 +95(缅甸),区号选择未实现 */
 const COUNTRY_CODE = '+95';
 
-/**
- * 【临时】真实短信 OTP 未接通期间,注册走纯前端的固定码页(`FixedOtpScreen`,只认 123456)。
- * 接通后置为 false(或直接删掉这个常量与下面那段 if),即恢复「发码 → VerifyOtp」的真实链路。
- */
-const USE_FIXED_OTP = true;
 const SOCIALS: SocialProvider[] = ['google', 'facebook', 'apple'];
 
 export default function RegisterScreen() {
@@ -102,18 +97,6 @@ export default function RegisterScreen() {
     }
 
     const draft = { mobile: mobile.trim(), password, realName: realName.trim() };
-
-    /**
-     * 【临时 · 接通真实 OTP 时整段删掉】
-     * 短信渠道尚未配置,走**纯前端**的固定码页(只认 123456,不发任何请求、也不验票据)。
-     * 后端此时没有启用中的渠道,`register` 不强制 `verifyToken`,所以过完这一页直接去推荐码页即可。
-     * 删除清单:本 if + 顶部 `USE_FIXED_OTP` + `screens/user/FixedOtpScreen.tsx` + 路由 `FixedOtp`;
-     * 删完下面原有的发码逻辑自动恢复,`VerifyOtpScreen` 一直原样留着没动过。
-     */
-    if (USE_FIXED_OTP) {
-      navigation.navigate('FixedOtp', { draft });
-      return;
-    }
 
     setSending(true);
     try {
