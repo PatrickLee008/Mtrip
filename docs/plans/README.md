@@ -53,6 +53,8 @@ MTrip/
 
 ## 模块进度总览
 
+2026-09-16更新：修复 C 端 `order/create` 报 409「库存不足」的根因 —— `RoomDefaults::stock()` 的 `launch_stock ?? base_stock` 在 `launch_stock=0`（merchant-web 新建房型初值）时不回退，导致无日库存记录的日期被补建成 `stock_total=0`（消费者日历同样显示 `stock=0`）。已改为 `launch_stock > 0 ? launch_stock : base_stock`，shared 单测补 0/null/缺失/负数与周末价回退用例（95/957 → 97/968 全绿）；开发库房型 5 的 `launch_stock` 设为 40，日历 `stock` 恢复为 40。详见[模块20](./20-客房管理Figma与PRD整改计划.md)。
+
 2026-09-16更新：修复客房管理首次进入时的“物业上下文格式不正确”；未选物业时不再发送 `X-Mtrip-Property-Id: 0`，有效物业 ID 和通用拦截器逻辑保持不变。merchant-web 生产构建通过。
 
 2026-09-16更新：[客房管理 Figma 与 PRD 整改计划](./20-客房管理Figma与PRD整改计划.md) 阶段 0–5 已完成。merchant-web 已落地房型卡片列表、More Details 及四步编辑，后端收口站点币种、默认库存/周末价、取消规则快照、媒体归属与审核、订单删除门禁，admin-web 可审核完整媒体。迁移 18/18，客房专项、物业发布/消费者、389 PHP lint、shared 95/957、双 Web 构建与 client 类型检查通过。外部 VR/PMS 等待服务商；两个 App 功能代码未改。
@@ -141,6 +143,7 @@ MTrip/
 
 | 日期 | 变更内容 |
 |------|---------|
+| 2026-09-16 | 客房默认可售配额回退修复（C 端下单 409「库存不足」根因）：`RoomDefaults::stock()` 写成 `launch_stock ?? base_stock`，而 `??` 在 `launch_stock=0`（merchant-web 新建房型初值）时不回退，导致无日库存记录的日期被补建成 `stock_total=0`，`order/create` 抛 `DATA_CONFLICT`(409)、消费者日历长期显示 `stock=0`。已改为 `launch_stock > 0 ? launch_stock : base_stock`（0/null/缺失视为未设置），`shared/tests/cases/SupportTest.php` 补 0/null/缺失/负数与周末价回退用例，shared 95 用例/957 断言 → 97/968 全绿；开发库房型 5 的 `launch_stock` 设为 40，日历 `stock` 恢复为 40。未修改两个 App 功能代码。 |
 | 2026-09-15 | 商户入驻整改阶段 7：新增跨 merchant/goods/user 同库 E2E，56 项断言贯通注册补正、两家首批物业 KYC、签署、并发最终批准、投递失败重试、激活、资料/房型审核、发布、用户端消费接口、商户暂停恢复和物业下线恢复。阶段 2–6 回归、PHP 8.1 lint、shared tests、两套 Web 构建、client 类型检查、签名网关、迁移 15/15 与六实例健康均通过；交付 App 接入包，两个 App 代码未修改。 |
 | 2026-09-15 | 商户入驻整改阶段 6：首批物业与商户账号直接衔接，物业资料/房型批准版本、首次发布和实时用户端门禁收口；无排名合格酒店可普通搜索，排名只叠加默认顺序与标记，推荐榜单保持独立。阶段 6 主链路 49 项、阶段 2–5 回归 92 项、真实签名网关冒烟、PHP 8.1、merchant-web 构建、迁移账本 15/15 和 6 个服务实例健康检查通过；未修改两个 App，未新增迁移或权限键。 |
 | 2026-09-15 | 商户入驻整改阶段 5：待激活账号通过批准凭证和注册联系方式 OTP 完成激活；新增访问码/TOTP、邮箱 OTP、短信 OTP、Google + mTrip OTP、联系方式恢复和 Authenticator 轮换，merchant-web 接入登录/激活/恢复，App 仅冻结契约。24 项阶段 5、68 项阶段 2–4 和旧 S4 回归、PHP 8.1、merchant-web 构建与桌面/移动渲染通过；账本 15/15，两个 App 未修改。 |

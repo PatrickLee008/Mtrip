@@ -119,6 +119,8 @@ cd ../admin-web && npm install && npm run dev    # http://localhost:5173,接口�
 
 ## 当前状态(2026-07)
 
+客房默认可售配额回退修复（2026-09-16）：C 端 `POST /api/v1/app/order/create` 报 409「库存不足」的根因是 `RoomDefaults::stock()` 用 `??` 回退（`launch_stock ?? base_stock`），而 merchant-web 新建房型的 `launch_stock` 初值就是 0 —— **0 不是 null，空合并运算符不会回退**，于是「填了客房总数 40、没填默认可售配额」的房型在没有日库存记录时被补建成 `stock_total=0`，`OrderStockService::lock()` 判定 `available = 0 - 0 - 0 < 1` 抛 409；同一函数的另一个消费方（消费者日历）也一直返回 `stock=0`。已改为 `launch_stock > 0 ? launch_stock : base_stock`（0/null/缺失一律视为「未设置」，真要不卖应走停售或单日 `is_closed`），并在 `backend/shared/tests/cases/SupportTest.php` 补 0/null/缺失/负数回退与周末价回退用例。开发库房型 5 的 `launch_stock` 已设为 40，消费者日历 `stock` 由 0 恢复为 40；`goods_daily_stock` 补建 INSERT 的非空列已核对。详见[客房整改计划](docs/plans/20-客房管理Figma与PRD整改计划.md)。
+
 商户端客房管理列表样式修复（2026-09-16）：搜索房型框按用户要求**去掉右侧搜索图标只留输入框**，改用仓库既有的 `a-input` + `@press-enter` 写法（回车查询）——原先用 `a-input-search` 时 antd 把按钮固定成 32px，全局 `.ant-input{min-height:34px}` 又把 affix 包裹层撑到 44px，两者不同高；现输入框实测 260×34、与同排下拉框一致，DOM 中不再有搜索按钮。客房卡片封面用 `display:grid` 时图片 `height:100%` 落到固有尺寸（实测 597px）并因 `.cover` 定位而盖住客房信息，现改为 flex 居中 + `overflow:hidden` + `object-fit:cover`，图片恒为封面高度（200px/窄屏 210px）。无头 Chrome 实测 + 前后截图对比，merchant-web 生产构建通过。详见[客房整改记录](docs/plans/audits/2026-09-16-room-remediation.md)。
 
 客房管理整改（2026-09-16）：按 Figma `930:11444` 与 PRD v1.0.3 模块 2 完成[阶段 0–5](docs/plans/20-客房管理Figma与PRD整改计划.md)。商户 Web 已实现卡片列表、详情、四步编辑、图片/视频/360 全景/平面图热点；库存、周末价、取消政策快照、媒体归属、审核及订单删除门禁已收口，管理后台可审核完整媒体。`V20260916005000` 已应用，账本 18/18；客房专项、物业发布/消费者回归、389 PHP lint、shared 95/957、双 Web 构建、client 类型检查和桌面/窄屏检查通过。外部 VR/PMS 等待服务商；两个 App 功能代码未改。

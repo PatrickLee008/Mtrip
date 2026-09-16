@@ -1,4 +1,52 @@
 # 会话交接文档(HANDOFF)
+### ★ 2026-09-16(客房默认可售配额回退修复:C 端下单 409「库存不足」根因)
+
+**问题**:`POST /api/v1/app/order/create` 在无日库存记录时抛 `DATA_CONFLICT`(409)「2026-09-16 库存不足」
+(`OrderStockService.php:72`)。
+
+**根因**:不在数据,在 `backend/shared/src/Support/RoomDefaults.php` 的 `stock()` 写成
+`launch_stock ?? base_stock`。`??` 是空合并,只在键为 null/缺失时回退,而 merchant-web 新建房型的
+`launch_stock` 初值就是 **0**(`RoomEditor.vue` 的 `draft` 初值 0;`validBasics` 只校验“不超过
+base_stock”、不校验 >0)。于是“填了客房总数、没填默认可售配额”的房型走过 `OrderStockService::lock()`
+时被补建成 `stock_total = RoomDefaults::stock($sku) = 0`, `available = 0 - 0 - 0 < 1` → 409。
+
+- 同一函数的另一个消费方消费者日历(`HotelController:193`)也长期返回 `stock=0`,而价格
+  19500 / 周末 20000 完全正常 —— 反证问题只在 `stock()` 一个函数。
+- `goods_daily_stock` 全表 0 行也是旁证:每次都是补建后抛错、随事务回滚,所以库里看不到那行 0。
+
+**修复**:改为 `launch_stock > 0 ? launch_stock : base_stock`,0/null/缺失一律视为“未设置”;真正的
+“不卖”应走停售 `status=2` 或单日 `is_closed`。`backend/shared/tests/cases/SupportTest.php` 补
+0/null/缺失/负数回退与周末价回退用例。
+
+**验证**:shared 单测 95 用例/957 断言 → **97/968 全绿**;开发库房型 5(物业 7「胤竹酒店」/标准间)
+的 `launch_stock` 由 0 设为 40,消费者日历 `stock` 由 0 恢复为 40;`goods_daily_stock` 补建 INSERT 的
+无默认值非空列(仅 `sku_id`/`stock_date`)已核对,均显式提供;`./mtrip.sh health` 全绿。
+
+**遗留**:merchant-web 表单该字段默认值仍是 0、未加 >0 校验,本次只修后端语义,同类误配仍可能发生。
+
+**本轮排查顺带确认的三个环境陷阱**(已按用户授权临时处理,**勿当成已修复**):
+
+1. **`./mtrip.sh restart <服务>` 不刷新网关**:`docker restart` 会释放并重新分配容器 IP,而
+   `cmd_restart()` 没有像 `cmd_start`/`cmd_build` 那样调用 `refresh_gateway()`。本次重启 4 个服务后
+   网关仍连旧 IP `172.18.0.11`(实际已变 `172.18.0.15`),全量 `50200`,手动 `restart gateway` 才恢复。
+   `CLAUDE.md` 里“网关会在 start/build 后自动刷新”这句对 restart 不成立 —— 属脚本缺口。
+2. **C 端签名/传输加密的临时开关仍在 `deploy/.env`**(该文件 gitignored):`MTRIP_CLIENT_SIGN=false`、
+   `MTRIP_PAYLOAD_ENCRYPT=false`。成因是 `client-app/.env` 的 `EXPO_PUBLIC_CLIENT_ID/SECRET` 为空,
+   且 `sys_client` 表 0 行(无任何迁移/种子创建客户端;只能走 admin-web「配置→客户端管理」生成
+   `mtc_*`,而 `client-app/.env.production` 里写死的 `mtrip_h5` 格式对不上、库里也查不到)。
+   **二者不对称**:签名可以只靠服务端开关绕过,但传输加密的密钥就是客户端密钥本身
+   (`PayloadDecryptMiddleware::resolveSecret` → `ClientSecretResolver::secretByClientId`),客户端不带
+   密钥时服务端无法解密,所以改开关期间必须**同时保持**客户端密钥为空;一旦填了密钥就必须先建好
+   `sys_client` 行,否则回到 40103。
+3. **站点隔离 + 账号按站点绑定**:`AbstractController::siteId()` 登录态优先取 **JWT 里的 `site_id`**
+   (游客才读 `X-Site-Id` 头);`login`/`register` 按 `site_id` 过滤用户、`issueToken` 把站点写进 token,
+   故站点 1 的账号在站点 7 登不上(表现为「手机号或密码错误」)。App 的 `SiteSelectScreen.select()`
+   切站点只 `switchSite` + `goBack`、**不清登录态**,会出现“列表按新站点、下单按旧站点”的不一致。
+   本轮 404 即由此而来:物业 7/房型 5 属站点 7,用户在站点 1 注册 → `hotelTarget()` 查 `site_id=1`
+   落空 → 业务 404「酒店物业不存在或暂不可预订」(`40401` 同样映射 HTTP 404,与路由 404 同形)。
+
+本轮只做诊断与上述 `RoomDefaults` 修复,未修改两个 App 功能代码,未执行 Git 写操作。
+
 ### ★ 2026-09-16(关怀模式结果页取数对齐完整版:`/app/goods/list` → `/app/hotels/list`)
 
 **问题**:`HotelResultsLiteScreen` 此前用 `fetchGoodsList({goodsType: GOODS_TYPE.HOTEL, …})`
