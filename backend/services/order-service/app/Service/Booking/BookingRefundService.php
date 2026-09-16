@@ -48,7 +48,7 @@ class BookingRefundService
             if ($type === 3) {
                 $refundable = 0.0;
             } elseif ($type === 2) {
-                $refundable = $this->stepRefundable($pay, (array) ($policy['rules'] ?? []), (string) ($order['use_date'] ?? ''));
+                $refundable = $this->stepRefundable($pay, is_string($policy['rules'] ?? null) ? (json_decode($policy['rules'], true) ?: []) : (array) ($policy['rules'] ?? []), (string) ($order['use_date'] ?? ''));
             }
         }
         $refundedAlready = round((float) Db::table('order_refund')

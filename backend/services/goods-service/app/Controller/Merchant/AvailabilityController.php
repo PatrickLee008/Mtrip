@@ -7,6 +7,7 @@ namespace App\Controller\Merchant;
 use App\Controller\Admin\AbstractAdminController;
 use Hyperf\Database\Query\Builder;
 use Hyperf\DbConnection\Db;
+use Mtrip\Shared\Support\RoomDefaults;
 use Mtrip\Shared\Annotation\Permission;
 use Mtrip\Shared\Constants\ErrorCode;
 use Mtrip\Shared\Context\MerchantContext;
@@ -181,7 +182,7 @@ class AvailabilityController extends AbstractAdminController
 
         $rows = $query->orderBy('p.id')->orderBy('r.sort')->orderBy('r.id')
             ->get([
-                'r.id', 'r.site_id', 'r.property_id', 'r.room_name', 'r.bed_type', 'r.base_price', 'r.weekend_price', 'r.base_stock', 'r.status',
+                'r.id', 'r.site_id', 'r.property_id', 'r.room_name', 'r.bed_type', 'r.base_price', 'r.weekend_price', 'r.base_stock', 'r.launch_stock', 'r.status',
                 'p.store_name as property_name', 'p.merchant_id', 'p.images as property_images', 'p.address',
             ])->map(static fn ($row) => (array) $row)->all();
 
@@ -207,6 +208,7 @@ class AvailabilityController extends AbstractAdminController
                 'base_price' => (float) $row['base_price'],
                 'weekend_price' => (float) $row['weekend_price'],
                 'base_stock' => (int) $row['base_stock'],
+                'launch_stock' => (int) $row['launch_stock'],
                 'status' => (int) $row['status'],
             ];
         }
@@ -262,7 +264,7 @@ class AvailabilityController extends AbstractAdminController
             $fields['price'] = $price;
         }
         if ($this->input('stockTotal') !== null || ! $partial) {
-            $stock = $this->input('stockTotal') !== null ? $this->intInput('stockTotal') : (int) ($room['base_stock'] ?? 0);
+            $stock = $this->input('stockTotal') !== null ? $this->intInput('stockTotal') : RoomDefaults::stock($room);
             if ($stock < 0) {
                 throw new BusinessException(ErrorCode::PARAM_ERROR, '参数 stockTotal 不能为负');
             }
@@ -303,7 +305,7 @@ class AvailabilityController extends AbstractAdminController
                 ->lockForUpdate()
                 ->first();
             $data = $payload;
-            $newTotal = array_key_exists('stock_total', $data) ? (int) $data['stock_total'] : ($row !== null ? (int) $row->stock_total : (int) $room['base_stock']);
+            $newTotal = array_key_exists('stock_total', $data) ? (int) $data['stock_total'] : ($row !== null ? (int) $row->stock_total : RoomDefaults::stock($room));
             $occupied = $row !== null ? (int) $row->stock_sold + (int) $row->stock_locked : 0;
             if ($newTotal < $occupied) {
                 throw new BusinessException(ErrorCode::DATA_CONFLICT, "{$date} 已售+锁定 {$occupied},总库存不可低于该值");
@@ -323,8 +325,8 @@ class AvailabilityController extends AbstractAdminController
                 'sku_type' => 1,
                 'sku_id' => (int) $room['id'],
                 'stock_date' => $date,
-                'price' => (float) $room['base_price'],
-                'stock_total' => (int) $room['base_stock'],
+                'price' => RoomDefaults::price($room, $date),
+                'stock_total' => RoomDefaults::stock($room),
                 'source' => 'manual',
             ], $data);
             Db::table('goods_daily_stock')->insert($insert);
@@ -365,15 +367,14 @@ class AvailabilityController extends AbstractAdminController
 
     private function fallbackDay(string $date, array $room): array
     {
-        $isWeekend = in_array((int) date('w', strtotime($date)), [5, 6], true);
-        $price = $isWeekend && (float) $room['weekend_price'] > 0 ? (float) $room['weekend_price'] : (float) $room['base_price'];
+        $price = RoomDefaults::price($room, $date);
         return [
             'date' => $date,
             'price' => $price,
-            'stockTotal' => (int) $room['base_stock'],
+            'stockTotal' => RoomDefaults::stock($room),
             'stockSold' => 0,
             'stockLocked' => 0,
-            'stockLeft' => (int) $room['base_stock'],
+            'stockLeft' => RoomDefaults::stock($room),
             'isClosed' => (int) $room['status'] === 1 ? 0 : 1,
             'minStay' => 1,
             'maxStay' => 30,

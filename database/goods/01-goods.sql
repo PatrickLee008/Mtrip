@@ -95,6 +95,14 @@ CREATE TABLE IF NOT EXISTS `hotel_room_type` (
   `images`       JSON         NULL COMMENT '房型图片',
   `video_url`    VARCHAR(255) NOT NULL DEFAULT '' COMMENT '房型视频',
   `facilities`   JSON         NULL COMMENT '房型设施',
+  `bedding` JSON NULL,
+  `area_unit` VARCHAR(8) NOT NULL DEFAULT 'sqm',
+  `image_gallery` JSON NULL,
+  `panorama` JSON NULL,
+  `vr_tour` JSON NULL,
+  `floor_plan` JSON NULL,
+  `refund_policy` JSON NULL,
+  `status_version` INT UNSIGNED NOT NULL DEFAULT 0,
   `status`       TINYINT      NOT NULL DEFAULT 1 COMMENT '售卖状态:1在售 2停售',
   `publish_status` TINYINT    NOT NULL DEFAULT 0 COMMENT '发布流程:0草稿 1待审核 2已发布 3驳回',
   `submitted_at` DATETIME     NULL DEFAULT NULL COMMENT '提交审核时间',
@@ -233,3 +241,21 @@ CREATE TABLE IF NOT EXISTS `goods_stock_log` (
   KEY `idx_order_id` (`order_id`),
   KEY `idx_created_at` (`created_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin COMMENT='库存变动流水表';
+
+CREATE TABLE IF NOT EXISTS hotel_room_media (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  site_id BIGINT UNSIGNED NOT NULL,
+  property_id BIGINT UNSIGNED NOT NULL,
+  uploaded_by BIGINT UNSIGNED NOT NULL,
+  kind VARCHAR(20) NOT NULL,
+  url VARCHAR(255) NOT NULL,
+  mime VARCHAR(80) NOT NULL,
+  size_bytes BIGINT UNSIGNED NOT NULL,
+  width INT UNSIGNED NOT NULL DEFAULT 0,
+  height INT UNSIGNED NOT NULL DEFAULT 0,
+  duration DECIMAL(10,3) NOT NULL DEFAULT 0,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_room_media_url (url),
+  KEY idx_room_media_property (site_id, property_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;

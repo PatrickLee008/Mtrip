@@ -68,7 +68,7 @@ class BookingLifecycleService
         $rule = (array) $rule;
         return [
             'ruleType' => (int) $rule['rule_type'],
-            'rules' => $rule['rules'] ?? [],
+            'rules' => is_string($rule['rules'] ?? null) ? (json_decode($rule['rules'], true) ?: []) : ($rule['rules'] ?? []),
             'remark' => (string) ($rule['remark'] ?? ''),
             'source' => 'goods_refund_rule',
         ];

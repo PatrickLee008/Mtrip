@@ -1,5 +1,7 @@
 # Mtrip 海外旅游 SaaS 平台
 
+Hotel Amenities 页签（2026-09-15）：按 Figma `696:4238` / `743:4446` 实现四类设施和酒店标签的查看、整页编辑、新增、删除、图标、启用及亮点状态。结构化数据按物业进入现有资料审核版本，启用项兼容投影到 `facilities`，旧物业自动回退；迁移已应用，双 Web 构建和隔离发布/消费者回归通过，两个 App 未修改。详见[商户端落地记录](docs/plans/13-商家端merchant-web落地.md)。
+
 2026-09-15 本地提交归档：按用户授权统一提交当前商户入驻、酒店物业模型、三端适配、迁移及测试文档，基于 dev `29614ea` 保留双方改动；由用户自行推送。详见[提交记录](docs/plans/audits/2026-09-15-local-dev-commit.md)。
 
 2026-09-15 dev 同步：已从 `14bbd94` 快进至 `29614ea`，保留本地未提交改动及远端余额支付、关怀模式和登录注册更新。三个冲突文件已整合，物业收藏逻辑迁入共享 `useMyPickData`，关怀模式酒店详情参数同步为 `propertyId`。本地原始改动保留于 stash `codex-backup-before-dev-sync-2026-09-15`；client-app 类型检查通过。
@@ -116,6 +118,12 @@ cd ../admin-web && npm install && npm run dev    # http://localhost:5173,接口�
 - 工作方式:每完成一项任务,同步更新 `docs/plans/` 对应模块文件、README 进度表和 HANDOFF.md;交付前本地跑一次 `scripts/check.ps1` 作为验收入口。
 
 ## 当前状态(2026-07)
+
+商户端客房管理列表样式修复（2026-09-16）：搜索房型框按用户要求**去掉右侧搜索图标只留输入框**，改用仓库既有的 `a-input` + `@press-enter` 写法（回车查询）——原先用 `a-input-search` 时 antd 把按钮固定成 32px，全局 `.ant-input{min-height:34px}` 又把 affix 包裹层撑到 44px，两者不同高；现输入框实测 260×34、与同排下拉框一致，DOM 中不再有搜索按钮。客房卡片封面用 `display:grid` 时图片 `height:100%` 落到固有尺寸（实测 597px）并因 `.cover` 定位而盖住客房信息，现改为 flex 居中 + `overflow:hidden` + `object-fit:cover`，图片恒为封面高度（200px/窄屏 210px）。无头 Chrome 实测 + 前后截图对比，merchant-web 生产构建通过。详见[客房整改记录](docs/plans/audits/2026-09-16-room-remediation.md)。
+
+客房管理整改（2026-09-16）：按 Figma `930:11444` 与 PRD v1.0.3 模块 2 完成[阶段 0–5](docs/plans/20-客房管理Figma与PRD整改计划.md)。商户 Web 已实现卡片列表、详情、四步编辑、图片/视频/360 全景/平面图热点；库存、周末价、取消政策快照、媒体归属、审核及订单删除门禁已收口，管理后台可审核完整媒体。`V20260916005000` 已应用，账本 18/18；客房专项、物业发布/消费者回归、389 PHP lint、shared 95/957、双 Web 构建、client 类型检查和桌面/窄屏检查通过。外部 VR/PMS 等待服务商；两个 App 功能代码未改。
+
+酒店物业详情界面（2026-09-15）：按 Figma `696:4024` / `712:6419` 完成真实房型、房量、评分指标，六页签布局及 Hotel Details 整页编辑；新增物业双电话密文、邮箱、经纬度、图片上传与启停状态，消费者仍只收到启用图片。地图暂用静态占位，未修改两个 App。迁移已应用，双 Web 构建、隔离发布链路、383 PHP lint、95 shared 测试及桌面/手机预览通过。详见[商户端落地记录](docs/plans/13-商家端merchant-web落地.md)。
 
 client-app 关怀模式订房流程（2026-09-15，Figma section `Booking Flow` `759:9777`）：关怀模式的下单链路补齐，此前 Lite 详情页点 Choose 会掉回完整版向导、字号从 20/24 骤降到 14/16，现在搜索 → 详情 → 订房 → 成功页全程同一套字号。**设计侧没有出订房流程的 Lite 稿**——指定的这个 section 与完整模式已实现的 `Multi Booking Hotel Booking Flow` `1675:5776` 逐屏同构（逐帧截图比对过 `224:4808` ≡ `1675:6292`），故按仓库已确立的关怀模式换算规则从该稿**推导**：版式不变、每个元素放大一档，换算表写在 `components/hotel/booking/lite/liteBookingShared.ts` 头部。**业务逻辑抽成共享 Hook**：新增 `screens/hotel/useBookingWizard.ts` 承载原 `HotelBookingScreen` 的全部状态 / 副作用 / 下单支付（真实与演示两种模式、只开通钱包余额、加购与多住宿不提交、优惠券服务端试算），完整版页面只改取值来源、**JSX 与像素零变化**（与「我的精选」`useMyPickData` 同一做法），两种模式的实付金额与用券口径因此必然一致。新增 2 个路由 `HotelBookingLite`（4 步同一路由内切换）与 `BookingSuccessLite`，外加 `liteBookingShared` + 四个步骤组件；`HotelDetailLite` / `RoomDetailLite` 改跳 Lite 向导（完整模式不受影响）。**复用不重写**：日历只给 `BookingCalendar` 加了个 `lite` 尺寸开关（排布与选区数学两种模式同一份），选券弹窗、支付结果浮层、常旅客 / 新增旅客 / 保险三个子页全部复用完整模式那几个，**文案复用 `hotels.booking.*`，i18n 零新增键**（仍 971，三份一致）。**刻意砍掉的死路**：多住宿 `trip` 步与 Add More Stay（后端一单一个 sku，完整模式真实下单下本就只弹 Coming soon）、支付页银行卡 / 手机银行的展开层（展开后是写死的示例卡）、支付汇总卡的 View Details（跳完整版版式的页面会掉字号）、成功页的引流卡。加购、税费、渠道置灰口径与完整模式逐条一致。顺带修掉 3 处**既有**类型错（都在上一批未提交的 Lite 文件里）：两处向导入参 `goodsId/skuId` 应为 `propertyId/roomTypeId`，一处收藏映射 `f.goods_id` 应为 `f.property_id`。client-app typecheck 零报错；**未做真机冒烟**，`scripts/check.ps1` 因本机未装 php 停在第 1 步后端 lint（与本次改动无关，未动 PHP）。
 

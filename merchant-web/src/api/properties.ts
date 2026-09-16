@@ -51,6 +51,29 @@ export interface PropertyProfileResult {
   property: PropertyRow & Record<string, unknown>;
   editable: Record<string, unknown>;
   latestRevision: (Record<string, unknown> & { status: number; reject_reason: string }) | null;
+  metrics: {
+    roomTypes: string[];
+    totalRooms: number;
+    guestRating: number;
+    guestReviewCount: number;
+  };
+}
+
+export interface PropertyImage {
+  url: string;
+  enabled: boolean;
+}
+
+export type AmenityCategory = 'essential' | 'reception' | 'dining' | 'tags';
+
+export interface PropertyAmenity {
+  id: string;
+  category: AmenityCategory;
+  name: string;
+  icon: string;
+  description: string;
+  enabled: boolean;
+  highlighted: boolean;
 }
 
 export function apiPropertyList(params: Record<string, unknown> = {}): Promise<PageData<PropertyRow>> {
@@ -90,6 +113,13 @@ export function apiPropertyProfile(propertyId: number): Promise<PropertyProfileR
 export function apiPropertyProfileSave(data: Record<string, unknown>): Promise<{ propertyId: number; revisionId: number; version: number; reviewStatus: number }> {
   const propertyId = Number(data.propertyId || 0);
   return request({ method: 'POST', url: '/merchant/properties/profile/save', data, headers: propertyHeaders(propertyId) });
+}
+
+export function apiPropertyProfileImageUpload(propertyId: number, file: File): Promise<{ url: string; name: string }> {
+  const data = new FormData();
+  data.append('propertyId', String(propertyId));
+  data.append('file', file);
+  return request({ method: 'POST', url: '/merchant/properties/profile/media/upload', data, headers: propertyHeaders(propertyId) });
 }
 
 export function apiPropertyPublish(propertyId: number, enabled: boolean): Promise<{ propertyId: number; publishStatus: number }> {

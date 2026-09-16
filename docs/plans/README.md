@@ -53,6 +53,14 @@ MTrip/
 
 ## 模块进度总览
 
+2026-09-16更新：修复客房管理首次进入时的“物业上下文格式不正确”；未选物业时不再发送 `X-Mtrip-Property-Id: 0`，有效物业 ID 和通用拦截器逻辑保持不变。merchant-web 生产构建通过。
+
+2026-09-16更新：[客房管理 Figma 与 PRD 整改计划](./20-客房管理Figma与PRD整改计划.md) 阶段 0–5 已完成。merchant-web 已落地房型卡片列表、More Details 及四步编辑，后端收口站点币种、默认库存/周末价、取消规则快照、媒体归属与审核、订单删除门禁，admin-web 可审核完整媒体。迁移 18/18，客房专项、物业发布/消费者、389 PHP lint、shared 95/957、双 Web 构建与 client 类型检查通过。外部 VR/PMS 等待服务商；两个 App 功能代码未改。
+
+2026-09-15更新：Hotel Amenities 按 Figma `696:4238` / `743:4446` 开放分组查看和整页编辑，支持图标、名称、说明、启用/亮点状态及新增编辑删除；结构化 `amenities` 随物业资料审核版本保存，启用项兼容投影到 `facilities`，旧数据自动回退，两个 App 未改。迁移已应用，双 Web 构建及隔离发布/消费者回归通过。详见[模块13](./13-商家端merchant-web落地.md)。
+
+2026-09-15更新：酒店物业详情按 Figma `696:4024` / `712:6419` 完成三项真实指标、六页签与 Hotel Details 整页编辑；新增双电话密文、邮箱、经纬度及图片上传/启停，消费者维持启用图片 URL 契约。地图暂用占位，两个 App 未改。迁移已应用，双 Web 构建、隔离回归、383 PHP lint、95 shared 测试和桌面/手机预览通过。详见[模块13](./13-商家端merchant-web落地.md)。
+
 2026-09-15更新：client-app **关怀模式订房流程**落地(Figma `Booking Flow` `759:9777`):新增 `HotelBookingLite`(日期→入住人→复核→支付 4 步)与 `BookingSuccessLite` 两个路由 + `liteBookingShared` 与四个步骤组件,Lite 详情/房型详情的 Choose 改跳 Lite 向导,关怀模式从搜索到下单成功全程同一套字号。**该 section 与完整模式已实现的 `1675:5776` 逐屏同构、设计侧没有 Lite 稿**,故按既定换算规则推导。**下单逻辑抽成共享 `useBookingWizard`**,完整版只改取值来源、渲染零变化,两种模式的实付与用券口径必然一致;日历、选券弹窗、常旅客/新增旅客/保险子页一律复用完整模式,文案复用 `hotels.booking.*`(i18n 零新增)。多住宿 `trip` 步与 Add More Stay **刻意不做**(后端一单一个 sku)。详见[模块10](./10-移动端App框架.md)。
 
 2026-09-15更新：client-app **关怀模式酒店详情七屏**落地(Figma `Hotel Details Lite` `2352:5591`):主详情页(单选/多选一页两态)、房型详情、信息页、政策页、评价页、实景预览共 6 个路由 + `LiteRoomCard`/`liteShared`;内容与完整模式同源(复用 `detailDemo` 与 `hotels.detail.*`),退改规则接真实 `refundRules`;结果页卡片改跳 Lite 详情。多选只算合计不多间下单(后端一单一个 sku),订房流程 Lite 版另排。详见[模块10](./10-移动端App框架.md)。

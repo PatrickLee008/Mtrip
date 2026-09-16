@@ -34,6 +34,7 @@ return [
         // 处理 N 个请求后平滑重建 worker,防常驻内存泄漏 OOM(避坑规范 三.1)
         'max_request' => (int) env('MAX_REQUEST', 10000),
         'max_request_grace' => 200,
+        'package_max_length' => 512 * 1024 * 1024,
         'socket_buffer_size' => 2 * 1024 * 1024,
         'buffer_output_size' => 2 * 1024 * 1024,
     ],

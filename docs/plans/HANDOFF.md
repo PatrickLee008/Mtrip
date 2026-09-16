@@ -238,6 +238,16 @@
 冒烟用户(id 19)已逐表清理。**注意**:后端回滚后必须
 `./mtrip.sh restart user-service` 与 `user-service-app`,否则旧进程仍在内存里认 123456(已重启)。
 
+2026-09-16 客房管理列表样式修复：用户报的两个视觉问题都在 `merchant-web/src/views/rooms/index.vue`。① 搜索房型框按用户要求**去掉右侧搜索图标只留输入框**——原先 `a-input-search` 的图标按钮被 antd 固定 32px（特指度盖过全局 `.ant-btn{height:34px}`），而全局 `.ant-input{min-height:34px !important}` 连带把 affix 包裹层撑到 44px（实测 44 vs 32）；现改用仓库既有的 `<a-input class="room-search" allow-clear @press-enter="search" />`（回车查询，`class` 落在 `.ant-input-affix-wrapper` 上），DOM 中不再有 `.ant-input-group`/`.ant-input-search-button`，样式只剩「包裹层 34px 去上下内边距 + 内层 input 中和全局 min-height」两条，实测输入框 260×34、顶底 13/47 与同排下拉框一致。② 客房卡片图片盖住客房信息——`.cover` 是 `display:grid`（行轨 auto），图片 `height:100%` 解析成固有尺寸（实测 597px，溢出 397px），又因 `.cover` 定位而绘制在文字之上（`elementFromPoint` 命中的是 `IMG`）；现改 flex 居中 + `overflow:hidden` + `object-fit:cover`，图片恒等于封面高度（200px，窄屏 210px）。用无头 Chrome 对真实 antd 组件量取前后尺寸并截图对比（临时探针已删除，未入库），merchant-web 生产构建通过。详见[客房整改记录](audits/2026-09-16-room-remediation.md)。
+
+2026-09-16 客房管理物业上下文修复：`apiRoomHotels()` 和 All Properties 列表原会显式发送 `X-Mtrip-Property-Id: 0`，被 `MerchantAuthMiddleware` 按“只接受正整数”拒绝，导致页面进入即提示“物业上下文格式不正确”。`merchant-web/src/api/rooms.ts` 已改为未选物业时省略该头，有效 ID 仍显式发送，全局已选物业仍由通用拦截器补入。merchant-web 生产构建及差异检查通过。
+
+2026-09-16 客房管理整改：[计划](20-客房管理Figma与PRD整改计划.md) 阶段 0–5 已完成。merchant-web 已实现 Figma `930:11444` 卡片列表、More Details 和四步房型编辑，包含多床型、面积换算、图片/视频、WebGL 全景及平面图热点；后端收口站点币种、`launch_stock` 默认配额、周末价、取消规则快照、媒体归属/内容校验、审批期间紧急停售和订单删除门禁；admin 房型审核可预览新媒体。消费者房型使用已批准白名单投影，退款仍走 `refundRules`。`V20260916005000` 已应用，账本 18/18；客房专项 61 场景、物业发布/消费者回归、389 PHP lint、shared 95/957、双 Web 构建、client 类型检查、OpenResty/DDL/差异检查及桌面/窄屏检查通过。外部 VR/PMS 待服务商；未修改两个 App 功能代码。详见[验收记录](audits/2026-09-16-room-remediation.md)。
+
+2026-09-15 Hotel Amenities：按 Figma `696:4238` / `743:4446` 开放物业设施页签及查看/编辑、新增、删除、启用、亮点和图标选择。新增 `merchant_store.amenities` 结构化 JSON 并进入既有资料审核版本；启用的非标签项继续投影到 `facilities`，旧数据自动回退，消费者与两个 App 未改。`V20260916004000` 已应用；隔离发布/消费者回归和双 Web 构建通过。详见[模块13](13-商家端merchant-web落地.md)。
+
+2026-09-15 酒店物业详情界面：按 Figma `696:4024` 主页面和 `712:6419` 编辑页面完成三项真实指标、六页签及 Hotel Details 整页编辑。新增双电话（主表与修订均 AES 密文）、邮箱、经纬度、物业图片上传和启停状态；`image_gallery` 保留全部图片，`images` 仅向消费者投影启用 URL。地图暂为静态占位，两个 App 未改。`V20260916003000` 已应用；隔离发布链路、merchant/admin 构建、383 PHP lint、95 shared 测试及桌面/手机预览通过。详见[模块13](13-商家端merchant-web落地.md)。
+
 2026-09-15 本地提交归档：按用户授权统一提交当前商户入驻、酒店物业模型、三端适配、迁移及测试文档，基于 dev `29614ea` 保留双方改动；由用户自行推送。详见[提交记录](audits/2026-09-15-local-dev-commit.md)。
 
 2026-09-15 dev 同步：已从 `14bbd94` 快进至 `29614ea`，保留本地未提交改动及远端余额支付、关怀模式和登录注册更新。三个冲突文件已整合，物业收藏逻辑迁入共享 `useMyPickData`，关怀模式酒店详情参数同步为 `propertyId`。本地原始改动保留于 stash `codex-backup-before-dev-sync-2026-09-15`；client-app 类型检查通过。

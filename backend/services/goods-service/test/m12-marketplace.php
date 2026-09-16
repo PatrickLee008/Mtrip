@@ -80,6 +80,9 @@ try {
     $detail = $hotelCall('detail', ['propertyId' => $properties[2]]);
     check($detail['id'] === $properties[2] && $detail['property_id'] === $properties[2], 'F detail identity is Property');
     check($detail['skus'][0]['room_type_id'] === $rooms[2], 'F detail rooms expose room type identity');
+    check(! array_intersect(['site_id', 'goods_id', 'room_code', 'base_stock', 'launch_stock', 'refund_policy',
+        'status', 'publish_status', 'approved_version', 'status_version', 'submitted_at', 'created_at', 'updated_at', 'deleted_at'], array_keys($detail['skus'][0])),
+        'F detail room projection excludes merchant workflow and internal stock fields');
     $calendar = $hotelCall('calendar', ['propertyId' => $properties[2], 'roomTypeId' => $rooms[2], 'days' => 1]);
     check($calendar['propertyId'] === $properties[2] && $calendar['roomTypeId'] === $rooms[2] && count($calendar['calendar']) === 1, 'F calendar uses property and room type IDs');
     check($hotelCall('reviews', ['propertyId' => $properties[2]])['total'] === 1, 'F public reviews are property scoped');

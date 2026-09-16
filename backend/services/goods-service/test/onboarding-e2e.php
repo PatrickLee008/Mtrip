@@ -64,11 +64,12 @@ if ($mode === 'room') {
         'description' => 'Stage 7 room', 'bed_type' => 'King', 'bed_count' => 1, 'area' => '36',
         'max_adults' => 2, 'max_children' => 1, 'max_guests' => 3, 'floor_name' => '3-5',
         'room_view' => 'City', 'smoking' => 0, 'breakfast' => 1, 'meal_plan' => 'Breakfast Included',
-        'cancellation_policy' => 'Free cancellation', 'currency' => 'USD', 'checkin_notes' => 'ID required',
+        'cancellation_policy' => 'Free cancellation', 'currency' => \App\Service\RoomContentService::siteCurrency((int) $property['site_id']), 'checkin_notes' => 'ID required',
         'base_price' => 120, 'weekend_price' => 140, 'extra_bed_price' => 20,
         'base_stock' => 6, 'launch_stock' => 4, 'images' => ['https://example.test/stage7-room.jpg'],
         'video_url' => '', 'facilities' => ['WiFi'], 'status' => 1, 'sort' => 1,
     ];
+    Db::table('hotel_room_media')->insert(['site_id' => $property['site_id'], 'property_id' => $property['id'], 'uploaded_by' => MerchantContext::adminId(), 'kind' => 'image', 'url' => 'https://example.test/stage7-room.jpg', 'mime' => 'image/jpeg', 'size_bytes' => 1024]);
     $created = $service->save($property, 0, $payload, true);
     AdminContext::set(['admin_id' => 97003, 'admin_name' => 'Stage 7 Room Reviewer',
         'site_id' => (int) $application['site_id'], 'is_super' => false]);
@@ -119,6 +120,9 @@ if ($mode === 'visible') {
     check((int) $detail['property_id'] === (int) $property['id']
         && ($room['room_name'] ?? '') === 'Stage 7 Approved Room',
         'E2E detail uses propertyId and keeps the approved room projection');
+    check(! array_intersect(['site_id', 'goods_id', 'room_code', 'base_stock', 'launch_stock', 'refund_policy',
+        'status', 'publish_status', 'approved_version', 'status_version', 'submitted_at', 'created_at', 'updated_at', 'deleted_at'], array_keys($room)),
+        'E2E public room projection excludes merchant workflow and internal stock fields');
     $calendar = stage7HotelCall($hotels, 'calendar', [
         'propertyId' => $property['id'], 'roomTypeId' => $room['room_type_id'], 'days' => 2,
     ]);

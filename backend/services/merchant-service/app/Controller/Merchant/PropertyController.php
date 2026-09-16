@@ -73,6 +73,15 @@ class PropertyController extends AbstractController
             $submit ? '物业资料已提交审核' : '物业资料草稿已保存');
     }
 
+    #[Permission('mch:properties:profile-edit')]
+    public function uploadProfileImage(): array
+    {
+        return Result::success($this->profiles->uploadImage(
+            $this->requireId('propertyId'),
+            $this->request->file('file')
+        ), '图片上传成功');
+    }
+
     #[Permission('mch:properties:publish')]
     public function publish(): array
     {
