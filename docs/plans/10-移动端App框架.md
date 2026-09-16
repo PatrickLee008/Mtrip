@@ -284,7 +284,7 @@ Expo 51 / TypeScript / Zustand / React Navigation 6 / Axios / i18next + react-i1
   新增 `HomeIcon.mic`(字形取自设计稿导出 SVG)与本地键 `mtrip:hotel-recent`(最近搜索,最多 3 条)。
   **未照抄**:设计稿「输入中」的联想列表(没有地点库,不编造联想词);
   Nearby / Search on Map / 语音 / how do I book 走 comingSoon;
-  房间与入住人只回显不进请求(`/app/goods/list` 无此参数,日期同理)。
+  房间与入住人只回显不进请求(日期同理)。
   i18n 三份各补 26 键(共 912)。
 
 - [x] **关怀模式酒店详情七屏**(2026-09-15,Figma section `Hotel Details Lite` `2352:5591`):
@@ -330,3 +330,35 @@ Expo 51 / TypeScript / Zustand / React Navigation 6 / Axios / i18next + react-i1
       **顺带修掉 3 处既有类型错**(都在上一批未提交的 Lite 文件里):`HotelDetailLite` /
       `RoomDetailLite` 传给向导的 `goodsId/skuId` 应为 `propertyId/roomTypeId`;
       `HotelResultsLite` 的收藏映射 `f.goods_id` 应为 `f.property_id`(`FavoriteItem` 早已改名)。
+
+- [x] **酒店页用户指引(Coach Mark 七步)**(2026-09-16,Figma section `Hotel Search Coach mark UI` `2150:4865`):
+      新增 `components/hotel/guide/HotelGuideOverlay.tsx`(遮罩 / 箭头 / 文案 / 底部控件)与
+      `guideSteps.tsx`(七步插图)。七步讲完整条订房链路:目的地 → 日期 → 住客 → 选酒店 →
+      选房 → 填资料 → 付款。
+      **三处入口**(用户指定「筛选旁边的问号」):完整版搜索页 `HotelsScreen` 与结果页
+      `HotelResultsScreen` 顶栏筛选旁各加一枚 `questionCircle` 圆按钮;关怀版 `HotelsLiteScreen`
+      顶栏那枚「how do I book ?」药片由 `comingSoon` 死链接到同一浮层并传 `lite`(字号放大一档)。
+      **不自动弹**,只有点问号才出;左上角 Skip Tutorial 为快速关闭。
+      设计稿实测(取自 Coach Mark 2 `2154:7076` 的 design context):遮罩纯黑 .95、文案块宽 320、
+      标题 Inter Bold 24 白 / 说明 Inter 400 16 `#D9E1FB`、底栏 Previous + 7 点 + Next
+      (1px `#D9E1FB` 描边圆角 32);曲线箭头是设计稿导出 SVG 的单路径,**逐字符照搬未重绘**,
+      旋转 -53.55°。
+      **示例卡复用现成组件与设计稿同源演示数据**:步 4 `HotelResultCard` + `DEMO_RESULTS[0]`
+      (就是稿上那家 Heritage Bagan)、步 5 `HotelRoomCard` + `DETAIL_ROOMS[0]`(Standard Room /
+      4 Left / 1 Queen / 32 sqft / MMK 195,000 与稿逐字段吻合)、步 6 `FormInput`、
+      步 7 `PaymentMethodRow` + `TEMP_PAY_ICONS`;关怀模式下步 4/5 换 `LiteHotelCard` / `LiteRoomCard`。
+      i18n 三份各补 18 键(`hotels.guide.*`);连同下面那条修复共 990。
+      **冒烟时抓到一个既有 bug 并修了**:`hotels.detail.rooms.breakfast` 三份里根本不存在,
+      而 `lite/LiteRoomCard.tsx:109` 一直在 `t()` 它 —— 关怀模式房型卡上凡 `breakfast===1`
+      的房型都会把原始键名画出来(与本次引导无关,是第 5 步复用该卡后暴露的)。
+      已补:en `Breakfast` / zh `含早餐` / my `မနက်စာ`。
+      **已知偏差**:4~7 步高亮的元素属于结果页 / 详情页 / 订房页 / 支付页,那几页当下并未挂载,
+      做不成真实挖洞高亮 —— 设计稿本身也是「遮罩 + 元素副本画在遮罩上」,故七步统一成
+      「遮罩之上画该步示例卡」;遮罩 95% 黑,底层几乎不可见,差别只在透出的那层页面不同。
+      示例卡是演示数据,**不反映用户当前搜索结果**。步 6 只画三栏(稿上四栏 + 提示 + Save Info
+      整卡近 450 高,叠上文案后小屏放不下,砍掉与姓名说明重复的手机号栏)。
+      **缅文文案是照着现有 `my-MM.json` 同类措辞拼的,不是母语者产出,需人工过一遍。**
+      **验证**:typecheck 零报错;i18n 三份 990 键零差异;**Web 冒烟已做**
+      (`expo start --web` + headless Chrome 402×874,两种模式各 35 条断言全绿,
+      逐屏看过截图,完整版顶栏三枚按钮实测 x=20/298/346,问号确在筛选旁)。
+      冒烟时后端没起,金额显示为 EUR(`siteStore.currency` 初值,全局如此),接上网关即为 MMK。

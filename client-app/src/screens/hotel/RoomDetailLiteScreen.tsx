@@ -239,7 +239,8 @@ const styles = StyleSheet.create({
   flexCol: { flex: 1, minWidth: 0 },
   pressed: { opacity: 0.85 },
 
-  hero: { position: 'absolute', left: 0, right: 0, top: 0, height: HERO_HEIGHT },
+  /** 同 `HotelsLiteScreen`:H5 端必须显式 `width:'100%'`,否则 RNW 会用图片固有宽度撑爆页面 */
+  hero: { position: 'absolute', left: 0, top: 0, width: '100%', height: HERO_HEIGHT },
 
   topBar: {
     flexDirection: 'row',

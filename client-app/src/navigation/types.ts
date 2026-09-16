@@ -57,6 +57,9 @@ export type RootStackParamList = {
   PropertyPreviewLite: { id: number };
   /** 关怀模式酒店搜索结果页(同上 section 的 Search Results `2312:6745`) */
   HotelResultsLite: {
+    /** 与完整模式 `HotelResults` 同一套列表参数:两位用于按国家/城市圈定物业 */
+    countryCode?: string;
+    cityKey?: string;
     keyword?: string;
     checkIn?: string;
     checkOut?: string;

@@ -61,11 +61,15 @@ MTrip/
 
 2026-09-15更新：酒店物业详情按 Figma `696:4024` / `712:6419` 完成三项真实指标、六页签与 Hotel Details 整页编辑；新增双电话密文、邮箱、经纬度及图片上传/启停，消费者维持启用图片 URL 契约。地图暂用占位，两个 App 未改。迁移已应用，双 Web 构建、隔离回归、383 PHP lint、95 shared 测试和桌面/手机预览通过。详见[模块13](./13-商家端merchant-web落地.md)。
 
+2026-09-16更新：client-app **关怀模式酒店结果页取数对齐完整版** —— `HotelResultsLiteScreen` 此前带 `goodsType=1` 打 `/api/v1/app/goods/list`,而该端点在 `GoodsController::list` 里明确只收 `0|2`(门票),**必返 400**,关怀模式结果页实际拿不到真实酒店;现改用完整版同一个 `fetchHotelList`(`/api/v1/app/hotels/list`,与 `HotelResultsScreen` 同源 `MarketplaceReader::searchable`,字段一致)。Lite 稿没有排序面板与 chips 行,故 `sortBy`/`reviewScore`/`breakfast`/`freeCancel`/`amenities` 一律不发;路由参数补可选 `countryCode`/`cityKey`。**typecheck 待补跑**(本轮 shell 起不来)。详见[模块10](./10-移动端App框架.md)与 [HANDOFF](./HANDOFF.md)。
+
+2026-09-16更新：client-app **酒店页用户指引**落地(Figma `Hotel Search Coach mark UI` `2150:4865`):七步 coach mark 覆盖目的地 → 日期 → 住客 → 选酒店 → 选房 → 填资料 → 付款;入口是**筛选旁边的问号**(完整版搜索页 + 结果页各一枚,关怀版复用顶栏「how do I book ?」药片并放大一档),**不自动弹**。示例卡复用 `HotelResultCard` / `HotelRoomCard` / `FormInput` / `PaymentMethodRow` 与设计稿同源演示数据,箭头用设计稿导出 SVG 原路径。4~7 步高亮的元素属于别的页面、做不成真实挖洞高亮,统一成「95% 黑遮罩之上画该步示例卡」(设计稿本身也是这么排的)。i18n 三份各补 18 键(连同下述修复共 990)。**Web 冒烟已做**(headless Chrome 402×874,两种模式各 35 条断言全绿并逐屏看过截图);冒烟中抓到并修掉一个既有 bug —— `hotels.detail.rooms.breakfast` 三份 i18n 里不存在,`LiteRoomCard` 却一直在 `t()` 它,导致关怀模式房型卡把原始键名当文案画出来。详见[模块10](./10-移动端App框架.md)。
+
 2026-09-15更新：client-app **关怀模式订房流程**落地(Figma `Booking Flow` `759:9777`):新增 `HotelBookingLite`(日期→入住人→复核→支付 4 步)与 `BookingSuccessLite` 两个路由 + `liteBookingShared` 与四个步骤组件,Lite 详情/房型详情的 Choose 改跳 Lite 向导,关怀模式从搜索到下单成功全程同一套字号。**该 section 与完整模式已实现的 `1675:5776` 逐屏同构、设计侧没有 Lite 稿**,故按既定换算规则推导。**下单逻辑抽成共享 `useBookingWizard`**,完整版只改取值来源、渲染零变化,两种模式的实付与用券口径必然一致;日历、选券弹窗、常旅客/新增旅客/保险子页一律复用完整模式,文案复用 `hotels.booking.*`(i18n 零新增)。多住宿 `trip` 步与 Add More Stay **刻意不做**(后端一单一个 sku)。详见[模块10](./10-移动端App框架.md)。
 
 2026-09-15更新：client-app **关怀模式酒店详情七屏**落地(Figma `Hotel Details Lite` `2352:5591`):主详情页(单选/多选一页两态)、房型详情、信息页、政策页、评价页、实景预览共 6 个路由 + `LiteRoomCard`/`liteShared`;内容与完整模式同源(复用 `detailDemo` 与 `hotels.detail.*`),退改规则接真实 `refundRules`;结果页卡片改跳 Lite 详情。多选只算合计不多间下单(后端一单一个 sku),订房流程 Lite 版另排。详见[模块10](./10-移动端App框架.md)。
 
-2026-09-15更新：client-app **关怀模式酒店搜索三屏**落地(Figma `Hotel Search Lite` `2312:6435`):Lite 搜索页 `HotelsLite` + 结果页 `HotelResultsLite` + 筛选浮层(复用完整模式的 `HotelFilterSheet`),关怀模式首页 Hotels 卡改跳新页。数据与完整版同一套 `/app/goods/list`;最近搜索存本地,联想/地图/语音等无依赖能力走 comingSoon。详见[模块10](./10-移动端App框架.md)。
+2026-09-15更新：client-app **关怀模式酒店搜索三屏**落地(Figma `Hotel Search Lite` `2312:6435`):Lite 搜索页 `HotelsLite` + 结果页 `HotelResultsLite` + 筛选浮层(复用完整模式的 `HotelFilterSheet`),关怀模式首页 Hotels 卡改跳新页。数据与完整版同一套接口(该条写就时是 `/app/goods/list`,已于 2026-09-16 修正为 `/app/hotels/list`,见上方更新);最近搜索存本地,联想/地图/语音等无依赖能力走 comingSoon。详见[模块10](./10-移动端App框架.md)。
 
 2026-09-15更新：client-app 注册页**邮箱栏换成姓名**(必填,AES 加密落 `user_info.real_name`;后端 `register` 新收 `realName`,不动 `real_name_status`、不写 `nickname`),登录/注册右上角入口按改版稿 Figma Onboarding `2540:13083` 改成黑 25% 底的药丸按钮(改在共用的 `AuthShell`,五屏同时生效;其余样式未动)。详见[模块09](./09-移动端微服务.md)与[模块10](./10-移动端App框架.md)。
 

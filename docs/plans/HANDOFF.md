@@ -1,4 +1,116 @@
 # 会话交接文档(HANDOFF)
+### ★ 2026-09-16(关怀模式结果页取数对齐完整版:`/app/goods/list` → `/app/hotels/list`)
+
+**问题**:`HotelResultsLiteScreen` 此前用 `fetchGoodsList({goodsType: GOODS_TYPE.HOTEL, …})`
+打 `/api/v1/app/goods/list`,而 `GoodsController::list`(`goods-service`)第 100 行明确
+`if (! in_array($goodsType, [0, 2], true)) throw PARAM_ERROR('当前商品接口仅支持门票')` ——
+**带 `goodsType=1`(酒店)的这个请求必被 400 打回**,关怀模式结果页只能落到错误态,
+拿不到任何真实酒店。
+
+**修复**:改用完整版同一个端点 `fetchHotelList`(`/api/v1/app/hotels/list`,见 `HotelController::list`)。
+两者同源 `MarketplaceReader::searchable`,字段一致(卡片要的 `minPrice` / `minPriceCitizen` /
+`rating` / `goods_name` / `property_id` 都在),`sortBy` 的 default 语义也都是 ranking(`rank` 默认序)。
+
+- `HotelResultsLiteScreen`:`import` 与 `load()` 换成 `fetchHotelList`;`query` 去掉 `goodsType`
+  (hotels 端点本身就是酒店口径,不认这个参数),并补上完整版同款可选 `countryCode` / `cityKey`。
+- `navigation/types.ts`:`HotelResultsLite` 路由参数补 `countryCode?` / `cityKey?`(完整版 `HotelResults` 早有),
+  Lite 搜索页暂时不传,留着与完整版同一套参数面。
+- Lite 稿**没有**排序面板与 chips 行,所以 `sortBy` / `reviewScore` / `breakfast` / `freeCancel` /
+  `amenities` 一律不发 —— 请求参数取「完整版查询去掉 Lite 版式不提供的那些控件」。
+- `GOODS_TYPE` 在本文件已无引用,import 一并删掉(常量本身其它页面还在用,不动)。
+
+**同类隐患(本次未动,留作待办)**:`/app/goods/list` 收 `goodsType=1` 是**全仓通用的坑** ——
+`HomeScreen:112/166/207`(PromoCard 与 Stays 的 See all 走 `goList(GOODS_TYPE.HOTEL)`)
+和 `MyPickScreen:240` 都把它塞进 `GoodsList` 路由,那个页面照样会 400。
+酒店入口正确的落点是 `Hotels`(完整模式)/ `HotelsLite`(关怀模式),不是商品列表页。
+
+**验证**:`client-app` typecheck 待跑 —— 本次会话 DSH 的 shell 起不来(`pwsh` 任意命令均返回
+`3221225794` = `STATUS_DLL_INIT_FAILED`,连 `Write-Output` 都失败),`npm run typecheck` 无法在本轮执行,
+**下次接手请先补跑**。改动只涉及一个 import / 一处调用点 / 一处 `useMemo` / 一处路由类型,无逻辑风险。
+
+### ★ 2026-09-16(酒店页用户指引 Coach Mark 七步,Figma section `Hotel Search Coach mark UI` `2150:4865`)
+
+**范围**:七步 coach mark,讲完整条订房链路 ——
+目的地 → 日期 → 住客 → 选酒店 → 选房 → 填资料 → 付款。
+
+**入口三处**(用户指定「筛选旁边的问号」):
+
+| 页面 | 入口 |
+|---|---|
+| `HotelsScreen`(完整版搜索页) | 顶栏筛选旁新增 `questionCircle` 圆按钮 |
+| `HotelResultsScreen`(完整版结果页) | 同上 |
+| `HotelsLiteScreen`(关怀版搜索页) | 顶栏「how do I book ?」药片(原 `comingSoon` 死链)接到同一浮层,传 `lite` |
+
+**不自动弹**,只有点问号才出(用户明确要求);左上角 Skip Tutorial 是快速关闭,不记「已看过」标志。
+
+**新增两个文件**
+
+- `components/hotel/guide/HotelGuideOverlay.tsx` —— 遮罩 / 箭头 / 文案 / 底部控件 / 步进
+- `components/hotel/guide/guideSteps.tsx` —— 七步插图
+
+**设计稿实测**(取自 Coach Mark 2 `2154:7076` 的 design context,不是目测):
+遮罩纯黑 **opacity .95**;文案块宽 320、gap 8;标题 Inter Bold 24 白、说明 Inter 400 16 `#D9E1FB`;
+Skip Inter 400 12 白(左 17 / 上 9);底栏宽 370 两端对齐 —— Previous / 7 点 / Next,
+按钮 1px `#D9E1FB` 描边、圆角 32、px20 py12。第 1 步没有 Previous,第 7 步主按钮是 Done。
+曲线箭头是设计稿导出 SVG 的**单路径,逐字符照搬未重绘**,整体旋转 -53.55°;
+因为不是 24 见方的图标字形,没塞进 `HomeIcon` 的图标表,就地内联。
+
+**示例卡复用现成组件 + 设计稿同源演示数据,一个都没新造**
+
+| 步 | 复用 |
+|---|---|
+| 4 | `HotelResultCard` + `DEMO_RESULTS[0]`(就是稿上那家 Heritage Bagan)+ `DEMO_COVERS`/`DEMO_RATING_TIER`/`DEMO_BADGE`,接线抄 `HotelResultsScreen` 的演示分支 |
+| 5 | `HotelRoomCard` + `DETAIL_ROOMS[0]` + `ROOM_FACILITY_ICONS`,接线抄 `HotelRoomsTab` 的演示分支 —— 稿上的 Standard Room / 4 Left / 1 Queen / 32 sqft / MMK 195,000 与这条演示数据**逐字段吻合** |
+| 6 | `FormInput`(订房第 2 步同一个),只读 |
+| 7 | `PaymentMethodRow` + `TEMP_PAY_ICONS`,与 `BookingStepPayment` 同一套接线 |
+| 1/2/3 | 搜索卡里的三个字段,样式取自 `HotelsScreen`,各十几行就地画 |
+
+关怀模式下步 4/5 换 `LiteHotelCard` / `LiteRoomCard`,其余各步与浮层 chrome 字号放大一档。
+
+**已知偏差(都写进了组件头注释)**
+
+- **4~7 步不是真实挖洞高亮**:那四步高亮的元素属于结果页 / 详情页 / 订房页 / 支付页,
+  浮层打开时那几个页面并没有挂载。**设计稿本身也是「遮罩 + 把元素副本画在遮罩之上」**
+  (design context 里那个副本是独立的绝对定位节点),所以七步统一成「遮罩之上画该步示例卡」。
+  遮罩 95% 黑,底层几乎不可见,肉眼差别仅在于透出的那层页面不同。
+- 示例卡是**演示数据,不反映用户当前的搜索结果** —— 引导讲的是「长什么样、该看哪几个信息」。
+- 步 6 只画三栏:稿上那张卡是四栏 + 提示 + Save Info、整卡近 450 高,叠上箭头与文案后小屏放不下,
+  砍掉与姓名说明重复的手机号栏。
+- 插图 + 箭头 + 文案放在 ScrollView 里(步 5/6 的卡本身就 400+ 高),底栏与 Skip 固定不滚。
+
+**i18n**:三份各补 18 键(`hotels.guide.*`),加上下面那条修复共 **990**。
+**缅文是照着现有 `my-MM.json` 同类措辞拼的,不是母语者产出,需要人工过一遍**
+(英文照抄设计稿原文,中文自译)。
+
+**冒烟时抓到一个既有 bug 并修了**:`hotels.detail.rooms.breakfast` 三份 i18n 里**根本不存在**,
+而 `components/hotel/lite/LiteRoomCard.tsx:109` 一直在 `t()` 它 —— 于是**关怀模式的房型卡上,
+凡是 `breakfast===1` 的房型都会把原始键名 `hotels.detail.rooms.breakfast` 当文案画出来**
+(截图里显示为 `hotels.de…`)。这不是本次引导引入的,是引导的第 5 步复用 Lite 房卡后暴露出来的。
+已补三份:en `Breakfast` / zh `含早餐` / my `မနက်စာ`(与既有 `facilities.breakfast` =
+`Good Breakfast` / 优质早餐 区分开:那条是设施名,这条是房卡上的属性标)。
+
+**验证(本轮真跑了)**
+
+- `client-app` typecheck 零报错;i18n 三份各 **990** 键,零 missing / 零 extra,
+  新增键无空值、无「与英文原文相同」的漏译。
+- **真机冒烟已做**:`expo start --web` + headless Chrome(402×874,playwright-core 驱动
+  本机 Chrome,装在 `C:\temp\mtrip-smoke`,**没往仓库里加任何依赖**)。
+  **两种模式各 35 条断言全绿**:
+  ① 关怀版点「how do I book ?」/ 完整版点问号 → 浮层打开且从 01 起;
+  ② 七步标题逐条对上;③ 第 1 步无 Previous、其余有;④ 每步都有 Skip Tutorial;
+  ⑤ 前六步主按钮 Next、第 7 步 Done;⑥ Done 后浮层关闭且回到酒店搜索页;
+  ⑦ 重开从第 1 步起;⑧ Next×2 → 第 3 步,Previous → 第 2 步;⑨ Skip Tutorial 能关。
+  逐屏看过截图:遮罩 / 箭头 / 白卡 / 七点指示器 / 按钮渲染都对,
+  完整版顶栏三枚圆按钮实测坐标 x=20(返回)、298(问号)、346(筛选)—— 问号确实在筛选旁边。
+- `scripts/check.ps1` 仍因本机未装 php 停在第 1 步(本次未动 PHP)。
+
+**冒烟环境的两点说明(不是 bug)**
+
+- 金额显示成 `€195,000.00` 而不是稿上的 `MMK 195,000`:后端没起,`siteStore` 取不到站点配置,
+  `currency` 停在初值 `'EUR'`(「更多」页的钱包卡同样显示 `EUR 0.00`,全局如此,不只引导)。
+  接上网关拿到站点配置即为 MMK。
+- 浮层里的示例卡用的是演示数据(Heritage Bagan / Standard Room),这是设计如此,见上面「已知偏差」。
+
 ### ★ 2026-09-15(关怀模式订房流程,Figma section `Booking Flow` `759:9777`)
 
 **范围**:关怀模式下单链路的最后一段。此前 Lite 详情页点 Choose 会掉回**完整模式**向导
@@ -123,7 +235,7 @@
   与它逐段同构(Filter By / Recent Filters / Budget 直方图+双滑块 / Popular Filters / Show Results),
   没有需要放大的差异,再抄一份只会多一处要同步维护的地方。
 - **日期复用 `DatePickerSheet`**;结果页数据、收藏、上拉加载与完整版同一套
-  (`/app/goods/list` + `user/favorite/*`),卡片封面同样走 `tempCoverFor(index)` 兜底。
+  (`/app/hotels/list` + `user/favorite/*`,见顶部 2026-09-16 那条修复),卡片封面同样走 `tempCoverFor(index)` 兜底。
 - **最近搜索是真的**:存本地 `mtrip:hotel-recent`(最多 3 条,`useFocusEffect` 每次回页重读),
   搜索时写入、点一条即回填目的地。设计稿那三条静态示例没有照抄。
 - **新增一枚图标** `HomeIcon.mic`:字形取自设计稿自己导出的 `fluent:mic-20-filled` SVG 路径,不是手画的。
@@ -138,7 +250,7 @@
   改成一行「用当前输入搜索」+ Nearby / Search on Map / 最近搜索。编造假联想词会让人以为能搜到。
 - Nearby、Search on Map、语音搜索、「how do I book ?」、Myanmar Citizen 的说明一律 comingSoon
   (与完整模式同口径:没有定位 / 地图 SDK / 语音能力)。
-- **房间与入住人只带在路由参数里回显**,不参与 `/app/goods/list` 请求 —— 接口没有这些参数
+- **房间与入住人只带在路由参数里回显**,不参与 `/app/hotels/list` 请求 —— 接口没有这些参数
   (日期同理,完整模式也是这样)。筛选项同样只留在前端状态。
 - 结果页的「Choose」与整卡点击都进 `HotelDetail`(与完整模式一致),不是直接下单。
 
@@ -2067,6 +2179,16 @@ Mtrip 海外旅游 SaaS 平台:后端 Hyperf 3.1 微服务(backend/)+ 平台管�
 - **多语言**(vue-i18n,默认/fallback 均 en-US):en-US.ts 为全量词条源,zh-CN.ts 只维护已翻译部分;菜单三字段 `menu_name`(中文)/`menu_name_en`(英文回退)/`i18n_key`(词条 key,目录与页面必填、按钮不占词条);显示名统一走 `locales/menuI18n.ts` 的 `resolveMenuTitle/menuTitle`(i18n_key 命中→t(key),未命中→非中文环境用英文名、中文用中文名);扩展新语言只需前端加语言包+SUPPORTED_LOCALES,菜单数据与后端零改动;详细规范见 `docs/guides/standards/README.md`。
 
 ## 6. 下一步(模块08 部署与网关联调,任务清单见 docs/plans/08-部署与网关.md)
+
+client-app 酒店指引下一步(2026-09-16,承接本文件顶部「酒店页用户指引」一条):
+1. **缅文文案找母语者过一遍**(`hotels.guide.*` 共 18 键中的 14 条正文)。
+2. Web 冒烟已过(见顶部那条的「验证」段),**真机 / 真容器仍值得补一次**:
+   ① iOS/Android 上 `Modal` 的层级与安全区与 web 不同;
+   ② 起上后端后确认金额显示为 MMK(web 冒烟时后端没起,币种停在初值 EUR)。
+3. 设计稿这套只画了酒店线。餐饮 / 用车 / 套餐若也要引导,得先出稿 ——
+   现在这七步的文案与示例卡是**写死给酒店用的**,不要直接套到别的业务线。
+4. 若以后想「首次进页面自动弹一次」,本次刻意没做(用户要求只点问号触发),
+   要加的话在 `HotelsScreen` 用 `storage` 记一个标志即可,浮层本身不用改。
 
 client-app 关怀模式下一步(2026-09-15,承接本文件顶部「关怀模式订房流程」一条):
 1. **本轮唯一未验项:真机冒烟**(尤其是完整模式的回归 —— 订房向导抽了共享 Hook,

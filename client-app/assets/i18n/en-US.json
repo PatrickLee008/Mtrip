@@ -783,6 +783,42 @@
     "myanmarCitizen": "Myanmar Citizen",
     "search": "Search",
     "stayLonger": "Stay Longer, Save More",
+    "guide": {
+      "skip": "Skip Tutorial",
+      "previous": "Previous",
+      "next": "Next",
+      "done": "Done",
+      "steps": {
+        "s1": {
+          "title": "01. Where are you going?",
+          "desc": "Enter your destination to find available hotels."
+        },
+        "s2": {
+          "title": "02. When are you staying?",
+          "desc": "Select your check-in and check-out dates."
+        },
+        "s3": {
+          "title": "03. Who is staying?",
+          "desc": "Select your guests and rooms. Keep Myanmar Citizen selected if applicable."
+        },
+        "s4": {
+          "title": "04. Choose your hotel",
+          "desc": "Compare hotels by location, rating, price, and offers."
+        },
+        "s5": {
+          "title": "05. Choose your room",
+          "desc": "Check the room details, price, and cancellation policy before booking."
+        },
+        "s6": {
+          "title": "06. Enter your details",
+          "desc": "Enter the required information to complete your booking."
+        },
+        "s7": {
+          "title": "07. Complete your booking",
+          "desc": "Choose your payment method and complete your payment."
+        }
+      }
+    },
     "nights": "{{nights}} Nights",
     "adTitle": "YOUR AD HERE",
     "adSize": "320*180",
@@ -924,7 +960,8 @@
         },
         "perNight": "/ night",
         "select": "Select",
-        "bestseller": "Bestseller"
+        "bestseller": "Bestseller",
+        "breakfast": "Breakfast"
       },
       "amenityGroups": {
         "essentials": "Essentials",

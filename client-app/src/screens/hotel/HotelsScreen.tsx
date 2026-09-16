@@ -40,6 +40,7 @@ import HotelFilterSheet, {
   DEFAULT_HOTEL_FILTER,
   HotelFilterValue,
 } from '@/components/hotel/HotelFilterSheet';
+import HotelGuideOverlay from '@/components/hotel/guide/HotelGuideOverlay';
 import { GOODS_TYPE } from '@/config/global';
 import { PAGE_PADDING, colors, radius } from '@/config/theme';
 import { fonts } from '@/config/typography';
@@ -70,6 +71,7 @@ export default function HotelsScreen() {
   const [keyword, setKeyword] = useState('');
   const [citizen, setCitizen] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
+  const [guideOpen, setGuideOpen] = useState(false);
   const [filter, setFilter] = useState<HotelFilterValue>(DEFAULT_HOTEL_FILTER);
   const [dateOpen, setDateOpen] = useState(false);
   const [range, setRange] = useState<DateRangeValue>(() => defaultDateRange(DEFAULT_NIGHTS));
@@ -237,15 +239,27 @@ export default function HotelsScreen() {
           >
             <HomeIcon name="arrowLeft" size={20} color="#FFFFFF" />
           </Pressable>
-          <Pressable
-            style={({ pressed }) => [styles.roundBtn, styles.filterBtn, pressed && styles.pressed]}
-            onPress={() => setFilterOpen(true)}
-            hitSlop={8}
-          >
-            <HomeIcon name="filter" size={20} color="#FFFFFF" />
-          </Pressable>
+          <View style={styles.topRight}>
+            {/* 用户指引:筛选旁边的问号(Figma section Hotel Search Coach mark UI 2150:4865) */}
+            <Pressable
+              style={({ pressed }) => [styles.roundBtn, styles.filterBtn, pressed && styles.pressed]}
+              onPress={() => setGuideOpen(true)}
+              hitSlop={8}
+            >
+              <HomeIcon name="questionCircle" size={20} color="#FFFFFF" />
+            </Pressable>
+            <Pressable
+              style={({ pressed }) => [styles.roundBtn, styles.filterBtn, pressed && styles.pressed]}
+              onPress={() => setFilterOpen(true)}
+              hitSlop={8}
+            >
+              <HomeIcon name="filter" size={20} color="#FFFFFF" />
+            </Pressable>
+          </View>
         </View>
       </SafeAreaView>
+
+      <HotelGuideOverlay visible={guideOpen} onClose={() => setGuideOpen(false)} />
 
       {/* 日期选择器:选中的区间目前只回填到搜索卡,列表接口没有日期参数 */}
       <DatePickerSheet
@@ -303,6 +317,8 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.4)',
   },
   filterBtn: { borderRadius: 999 },
+  /** 顶栏右侧:问号 + 筛选两枚 */
+  topRight: { flexDirection: 'row', alignItems: 'center', gap: 12 },
 
   searchCard: {
     backgroundColor: colors.surface,

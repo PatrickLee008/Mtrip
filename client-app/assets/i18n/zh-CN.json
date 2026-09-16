@@ -783,6 +783,42 @@
     "myanmarCitizen": "缅甸公民",
     "search": "搜索",
     "stayLonger": "住得越久,省得越多",
+    "guide": {
+      "skip": "跳过引导",
+      "previous": "上一步",
+      "next": "下一步",
+      "done": "完成",
+      "steps": {
+        "s1": {
+          "title": "01. 想去哪里?",
+          "desc": "输入目的地,查看可订酒店。"
+        },
+        "s2": {
+          "title": "02. 什么时候住?",
+          "desc": "选择入住与离店日期。"
+        },
+        "s3": {
+          "title": "03. 几位入住?",
+          "desc": "选择入住人数与房间数;是缅甸公民请勾选 Myanmar Citizen。"
+        },
+        "s4": {
+          "title": "04. 选择酒店",
+          "desc": "按位置、评分、价格和优惠对比酒店。"
+        },
+        "s5": {
+          "title": "05. 选择房型",
+          "desc": "下单前先看清房型详情、价格与退改政策。"
+        },
+        "s6": {
+          "title": "06. 填写资料",
+          "desc": "填写完成预订所需的信息。"
+        },
+        "s7": {
+          "title": "07. 完成预订",
+          "desc": "选择支付方式并完成付款。"
+        }
+      }
+    },
     "nights": "{{nights}} 晚",
     "adTitle": "广告位招租",
     "adSize": "320*180",
@@ -924,7 +960,8 @@
         },
         "perNight": "/ 晚",
         "select": "选择",
-        "bestseller": "热销"
+        "bestseller": "热销",
+        "breakfast": "含早餐"
       },
       "amenityGroups": {
         "essentials": "基础设施",

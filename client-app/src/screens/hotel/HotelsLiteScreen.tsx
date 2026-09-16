@@ -34,6 +34,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTranslation } from 'react-i18next';
 
 import HomeIcon from '@/components/home/HomeIcon';
+import HotelGuideOverlay from '@/components/hotel/guide/HotelGuideOverlay';
 import DatePickerSheet, {
   DateRangeValue,
   defaultDateRange,
@@ -70,6 +71,7 @@ export default function HotelsLiteScreen() {
   const [citizen, setCitizen] = useState(false);
   const [dateOpen, setDateOpen] = useState(false);
   const [guestOpen, setGuestOpen] = useState(false);
+  const [guideOpen, setGuideOpen] = useState(false);
 
   const comingSoon = () => showToast(t('home.comingSoon'));
 
@@ -138,7 +140,7 @@ export default function HotelsLiteScreen() {
 
           <Pressable
             style={({ pressed }) => [styles.pill, styles.helpPill, pressed && styles.pressed]}
-            onPress={comingSoon}
+            onPress={() => setGuideOpen(true)}
             hitSlop={8}
           >
             <Text style={styles.helpText}>{t('hotels.lite.howToBook')}</Text>
@@ -323,6 +325,9 @@ export default function HotelsLiteScreen() {
           setGuestOpen(false);
         }}
       />
+
+      {/* 顶栏「how do I book ?」的落地页:与完整模式同一套引导,字号放大一档 */}
+      <HotelGuideOverlay visible={guideOpen} onClose={() => setGuideOpen(false)} lite />
     </View>
   );
 }
@@ -331,7 +336,13 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.pageBg },
   safe: { flex: 1 },
   flex: { flex: 1 },
-  hero: { position: 'absolute', left: 0, right: 0, top: 0, height: HERO_HEIGHT },
+  /**
+   * 必须显式给 `width: '100%'`,不能只靠 `left:0 + right:0` 拉伸 ——
+   * react-native-web 的 `Image` 会把 `require()` 资源的固有尺寸(hero.png 是 1024×683)
+   * 写成显式 `width`,而 CSS 里 `width` 一有值就压过 `right`,H5 端整张图会按 1024 铺开,
+   * 把页面横向撑出 600+ px(原生 RN 下 left/right 能拉伸,所以只在 H5 露出来)。
+   */
+  hero: { position: 'absolute', left: 0, top: 0, width: '100%', height: HERO_HEIGHT },
 
   topBar: {
     flexDirection: 'row',
