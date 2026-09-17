@@ -76,6 +76,33 @@ class SmsVerifyService
     }
 
     /**
+     * 平台是否**强制**注册短信验证(全局配置 `sys_config.register_sms_required`)
+     *
+     * 与 `enabled()` 是两件事:`enabled()` 说的是「渠道此刻能不能用」,这里说的是「平台要不要求」。
+     * 两者解耦之后,渠道挂掉不会再让注册静默降级成免验证码。
+     *
+     * **这是全局的、不按站点**:注册时的站点来自客户端可控的 `X-Site-Id`,
+     * 做成站点级会被「挑一个最宽松的站点」绕过(见迁移 V20260917040000 的说明)。
+     */
+    public function registerSmsRequired(): bool
+    {
+        $value = Db::connection('system')->table('sys_config')
+            ->where('config_key', 'register_sms_required')->value('config_value');
+        return (string) $value === '1';
+    }
+
+    /**
+     * 注册是否需要 verifyToken
+     *
+     * 全局强制 → 恒为 true(渠道挂了也不放行,发码那一步会抛 50022 告诉 App 别跳过);
+     * 未强制 → 维持旧的「渠道启用即强制」(渠道判定仍然按站点,故这里仍收 `$siteId`)。
+     */
+    public function registerRequiresSms(int $siteId): bool
+    {
+        return $this->registerSmsRequired() || $this->enabled($siteId);
+    }
+
+    /**
      * 取本站点可用的 SMSPoh 渠道配置(站点专属优先,回退全局 site_id=0)
      *
      * @return array<string, mixed>|null 缺任一必填项(apiKey/apiSecret/from)时返回 null —— 半配的渠道等于没配
@@ -273,7 +300,14 @@ class SmsVerifyService
     {
         $channel = $this->channel($siteId);
         if ($channel === null) {
-            throw new BusinessException(ErrorCode::SMS_CHANNEL_UNAVAILABLE, '短信服务未配置,请联系客服');
+            /*
+             * 两个码的差别是「调用方能不能降级」:
+             *   全局强制 → 50022,App 必须停在注册页报错,**不能**跳过验证码页;
+             *   未强制   → 50021,App 照旧跳过验证码页直接注册(后端此时也不要 verifyToken)。
+             */
+            throw $this->registerSmsRequired()
+                ? new BusinessException(ErrorCode::SMS_REQUIRED_UNAVAILABLE)
+                : new BusinessException(ErrorCode::SMS_CHANNEL_UNAVAILABLE, '短信服务未配置,请联系客服');
         }
         return $channel;
     }

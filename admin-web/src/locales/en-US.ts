@@ -1133,6 +1133,9 @@ export default {
       configRemark: 'Remark',
       sectionBase: 'Base Config',
       sectionSecurity: 'Security Config',
+      smsConfirmTitle: 'Change "Require SMS verification on signup"?',
+      smsConfirmOn: 'Once on, app signup always requires an SMS code. Note: if the SMS channel becomes unavailable (disabled, bad credentials, provider outage), signup will be rejected outright rather than allowed through.',
+      smsConfirmOff: 'Once off, this follows the SMS channel status — if the channel becomes unavailable, signup is silently allowed through with no code required. This weakens platform security; please confirm this is intended.',
       sectionUpload: 'Upload Config',
       sectionClient: 'Client Config',
       actions: {

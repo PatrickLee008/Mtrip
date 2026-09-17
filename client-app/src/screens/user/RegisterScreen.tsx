@@ -118,9 +118,13 @@ export default function RegisterScreen() {
       });
     } catch (e) {
       /*
-       * 本站点没配短信渠道 → 整条验证码链路不可用,直接跳过这一步。
-       * 后端此时同样不会强制 verifyToken(见 AuthController::register 的「渠道启用即强制」),
-       * 两边口径一致;不这么处理的话,未配渠道的站点会彻底注册不了。
+       * 50021 = 平台没开强制、本站点也没有可用渠道 → 整条验证码链路不可用,直接跳过这一步。
+       * 后端此时同样不会要 verifyToken(见 `SmsVerifyService::registerRequiresSms`),两边口径一致;
+       * 不这么处理的话,未配渠道的站点会彻底注册不了。
+       *
+       * **50022 不在此列**:那是平台开了全局 `sys_config.register_sms_required` 但渠道此刻不可用,
+       * 后端会照样要 verifyToken —— 这时跳过去只会在推荐码页被 40111 打回,是条死路。
+       * 所以让它落到下面的默认分支:停在注册页,由 request 层把后端文案 Toast 出来。
        */
       if (e instanceof ApiError && e.code === API_CODE.SMS_CHANNEL_UNAVAILABLE) {
         navigation.navigate('ReferralCode', { draft });

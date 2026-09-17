@@ -1,4 +1,125 @@
 # 会话交接文档(HANDOFF)
+### ★ 2026-09-17 下午(「强制短信验证」开关搬家:站点级 → **全局安全配置**)
+
+> 本节**取代**下面那节(站点级方案)。`sys_site.sms_verify_required` 这一列**已被删除**,
+> 照着那节去找它会扑空。保留旧节是为了记录动机与 50021/50022 的设计,那部分仍然有效。
+
+**为什么搬**:站点级开关**挡不住「挑一个最宽松的站点」**。注册请求的站点来自
+**客户端可控的 `X-Site-Id`**(`AuthController::register` 的 `requireSiteId()` 只校验 `>0`,
+不校验站点是否存在/启用)。只要有任何一个站点被设成「跟随渠道」,带上那个站点号就能免验证码注册。
+而且这本质上是**平台级安全策略**,不是站点差异化配置。
+
+**改动**
+
+| 层 | 内容 |
+|---|---|
+| 迁移 | `V20260917040000__move-sms-verify-required-to-global.sql`(账本 19→**20**):种 `sys_config` 行 `security` / `register_sms_required` / `value_type=3` / `default_value='1'`;**并 `DROP` 掉 `sys_site.sms_verify_required`** |
+| user-service | `siteForcesSms(int)` → **`registerSmsRequired(): bool`**(读全局配置,不再吃 siteId);`registerRequiresSms($siteId)` = `registerSmsRequired() \|\| enabled($siteId)`,siteId 只用于判渠道归属 |
+| system-service | 撤销站点级字段(`SiteController::fill()` / `SysSite` casts 回到改动前) |
+| admin-web | 站点页改动**全部撤销**;**全局配置 → 安全配置**页加开/关**双向二次确认**(`Modal.confirm`,关闭走 `danger`),i18n 3 键 × 2 份 |
+| client-app | **逻辑零改动**(50021/50022 契约没变),仅修注释口径 |
+
+**开关在哪**:后台「系统配置 → 全局参数」(`/config/global`)→ **安全配置** 分组 →
+「注册强制短信验证」。`value_type=3` 由该页既有逻辑自动渲染成 `a-switch`,前端没为它写专门控件。
+
+**留痕**:靠既有 `OperationLogMiddleware`,不另写审计。因为该页**只提交变更项**,
+日志 `content` 里就只有这一个键,附带管理员 / IP / URL / 状态码 / 时间。实测样例:
+`{"configs":[{"key":"register_sms_required","value":"0"}]}`。
+**局限:只有新值、没有旧值**(要看旧值得比对前一条日志)。
+
+**验证(全部实跑)**
+
+- 迁移账本 19→**20**,待执行 0;`sys_config` 有新行(中文名入库为正确 UTF-8)、`sys_site` 该列已消失。
+- shared 单测 **99 用例 / 975 断言全绿**(改造而非新增)。
+- 真值表 **13 项全过**(经网关 8081,每格跑完即回滚):
+
+  | 全局开关 | 渠道 | `sms/send` | `register` 无 token |
+  |---|---|---|---|
+  | 强制(1) | 启用 | (跳过实测,见下) | `40111` |
+  | 强制(1) | 停用 | `50022` | `40111`,不建号 |
+  | 关闭(0) | 停用 | `50021` | `code=0` 建号(旧降级) |
+
+  **关键一格**:开关=1 时,`X-Site-Id` 取 `1/2/7/999/12345`(含**不存在**的站点号)
+  调 `register` **全部被 `40111` 拦下** —— 「挑弱站点」这条路已堵死,这正是搬家的目的。
+  唯一**没实测**的是「开关=1 + 渠道启用 → `sms/send` 正常」:那会真往用户手机发一条短信(要花钱、要打扰人),
+  且该格行为本次未触碰、当天早些时候已实测通过。
+- 后台走查 **全过**:开关可见、开/关**都弹确认**且文案不同、取消不保存、确认后落库、最终恢复为「开」。
+- `admin-web build`、`client-app typecheck` 零报错;改动 PHP 文件容器内 `php -l` 通过。
+- 状态已还原:开关=1、渠道 status=1、测试账号已删(`user_info` 回到 6)。
+
+**⚠️ 代价没变**:默认 `1`(强制),即 **SMSPoh 一旦挂掉或凭证失效,注册会全面不可用**(而不是降级放行)。
+要放开就去上面那个开关关掉,会弹确认并留痕。
+
+**仍未做(独立问题)**:`requireSiteId()` 依旧不校验站点存在/启用。开关全局化后,这个洞
+在「注册强制短信」这件事上已不可利用(判据不再依赖 siteId),但**伪造的 `X-Site-Id` 仍会被其它
+`/app/*` 接口接受**。影响面覆盖所有 C 端接口,值得单独评估,本次刻意没顺手改。
+
+**⚠️ 验证留痕时顺带发现的另一个问题(未修,需单独决策)**:
+**`sys_operation_log.content` 里存着明文的第三方凭证**。`MaskHelper::maskParams()` 的脱敏表是
+**精确匹配小写键名**,含 `secret` / `secret_key` / `client_secret` / `access_key`,
+但**不含 `apikey` / `apisecret`** —— 而短信、存储、文件三个配置接口用的正是 `apiKey` / `apiSecret` 驼峰命名
+(`system-service` 的 `SmsController` / `StorageController` / `FileController`)。
+结果:这些密钥在自己表里是 `SecretField` AES 加密存储的,却被操作日志以**明文**留了一份副本,
+凡能读日志表或后台「日志」页的人都能看到。当前库里已有 4 条这样的记录
+(`/sys/sms/channel/add` ×3、`/sys/sms/channel/update` ×1)。
+修的方向:给 `maskParams` 的默认表补上这几个键名(或改成子串匹配,注意别误伤 `keyword` 之类),
+并清洗存量记录。**本次未动** —— 属于另一件事,且清洗历史日志是不可逆操作,需要你点头。
+
+---
+
+### ~~2026-09-17 上午(站点级「强制短信验证」开关)~~ · **已被上一节取代**
+
+> ⚠️ 本节描述的 `sys_site.sms_verify_required` **列已被 `V20260917040000` 删除**,
+> 后台站点管理里也**没有**那个开关了。动机与 50021/50022 的设计仍然有效,其余按上一节为准。
+
+**动机**:`AuthController::register` 原本读 `SmsVerifyService::enabled()`,即「渠道启用即强制」。
+渠道一旦停用 / 软删 / 凭证失效,`enabled()` 变 false,注册**静默降级成免验证码注册**,且没有任何告警。
+9/17 实测复现(渠道 id=4 临时置 `status=2`):不带 `verifyToken` 的 `register` 直接 `code=0` 建号,`user_info` 6→7。
+
+**改动**
+
+| 层 | 内容 |
+|---|---|
+| 迁移 | `V20260917032003__add-site-sms-verify-required.sql`:`sys_site` + `sms_verify_required TINYINT NOT NULL DEFAULT 1`(账本 18→19) |
+| shared | `ErrorCode` 新增 `SMS_REQUIRED_UNAVAILABLE = 50022`(HTTP 500) |
+| user-service | `SmsVerifyService` 新增 `siteForcesSms()` / `registerRequiresSms()`;`requireChannel()` 按站点开关抛 50021 或 50022;`register` 改读 `registerRequiresSms()` |
+| system-service | `SiteController::fill()` 收 `smsVerifyRequired`;`SysSite` casts 补 integer |
+| admin-web | 站点列表加一列标签、编辑弹窗加开关;i18n 4 键 × 2 份 |
+| client-app | `API_CODE` 加 50022;`RegisterScreen` 的降级分支**仍只认 50021**(i18n 零新增) |
+
+**`enabled()` 语义没动**(仍是「渠道能否解析」),既有语义与单测不受影响,新逻辑是它外面加了一层。
+
+**50021 与 50022 的区别是「调用方能不能降级」**——这是这次设计的核心:
+- `50021` 站点不强制 + 无可用渠道 → 后端也不会要 `verifyToken`,App 照旧跳过验证码页直接注册;
+- `50022` 站点开了强制 + 渠道此刻不可用 → 后端**照样要** `verifyToken`,
+  App **不能跳过**(跳过去只会在推荐码页被 `40111` 打回,是条死路),要停在注册页把后端文案说给用户。
+
+**⚠️ 存量 7 个站点与新建站点一律默认 `1`(强制)** —— 用户的明确决定,已知晓代价:
+**SMSPoh 一旦挂掉或凭证失效,所有站点的注册会立即全部不可用**(而不是降级放行)。
+要放开的站点:后台「配置 → 站点管理」编辑该站点,把「强制短信验证」开关关掉(即 `sms_verify_required=0`)。
+
+**验证(真值表逐格实测,site 1,经网关 8081)**
+
+| 站点开关 | 渠道 | `sms/send` | `register` 无 token |
+|---|---|---|---|
+| 强制(1) | 启用 | 正常 | `40111` |
+| 强制(1) | 停用 | **`50022`** | **`40111`,`user_info` 6→6 不建号** ✅ 漏洞已堵 |
+| 跟随(0) | 停用 | `50021` | `code=0` 建号(旧降级行为保留) |
+
+其余:shared 单测 97/968 → **99/975** 全绿(新增 2 用例 7 断言,覆盖 `registerRequiresSms` 四种组合
+与 `requireChannel()` 的错误码切换);5 个改动 PHP 文件容器内 `php -l` 通过;
+`admin-web build` 与 `client-app typecheck` 零报错。
+**测试后状态已全部还原**:站点 7×`1`、渠道 `status=1`、`user_info` 回到 6。
+
+**踩到的一个坑**:`a-switch` 的 `@change="(v) => ...)"` 会让 `v` 变成隐式 any,
+而本仓库模板禁用类型标注 → `vue-tsc` 报 `TS7006`。改用带 setter 的 `computed` 做布尔↔0/1 转换。
+
+**未做**
+- 不动 `login-by-sms` / `reset-password`:这两条本就以短信为前提,不存在静默降级问题,开关只作用于 `register`。
+- 不在 `AppSiteController::config` 下发该字段:错误码已经把信号带给 App 了,不必多一份公开契约。
+  将来 App 想「进注册页之前就提示」再加。
+- 真实收发短信的端到端仍待用户用真号自测(与 9/16 那条相同)。
+
 ### ★ 2026-09-17(客房管理「今日可售」看不出非今日订单:根因复核 + 两处修复)
 
 **问题**(用户报):商户新增房型并设好客房总数后,在 APP 下了该房型的订单,商户后台客房管理里

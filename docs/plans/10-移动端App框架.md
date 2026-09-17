@@ -261,6 +261,50 @@ Expo 51 / TypeScript / Zustand / React Navigation 6 / Axios / i18next + react-i1
   **先前那版后端万能码 `MTRIP_SMS_BYPASS_CODE` 已整体回滚**(它是真的认证绕过,
   且与渠道解耦 —— 删光短信渠道也关不掉)。
 
+- [x] **全局「强制短信验证」开关**(2026-09-17 下午,`sys_config` 的 `security` / `register_sms_required`):
+      把下面那条**站点级**方案**搬到了全局配置**,`sys_site.sms_verify_required` 列已删除
+      (迁移 `V20260917040000`,账本 19→20)。
+      **搬家原因**:注册请求的站点来自**客户端可控的 `X-Site-Id`**(`requireSiteId()` 只校验 `>0`),
+      站点级开关挡不住「挑一个最宽松的站点」;且这本质是平台级安全策略,不是站点差异化配置。
+      **实现**:`siteForcesSms(int)` → `registerSmsRequired(): bool`(读 `sys_config`,不再吃 siteId);
+      `registerRequiresSms($siteId)` = `registerSmsRequired() || enabled($siteId)`,siteId 只用于判渠道归属。
+      站点页与 4 个 `config.site.sms*` i18n 键**全部撤销**;client-app 逻辑零改动(50021/50022 契约未变)。
+      **开关位置**:后台「系统配置 → 全局参数」(`/config/global`)→ **安全配置** 分组。
+      `value_type=3` 由该页既有逻辑自动渲染成 `a-switch`,**没为它写专门控件**。
+      **切换要确认、要留痕**:开/关**双向** `Modal.confirm`(关闭走 danger,文案讲清后果);
+      留痕复用既有 `OperationLogMiddleware` —— 该页只提交变更项,故日志 `content` 里只有这一个键,
+      附管理员 / IP / 时间。**局限:只有新值没有旧值**。
+      **验证**:真值表 13 项全过,其中关键一格是「开关=1 时 `X-Site-Id` 取 1/2/7/999/12345(含不存在的站点号)
+      调 `register` 全部被 `40111` 拦下」,证明「挑弱站点」已堵死;shared 单测 99/975 全绿;
+      后台走查开/关确认、取消不保存、落库、还原全过;两端构建零报错。
+      唯一未实测:「开关=1 + 渠道启用 → `sms/send` 正常」——会真发短信(花钱且打扰用户),
+      该格本次未触碰且当天早些时候已验证。
+
+- [x] ~~**站点级「强制短信验证」开关**(2026-09-17 上午,`sys_site.sms_verify_required`)~~ · **已被上一条取代**
+      (该列已删除,后台站点管理也没有那个开关了;动机与 50021/50022 设计仍有效):
+      把「注册是否要求短信验证」与「渠道是否可用」**解耦**。
+      **动机**:原实现是 `AuthController::register` 读 `SmsVerifyService::enabled()`,即「渠道启用即强制」——
+      渠道一旦停用 / 软删 / 凭证失效,`enabled()` 变 false,注册就**静默降级成免验证码注册**,且无任何告警。
+      9/17 实测复现:渠道 `status` 置 2 后,不带 `verifyToken` 的 `register` 直接 `code=0` 建号(`user_info` 6→7)。
+      **实现**:迁移 `V20260917032003`(账本 18→19)给 `sys_site` 加 `sms_verify_required TINYINT NOT NULL DEFAULT 1`;
+      `SmsVerifyService` 新增 `siteForcesSms()` 与 `registerRequiresSms()`(= 站点强制 OR 渠道可用),
+      `register` 改读后者;`requireChannel()` 在无渠道时按站点开关抛不同码。
+      **`enabled()` 语义未动**(仍是「渠道能否解析」),既有语义与单测不受影响。
+      **新增错误码 `50022 SMS_REQUIRED_UNAVAILABLE`**,与既有 50021 的区别是**调用方能不能降级**:
+      50021 = 不强制且无渠道 → App 照旧跳过验证码页;50022 = 站点强制但渠道不可用 → App **不能跳过**
+      (跳过去也会在推荐码页被 40111 打回),停在注册页由 request 层 Toast 后端文案。
+      App 侧只改两处:`API_CODE` 加 50022、`RegisterScreen` 的 catch 仍只对 50021 降级(**i18n 零新增**)。
+      后台:站点管理列表加一列标签、编辑弹窗加一个开关(`config.site.smsVerifyRequired` 等 4 键 × 2 份 i18n);
+      布尔↔0/1 用带 setter 的 `computed` 转换 —— 写在模板里的箭头函数参数会是隐式 any,本仓库模板禁类型标注,
+      `vue-tsc` 会报 TS7006。
+      **⚠️ 存量 7 个站点与新建站点一律默认 `1`(强制)**,这是用户的明确决定。
+      代价:**SMSPoh 一旦挂掉或凭证失效,所有站点的注册会立即全部不可用**(而不是降级放行)。
+      要放开的站点在后台站点管理逐个把开关翻成 0。
+      **验证**:真值表三格逐格实测(见 HANDOFF);shared 单测 97/968 → **99/975** 全绿(新增 2 用例 7 断言);
+      5 个改动 PHP 文件容器内 `php -l` 通过;`admin-web build` 与 `client-app typecheck` 零报错;
+      测试后渠道状态、站点开关、测试账号全部还原(站点 7×1 / 渠道 status=1 / 用户 6)。
+      **未做**:真实收发短信的端到端仍待用户用真号自测(与上一条同)。
+
 - [x] **恢复注册的真实短信 OTP 链路**(2026-09-16,SMSPoh 已可测试、后台已配渠道):
       按上一条留的删除清单**四处全删**,并删掉 `screens/user/FixedOtpScreen.tsx`;
       注册恢复为 `Register →(sms/send)→ VerifyOtp →(sms/verify 换 verifyToken)→ ReferralCode`。

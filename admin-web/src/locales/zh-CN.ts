@@ -1121,6 +1121,9 @@ export default {
       configRemark: '备注',
       sectionBase: '基础配置',
       sectionSecurity: '安全配置',
+      smsConfirmTitle: '确认修改「注册强制短信验证」?',
+      smsConfirmOn: '开启后,App 注册一律要求短信验证码。注意:短信渠道一旦不可用(停用 / 凭证失效 / 服务商故障),注册将全面拒绝,而不是放行。',
+      smsConfirmOff: '关闭后将跟随短信渠道状态 —— 渠道一旦不可用,注册会静默放行、不再要求验证码。这会削弱平台安全,请确认这是你要的。',
       sectionUpload: '上传配置',
       sectionClient: '客户端配置',
       actions: {

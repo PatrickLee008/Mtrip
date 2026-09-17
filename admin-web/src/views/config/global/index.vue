@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue';
-import { message } from 'ant-design-vue';
+import { Modal, message } from 'ant-design-vue';
 import { ReloadOutlined, SaveOutlined } from '@ant-design/icons-vue';
 import { useI18n } from 'vue-i18n';
 import PageContainer from '@/components/PageContainer.vue';
@@ -66,6 +66,24 @@ async function load(): Promise<void> {
   }
 }
 
+/** 注册强制短信验证开关的键名(与 sys_config.config_key 一致) */
+const SMS_REQUIRED_KEY = 'register_sms_required';
+
+/** 二次确认;用户点「取消」返回 false,调用方据此中止保存 */
+function confirmSmsSwitch(turningOn: boolean): Promise<boolean> {
+  return new Promise((resolve) => {
+    Modal.confirm({
+      title: t('config.global.smsConfirmTitle'),
+      content: turningOn ? t('config.global.smsConfirmOn') : t('config.global.smsConfirmOff'),
+      okText: t('common.confirm'),
+      cancelText: t('common.cancel'),
+      okType: turningOn ? 'primary' : 'danger',
+      onOk: () => resolve(true),
+      onCancel: () => resolve(false),
+    });
+  });
+}
+
 async function save(): Promise<void> {
   // 仅提交有变更的配置项(value 统一转字符串)
   const changed: { key: string; value: string }[] = [];
@@ -89,6 +107,16 @@ async function save(): Promise<void> {
   }
   if (!changed.length) {
     message.info(t('common.info'));
+    return;
+  }
+  /*
+   * 安全开关必须二次确认(开、关都确认)。
+   * 关闭它 = 短信渠道不可用时放行注册,是削弱安全的动作,文案要把后果说清楚;
+   * 开启它 = 收紧,但渠道一旦不可用注册会全面拒绝,同样值得让人停一下。
+   * 留痕依赖 `OperationLogMiddleware`:本页只提交变更项,所以日志里就只有这一个键。
+   */
+  const smsSwitch = changed.find((item) => item.key === SMS_REQUIRED_KEY);
+  if (smsSwitch && !(await confirmSmsSwitch(smsSwitch.value === '1'))) {
     return;
   }
   saving.value = true;

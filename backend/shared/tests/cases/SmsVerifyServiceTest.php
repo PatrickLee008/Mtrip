@@ -67,6 +67,12 @@ final class SmsTestQuery
         return $this->row;
     }
 
+    /** `registerSmsRequired()` 走的是 `->value('config_value')`,这里取命中行的同名属性 */
+    public function value(string $column): mixed
+    {
+        return is_object($this->row) ? ($this->row->{$column} ?? null) : null;
+    }
+
     public function insert(array $row): bool
     {
         $this->inserted[] = $row;
@@ -125,16 +131,25 @@ final class SmsTestKit
      * @param object|null $channelRow sys_sms_channel 命中的行(null = 未配置渠道)
      * @param object|null $userRow    user_info 命中的行(null = 该手机号未注册)
      */
+    /** 一行全局配置;`register_sms_required` 默认 '0' = 跟随渠道,保持既有用例语义不变 */
+    public static function configRow(string $registerSmsRequired = '0'): object
+    {
+        return (object) ['config_key' => 'register_sms_required', 'config_value' => $registerSmsRequired];
+    }
+
     public static function service(
         Hyperf\Redis\Redis $redis,
         ?object $channelRow,
         ?object $userRow = null,
+        ?object $configRow = null,
     ): TestableSmsVerifyService {
+        $configRow ??= self::configRow('0');
         $config = new SmsTestConfig();
         Hyperf\DbConnection\Db::$tableResolver = static fn (string $table): object => new SmsTestQuery($userRow);
-        Hyperf\DbConnection\Db::$connectionResolver = static function (string $conn, string $table) use ($channelRow, $userRow): object {
+        Hyperf\DbConnection\Db::$connectionResolver = static function (string $conn, string $table) use ($channelRow, $userRow, $configRow): object {
             return match ($table) {
                 'sys_sms_channel' => new SmsTestQuery($channelRow),
+                'sys_config' => new SmsTestQuery($configRow),
                 'sys_sms_log' => new SmsTestQuery(),
                 default => new SmsTestQuery($userRow),
             };
@@ -170,6 +185,45 @@ MiniTest::add('SmsVerify:没有渠道时视为未开通(注册不被卡住)', st
     $service = SmsTestKit::service(new Hyperf\Redis\Redis(), null);
     MiniTest::assertSame(null, $service->channel(1), '查不到渠道应返回 null');
     MiniTest::assertSame(false, $service->enabled(1), 'enabled=false 时 register 照旧放行');
+});
+
+MiniTest::add('SmsVerify:全局强制开关与渠道状态解耦(registerRequiresSms)', static function (): void {
+    $redis = new Hyperf\Redis\Redis();
+    $channel = SmsTestKit::channelRow();
+
+    // 这条是加开关的**动机**:渠道挂了,但平台开了强制 → 注册仍要 verifyToken,不再静默放行
+    $forcedNoChannel = SmsTestKit::service($redis, null, null, SmsTestKit::configRow('1'));
+    MiniTest::assertSame(false, $forcedNoChannel->enabled(1), '渠道确实不可用');
+    MiniTest::assertSame(true, $forcedNoChannel->registerSmsRequired(), '平台开了强制');
+    MiniTest::assertSame(true, $forcedNoChannel->registerRequiresSms(1), '强制 + 无渠道 → 仍要求短信验证');
+
+    // 旧行为保留:未强制且没渠道 → 放行(否则未配渠道的环境根本注册不了)
+    $followNoChannel = SmsTestKit::service($redis, null, null, SmsTestKit::configRow('0'));
+    MiniTest::assertSame(false, $followNoChannel->registerRequiresSms(1), '跟随渠道 + 无渠道 → 放行');
+
+    // 跟随渠道 + 有渠道 → 要求(即原来的「渠道启用即强制」)
+    $followWithChannel = SmsTestKit::service($redis, $channel, null, SmsTestKit::configRow('0'));
+    MiniTest::assertSame(true, $followWithChannel->registerRequiresSms(1), '跟随渠道 + 有渠道 → 要求');
+});
+
+MiniTest::add('SmsVerify:发码失败的错误码随全局开关切换(50021/50022)', static function (): void {
+    $redis = new Hyperf\Redis\Redis();
+
+    // 不强制 → 50021,App 据此降级跳过验证码页
+    MiniTest::assertThrows(
+        BusinessException::class,
+        static fn () => SmsTestKit::service($redis, null, null, SmsTestKit::configRow('0'))->send(1, '09771234567', 'register', '127.0.0.1'),
+        ErrorCode::SMS_CHANNEL_UNAVAILABLE,
+        '不强制时仍是 50021(可降级)'
+    );
+
+    // 强制 → 50022,App 必须停在注册页报错,不能跳过(跳过去也会被 40111 打回)
+    MiniTest::assertThrows(
+        BusinessException::class,
+        static fn () => SmsTestKit::service($redis, null, null, SmsTestKit::configRow('1'))->send(1, '09771234567', 'register', '127.0.0.1'),
+        ErrorCode::SMS_REQUIRED_UNAVAILABLE,
+        '强制时换成 50022(不可降级)'
+    );
 });
 
 MiniTest::add('SmsVerify:半配的渠道等于没配', static function (): void {
