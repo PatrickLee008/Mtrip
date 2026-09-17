@@ -3,6 +3,20 @@
 > 参考 admin-web 从零搭建平行的 merchant-web(Vue3+Vite+TS+antdv),为商户账号(`merchant_admin`,account_type 1集团/2商户/3门店)落地一套完整仿 admin 的动态 RBAC:独立四表菜单/角色,登录按 `account_type` 下发菜单树+权限集,接口权限继续由 `#[Permission]` 注解按 `perm_key` 联动(与前端 `v-perm` 同一把钥匙)。
 > 承接 12-商家账号体系.md 的二期清单。
 
+## 2026-09-17 侧边栏菜单调整(Stores/Goods 移出 + 物业专属分组)
+
+按用户要求调整商户端侧边栏,5 个待确认点已逐条确认(均为推荐方案):
+
+- [x] **Stores、Goods 移出侧边栏**:只在 `SideMenu.vue` 的 `HIDDEN_PATHS` 隐藏,数据库菜单行、权限键与路由全部保留 —— 工作台「View All Properties」与「所有物业」列表对非酒店物业的 Manage 按钮仍跳 `/store`,不会 404。
+- [x] **Operations 仅在选中具体物业时出现**:子菜单为 Availability & Pricing(`/availability`)、Booking Management(`/order`,从原「经营」分组移入)。未选物业(All Properties)整组隐藏。
+- [x] **新增 HOTEL MANAGEMENT 分组**:仅选中**酒店**物业时显示,含 Hotel Profile 与 Room Types。Hotel Profile 复用既有 `/properties/:id/profile` 页面(与「所有物业」列表 Manage 按钮同一页),入口按当前选中物业动态生成;Room Types 即原 Rooms 菜单改名,路由 `/rooms` 与权限 `mch:rooms:list` 不变。
+- [x] **切回 All Properties 的兜底**:`BasicLayout.selectProperty()` 切换后若当前页面已不在菜单口径内(物业专属页面),直接跳回「所有物业」页。
+- [x] 菜单口径抽到 `src/config/menuSections.ts`(`isMenuPathVisible`),侧边栏与切换兜底共用一份,避免两处漂移;`userStore.visibleMenus` 仍按既有 `module_key` 过滤(房型 600、房量与价格 700 本就是 `module_key='hotel'`)。
+- [x] 菜单改名走增量 `database/merchant/42-merchant-menu-restructure.sql`(守卫式 UPDATE,已 db-apply),`database/seed/04-merchant-menu.sql` 同步为「房型管理 / Room Types」供空库初始化;不改 `module_key`、不新增 menu 行(Hotel Profile 与 `/dashboard`、`/properties` 一样由前端直接挂入口,避免菜单树注册重复路由)。
+- [x] i18n:新增 `sidebar.sections.hotelManagement`(en `HOTEL MANAGEMENT`/zh 酒店管理),`menu.rooms` 改为 Room Types/房型管理;Hotel Profile 复用既有 `properties.profile.title`(en/zh 已是 Hotel Profile/酒店资料)。
+
+验证:用真实 `SideMenu.vue` + 真实 store/i18n/router 喂本地开发库的真实菜单树,在无头 Chrome 里跑三种物业上下文(临时探针已删除)——All Properties 下无 Operations/HOTEL MANAGEMENT/Stores/Goods;选中酒店时两组齐全,Hotel Profile 点击落到 `/properties/5/profile`、Room Types 落到 `/rooms`;选中餐厅时不出现 HOTEL MANAGEMENT,Operations 只剩 Booking Management。该轮实测还抓出一个真实缺陷并已修:**Hotel Profile 的动态路径初版没有业务类型判断,选中餐厅时仍会显示**,现 `hotelProfilePath` 仅在 `business_type === 'hotel'` 时生成。merchant-web 生产构建(vue-tsc + vite build)通过。
+
 ## 2026-09-16 客房管理 Figma 与 PRD 整改
 
 - [x] 进入客房管理提示“物业上下文格式不正确”已修复：原因是酒店选项和 All Properties 列表把 `0` 作为 `X-Mtrip-Property-Id` 发出。现在未选物业时省略该头，有效物业仍显式发送；merchant-web 生产构建通过。

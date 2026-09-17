@@ -145,7 +145,7 @@ export default {
     order: 'Booking Management',
     booking: 'Booking Management',
     goods: 'Goods',
-    rooms: 'Rooms',
+    rooms: 'Room Types',
     availability: 'Availability & Pricing',
     earnings: 'Earnings',
     notifications: 'Notifications',
@@ -185,6 +185,7 @@ export default {
     sections: {
       portfolio: 'Portfolio',
       business: 'Business',
+      hotelManagement: 'HOTEL MANAGEMENT',
       operations: 'Operations',
       team: 'Team',
       system: 'System',

@@ -120,6 +120,42 @@
   将来 App 想「进注册页之前就提示」再加。
 - 真实收发短信的端到端仍待用户用真号自测(与 9/16 那条相同)。
 
+### ★ 2026-09-17(商户端侧边栏菜单调整:Stores/Goods 移出 + 物业专属分组)
+
+**范围**:`merchant-web` 侧边栏分组与菜单可见性。5 个待确认点已向用户逐条确认(均为推荐方案)。
+
+- **Stores、Goods 移出侧边栏**,但只在 `SideMenu.vue` 的 `HIDDEN_PATHS` 隐藏:数据库菜单行、
+  权限键、路由与页面全部保留。理由:`/store` 还被工作台「View All Properties」和「所有物业」
+  列表对**非酒店物业**的 Manage 按钮使用,而 merchant-web 的路由是由菜单树生成的
+  (`router/dynamic.ts` 的 `walk()`),删菜单行会连带删掉 `/store` 路由,这三处会 404。
+- **Operations 仅在选中具体物业时出现**,子菜单 = Availability & Pricing(`/availability`)+
+  Booking Management(`/order`,从「经营」分组移入)。All Properties 下整组隐藏。
+- **新增 HOTEL MANAGEMENT 分组**,仅选中**酒店**物业时显示:Hotel Profile(复用既有
+  `/properties/:id/profile`,入口按当前选中物业动态生成)+ Room Types(原 Rooms 改名,
+  路由 `/rooms` 与权限 `mch:rooms:list` 不变)。
+- **切回 All Properties 的兜底**:`BasicLayout.selectProperty()` 切换后若当前页面已不在菜单
+  口径内,直接跳回「所有物业」页,避免停在一个侧边栏已无入口的页面上。
+- **口径单一来源**:新增 `src/config/menuSections.ts` 的 `isMenuPathVisible(path, selected)`,
+  侧边栏与切换兜底共用。注意它与 `merchant_menu.module_key` 是两层不同过滤:`module_key='hotel'`
+  (房型 600、房量与价格 700)在 `userStore.visibleMenus` 里已按业务模块裁剪,本次只补
+  「必须选中物业」这一层,没有改 `module_key`。
+- **数据库**:改名走增量 `database/merchant/42-merchant-menu-restructure.sql`(守卫式 UPDATE,
+  已用 `scripts/db-apply.sh` 应用),`database/seed/04-merchant-menu.sql` 同步为
+  「房型管理 / Room Types」供空库初始化。**不新增 menu 行**:Hotel Profile 与 `/dashboard`、
+  `/properties` 一样由前端直接挂入口(`item()` 的 always-allowed 分支),否则菜单树会再注册
+  一条与 `dynamic.ts` 硬编码路由重复的 `/properties/:id/profile`。
+- **i18n**:新增 `sidebar.sections.hotelManagement`(en `HOTEL MANAGEMENT` / zh 酒店管理);
+  `menu.rooms` 改 Room Types/房型管理;Hotel Profile 直接复用 `properties.profile.title`。
+
+**验证**:用真实 `SideMenu.vue` + 真实 pinia store / i18n / vue-router,喂本地开发库真实菜单树,
+在无头 Chrome 里渲染三种物业上下文(临时探针已删除,未入库):All Properties 下无
+Operations/HOTEL MANAGEMENT/Stores/Goods;选中酒店时两组齐全且点击 Hotel Profile 落到
+`/properties/5/profile`、Room Types 落到 `/rooms`;选中餐厅时 HOTEL MANAGEMENT 不出现、
+Operations 只剩 Booking Management。**该轮实测抓出一个真实缺陷并修掉**:Hotel Profile 的
+动态路径初版没有业务类型判断,选中餐厅时仍会显示,现 `hotelProfilePath` 仅在
+`business_type === 'hotel'` 时生成。merchant-web 生产构建(vue-tsc + vite build)通过。
+详见[模块13](13-商家端merchant-web落地.md)。
+
 ### ★ 2026-09-17(客房管理「今日可售」看不出非今日订单:根因复核 + 两处修复)
 
 **问题**(用户报):商户新增房型并设好客房总数后,在 APP 下了该房型的订单,商户后台客房管理里

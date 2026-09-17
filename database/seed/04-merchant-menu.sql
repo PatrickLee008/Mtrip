@@ -18,7 +18,7 @@ INSERT IGNORE INTO `merchant_menu` (`id`, `parent_id`, `menu_name`, `menu_name_e
 (300, 0, '门店管理',   'Stores',    'menu.store',     'mch:store:list',  2, '/store',     'store/index',     'ShopOutlined',      3, '1,2,3'),
 (400, 0, '预订管理',   'Booking Management', 'menu.booking', 'mch:order:list',  2, '/order',     'order/index',     'ProfileOutlined',   4, '1,2,3'),
 (500, 0, '门票商品',   'Ticket Products', 'menu.goods', 'mch:goods:list',  2, '/goods',     'goods/index',     'GoldOutlined',      5, '1,2,3'),
-(600, 0, '客房管理',   'Rooms',     'menu.rooms',     'mch:rooms:list',  2, '/rooms',     'rooms/index',     'HomeOutlined',      6, '1,2,3'),
+(600, 0, '房型管理',   'Room Types',     'menu.rooms',     'mch:rooms:list',  2, '/rooms',     'rooms/index',     'HomeOutlined',      6, '1,2,3'),
 (700, 0, '房量与价格', 'Availability & Pricing', 'menu.availability', 'mch:availability:list', 2, '/availability', 'availability/index', 'CalendarOutlined', 7, '1,2,3'),
 (800, 0, '收益结算',   'Earnings',  'menu.earnings',  'mch:earnings:list', 2, '/earnings', 'earnings/index', 'AccountBookOutlined', 8, '1,2,3'),
 (900, 0, '通知中心',   'Notifications', 'menu.notifications', 'mch:notifications:list', 2, '/notifications', 'notifications/index', 'BellOutlined', 9, '1,2,3'),

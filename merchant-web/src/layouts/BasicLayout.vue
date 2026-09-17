@@ -15,6 +15,7 @@ import {
 } from '@ant-design/icons-vue';
 import type { MerchantProperty, MenuNode } from '@/api/types';
 import { useUserStore } from '@/stores/user';
+import { isMenuPathVisible } from '@/config/menuSections';
 import SupportBanner from '@/components/SupportBanner.vue';
 import AppHeader from './components/AppHeader.vue';
 import SideMenu from './components/SideMenu.vue';
@@ -54,7 +55,10 @@ function toggleSwitcher(): void {
 function selectProperty(id: number | null): void {
   userStore.selectProperty(id);
   switcherOpen.value = false;
-  if (!['/dashboard', '/properties'].includes(route.path) && !route.path.startsWith('/properties/') && !containsPath(userStore.visibleMenus, route.path)) {
+  const path = route.path;
+  const alwaysAvailable = ['/dashboard', '/properties'].includes(path) || path.startsWith('/properties/');
+  // 切到 All Properties(或切到非酒店物业)后物业专属菜单会从侧边栏消失,此时把停留在这些页面的用户送回「所有物业」
+  if (!alwaysAvailable && (!isMenuPathVisible(path, userStore.selectedProperty) || !containsPath(userStore.visibleMenus, path))) {
     void router.push('/properties');
   }
 }

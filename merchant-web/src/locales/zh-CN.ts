@@ -144,7 +144,7 @@ export default {
     order: '预订管理',
     booking: '预订管理',
     goods: '商品管理',
-    rooms: '客房管理',
+    rooms: '房型管理',
     availability: '房量与价格',
     earnings: '收益结算',
     notifications: '通知中心',
@@ -184,6 +184,7 @@ export default {
     sections: {
       portfolio: '资产组合',
       business: '经营',
+      hotelManagement: '酒店管理',
       operations: '物业运营',
       team: '团队',
       system: '系统',
