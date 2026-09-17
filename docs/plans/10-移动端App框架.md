@@ -378,3 +378,14 @@ Expo 51 / TypeScript / Zustand / React Navigation 6 / Axios / i18next + react-i1
       (`expo start --web` + headless Chrome 402×874,两种模式各 35 条断言全绿,
       逐屏看过截图,完整版顶栏三枚按钮实测 x=20/298/346,问号确在筛选旁)。
       冒烟时后端没起,金额显示为 EUR(`siteStore.currency` 初值,全局如此),接上网关即为 MMK。
+- 2026-09-17:订房向导缺省入离日期与搜索页口径统一。`components/hotel/booking/bookingFormat.ts`
+  的 `normalizeDates()` 兜底由「明天起 1 晚」(`dayAfter(1)/dayAfter(2)`)改为「**今天起 2 晚**」
+  (`dayAfter(0)/dayAfter(2)`),与 `DatePickerSheet.defaultDateRange(2)` 及完整版/关怀版搜索页默认
+  一致;`useBookingWizard.ts` 与 `navigation/types.ts` 的「缺省时向导用明天起 1 晚」注释同步。
+  **动因**:「我的精选 → 酒店详情 → 订房向导」这条链路只传 `propertyId`
+  (`MyPickScreen.tsx:191` / `MyPickLiteScreen.tsx:174`),向导因此静默把住宿订成明天/后天,
+  而商户在客房管理里看的是"今天"的库存(按日期存),于是"下了单但今日可售没变"被当成 bug 报回来;
+  详情见 `docs/plans/20-客房管理Figma与PRD整改计划.md` 第 12 节与本文件对应的 HANDOFF 顶部条目。
+  **未动**门票下单页 `screens/order/OrderConfirmScreen.tsx` 的同款默认值(门票业务另论)。
+  **验证**:`npm run typecheck` 零报错;`normalizeDates` 用 Node 直跑 TS 源文件跑 6 组断言
+  (缺省 / 空串 / 离店不晚于入住 / 过去日期 / 正常区间原样透传)全绿。未做真机走查。

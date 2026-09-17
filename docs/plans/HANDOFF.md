@@ -1,4 +1,67 @@
 # 会话交接文档(HANDOFF)
+### ★ 2026-09-17(客房管理「今日可售」看不出非今日订单:根因复核 + 两处修复)
+
+**问题**(用户报):商户新增房型并设好客房总数后,在 APP 下了该房型的订单,商户后台客房管理里
+「今日可售」没有变化,像是订单没生效。
+
+**根因(先证伪、再定性,原方案已被推翻)**:
+
+1. **列表只读"今天"那一行,而订单只写入住日那几行**。库存按日期落 `goods_daily_stock`,
+   订单只占「入住日 → 离店前一晚」(`OrderStockService::datesOf`),列表的「今日可售」只查
+   `stock_date = 今天` 的一行(`RoomController::appendAvailability`)。那笔单(订单 id=3,
+   房型 6)入住 **09-17**、离店 09-18,而当时"今天"是 09-16 —— 今天那一行**根本不存在**,
+   列表按房型默认可售配额(`launch_stock` 30)兜底 → 与下单前**一模一样**。这不是丢单:
+   同房型 09-17 的剩余确实由 30 掉到 29;对照组房型 5 的单含今天,它的今日可售确实 40→37。
+   证据:`goods_daily_stock` 当时只有 `sku 6 / 2026-09-17` 一行(由订单 id=3 补建),
+   没有 `sku 6 / 2026-09-16`。
+2. **那笔单为什么是"明天"**:订房向导 `normalizeDates()` 在**拿不到日期**时把兜底写死成
+   「明天起 1 晚」(`dayAfter(1)/dayAfter(2)`),而「我的精选」入口只传 `propertyId`
+   (`MyPickScreen.tsx:191` / `MyPickLiteScreen.tsx:174` → `HotelDetailScreen.tsx:102`)——
+   用户以为订的是"今天",系统静默订成"明天";搜索页默认却是「今天 → 后天」
+   (`defaultDateRange(2)`),两处口径不一致。
+3. **顺带推翻**:原计划的「审核通过时预生成日库存行」**治不了这个现象** —— 生成出来的
+   "今天"那一行 `stock_total` 同样是 30、`sold/locked` 同样是 0,页面还是 30。
+   该方案已放弃(仅"把兜底值固化成真实行",与本次症状无关)。
+
+**修复 A(后端 + merchant-web):客房列表下发并展示未来窗口**
+- `RoomController::appendAvailability` 一次取 `today .. today+7` 的库存行,新增
+  `upcoming_days`(固定 7)、`upcoming_stock_left`(明天起窗口内**未关房**日期的最低剩余)、
+  `upcoming_stock_date`(最低值所在日期,全关房为空串)、`upcoming_sold`(**明天起**窗口内已售+锁定间夜)。
+  无日库存记录的日期仍按房型默认可售配额兜底(与 C 端日历同口径)。
+- merchant-web 卡片在「今日可售」旁显示「未来 7 天最低 29 · 9/18」,`upcoming_sold > 0`
+  (即有非今日订单)时用警示色高亮;助手 `upcomingLabel/upcomingTight` 落在 `presentation.ts`。
+
+**修复 B(client-app):订房向导缺省日期与搜索页口径统一**
+- `bookingFormat.ts::normalizeDates` 兜底由「明天起 1 晚」改为「**今天起 2 晚**」,与
+  `DatePickerSheet.defaultDateRange(2)`(以及完整版/关怀版搜索页)一致;
+  `useBookingWizard.ts` 与 `navigation/types.ts` 的注释同步。
+- 「我的精选 → 酒店详情 → 订房向导」这条不带日期的链路因此不再静默挪到明天。
+
+**验证**
+- 新增 `backend/services/goods-service/test/room-list-availability.php`(13 条断言,已并入
+  `scripts/test-room-remediation.sh` 的 goods-service 用例列表):无订单时今日=未来窗口=默认配额;
+  复刻 `OrderStockService::lock()` 只订明天后,**今日不变、窗口 30→29、最低日期=明天、已订 1 间夜**;
+  关房日不计入最低值(最低日期顺延)。客房整改全套(room-review/room-list-availability/
+  room-content/room-media/room-contract)通过。
+- 质量基线(本机无 pwsh,`scripts/check.ps1` 按等价分步执行并在容器内跑前两步):
+  后端 **390 文件 `php -l` 零错**、shared **97 用例/968 断言全绿**、admin-web build 通过、
+  client-app typecheck 零报错;另跑 merchant-web build 通过。
+- 逻辑断言:`normalizeDates` 6 组(Node 直跑 `bookingFormat.ts`,覆盖缺省/空串/离店不晚于入住/
+  过去日期/正常区间透传)、merchant-web 展示助手 7 组(中英双语 + 空值 + 全关房)。
+- 真库核验(站点 7 / 商户 6,容器内直调 `RoomController::index()`):
+  `room 6 today=28 upcoming=29@2026-09-18`(今天 2 单、明天 1 晚)、`room 5 today=37`;
+  经网关未登录探活 `GET /api/v1/merchant/rooms/list` 返回标准 `40101` 信封。
+- 已 `./mtrip.sh restart goods-service goods-service-app` + `restart gateway`(Swoole 进程启动即
+  加载类,改 PHP 必须重启;`restart` 不刷网关,故网关单独重启),`./mtrip.sh health` 全绿。
+
+**未做 / 遗留**
+1. **没有做登录态浏览器点击走查**:merchant-web(5174)是 Vite dev、改动已 HMR;本轮只做到
+   接口级(真库 Controller 调用)+ 展示助手级断言,页面视觉请在有会话的浏览器里复核一眼。
+2. **"今天"的时区口径仍是隐患**:容器/PHP 为 UTC(`date.timezone` 未配置),后端 `date('Y-m-d')`
+   取的是 UTC 日期,而 C 端传的是设备本地日期;北京时间 00:00–08:00 期间二者差一天,
+   列表的「今日可售/未来窗口」会整体错位一天。本轮未改(需要统一 `TZ` 或由服务端下发"业务今天")。
+3. 门票下单页 `OrderConfirmScreen` 的默认日期仍是「明天起 1 晚」,本轮只统一了酒店订房向导。
+
 ### ★ 2026-09-16(客房默认可售配额回退修复:C 端下单 409「库存不足」根因)
 
 **问题**:`POST /api/v1/app/order/create` 在无日库存记录时抛 `DATA_CONFLICT`(409)「2026-09-16 库存不足」
@@ -2220,7 +2283,7 @@ Mtrip 海外旅游 SaaS 平台:后端 Hyperf 3.1 微服务(backend/)+ 平台管�
 
 ## 2. 当前进度(与 docs/plans/README.md 保持一致)
 
-本任务最新进度：PRD模块12商户管理S0设计及S1～S4核心开发测试已完成；S5～S7尚未开始。S4真实扫码和完整UI、S3完整上传及模块11端到端未验，详见模块15计划及阶段交付报告；下表为历史底座状态。
+本任务最新进度：PRD模块12商户管理S0设计及S1～S4核心开发测试已完成；S5～S7尚未开始。S4真实扫码和完整UI、S3完整上传及模块11端到端未验，详见模块15计划及阶段交付报告；下表为历史底座状态。**2026-09-17 最新一轮为「客房管理看不出非今日订单」的根因复核与修复(A 列表下发未来窗口 / B 订房向导缺省日期统一),见本文件顶部那条 ★。**
 
 **商户账号体系三期(2026-08-31)**:补齐平台对商户的三项管控,详见 [12-商家账号体系.md](./12-商家账号体系.md)「三期任务清单」。
 - **功能模块授权**:新表 `merchant_module_grant` + `merchant_menu.module_key`(''=公共菜单)。可见性口径 ——
@@ -2283,6 +2346,20 @@ Mtrip 海外旅游 SaaS 平台:后端 Hyperf 3.1 微服务(backend/)+ 平台管�
 - **多语言**(vue-i18n,默认/fallback 均 en-US):en-US.ts 为全量词条源,zh-CN.ts 只维护已翻译部分;菜单三字段 `menu_name`(中文)/`menu_name_en`(英文回退)/`i18n_key`(词条 key,目录与页面必填、按钮不占词条);显示名统一走 `locales/menuI18n.ts` 的 `resolveMenuTitle/menuTitle`(i18n_key 命中→t(key),未命中→非中文环境用英文名、中文用中文名);扩展新语言只需前端加语言包+SUPPORTED_LOCALES,菜单数据与后端零改动;详细规范见 `docs/guides/standards/README.md`。
 
 ## 6. 下一步(模块08 部署与网关联调,任务清单见 docs/plans/08-部署与网关.md)
+
+客房可用性可见性下一步(2026-09-17,承接本文件顶部「客房管理今日可售」一条):
+1. **登录态浏览器走查**(merchant-web 5174 已在跑):新建房型 → 审核通过 → APP 订**明天**的房,
+   确认卡片同时显示「今日可售 N」与「未来 7 天最低 N-1 · 次日」并在有占用时高亮;
+   窄屏(≤1280)下新加的这一段是否会挤换行。
+2. **"今天"的时区口径**:容器是 UTC,后端 `date('Y-m-d')` 与 C 端设备本地日期在
+   北京时间 00:00–08:00 会差一天。建议给服务统一 `TZ`(或由服务端下发"业务今天"),
+   涉及 `RoomController::appendAvailability`、`OrderStockService::datesOf`、
+   `HotelController::calendar` 等所有 `date('Y-m-d')` 消费方 —— 属跨服务改动,单独立项。
+3. **门票下单页 `OrderConfirmScreen`** 的默认日期仍是「明天起 1 晚」;若也要与搜索页统一,
+   改它自己的 `dayAfter(1)/dayAfter(2)` 两个初值即可(本轮只动了酒店向导)。
+4. 若发现「未来 7 天」这个窗口不够用(商户想看得更远),`RoomController::UPCOMING_DAYS`
+   是唯一开关;窗口越长,列表查询返回的行数越多,注意 `goods_daily_stock` 的
+   `idx_property_stock`/`idx_stock_date` 命中情况。
 
 client-app 酒店指引下一步(2026-09-16,承接本文件顶部「酒店页用户指引」一条):
 1. **缅文文案找母语者过一遍**(`hotels.guide.*` 共 18 键中的 14 条正文)。

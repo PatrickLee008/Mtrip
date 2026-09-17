@@ -212,3 +212,33 @@
 - 前端契约将 `metrics` 标记为可选/可空，并在唯一赋值入口归一为 `{ totalRooms: 0, roomTypes: [] }`；有效统计继续原样显示，异常结构不再进入模板。
 - 请求失败时同时重置列表、分页总数和统计，避免展示上一物业的残留结果。goods-service 当前标准响应仍返回 `metrics`，无需修改后端接口。
 - 验证：`merchant-web npm run build` 通过；仅保留项目既有的大 chunk 提示。
+
+## 12. 2026-09-17 「今日可售」看不出非今日订单(列表未来窗口 + 向导缺省日期)
+
+**报告**：商户新增房型并设好客房总数，在 APP 下了该房型的订单，客房管理卡片的「今日可售」没有变化。
+
+**根因(不是丢单)**
+- 库存按日期落 `goods_daily_stock`，订单只占「入住日 → 离店前一晚」那一行；卡片上的「今日可售」只读
+  `stock_date = 今天` 的一行。报告里那笔单入住日是**次日**，今天这一行不存在 → 列表回落房型
+  默认可售配额，与下单前完全相同(同一房型次日剩余确实由 30 → 29，属正常扣减)。
+- 那笔单之所以落在"次日"：订房向导在没有入离日期时兜底写死「明天起 1 晚」，而「我的精选」
+  入口不带日期，于是静默订成明天；搜索页默认却是「今天 → 后天」，两处口径不一致。
+- 复核结论：**"审核通过时预生成日库存行"治不了本现象**(生成出的今天那行同样是 30)，不采纳。
+
+**改动**
+- 契约：`GET /merchant/rooms/list` 每行新增 `upcoming_days`(固定 7)、`upcoming_stock_left`
+  (明天起窗口内未关房日期的最低剩余)、`upcoming_stock_date`(最低值所在日期，全关房为空串)、
+  `upcoming_sold`(**明天起**窗口内已售+锁定间夜)。无日库存记录的日期仍按 `RoomDefaults::stock()` 兜底，
+  与 C 端日历同口径；商户主动关房的日期不计入最低值。
+- merchant-web：卡片在「今日可售」旁显示「未来 7 天最低 29 · 9/18」，`upcoming_sold > 0`
+  (窗口内有占用)时用警示色高亮；助手 `upcomingLabel/upcomingTight` 落在 `presentation.ts`。
+- client-app：`normalizeDates()` 兜底统一为「今天起 2 晚」，与 `defaultDateRange(2)` 对齐。
+
+**验收**
+- 新增 `backend/services/goods-service/test/room-list-availability.php`(13 条断言，已并入
+  `scripts/test-room-remediation.sh`)：无订单时今日=窗口=默认配额；只订明天时今日不变、
+  窗口 30→29、最低日期=明天、已订 1 间夜；关房日被跳过。
+- 质量基线(等价分步)：390 文件 `php -l` 零错、shared 97/968、admin-web build、
+  merchant-web build、client-app typecheck 全绿。
+- 真库(站点 7/商户 6)：`room 6 today=28 upcoming=29@2026-09-18`、`room 5 today=37`。
+- 遗留见 `docs/plans/HANDOFF.md` 顶部那条(浏览器走查、"今天"的 UTC/本地时区口径、门票页默认日期)。

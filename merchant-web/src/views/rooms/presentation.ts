@@ -9,6 +9,23 @@ export function areaLabel(room: Partial<MerchantRoom>) {
   if (!Number.isFinite(value) || value <= 0) return room.area || '-';
   return `${Number((room.area_unit === 'sqft' ? value / 0.09290304 : value).toFixed(2))} ${room.area_unit === 'sqft' ? 'sqFt' : 'sqm'}`;
 }
+/**
+ * 「未来 N 天最低可售 29 · 9/18」。
+ *
+ * 库存按日期落库,只订明天/后天的订单不会动「今日可售」,所以卡片必须再给一个未来窗口,
+ * 商户才看得出非今日订单(见 docs/plans/20 与 RoomController::appendAvailability)。
+ */
+export function upcomingLabel(room: Partial<MerchantRoom>, tr: (en: string, zh: string) => string) {
+  const left = room.upcoming_stock_left;
+  if (left === undefined || left === null) return '';
+  const [, month, day] = String(room.upcoming_stock_date || '').split('-');
+  const date = month && day ? ` · ${Number(month)}/${Number(day)}` : '';
+  return `${tr(`Next ${room.upcoming_days || 7} days low`, `未来 ${room.upcoming_days || 7} 天最低`)} ${Number(left)}${date}`;
+}
+/** 未来窗口内已有售出/占用(间夜 > 0)= 有非今日订单,卡片给个警示色 */
+export function upcomingTight(room: Partial<MerchantRoom>) {
+  return Number(room.upcoming_sold ?? 0) > 0;
+}
 export const roomAmenities = ['wifi', 'air_conditioning', 'tv', 'mini_bar', 'safe', 'balcony', 'bathtub', 'kitchenette', 'pool_access', 'coffee_machine', 'hair_dryer', 'blackout_curtains'];
 export const amenityLabels: Record<string, [string, string]> = {
   wifi: ['High Speed Wi-Fi', '高速 Wi-Fi'], air_conditioning: ['Air Conditioning', '空调'], tv: ['TV', '电视'], mini_bar: ['Mini Bar', '迷你吧'], safe: ['Safe', '保险箱'], balcony: ['Balcony', '阳台'], bathtub: ['Bathtub', '浴缸'], kitchenette: ['Kitchenette', '小厨房'], pool_access: ['Pool Access', '泳池使用权'], coffee_machine: ['Coffee Machine', '咖啡机'], hair_dryer: ['Hair Dryer', '吹风机'], blackout_curtains: ['Blackout Curtains', '遮光窗帘'],

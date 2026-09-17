@@ -97,7 +97,7 @@ export type RootStackParamList = {
   HotelBooking:
     | {
         roomKey?: string;
-        /** 搜索页选好的入离日期(`YYYY-MM-DD`),缺省时向导用明天起 1 晚 */
+        /** 搜索页选好的入离日期(`YYYY-MM-DD`),缺省时向导用今天起 2 晚(与搜索页默认口径一致) */
         checkIn?: string;
         checkOut?: string;
         /** 真实物业 id;带上即「真实模式」 */

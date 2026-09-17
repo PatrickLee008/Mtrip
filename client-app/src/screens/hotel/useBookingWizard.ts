@@ -115,7 +115,8 @@ export function useBookingWizard({ params, successRoute, enableMultiStay = true 
   const [step, setStep] = useState<BookingStepKey>('dates');
   /**
    * 入离日期优先用搜索页选好的那组(`HotelResults → HotelDetail → 这里` 透传);
-   * 没带、或带来的是过去的日期(后端 `create` 会以「使用日期不能早于今天」拒掉)就用明天起 1 晚。
+   * 没带、或带来的是过去的日期(后端 `create` 会以「使用日期不能早于今天」拒掉)就用今天起 2 晚
+   * —— 与搜索页 `defaultDateRange(2)` 同一口径,别再默默挪到明天(见 `normalizeDates` 注释)。
    */
   const initialDates = useMemo(() => normalizeDates(params?.checkIn, params?.checkOut), [
     params?.checkIn,

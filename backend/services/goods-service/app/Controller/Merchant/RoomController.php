@@ -23,6 +23,13 @@ use Mtrip\Shared\Support\Result;
  */
 class RoomController extends AbstractAdminController
 {
+    /**
+     * 列表「未来窗口」天数:今天之后 N 天内最低可售。
+     * 库存按日期落 goods_daily_stock,只订明天/后天的订单不会改动今天的数字,
+     * 所以列表必须额外给出未来窗口,否则商户在客房管理里完全看不出这类订单(见 docs/plans/20)。
+     */
+    private const UPCOMING_DAYS = 7;
+
     /** 酒店下拉选项:仅返回当前账号可管理且 KYC 已通过的物业 */
     public function hotelOptions(): array
     {
@@ -332,30 +339,71 @@ class RoomController extends AbstractAdminController
         return $row;
     }
 
+    /**
+     * 列表附加「今日可售」与「未来 7 天(明天起)最低可售」。
+     *
+     * 无日库存记录的日期一律按房型默认可售配额兜底(与 C 端日历同口径);
+     * 未来窗口里商户主动关房的日期不计入最低值(全部关房则记 0)。
+     */
     private function appendAvailability(array $rows): array
     {
         if ($rows === []) {
             return [];
         }
         $today = date('Y-m-d');
+        $windowEnd = date('Y-m-d', strtotime("{$today} +" . self::UPCOMING_DAYS . ' days'));
         $skuIds = array_map(static fn (array $row) => (int) $row['id'], $rows);
-        $stock = Db::table('goods_daily_stock')
+        $days = [];
+        foreach (Db::table('goods_daily_stock')
             ->where('sku_type', 1)
             ->whereIn('sku_id', $skuIds)
-            ->where('stock_date', $today)
+            ->whereBetween('stock_date', [$today, $windowEnd])
             ->whereNull('deleted_at')
-            ->get(['sku_id', 'stock_total', 'stock_sold', 'stock_locked', 'is_closed'])
-            ->keyBy('sku_id');
+            ->get(['sku_id', 'stock_date', 'stock_total', 'stock_sold', 'stock_locked', 'is_closed']) as $stockRow) {
+            $days[(int) $stockRow->sku_id][(string) $stockRow->stock_date] = (array) $stockRow;
+        }
 
-        return array_map(static function (array $row) use ($stock) {
-            $day = $stock[(int) $row['id']] ?? null;
-            $total = $day !== null ? (int) $day->stock_total : RoomDefaults::stock($row);
-            $sold = $day !== null ? (int) $day->stock_sold : 0;
-            $locked = $day !== null ? (int) $day->stock_locked : 0;
-            $row['today_stock_total'] = $total;
-            $row['today_stock_left'] = (int) ($day !== null && (int) $day->is_closed === 1 ? 0 : max(0, $total - $sold - $locked));
+        return array_map(static function (array $row) use ($days, $today) {
+            $skuId = (int) $row['id'];
+            $day = $days[$skuId][$today] ?? null;
+            $row['today_stock_total'] = $day !== null ? (int) $day['stock_total'] : RoomDefaults::stock($row);
+            $row['today_stock_left'] = self::stockLeft($row, $day);
+
+            $lowest = null;
+            $occupied = 0;
+            for ($offset = 1; $offset <= self::UPCOMING_DAYS; ++$offset) {
+                $date = date('Y-m-d', strtotime("{$today} +{$offset} days"));
+                $windowDay = $days[$skuId][$date] ?? null;
+                if ($windowDay !== null) {
+                    $occupied += (int) $windowDay['stock_sold'] + (int) $windowDay['stock_locked'];
+                    if ((int) $windowDay['is_closed'] === 1) {
+                        continue;
+                    }
+                }
+                $left = self::stockLeft($row, $windowDay);
+                if ($lowest === null || $left < $lowest['left']) {
+                    $lowest = ['date' => $date, 'left' => $left];
+                }
+            }
+            $row['upcoming_days'] = self::UPCOMING_DAYS;
+            $row['upcoming_stock_left'] = $lowest !== null ? $lowest['left'] : 0;
+            $row['upcoming_stock_date'] = $lowest !== null ? $lowest['date'] : '';
+            // 窗口内已售+锁定合计(间夜):非今日订单的"看得见"信号,前端据此高亮
+            $row['upcoming_sold'] = $occupied;
             return $row;
         }, $rows);
+    }
+
+    /** 单日剩余可售:无记录按默认配额,关房为 0 */
+    private static function stockLeft(array $room, ?array $day): int
+    {
+        if ($day === null) {
+            return RoomDefaults::stock($room);
+        }
+        if ((int) $day['is_closed'] === 1) {
+            return 0;
+        }
+        return max(0, (int) $day['stock_total'] - (int) $day['stock_sold'] - (int) $day['stock_locked']);
     }
 
     private function pluckNames(string $table, array $ids, string $nameColumn): array
