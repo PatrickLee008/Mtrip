@@ -173,8 +173,8 @@
   侧边栏与切换兜底共用。注意它与 `merchant_menu.module_key` 是两层不同过滤:`module_key='hotel'`
   (房型 600、房量与价格 700)在 `userStore.visibleMenus` 里已按业务模块裁剪,本次只补
   「必须选中物业」这一层,没有改 `module_key`。
-- **数据库**:改名走增量 `database/merchant/42-merchant-menu-restructure.sql`(守卫式 UPDATE,
-  已用 `scripts/db-apply.sh` 应用),`database/seed/04-merchant-menu.sql` 同步为
+- **数据库**:改名走增量 `database/migrations/V20260918130000__merchant-menu-restructure.sql`
+  (守卫式 UPDATE,已用 `scripts/db-apply.sh` 应用),`database/seed/04-merchant-menu.sql` 同步为
   「房型管理 / Room Types」供空库初始化。**不新增 menu 行**:Hotel Profile 与 `/dashboard`、
   `/properties` 一样由前端直接挂入口(`item()` 的 always-allowed 分支),否则菜单树会再注册
   一条与 `dynamic.ts` 硬编码路由重复的 `/properties/:id/profile`。

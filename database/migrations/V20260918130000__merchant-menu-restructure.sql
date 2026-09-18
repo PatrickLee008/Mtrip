@@ -2,7 +2,7 @@
 SET NAMES utf8mb4;
 
 -- ============================================================
--- 增量 42:商户端菜单结构调整(Room Types 改名 + Hotel Profile 入口)
+-- 商户端菜单结构调整(Room Types 改名 + Hotel Profile 入口)
 -- 需求源:用户 2026-09-16 菜单调整(Stores/Goods 移出侧边栏、Operations 仅选中物业时显示、
 --         新增 HOTEL MANAGEMENT 分组)
 -- 库:mtrip_business;幂等(守卫式 UPDATE)

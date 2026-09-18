@@ -12,7 +12,7 @@
 - [x] **新增 HOTEL MANAGEMENT 分组**:仅选中**酒店**物业时显示,含 Hotel Profile 与 Room Types。Hotel Profile 复用既有 `/properties/:id/profile` 页面(与「所有物业」列表 Manage 按钮同一页),入口按当前选中物业动态生成;Room Types 即原 Rooms 菜单改名,路由 `/rooms` 与权限 `mch:rooms:list` 不变。
 - [x] **切回 All Properties 的兜底**:`BasicLayout.selectProperty()` 切换后若当前页面已不在菜单口径内(物业专属页面),直接跳回「所有物业」页。
 - [x] 菜单口径抽到 `src/config/menuSections.ts`(`isMenuPathVisible`),侧边栏与切换兜底共用一份,避免两处漂移;`userStore.visibleMenus` 仍按既有 `module_key` 过滤(房型 600、房量与价格 700 本就是 `module_key='hotel'`)。
-- [x] 菜单改名走增量 `database/merchant/42-merchant-menu-restructure.sql`(守卫式 UPDATE,已 db-apply),`database/seed/04-merchant-menu.sql` 同步为「房型管理 / Room Types」供空库初始化;不改 `module_key`、不新增 menu 行(Hotel Profile 与 `/dashboard`、`/properties` 一样由前端直接挂入口,避免菜单树注册重复路由)。
+- [x] 菜单改名走增量 `database/migrations/V20260918130000__merchant-menu-restructure.sql`(守卫式 UPDATE,已 db-apply),`database/seed/04-merchant-menu.sql` 同步为「房型管理 / Room Types」供空库初始化;不改 `module_key`、不新增 menu 行(Hotel Profile 与 `/dashboard`、`/properties` 一样由前端直接挂入口,避免菜单树注册重复路由)。
 - [x] i18n:新增 `sidebar.sections.hotelManagement`(en `HOTEL MANAGEMENT`/zh 酒店管理),`menu.rooms` 改为 Room Types/房型管理;Hotel Profile 复用既有 `properties.profile.title`(en/zh 已是 Hotel Profile/酒店资料)。
 
 验证:用真实 `SideMenu.vue` + 真实 store/i18n/router 喂本地开发库的真实菜单树,在无头 Chrome 里跑三种物业上下文(临时探针已删除)——All Properties 下无 Operations/HOTEL MANAGEMENT/Stores/Goods;选中酒店时两组齐全,Hotel Profile 点击落到 `/properties/5/profile`、Room Types 落到 `/rooms`;选中餐厅时不出现 HOTEL MANAGEMENT,Operations 只剩 Booking Management。该轮实测还抓出一个真实缺陷并已修:**Hotel Profile 的动态路径初版没有业务类型判断,选中餐厅时仍会显示**,现 `hotelProfilePath` 仅在 `business_type === 'hotel'` 时生成。merchant-web 生产构建(vue-tsc + vite build)通过。
