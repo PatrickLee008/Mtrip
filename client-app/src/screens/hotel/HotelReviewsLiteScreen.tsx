@@ -19,20 +19,29 @@
  * 落在 `hotels.lite.reviews.items.*`。Helpful / Report 没有接口,走 comingSoon。
  */
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTranslation } from 'react-i18next';
 
+import { fetchHotelDetail } from '@/api/goods';
 import { tempCoverFor } from '@/assets/tempImages';
 import HomeIcon from '@/components/home/HomeIcon';
+import LiteAiSummary from '@/components/hotel/lite/LiteAiSummary';
+import LiteDetailBottomBar, {
+  LITE_DETAIL_BAR_HEIGHT,
+} from '@/components/hotel/lite/LiteDetailBottomBar';
 import { liteShared } from '@/components/hotel/lite/liteShared';
 import { colors } from '@/config/theme';
 import { fonts } from '@/config/typography';
 import type { RootStackParamList } from '@/navigation/types';
-import { DETAIL_REVIEW_SCORES, DETAIL_REVIEW_SUMMARY } from '@/screens/hotel/detailDemo';
+import {
+  DETAIL_DEMO,
+  DETAIL_REVIEW_SCORES,
+  DETAIL_REVIEW_SUMMARY,
+} from '@/screens/hotel/detailDemo';
 import { useCommonStore } from '@/store/commonStore';
 
 /** 设计稿三张评论卡:分数 + 是否带图墙 + 是否有商家回复(文案在 i18n) */
@@ -46,8 +55,26 @@ export default function HotelReviewsLiteScreen() {
   const { t, i18n } = useTranslation();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const showToast = useCommonStore((s) => s.showToast);
+  const params = useRoute<RouteProp<RootStackParamList, 'HotelReviewsLite'>>().params;
 
   const comingSoon = () => showToast(t('home.comingSoon'));
+
+  /**
+   * 本页的评价内容全是静态的(后端没有评价接口),这一次请求**只为底栏那行起价**。
+   * 拿不到就只是不画金额那一行,不挡页面 —— 不给评价内容加载态。
+   */
+  const [priceFrom, setPriceFrom] = useState(0);
+  useEffect(() => {
+    let alive = true;
+    void fetchHotelDetail(params.id)
+      .then((d) => {
+        if (alive) setPriceFrom(d.minPrice ?? 0);
+      })
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, [params.id]);
 
   return (
     <View style={liteShared.root}>
@@ -63,7 +90,7 @@ export default function HotelReviewsLiteScreen() {
 
         <ScrollView
           style={liteShared.flex}
-          contentContainerStyle={liteShared.main}
+          contentContainerStyle={[liteShared.main, styles.mainWithBar]}
           showsVerticalScrollIndicator={false}
         >
           {/* 总览 */}
@@ -96,6 +123,8 @@ export default function HotelReviewsLiteScreen() {
                 <Text style={styles.scoreValue}>{row.score}</Text>
               </View>
             ))}
+
+            <LiteAiSummary />
           </View>
 
           {/* 评论卡 */}
@@ -177,11 +206,20 @@ export default function HotelReviewsLiteScreen() {
           ))}
         </ScrollView>
       </SafeAreaView>
+
+      <LiteDetailBottomBar
+        priceFrom={priceFrom}
+        discountPercent={DETAIL_DEMO.discountPercent}
+        onPress={() => navigation.navigate('HotelDetailLite', { id: params.id })}
+      />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  /* 底栏是绝对定位的,给滚动区留出它的高度 */
+  mainWithBar: { paddingBottom: LITE_DETAIL_BAR_HEIGHT + 24 },
+
   score: { fontFamily: fonts.interBold, fontSize: 40, lineHeight: 48, color: colors.primary },
   scoreRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   scoreLabel: { width: 110 },

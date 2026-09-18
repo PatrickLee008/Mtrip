@@ -1,10 +1,9 @@
 /**
- * 关怀模式酒店详情页(Figma section `Hotel Details Lite` `2352:5591`)
+ * 关怀模式酒店详情页(Figma `Hotel Details Lite` / `2642:10749`,含多房间底栏)
  *
- * 两张稿同一页两态:
- *   单选 `2492:10399`「Choose a Room」—— 每张房卡右下角一枚 Choose,选完直接进订房向导;
- *   多选 `2707:13098`「Choose Multiple Room」—— 房卡换成加减器,底部多一条合计栏(Total Price +
- *   购物车 + Continue)。标题右侧的链接在两态之间来回切(`+ Choose Single` / `+ Choose Multiple`)。
+ * ⚠️ **版式几经反复,以这一版为准**:09-18 曾按 `2540:16882` 改成
+ * 「Hero 图库 + 评分行 + 整宽封面房卡 + Read Policies」,用户实际看过后判定与设计稿差太多,
+ * 已按 `2642:10749` 改回**文字顶栏 + 标题卡 + 横排房卡**。别再照 `2540:16882` 改回去。
  *
  * 与完整模式 `HotelDetailScreen`(94:438)的关系:完整版是「图库 + 六个页签」,
  * 关怀版把首屏收成「标题卡 + 房型列表」,设施 / 周边 / 评价挪到「View Hotel Detail」那一页
@@ -14,17 +13,19 @@
  *   页面   底色 --background;Main pt80 px16 pb16 gap24(顶栏绝对定位在状态栏下)
  *   顶栏   px20 py16:左 20 返回 + 「Hotel Details」Outfit 600/24;右「Hotel Policy」按钮
  *          (20 文档图标 + Inter 600/16 主色)
- *   标题卡 白底 1px --secondary 圆角 24 padding 21 gap12,投影 0/1 blur1 黑 5%:
+ *   标题卡 `2642:10751` 白底 1px --secondary 圆角 24 padding 21 gap12,投影 0/1 blur1 黑 5%:
  *          酒店名 Inter 600/24/32 → 地址(16 定位图标 + Inter 400/14/24 --text-2)
- *          → 底行 See Map(Inter 600/16 主色 + 20 地图图标)/ View Hotel Detail(Outfit 600/16 主色)
- *   区标题 「Choose a Room」Outfit 600/24;房卡见 components/hotel/lite/LiteRoomCard
- *   合计栏 白底、上边框 rgba(196,197,215,.3)、px20 pt17 pb16:
- *          左 Total Price(Inter 600/12)+ 金额(Inter 600/20/24 主色);
- *          右 购物车(1px 主色描边圆角 12,40 图标,右上角计数气泡)+ Continue(主色圆角 12 px32 py16)
+ *          → 底行 See Map(Inter 600/16/20 主色 + 20 地图图标,px12 gap8)/
+ *            View Hotel Detail(Outfit 600/16/24 主色)
+ *   区标题 「Choose a Room」Outfit 600/24/24;房卡见 components/hotel/lite/LiteRoomCard
+ *   底栏   `2863:7627` 白底、上边框 rgba(196,197,215,.3)、px20 pt17 pb16:
+ *          左 Total Price(Inter 600/12/16)+ 金额(Inter 600/16/24 主色)+ -N% TODAY
+ *            (Inter 700/10/15 #BA1A1A);
+ *          右 购物车(1px 主色描边圆角 12 p12,32 图标,角标 left31/top-8/w24/r99)
+ *            + Continue(主色圆角 12 px32 py16,Inter 700/20/24 白)
  *
- * **多选的合计只是把「单价 × 间数」加起来**:后端一单只收一个 sku(见 HANDOFF 订房那条),
- * 所以 Continue 仍带**第一个选中的房型**进订房向导,其余间数只体现在这一屏的合计上。
- * 真正的多房间下单要等订房流程 Lite 版与后端多 sku 支持,这里不假装能下多间。
+ * ⚠️ **多房间的合计只是展示**:后端 `order/create` **一单只收一个 sku**,
+ * Continue 仍带**第一个**选中的房型进订房向导。这是刻意的,不是没接完。
  */
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
@@ -38,14 +39,18 @@ import { fetchHotelDetail } from '@/api/goods';
 import { tempCoverFor } from '@/assets/tempImages';
 import { ErrorView, LoadingView } from '@/components/common/StateViews';
 import HomeIcon from '@/components/home/HomeIcon';
-import LiteRoomCard, { type RoomCardMode } from '@/components/hotel/lite/LiteRoomCard';
+import LiteRoomCard from '@/components/hotel/lite/LiteRoomCard';
 import { PAGE_PADDING, colors, radius, shadows } from '@/config/theme';
 import { fonts } from '@/config/typography';
 import type { RootStackParamList } from '@/navigation/types';
+import { DETAIL_DEMO } from '@/screens/hotel/detailDemo';
 import { useCommonStore } from '@/store/commonStore';
 import { useSiteStore } from '@/store/siteStore';
 import type { GoodsDetail, GoodsSku } from '@/types/models';
 import { formatMoney } from '@/utils/format';
+
+/** 合计栏高(pt17 + pb16 + 按钮 56),滚动区据此留白 */
+const BAR_HEIGHT = 89;
 
 export default function HotelDetailLiteScreen() {
   const { t } = useTranslation();
@@ -57,8 +62,7 @@ export default function HotelDetailLiteScreen() {
   const [detail, setDetail] = useState<GoodsDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [mode, setMode] = useState<RoomCardMode>('single');
-  /** 多选态的「房型 id → 间数」 */
+  /** 多房间选择:房型 id -> 间数 */
   const [picked, setPicked] = useState<Record<number, number>>({});
 
   const comingSoon = () => showToast(t('home.comingSoon'));
@@ -79,12 +83,10 @@ export default function HotelDetailLiteScreen() {
     void load();
   }, [load]);
 
-  const rooms = detail?.skus ?? [];
-
-  /** 多选合计 = Σ 单价 × 间数 */
+  const rooms = useMemo(() => detail?.skus ?? [], [detail]);
+  /** 合计 = Σ 单价 × 间数;间数与购物车角标同源 */
   const total = useMemo(
-    () =>
-      rooms.reduce((sum, sku) => sum + Number(sku.base_price) * (picked[sku.id] ?? 0), 0),
+    () => rooms.reduce((sum, sku) => sum + Number(sku.base_price) * (picked[sku.id] ?? 0), 0),
     [rooms, picked],
   );
   const pickedCount = useMemo(
@@ -92,6 +94,7 @@ export default function HotelDetailLiteScreen() {
     [picked],
   );
 
+  /* Hook 必须全部跑完再早退,否则渲染分支之间 Hook 数量不一致 */
   if (loading) return <LoadingView />;
   if (error || !detail) return <ErrorView message={error} onRetry={() => void load()} />;
 
@@ -125,7 +128,7 @@ export default function HotelDetailLiteScreen() {
 
         <ScrollView
           style={styles.flex}
-          contentContainerStyle={[styles.main, mode === 'multi' && styles.mainWithBar]}
+          contentContainerStyle={[styles.main, pickedCount > 0 && styles.mainWithBar]}
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.titleCard}>
@@ -142,7 +145,7 @@ export default function HotelDetailLiteScreen() {
                 onPress={comingSoon}
                 hitSlop={6}
               >
-                <Text style={styles.linkText}>{t('hotels.lite.seeMap')}</Text>
+                <Text style={styles.mapText}>{t('hotels.lite.seeMap')}</Text>
                 <HomeIcon name="map" size={20} color={colors.primary} />
               </Pressable>
               <Pressable
@@ -155,23 +158,7 @@ export default function HotelDetailLiteScreen() {
             </View>
           </View>
 
-          <View style={styles.roomsHead}>
-            <Text style={styles.roomsTitle}>
-              {t(mode === 'single' ? 'hotels.lite.chooseRoom' : 'hotels.lite.chooseMultiRoom')}
-            </Text>
-            <Pressable
-              style={({ pressed }) => pressed && styles.pressed}
-              onPress={() => {
-                setMode((prev) => (prev === 'single' ? 'multi' : 'single'));
-                setPicked({});
-              }}
-              hitSlop={6}
-            >
-              <Text style={styles.modeLink}>
-                {t(mode === 'single' ? 'hotels.lite.switchMulti' : 'hotels.lite.switchSingle')}
-              </Text>
-            </Pressable>
-          </View>
+          <Text style={styles.roomsTitle}>{t('hotels.lite.chooseRoom')}</Text>
 
           <View style={styles.rooms}>
             {rooms.map((sku, index) => (
@@ -182,8 +169,6 @@ export default function HotelDetailLiteScreen() {
                 coverSource={tempCoverFor(index)}
                 /* 设计稿第一张卡挂 Bestseller;接口没有这个标记,按「排序最前」等价处理 */
                 badge={index === 0 ? t('hotels.lite.bestseller') : null}
-                mode={mode}
-                quantity={picked[sku.id] ?? 0}
                 onSeeRoom={(room) =>
                   navigation.navigate('RoomDetailLite', {
                     goodsId: detail.id,
@@ -192,9 +177,16 @@ export default function HotelDetailLiteScreen() {
                     checkOut: params.checkOut,
                   })
                 }
-                onChoose={goBooking}
-                onChangeQuantity={(room, quantity) =>
-                  setPicked((prev) => ({ ...prev, [room.id]: Math.max(0, quantity) }))
+                /* Choose = 加入选择(置 1 间),之后那枚按钮就地变成加减器 */
+                onChoose={(room) => setPicked((prev) => ({ ...prev, [room.id]: 1 }))}
+                quantity={picked[sku.id] ?? 0}
+                onChangeQuantity={(room, qty) =>
+                  setPicked((prev) => {
+                    const next = { ...prev };
+                    if (qty <= 0) delete next[room.id];
+                    else next[room.id] = qty;
+                    return next;
+                  })
                 }
               />
             ))}
@@ -205,13 +197,20 @@ export default function HotelDetailLiteScreen() {
         </ScrollView>
       </SafeAreaView>
 
-      {/* 多选态的合计栏 */}
-      {mode === 'multi' ? (
+      {/**
+       * 多房间合计栏(`2863:7627`),选中任一房型才出现。
+       * ⚠️ **合计只是展示**:后端 `order/create` 一单只收一个 sku,Continue 仍带**第一个**
+       * 选中的房型进订房向导 —— 真正的一单多房型要等后端支持,别以为这里已经能下多间。
+       */}
+      {pickedCount > 0 ? (
         <SafeAreaView style={styles.bottomBar} edges={['bottom']}>
           <View style={styles.bottomInner}>
             <View>
               <Text style={styles.totalLabel}>{t('hotels.lite.totalPrice')}</Text>
               <Text style={styles.totalValue}>{formatMoney(total, currency)}</Text>
+              <Text style={styles.totalDiscount}>
+                {t('hotels.detail.discountToday', { percent: DETAIL_DEMO.discountPercent })}
+              </Text>
             </View>
 
             <View style={styles.bottomActions}>
@@ -220,21 +219,14 @@ export default function HotelDetailLiteScreen() {
                 onPress={comingSoon}
                 hitSlop={6}
               >
-                <HomeIcon name="cart" size={28} color={colors.primary} />
-                {pickedCount > 0 ? (
-                  <View style={styles.cartBadge}>
-                    <Text style={styles.cartBadgeText}>{pickedCount}</Text>
-                  </View>
-                ) : null}
+                <HomeIcon name="cart" size={32} color={colors.primary} />
+                <View style={styles.cartBadge}>
+                  <Text style={styles.cartBadgeText}>{pickedCount}</Text>
+                </View>
               </Pressable>
 
               <Pressable
-                style={({ pressed }) => [
-                  styles.continueBtn,
-                  pickedCount === 0 && styles.continueDisabled,
-                  pressed && pickedCount > 0 && styles.pressed,
-                ]}
-                disabled={pickedCount === 0}
+                style={({ pressed }) => [styles.continueBtn, pressed && styles.pressed]}
                 onPress={() => {
                   const first = rooms.find((sku) => (picked[sku.id] ?? 0) > 0);
                   if (first) goBooking(first);
@@ -256,6 +248,7 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   pressed: { opacity: 0.85 },
 
+  /* ---- 顶栏 ---- */
   topBar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -275,9 +268,10 @@ const styles = StyleSheet.create({
   policyText: { fontFamily: fonts.interSemi, fontSize: 16, lineHeight: 24, color: colors.primary },
 
   main: { paddingHorizontal: PAGE_PADDING, paddingBottom: 16, gap: 24 },
-  /* 合计栏是绝对定位的,多选态给列表留出它的高度 */
-  mainWithBar: { paddingBottom: 120 },
+  /* 合计栏是绝对定位的,选了房就给列表留出它的高度 */
+  mainWithBar: { paddingBottom: BAR_HEIGHT + 16 },
 
+  /* ---- 标题卡 ---- */
   titleCard: {
     width: '100%',
     padding: 21,
@@ -300,7 +294,7 @@ const styles = StyleSheet.create({
   },
   linkRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
   mapLink: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12 },
-  linkText: {
+  mapText: {
     fontFamily: fonts.interSemi,
     fontSize: 16,
     lineHeight: 20,
@@ -309,17 +303,8 @@ const styles = StyleSheet.create({
   },
   viewDetail: { fontFamily: fonts.outfitSemi, fontSize: 16, lineHeight: 24, color: colors.primary },
 
-  roomsHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
-  roomsTitle: {
-    flex: 1,
-    minWidth: 0,
-    fontFamily: fonts.outfitSemi,
-    fontSize: 24,
-    lineHeight: 28,
-    color: colors.heading,
-  },
-  modeLink: { fontFamily: fonts.interSemi, fontSize: 16, lineHeight: 24, color: colors.primary },
-
+  /* ---- 房型区 ---- */
+  roomsTitle: { fontFamily: fonts.outfitSemi, fontSize: 24, lineHeight: 24, color: colors.heading },
   rooms: { gap: 16 },
   emptyRooms: {
     paddingVertical: 24,
@@ -330,6 +315,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 
+  /* ---- 多房间合计栏(设计稿 `2863:7627`) ---- */
   bottomBar: {
     position: 'absolute',
     left: 0,
@@ -349,33 +335,38 @@ const styles = StyleSheet.create({
     paddingBottom: 16,
   },
   totalLabel: { fontFamily: fonts.interSemi, fontSize: 12, lineHeight: 16, color: colors.heading },
-  totalValue: { fontFamily: fonts.interSemi, fontSize: 20, lineHeight: 24, color: colors.primary },
+  totalValue: { fontFamily: fonts.interSemi, fontSize: 16, lineHeight: 24, color: colors.primary },
+  totalDiscount: {
+    fontFamily: fonts.interBold,
+    fontSize: 10,
+    lineHeight: 15,
+    color: colors.emergencyFg,
+  },
 
   bottomActions: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   cartBtn: {
-    width: 56,
-    height: 56,
     alignItems: 'center',
     justifyContent: 'center',
+    padding: 12,
     borderRadius: radius.btn,
     borderWidth: 1,
     borderColor: colors.primary,
   },
   cartBadge: {
     position: 'absolute',
-    right: 4,
+    left: 31,
     top: -8,
     minWidth: 24,
-    paddingHorizontal: 6,
+    paddingHorizontal: 4,
     borderRadius: 99,
     backgroundColor: colors.primary,
   },
   cartBadgeText: {
     fontFamily: fonts.interBold,
-    fontSize: 16,
+    fontSize: 12,
     lineHeight: 24,
-    color: '#FFFFFF',
     textAlign: 'center',
+    color: '#FFFFFF',
   },
   continueBtn: {
     alignItems: 'center',
@@ -385,6 +376,11 @@ const styles = StyleSheet.create({
     borderRadius: radius.btn,
     backgroundColor: colors.primary,
   },
-  continueDisabled: { opacity: 0.5 },
-  continueText: { fontFamily: fonts.interBold, fontSize: 20, lineHeight: 24, color: '#FFFFFF' },
+  continueText: {
+    fontFamily: fonts.interBold,
+    fontSize: 20,
+    lineHeight: 24,
+    textAlign: 'center',
+    color: '#FFFFFF',
+  },
 });

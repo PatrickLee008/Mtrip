@@ -23,12 +23,16 @@ import { fetchHotelDetail } from '@/api/goods';
 import { TEMP_HOTEL_COVERS } from '@/assets/tempImages';
 import { ErrorView, LoadingView } from '@/components/common/StateViews';
 import HomeIcon from '@/components/home/HomeIcon';
+import LiteDetailBottomBar, {
+  LITE_DETAIL_BAR_HEIGHT,
+} from '@/components/hotel/lite/LiteDetailBottomBar';
 import { liteShared } from '@/components/hotel/lite/liteShared';
 import { colors } from '@/config/theme';
 import { fonts } from '@/config/typography';
 import type { RootStackParamList } from '@/navigation/types';
 import {
   DETAIL_CHECK_TIMES,
+  DETAIL_DEMO,
   DETAIL_EXTRA_BEDS,
   DETAIL_PROPERTY_RULES,
   DETAIL_REQUIRED_DOCS,
@@ -83,7 +87,7 @@ export default function HotelPolicyLiteScreen() {
 
         <ScrollView
           style={liteShared.flex}
-          contentContainerStyle={liteShared.main}
+          contentContainerStyle={[liteShared.main, styles.mainWithBar]}
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.header}>
@@ -203,6 +207,12 @@ export default function HotelPolicyLiteScreen() {
           </View>
         </ScrollView>
       </SafeAreaView>
+
+      <LiteDetailBottomBar
+        priceFrom={detail.minPrice}
+        discountPercent={DETAIL_DEMO.discountPercent}
+        onPress={() => navigation.navigate('HotelDetailLite', { id: detail.id })}
+      />
     </View>
   );
 }
@@ -219,6 +229,9 @@ function refundText(rules: RefundRule[] | undefined, t: (key: string) => string)
 }
 
 const styles = StyleSheet.create({
+  /* 底栏是绝对定位的,给滚动区留出它的高度 */
+  mainWithBar: { paddingBottom: LITE_DETAIL_BAR_HEIGHT + 24 },
+
   header: { width: '100%', height: 180, borderRadius: 24, overflow: 'hidden' },
   headerImage: { width: '100%', height: '100%' },
 

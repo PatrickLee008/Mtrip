@@ -21,7 +21,8 @@ import { fonts } from '@/config/typography';
 
 interface Props {
   visible: boolean;
-  tone: 'success' | 'error';
+  /** `plain` = 不画图标、标题用正文色(关怀模式的 Account Login Required) */
+  tone: 'success' | 'error' | 'plain';
   title: string;
   desc?: string | null;
   /** 主按钮(成功=Close,失败=Retry) */
@@ -72,6 +73,8 @@ export default function AlertDialog({
 
   const translateY = anim.interpolate({ inputRange: [0, 1], outputRange: [24, 0] });
   const success = tone === 'success';
+  /* `plain` 不画图标、标题也用正文色(关怀模式的 Account Login Required `2540:20959`) */
+  const plain = tone === 'plain';
 
   return (
     <Modal transparent visible animationType="none" onRequestClose={onClose}>
@@ -81,12 +84,16 @@ export default function AlertDialog({
 
       <View style={styles.center} pointerEvents="box-none">
         <Animated.View style={[styles.card, { opacity: anim, transform: [{ translateY }] }]}>
-          <HomeIcon
-            name={success ? 'checkmarkCircle' : 'dismissCircle'}
-            size={60}
-            color={success ? colors.primary : colors.hot}
-          />
-          <Text style={[styles.title, !success && styles.titleError]}>{title}</Text>
+          {plain ? null : (
+            <HomeIcon
+              name={success ? 'checkmarkCircle' : 'dismissCircle'}
+              size={60}
+              color={success ? colors.primary : colors.hot}
+            />
+          )}
+          <Text style={[styles.title, plain ? styles.titlePlain : !success && styles.titleError]}>
+            {title}
+          </Text>
           {desc ? <Text style={styles.desc}>{desc}</Text> : null}
 
           <View style={styles.actions}>
@@ -133,6 +140,7 @@ const styles = StyleSheet.create({
     color: colors.primary,
   },
   titleError: { color: colors.hot },
+  titlePlain: { color: colors.heading },
   desc: {
     width: '100%',
     fontFamily: fonts.inter,

@@ -1363,6 +1363,47 @@
         "save": "Save {{amount}}",
         "noCoupon": "Don't use a coupon",
         "useBest": "Use best coupon"
+      },
+      "lite": {
+        "confirmTitle": "Confirm Your Room & Date",
+        "priceTitle": "Price Breakdown",
+        "roomsValue": {
+          "one": "1 Room",
+          "many": "{{count}} Rooms"
+        },
+        "dateRange": "{{checkIn}} - {{checkOut}} ({{nights}})",
+        "guestInfo": "Guest Info",
+        "fullName": "Full Name",
+        "addEmail": "+ Add Email if you want a slip via email.",
+        "emailHint": "Booking confirmation will be sent to this email.",
+        "rememberInfo": "Remember Info",
+        "addOnService": "Add On Service",
+        "viewMore": "View More >",
+        "viewLess": "View Less",
+        "choosePayment": "Choose Payment Method",
+        "seeOtherPayment": "See Other Payment",
+        "applied": "Applied",
+        "cancel": "Cancel",
+        "payNow": "Pay Now",
+        "confirm": "Confirm",
+        "loginRequiredTitle": "Account Login Required!",
+        "loginRequiredDesc": "Go to Login/Register screen now?",
+        "idCopied": "Booking ID copied",
+        "success": {
+          "confirmedTitle": "Booking Confirmed!",
+          "confirmedDesc": "Your hotel booking is confirmed by the hotel. Your room is reserved and guaranteed.",
+          "confirmingTitle": "Booking Confirming",
+          "confirmingDesc": "The hotel is confirming your booking request.",
+          "paymentStatus": "Payment Status",
+          "bookingStatus": "Booking Status",
+          "paid": "Paid",
+          "confirmed": "Confirmed",
+          "confirming": "Confirming",
+          "bookingId": "Booking ID: ",
+          "bookingDetails": "Booking Details",
+          "dateRange": "{{checkIn}} - {{checkOut}}",
+          "saveEreceipt": "Save E-receipt"
+        }
       }
     },
     "lite": {
@@ -1399,9 +1440,7 @@
       "seeMap": "See Map",
       "viewHotelDetail": "View Hotel Detail",
       "chooseRoom": "Choose a Room",
-      "chooseMultiRoom": "Choose Multiple Room",
-      "switchMulti": "+ Choose Multiple",
-      "switchSingle": "+ Choose Single",
+      "chooseRoomCta": "Choose room",
       "seeRoom": "See Room",
       "bestseller": "Bestseller",
       "guestsCount": "{{count}} Guests",
@@ -1411,6 +1450,7 @@
         "title": "Room Details",
         "pricePerNight": "PRICE PER NIGHT",
         "pricePerNightPlain": "Price per night",
+        "taxAndFees": "Tax & Service Fees (15%)",
         "nights": "Nights",
         "amenities": "Room Amenities",
         "breakfastTitle": "Breakfast Included",
@@ -1418,8 +1458,8 @@
         "priceSummary": "Price Summary",
         "bookThisRoom": "Book This Room",
         "freeCancelNote": "Free cancellation until 48h before check-in",
-        "startAt": "Start at",
-        "reserveNow": "Reserve now"
+        "see3d": "See 3D View",
+        "see360": "See 360 View"
       },
       "info": {
         "title": "Hotel Detail",
@@ -1432,14 +1472,22 @@
       },
       "preview": {
         "title": "Property Preview",
-        "video360": "360° & Video",
+        "overview": "Property overview",
+        "back": "Back",
+        "video360": "Video/360",
         "video360Hint": "Take a virtual walk through the property before you book.",
         "facilities": "Facilities",
         "tabs": {
           "all": "All",
+          "video360": "Video/360",
+          "facilities": "Facilities",
           "rooms": "Rooms",
           "pool": "Pool",
           "dining": "Dining"
+        },
+        "facilityGroups": {
+          "kids": "Kids areas",
+          "pools": "Pools & Gyms"
         }
       },
       "reviews": {

@@ -45,7 +45,7 @@ import {
 import { useCommonStore } from '@/store/commonStore';
 import { useSiteStore } from '@/store/siteStore';
 import { useUserStore } from '@/store/userStore';
-import type { CouponView } from '@/types/models';
+import type { CouponView, RefundRule } from '@/types/models';
 import { formatMoney } from '@/utils/format';
 
 /** 设计稿写死「还能再加 2 位同行人」 */
@@ -60,6 +60,17 @@ interface Options {
   successRoute: 'BookingSuccess' | 'BookingSuccessLite';
   /** 是否允许多住宿(trip 步骤 + Add More Stay);关怀模式传 false */
   enableMultiStay?: boolean;
+  /**
+   * 步骤序列覆盖。关怀模式新稿(`2540:19101`)把四步收成两步,传 `['guests', 'payment']` ——
+   * **刻意复用原有的 step key**,这样 `goNext` 里那两段校验(姓名/手机、渠道/登录/余额/下单)
+   * 原样生效,不用为 Lite 再写一份。不传就是完整模式的原序列。
+   */
+  steps?: BookingStepKey[];
+  /**
+   * 未登录时是先弹「Account Login Required」浮层再跳登录页(关怀模式新稿 `2540:20959`),
+   * 还是直接跳。完整模式的稿子里没有这张浮层,默认 false 保持原行为。
+   */
+  confirmLogin?: boolean;
 }
 
 /**
@@ -99,7 +110,13 @@ function makeStay(
   });
 }
 
-export function useBookingWizard({ params, successRoute, enableMultiStay = true }: Options) {
+export function useBookingWizard({
+  params,
+  successRoute,
+  enableMultiStay = true,
+  steps,
+  confirmLogin = false,
+}: Options) {
   const { t, i18n } = useTranslation();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const isLogin = useUserStore((s) => s.isLogin);
@@ -112,7 +129,9 @@ export function useBookingWizard({ params, successRoute, enableMultiStay = true 
   /** 钱包可用余额:登录后取 `/app/user/me` 的 balance(字符串),演示模式回落设计稿数值 */
   const walletBalance = isLogin ? Number(profile?.balance ?? 0) : BOOKING_DEMO.walletBalance;
 
-  const [step, setStep] = useState<BookingStepKey>('dates');
+  const [step, setStep] = useState<BookingStepKey>(steps?.[0] ?? 'dates');
+  /** 未登录时的确认浮层(只有 `confirmLogin` 打开时才会被置起) */
+  const [loginPrompt, setLoginPrompt] = useState(false);
   /**
    * 入离日期优先用搜索页选好的那组(`HotelResults → HotelDetail → 这里` 透传);
    * 没带、或带来的是过去的日期(后端 `create` 会以「使用日期不能早于今天」拒掉)就用今天起 2 晚
@@ -140,8 +159,12 @@ export function useBookingWizard({ params, successRoute, enableMultiStay = true 
   const [payResult, setPayResult] = useState<'success' | 'error' | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [failReason, setFailReason] = useState('');
-  /** 真实下单成功后的单号 / 实付金额 / 核销码(二维码),传给成功页 */
+  /**
+   * 真实下单成功后的订单主键 / 单号 / 实付金额 / 核销码(二维码),传给成功页。
+   * `orderId` 是给成功页的「View Booking」跳 `OrderDetail` 用的(那个路由收的是数字主键,不是单号)。
+   */
   const [paid, setPaid] = useState<{
+    orderId: number;
     orderNo: string;
     payAmount: number;
     verifyCode: string;
@@ -203,6 +226,8 @@ export function useBookingWizard({ params, successRoute, enableMultiStay = true 
   const roomTypeId = params?.roomTypeId;
   const realMode = Boolean(propertyId && roomTypeId);
   const [loadingGoods, setLoadingGoods] = useState(realMode);
+  /** 真实商品的退改规则,给关怀模式 Step 1 的 Cancellation Policy 卡用(演示模式为空) */
+  const [refundRules, setRefundRules] = useState<RefundRule[]>([]);
 
   useEffect(() => {
     if (!propertyId || !roomTypeId) return;
@@ -213,6 +238,7 @@ export function useBookingWizard({ params, successRoute, enableMultiStay = true 
         if (!alive) return;
         const sku = (detail.skus ?? []).find((r) => r.id === roomTypeId);
         if (!sku) return;
+        setRefundRules(detail.refundRules ?? []);
         const unit = Number(sku.base_price) || 0;
         setStays([
           scaleStay({
@@ -223,6 +249,7 @@ export function useBookingWizard({ params, successRoute, enableMultiStay = true 
             hotelName: detail.goods_name,
             roomName: sku.room_name ?? '',
             address: detail.address ?? '',
+            bedType: sku.bed_type ?? undefined,
             hotelKey: BOOKING_DEMO.hotelKey,
             roomKey: BOOKING_DEMO.roomKey,
             checkIn: initialDates.checkIn,
@@ -321,13 +348,14 @@ export function useBookingWizard({ params, successRoute, enableMultiStay = true 
   const hasUsableCoupon = couponList.some((c) => c.unusableReason === null);
   const couponDiscount = appliedCoupon?.discount ?? 0;
 
-  /** 步骤序列:多住宿才插入 trip(关怀模式禁用多住宿,序列恒为 4 步) */
+  /** 步骤序列:调用方给了 `steps` 就用它;否则多住宿才插入 trip */
   const sequence = useMemo<BookingStepKey[]>(
     () =>
-      multi && enableMultiStay
+      steps ??
+      (multi && enableMultiStay
         ? ['dates', 'guests', 'review', 'trip', 'payment']
-        : ['dates', 'guests', 'review', 'payment'],
-    [multi, enableMultiStay],
+        : ['dates', 'guests', 'review', 'payment']),
+    [steps, multi, enableMultiStay],
   );
   const index = Math.max(sequence.indexOf(step), 0);
 
@@ -415,6 +443,7 @@ export function useBookingWizard({ params, successRoute, enableMultiStay = true 
       /* 余额变了,把本地资料刷一次,钱包卡与「我的」页不至于还显示扣款前的数 */
       void refreshProfile().catch(() => undefined);
       setPaid({
+        orderId: order.orderId,
         orderNo: order.orderNo,
         payAmount: order.priceDetail.payAmount,
         verifyCode: paidResult.verifyCode,
@@ -433,10 +462,14 @@ export function useBookingWizard({ params, successRoute, enableMultiStay = true 
     if (submitting || loadingGoods) return;
     /**
      * 日历是「点一下起头、再点一下收尾」,中间那一下之后 `checkOut` 是空的。
-     * 摘要卡的日期弹层去掉后,这个半选状态会一直留在页面上,必须在这里拦 ——
-     * 否则真实模式会带着空的 `endDate` 去下单,被后端以「入住/离店日期不正确」打回。
+     * 这个半选状态会一直留在页面上,必须拦 —— 否则真实模式会带着空的 `endDate` 去下单,
+     * 被后端以「入住/离店日期不正确」打回。
+     *
+     * **无条件判**(不再限定 `step === 'dates'`):关怀模式新稿没有 dates 这一步,
+     * 限定步骤的话这条护栏会整个失效。完整模式第一步就是 dates,后面几步 `checkOut` 必非空,
+     * 所以放开步骤限制对它没有实际影响。
      */
-    if (step === 'dates' && !current.checkOut) {
+    if (!current.checkOut) {
       showToast(t('hotels.booking.dates.checkOutRequired'));
       return;
     }
@@ -467,7 +500,9 @@ export function useBookingWizard({ params, successRoute, enableMultiStay = true 
         return;
       }
       if (!isLogin) {
-        navigation.navigate('Login');
+        /* 关怀模式新稿先弹「Account Login Required」确认;完整模式保持直接跳 */
+        if (confirmLogin) setLoginPrompt(true);
+        else navigation.navigate('Login');
         return;
       }
       /* 余额是唯一真渠道:不够就别去创建订单,免得留一单十分钟后才过期的待支付 */
@@ -518,6 +553,7 @@ export function useBookingWizard({ params, successRoute, enableMultiStay = true 
    */
   const goSuccess = () => {
     const payload = {
+      orderId: paid?.orderId,
       orderNo: paid?.orderNo,
       verifyCode: paid?.verifyCode,
       hotelName: current.demo ? undefined : hotelNameOf(current),
@@ -555,6 +591,7 @@ export function useBookingWizard({ params, successRoute, enableMultiStay = true 
     current,
     multi,
     loadingGoods,
+    refundRules,
     request,
     setRequest,
     agreed,
@@ -578,6 +615,8 @@ export function useBookingWizard({ params, successRoute, enableMultiStay = true 
     setPayResult,
     failReason,
     goSuccess,
+    loginPrompt,
+    setLoginPrompt,
 
     /* 优惠券 */
     couponEnabled,

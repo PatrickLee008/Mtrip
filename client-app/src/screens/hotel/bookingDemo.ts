@@ -97,6 +97,8 @@ export interface BookingStay {
   hotelName?: string;
   roomName?: string;
   address?: string;
+  /** 房型床型(关怀模式 Step 1 的摘要行要画;接口没给就不画那一格) */
+  bedType?: string;
   hotelKey: string;
   roomKey: string;
   /** `YYYY-MM-DD` */
@@ -115,8 +117,8 @@ export interface BookingStay {
 }
 
 /**
- * 主要入住人表单(Step 2)。完整模式 `BookingStepGuests` 与关怀模式 `LiteStepGuests`
- * 是两套排版、同一份字段,所以形状放在这里,两边都从这里取。
+ * 主要入住人表单。完整模式 `BookingStepGuests`(第 2 步)与关怀模式 `LiteStepConfirm`
+ * (两步版的第 1 步)是两套排版、同一份字段,所以形状放在这里,两边都从这里取。
  */
 export interface LeadGuestForm {
   firstName: string;

@@ -56,6 +56,18 @@ export const colors = {
   emergencyFg: '#BA1A1A',
   /** 分隔线 */
   divider: '#C4C5D7',
+  /* ---- 关怀模式实景预览(Figma Property Preview `2352:7051`)---- */
+  /**
+   * 顶栏返回文案 "Back" 的蓝(稿面 `2352:7111`)。
+   * 注意它**不是** primary `#4169ED` —— 同一张稿上两者并存,不要互相顶替。
+   */
+  previewBack: '#204DDA',
+  /** 页签缩略图下方标签灰(稿面 `2352:7061`) */
+  previewTabLabel: '#475569',
+  /** 设施分组小标灰(稿面 `2352:7096` / `2352:7101`) */
+  previewSubheading: '#8B8C91',
+  /** 设施两列网格的格子底色,图未铺满时可见(稿面 `2352:7103`) */
+  previewTileBg: '#F3F4F6',
 } as const;
 
 /**

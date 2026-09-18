@@ -106,9 +106,21 @@ interface Props {
   value: DateRangeValue;
   onClose: () => void;
   onConfirm: (value: DateRangeValue) => void;
+  /**
+   * 是否压一层遮罩。**默认不压** —— 搜索页(完整版 / 关怀版)与结果页的设计稿都要求
+   * 背后那张大图保持原亮度,见下方 render 里的注释。
+   * 订房向导那一处背后是普通白卡页面,不压遮罩浮层会像是浮空的,故按需打开。
+   */
+  backdrop?: boolean;
 }
 
-export default function DatePickerSheet({ visible, value, onClose, onConfirm }: Props) {
+export default function DatePickerSheet({
+  visible,
+  value,
+  onClose,
+  onConfirm,
+  backdrop = false,
+}: Props) {
   const { t, i18n } = useTranslation();
   const { width: winW, height: winH } = useWindowDimensions();
 
@@ -277,7 +289,14 @@ export default function DatePickerSheet({ visible, value, onClose, onConfirm }: 
   return (
     <Modal visible transparent animationType="none" statusBarTranslucent onRequestClose={onClose}>
       <View style={styles.root}>
-        {/* 设计稿没有遮罩(背后大图保持原亮度),这里只留一层透明的点击区用于关闭 */}
+        {/* 搜索/结果页的设计稿没有遮罩(背后大图保持原亮度),那几处只留一层透明点击区;
+            订房向导背后是白卡页面,传 `backdrop` 才压这一层,跟着浮层一起淡入淡出 */}
+        {backdrop ? (
+          <Animated.View
+            style={[styles.backdrop, { opacity: anim }]}
+            pointerEvents="none"
+          />
+        ) : null}
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
 
         <Animated.View
@@ -428,6 +447,9 @@ function monthOf(key: string): Date {
 
 const styles = StyleSheet.create({
   root: { flex: 1, justifyContent: 'center' },
+
+  /* 与 GuestRoomSheet / AlertDialog 同一口径的遮罩(黑 25%) */
+  backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0, 0, 0, 0.25)' },
 
   card: {
     marginHorizontal: CARD_MARGIN,

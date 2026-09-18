@@ -433,3 +433,322 @@ Expo 51 / TypeScript / Zustand / React Navigation 6 / Axios / i18next + react-i1
   **未动**门票下单页 `screens/order/OrderConfirmScreen.tsx` 的同款默认值(门票业务另论)。
   **验证**:`npm run typecheck` 零报错;`normalizeDates` 用 Node 直跑 TS 源文件跑 6 组断言
   (缺省 / 空串 / 离店不晚于入住 / 过去日期 / 正常区间原样透传)全绿。未做真机走查。
+
+- [x] **关怀模式酒店详情页改版**(2026-09-18,Figma section `Hotel Details Lite` **新稿** `2540:16881`
+      / 首帧 `2540:16882`):设计出了新版,`HotelDetailLiteScreen` 首屏整个换掉 ——
+      旧稿的「文字顶栏(返回 + Hotel Details + Hotel Policy)+ 标题卡 + 左 90×90 缩略图小房卡」
+      改成「整宽图库 Hero(返回与星级压在图上)→ 标题卡(名 / 评分 / 地址)→ Choose a Room 房卡列表
+      → Read Policies 描边按钮」。**此帧的 Mobile Bottom Bar 在稿里是 `hidden`,故本页没有底部价格栏。**
+      **多选态整个删掉**(用户确认):`mode` 状态、「+ Choose Multiple」链接、房卡加减器、
+      底部 Total Price + 购物车 + Continue 合计栏全部移除 —— 后端一单只收一个 sku,
+      原先的 Continue 也只是带**第一个**选中房型进向导,是假功能(见上一条 2026-09-15 的「未做」)。
+      `LiteRoomCard` 按新稿 `2540:17042` 重写成**整宽 192 封面在上**的大卡,结构与完整模式
+      `HotelRoomCard`(222:1598)同型(封面定高 + overflow hidden、角标绝对定位、正文自带不透明底色、
+      渐变 id 跟卡片走),字号取 Lite 档(房型名 24、参数 14、Select 20、心 32);
+      封面图源改走 `resolveMediaUri` 过滤脏值,圆点按**实际张数**渲染(只有一张就不画),
+      导出资产 Line 3 实测描边 `#D9E1FB`,与完整版房卡一致。
+      **复用不新写**:Hero 直接用现成的 `components/hotel/HotelGallery`(渐变 / 圆点条 / 张数胶囊
+      与新稿逐项吻合),只给它加了一个可选 `counterTextSize`(完整版 12 / 关怀版 16),调用点零改动;
+      状态栏黑条 + 悬浮顶栏 + 客服悬浮球照搬完整版 `HotelDetailScreen`;
+      图标全部命中 `HomeIcon` 已有字形(`arrowLeft` / `star` / `locationOutline` / `heart` /
+      `imageCopy` / `people` / `bedSize` / `breakfast` / `chatFilled`),**本次零新增图标与图片资产**;
+      房卡兜底图沿用 `TEMP_ROOM_COVERS`(370×192,正好是新稿封面框尺寸)。
+      **评分口径**:稿上是十分制(9.3),后端 `goods.rating` 是五分制,按用户确认 **×2 换算**显示,
+      EXCELLENT 门槛仍按五分制原值判(≥4.5,复用 `hotels.results.excellent`);
+      接口不下发评分时整行只留右边的「See All Detail >」。
+      **未做**:房卡的划线原价与「5% off for 7Nights」(`GoodsSku` 只有 `base_price`,
+      没有原价/促销字段,组件留了可选 props 等后端下发);房卡收藏心走 comingSoon
+      (`addFavorite` 是**物业级**收藏,没有房型级接口,与完整版 `HotelRoomsTab` 同一处理);
+      Bestseller 角标接口无此标记,按「排序最前两张」等价处理(稿上前两张卡有、第三张没有)。
+      路由与入口一行未动(`HotelResultsLite` → `HotelDetailLite` 不变),
+      「See All Detail」→ `HotelInfoLite`、「Read Policies」→ `HotelPolicyLite`、
+      「See Details」→ `RoomDetailLite`、「Select」→ `HotelBookingLite`(日期照旧透传)。
+      i18n 三份各 +4 键(`seeAllDetail` / `seeDetails` / `select` / `readPolicies`)、
+      −8 个失去调用点的键(`detailTitle` / `hotelPolicy` / `viewHotelDetail` / `chooseMultiRoom` /
+      `switchMulti` / `switchSingle` / `seeRoom` / `lite.continue`),三份 `hotels.lite` 均 32 键零差异。
+      **验证**:`npm run typecheck` 零报错;三份 i18n JSON 解析通过且键集一致;
+      已删键全仓零残留引用。`scripts/check.ps1` 因**本机未装 php** 停在第 1 步后端 lint
+      (与本次改动无关,未动任何 PHP);**未做真机 / Web 冒烟,需人工对图验收。**
+
+- [x] **关怀模式订房流程改版:4 步 → 2 步**(2026-09-18,Figma section `2540:19101`):
+      2026-09-15 那一版是**推导**的(设计侧当时没出 Lite 稿,从完整版 `1675:5776` 按换算规则
+      放大一档),做成 `dates → guests → review → payment` 四步。这次设计出了真稿,整条流程重做:
+
+      | 新稿 | 落点 |
+      |---|---|
+      | `2540:19394` Lite Booking step 1 | `components/hotel/booking/lite/LiteStepConfirm.tsx`(新增) |
+      | `2540:19621` Lite Booking step 2 | `components/hotel/booking/lite/LiteStepPay.tsx`(新增) |
+      | `2540:19863` Booking Confirmed! / `2540:19741` Booking Confirming | `BookingSuccessLiteScreen` 重写,一屏两态 |
+      | `2540:20959` Account Login Required | 复用 `AlertDialog`,新增 `tone: 'plain'` |
+
+      删除 `LiteStepDates` / `LiteStepGuests` / `LiteStepReview` / `LiteStepPayment` 四个旧组件
+      (只有 `HotelBookingLiteScreen` 在用,无其它引用)。
+      **`liteBookingShared.ts` 的换算表整表作废**,改成新稿实测 —— 实测字号**比推导值小**
+      (区块标题 20/32 而非 32/40、卡内标题 16/24 而非 24/32、输入框高 56 文字 16 而非 64/24)。
+      壳去掉了顶栏与「Step N of 4」进度条(新稿两屏都没有),标题改成 Main 里的第一行文字;
+      吸底栏由「预计总价 + 一枚大按钮」换成**两枚等宽按钮**(Cancel / Continue → 与 ← Back / Pay Now →),
+      总价改由 step 2 的价格明细卡承担。
+      **数据层仍与完整模式共用 `useBookingWizard`**,只加了三个可选口子:
+      `steps`(序列覆盖,Lite 传 `['guests','payment']` —— **刻意复用原 step key**,
+      于是「姓名/手机必填」「渠道必选 / 未登录 / 余额不足 / 下单」两段校验原样生效)、
+      `confirmLogin`(未登录先弹确认浮层,完整模式默认 false 保持原行为)、
+      返回值多了 `refundRules` / `loginPrompt`。
+      **顺带修掉一处护栏失效**:`goNext` 里「离店日期为空」的拦截原本限定 `step === 'dates'`,
+      Lite 没有这一步就会整个失效、带着空 `endDate` 去下单被后端打回,改成**无条件前置判断**
+      (完整模式第一步就是 dates,后续步骤 `checkOut` 必非空,对它无实际影响)。
+      `paid` 补 `orderId`、成功页参数补 `orderId` / `status`,供「View Booking」跳 `OrderDetail`。
+      **已确认的取舍**:① 新稿把日期/人数画成只读摘要,按用户选定**接上了现成弹层**
+      (日期行开 `DatePickerSheet`、「N Room」药丸与住客行开 `GuestRoomSheet`)——
+      否则进了订房页发现日期错了只能退两层;② 支付主位卡放 **mTrip 钱包余额**(后端唯一真渠道),
+      MMQR / KBZPay / Wave Pay / 酒店前台收进「See Other Payment」展开后置灰 + Coming soon ——
+      照稿把 MMQR 摆主位的话默认那张卡根本付不了款;③「View More」是**就地展开**加购卡列表
+      (含保险那张,点它仍跳 `Insurance`),不是跳新页,否则加购与保险两条既有链路会断。
+      **Add New Guest `2540:19102` / Insurance `2540:19225` 本次未动** —— 逐屏比对过,
+      与已实现的 `1675:5777` / `1675:5900` 是同一版式,现有差异全是上次用户确认的后端字段裁剪。
+      **未做 / 已知缺口**:成功页的 `confirming` 态**目前产生不了**(后端 `ORDER_STATUS` 没有
+      「等酒店确认」这一档,`order/pay` 成功即已支付),两态都实现好放着,等后端支持时
+      只需让 `goSuccess` 传 `status: 'confirming'`;新稿没有 Special Requests 输入框,
+      `request` 状态保留但页面不再提供入口(真实下单的 `remark` 因此恒为空);
+      新稿成功页没有核销二维码,核销码仍在订单详情页(`VerifyCodeView`),「View Booking」跳那里;
+      演示模式(未登录 / 无 propertyId)不画券卡 —— 券接口要登录态,不伪造。
+      i18n 三份各新增 `hotels.booking.lite.*` 一整块(含 `success` 子块),
+      复数沿用仓库既有的嵌套 `one/many` 写法(本项目 `compatibilityJSON: 'v3'`,同 `nightsLabel`);
+      旧步骤的词条**全部保留** —— 完整模式的 `BookingStepDates/Guests/Review` 仍在用,逐键 grep 确认过。
+      **验证**:`npm run typecheck` 零报错;三份 i18n **1021 键零 missing / 零 extra**;
+      四个已删组件全仓零残留引用。`scripts/check.ps1` 因本机未装 php 仍停在第 1 步后端 lint。
+      ⚠️ **未做真机 / Web 冒烟**;**完整模式订房流程需要回归**(动了共用的 `useBookingWizard`);
+      缅文文案照现有 `my-MM.json` 同类措辞拼,需母语者复核。
+
+- [x] **关怀模式详情族三处补齐**(2026-09-18 晚,同一批):
+
+      **① 订房日期弹窗加遮罩**。`DatePickerSheet` 原本**故意不带遮罩**(代码里写着
+      「设计稿没有遮罩(背后大图保持原亮度)」——那是给搜索页定的,背后是整屏 hero 大图)。
+      它有 4 个调用方,订房向导那处背后是白卡页面,不压遮罩浮层像浮空的。
+      做成**opt-in 的 `backdrop` prop(默认 false)**,只在 `HotelBookingLiteScreen` 打开,
+      `HotelsScreen` / `HotelsLiteScreen` / `HotelResultsScreen` 三处一行没动。
+      遮罩用 `Animated.View` 绑同一个 `anim` 跟浮层一起淡入淡出、`pointerEvents="none"`
+      让点击穿透到原来的关闭层;颜色 `rgba(0,0,0,0.25)`,与同屏的 `GuestRoomSheet` /
+      `AlertDialog` 同一口径(`HotelFilterSheet` 的 0.4 是整屏上拉面板,没跟)。
+
+      **② AI Summary 补到关怀版两处**(`2540:7491` 信息页尾 / `2540:18286` 评价页)。
+      此前只有完整模式 `HotelReviewsTab` 有这一块,关怀版**评分与维度条都画了、偏偏漏了它**。
+      抽成 `components/hotel/lite/LiteAiSummary.tsx`,`HotelInfoLiteScreen`(接在
+      Read All Reviews 之后)与 `HotelReviewsLiteScreen`(接在维度条之后)共用。
+      文案**共用完整模式那五个键** `hotels.detail.reviews.{aiSummary,topPositive,
+      positiveQuote,improvement,improvementQuote}`,**不另造 Lite 词条**,否则两种模式
+      会给出不同的总结;版式按既定换算规则放大一档。**这块是写死的设计稿文案**,
+      后端没有评价接口更没有 AI 总结接口(完整模式同此状态)。
+
+      **③ 详情族底栏**(`2540:18477`:白底 + 上边框 rgba(196,197,215,.3) + px20 pt17 pb16;
+      左 Start at 12/16 + 金额 20/24 主色 + `-15% TODAY` 10/15 #BA1A1A;
+      右主色按钮**圆角 24** px32 py16)。抽成 `components/hotel/lite/LiteDetailBottomBar.tsx`。
+      **逐帧核过设计稿,不是"统一加"**:信息页 / 政策页 / 评价页**有**(本次加);
+      房型详情早有自己的 Book This Room 底栏,不动;**主详情页没有**
+      (`2540:16882` 那帧 Mobile Bottom Bar 是 `hidden=true`,且房卡各自带 Select,
+      再挂一条 Choose room 是重复入口);**实景预览没有**(`2540:18495` 稿里无此节点)。
+      「Choose room」→ `navigate('HotelDetailLite', {id})`,栈里已有该页就弹回去选房。
+      评价页原本不取数(评价内容全静态),为底栏那行起价加了**一次轻量 `fetchHotelDetail`**,
+      拿不到只是不画金额那行、不挡页面。`-15% TODAY` 取 `DETAIL_DEMO.discountPercent`,
+      **后端没有"今日折扣"字段**,与完整模式 `HotelDetailScreen` 同一口径;
+      组件做成可选 `discountPercent`,不想显示不传。
+      i18n 三份各 +1 键 `hotels.lite.chooseRoomCta`(`hotels.detail.chooseRoom` 是
+      "Choose my room",与稿上的 "Choose room" 不同,没硬套)。
+
+- [x] **关怀模式详情页补回多房间选择**(2026-09-18 晚,Figma `2642:10749` / 底栏 `2863:7627`):
+      **版式基底仍是新稿 `2540:16882`**(Hero 图库 / 评分行 / 整宽封面房卡 / Read Policies 全留着)——
+      用户给的 `2492:10399` 与 `2642:10749` 其实都是**旧版式**(文字顶栏 + 90×90 小图房卡),
+      已与用户确认:**只搬多房间能力,不回退版式**。
+      交互按用户选定的"两者都要":房卡右下角 **Select 点一下即加入(置 1 间)、就地换成
+      −/数量/+ 加减器**(加减器规格取自旧稿 `2707:13670`,按新卡圆角 16 调整);
+      减到 0 自动移出选择、按钮变回 Select。
+      选中任一房型后页面底部出现合计栏:左「Total Price」12/16 + 金额 Inter 600 **16**/24 主色
+      + `-15% TODAY` 10/15 #BA1A1A;右购物车(1px 主色描边圆角 12、p12、cart 32,
+      角标 left31/top-8/w24/r99、Inter 700 12/24 白)+ Continue(主色圆角 12 px32 py16)。
+      客服悬浮球在有底栏时上移一个栏高,免得压住 Continue。
+      `LiteRoomCard` 新增可选 `quantity` / `onChangeQuantity`,**不传就退回纯单选**
+      (`guideSteps` 的演示卡不受影响)。i18n 三份补回 `hotels.lite.continue`(上一轮删多选时删掉的)。
+      ⚠️ **合计只是展示**(用户确认):后端 `order/create` **一单只收一个 sku**,
+      Continue 仍带**第一个**选中的房型进订房向导。代码注释与本条都写明了,
+      **别当成"没接完"去补** —— 真正的一单多房型要等后端支持。
+      **验证**:**质量基线四步全跑完** —— backend `php -l` 390 文件 0 错误、
+      shared 单测 99 用例 975 断言全绿(前两步借微服务镜像里的 PHP 8.1.27 跑,
+      本机 PATH 没有 php;命令见 README「质量基线」一节)、admin-web build 通过、
+      client-app typecheck 零报错;三份 i18n **1023 键零 missing / 零 extra**。
+      ⚠️ 仍未做真机 / Web 冒烟,需人工对图;缅文需母语者复核。
+
+- [x] **关怀模式酒店详情页改回 `2642:10749`**(2026-09-18 夜):
+
+      🔴 **设计文件里有两套并存的 Lite 详情稿,已确定以 `2642:10749` 为准**:
+
+      | 稿 | 版式 | 状态 |
+      |---|---|---|
+      | `2642:10749`(含底栏)/ `2492:10399`(无底栏) | 文字顶栏 + 标题卡 + **左 90×90 缩略图横排房卡** + Choose | ✅ 当前基准 |
+      | `2540:16882` | Hero 图库 + 评分行 + **整宽 192 封面大房卡** + Select + Read Policies | ❌ 已作废 |
+
+      白天那条「关怀模式酒店详情页改版」按 `2540:16882` 做的 Hero 版**已被推翻** ——
+      当时已提示这两个节点是旧版式、用户先选了「保留新版」,实际跑起来看过后判定
+      「和设计稿差别太大」,要求改回。**别再照 `2540:16882` 改回去。**
+
+      `HotelDetailLiteScreen` 与 `LiteRoomCard` 按 `2642:10881` 重写:
+      房卡回到左列(90×90 圆角 8 缩略图 + 20 eye-circle「See Room」Inter 600/12)、
+      右列(房型名 Outfit 600/20/24 + Bestseller 药丸主色 10% 底、参数行 **定宽 100** wrap
+      Inter 500/14/20)、1px #D9E1FB 分隔线、底行(可选划线原价+促销 Inter 600/12;
+      主价 Inter 600/20/24 + `/ night`;右 Choose 主色**圆角 12** px16 py8 Inter 600/20)。
+      **`HotelGallery` 完全回退**到改动前 —— 为 Hero 加的 `counterTextSize` 已无调用方,
+      相对 HEAD 的 diff 归零;`guideSteps` 跟着去掉 `onToggleFavorite`(新版式没有收藏心)。
+
+      **多房间保留**(上一轮刚补的没丢):Choose 点一下即加入(置 1 间)、就地换成加减器,
+      减到 0 变回 Choose;选中后底部出 `2863:7627` 合计栏。
+      ⚠️ **合计只是展示**,后端 `order/create` 一单只收一个 sku,Continue 带第一个选中的房型。
+
+      **参数行的 Wifi**:设计稿第二张卡有这一项,但接口 `sku.facilities` 是自由文本数组,
+      按 `/wifi/i` 命中才画,不硬编码成固定四项。
+
+      **i18n**:补回 `hotels.lite.{detailTitle,hotelPolicy,viewHotelDetail,seeRoom}`
+      (白天改 Hero 版时删掉的),删掉随 Hero 版作废的
+      `hotels.lite.{seeAllDetail,seeDetails,select,readPolicies}`;三份仍 **1023 键零差异**。
+
+      **验证**:`npm run typecheck` 零报错;i18n 三份零差异;四个已删键全仓零引用;
+      `HotelGallery` diff 归零。⚠️ **未做真机 / Web 冒烟** ——
+      这一页版式刚被判定「差太多」,**建议先跑起来对图再继续**。
+
+- [x] **关怀模式房型详情页按 `2352:6030` 重做**(2026-09-18 夜):用户判定与设计稿差距大,
+      逐节点比对后改掉五处(**都是实现与稿不符,不是设计变更** —— 该页本来就是按这个节点做的):
+
+      0. **(第二轮返工)大图必须在滚动流里**:第一轮为了让 3D/360 点得到,把大图做成绝对定位
+         垫在 ScrollView 底下、覆盖控件浮在最上层 —— 结果**滚动时那两枚按钮不跟着图走、
+         一直悬在内容上方**,用户指出「不应该是悬浮组件」。已改成大图是 ScrollView 的
+         第一个子元素、覆盖控件绝对定位在**大图内部**(一起滚也点得到),
+         只有返回键仍压在图上。既然内容不再压图(见第 2 条),大图本就没有绝对定位的必要。
+         同轮按 `get_design_context` 校正字体:房型名 Inter 600/24/**40** ls **-0.32** `#0B1C30`、
+         「PRICE PER NIGHT」**大写** ls.6、金额 Inter **700**/20、参数行 **16**/20、
+         脚注 Inter 600/**16/16** ls.6(卡壳 r32 p24 / r20 p25 原本就对)。
+      1. **大图底部覆盖层补上**(`2352:6033`,原先整层没做):圆点条(黑 20% px12 py8 r999 w60,
+         点 8)、张数胶囊(黑 25% r40 px12 py4,imageCopy 20 + Inter 400/16/20 白)、
+         「See 3D View」/「See 360 View」两枚胶囊(同底,20 图标 + Inter 400/16/20 白)。
+         **必须放在 ScrollView 之后**才点得到 —— 大图是绝对定位垫在最底层的,夹在中间会被滚动区盖住。
+         圆点与张数按**实际可用图片数**渲染(经 `resolveMediaUri` 过滤),只有一张就不画;
+         3D / 360 没有素材与接口,与实景预览页同一处理走 comingSoon。
+      2. **大图高度 260 → 300**,且内容不再压图 —— 稿里 `2352:6031` 高 300、内容区
+         `2352:6048` 起点 y=354 正好接在图后面,原实现让首卡上移 120 压住了图。
+      3. **Room Amenities 分组**:接口给了 `sku.facilities` 就按真实值平铺一组(**没有分类字段,不猜**),
+         没给才回落到稿里的 ESSENTIALS / RECREATION / DINING 三组 —— 直接复用
+         `DETAIL_AMENITY_GROUPS`(与 `HotelInfoLiteScreen` 同一份,两页不会给出不同的设施)。
+      4. **删掉吸底栏**:稿里 `2352:6164 Mobile Bottom Bar` 是 **`hidden="true"`**,
+         CTA 由价格卡内的「Book This Room」承担;滚动区底部留白 120 → 32。
+      5. **顶栏去掉标题**:稿里 `2352:9560 Heading 1` 是 `hidden`,只留返回键压在图上。
+
+      i18n:补 `hotels.lite.room.{see3d,see360}`,删掉随吸底栏失去调用点的
+      `hotels.lite.room.{startAt,reserveNow}`;三份仍 **1023 键零差异**。
+
+      **仍未做(有据可查,不是漏)**:价格卡的「Tax & Service Fees (15%)」——
+      后端 `PricingService` 算的实付里没有这笔税费,**而且稿子自己的数也对不上**
+      (Price per Night 212,750 + Tax 27,75,Total 却仍是 212,750),说明那一行在稿里是占位。
+      照画会让本页 Total 与结账页实收金额不一致,故仍不做;后端真出税费字段时再补。
+      「Loyalty Status Module」同样是稿里 `hidden`(`2352:6146`),不做。
+
+      **验证**:`npm run typecheck` 零报错;本页 15 个静态 i18n 键 + 2 个模板前缀**全部解析通过**
+      (typecheck 查不出缺键,单独跑脚本验的);三份 i18n 1023 键零差异。
+      ⚠️ 未做真机 / Web 冒烟,需人工对图。
+
+- [x] **关怀模式实景预览页按 `2352:7051` 重做**(2026-09-18 深夜):用户判定与稿面差距大,
+      逐节点比对后**严格照帧**重写 `PropertyPreviewLiteScreen`。设计数据首次经 **Figma MCP**
+      (`get_figma_data`)取回,落档 `.figma-cache/2352-7051.txt`(整帧渲染图 `2352-7051.png`)。五处改动:
+
+      1. **页签从文字药丸改成缩略图卡**(`2352:7056`):横滑 gap 12,四张卡
+         Video/360 · Facilities · Rooms · Dining;图高 **83.5** 圆角 8,标签 Inter 500/14/20
+         `#475569`,卡内 gap 8,且**标签居中在缩略图正下方**(稿里标签容器是 column + alignItems center)。
+         不再有「选中态」—— 稿里四个页签是 Link,没有 active 样式。
+      2. **360 区去掉白卡外壳**(`2352:7077` / `2352:7080`):标题 Inter 700/20/28 →
+         **268.5** 高圆角 20 大图,整图叠 `rgba(0,0,0,.1)`,居中 64 毛玻璃圆(内 `view360` 40)
+         下方 8px 白字 **"360°"**(Inter 700/18/28 + 阴影)。稿里**没有**原来那条说明文字,
+         已删掉(`hotels.lite.preview.video360Hint` 键保留但失去调用点)。
+      3. **设施区改成双分组**(`2352:7092`):"Facilities" → 小标 **"Kids areas"** 16/600 `#8B8C91`
+         → **223.75** 英雄图 → 小标 **"Pools & Gyms"** → **两列网格**(格底 `#F3F4F6` 圆角 8、
+         图高 **171** 圆角 20,列间距 16)。两个分组小标是稿面静态文案 ——
+         后端 `GoodsDetail.facilities` 只是扁平 key 列表,**没有分组字段,不猜**。
+      4. **顶栏照稿写 "Back"**(`2352:7107` / `2352:7111`):`#FEFEFE` 底 + Effect/DS,
+         Inter 600/24 **`#204DDA`** —— ⚠️ **不是** `colors.primary` `#4169ED`,
+         同一张稿上两者并存,新令牌 `colors.previewBack` 单独承载。
+      5. **页底是纯白 `#FFFFFF`**(`fill_658ab2fa`),三段都没有白卡 —— 与同族另外三屏
+         (`liteShared` 的 `#EBF0FF` 页底 + 白卡)**观感不同**,这是照帧的结果不是漏改,
+         本页因此不再引用 `liteShared.card`。
+
+      **3 处稿面无法直译,已取最接近值近似并在代码注释里逐条标注**(拿到设计侧明确值后替换):
+      ① 缩略图**宽度**稿里没落值(tab 帧是 hug、内层图帧是 fill,自相矛盾)→ 取 **120**
+      (高度 83.5 是稿面值);② 顶栏箭头 SVG 的 fill 为空(`fill_97d170e1: []`)→ 与 "Back" 同色 `#204DDA`;
+      ③ `backdrop-filter: blur(2px)` 与 "360°" 的两层 text-shadow RN 都不支持 →
+      blur 用 40% 白底 + 1px 60% 白描边近似,阴影取主导层 `0/4 blur3`(与 theme 里「多层取主导层」同口径)。
+
+      **自查里抓到的两个渲染缺陷,一并修掉**(都不是设计变更):
+      ① **阴影层与裁剪层拆开** —— iOS 上 `overflow:'hidden'` 会把同一视图的 `shadow` 一起裁掉,
+      原先 `panoBox`/`facilityHeroBox` 把两者写在同一个样式块里,等于没有阴影;
+      已拆成 `panoShadow`+`panoBox` / `facilityHeroShadow`+`facilityHeroBox`
+      (同族 `LiteHotelCard.card` 是同样的写法,本页不跟,未去动那个文件);
+      ② 设施格子的**可见圆角取图自己的 20** —— 格底 `#F3F4F6` 圆角 8 只是图未铺满时的占位底,
+      原先给它加了 `overflow:'hidden'`,会把图裁成 8,与稿面 `2352:7104` 的 20 不符,已去掉裁剪。
+
+      i18n:新增 `preview.{overview,back}`、`preview.tabs.{video360,facilities}`、
+      `preview.facilityGroups.{kids,pools}`,并把 `preview.video360` 的值由 "360° & Video"
+      改成稿面 **"Video/360"**(该键只有本页在用);`preview.title` **未动**(`HotelInfoLiteScreen` 还在用)。
+      三份**同结构**:`hotels.lite.preview` 各 14 键,整份文件相对 en-US **零缺失**。
+      ⚠️ **缅文 7 条是保守译法,需母语者复核**:`overview` / `back` / `video360` /
+      `tabs.video360` / `tabs.facilities` / `facilityGroups.kids` / `facilityGroups.pools`。
+
+      **新增设计契约校验脚本** `scripts/check-property-preview-lite.cjs`(81 项断言):
+      三语 `hotels.lite.preview` 结构一致 + 10 个词条三语非空 + en-US 稿面文案逐字一致 +
+      theme 4 个新令牌与 4 个色值 + 22 个结构标记(含 4 个稿面尺寸)+ 4 条 RN 渲染语义断言
+      (标签居中 / 格底不裁剪 / 带阴影的块不得同时裁剪 / 360° 间距)。
+      **红→绿**:落实现前 `RED 26/72`(词条与结构全缺)→ 实现后 `RED 77/81`(自查新增的 4 条命中)
+      → 修完 `GREEN 81/81`。过程中还修了脚本自身一个 bug(样式块解析用正则配对,
+      把单行块 `tab: { gap: 8 }` 与多行块错配,已改成花括号配对扫描)。
+      ⚠️ 该脚本**未接进 `scripts/check.ps1`**(改仓库门禁不属本次范围),需手动执行。
+
+      **验证**:`npm run typecheck` 零报错;`scripts/check-property-preview-lite.cjs` **81/81 GREEN**。
+      ⚠️ **`scripts/check.ps1` 本机跑不了**:第 1 步 `php -l` 因**本机未装 php** 立即中断
+      (390 个文件全报 `CommandNotFoundException: php`),与本改动无关,本次未动任何 PHP。
+      ⚠️ **未做真机 / Web 冒烟**,需人工对图。
+
+- [x] **关怀模式房型详情页第三次逐节点复核**(2026-09-18 深夜,Figma `2352:6030`):用户再次指定同一节点,
+      逐节点比对后**发现 11 处数值/结构不符** —— 该页 09-18 夜已改过两轮,这是第三轮,
+      **其中两处是本文件早写明的规格却没落到实现上**(设施卡 gap 24、早餐/价格卡 padding 24)。
+      设计数据经 Figma MCP 取回,落档 `.figma-cache/2352-6030.txt`(整帧渲染图 `2352-6030.png`)。
+
+      | # | 稿面 | 现值 → 改为 |
+      |---|---|---|
+      | ① | 顶栏填充 `2352:9557` = 主色渐变遮罩(0deg 透明 → `rgba(65,105,237,.5)`),带高 80 | 完全没有 → 补上 |
+      | ② | 返回胶囊底 `rgba(0,0,0,.25)`(+blur4+opacity.8) | `.4` → `.25`(blur/整体透明度 RN 不还原) |
+      | ③ | 返回箭头 32 | 20 → 32 |
+      | ④ | 大图 ↔ 内容 gap 10(`2352:6031`) | 无 → 补 |
+      | ⑤ | 覆盖层首行 `alignItems: flex-end` | center → flex-end |
+      | ⑥ | 设施卡 gap 24(`2352:6071`) | 与信息卡共用 16 → 本页覆盖 24(信息卡仍需 16,不动共用样式) |
+      | ⑦ | 分组小标行高 16(`style_db23f563`) | 20 → 16 |
+      | ⑧ | 属性行图标宽 20(`layout_24ff1e97`) | 16 → 20 |
+      | ⑨ | 早餐卡 padding 24(`2352:6111`) | 25 → 24 |
+      | ⑩ | 价格卡 padding 24 + 合计行 `padding 12px 0 0` | 25 / 13 → 24 / 12 |
+      | ⑪ | 价格卡阴影 `0/4 blur6 -4 + 0/10 blur15 -3`;CTA 阴影 `0/2 blur4 -2 + 0/4 blur6 -1` | 误用 `shadows.subtle` / 无 → `shadows.raised` / `shadows.media`(令牌注释与稿面**逐字一致**,不是近似) |
+
+      **税费展示位(用户选定)**:稿面 `2352:6131` 的「Tax & Service Fees (15%)」本轮**画出**,
+      值取占位常量 `TAX_AMOUNT = 0`,并在代码里注明「**后端无税费字段**、待后端出字段后替换」——
+      后端 `PricingService` 的实付里没有这笔税费,且**稿面自身的数就对不上**(212,750 + 27,75,Total 仍 212,750),
+      照抄会让本页 Total 与结账页实收不一致。新词条 `hotels.lite.room.taxAndFees` 三语齐备
+      (`hotels.lite.room` 三份各 **13 键同结构**)。
+
+      **顺带抽取**:顶栏遮罩与 `LiteHotelCard` 封面上下两条渐变是**同一规格**(主色 50% ↔ 透明),
+      已抽成 `components/common/EdgeGradient.tsx` 两处共用(实现逐字搬运;原文件 `colors`/`shadows`
+      仍被其他样式使用,无遗留 import)。**没有动 `LiteHotelCard` 的任何视觉值。**
+
+      **未照抄且已说明理由的两处**:覆盖层两行稿里写死宽 370(可用宽 = 402 − 2×12 = 378,左右并不等距),
+      判为稿面手工尺寸,按容器撑满;圆点数量不照稿的固定 3 枚(稿面 3 枚与旁边胶囊 "2/12" 自相矛盾),
+      按实际图片数渲染 —— **用户选定保持现状**。另有 1 处 2px 级差异已知未跟:稿面第三枚(面积)图标是
+      17.76×17.76 且带 1px 下内边距(三枚里只有它这样),判为导出缩放产物,三枚统一 20。
+
+      **新增校验脚本** `scripts/check-room-detail-lite.cjs`(35 项:11 处稿面值逐条 + 税费占位 +
+      EdgeGradient 抽取 + 三语结构):**红→绿 8/34 → 34/35 → 35/35**。中间那次 34/35 是**断言过度约束**
+      —— 把遮罩高度写死成字面量 `80`,而实现用的是具名常量 `SCRIM_HEIGHT = 80`;已改成校验
+      「高度解析为 80」这一事实(常量存在且值必须为 80,否则照样红)。⚠️ 脚本同样**未接进 `scripts/check.ps1`**。
+
+      **验证**:`npm run typecheck` 零报错;`check-room-detail-lite.cjs` **35/35 GREEN**;
+      `check-property-preview-lite.cjs` 仍 **81/81**(确认抽取没连带破坏)。
+      ⚠️ `scripts/check.ps1` 本机仍不可跑(未装 php,第 1 步即断);⚠️ **仍未做真机 / Web 冒烟**,需人工对图;
+      ⚠️ 缅文新增 1 条待母语复核(连同实景预览页 7 条,共 **8 条**待复核)。

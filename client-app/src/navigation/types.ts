@@ -139,6 +139,8 @@ export type RootStackParamList = {
   /** 预订成功(1675:6714);真实下单后带上订单结果,缺省则显示设计稿演示值 */
   BookingSuccess:
     | {
+        /** 订单数字主键,给「View Booking」跳 `OrderDetail` 用 */
+        orderId?: number;
         orderNo?: string;
         /** 支付接口返回的核销码,成功页的二维码就是它 */
         verifyCode?: string;
@@ -152,11 +154,13 @@ export type RootStackParamList = {
       }
     | undefined;
   /**
-   * 关怀模式预订成功(同 `Booking Flow` `759:9777` 的 Booking Success `224:3826`)。
-   * 参数与 `BookingSuccess` 同形,Lite 向导支付成功后 replace 到这里。
+   * 关怀模式预订成功(Figma `2540:19863` Booking Confirmed / `2540:19741` Booking Confirming)。
+   * 参数比 `BookingSuccess` 多一个 `status`:后端目前没有「等酒店确认」这个状态,
+   * 支付成功即 `confirmed`,`confirming` 留着等后端支持(见该页头部注释)。
    */
   BookingSuccessLite:
     | {
+        orderId?: number;
         orderNo?: string;
         verifyCode?: string;
         hotelName?: string;
@@ -166,6 +170,7 @@ export type RootStackParamList = {
         adults?: number;
         rooms?: number;
         paidTotal?: number;
+        status?: 'confirming' | 'confirmed';
       }
     | undefined;
   GoodsList: { goodsType?: number; categoryId?: number; keyword?: string; title?: string };

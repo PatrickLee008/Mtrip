@@ -18,9 +18,9 @@
 
 import React from 'react';
 import { Pressable, StyleSheet, Text, View, useWindowDimensions, type ImageSourcePropType } from 'react-native';
-import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 import { useTranslation } from 'react-i18next';
 
+import EdgeGradient from '@/components/common/EdgeGradient';
 import CoverImage from '@/components/home/CoverImage';
 import HomeIcon from '@/components/home/HomeIcon';
 import { PAGE_PADDING, colors, shadows } from '@/config/theme';
@@ -141,20 +141,7 @@ export default function LiteHotelCard({
   );
 }
 
-/** 封面上下那两条渐变(主色 50% → 透明);`reverse` = 自上而下由深到浅 */
-function EdgeGradient({ id, reverse = false }: { id: string; reverse?: boolean }) {
-  return (
-    <Svg style={StyleSheet.absoluteFill} width="100%" height="100%">
-      <Defs>
-        <LinearGradient id={id} x1="0" y1="0" x2="0" y2="1">
-          <Stop offset="0" stopColor={colors.primary} stopOpacity={reverse ? 0.5 : 0} />
-          <Stop offset="1" stopColor={colors.primary} stopOpacity={reverse ? 0 : 0.5} />
-        </LinearGradient>
-      </Defs>
-      <Rect x="0" y="0" width="100%" height="100%" fill={`url(#${id})`} />
-    </Svg>
-  );
-}
+/** 封面上下那两条渐变(主色 50% → 透明)已抽成 `components/common/EdgeGradient`,房型详情页顶栏遮罩共用 */
 
 const styles = StyleSheet.create({
   card: {

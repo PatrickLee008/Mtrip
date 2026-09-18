@@ -1363,6 +1363,47 @@
         "save": "省 {{amount}}",
         "noCoupon": "不使用优惠券",
         "useBest": "使用最优券"
+      },
+      "lite": {
+        "confirmTitle": "确认房型与日期",
+        "priceTitle": "价格明细",
+        "roomsValue": {
+          "one": "1 间",
+          "many": "{{count}} 间"
+        },
+        "dateRange": "{{checkIn}} - {{checkOut}}({{nights}})",
+        "guestInfo": "住客信息",
+        "fullName": "姓名",
+        "addEmail": "+ 需要邮件回执请添加邮箱",
+        "emailHint": "预订确认函将发送至该邮箱。",
+        "rememberInfo": "记住信息",
+        "addOnService": "增值服务",
+        "viewMore": "查看更多 >",
+        "viewLess": "收起",
+        "choosePayment": "选择支付方式",
+        "seeOtherPayment": "查看其他支付方式",
+        "applied": "已使用",
+        "cancel": "取消",
+        "payNow": "立即支付",
+        "confirm": "确认",
+        "loginRequiredTitle": "需要登录账号！",
+        "loginRequiredDesc": "现在去登录 / 注册页面？",
+        "idCopied": "预订编号已复制",
+        "success": {
+          "confirmedTitle": "预订已确认！",
+          "confirmedDesc": "酒店已确认您的预订，房间已保留。",
+          "confirmingTitle": "预订确认中",
+          "confirmingDesc": "酒店正在确认您的预订请求。",
+          "paymentStatus": "支付状态",
+          "bookingStatus": "预订状态",
+          "paid": "已支付",
+          "confirmed": "已确认",
+          "confirming": "确认中",
+          "bookingId": "预订编号：",
+          "bookingDetails": "预订详情",
+          "dateRange": "{{checkIn}} - {{checkOut}}",
+          "saveEreceipt": "保存电子回执"
+        }
       }
     },
     "lite": {
@@ -1399,9 +1440,7 @@
       "seeMap": "查看地图",
       "viewHotelDetail": "查看酒店详情",
       "chooseRoom": "选择房型",
-      "chooseMultiRoom": "选择多个房型",
-      "switchMulti": "+ 多选房型",
-      "switchSingle": "+ 单选房型",
+      "chooseRoomCta": "选择房型",
       "seeRoom": "查看房型",
       "bestseller": "热销",
       "guestsCount": "可住 {{count}} 人",
@@ -1411,6 +1450,7 @@
         "title": "房型详情",
         "pricePerNight": "每晚价格",
         "pricePerNightPlain": "每晚价格",
+        "taxAndFees": "税费与服务费(15%)",
         "nights": "晚数",
         "amenities": "房内设施",
         "breakfastTitle": "含早餐",
@@ -1418,8 +1458,8 @@
         "priceSummary": "价格明细",
         "bookThisRoom": "预订该房型",
         "freeCancelNote": "入住前 48 小时可免费取消",
-        "startAt": "起价",
-        "reserveNow": "立即预订"
+        "see3d": "查看 3D",
+        "see360": "查看 360°"
       },
       "info": {
         "title": "酒店详情",
@@ -1432,14 +1472,22 @@
       },
       "preview": {
         "title": "实景预览",
-        "video360": "360° 与视频",
+        "overview": "物业概览",
+        "back": "返回",
+        "video360": "视频/360°",
         "video360Hint": "预订前先线上走一圈,看看真实环境。",
         "facilities": "设施实景",
         "tabs": {
           "all": "全部",
+          "video360": "视频/360°",
+          "facilities": "设施",
           "rooms": "客房",
           "pool": "泳池",
           "dining": "餐饮"
+        },
+        "facilityGroups": {
+          "kids": "儿童区",
+          "pools": "泳池与健身房"
         }
       },
       "reviews": {

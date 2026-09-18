@@ -28,6 +28,10 @@ import { fetchHotelDetail } from '@/api/goods';
 import { TEMP_HOTEL_COVERS, tempCoverFor } from '@/assets/tempImages';
 import { ErrorView, LoadingView } from '@/components/common/StateViews';
 import HomeIcon from '@/components/home/HomeIcon';
+import LiteAiSummary from '@/components/hotel/lite/LiteAiSummary';
+import LiteDetailBottomBar, {
+  LITE_DETAIL_BAR_HEIGHT,
+} from '@/components/hotel/lite/LiteDetailBottomBar';
 import { liteShared } from '@/components/hotel/lite/liteShared';
 import { colors } from '@/config/theme';
 import { fonts } from '@/config/typography';
@@ -35,6 +39,7 @@ import type { RootStackParamList } from '@/navigation/types';
 import {
   DETAIL_AMENITY_GROUPS,
   DETAIL_ATTRACTIONS,
+  DETAIL_DEMO,
   DETAIL_REASONS,
   DETAIL_REVIEW_SCORES,
   DETAIL_REVIEW_SUMMARY,
@@ -90,7 +95,7 @@ export default function HotelInfoLiteScreen() {
 
         <ScrollView
           style={liteShared.flex}
-          contentContainerStyle={liteShared.main}
+          contentContainerStyle={[liteShared.main, styles.mainWithBar]}
           showsVerticalScrollIndicator={false}
         >
           {/* 图库:接口只给一组图,取首图铺满并标张数(设计稿的轮播交互未做) */}
@@ -249,6 +254,8 @@ export default function HotelInfoLiteScreen() {
             >
               <Text style={styles.reviewCtaText}>{t('hotels.detail.reviews.readAll')}</Text>
             </Pressable>
+
+            <LiteAiSummary />
           </View>
 
           {/* 实景预览入口 */}
@@ -261,11 +268,20 @@ export default function HotelInfoLiteScreen() {
           </Pressable>
         </ScrollView>
       </SafeAreaView>
+
+      <LiteDetailBottomBar
+        priceFrom={detail.minPrice}
+        discountPercent={DETAIL_DEMO.discountPercent}
+        onPress={() => navigation.navigate('HotelDetailLite', { id: detail.id })}
+      />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  /* 底栏是绝对定位的,给滚动区留出它的高度 */
+  mainWithBar: { paddingBottom: LITE_DETAIL_BAR_HEIGHT + 24 },
+
   gallery: { width: '100%', height: 220, borderRadius: 24, overflow: 'hidden' },
   galleryImage: { width: '100%', height: '100%' },
   photoCount: {
