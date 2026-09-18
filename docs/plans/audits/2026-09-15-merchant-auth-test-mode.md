@@ -1,5 +1,7 @@
 # 商户凭证展示与 OTP 测试模式
 
+> 2026-09-18 取代说明：本报告中的 `MTRIP_MERCHANT_AUTH_TEST_MODE` 单变量启停方式已经退役。凭证展示、固定 OTP、上下文失效和审计行为继续保留；最新启停方式为部署能力门禁 `MTRIP_MERCHANT_AUTH_TEST_ALLOWED` 加后台全局配置 `merchant_auth_test_mode`，详见[运行时开关报告](./2026-09-18-merchant-auth-runtime-toggle.md)。以下内容作为历史实施记录保留。
+
 后续修复：首次激活请求曾因网关遗漏 activation 映射返回 404，已补齐并实际验证当前账号两种激活入口。见[激活路由修复](./2026-09-15-merchant-activation-routing-fix.md)。
 
 ## 本次行为

@@ -19,7 +19,17 @@ class NotificationController extends AbstractController
 {
     private function query(): Builder
     {
-        return Db::table('merchant_notify as n')->whereIn('n.merchant_id', MerchantContext::scopeMerchantIds() ?: [0])
+        $propertyIds = MerchantContext::authorizedPropertyIds();
+        $merchantIds = MerchantContext::accountType() === 3 && MerchantContext::merchantId() > 0
+            ? [MerchantContext::merchantId()]
+            : MerchantContext::scopeMerchantIds();
+        return Db::table('merchant_notify as n')->whereIn('n.merchant_id', $merchantIds ?: [0])
+            ->where(static function ($scope) use ($propertyIds) {
+                $scope->whereNull('n.property_id')->orWhere('n.property_id', 0);
+                if ($propertyIds !== []) {
+                    $scope->orWhereIn('n.property_id', $propertyIds);
+                }
+            })
             ->where('n.status', 1)->whereRaw("FIND_IN_SET('inapp', n.channels)")
             ->where('n.send_at', '<=', gmdate('Y-m-d H:i:s'))
             ->leftJoin('merchant_notify_read as r', static function ($join) {

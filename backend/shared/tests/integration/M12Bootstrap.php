@@ -39,6 +39,21 @@ function setRequest(array $input): void
     Hyperf\Context\Context::destroy('http.request.parsedData');
     Hyperf\Context\RequestContext::set((new Hyperf\HttpMessage\Server\Request('POST', '/m12-test'))->withParsedBody($input));
 }
+
+function setMerchantAuthTestMode(object $config, bool $allowed, bool $enabled, ?string $environment = null): void
+{
+    if ($environment !== null) {
+        $config->set('app_env', $environment);
+    }
+    $config->set('mtrip.merchant_auth_test_allowed', $allowed);
+    Hyperf\DbConnection\Db::connection('system')->table('sys_config')->updateOrInsert(
+        ['config_key' => 'merchant_auth_test_mode'],
+        [
+            'config_group' => 'security', 'config_value' => $enabled ? '1' : '0', 'value_type' => 3,
+            'config_name' => 'Merchant auth test mode', 'default_value' => '0', 'remark' => 'integration test',
+        ]
+    );
+}
 /** Test-only login adapter for pre-S4 regression fixtures. Never used in application code. */
 function merchantFixtureLogin(object $auth, string $username, string $password, string $ip): array
 {

@@ -177,7 +177,7 @@ file=@hotel-license.pdf
 
 ### 3.3 最终批准与激活
 
-本地测试选项：`MTRIP_MERCHANT_AUTH_TEST_MODE=true` 且 `APP_ENV=dev/local/test` 时，最终批准跳过外部投递；后台通过 `POST /api/v1/admin/merchant/onboarding/test-credentials`（`{id}`，超管＋最终批准权限）查看待激活凭证。普通详情不返回临时密码。认证配置及 OTP challenge 新增 `testMode`；邮箱/短信 OTP 仍须先请求验证上下文，随后用 `000000` 验证，无需真实渠道。注册、激活、登录和恢复均支持此测试模式，关闭开关/生产环境拒绝测试上下文，Authenticator/Google 不受此开关替代。App UI 接入时根据 `testMode` 显示明确提示，不能将固定码写成生产逻辑。详见[测试模式说明](../../plans/audits/2026-09-15-merchant-auth-test-mode.md)。
+测试选项：部署先设置 `MTRIP_MERCHANT_AUTH_TEST_ALLOWED=true` 并重建服务，再由超级管理员在“系统配置 → 全局参数 → 安全配置”开启 `merchant_auth_test_mode`。仅非 `prod/production` 环境且两道开关同时开启时生效；生产环境始终拒绝。生效后最终批准跳过外部投递，后台通过 `POST /api/v1/admin/merchant/onboarding/test-credentials`（`{id}`，超管＋最终批准权限）查看待激活凭证。普通详情不返回临时密码。认证配置及 OTP challenge 的 `testMode=true` 表示邮箱/短信 OTP 仍须先请求验证上下文，随后使用 `000000`；注册、激活、登录和恢复均支持，关闭任一道开关后既有测试上下文失效。Authenticator/Google 不受此开关替代。App UI 只能根据服务端 `testMode` 展示提示，不能把固定码写成生产逻辑。详见[运行时开关说明](../../plans/audits/2026-09-18-merchant-auth-runtime-toggle.md)。
 
 管理员最终批准后，后端一次创建 `merchant_info`、待激活 owner 账号和全部首批 `merchant_store`，并通过 outbox 投递访问码/用户名/临时密码。邮件或短信失败不会回滚实体；管理员从后台重试失败投递。
 

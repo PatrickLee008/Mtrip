@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Controller\Admin;
 
+use App\Constants\BookingConst;
+use App\Service\Booking\BookingLifecycleService;
 use App\Service\OrderStockService;
 use Hyperf\DbConnection\Db;
 use Hyperf\Di\Annotation\Inject;
@@ -23,6 +25,9 @@ class AdminOrderController extends AbstractAdminController
 {
     #[Inject]
     protected OrderStockService $stockService;
+
+    #[Inject]
+    protected BookingLifecycleService $lifecycle;
 
     /** 订单列表:筛选 订单号/类型/状态/商户/用户/下单与使用日期,手机号脱敏 */
     public function index(): array
@@ -169,6 +174,16 @@ class AdminOrderController extends AbstractAdminController
             throw new BusinessException(ErrorCode::DATA_CONFLICT, '仅待支付订单可直接取消,已支付请走退款流程');
         }
         $reason = $this->requireStr('reason');
+        if ((int) $order['order_type'] === 1) {
+            $this->lifecycle->cancel(
+                (int) $order['id'],
+                AdminContext::adminId(),
+                AdminContext::adminName(),
+                $reason,
+                BookingConst::OPERATOR_PLATFORM,
+            );
+            return Result::success(null, '订单已取消,库存已释放');
+        }
         Db::transaction(function () use ($order, $reason) {
             Db::table('order_main')->where('id', $order['id'])->update([
                 'order_status' => 4,

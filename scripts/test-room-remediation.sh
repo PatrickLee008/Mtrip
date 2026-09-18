@@ -17,7 +17,7 @@ for pass in 1 2; do
   sed "s/USE mtrip_business;/USE $TEST_DB;/" "$REPO_ROOT/database/migrations/V20260916005000__add-room-content-media.sql" | mysql_exec >/dev/null
 done
 sed "s/mtrip_m12_s1_test/$TEST_DB/g" "$REPO_ROOT/backend/services/goods-service/test/RoomReviewBootstrap.php" | docker exec -i mtrip-goods-service-1 sh -c 'cat > /tmp/RoomReviewBootstrap.php'
-for test in room-review room-content room-media; do
+for test in room-review room-list-availability room-content room-media; do
   sed "/declare(strict_types=1);/a\\
  define('BASE_PATH', '/opt/www');" "$REPO_ROOT/backend/services/goods-service/test/$test.php" | docker exec -i mtrip-goods-service-1 sh -c "cat > /tmp/$test.php"
   docker exec -e DB_BUSINESS_DATABASE="$TEST_DB" -e DB_SYSTEM_DATABASE="$TEST_DB" mtrip-goods-service-1 php "/tmp/$test.php"

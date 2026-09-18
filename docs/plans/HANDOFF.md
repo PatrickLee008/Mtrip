@@ -1,4 +1,362 @@
 # 会话交接文档(HANDOFF)
+### ★ 2026-09-18（商户认证测试模式改为后台运行时开关）
+
+商户固定 OTP 测试模式不再复用消费者注册的 `register_sms_required`，也不再由单一环境变量直接启停。新增全局安全配置 `sys_config.merchant_auth_test_mode`（默认 `0`）和部署能力门禁 `MTRIP_MERCHANT_AUTH_TEST_ALLOWED`（模板默认 `false`）；仅当环境不是 `prod/production`、部署门禁为 `true`、数据库开关为 `1` 时，商户注册/激活/登录/恢复才接受 `000000` 并跳过最终批准的外部凭证投递。生产环境始终关闭。
+
+后续页面走查修复了布尔配置模板分支：后台 IP 白名单、注册强制短信验证和商户认证测试模式现在统一只渲染开关与元信息，不再为前两项额外显示 `false` 文本输入框；商户测试模式继续保留生效状态标签，配置行为未改变。
+
+后台入口为“系统配置 → 全局参数 → 安全配置 → 商户认证测试模式”。只有超级管理员可以保存或重置该项；部署门禁关闭时不能开启，但可关闭遗留的数据库开启值。开关双向确认并展示“已生效/未开启/部署环境禁止”状态。最终批准在请求开始时冻结一次测试模式判定并传给凭证投递，避免审批过程中切换导致投递行为前后不一致；全局配置批量保存先完整校验再事务写入，失败批次不会留下已切换的安全开关。
+
+迁移 `V20260918120000__add-merchant-auth-test-toggle.sql` 和权限对齐迁移 `V20260918121000__add-global-config-reset-permission.sql` 已应用，账本 23/23、待执行 0。开发 `deploy/.env` 的部署门禁为 `true`，运行时数据库开关已恢复为 `0`；主池、APP 池和网关已重建并健康。注册、认证、最终批准三套隔离回归及新增后台控制器 14 项安全断言通过；真实网关验证 `0→1→0` 即时返回 `testMode:false→true→false`，无需重启。admin-web 构建、迁移校验、PHP lint 和 `git diff --check` 通过。两个 App 未修改。详见 `docs/plans/audits/2026-09-18-merchant-auth-runtime-toggle.md`。
+
+### ★ 2026-09-18（Merchant M4 预订管理 PRD v1.0.3 / Figma 整改）
+
+> 本节是当前口径，取代 2026-09-17 菜单记录中“All Properties 隐藏 Booking Management”的部分；`/availability` 仍要求具体物业，`/order` 现支持 All Properties 聚合。
+
+**范围**：仅 `merchant-web` 预订管理与现有后端链路；不扩展两个 App，不发送真实支付/短信/邮件/PMS 请求。基线是 Merchant PRD v1.0.3 模块 4 和 Figma `mTrip_Merchant` 详情节点 `1289:24340`、列表节点 `1289:16725`。
+
+**阶段 0～6 已执行并逐阶段 Review**：
+
+- 建立 `scripts/test-booking-remediation.sh` 一次性隔离库专项；收口取消政策退款上限、库存回补和旧核销入口。
+- 预订通知深链存数字订单 ID 并携带 `property_id`，C 端酒店取消/退款申请通知商户；员工和物业账号按授权物业过滤。
+- Pay at Hotel 仅使用 `pay_method=4`；`POST /merchant/order/mark-paid` 只对合法状态生效，权限键 `mch:order:mark-paid` 在注解、路由、菜单种子和前端 `v-perm` 一致。
+- Booking Management 补齐总额、倒计时、Workflow、终态告警、支付方式、Mark as Paid 和 No-show 禁用态；删除重复 Pending Check-in 页签。列表按 `1289:16725` 收敛为单搜索栏、胶囊页签、七列主表格和卡片内分页，高级条件收入筛选弹层；行点击仍进入详情，业务操作入口未删除。
+- All Properties 可查全部已授权酒店；选中具体物业后酒店筛选锁定，切换物业会清空旧房型筛选和详情。All Properties 省略 `X-Mtrip-Property-Id`，服务端授权集合仍是最终边界。
+- No-show 新订单冻结站点 IANA 时区、入住日 `23:59:59` 与首晚房费策略；历史订单回退站点时区，API 返回带偏移的 ISO 时间。站点时区在单请求内按 `site_id` 缓存，避免历史列表 N+1 且不会跨请求固化旧配置。
+
+**数据库/运行态**：`V20260918010000__booking-management-remediation.sql` 已应用，账本 21/21、待执行 0；该迁移已登记，禁止原地修改。order/order-app/merchant/gateway 已重启，8 主服务 + 5 App 孪生服务 + Gateway 健康检查全绿；未登录 `/merchant/order/mark-paid` 和 `/merchant/order/list` 均到达鉴权层并返回标准 `40101`。
+
+**验证**：预订专项（含 All Properties、越权、Header 契约、No-show 时区、Mark as Paid、通知范围）全过；392 个 PHP lint、shared 99/975、admin-web build、merchant-web build、client-app typecheck、菜单可见性契约和 `git diff --check` 通过。恢复会话后又完成 1440×900、1366×768 与 iPhone 16 393×852 真实登录态列表/详情/入住弹窗验收；修复实测发现的 `payment_success` / `payment_failed` 时间线翻译缺口。authenticated Mark as Paid 使用不存在订单 ID 无副作用探测，返回 HTTP 404 / `40401` 而非 401。
+
+**仍待决策/受控验证**：
+
+1. 当前 6 笔真实订单均已支付，未对它们执行 Mark as Paid 成功写入。若需补登录态成功路径，必须先准备专用 Pay at Hotel 测试订单；现有隔离契约已覆盖成功、幂等和非到店付拒绝。
+2. 待产品确认物业级 No-show 截止时间、费用策略（首期是否仅首晚/豁免）及配置入口（Hotel Profile 或 Settings）。确认前不新增物业字段、迁移或 UI。
+
+### ★ 2026-09-17 下午(「强制短信验证」开关搬家:站点级 → **全局安全配置**)
+
+> 本节**取代**下面那节(站点级方案)。`sys_site.sms_verify_required` 这一列**已被删除**,
+> 照着那节去找它会扑空。保留旧节是为了记录动机与 50021/50022 的设计,那部分仍然有效。
+
+**为什么搬**:站点级开关**挡不住「挑一个最宽松的站点」**。注册请求的站点来自
+**客户端可控的 `X-Site-Id`**(`AuthController::register` 的 `requireSiteId()` 只校验 `>0`,
+不校验站点是否存在/启用)。只要有任何一个站点被设成「跟随渠道」,带上那个站点号就能免验证码注册。
+而且这本质上是**平台级安全策略**,不是站点差异化配置。
+
+**改动**
+
+| 层 | 内容 |
+|---|---|
+| 迁移 | `V20260917040000__move-sms-verify-required-to-global.sql`(账本 19→**20**):种 `sys_config` 行 `security` / `register_sms_required` / `value_type=3` / `default_value='1'`;**并 `DROP` 掉 `sys_site.sms_verify_required`** |
+| user-service | `siteForcesSms(int)` → **`registerSmsRequired(): bool`**(读全局配置,不再吃 siteId);`registerRequiresSms($siteId)` = `registerSmsRequired() \|\| enabled($siteId)`,siteId 只用于判渠道归属 |
+| system-service | 撤销站点级字段(`SiteController::fill()` / `SysSite` casts 回到改动前) |
+| admin-web | 站点页改动**全部撤销**;**全局配置 → 安全配置**页加开/关**双向二次确认**(`Modal.confirm`,关闭走 `danger`),i18n 3 键 × 2 份 |
+| client-app | **逻辑零改动**(50021/50022 契约没变),仅修注释口径 |
+
+**开关在哪**:后台「系统配置 → 全局参数」(`/config/global`)→ **安全配置** 分组 →
+「注册强制短信验证」。`value_type=3` 由该页既有逻辑自动渲染成 `a-switch`,前端没为它写专门控件。
+
+**留痕**:靠既有 `OperationLogMiddleware`,不另写审计。因为该页**只提交变更项**,
+日志 `content` 里就只有这一个键,附带管理员 / IP / URL / 状态码 / 时间。实测样例:
+`{"configs":[{"key":"register_sms_required","value":"0"}]}`。
+**局限:只有新值、没有旧值**(要看旧值得比对前一条日志)。
+
+**验证(全部实跑)**
+
+- 迁移账本 19→**20**,待执行 0;`sys_config` 有新行(中文名入库为正确 UTF-8)、`sys_site` 该列已消失。
+- shared 单测 **99 用例 / 975 断言全绿**(改造而非新增)。
+- 真值表 **13 项全过**(经网关 8081,每格跑完即回滚):
+
+  | 全局开关 | 渠道 | `sms/send` | `register` 无 token |
+  |---|---|---|---|
+  | 强制(1) | 启用 | (跳过实测,见下) | `40111` |
+  | 强制(1) | 停用 | `50022` | `40111`,不建号 |
+  | 关闭(0) | 停用 | `50021` | `code=0` 建号(旧降级) |
+
+  **关键一格**:开关=1 时,`X-Site-Id` 取 `1/2/7/999/12345`(含**不存在**的站点号)
+  调 `register` **全部被 `40111` 拦下** —— 「挑弱站点」这条路已堵死,这正是搬家的目的。
+  唯一**没实测**的是「开关=1 + 渠道启用 → `sms/send` 正常」:那会真往用户手机发一条短信(要花钱、要打扰人),
+  且该格行为本次未触碰、当天早些时候已实测通过。
+- 后台走查 **全过**:开关可见、开/关**都弹确认**且文案不同、取消不保存、确认后落库、最终恢复为「开」。
+- `admin-web build`、`client-app typecheck` 零报错;改动 PHP 文件容器内 `php -l` 通过。
+- 状态已还原:开关=1、渠道 status=1、测试账号已删(`user_info` 回到 6)。
+
+**⚠️ 代价没变**:默认 `1`(强制),即 **SMSPoh 一旦挂掉或凭证失效,注册会全面不可用**(而不是降级放行)。
+要放开就去上面那个开关关掉,会弹确认并留痕。
+
+**仍未做(独立问题)**:`requireSiteId()` 依旧不校验站点存在/启用。开关全局化后,这个洞
+在「注册强制短信」这件事上已不可利用(判据不再依赖 siteId),但**伪造的 `X-Site-Id` 仍会被其它
+`/app/*` 接口接受**。影响面覆盖所有 C 端接口,值得单独评估,本次刻意没顺手改。
+
+**⚠️ 验证留痕时顺带发现的另一个问题(未修,需单独决策)**:
+**`sys_operation_log.content` 里存着明文的第三方凭证**。`MaskHelper::maskParams()` 的脱敏表是
+**精确匹配小写键名**,含 `secret` / `secret_key` / `client_secret` / `access_key`,
+但**不含 `apikey` / `apisecret`** —— 而短信、存储、文件三个配置接口用的正是 `apiKey` / `apiSecret` 驼峰命名
+(`system-service` 的 `SmsController` / `StorageController` / `FileController`)。
+结果:这些密钥在自己表里是 `SecretField` AES 加密存储的,却被操作日志以**明文**留了一份副本,
+凡能读日志表或后台「日志」页的人都能看到。当前库里已有 4 条这样的记录
+(`/sys/sms/channel/add` ×3、`/sys/sms/channel/update` ×1)。
+修的方向:给 `maskParams` 的默认表补上这几个键名(或改成子串匹配,注意别误伤 `keyword` 之类),
+并清洗存量记录。**本次未动** —— 属于另一件事,且清洗历史日志是不可逆操作,需要你点头。
+
+---
+
+### ~~2026-09-17 上午(站点级「强制短信验证」开关)~~ · **已被上一节取代**
+
+> ⚠️ 本节描述的 `sys_site.sms_verify_required` **列已被 `V20260917040000` 删除**,
+> 后台站点管理里也**没有**那个开关了。动机与 50021/50022 的设计仍然有效,其余按上一节为准。
+
+**动机**:`AuthController::register` 原本读 `SmsVerifyService::enabled()`,即「渠道启用即强制」。
+渠道一旦停用 / 软删 / 凭证失效,`enabled()` 变 false,注册**静默降级成免验证码注册**,且没有任何告警。
+9/17 实测复现(渠道 id=4 临时置 `status=2`):不带 `verifyToken` 的 `register` 直接 `code=0` 建号,`user_info` 6→7。
+
+**改动**
+
+| 层 | 内容 |
+|---|---|
+| 迁移 | `V20260917032003__add-site-sms-verify-required.sql`:`sys_site` + `sms_verify_required TINYINT NOT NULL DEFAULT 1`(账本 18→19) |
+| shared | `ErrorCode` 新增 `SMS_REQUIRED_UNAVAILABLE = 50022`(HTTP 500) |
+| user-service | `SmsVerifyService` 新增 `siteForcesSms()` / `registerRequiresSms()`;`requireChannel()` 按站点开关抛 50021 或 50022;`register` 改读 `registerRequiresSms()` |
+| system-service | `SiteController::fill()` 收 `smsVerifyRequired`;`SysSite` casts 补 integer |
+| admin-web | 站点列表加一列标签、编辑弹窗加开关;i18n 4 键 × 2 份 |
+| client-app | `API_CODE` 加 50022;`RegisterScreen` 的降级分支**仍只认 50021**(i18n 零新增) |
+
+**`enabled()` 语义没动**(仍是「渠道能否解析」),既有语义与单测不受影响,新逻辑是它外面加了一层。
+
+**50021 与 50022 的区别是「调用方能不能降级」**——这是这次设计的核心:
+- `50021` 站点不强制 + 无可用渠道 → 后端也不会要 `verifyToken`,App 照旧跳过验证码页直接注册;
+- `50022` 站点开了强制 + 渠道此刻不可用 → 后端**照样要** `verifyToken`,
+  App **不能跳过**(跳过去只会在推荐码页被 `40111` 打回,是条死路),要停在注册页把后端文案说给用户。
+
+**⚠️ 存量 7 个站点与新建站点一律默认 `1`(强制)** —— 用户的明确决定,已知晓代价:
+**SMSPoh 一旦挂掉或凭证失效,所有站点的注册会立即全部不可用**(而不是降级放行)。
+要放开的站点:后台「配置 → 站点管理」编辑该站点,把「强制短信验证」开关关掉(即 `sms_verify_required=0`)。
+
+**验证(真值表逐格实测,site 1,经网关 8081)**
+
+| 站点开关 | 渠道 | `sms/send` | `register` 无 token |
+|---|---|---|---|
+| 强制(1) | 启用 | 正常 | `40111` |
+| 强制(1) | 停用 | **`50022`** | **`40111`,`user_info` 6→6 不建号** ✅ 漏洞已堵 |
+| 跟随(0) | 停用 | `50021` | `code=0` 建号(旧降级行为保留) |
+
+其余:shared 单测 97/968 → **99/975** 全绿(新增 2 用例 7 断言,覆盖 `registerRequiresSms` 四种组合
+与 `requireChannel()` 的错误码切换);5 个改动 PHP 文件容器内 `php -l` 通过;
+`admin-web build` 与 `client-app typecheck` 零报错。
+**测试后状态已全部还原**:站点 7×`1`、渠道 `status=1`、`user_info` 回到 6。
+
+**踩到的一个坑**:`a-switch` 的 `@change="(v) => ...)"` 会让 `v` 变成隐式 any,
+而本仓库模板禁用类型标注 → `vue-tsc` 报 `TS7006`。改用带 setter 的 `computed` 做布尔↔0/1 转换。
+
+**未做**
+- 不动 `login-by-sms` / `reset-password`:这两条本就以短信为前提,不存在静默降级问题,开关只作用于 `register`。
+- 不在 `AppSiteController::config` 下发该字段:错误码已经把信号带给 App 了,不必多一份公开契约。
+  将来 App 想「进注册页之前就提示」再加。
+- 真实收发短信的端到端仍待用户用真号自测(与 9/16 那条相同)。
+
+### ★ 2026-09-17(商户端侧边栏菜单调整:Stores/Goods 移出 + 物业专属分组)
+
+**范围**:`merchant-web` 侧边栏分组与菜单可见性。5 个待确认点已向用户逐条确认(均为推荐方案)。
+
+- **Stores、Goods 移出侧边栏**,但只在 `SideMenu.vue` 的 `HIDDEN_PATHS` 隐藏:数据库菜单行、
+  权限键、路由与页面全部保留。理由:`/store` 还被工作台「View All Properties」和「所有物业」
+  列表对**非酒店物业**的 Manage 按钮使用,而 merchant-web 的路由是由菜单树生成的
+  (`router/dynamic.ts` 的 `walk()`),删菜单行会连带删掉 `/store` 路由,这三处会 404。
+- **Operations 仅在选中具体物业时出现**,子菜单 = Availability & Pricing(`/availability`)+
+  Booking Management(`/order`,从「经营」分组移入)。All Properties 下整组隐藏。
+- **新增 HOTEL MANAGEMENT 分组**,仅选中**酒店**物业时显示:Hotel Profile(复用既有
+  `/properties/:id/profile`,入口按当前选中物业动态生成)+ Room Types(原 Rooms 改名,
+  路由 `/rooms` 与权限 `mch:rooms:list` 不变)。
+- **切回 All Properties 的兜底**:`BasicLayout.selectProperty()` 切换后若当前页面已不在菜单
+  口径内,直接跳回「所有物业」页,避免停在一个侧边栏已无入口的页面上。
+- **口径单一来源**:新增 `src/config/menuSections.ts` 的 `isMenuPathVisible(path, selected)`,
+  侧边栏与切换兜底共用。注意它与 `merchant_menu.module_key` 是两层不同过滤:`module_key='hotel'`
+  (房型 600、房量与价格 700)在 `userStore.visibleMenus` 里已按业务模块裁剪,本次只补
+  「必须选中物业」这一层,没有改 `module_key`。
+- **数据库**:改名走增量 `database/merchant/42-merchant-menu-restructure.sql`(守卫式 UPDATE,
+  已用 `scripts/db-apply.sh` 应用),`database/seed/04-merchant-menu.sql` 同步为
+  「房型管理 / Room Types」供空库初始化。**不新增 menu 行**:Hotel Profile 与 `/dashboard`、
+  `/properties` 一样由前端直接挂入口(`item()` 的 always-allowed 分支),否则菜单树会再注册
+  一条与 `dynamic.ts` 硬编码路由重复的 `/properties/:id/profile`。
+- **i18n**:新增 `sidebar.sections.hotelManagement`(en `HOTEL MANAGEMENT` / zh 酒店管理);
+  `menu.rooms` 改 Room Types/房型管理;Hotel Profile 直接复用 `properties.profile.title`。
+
+**验证**:用真实 `SideMenu.vue` + 真实 pinia store / i18n / vue-router,喂本地开发库真实菜单树,
+在无头 Chrome 里渲染三种物业上下文(临时探针已删除,未入库):All Properties 下无
+Operations/HOTEL MANAGEMENT/Stores/Goods;选中酒店时两组齐全且点击 Hotel Profile 落到
+`/properties/5/profile`、Room Types 落到 `/rooms`;选中餐厅时 HOTEL MANAGEMENT 不出现、
+Operations 只剩 Booking Management。**该轮实测抓出一个真实缺陷并修掉**:Hotel Profile 的
+动态路径初版没有业务类型判断,选中餐厅时仍会显示,现 `hotelProfilePath` 仅在
+`business_type === 'hotel'` 时生成。merchant-web 生产构建(vue-tsc + vite build)通过。
+详见[模块13](13-商家端merchant-web落地.md)。
+
+### ★ 2026-09-17(客房管理「今日可售」看不出非今日订单:根因复核 + 两处修复)
+
+**问题**(用户报):商户新增房型并设好客房总数后,在 APP 下了该房型的订单,商户后台客房管理里
+「今日可售」没有变化,像是订单没生效。
+
+**根因(先证伪、再定性,原方案已被推翻)**:
+
+1. **列表只读"今天"那一行,而订单只写入住日那几行**。库存按日期落 `goods_daily_stock`,
+   订单只占「入住日 → 离店前一晚」(`OrderStockService::datesOf`),列表的「今日可售」只查
+   `stock_date = 今天` 的一行(`RoomController::appendAvailability`)。那笔单(订单 id=3,
+   房型 6)入住 **09-17**、离店 09-18,而当时"今天"是 09-16 —— 今天那一行**根本不存在**,
+   列表按房型默认可售配额(`launch_stock` 30)兜底 → 与下单前**一模一样**。这不是丢单:
+   同房型 09-17 的剩余确实由 30 掉到 29;对照组房型 5 的单含今天,它的今日可售确实 40→37。
+   证据:`goods_daily_stock` 当时只有 `sku 6 / 2026-09-17` 一行(由订单 id=3 补建),
+   没有 `sku 6 / 2026-09-16`。
+2. **那笔单为什么是"明天"**:订房向导 `normalizeDates()` 在**拿不到日期**时把兜底写死成
+   「明天起 1 晚」(`dayAfter(1)/dayAfter(2)`),而「我的精选」入口只传 `propertyId`
+   (`MyPickScreen.tsx:191` / `MyPickLiteScreen.tsx:174` → `HotelDetailScreen.tsx:102`)——
+   用户以为订的是"今天",系统静默订成"明天";搜索页默认却是「今天 → 后天」
+   (`defaultDateRange(2)`),两处口径不一致。
+3. **顺带推翻**:原计划的「审核通过时预生成日库存行」**治不了这个现象** —— 生成出来的
+   "今天"那一行 `stock_total` 同样是 30、`sold/locked` 同样是 0,页面还是 30。
+   该方案已放弃(仅"把兜底值固化成真实行",与本次症状无关)。
+
+**修复 A(后端 + merchant-web):客房列表下发并展示未来窗口**
+- `RoomController::appendAvailability` 一次取 `today .. today+7` 的库存行,新增
+  `upcoming_days`(固定 7)、`upcoming_stock_left`(明天起窗口内**未关房**日期的最低剩余)、
+  `upcoming_stock_date`(最低值所在日期,全关房为空串)、`upcoming_sold`(**明天起**窗口内已售+锁定间夜)。
+  无日库存记录的日期仍按房型默认可售配额兜底(与 C 端日历同口径)。
+- merchant-web 卡片在「今日可售」旁显示「未来 7 天最低 29 · 9/18」,`upcoming_sold > 0`
+  (即有非今日订单)时用警示色高亮;助手 `upcomingLabel/upcomingTight` 落在 `presentation.ts`。
+
+**修复 B(client-app):订房向导缺省日期与搜索页口径统一**
+- `bookingFormat.ts::normalizeDates` 兜底由「明天起 1 晚」改为「**今天起 2 晚**」,与
+  `DatePickerSheet.defaultDateRange(2)`(以及完整版/关怀版搜索页)一致;
+  `useBookingWizard.ts` 与 `navigation/types.ts` 的注释同步。
+- 「我的精选 → 酒店详情 → 订房向导」这条不带日期的链路因此不再静默挪到明天。
+
+**验证**
+- 新增 `backend/services/goods-service/test/room-list-availability.php`(13 条断言,已并入
+  `scripts/test-room-remediation.sh` 的 goods-service 用例列表):无订单时今日=未来窗口=默认配额;
+  复刻 `OrderStockService::lock()` 只订明天后,**今日不变、窗口 30→29、最低日期=明天、已订 1 间夜**;
+  关房日不计入最低值(最低日期顺延)。客房整改全套(room-review/room-list-availability/
+  room-content/room-media/room-contract)通过。
+- 质量基线(本机无 pwsh,`scripts/check.ps1` 按等价分步执行并在容器内跑前两步):
+  后端 **390 文件 `php -l` 零错**、shared **97 用例/968 断言全绿**、admin-web build 通过、
+  client-app typecheck 零报错;另跑 merchant-web build 通过。
+- 逻辑断言:`normalizeDates` 6 组(Node 直跑 `bookingFormat.ts`,覆盖缺省/空串/离店不晚于入住/
+  过去日期/正常区间透传)、merchant-web 展示助手 7 组(中英双语 + 空值 + 全关房)。
+- 真库核验(站点 7 / 商户 6,容器内直调 `RoomController::index()`):
+  `room 6 today=28 upcoming=29@2026-09-18`(今天 2 单、明天 1 晚)、`room 5 today=37`;
+  经网关未登录探活 `GET /api/v1/merchant/rooms/list` 返回标准 `40101` 信封。
+- 已 `./mtrip.sh restart goods-service goods-service-app` + `restart gateway`(Swoole 进程启动即
+  加载类,改 PHP 必须重启;`restart` 不刷网关,故网关单独重启),`./mtrip.sh health` 全绿。
+
+**未做 / 遗留**
+1. **没有做登录态浏览器点击走查**:merchant-web(5174)是 Vite dev、改动已 HMR;本轮只做到
+   接口级(真库 Controller 调用)+ 展示助手级断言,页面视觉请在有会话的浏览器里复核一眼。
+2. **"今天"的时区口径仍是隐患**:容器/PHP 为 UTC(`date.timezone` 未配置),后端 `date('Y-m-d')`
+   取的是 UTC 日期,而 C 端传的是设备本地日期;北京时间 00:00–08:00 期间二者差一天,
+   列表的「今日可售/未来窗口」会整体错位一天。本轮未改(需要统一 `TZ` 或由服务端下发"业务今天")。
+3. 门票下单页 `OrderConfirmScreen` 的默认日期仍是「明天起 1 晚」,本轮只统一了酒店订房向导。
+
+### ★ 2026-09-16(客房默认可售配额回退修复:C 端下单 409「库存不足」根因)
+
+**问题**:`POST /api/v1/app/order/create` 在无日库存记录时抛 `DATA_CONFLICT`(409)「2026-09-16 库存不足」
+(`OrderStockService.php:72`)。
+
+**根因**:不在数据,在 `backend/shared/src/Support/RoomDefaults.php` 的 `stock()` 写成
+`launch_stock ?? base_stock`。`??` 是空合并,只在键为 null/缺失时回退,而 merchant-web 新建房型的
+`launch_stock` 初值就是 **0**(`RoomEditor.vue` 的 `draft` 初值 0;`validBasics` 只校验“不超过
+base_stock”、不校验 >0)。于是“填了客房总数、没填默认可售配额”的房型走过 `OrderStockService::lock()`
+时被补建成 `stock_total = RoomDefaults::stock($sku) = 0`, `available = 0 - 0 - 0 < 1` → 409。
+
+- 同一函数的另一个消费方消费者日历(`HotelController:193`)也长期返回 `stock=0`,而价格
+  19500 / 周末 20000 完全正常 —— 反证问题只在 `stock()` 一个函数。
+- `goods_daily_stock` 全表 0 行也是旁证:每次都是补建后抛错、随事务回滚,所以库里看不到那行 0。
+
+**修复**:改为 `launch_stock > 0 ? launch_stock : base_stock`,0/null/缺失一律视为“未设置”;真正的
+“不卖”应走停售 `status=2` 或单日 `is_closed`。`backend/shared/tests/cases/SupportTest.php` 补
+0/null/缺失/负数回退与周末价回退用例。
+
+**验证**:shared 单测 95 用例/957 断言 → **97/968 全绿**;开发库房型 5(物业 7「胤竹酒店」/标准间)
+的 `launch_stock` 由 0 设为 40,消费者日历 `stock` 由 0 恢复为 40;`goods_daily_stock` 补建 INSERT 的
+无默认值非空列(仅 `sku_id`/`stock_date`)已核对,均显式提供;`./mtrip.sh health` 全绿。
+
+**遗留**:无。同日已把 merchant-web 侧一并收口(`merchant-web/src/views/rooms/components/RoomEditor.vue`):**①** 客房总数变化时,尚未设置(`0`)或仍在跟随(等于上一个客房总数)的默认可售配额自动同步,商户显式填过的更小值不覆盖;**②** 打开编辑器时把历史 `launch_stock=0` 按客房总数补上(存量坏数据由此自愈),且补值写在 `baseline` 捕获之前,不会出现"打开即脏/误弹放弃修改";**③** 提交审核时若 `base_stock > 0` 而 `launch_stock <= 0` 直接拦截并提示(仅提交拦截,草稿仍允许不完整,与原有校验口径一致;`base_stock = 0` 的复制草稿不拦)。验证:用 merchant-web 自带 `vue` 在 Node 里以**真实 `watch` 语义**跑 13 条断言覆盖上述分支(含 pre-flush 时机与 baseline 交互)全绿,`npm run build`(`vue-tsc --noEmit` + vite)通过。
+
+**本轮排查顺带确认的三个环境陷阱**(已按用户授权临时处理,**勿当成已修复**):
+
+1. **`./mtrip.sh restart <服务>` 不刷新网关**:`docker restart` 会释放并重新分配容器 IP,而
+   `cmd_restart()` 没有像 `cmd_start`/`cmd_build` 那样调用 `refresh_gateway()`。本次重启 4 个服务后
+   网关仍连旧 IP `172.18.0.11`(实际已变 `172.18.0.15`),全量 `50200`,手动 `restart gateway` 才恢复。
+   `CLAUDE.md` 里“网关会在 start/build 后自动刷新”这句对 restart 不成立 —— 属脚本缺口。
+2. **C 端签名/传输加密的临时开关仍在 `deploy/.env`**(该文件 gitignored):`MTRIP_CLIENT_SIGN=false`、
+   `MTRIP_PAYLOAD_ENCRYPT=false`。成因是 `client-app/.env` 的 `EXPO_PUBLIC_CLIENT_ID/SECRET` 为空,
+   且 `sys_client` 表 0 行(无任何迁移/种子创建客户端;只能走 admin-web「配置→客户端管理」生成
+   `mtc_*`,而 `client-app/.env.production` 里写死的 `mtrip_h5` 格式对不上、库里也查不到)。
+   **二者不对称**:签名可以只靠服务端开关绕过,但传输加密的密钥就是客户端密钥本身
+   (`PayloadDecryptMiddleware::resolveSecret` → `ClientSecretResolver::secretByClientId`),客户端不带
+   密钥时服务端无法解密,所以改开关期间必须**同时保持**客户端密钥为空;一旦填了密钥就必须先建好
+   `sys_client` 行,否则回到 40103。
+3. **站点隔离 + 账号按站点绑定**:`AbstractController::siteId()` 登录态优先取 **JWT 里的 `site_id`**
+   (游客才读 `X-Site-Id` 头);`login`/`register` 按 `site_id` 过滤用户、`issueToken` 把站点写进 token,
+   故站点 1 的账号在站点 7 登不上(表现为「手机号或密码错误」)。App 的 `SiteSelectScreen.select()`
+   切站点只 `switchSite` + `goBack`、**不清登录态**,会出现“列表按新站点、下单按旧站点”的不一致。
+   本轮 404 即由此而来:物业 7/房型 5 属站点 7,用户在站点 1 注册 → `hotelTarget()` 查 `site_id=1`
+   落空 → 业务 404「酒店物业不存在或暂不可预订」(`40401` 同样映射 HTTP 404,与路由 404 同形)。
+
+本轮只做诊断与上述 `RoomDefaults` 修复,未修改两个 App 功能代码,未执行 Git 写操作。
+
+### ★ 2026-09-16(恢复注册的真实短信 OTP:撤销临时固定码页)
+
+**触发**:SMSPoh 已可测试,后台已在「配置 → 短信配置」添加渠道。
+
+**改动:按上一条留的删除清单删,四处 + 一个文件,没有新写代码**
+
+| 位置 | 删了什么 |
+|---|---|
+| `screens/user/FixedOtpScreen.tsx` | 整个文件 |
+| `screens/user/RegisterScreen.tsx` | `USE_FIXED_OTP` 常量 + 那段 `if (USE_FIXED_OTP)` 跳转 |
+| `navigation/index.tsx` | `FixedOtpScreen` 的 import 与 `<Stack.Screen name="FixedOtp">` |
+| `navigation/types.ts` | `FixedOtp: { draft: SignupDraft }` 路由项 |
+
+删完注册自动回到原链路:
+`Register →(sms/send scene=register)→ VerifyOtp →(sms/verify 换一次性 verifyToken)→ ReferralCode(带 token 提交注册)`。
+`VerifyOtpScreen` 自始至终原样保留、一行没动过,`RegisterScreen` 里原有的发码逻辑
+(含「渠道未配 → 50021 → 跳过验证码页直接去推荐码页」的兜底分支)也一直在,所以是纯删除。
+
+**这次是必修,不是清理**
+
+后台新配的渠道让 `SmsVerifyService::enabled()` 对所有站点恒为 true,
+而 `AuthController::register` 的策略是「渠道启用即强制」(`if ($smsRequired) assertTicket(...)`)——
+固定码页是纯前端校验、永远拿不到 `verifyToken`,**留着的话每一次注册都会被 `40111` 打回**。
+
+渠道行:`mtrip_system.sys_sms_channel` id=4,`provider_code=smspoh` / `status=1` /
+`site_id=0`(全局,对所有站点生效)/ `deleted_at IS NULL` / `sign_name=SMSPohTest`。
+(同表 id=2、id=3 两行分别被软删与停用,会被 `channel()` 的 `status=1 + whereNull(deleted_at)` 排掉。)
+
+**验证**
+
+1. **渠道确实能解析**:把 `api_key`/`api_secret` 密文取出,在 `mtrip-user-service-1` 容器内
+   用它自己的 `MTRIP_AES_KEY` 走 AES-256-GCM 解密成功(41 / 32 字符),`sign_name` 非空。
+   这四项正是 `channel()` 返回 null 的全部条件,故 `50021 短信服务未配置` 不可能再出现。
+2. **反证渠道已生效**:经网关不带 `verifyToken` 调 `POST /api/v1/app/auth/register`
+   → `40111 请先完成手机号短信验证`,且 `user_info` 行数 **6 → 6 无副作用**
+   (若渠道未生效,这一调用会直接建号成功)。
+3. `client-app` typecheck 零报错;全仓已无 `FixedOtp` / `USE_FIXED_OTP` 残留;
+   后端也确认没有 `MTRIP_SMS_BYPASS_CODE` 一类的万能码残留(那一版早已整体回滚)。
+
+**未做**:**真实收发短信的端到端没跑** —— 需要一个能收码的真实缅甸号码,
+且发码会真的产生一条短信与费用,留给你用自己的号码自测:
+注册页填号 → 收码 → 验证码页填入 → 推荐码页 Continue/Skip → 应建号成功。
+若发码报服务商侧错误(号码前缀、余额、凭证),看 `sys_sms_log` 与 user-service 日志。
+
+### ★ 2026-09-16(merchant-web 客房列表 `metrics` 空值兼容)
+
+**现象**：进入 `/rooms` 后，`index.vue` 渲染 `metrics.totalRooms` 时抛出 `Cannot read properties of undefined`。页面虽然为 `metrics` 提供了初始值，但列表请求成功后无条件执行 `metrics.value = data.metrics`；只要运行中的接口实例未携带新增统计字段或返回空值，安全初始值就会被覆盖为 `undefined`。
+
+**修复**：`apiRoomList` 将运行时可能缺失的 `metrics` 明确为可选/可空；页面通过 `normalizeMetrics()` 统一将缺失或结构异常的统计归一为 `{ totalRooms: 0, roomTypes: [] }`，并对 `totalRooms` 做数值归一。请求失败时同步清空 `list`、`total` 和 `metrics`，避免物业切换或重试后残留旧数据。当前 goods-service 源码仍按统一分页结构附带真实 `metrics`，正常响应不受影响。
+
+**验证**：`merchant-web npm run build` 通过（`vue-tsc --noEmit && vite build`）；仅有既有的大 chunk 提示。
+
+### ★ 2026-09-16(指定 Git 基线后的数据库增量复核)
+
+按用户要求以提交 `2a32fe1996376e3b917aba838e2560ef52760217` 为起点复核并执行数据库增量。该提交本身没有数据库变更；从该提交（含）到当前 `dev` 的版本化迁移共新增 16 个。`scripts/db-migrate.sh --validate` 校验当前 18 个版本全部通过，`--status` 与正式 apply 均显示已执行 18、待执行 0；apply 随后再次完成全账本复核，数据库已是最新版本，没有重复执行已登记 SQL，也没有失败项。
+
 ### ★ 2026-09-16(关怀模式结果页取数对齐完整版:`/app/goods/list` → `/app/hotels/list`)
 
 **问题**:`HotelResultsLiteScreen` 此前用 `fetchGoodsList({goodsType: GOODS_TYPE.HOTEL, …})`
@@ -313,7 +671,7 @@ Skip Inter 400 12 白(左 17 / 上 9);底栏宽 370 两端对齐 —— Previous
 判断依据是 `docker inspect -f '{{.State.StartedAt}}'` 与出问题那条注册记录的 `register_time`
 一比对:注册发生在容器启动之后、改代码之前。
 
-### ★ 2026-09-15(【临时】注册验证码改为纯前端固定码页 123456)
+### ★ 2026-09-15(【临时】注册验证码改为纯前端固定码页 123456)—— **已于 2026-09-16 整体撤销,见本文件顶部那条**
 
 **范围**:client-app **新增一页** `screens/user/FixedOtpScreen.tsx`(路由 `FixedOtp`),
 只认 `123456`、**纯前端校验、不发任何网络请求**。注册流程 `Register → FixedOtp → ReferralCode`。
@@ -500,7 +858,7 @@ merchant-web 的 `/merchant/activation/*` 后端已存在但网关遗漏 activat
 
 ### ★ 2026-09-15（测试凭证弹窗与固定 OTP）
 
-用户授权跳过邮件渠道后，本地已开启 `MTRIP_MERCHANT_AUTH_TEST_MODE=true`，仅 dev/local/test 生效。最终批准后自动弹出凭证，既有待激活申请可由超管在详情查看；邮箱/SMS 外部投递跳过，注册/激活/登录/恢复 OTP 获取后输入 000000，生产与关闭开关后拒绝测试上下文。Authenticator 不变。两个 Web 构建、8 文件 lint、43 注册/42 认证/36 凭证测试通过，双池和商户 Web 代理已确认 testMode=true。用户 ID 2 账号仍待激活，未替用户激活。无迁移，两个 App 未修改。详见 `docs/plans/audits/2026-09-15-merchant-auth-test-mode.md`。
+该节记录初版实现，启停方式已由 2026-09-18 的后台运行时开关取代。最终批准后自动弹出凭证、测试 OTP 上下文、生产拒绝、审计和 Authenticator 行为保持不变；旧变量 `MTRIP_MERCHANT_AUTH_TEST_MODE` 已退役。详见 `docs/plans/audits/2026-09-15-merchant-auth-test-mode.md` 顶部的取代说明及最新运行时开关报告。
 
 ### ★ 2026-09-15（后台线索默认确认注册联系方式）
 
@@ -2116,7 +2474,7 @@ Mtrip 海外旅游 SaaS 平台:后端 Hyperf 3.1 微服务(backend/)+ 平台管�
 
 ## 2. 当前进度(与 docs/plans/README.md 保持一致)
 
-本任务最新进度：PRD模块12商户管理S0设计及S1～S4核心开发测试已完成；S5～S7尚未开始。S4真实扫码和完整UI、S3完整上传及模块11端到端未验，详见模块15计划及阶段交付报告；下表为历史底座状态。
+本任务最新进度：PRD模块12商户管理S0设计及S1～S4核心开发测试已完成；S5～S7尚未开始。S4真实扫码和完整UI、S3完整上传及模块11端到端未验，详见模块15计划及阶段交付报告；下表为历史底座状态。**2026-09-17 最新一轮为「客房管理看不出非今日订单」的根因复核与修复(A 列表下发未来窗口 / B 订房向导缺省日期统一),见本文件顶部那条 ★。**
 
 **商户账号体系三期(2026-08-31)**:补齐平台对商户的三项管控,详见 [12-商家账号体系.md](./12-商家账号体系.md)「三期任务清单」。
 - **功能模块授权**:新表 `merchant_module_grant` + `merchant_menu.module_key`(''=公共菜单)。可见性口径 ——
@@ -2179,6 +2537,20 @@ Mtrip 海外旅游 SaaS 平台:后端 Hyperf 3.1 微服务(backend/)+ 平台管�
 - **多语言**(vue-i18n,默认/fallback 均 en-US):en-US.ts 为全量词条源,zh-CN.ts 只维护已翻译部分;菜单三字段 `menu_name`(中文)/`menu_name_en`(英文回退)/`i18n_key`(词条 key,目录与页面必填、按钮不占词条);显示名统一走 `locales/menuI18n.ts` 的 `resolveMenuTitle/menuTitle`(i18n_key 命中→t(key),未命中→非中文环境用英文名、中文用中文名);扩展新语言只需前端加语言包+SUPPORTED_LOCALES,菜单数据与后端零改动;详细规范见 `docs/guides/standards/README.md`。
 
 ## 6. 下一步(模块08 部署与网关联调,任务清单见 docs/plans/08-部署与网关.md)
+
+客房可用性可见性下一步(2026-09-17,承接本文件顶部「客房管理今日可售」一条):
+1. **登录态浏览器走查**(merchant-web 5174 已在跑):新建房型 → 审核通过 → APP 订**明天**的房,
+   确认卡片同时显示「今日可售 N」与「未来 7 天最低 N-1 · 次日」并在有占用时高亮;
+   窄屏(≤1280)下新加的这一段是否会挤换行。
+2. **"今天"的时区口径**:容器是 UTC,后端 `date('Y-m-d')` 与 C 端设备本地日期在
+   北京时间 00:00–08:00 会差一天。建议给服务统一 `TZ`(或由服务端下发"业务今天"),
+   涉及 `RoomController::appendAvailability`、`OrderStockService::datesOf`、
+   `HotelController::calendar` 等所有 `date('Y-m-d')` 消费方 —— 属跨服务改动,单独立项。
+3. **门票下单页 `OrderConfirmScreen`** 的默认日期仍是「明天起 1 晚」;若也要与搜索页统一,
+   改它自己的 `dayAfter(1)/dayAfter(2)` 两个初值即可(本轮只动了酒店向导)。
+4. 若发现「未来 7 天」这个窗口不够用(商户想看得更远),`RoomController::UPCOMING_DAYS`
+   是唯一开关;窗口越长,列表查询返回的行数越多,注意 `goods_daily_stock` 的
+   `idx_property_stock`/`idx_stock_date` 命中情况。
 
 client-app 酒店指引下一步(2026-09-16,承接本文件顶部「酒店页用户指引」一条):
 1. **缅文文案找母语者过一遍**(`hotels.guide.*` 共 18 键中的 14 条正文)。

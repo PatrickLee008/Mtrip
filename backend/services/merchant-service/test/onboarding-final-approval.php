@@ -97,7 +97,7 @@ function stage4Rejects(int $code, callable $callback, string $message): void
 }
 
 $siteId = 994;
-$config->set('mtrip.merchant_auth_test_mode', false);
+setMerchantAuthTestMode($config, false, false, 'test');
 $kyc = $container->get(OnboardingKycService::class);
 $delivery = new Stage4Delivery();
 $approval = new Stage4Approval($kyc, $delivery);
@@ -201,8 +201,7 @@ Db::connection('system')->table('sys_email_channel')->update(['status' => 2]);
 
     stage4Rejects(ErrorCode::FORBIDDEN, fn () => $delivery->testCredentials($adminLead['applicationId']),
         'credential viewing is disabled by default');
-    $config->set('app_env', 'test');
-    $config->set('mtrip.merchant_auth_test_mode', true);
+    setMerchantAuthTestMode($config, true, true, 'staging');
     $testLead = seedReadyStage4($siteId, 'TESTMODE', 'hotel', 1, '+95940000006', 'stage4-testmode@example.test', $merchantTemplate, $hotelTemplate);
     $testResult = $approval->approve($testLead['applicationId'], 'stage4-testmode-request', ['email', 'inapp']);
     $emailRow = Db::table('merchant_credential_delivery')->where('application_id', $testLead['applicationId'])->where('channel', 'email')->first();
@@ -226,10 +225,10 @@ Db::connection('system')->table('sys_email_channel')->update(['status' => 2]);
         'permissions' => ['merchant:onboarding:final-approve', 'merchant:onboarding:credential-retry']]);
     $config->set('app_env', 'production');
     stage4Rejects(ErrorCode::FORBIDDEN, fn () => $delivery->testCredentials($testLead['applicationId']), 'production refuses test credentials even with the flag enabled');
-    $config->set('app_env', 'test');
+    $config->set('app_env', 'staging');
     Db::table('merchant_admin')->where('id', $testResult['accountId'])->update(['status' => 1]);
     stage4Rejects(ErrorCode::DATA_CONFLICT, fn () => $delivery->testCredentials($testLead['applicationId']), 'activated accounts cannot expose their old temporary credentials');
-    $config->set('mtrip.merchant_auth_test_mode', false);
+    setMerchantAuthTestMode($config, true, false);
 
     $rollback = seedReadyStage4($siteId, 'ROLLBACK', 'hotel', 1, '+95940000003', 'stage4-rollback@example.test', $merchantTemplate, $hotelTemplate);
     Db::table('merchant_info')->insert([

@@ -48,4 +48,10 @@ export const API_CODE = {
   SMS_VERIFY_REQUIRED: 40111,
   SMS_SEND_TOO_FREQUENT: 42911,
   SMS_CHANNEL_UNAVAILABLE: 50021,
+  /**
+   * 平台开了「强制短信验证」(全局配置 `sys_config.register_sms_required=1`)但渠道此刻不可用。
+   * 与 50021 的区别是**能不能降级**:50021 可以跳过验证码页直接注册,
+   * 50022 **不能** —— 此时注册这条路走不通,要停在注册页把后端文案说给用户。
+   */
+  SMS_REQUIRED_UNAVAILABLE: 50022,
 } as const;

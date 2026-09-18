@@ -80,6 +80,7 @@
 ### P1：首发库存、周末价和取消政策尚未完全驱动交易
 
 - `launch_stock` 有保存和“不超过 base_stock”校验，但当前读取/下单缺省库存使用 `base_stock`。仅填写首发可售数不会限制初始可售库存。数据库还将 `base_stock` 注释为“基础每日库存”，前端则标作实际总数，需要先冻结含义。
+- **[已修复 2026-09-16]** 阶段 2–5 引入 `RoomDefaults::stock()` 把 `launch_stock` 作为无日库存时的默认可售配额，但实现写成 `launch_stock ?? base_stock`。`??` 只在键为 null/缺失时回退，而 merchant-web 新建房型的 `launch_stock` 初值就是 **0**（`RoomEditor.vue` 的 `draft` 初始值，提交校验只查“不超过 base_stock”、不查是否 > 0），因此“填了客房总数、没填默认可售配额”的房型 `stock_total` 被补建成 0，`OrderStockService::lock()` 判定 `available = 0 - 0 - 0 < 1` 抛 `DATA_CONFLICT`(409)「库存不足」；消费者日历（同一函数的另一个消费方）也长期返回 `stock=0`。已改为 `launch_stock > 0 ? launch_stock : base_stock`，0/null/缺失一律视为“未设置”（真正的“不卖”应走停售 `status=2` 或单日 `is_closed`），并在 `shared/tests/cases/SupportTest.php` 补 0/null/缺失/负数回退与周末价回退用例。开发库房型 5 的 `launch_stock` 已设为 40，日历 `stock` 由 0 恢复为 40。**遗留**：无（merchant-web 侧已同轮收口：客房总数变化时自动同步尚未设置的默认可售配额、打开时按客房总数补历史 0 值、提交审核时拦截「客房总数 > 0 而配额 ≤ 0」，详见[模块13](./13-商家端merchant-web落地.md)）。
 - 商户日历 `fallbackDay()` 使用周末价；消费者日历无日库存记录时使用基础价；`OrderStockService::lock()` 首次建日库存也使用基础价。周末看见的价格可能与实际下单不一致。
 - 房型表单的 `cancellation_policy` 是展示文本；实际订单快照/退款读取 `goods_refund_rule`。选择“不可退款”文本不等于创建可执行的不可退款规则。
 - 计划：明确初始配额作用日期/默认值，统一三处缺省库存与报价规则；将取消政策映射到明确的规则 ID/规则结构并冻结订单快照。已有日历覆盖、售出和锁定数量不能被资料审核覆盖。加床价格保留，但加床收费流程另须确认，不能宣称仅存字段就能自动计费。
@@ -203,3 +204,41 @@
 - [x] 完成阶段 0–5 编码、数据库迁移、隔离回归、构建、桌面/窄屏视觉检查及文档交接。
 - [x] 本地已应用 `V20260916005000__add-room-content-media.sql`，迁移账本 18 已执行、0 待执行。
 - [x] 没有修改 `merchant-app/**` 或 `client-app/**` 功能代码；外部 VR 仅保存 HTTPS 配置且禁止启用，PMS/CM 保持后续独立阶段。
+- [x] 2026-09-16 补修 `RoomDefaults::stock()` 的 `launch_stock=0` 回退缺陷（409「库存不足」根因），shared 单测 97 用例/968 断言全绿；消费者日历 `stock` 由 0 恢复为 40。同日 merchant-web `RoomEditor.vue` 同步收口默认可售配额（自动同步/打开补值/提交拦截），13 条 Vue 响应式断言与生产构建通过。详见上方 P1 条目。
+
+## 11. 2026-09-16 客房列表统计空值修复
+
+- 复现原因：页面初始化的 `metrics` 有安全默认值，但 `/merchant/rooms/list` 响应缺失或空置 `metrics` 时，`loadList()` 又把页面状态覆盖为 `undefined`，下一次渲染读取 `metrics.totalRooms` 即报错。
+- 前端契约将 `metrics` 标记为可选/可空，并在唯一赋值入口归一为 `{ totalRooms: 0, roomTypes: [] }`；有效统计继续原样显示，异常结构不再进入模板。
+- 请求失败时同时重置列表、分页总数和统计，避免展示上一物业的残留结果。goods-service 当前标准响应仍返回 `metrics`，无需修改后端接口。
+- 验证：`merchant-web npm run build` 通过；仅保留项目既有的大 chunk 提示。
+
+## 12. 2026-09-17 「今日可售」看不出非今日订单(列表未来窗口 + 向导缺省日期)
+
+**报告**：商户新增房型并设好客房总数，在 APP 下了该房型的订单，客房管理卡片的「今日可售」没有变化。
+
+**根因(不是丢单)**
+- 库存按日期落 `goods_daily_stock`，订单只占「入住日 → 离店前一晚」那一行；卡片上的「今日可售」只读
+  `stock_date = 今天` 的一行。报告里那笔单入住日是**次日**，今天这一行不存在 → 列表回落房型
+  默认可售配额，与下单前完全相同(同一房型次日剩余确实由 30 → 29，属正常扣减)。
+- 那笔单之所以落在"次日"：订房向导在没有入离日期时兜底写死「明天起 1 晚」，而「我的精选」
+  入口不带日期，于是静默订成明天；搜索页默认却是「今天 → 后天」，两处口径不一致。
+- 复核结论：**"审核通过时预生成日库存行"治不了本现象**(生成出的今天那行同样是 30)，不采纳。
+
+**改动**
+- 契约：`GET /merchant/rooms/list` 每行新增 `upcoming_days`(固定 7)、`upcoming_stock_left`
+  (明天起窗口内未关房日期的最低剩余)、`upcoming_stock_date`(最低值所在日期，全关房为空串)、
+  `upcoming_sold`(**明天起**窗口内已售+锁定间夜)。无日库存记录的日期仍按 `RoomDefaults::stock()` 兜底，
+  与 C 端日历同口径；商户主动关房的日期不计入最低值。
+- merchant-web：卡片在「今日可售」旁显示「未来 7 天最低 29 · 9/18」，`upcoming_sold > 0`
+  (窗口内有占用)时用警示色高亮；助手 `upcomingLabel/upcomingTight` 落在 `presentation.ts`。
+- client-app：`normalizeDates()` 兜底统一为「今天起 2 晚」，与 `defaultDateRange(2)` 对齐。
+
+**验收**
+- 新增 `backend/services/goods-service/test/room-list-availability.php`(13 条断言，已并入
+  `scripts/test-room-remediation.sh`)：无订单时今日=窗口=默认配额；只订明天时今日不变、
+  窗口 30→29、最低日期=明天、已订 1 间夜；关房日被跳过。
+- 质量基线(等价分步)：390 文件 `php -l` 零错、shared 97/968、admin-web build、
+  merchant-web build、client-app typecheck 全绿。
+- 真库(站点 7/商户 6)：`room 6 today=28 upcoming=29@2026-09-18`、`room 5 today=37`。
+- 遗留见 `docs/plans/HANDOFF.md` 顶部那条(浏览器走查、"今天"的 UTC/本地时区口径、门票页默认日期)。

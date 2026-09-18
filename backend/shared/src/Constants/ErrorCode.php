@@ -80,6 +80,15 @@ class ErrorCode
     public const DB_ERROR = 50003;
     /** 短信服务不可用(未配置渠道 / 凭证无效 / 服务商故障) (HTTP 500) */
     public const SMS_CHANNEL_UNAVAILABLE = 50021;
+    /**
+     * 平台强制短信验证、但渠道此刻不可用 (HTTP 500)
+     *
+     * 与 50021 的区别是**调用方能不能降级**:
+     *   50021 = 平台没开强制且没有可用渠道 → App 可跳过验证码页直接注册(后端也不会要 verifyToken);
+     *   50022 = 平台开了 `sys_config.register_sms_required` → **不允许跳过**,注册这条路此刻走不通。
+     * 拆成两个码,App 才能一个降级、一个报错,而不是靠猜。
+     */
+    public const SMS_REQUIRED_UNAVAILABLE = 50022;
 
     /** 业务code → HTTP 状态码映射 */
     public const HTTP_MAP = [
@@ -109,6 +118,7 @@ class ErrorCode
         self::THIRD_PARTY_ERROR => 500,
         self::DB_ERROR => 500,
         self::SMS_CHANNEL_UNAVAILABLE => 500,
+        self::SMS_REQUIRED_UNAVAILABLE => 500,
     ];
 
     /** 默认错误文案 */
@@ -139,6 +149,7 @@ class ErrorCode
         self::THIRD_PARTY_ERROR => '第三方服务调用失败',
         self::DB_ERROR => '数据库操作失败',
         self::SMS_CHANNEL_UNAVAILABLE => '短信服务暂不可用,请稍后再试',
+        self::SMS_REQUIRED_UNAVAILABLE => '短信验证暂不可用,请稍后再试或联系客服',
     ];
 
     public static function httpStatus(int $code): int

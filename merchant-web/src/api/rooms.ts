@@ -70,6 +70,13 @@ export interface MerchantRoom {
   sort: number;
   today_stock_total?: number;
   today_stock_left?: number;
+  /** 未来窗口天数(后端固定 7):今天之后 N 天内最低可售 */
+  upcoming_days?: number;
+  upcoming_stock_left?: number;
+  /** 最低可售所在日期(YYYY-MM-DD);窗口内全关房时为空串 */
+  upcoming_stock_date?: string;
+  /** 明天起窗口内已售+锁定合计(间夜):非今日订单的信号,> 0 时卡片高亮 */
+  upcoming_sold?: number;
 }
 
 export function apiRoomHotels(): Promise<RoomHotelOption[]> {

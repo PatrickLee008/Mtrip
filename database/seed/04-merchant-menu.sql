@@ -18,7 +18,7 @@ INSERT IGNORE INTO `merchant_menu` (`id`, `parent_id`, `menu_name`, `menu_name_e
 (300, 0, '门店管理',   'Stores',    'menu.store',     'mch:store:list',  2, '/store',     'store/index',     'ShopOutlined',      3, '1,2,3'),
 (400, 0, '预订管理',   'Booking Management', 'menu.booking', 'mch:order:list',  2, '/order',     'order/index',     'ProfileOutlined',   4, '1,2,3'),
 (500, 0, '门票商品',   'Ticket Products', 'menu.goods', 'mch:goods:list',  2, '/goods',     'goods/index',     'GoldOutlined',      5, '1,2,3'),
-(600, 0, '客房管理',   'Rooms',     'menu.rooms',     'mch:rooms:list',  2, '/rooms',     'rooms/index',     'HomeOutlined',      6, '1,2,3'),
+(600, 0, '房型管理',   'Room Types',     'menu.rooms',     'mch:rooms:list',  2, '/rooms',     'rooms/index',     'HomeOutlined',      6, '1,2,3'),
 (700, 0, '房量与价格', 'Availability & Pricing', 'menu.availability', 'mch:availability:list', 2, '/availability', 'availability/index', 'CalendarOutlined', 7, '1,2,3'),
 (800, 0, '收益结算',   'Earnings',  'menu.earnings',  'mch:earnings:list', 2, '/earnings', 'earnings/index', 'AccountBookOutlined', 8, '1,2,3'),
 (900, 0, '通知中心',   'Notifications', 'menu.notifications', 'mch:notifications:list', 2, '/notifications', 'notifications/index', 'BellOutlined', 9, '1,2,3'),
@@ -75,7 +75,8 @@ INSERT IGNORE INTO `merchant_menu` (`id`, `parent_id`, `menu_name`, `menu_name_e
 (40011, 400, '内部备注',     'Internal Note',    'mch:order:note',          3, 11, '1,2,3'),
 (40012, 400, '同步PMS渠道',  'Sync PMS',         'mch:order:sync',          3, 12, '1,2,3'),
 (40013, 400, '预订凭证',     'Booking Voucher',  'mch:order:voucher',       3, 13, '1,2,3'),
-(40014, 400, '查看住客联系方式', 'View Guest Contact', 'mch:order:guest-contact', 3, 14, '1,2,3');
+(40014, 400, '查看住客联系方式', 'View Guest Contact', 'mch:order:guest-contact', 3, 14, '1,2,3'),
+(40016, 400, '确认到店收款', 'Mark as Paid', 'mch:order:mark-paid', 3, 16, '1,2,3');
 
 -- ---------- 门票商品按钮 ----------
 INSERT IGNORE INTO `merchant_menu` (`id`, `parent_id`, `menu_name`, `menu_name_en`, `perm_key`, `menu_type`, `sort`, `account_scope`) VALUES

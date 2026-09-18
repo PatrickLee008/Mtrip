@@ -47,11 +47,6 @@ import { isMobile, isPassword } from '@/utils/validate';
 /** 设计稿固定展示 +95(缅甸),区号选择未实现 */
 const COUNTRY_CODE = '+95';
 
-/**
- * 【临时】真实短信 OTP 未接通期间,注册走纯前端的固定码页(`FixedOtpScreen`,只认 123456)。
- * 接通后置为 false(或直接删掉这个常量与下面那段 if),即恢复「发码 → VerifyOtp」的真实链路。
- */
-const USE_FIXED_OTP = true;
 const SOCIALS: SocialProvider[] = ['google', 'facebook', 'apple'];
 
 export default function RegisterScreen() {
@@ -103,18 +98,6 @@ export default function RegisterScreen() {
 
     const draft = { mobile: mobile.trim(), password, realName: realName.trim() };
 
-    /**
-     * 【临时 · 接通真实 OTP 时整段删掉】
-     * 短信渠道尚未配置,走**纯前端**的固定码页(只认 123456,不发任何请求、也不验票据)。
-     * 后端此时没有启用中的渠道,`register` 不强制 `verifyToken`,所以过完这一页直接去推荐码页即可。
-     * 删除清单:本 if + 顶部 `USE_FIXED_OTP` + `screens/user/FixedOtpScreen.tsx` + 路由 `FixedOtp`;
-     * 删完下面原有的发码逻辑自动恢复,`VerifyOtpScreen` 一直原样留着没动过。
-     */
-    if (USE_FIXED_OTP) {
-      navigation.navigate('FixedOtp', { draft });
-      return;
-    }
-
     setSending(true);
     try {
       // 发码放在本页而不是验证码页:号码已被占用之类的失败要在这里就说清楚,
@@ -135,9 +118,13 @@ export default function RegisterScreen() {
       });
     } catch (e) {
       /*
-       * 本站点没配短信渠道 → 整条验证码链路不可用,直接跳过这一步。
-       * 后端此时同样不会强制 verifyToken(见 AuthController::register 的「渠道启用即强制」),
-       * 两边口径一致;不这么处理的话,未配渠道的站点会彻底注册不了。
+       * 50021 = 平台没开强制、本站点也没有可用渠道 → 整条验证码链路不可用,直接跳过这一步。
+       * 后端此时同样不会要 verifyToken(见 `SmsVerifyService::registerRequiresSms`),两边口径一致;
+       * 不这么处理的话,未配渠道的站点会彻底注册不了。
+       *
+       * **50022 不在此列**:那是平台开了全局 `sys_config.register_sms_required` 但渠道此刻不可用,
+       * 后端会照样要 verifyToken —— 这时跳过去只会在推荐码页被 40111 打回,是条死路。
+       * 所以让它落到下面的默认分支:停在注册页,由 request 层把后端文案 Toast 出来。
        */
       if (e instanceof ApiError && e.code === API_CODE.SMS_CHANNEL_UNAVAILABLE) {
         navigation.navigate('ReferralCode', { draft });

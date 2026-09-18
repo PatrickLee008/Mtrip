@@ -17,7 +17,10 @@
 ### M2 `/api/v1/merchant/rooms/*`
 
 - `GET /hotel-options`:当前商户范围内酒店商品下拉。
-- `GET /list`:分页房型列表,筛选 `goodsId/keyword/status`,返回今日可售房量冗余字段。
+- `GET /list`:分页房型列表,筛选 `goodsId/keyword/status`,返回今日可售房量冗余字段
+  (`today_stock_total/today_stock_left`)与未来窗口字段(`upcoming_days`=7、`upcoming_stock_left`、
+  `upcoming_stock_date`、`upcoming_sold`;库存按日期存,只订明天/后天的单不会动"今日"那一行,
+  窗口字段用于把这类订单暴露给商户,见 [模块 20](./20-客房管理Figma与PRD整改计划.md) 第 12 节)。
 - `GET /detail?id=`:房型详情,JSON 列解码为数组。
 - `POST /save`:新增/编辑房型;`id` 为空走 `mch:rooms:add`,有 `id` 走 `mch:rooms:edit`。
 - `POST /toggle-status`:在售/停售,权限 `mch:rooms:status`。

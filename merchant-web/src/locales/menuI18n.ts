@@ -14,6 +14,7 @@ export const MENU_I18N: Record<string, string> = {
   订单核销: 'menu.order',
   商品管理: 'menu.goods',
   客房管理: 'menu.rooms',
+  房型管理: 'menu.rooms',
   房量与价格: 'menu.availability',
   收益结算: 'menu.earnings',
   通知中心: 'menu.notifications',
