@@ -8,6 +8,7 @@ use App\Controller\AbstractController;
 
 use App\Service\Booking\BookingEventService;
 use App\Service\Booking\BookingLifecycleService;
+use App\Service\Booking\BookingNotificationService;
 use App\Service\FraudService;
 use App\Service\NotifyService;
 use App\Service\OrderStockService;
@@ -60,6 +61,9 @@ class OrderController extends AbstractController
 
     #[Inject]
     protected BookingEventService $bookingEvents;
+
+    #[Inject]
+    protected BookingNotificationService $bookingNotifications;
 
     #[Inject]
     protected PaymentResultHandler $payHandler;
@@ -379,6 +383,21 @@ class OrderController extends AbstractController
     public function cancel(): array
     {
         $orderId = $this->requireId('orderId');
+        $order = $this->ownOrder($orderId);
+        if ((int) $order['order_status'] !== 0) {
+            throw new BusinessException(ErrorCode::DATA_CONFLICT, '仅待支付订单可直接取消');
+        }
+        $reason = $this->strInput('reason', '用户主动取消');
+        if ((int) $order['order_type'] === 1) {
+            $this->bookingLifecycle->cancel(
+                $orderId,
+                (int) $order['user_id'],
+                '',
+                $reason,
+                \App\Constants\BookingConst::OPERATOR_GUEST,
+            );
+            return Result::success(null, '订单已取消');
+        }
         Db::transaction(function () use ($orderId) {
             $order = $this->lockOwnOrder($orderId);
             if ((int) $order['order_status'] !== 0) {
@@ -466,6 +485,8 @@ class OrderController extends AbstractController
                 'refundAmount' => $q['refundAmount'],
             ], 'refund');
             return [
+                'order' => $order,
+                'orderType' => (int) $order['order_type'],
                 'siteId' => (int) $order['site_id'],
                 'userId' => (int) $order['user_id'],
                 'goodsName' => (string) $order['goods_name'],
@@ -483,6 +504,16 @@ class OrderController extends AbstractController
                 $orderId,
             );
         } catch (\Throwable) {
+        }
+        if ($snap['orderType'] === 1) {
+            try {
+                $this->bookingNotifications->push(
+                    $snap['order'],
+                    '住客提交退款申请',
+                    "预订「{$snap['goodsName']}」(订单 {$snap['orderNo']})的住客已提交退款申请,申请金额 {$snap['refundAmount']}。",
+                );
+            } catch (\Throwable) {
+            }
         }
         // 风控:取消/退款行为评估(阈值化,后置容错,不影响退款申请)
         try {

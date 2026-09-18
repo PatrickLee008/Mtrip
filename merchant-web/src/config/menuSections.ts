@@ -10,8 +10,8 @@
  * 供 All Properties 场景与切换跳转共用。
  */
 
-/** 选中任意具体物业才显示(Operations 分组)。 */
-export const PROPERTY_SCOPED_PATHS = ['/availability', '/order'];
+/** 选中任意具体物业才显示。预订管理支持 All Properties 聚合视图。 */
+export const PROPERTY_SCOPED_PATHS = ['/availability'];
 
 /** 仅酒店物业显示(HOTEL MANAGEMENT 分组)。 */
 export const HOTEL_SCOPED_PATHS = ['/rooms'];

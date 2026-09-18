@@ -75,7 +75,8 @@ INSERT IGNORE INTO `merchant_menu` (`id`, `parent_id`, `menu_name`, `menu_name_e
 (40011, 400, '内部备注',     'Internal Note',    'mch:order:note',          3, 11, '1,2,3'),
 (40012, 400, '同步PMS渠道',  'Sync PMS',         'mch:order:sync',          3, 12, '1,2,3'),
 (40013, 400, '预订凭证',     'Booking Voucher',  'mch:order:voucher',       3, 13, '1,2,3'),
-(40014, 400, '查看住客联系方式', 'View Guest Contact', 'mch:order:guest-contact', 3, 14, '1,2,3');
+(40014, 400, '查看住客联系方式', 'View Guest Contact', 'mch:order:guest-contact', 3, 14, '1,2,3'),
+(40016, 400, '确认到店收款', 'Mark as Paid', 'mch:order:mark-paid', 3, 16, '1,2,3');
 
 -- ---------- 门票商品按钮 ----------
 INSERT IGNORE INTO `merchant_menu` (`id`, `parent_id`, `menu_name`, `menu_name_en`, `perm_key`, `menu_type`, `sort`, `account_scope`) VALUES

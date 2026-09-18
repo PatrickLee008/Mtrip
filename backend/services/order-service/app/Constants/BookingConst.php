@@ -25,6 +25,9 @@ class BookingConst
     public const PAY_REFUNDED = 4;
     public const PAY_FAILED = 5;
 
+    /** 支付方式 pay_method */
+    public const PAY_METHOD_PAY_AT_HOTEL = 4;
+
     /** 预订渠道 */
     public const CHANNEL_MTRIP = 'mtrip';
     public const CHANNEL_WALKIN = 'walkin';
@@ -58,9 +61,20 @@ class BookingConst
     public const OPERATOR_MERCHANT = 2;
     public const OPERATOR_PLATFORM = 3;
 
-    /** No-show 截止默认规则:入住日当地时间 23:59:59(可按酒店配置覆盖) */
-    public static function noShowDeadline(string $useDate): string
+    /** No-show 截止默认规则:入住日当地时间 23:59:59。 */
+    public static function noShowDeadline(string $useDate, string $timezone = 'UTC', string $deadlineTime = '23:59:59'): \DateTimeImmutable
     {
-        return $useDate . ' 23:59:59';
+        try {
+            $zone = new \DateTimeZone($timezone);
+        } catch (\Throwable) {
+            $zone = new \DateTimeZone('UTC');
+        }
+        if (preg_match('/^(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d)?$/D', $deadlineTime) !== 1) {
+            $deadlineTime = '23:59:59';
+        }
+        if (strlen($deadlineTime) === 5) {
+            $deadlineTime .= ':00';
+        }
+        return new \DateTimeImmutable($useDate . ' ' . $deadlineTime, $zone);
     }
 }

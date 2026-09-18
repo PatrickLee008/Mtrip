@@ -13,9 +13,6 @@ use Hyperf\DbConnection\Db;
  */
 class BookingNotificationService
 {
-    /** 深链前缀:商户端 /order 页按 notificationTarget 自动打开目标预订 */
-    private const DEEP_LINK_PREFIX = '/order?notificationTarget=';
-
     /** 推送一条商户预订通知(失败抛异常由调用方吞掉,不阻断主流程) */
     public function push(array $order, string $title, string $message): void
     {
@@ -25,11 +22,12 @@ class BookingNotificationService
         Db::table('merchant_notify')->insert([
             'site_id' => (int) ($order['site_id'] ?? 0),
             'merchant_id' => (int) $order['merchant_id'],
+            'property_id' => (int) ($order['property_id'] ?? 0) > 0 ? (int) $order['property_id'] : null,
             'category' => 'booking',
             'title' => mb_substr($title, 0, 200),
             'message' => mb_substr($message, 0, 1000),
             'deep_link_type' => 'booking_detail',
-            'deep_link_value' => self::DEEP_LINK_PREFIX . (int) $order['id'],
+            'deep_link_value' => (string) (int) $order['id'],
             'channels' => 'inapp',
             'send_type' => 1,
             'send_at' => date('Y-m-d H:i:s'),

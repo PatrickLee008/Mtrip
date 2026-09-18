@@ -1,5 +1,7 @@
 # Mtrip 开发工作计划总览
 
+2026-09-18更新：Merchant M4 预订管理按 PRD v1.0.3 与 Figma 详情节点 `1289:24340`、列表节点 `1289:16725` 完成本轮代码整改。已收口退款上限与库存、旧核销生命周期、通知深链/物业范围、Pay at Hotel / Mark as Paid、Figma 表格与详情交互、All Properties 聚合，以及带站点时区快照的 No-show 截止时间。迁移账本 21/21，专项、全量 PHP lint、shared 99/975、两个 Web 构建和 client 类型检查通过；补充完成 1440×900、1366×768、393×852 真实登录态视觉验收和 authenticated Mark as Paid 无副作用 HTTP 探测，并修复支付时间线翻译缺口。仅剩物业级 No-show 截止时间/费用策略/配置入口等产品决策；Mark as Paid 登录态成功写入若需再验，须使用专用 Pay at Hotel 测试订单。详见[M4 方案](./实现方案-Merchant-M4-酒店预订管理.md)。
+
 2026-09-16修复：merchant-web 客房列表兼容 `/merchant/rooms/list` 未返回 `metrics` 或返回空值的响应，不再把 `undefined` 写入页面状态并触发 `totalRooms` 渲染异常；失败响应同时清空列表、总数和统计，避免显示上一物业的旧数据。当前 goods-service 仍按标准契约返回真实统计；merchant-web 生产构建通过。详见[客房管理整改计划](./20-客房管理Figma与PRD整改计划.md)。
 
 2026-09-16 数据库增量复核：以 Git 提交 `2a32fe1996376e3b917aba838e2560ef52760217` 为起点检查到当前 `dev` 的迁移，指定提交本身无数据库变更，其后新增 16 个版本化迁移。命名校验通过；正式执行 `scripts/db-migrate.sh` 显示账本已执行 18、待执行 0，并完成二次全账本复核，当前数据库已是最新版本。
@@ -139,7 +141,7 @@ MTrip/
 | 10 | [10-移动端App框架.md](./10-移动端App框架.md) | client-app Expo51+RN+TS 多端工程 | 已完成(冒烟联调归模块08) | 100% |
 | 13 | [13-商家端merchant-web落地.md](./13-商家端merchant-web落地.md) | 商户后台、动态 RBAC 与业务页面 | All Properties、Add New Property 第 1 步及全局菜单 Figma 对齐；新增沿用原门店流程；真实账号联动验收待补 | 进行中 |
 | 15 | [15-M12-merchant-management.md](./15-M12-merchant-management.md) | PRD模块12：酒店优先的商户管理，餐厅资料展示、运营延期 | 8/29列表整改已提交；追加取消详情餐厅隐藏，admin构建及Browser混合业务核验通过，追加改动未提交；S7整体原型待收口 | 列表及餐厅展示已验证，S7进行中 |
-| M4 | [实现方案-Merchant-M4-酒店预订管理.md](./实现方案-Merchant-M4-酒店预订管理.md) | Merchant PRD 模块4：酒店预订列表、履约状态、库存、退款、通知、同步框架及原型 UI | 阶段0～6全部完成：生命周期+过期任务、商户API(22/22)、原型UI真实登录态验收、通知/住客消息/同步框架(23/23)、PermissionAspect平台级修复、跨端回归与check.ps1全绿 | 100% |
+| M4 | [实现方案-Merchant-M4-酒店预订管理.md](./实现方案-Merchant-M4-酒店预订管理.md) | Merchant PRD 模块4：酒店预订列表、履约状态、库存、退款、通知、同步框架及原型 UI | 2026-09-18 v1.0.3 / Figma 整改、自动化回归、真实登录态视觉与 authenticated Mark as Paid 无副作用探测完成；待确认物业级 No-show 配置模型 | 98% |
 | 17 | [17-商户移动端merchant-app.md](./17-商户移动端merchant-app.md) | Merchant PRD 移动端：入驻/认证/KYC、Dashboard、酒店运营、预订、结算、通知、RBAC、营销、评价、帮助中心 | 注册 OTP/申请提交已联动；统一申请级 KYC 清单、后台 Send KYC 门禁、真实文件选择/上传/提交已接入；M9-M12 待实现 | 进行中 |
 | 18 | [18-酒店商品收敛为物业整改计划.md](./18-酒店商品收敛为物业整改计划.md) | 酒店域去除重复商品实体，以物业统一 KYC、房型、库存、交易、运营和消费者展示 | 批次 A-G 已完成；旧酒店商品模型已退役；新增物业 KYC 请求上下文已修复 | 100% |
 | 19 | [19-商户入驻审批整改计划.md](./19-商户入驻审批整改计划.md) | PRD 模块 1 注册、KYC、最终批准、账号激活及首批物业转换 | 阶段 0–7 全部完成；App 真机接入另行实施 | 已完成 |

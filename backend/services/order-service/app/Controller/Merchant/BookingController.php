@@ -84,6 +84,7 @@ class BookingController extends AbstractAdminController
             ->map(function ($row) {
                 $row = (array) $row;
                 $row['contact_phone'] = MaskHelper::mobile($this->decryptField((string) $row['contact_phone']));
+                $row['no_show_deadline'] = $this->lifecycle->noShowDeadlineIso($row);
                 unset($row['deleted_at']);
                 return $row;
             })->all();
@@ -97,6 +98,7 @@ class BookingController extends AbstractAdminController
         $order = $this->findScopedBooking($this->requireId());
         $order['contact_phone'] = MaskHelper::mobile($this->decryptField((string) $order['contact_phone']));
         $order['guests'] = $this->decryptGuests((string) ($order['guests'] ?? ''));
+        $order['no_show_deadline'] = $this->lifecycle->noShowDeadlineIso($order);
         unset($order['deleted_at']);
 
         $notes = Db::table('order_internal_note')->where('order_id', (int) $order['id'])
@@ -139,7 +141,7 @@ class BookingController extends AbstractAdminController
                 'roomNo' => (string) $order['assigned_room_no'],
                 'cancellationPolicy' => $this->jsonField($order['cancellation_policy_snapshot'] ?? null),
                 'noShowPolicy' => $this->jsonField($order['no_show_policy_snapshot'] ?? null),
-                'noShowDeadline' => $order['use_date'] !== null ? BookingConst::noShowDeadline((string) $order['use_date']) : null,
+                'noShowDeadline' => $order['no_show_deadline'],
             ],
             'notes' => $notes,
             'sync' => [
@@ -186,6 +188,15 @@ class BookingController extends AbstractAdminController
         $order = $this->findScopedBooking($this->requireId());
         $this->lifecycle->checkOut((int) $order['id'], MerchantContext::adminId(), MerchantContext::adminName());
         return Result::success(null, '退房办理成功');
+    }
+
+    /** 确认已线下收取到店付款。 */
+    #[Permission('mch:order:mark-paid')]
+    public function markPaid(): array
+    {
+        $order = $this->findScopedBooking($this->requireId());
+        $this->lifecycle->markPaidAtHotel((int) $order['id'], MerchantContext::adminId(), MerchantContext::adminName());
+        return Result::success(null, '已标记为已支付');
     }
 
     /** 取消预订(释放/回补库存;退款另行按政策处理) */

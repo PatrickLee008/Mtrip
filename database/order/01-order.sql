@@ -37,7 +37,7 @@ CREATE TABLE IF NOT EXISTS `order_main` (
   `platform_commission` DECIMAL(12,2) NOT NULL DEFAULT 0.00 COMMENT '平台佣金',
   `merchant_receivable` DECIMAL(12,2) NOT NULL DEFAULT 0.00 COMMENT '商户实收',
   `supplier_cost`       DECIMAL(12,2) NOT NULL DEFAULT 0.00 COMMENT '供应商成本',
-  `pay_method`          TINYINT      NOT NULL DEFAULT 0 COMMENT '支付方式:1Stripe 2PayPal',
+  `pay_method`          TINYINT      NOT NULL DEFAULT 0 COMMENT '支付方式:1Stripe 2PayPal 3mTrip钱包 4到店付款',
   `pay_trade_no`        VARCHAR(64)  NOT NULL DEFAULT '' COMMENT '支付流水号',
   `pay_time`            DATETIME     NULL DEFAULT NULL COMMENT '支付时间',
   `order_status`        TINYINT      NOT NULL DEFAULT 0 COMMENT '订单状态:0待支付 1已支付 2已入住/已核销 3已完成 4已取消 5退款中 6已退款 7已过期',

@@ -4,7 +4,10 @@ declare(strict_types=1);
 
 namespace App\Controller\Admin;
 
+use App\Constants\BookingConst;
+use App\Service\Booking\BookingLifecycleService;
 use Hyperf\DbConnection\Db;
+use Hyperf\Di\Annotation\Inject;
 use Mtrip\Shared\Annotation\Permission;
 use Mtrip\Shared\Constants\ErrorCode;
 use Mtrip\Shared\Context\AdminContext;
@@ -18,6 +21,9 @@ use Mtrip\Shared\Support\Result;
  */
 class AdminVerifyController extends AbstractAdminController
 {
+    #[Inject]
+    protected BookingLifecycleService $lifecycle;
+
     /** 手工核销:按订单ID或核销码;仅已支付订单 */
     #[Permission('order:verify:list')]
     public function verify(): array
@@ -30,8 +36,18 @@ class AdminVerifyController extends AbstractAdminController
         if ($order['use_date'] !== null && (string) $order['use_date'] > date('Y-m-d')) {
             throw new BusinessException(ErrorCode::DATA_CONFLICT, "订单使用日期为 {$order['use_date']},尚未到期");
         }
-        Db::transaction(static function () use ($order) {
-            Db::table('order_main')->where('id', $order['id'])->update(['order_status' => 2]);
+        Db::transaction(function () use ($order) {
+            if ((int) $order['order_type'] === 1) {
+                $this->lifecycle->checkIn(
+                    (int) $order['id'],
+                    AdminContext::adminId(),
+                    AdminContext::adminName(),
+                    '',
+                    BookingConst::OPERATOR_PLATFORM,
+                );
+            } else {
+                Db::table('order_main')->where('id', $order['id'])->update(['order_status' => 2]);
+            }
             Db::table('order_verify_log')->insert([
                 'site_id' => (int) $order['site_id'],
                 'order_id' => (int) $order['id'],
@@ -57,8 +73,17 @@ class AdminVerifyController extends AbstractAdminController
             throw new BusinessException(ErrorCode::DATA_CONFLICT, '仅已核销订单可撤销核销');
         }
         $reason = $this->requireStr('reason');
-        Db::transaction(static function () use ($order, $reason) {
-            Db::table('order_main')->where('id', $order['id'])->update(['order_status' => 1]);
+        Db::transaction(function () use ($order, $reason) {
+            if ((int) $order['order_type'] === 1) {
+                $this->lifecycle->revertCheckIn(
+                    (int) $order['id'],
+                    AdminContext::adminId(),
+                    AdminContext::adminName(),
+                    $reason,
+                );
+            } else {
+                Db::table('order_main')->where('id', $order['id'])->update(['order_status' => 1]);
+            }
             Db::table('order_verify_log')
                 ->where('order_id', $order['id'])->where('status', 1)
                 ->update([

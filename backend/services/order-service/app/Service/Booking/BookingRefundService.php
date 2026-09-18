@@ -33,7 +33,7 @@ class BookingRefundService
 
     /**
      * 政策试算:基于订单取消政策快照(无快照=免费取消全额可退)。
-     * @return array{payAmount:float,refundable:float,cancellationFee:float,refundedAlready:float,remainingRefundable:float}
+     * @return array{payAmount:float,policyRefundable:float,refundable:float,cancellationFee:float,refundedAlready:float,remainingPaid:float,remainingRefundable:float}
      */
     public function quote(array $order): array
     {
@@ -42,13 +42,13 @@ class BookingRefundService
         if (is_string($policy)) {
             $policy = json_decode($policy, true);
         }
-        $refundable = $pay;
+        $policyRefundable = $pay;
         if (is_array($policy)) {
             $type = (int) ($policy['ruleType'] ?? 1);
             if ($type === 3) {
-                $refundable = 0.0;
+                $policyRefundable = 0.0;
             } elseif ($type === 2) {
-                $refundable = $this->stepRefundable($pay, is_string($policy['rules'] ?? null) ? (json_decode($policy['rules'], true) ?: []) : (array) ($policy['rules'] ?? []), (string) ($order['use_date'] ?? ''));
+                $policyRefundable = $this->stepRefundable($pay, is_string($policy['rules'] ?? null) ? (json_decode($policy['rules'], true) ?: []) : (array) ($policy['rules'] ?? []), (string) ($order['use_date'] ?? ''));
             }
         }
         $refundedAlready = round((float) Db::table('order_refund')
@@ -56,14 +56,17 @@ class BookingRefundService
             ->where('status', 3)
             ->whereNull('deleted_at')
             ->sum('refund_amount'), 2);
-        $remaining = max(0.0, round($pay - $refundedAlready, 2));
-        $refundable = min($refundable, $remaining);
+        $remainingPaid = max(0.0, round($pay - $refundedAlready, 2));
+        $remainingRefundable = max(0.0, round($policyRefundable - $refundedAlready, 2));
+        $refundable = min($remainingPaid, $remainingRefundable);
         return [
             'payAmount' => round($pay, 2),
+            'policyRefundable' => round($policyRefundable, 2),
             'refundable' => round($refundable, 2),
-            'cancellationFee' => round($pay - $refundable, 2),
+            'cancellationFee' => round($pay - $policyRefundable, 2),
             'refundedAlready' => $refundedAlready,
-            'remainingRefundable' => $remaining,
+            'remainingPaid' => $remainingPaid,
+            'remainingRefundable' => round($refundable, 2),
         ];
     }
 
@@ -91,15 +94,15 @@ class BookingRefundService
                 throw new BusinessException(ErrorCode::DATA_CONFLICT, '该预订已有进行中的退款单');
             }
             $quote = $this->quote($order);
-            if ($quote['remainingRefundable'] <= 0) {
+            if ($quote['refundable'] <= 0) {
                 throw new BusinessException(ErrorCode::DATA_CONFLICT, '该预订已无可退金额');
             }
             $refundAmount = $amount !== null ? round($amount, 2) : $quote['refundable'];
-            if ($refundAmount <= 0 || $refundAmount > $quote['remainingRefundable'] + 0.001) {
+            if ($refundAmount <= 0 || $refundAmount > $quote['refundable'] + 0.001) {
                 throw new BusinessException(ErrorCode::PARAM_ERROR, '退款金额须在可退范围内');
             }
-            $refundAmount = min($refundAmount, $quote['remainingRefundable']);
-            $fullRefund = $refundAmount >= $quote['remainingRefundable'] - 0.001;
+            $refundAmount = min($refundAmount, $quote['refundable']);
+            $fullRefund = $quote['refundedAlready'] + $refundAmount >= $quote['payAmount'] - 0.001;
 
             $refundNo = 'R' . date('YmdHis') . str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
             Db::table('order_refund')->insert([
@@ -114,7 +117,7 @@ class BookingRefundService
                 'refund_type' => $fullRefund ? 1 : 2,
                 'apply_amount' => $refundAmount,
                 'refund_amount' => $refundAmount,
-                'deduct_amount' => round($quote['payAmount'] - $refundAmount, 2),
+                'deduct_amount' => $quote['cancellationFee'],
                 'refund_channel' => 1,
                 'reason' => mb_substr($reason !== '' ? $reason : '商户按政策退款', 0, 500),
                 'status' => 3,
@@ -140,7 +143,7 @@ class BookingRefundService
             }
             Db::table('order_main')->where('id', (int) $order['id'])->update($update);
             // 库存:未履约的全额退款回补已售;已入住/已退房视为已消耗不回补
-            if ($fullRefund && in_array($bookingStatus, [BookingConst::STATUS_CONFIRMED, BookingConst::STATUS_CANCELLED], true)) {
+            if ($fullRefund && $bookingStatus === BookingConst::STATUS_CONFIRMED) {
                 $this->stockService->refundRestore($order);
             }
             // 退入 mTrip 钱包 + 资金流水(与后台退款到账确认同模型)

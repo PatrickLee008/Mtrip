@@ -5,7 +5,10 @@ declare(strict_types=1);
 namespace App\Controller\Merchant;
 
 use App\Controller\Admin\AbstractAdminController;
+use App\Constants\BookingConst;
+use App\Service\Booking\BookingLifecycleService;
 use Hyperf\DbConnection\Db;
+use Hyperf\Di\Annotation\Inject;
 use Mtrip\Shared\Annotation\Permission;
 use Mtrip\Shared\Constants\ErrorCode;
 use Mtrip\Shared\Context\MerchantContext;
@@ -18,6 +21,9 @@ use Mtrip\Shared\Support\Result;
  */
 class OrderController extends AbstractAdminController
 {
+    #[Inject]
+    protected BookingLifecycleService $lifecycle;
+
     /** 订单列表 */
     public function index(): array
     {
@@ -80,8 +86,18 @@ class OrderController extends AbstractAdminController
         if ($order['use_date'] !== null && (string) $order['use_date'] > date('Y-m-d')) {
             throw new BusinessException(ErrorCode::DATA_CONFLICT, "订单使用日期为 {$order['use_date']},尚未到期");
         }
-        Db::transaction(static function () use ($order) {
-            Db::table('order_main')->where('id', $order['id'])->update(['order_status' => 2]);
+        Db::transaction(function () use ($order) {
+            if ((int) $order['order_type'] === 1) {
+                $this->lifecycle->checkIn(
+                    (int) $order['id'],
+                    MerchantContext::adminId(),
+                    MerchantContext::adminName(),
+                    '',
+                    BookingConst::OPERATOR_MERCHANT,
+                );
+            } else {
+                Db::table('order_main')->where('id', $order['id'])->update(['order_status' => 2]);
+            }
             Db::table('order_verify_log')->insert([
                 'site_id' => (int) $order['site_id'],
                 'order_id' => (int) $order['id'],

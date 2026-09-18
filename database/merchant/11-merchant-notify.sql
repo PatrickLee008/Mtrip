@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS `merchant_notify` (
   `id`              BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '主键',
   `site_id`         BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '所属站点ID',
   `merchant_id`     BIGINT UNSIGNED NOT NULL COMMENT '接收商户ID',
+  `property_id`     BIGINT UNSIGNED NULL COMMENT '关联酒店物业ID,NULL=商户级通知',
   `category`        VARCHAR(30)  NOT NULL DEFAULT 'system' COMMENT '通知分类(booking/promotion/rewards/wallet/refund/account/security/support/system)',
   `title`           VARCHAR(200) NOT NULL DEFAULT '' COMMENT '通知标题',
   `message`         VARCHAR(1000) NOT NULL DEFAULT '' COMMENT '通知正文',
@@ -29,6 +30,7 @@ CREATE TABLE IF NOT EXISTS `merchant_notify` (
   `updated_at`      DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   PRIMARY KEY (`id`),
   KEY `idx_site_merchant` (`site_id`, `merchant_id`),
+  KEY `idx_merchant_property_status` (`merchant_id`, `property_id`, `status`, `send_at`),
   KEY `idx_status` (`status`),
   KEY `idx_read_at` (`read_at`),
   KEY `idx_send_at` (`send_at`)

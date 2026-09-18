@@ -1,4 +1,28 @@
 # 会话交接文档(HANDOFF)
+### ★ 2026-09-18（Merchant M4 预订管理 PRD v1.0.3 / Figma 整改）
+
+> 本节是当前口径，取代 2026-09-17 菜单记录中“All Properties 隐藏 Booking Management”的部分；`/availability` 仍要求具体物业，`/order` 现支持 All Properties 聚合。
+
+**范围**：仅 `merchant-web` 预订管理与现有后端链路；不扩展两个 App，不发送真实支付/短信/邮件/PMS 请求。基线是 Merchant PRD v1.0.3 模块 4 和 Figma `mTrip_Merchant` 详情节点 `1289:24340`、列表节点 `1289:16725`。
+
+**阶段 0～6 已执行并逐阶段 Review**：
+
+- 建立 `scripts/test-booking-remediation.sh` 一次性隔离库专项；收口取消政策退款上限、库存回补和旧核销入口。
+- 预订通知深链存数字订单 ID 并携带 `property_id`，C 端酒店取消/退款申请通知商户；员工和物业账号按授权物业过滤。
+- Pay at Hotel 仅使用 `pay_method=4`；`POST /merchant/order/mark-paid` 只对合法状态生效，权限键 `mch:order:mark-paid` 在注解、路由、菜单种子和前端 `v-perm` 一致。
+- Booking Management 补齐总额、倒计时、Workflow、终态告警、支付方式、Mark as Paid 和 No-show 禁用态；删除重复 Pending Check-in 页签。列表按 `1289:16725` 收敛为单搜索栏、胶囊页签、七列主表格和卡片内分页，高级条件收入筛选弹层；行点击仍进入详情，业务操作入口未删除。
+- All Properties 可查全部已授权酒店；选中具体物业后酒店筛选锁定，切换物业会清空旧房型筛选和详情。All Properties 省略 `X-Mtrip-Property-Id`，服务端授权集合仍是最终边界。
+- No-show 新订单冻结站点 IANA 时区、入住日 `23:59:59` 与首晚房费策略；历史订单回退站点时区，API 返回带偏移的 ISO 时间。站点时区在单请求内按 `site_id` 缓存，避免历史列表 N+1 且不会跨请求固化旧配置。
+
+**数据库/运行态**：`V20260918010000__booking-management-remediation.sql` 已应用，账本 21/21、待执行 0；该迁移已登记，禁止原地修改。order/order-app/merchant/gateway 已重启，8 主服务 + 5 App 孪生服务 + Gateway 健康检查全绿；未登录 `/merchant/order/mark-paid` 和 `/merchant/order/list` 均到达鉴权层并返回标准 `40101`。
+
+**验证**：预订专项（含 All Properties、越权、Header 契约、No-show 时区、Mark as Paid、通知范围）全过；392 个 PHP lint、shared 99/975、admin-web build、merchant-web build、client-app typecheck、菜单可见性契约和 `git diff --check` 通过。恢复会话后又完成 1440×900、1366×768 与 iPhone 16 393×852 真实登录态列表/详情/入住弹窗验收；修复实测发现的 `payment_success` / `payment_failed` 时间线翻译缺口。authenticated Mark as Paid 使用不存在订单 ID 无副作用探测，返回 HTTP 404 / `40401` 而非 401。
+
+**仍待决策/受控验证**：
+
+1. 当前 6 笔真实订单均已支付，未对它们执行 Mark as Paid 成功写入。若需补登录态成功路径，必须先准备专用 Pay at Hotel 测试订单；现有隔离契约已覆盖成功、幂等和非到店付拒绝。
+2. 待产品确认物业级 No-show 截止时间、费用策略（首期是否仅首晚/豁免）及配置入口（Hotel Profile 或 Settings）。确认前不新增物业字段、迁移或 UI。
+
 ### ★ 2026-09-17 下午(「强制短信验证」开关搬家:站点级 → **全局安全配置**)
 
 > 本节**取代**下面那节(站点级方案)。`sys_site.sms_verify_required` 这一列**已被删除**,

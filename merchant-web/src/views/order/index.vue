@@ -1,10 +1,9 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import { message } from 'ant-design-vue';
 import {
   CloseOutlined,
-  DownloadOutlined,
   ExportOutlined,
   FilterOutlined,
   SearchOutlined,
@@ -14,6 +13,7 @@ import dayjs from 'dayjs';
 import PageContainer from '@/components/PageContainer.vue';
 import AmountText from '@/components/AmountText.vue';
 import { useTable } from '@/composables/useTable';
+import { useUserStore } from '@/stores/user';
 import { apiAvailabilityOptions, type AvailabilityHotel, type AvailabilityRoom } from '@/api/availability';
 import {
   apiBookingCancel,
@@ -22,8 +22,8 @@ import {
   apiBookingConfirm,
   apiBookingDetail,
   apiBookingList,
+  apiBookingMarkPaid,
   apiBookingNoShow,
-  apiBookingStats,
   apiBookingSync,
   apiBookingTimeline,
   apiBookingVoucher,
@@ -36,7 +36,6 @@ import {
   downloadBookingCsv,
   type BookingDetail,
   type BookingRow,
-  type BookingStats,
   type BookingVoucher,
   type GuestThread,
   type RefundQuote,
@@ -51,21 +50,13 @@ import {
  */
 const { t } = useI18n();
 const route = useRoute();
-
-// ---------- 统计(页签数量) ----------
-const stats = ref<BookingStats | null>(null);
-async function loadStats(): Promise<void> {
-  try {
-    stats.value = await apiBookingStats();
-  } catch {
-    /* 拦截器已提示 */
-  }
-}
+const userStore = useUserStore();
 
 // ---------- 筛选条件 ----------
 const q = ref('');
 const dateRange = ref<string[]>([]);
-const propertyId = ref<number | undefined>(undefined);
+const propertyId = ref<number | undefined>(userStore.selectedPropertyId ?? undefined);
+const propertyLocked = computed(() => userStore.selectedPropertyId !== null);
 const moreFilters = reactive<{ roomTypeId?: number; bookingStatus?: number; paymentStatus?: number; channel?: string }>({});
 const moreOpen = ref(false);
 const sort = reactive<{ field: string; dir: 'asc' | 'desc' }>({ field: 'booked', dir: 'desc' });
@@ -75,7 +66,6 @@ const TAB_STATUS: Record<string, number | undefined> = {
   all: undefined,
   pending: 1,
   confirmed: 2,
-  pendingCheckin: 2,
   inhouse: 3,
   checkedOut: 4,
   cancelled: 5,
@@ -119,10 +109,25 @@ function resetMoreFilters(): void {
   moreFilters.channel = undefined;
 }
 
+function changePropertyFilter(): void {
+  moreFilters.roomTypeId = undefined;
+  search();
+}
+
 // ---------- 酒店/房型选项(真实数据) ----------
 const hotels = ref<AvailabilityHotel[]>([]);
+const hotelOptions = computed<AvailabilityHotel[]>(() => userStore.properties
+  .filter((property) => property.business_type === 'hotel')
+  .map((property) => hotels.value.find((hotel) => hotel.id === property.id) ?? {
+    id: property.id,
+    name: property.business_name,
+    merchant_id: property.merchant_id,
+    cover_image: '',
+    address: '',
+    rooms: [],
+  }));
 const roomOptions = computed<AvailabilityRoom[]>(() => {
-  const source = propertyId.value ? hotels.value.filter((h) => h.id === propertyId.value) : hotels.value;
+  const source = propertyId.value ? hotelOptions.value.filter((h) => h.id === propertyId.value) : hotelOptions.value;
   return source.flatMap((h) => h.rooms ?? []);
 });
 
@@ -148,61 +153,83 @@ function channelText(c: string): string {
   return t(`booking.channelMap.${c}`, c);
 }
 
+function paymentMethodText(method: number): string {
+  const methods: Record<number, string> = { 1: 'stripe', 2: 'paypal', 3: 'wallet', 4: 'payAtHotel' };
+  const key = methods[method] ?? 'unknown';
+  return t(`booking.paymentMethod.${key}`);
+}
+
 function fmtDate(v: string | null | undefined): string {
   return v ? dayjs(v).format('DD MMM YYYY') : '—';
 }
 
-function nightsOf(row: { use_date?: string | null; end_date?: string | null }): number {
-  if (!row.use_date || !row.end_date) return 0;
-  return dayjs(row.end_date).diff(dayjs(row.use_date), 'day');
+function noShowDeadlineOf(value: string | null | undefined): dayjs.Dayjs | null {
+  return value ? dayjs(value) : null;
 }
 
-function initials(name: string): string {
-  return name
-    .split(/\s+/)
-    .map((p) => p[0] ?? '')
-    .join('')
-    .slice(0, 2)
-    .toUpperCase();
-}
-
-/** No-show 截止:入住日当地 23:59(与后端 BookingConst::noShowDeadline 一致) */
-function noShowDeadlineOf(useDate: string | null): dayjs.Dayjs | null {
-  return useDate ? dayjs(`${useDate} 23:59:59`) : null;
-}
-
-function pastDeadline(useDate: string | null): boolean {
-  const d = noShowDeadlineOf(useDate);
+function pastDeadline(value: string | null | undefined): boolean {
+  const d = noShowDeadlineOf(value);
   return d !== null && dayjs().isAfter(d);
+}
+
+function deadlineText(value: string | null | undefined): string {
+  return value ? value.replace('T', ' ').slice(0, 16) : '—';
+}
+
+const nowTick = ref(Date.now());
+let countdownTimer: number | undefined;
+
+function countdownText(expiresAt: string | null | undefined): string {
+  if (!expiresAt) return '—';
+  const seconds = Math.max(0, dayjs(expiresAt).diff(dayjs(nowTick.value), 'second'));
+  const minutes = Math.floor(seconds / 60).toString().padStart(2, '0');
+  const rest = (seconds % 60).toString().padStart(2, '0');
+  return seconds > 0 ? `${minutes}:${rest}` : t('booking.pay.expired');
+}
+
+function workflowStep(status: number): number {
+  return ({ 1: 0, 2: 1, 3: 2, 4: 3 } as Record<number, number>)[status] ?? -1;
 }
 
 // ---------- 表格列与排序 ----------
 const showHotelColumn = computed(() => !propertyId.value);
 const columns = computed(() => {
   const cols: Record<string, unknown>[] = [
-    { title: t('booking.columns.bookingId'), dataIndex: 'order_no', width: 150 },
-    { title: t('booking.columns.guest'), dataIndex: 'contact_name', width: 140, ellipsis: true },
+    { title: t('booking.columns.bookingId'), dataIndex: 'order_no', width: 170 },
+    { title: t('booking.columns.guest'), dataIndex: 'contact_name', width: 145, ellipsis: true },
   ];
   if (showHotelColumn.value) {
-    cols.push({ title: t('booking.columns.hotel'), dataIndex: 'goods_name', width: 170, ellipsis: true });
+    cols.push({ title: t('booking.columns.hotel'), dataIndex: 'goods_name', width: 165, ellipsis: true });
   }
   cols.push(
-    { title: t('booking.columns.room'), dataIndex: 'sku_name', width: 140, ellipsis: true },
-    { title: t('booking.columns.dates'), key: 'dates', width: 150, sorter: true },
-    { title: t('booking.columns.status'), key: 'status', width: 110 },
-    { title: t('booking.columns.payment'), key: 'payment', width: 120 },
-    { title: t('booking.columns.channel'), dataIndex: 'booking_channel', width: 90 },
-    { title: t('booking.columns.actions'), key: 'action', width: 210, fixed: 'right' as const },
+    { title: t('booking.columns.room'), dataIndex: 'sku_name', width: 145, ellipsis: true },
+    { title: t('booking.columns.dates'), key: 'dates', width: 175 },
+    { title: t('booking.columns.totalAmount'), key: 'totalAmount', width: 130 },
+    { title: t('booking.columns.payment'), key: 'payment', width: 130 },
+    { title: t('booking.columns.status'), key: 'status', width: 140 },
   );
   return cols;
 });
 
-function onTableChange(_pag: unknown, _filters: unknown, sorter: { field?: string; order?: string | null }): void {
-  if (sorter?.field === 'dates') {
-    sort.field = 'checkin';
-    sort.dir = sorter.order === 'ascend' ? 'asc' : 'desc';
-    void load();
-  }
+const bookingPagination = computed(() => ({
+  ...pagination.value,
+  showSizeChanger: false,
+  showQuickJumper: false,
+  size: 'small' as const,
+  showTotal: (total: number, range: [number, number]) => t('booking.showingBookings', {
+    shown: range[1] - range[0] + 1,
+    total,
+  }),
+}));
+
+function stayDatesText(row: { use_date?: string | null; end_date?: string | null }): string {
+  if (!row.use_date || !row.end_date) return '—';
+  return `${dayjs(row.use_date).format('DD MMM')} – ${dayjs(row.end_date).format('DD MMM')}`;
+}
+
+function listPaymentText(row: BookingRow): string {
+  if (row.pay_method === 4 && row.payment_status === 1) return paymentMethodText(row.pay_method);
+  return t(`booking.paymentStatus.${PAY_TEXT_KEY[row.payment_status] ?? 'pending'}`);
 }
 
 // ---------- 详情面板 ----------
@@ -235,6 +262,17 @@ function closeDetail(): void {
   selectedId.value = null;
   detail.value = null;
 }
+
+watch(
+  () => userStore.selectedPropertyId,
+  (id) => {
+    propertyId.value = id ?? undefined;
+    moreFilters.roomTypeId = undefined;
+    closeDetail();
+    search();
+    void loadHotelOptions();
+  },
+);
 
 async function loadMoreTimeline(): Promise<void> {
   if (!selectedId.value) return;
@@ -271,7 +309,7 @@ async function saveNote(): Promise<void> {
 }
 
 // ---------- 操作弹窗 ----------
-type ActionType = '' | 'confirm' | 'checkIn' | 'checkOut' | 'cancel' | 'noShow' | 'refund' | 'voucher' | 'guestContact';
+type ActionType = '' | 'confirm' | 'checkIn' | 'checkOut' | 'markPaid' | 'cancel' | 'noShow' | 'refund' | 'voucher' | 'guestContact';
 const action = ref<ActionType>('');
 const actionOpen = computed({
   get: () => action.value !== '',
@@ -294,7 +332,7 @@ const voucher = ref<BookingVoucher | null>(null);
 const guestContact = ref<{ phone: string; name: string } | null>(null);
 const targetDeadline = ref<string>('');
 
-async function openAction(type: ActionType, row: { id: number; order_no: string; use_date?: string | null }): Promise<void> {
+async function openAction(type: ActionType, row: { id: number; order_no: string; no_show_deadline?: string | null }): Promise<void> {
   targetId.value = row.id;
   targetNo.value = row.order_no;
   roomNoDraft.value = '';
@@ -306,10 +344,9 @@ async function openAction(type: ActionType, row: { id: number; order_no: string;
   refundReason.value = '';
   voucher.value = null;
   guestContact.value = null;
-  const deadline = noShowDeadlineOf(row.use_date ?? null);
-  targetDeadline.value = deadline ? deadline.format('YYYY-MM-DD HH:mm') : '';
+  targetDeadline.value = deadlineText(row.no_show_deadline);
 
-  if (type === 'noShow' && !pastDeadline(row.use_date ?? null)) {
+  if (type === 'noShow' && !pastDeadline(row.no_show_deadline)) {
     message.warning(t('booking.modal.deadlineText', { deadline: targetDeadline.value }));
     return;
   }
@@ -343,6 +380,7 @@ const actionTitle = computed(() => {
     confirm: 'booking.modal.confirmTitle',
     checkIn: 'booking.modal.checkInTitle',
     checkOut: 'booking.modal.checkOutTitle',
+    markPaid: 'booking.modal.markPaidTitle',
     cancel: 'booking.modal.cancelTitle',
     noShow: 'booking.modal.noShowTitle',
     refund: 'booking.modal.refundTitle',
@@ -368,6 +406,10 @@ async function submitAction(): Promise<void> {
         await apiBookingCheckOut(targetId.value);
         message.success(t('booking.messages.checkedOut'));
         break;
+      case 'markPaid':
+        await apiBookingMarkPaid(targetId.value);
+        message.success(t('booking.messages.markedPaid'));
+        break;
       case 'cancel':
         await apiBookingCancel(targetId.value, reasonDraft.value.trim());
         message.success(t('booking.messages.cancelled'));
@@ -389,7 +431,6 @@ async function submitAction(): Promise<void> {
     }
     action.value = '';
     void load();
-    void loadStats();
     if (selectedId.value === targetId.value && selectedId.value !== null) {
       void openDetail(selectedId.value);
     }
@@ -481,14 +522,6 @@ async function exportCsv(): Promise<void> {
   }
 }
 
-function downloadVoucher(): void {
-  if (!selectedId.value || !detail.value) {
-    message.info(t('booking.messages.selectFirst'));
-    return;
-  }
-  void openAction('voucher', { id: selectedId.value, order_no: detail.value.order.order_no, use_date: detail.value.order.use_date });
-}
-
 function printVoucher(): void {
   window.print();
 }
@@ -518,9 +551,15 @@ watch(
 );
 
 onMounted(() => {
+  countdownTimer = window.setInterval(() => {
+    nowTick.value = Date.now();
+  }, 1000);
   void load();
-  void loadStats();
   void loadHotelOptions();
+});
+
+onBeforeUnmount(() => {
+  if (countdownTimer !== undefined) window.clearInterval(countdownTimer);
 });
 </script>
 
@@ -529,37 +568,50 @@ onMounted(() => {
     <div class="bm-page">
       <!-- 标题与全局操作 -->
       <div class="bm-header">
-        <h1 class="bm-title">{{ t('booking.title') }}</h1>
+        <div>
+          <h1 class="bm-title">{{ t('booking.title') }}</h1>
+          <p class="bm-subtitle">{{ t('booking.subtitle') }}</p>
+        </div>
         <div class="bm-header-actions">
-          <a-button v-perm="'mch:order:voucher'" class="bm-btn" @click="downloadVoucher">
-            <template #icon><DownloadOutlined /></template>{{ t('booking.download') }}
-          </a-button>
-          <a-button v-perm="'mch:order:export'" class="bm-btn" :loading="exporting" @click="exportCsv">
+          <a-button v-perm="'mch:order:export'" type="primary" class="bm-export-btn" :loading="exporting" @click="exportCsv">
             <template #icon><ExportOutlined /></template>{{ t('booking.export') }}
           </a-button>
         </div>
       </div>
 
-      <!-- 工具条:搜索/日期/酒店/更多筛选 -->
+      <!-- 主搜索保持原型单行结构，其余业务筛选收进一个紧凑入口。 -->
       <div class="bm-toolbar">
         <a-input
           v-model:value="q"
           allow-clear
           class="bm-input"
           :placeholder="t('booking.searchPlaceholder')"
-          style="width: 200px"
           @press-enter="search"
+          @clear="search"
         >
           <template #prefix><SearchOutlined style="color: #94a3b8" /></template>
         </a-input>
-        <a-range-picker v-model:value="dateRange" value-format="YYYY-MM-DD" style="width: 250px" @change="search" />
-        <a-select v-model:value="propertyId" allow-clear :placeholder="t('booking.allHotels')" style="width: 193px" @change="search">
-          <a-select-option v-for="h in hotels" :key="h.id" :value="h.id">{{ h.name }}</a-select-option>
-        </a-select>
         <a-popover v-model:open="moreOpen" trigger="click" placement="bottomRight" overlay-class-name="bm-more-pop">
           <template #content>
             <div class="bm-more">
               <div class="bm-more-title">MORE FILTERS</div>
+              <div class="bm-more-field">
+                <div class="bm-more-label">{{ t('booking.filters.stayDates') }}</div>
+                <a-range-picker v-model:value="dateRange" value-format="YYYY-MM-DD" style="width: 100%" />
+              </div>
+              <div class="bm-more-field">
+                <div class="bm-more-label">{{ t('booking.filters.hotel') }}</div>
+                <a-select
+                  v-model:value="propertyId"
+                  :allow-clear="!propertyLocked"
+                  :disabled="propertyLocked"
+                  :placeholder="t('booking.allHotels')"
+                  style="width: 100%"
+                  @change="changePropertyFilter"
+                >
+                  <a-select-option v-for="h in hotelOptions" :key="h.id" :value="h.id">{{ h.name }}</a-select-option>
+                </a-select>
+              </div>
               <div class="bm-more-field">
                 <div class="bm-more-label">{{ t('booking.filters.roomType') }}</div>
                 <a-select v-model:value="moreFilters.roomTypeId" allow-clear :placeholder="t('booking.filters.allRoomTypes')" style="width: 100%">
@@ -601,8 +653,8 @@ onMounted(() => {
               </div>
             </div>
           </template>
-          <a-button class="bm-btn">
-            <template #icon><FilterOutlined /></template>{{ t('booking.moreFilters') }}
+          <a-button class="bm-filter-btn" :aria-label="t('booking.moreFilters')" :title="t('booking.moreFilters')">
+            <template #icon><FilterOutlined /></template>
           </a-button>
         </a-popover>
       </div>
@@ -610,14 +662,13 @@ onMounted(() => {
       <!-- 页签 -->
       <div class="bm-tabs">
         <div
-          v-for="key in ['all', 'pending', 'confirmed', 'pendingCheckin', 'inhouse', 'checkedOut', 'cancelled', 'noShow']"
+          v-for="key in ['all', 'pending', 'confirmed', 'inhouse', 'checkedOut', 'cancelled', 'noShow']"
           :key="key"
           class="bm-tab"
           :class="{ active: activeTab === key }"
           @click="switchTab(key)"
         >
           {{ t(`booking.tabs.${key}`) }}
-          <span class="bm-tab-count">{{ stats ? (stats as Record<string, number>)[key === 'all' ? 'all' : key] ?? 0 : 0 }}</span>
         </div>
       </div>
 
@@ -628,83 +679,36 @@ onMounted(() => {
             :columns="columns"
             :data-source="list"
             :loading="loading"
-            :pagination="pagination"
+            :pagination="bookingPagination"
             row-key="id"
             size="middle"
-            :scroll="{ x: 1100 }"
+            :scroll="{ x: showHotelColumn ? 1100 : 900 }"
             :row-class-name="(record: BookingRow) => (record.id === selectedId ? 'bm-row-active' : '')"
             :custom-row="(record: BookingRow) => ({ onClick: () => openDetail(record.id) })"
-            @change="onTableChange"
           >
             <template #bodyCell="{ column, record }">
               <template v-if="column.dataIndex === 'order_no'">
                 <span class="bm-booking-id">{{ record.order_no }}</span>
               </template>
               <template v-else-if="column.dataIndex === 'contact_name'">
-                <span class="bm-guest">
-                  <span class="bm-avatar">{{ initials(record.contact_name || '?') }}</span>
-                  {{ record.contact_name }}
-                </span>
+                <span class="bm-guest">{{ record.contact_name }}</span>
               </template>
               <template v-else-if="column.key === 'dates'">
-                <div class="bm-dates">
-                  <div>{{ fmtDate(record.use_date) }}</div>
-                  <div>{{ fmtDate(record.end_date) }} · {{ t('booking.nightsShort', { n: nightsOf(record) }) }}</div>
-                </div>
+                <span class="bm-dates">{{ stayDatesText(record) }}</span>
+              </template>
+              <template v-else-if="column.key === 'totalAmount'">
+                <AmountText :value="record.total_amount" />
               </template>
               <template v-else-if="column.key === 'status'">
                 <span class="btag" :class="`btag-${BOOKING_TAG[record.booking_status] ?? 'pending'}`">{{ bookingStatusText(record.booking_status) }}</span>
               </template>
               <template v-else-if="column.key === 'payment'">
-                <span class="btag" :class="`btag-pay-${PAY_TAG[record.payment_status] ?? 'pending'}`">{{ t(`booking.paymentStatus.${PAY_TEXT_KEY[record.payment_status] ?? 'pending'}`) }}</span>
-              </template>
-              <template v-else-if="column.dataIndex === 'booking_channel'">
-                {{ channelText(record.booking_channel) }}
-              </template>
-              <template v-else-if="column.key === 'action'">
-                <span class="bm-row-actions" @click.stop>
-                  <a-button type="text" size="small" class="bm-row-btn" @click="openDetail(record.id)">{{ t('booking.view') }}</a-button>
-                  <a-button
-                    v-if="record.booking_status === 1 && record.booking_channel !== 'mtrip'"
-                    v-perm="'mch:order:confirm'"
-                    type="text"
-                    size="small"
-                    class="bm-row-btn"
-                    @click="openAction('confirm', record)"
-                  >{{ t('booking.actions.confirm') }}</a-button>
-                  <a-button
-                    v-if="record.booking_status === 2"
-                    v-perm="'mch:order:check-in'"
-                    type="text"
-                    size="small"
-                    class="bm-row-btn"
-                    @click="openAction('checkIn', record)"
-                  >{{ t('booking.actions.checkIn') }}</a-button>
-                  <a-button
-                    v-if="record.booking_status === 3"
-                    v-perm="'mch:order:check-out'"
-                    type="text"
-                    size="small"
-                    class="bm-row-btn"
-                    @click="openAction('checkOut', record)"
-                  >{{ t('booking.actions.checkOut') }}</a-button>
-                  <a-button
-                    v-if="record.booking_status === 1 || record.booking_status === 2"
-                    v-perm="'mch:order:cancel'"
-                    type="text"
-                    size="small"
-                    class="bm-row-btn"
-                    @click="openAction('cancel', record)"
-                  >{{ t('booking.actions.cancel') }}</a-button>
-                  <a-button
-                    v-if="record.booking_status === 2 && pastDeadline(record.use_date)"
-                    v-perm="'mch:order:no-show'"
-                    type="text"
-                    size="small"
-                    class="bm-row-btn"
-                    @click="openAction('noShow', record)"
-                  >{{ t('booking.actions.noShow') }}</a-button>
-                </span>
+                <div class="bm-payment-cell">
+                  <span class="btag" :class="record.pay_method === 4 && record.payment_status === 1 ? 'btag-pay-hotel' : `btag-pay-${PAY_TAG[record.payment_status] ?? 'pending'}`">{{ listPaymentText(record) }}</span>
+                  <span v-if="record.booking_status === 1 && record.payment_status === 1" class="bm-countdown">
+                    {{ countdownText(record.payment_expires_at) }}
+                  </span>
+                </div>
               </template>
             </template>
           </a-table>
@@ -723,6 +727,26 @@ onMounted(() => {
           </div>
           <a-spin :spinning="detailLoading">
             <div v-if="detail" class="bm-panel-body">
+              <div v-if="detail.order.booking_status === 5 || detail.order.booking_status === 6" class="bm-terminal-alert" :class="{ 'is-noshow': detail.order.booking_status === 6 }">
+                <strong>{{ detail.order.booking_status === 5 ? t('booking.alert.cancelledTitle') : t('booking.alert.noShowTitle') }}</strong>
+                <span>{{ detail.order.booking_status === 5 ? t('booking.alert.cancelledText') : t('booking.alert.noShowText') }}</span>
+              </div>
+
+              <section class="bm-section bm-workflow-section">
+                <h3 class="bm-section-title">{{ t('booking.sections.workflow') }}</h3>
+                <div class="bm-workflow">
+                  <div
+                    v-for="(step, index) in ['pending', 'confirmed', 'inhouse', 'checkedOut']"
+                    :key="step"
+                    class="bm-workflow-step"
+                    :class="{ done: workflowStep(detail.order.booking_status) > index, current: workflowStep(detail.order.booking_status) === index }"
+                  >
+                    <span class="bm-workflow-dot">{{ index + 1 }}</span>
+                    <span>{{ t(`booking.workflow.${step}`) }}</span>
+                  </div>
+                </div>
+              </section>
+
               <!-- Booking Summary -->
               <section class="bm-section">
                 <h3 class="bm-section-title">{{ t('booking.sections.summary') }}</h3>
@@ -731,6 +755,7 @@ onMounted(() => {
                   <div class="bm-field"><span class="bm-label">{{ t('booking.summary.hotel') }}</span><span class="bm-value">{{ detail.order.goods_name }}</span></div>
                   <div class="bm-field"><span class="bm-label">{{ t('booking.summary.roomType') }}</span><span class="bm-value">{{ detail.order.sku_name }}</span></div>
                   <div class="bm-field"><span class="bm-label">{{ t('booking.summary.channel') }}</span><span class="bm-value">{{ channelText(detail.order.booking_channel) }}</span></div>
+                  <div class="bm-field"><span class="bm-label">{{ t('booking.summary.received') }}</span><span class="bm-value">{{ detail.order.created_at }}</span></div>
                   <div class="bm-field"><span class="bm-label">{{ t('booking.summary.checkIn') }}</span><span class="bm-value">{{ fmtDate(detail.stay.useDate) }}</span></div>
                   <div class="bm-field"><span class="bm-label">{{ t('booking.summary.checkOut') }}</span><span class="bm-value">{{ fmtDate(detail.stay.endDate) }}</span></div>
                   <div class="bm-field"><span class="bm-label">{{ t('booking.summary.duration') }}</span><span class="bm-value">{{ t('booking.durationNights', { n: detail.nights }) }}</span></div>
@@ -752,7 +777,7 @@ onMounted(() => {
                         type="link"
                         size="small"
                         class="bm-link"
-                        @click="openAction('guestContact', { id: detail.order.id, order_no: detail.order.order_no, use_date: detail.order.use_date })"
+                        @click="openAction('guestContact', { id: detail.order.id, order_no: detail.order.order_no })"
                       >{{ t('booking.guest.reveal') }}</a-button>
                     </span>
                   </div>
@@ -772,10 +797,15 @@ onMounted(() => {
                   <div class="bm-field"><span class="bm-label">{{ t('booking.pay.roomTotal') }}</span><AmountText class="bm-value" :value="detail.payment.totalAmount" /></div>
                   <div class="bm-field"><span class="bm-label">{{ t('booking.pay.discount') }}</span><AmountText class="bm-value" :value="detail.payment.discountAmount" /></div>
                   <div class="bm-field bm-field-strong"><span class="bm-label">{{ t('booking.pay.payAmount') }}</span><AmountText class="bm-value" :value="detail.payment.payAmount" /></div>
+                  <div class="bm-field"><span class="bm-label">{{ t('booking.pay.method') }}</span><span class="bm-value">{{ paymentMethodText(detail.payment.payMethod) }}</span></div>
                   <div v-if="detail.payment.payTime" class="bm-field"><span class="bm-label">{{ t('booking.pay.payTime') }}</span><span class="bm-value">{{ detail.payment.payTime }}</span></div>
                   <div v-if="detail.payment.payTradeNo" class="bm-field"><span class="bm-label">{{ t('booking.pay.tradeNo') }}</span><span class="bm-value">{{ detail.payment.payTradeNo }}</span></div>
                   <div v-if="detail.payment.paymentStatus === 1 && detail.payment.paymentExpiresAt" class="bm-field">
                     <span class="bm-label">{{ t('booking.pay.expiresAt') }}</span><span class="bm-value">{{ detail.payment.paymentExpiresAt }}</span>
+                  </div>
+                  <div v-if="detail.order.booking_status === 1 && detail.payment.paymentStatus === 1" class="bm-payment-countdown">
+                    <span>{{ t('booking.pay.timeRemaining') }}</span>
+                    <strong>{{ countdownText(detail.payment.paymentExpiresAt) }}</strong>
                   </div>
                 </div>
                 <div v-if="detail.payment.refunds.length" class="bm-refunds">
@@ -795,7 +825,7 @@ onMounted(() => {
                   <div class="bm-field"><span class="bm-label">{{ t('booking.stay.mealPlan') }}</span><span class="bm-value">{{ detail.stay.mealPlan || '—' }}</span></div>
                   <div class="bm-field"><span class="bm-label">{{ t('booking.stay.roomNo') }}</span><span class="bm-value">{{ detail.stay.roomNo || '—' }}</span></div>
                   <div class="bm-field"><span class="bm-label">{{ t('booking.stay.cancellationPolicy') }}</span><span class="bm-value">{{ policyText(detail.stay.cancellationPolicy) }}</span></div>
-                  <div v-if="detail.stay.noShowDeadline" class="bm-field"><span class="bm-label">{{ t('booking.stay.noShowDeadline') }}</span><span class="bm-value">{{ detail.stay.noShowDeadline }}</span></div>
+                  <div v-if="detail.stay.noShowDeadline" class="bm-field"><span class="bm-label">{{ t('booking.stay.noShowDeadline') }}</span><span class="bm-value">{{ deadlineText(detail.stay.noShowDeadline) }}</span></div>
                 </div>
                 <div class="bm-label" style="margin-top: 8px">{{ t('booking.stay.specialRequests') }}</div>
                 <div class="bm-value bm-requests">{{ detail.stay.specialRequests || t('booking.stay.noRequests') }}</div>
@@ -886,6 +916,13 @@ onMounted(() => {
                     @click="openAction('checkOut', detail.order)"
                   >{{ t('booking.actions.checkOut') }}</a-button>
                   <a-button
+                    v-if="detail.availableActions.includes('mark-paid')"
+                    v-perm="'mch:order:mark-paid'"
+                    type="primary"
+                    block
+                    @click="openAction('markPaid', detail.order)"
+                  >{{ t('booking.actions.markPaid') }}</a-button>
+                  <a-button
                     v-if="detail.availableActions.includes('refund')"
                     v-perm="'mch:order:refund'"
                     block
@@ -899,10 +936,12 @@ onMounted(() => {
                     @click="openAction('cancel', detail.order)"
                   >{{ t('booking.actions.cancel') }}</a-button>
                   <a-button
-                    v-if="detail.availableActions.includes('no-show')"
+                    v-if="detail.order.booking_status === 2"
                     v-perm="'mch:order:no-show'"
                     block
                     class="bm-btn-warning"
+                    :disabled="!detail.availableActions.includes('no-show')"
+                    :title="!detail.availableActions.includes('no-show') ? t('booking.actions.noShowBeforeDeadline') : ''"
                     @click="openAction('noShow', detail.order)"
                   >{{ t('booking.actions.noShow') }}</a-button>
                   <a-button
@@ -953,6 +992,11 @@ onMounted(() => {
 
       <template v-else-if="action === 'checkOut'">
         <p class="bm-modal-text">{{ t('booking.modal.checkOutText') }}</p>
+        <p class="bm-modal-target">{{ targetNo }}</p>
+      </template>
+
+      <template v-else-if="action === 'markPaid'">
+        <p class="bm-modal-text">{{ t('booking.modal.markPaidText') }}</p>
         <p class="bm-modal-target">{{ targetNo }}</p>
       </template>
 
@@ -1080,24 +1124,38 @@ onMounted(() => {
 /* Booking Management:按 Figma 原型实测值还原(色值/尺寸见原型测量基线) */
 .bm-header {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
-  margin-bottom: 16px;
+  gap: 24px;
+  margin-bottom: 18px;
 }
 .bm-title {
   margin: 0;
-  font-size: 20px;
+  font-size: 22px;
+  line-height: 1.35;
   font-weight: 700;
   color: #0f172a;
+}
+.bm-subtitle {
+  max-width: 560px;
+  margin: 4px 0 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: #64748b;
 }
 .bm-header-actions {
   display: flex;
   gap: 8px;
 }
-.bm-btn {
-  height: 37px;
-  border-radius: 8px;
-  font-size: 13px;
+.bm-export-btn {
+  height: 40px;
+  padding: 0 16px;
+  border-radius: 7px;
+  border-color: #4776ed;
+  background: #4776ed;
+  box-shadow: none;
+  font-size: 12px;
+  font-weight: 600;
   display: inline-flex;
   align-items: center;
 }
@@ -1107,33 +1165,32 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 8px;
-  flex-wrap: wrap;
-  margin-bottom: 12px;
+  margin-bottom: 10px;
 
-  :deep(.ant-input-affix-wrapper),
-  :deep(.ant-picker),
-  :deep(.ant-select-selector) {
-    border-radius: 8px !important;
+  :deep(.ant-input-affix-wrapper) {
+    height: 40px;
+    border-radius: 7px !important;
     border-color: #e2e8f0;
-    font-size: 13px;
+    background: #fff;
+    box-shadow: none;
+    font-size: 12px;
   }
-  :deep(.ant-input-affix-wrapper),
-  :deep(.ant-picker) {
-    height: 37px;
-  }
-  :deep(.ant-select-selector) {
-    height: 37px !important;
-
-    .ant-select-selection-item,
-    .ant-select-selection-placeholder {
-      line-height: 35px;
-    }
-  }
+}
+.bm-input {
+  flex: 1;
+}
+.bm-filter-btn {
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border-radius: 7px;
+  border-color: #e2e8f0;
+  color: #64748b;
 }
 
 /* More Filters 弹层内容 */
 .bm-more {
-  width: 260px;
+  width: 300px;
 }
 .bm-more-title {
   font-size: 10px;
@@ -1160,41 +1217,32 @@ onMounted(() => {
 /* 页签 */
 .bm-tabs {
   display: flex;
-  gap: 20px;
-  border-bottom: 1px solid #e2e8f0;
-  margin-bottom: 16px;
+  gap: 8px;
+  margin-bottom: 12px;
   overflow-x: auto;
 }
 .bm-tab {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 10px 2px;
-  font-size: 12px;
-  font-weight: 500;
-  color: #64748b;
+  justify-content: center;
+  min-height: 34px;
+  padding: 7px 15px;
+  border: 1px solid #dfe4ec;
+  border-radius: 999px;
+  background: #fff;
+  font-size: 11px;
+  line-height: 1;
+  font-weight: 600;
+  color: #334155;
   cursor: pointer;
   white-space: nowrap;
-  border-bottom: 2px solid transparent;
-  margin-bottom: -1px;
+  transition: color 0.15s ease, background 0.15s ease, border-color 0.15s ease;
 
   &.active {
-    color: #1d4ed8;
-    font-weight: 600;
-    border-bottom-color: #2563eb;
-
-    .bm-tab-count {
-      background: #dbeafe;
-      color: #1d4ed8;
-    }
+    color: #fff;
+    border-color: #4776ed;
+    background: #4776ed;
   }
-}
-.bm-tab-count {
-  padding: 1px 7px;
-  border-radius: 999px;
-  background: #f1f5f9;
-  color: #64748b;
-  font-size: 11px;
 }
 
 /* 表格 + 面板并排 */
@@ -1208,130 +1256,144 @@ onMounted(() => {
   min-width: 0;
   background: #fff;
   border: 1px solid #e2e8f0;
-  border-radius: 12px;
-  padding: 4px 12px 8px;
+  border-radius: 10px;
+  overflow: hidden;
 
   :deep(.ant-table) {
-    font-size: 12px;
+    font-size: 11px;
   }
   :deep(.ant-table-thead > tr > th) {
+    height: 42px;
+    padding: 10px 16px;
     font-size: 10px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    color: #64748b;
-    background: #fff;
+    font-weight: 600;
+    color: #768196;
+    background: #f8fafc;
     border-bottom: 1px solid #e2e8f0;
   }
   :deep(.ant-table-tbody > tr > td) {
-    border-bottom: 1px solid #f1f5f9;
+    height: 54px;
+    padding: 11px 16px;
+    color: #64748b;
+    border-bottom: 1px solid #edf0f4;
+  }
+  :deep(.ant-table-tbody > tr:last-child > td) {
+    border-bottom: 0;
   }
   :deep(.ant-table-tbody > tr:hover > td) {
-    background: #f8fafc;
+    background: #f7f9ff;
   }
   :deep(.ant-table-tbody > tr.bm-row-active > td) {
     background: #eff6ff;
   }
+  :deep(.ant-table-tbody > tr) {
+    cursor: pointer;
+  }
+  :deep(.amount-text) {
+    color: #172033;
+    font-size: 11px;
+    font-weight: 700;
+  }
+  :deep(.ant-pagination) {
+    margin: 0;
+    min-height: 52px;
+    padding: 12px 16px;
+    align-items: center;
+    border-top: 1px solid #edf0f4;
+  }
+  :deep(.ant-pagination-total-text) {
+    margin-right: auto;
+    color: #7b8495;
+    font-size: 11px;
+  }
+  :deep(.ant-pagination-item),
+  :deep(.ant-pagination-prev .ant-pagination-item-link),
+  :deep(.ant-pagination-next .ant-pagination-item-link) {
+    border-radius: 5px;
+  }
 }
 .bm-booking-id {
-  color: #2563eb;
-  font-size: 12px;
+  color: #4776ed;
+  font-size: 11px;
   font-weight: 600;
 }
 .bm-guest {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
-.bm-avatar {
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  background: #eff6ff;
-  color: #2563eb;
-  font-size: 10px;
+  color: #172033;
+  font-size: 11px;
   font-weight: 600;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
 }
 .bm-dates {
-  font-size: 12px;
-  color: #334155;
-  line-height: 1.6;
+  font-size: 11px;
+  color: #697386;
+  white-space: nowrap;
 }
-.bm-row-actions {
-  display: inline-flex;
-  gap: 2px;
-  flex-wrap: wrap;
+.bm-payment-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
 }
-.bm-row-btn {
-  padding: 0 4px;
-  height: 22px;
-  font-size: 12px;
-  color: #2563eb;
+.bm-countdown {
+  color: #c2410c;
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
 }
-
 /* 状态标签(原型实测色值) */
 .btag {
   display: inline-flex;
-  padding: 2px 8px;
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 500;
-  border: 1px solid transparent;
+  align-items: center;
+  min-height: 22px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 10px;
+  line-height: 1;
+  font-weight: 600;
   white-space: nowrap;
 }
 .btag-confirmed {
-  background: #eff6ff;
-  color: #1d4ed8;
-  border-color: #bfdbfe;
+  background: #eef3ff;
+  color: #4776ed;
 }
 .btag-pending {
-  background: #fffbeb;
-  color: #b45309;
-  border-color: #fde68a;
+  background: #fff3e9;
+  color: #dd7a25;
 }
 .btag-checkedin {
-  background: #f0fdf4;
-  color: #15803d;
-  border-color: #bbf7d0;
+  background: #e8f8ed;
+  color: #32a75a;
 }
 .btag-checkedout {
   background: #f1f5f9;
-  color: #475569;
-  border-color: #e2e8f0;
+  color: #7c8799;
 }
 .btag-cancelled {
   background: #fef2f2;
-  color: #b91c1c;
-  border-color: #fecaca;
+  color: #df4c5b;
 }
 .btag-noshow {
-  background: #fff7ed;
-  color: #c2410c;
-  border-color: #fed7aa;
+  background: #fff0f1;
+  color: #ce3e50;
 }
 .btag-pay-paid {
-  background: #f0fdf4;
-  color: #15803d;
-  border-color: #bbf7d0;
+  background: #e8f8ed;
+  color: #32a75a;
 }
 .btag-pay-pending {
-  background: #fffbeb;
-  color: #b45309;
-  border-color: #fde68a;
+  background: #f1f3f7;
+  color: #7c8799;
 }
 .btag-pay-refunded {
-  background: #f1f5f9;
-  color: #475569;
-  border-color: #e2e8f0;
+  background: #fff0f1;
+  color: #df4c5b;
 }
 .btag-pay-failed {
   background: #fef2f2;
-  color: #b91c1c;
-  border-color: #fecaca;
+  color: #df4c5b;
+}
+.btag-pay-hotel {
+  background: #fff4e9;
+  color: #c8752a;
 }
 
 /* 右侧详情面板(430px,与表格并排) */
@@ -1372,6 +1434,77 @@ onMounted(() => {
   flex-direction: column;
   gap: 18px;
 }
+.bm-terminal-alert {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 14px;
+  border: 1px solid #fecaca;
+  border-radius: 10px;
+  background: #fff7f7;
+  color: #991b1b;
+  font-size: 12px;
+}
+.bm-terminal-alert.is-noshow {
+  border-color: #fed7aa;
+  background: #fffaf2;
+  color: #9a3412;
+}
+.bm-workflow {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+.bm-workflow-step {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  color: #94a3b8;
+  font-size: 10px;
+  text-align: center;
+}
+.bm-workflow-step::before {
+  content: '';
+  position: absolute;
+  top: 10px;
+  right: 50%;
+  width: 100%;
+  height: 2px;
+  background: #e2e8f0;
+  z-index: 0;
+}
+.bm-workflow-step:first-child::before {
+  display: none;
+}
+.bm-workflow-step.done::before,
+.bm-workflow-step.current::before {
+  background: #2563eb;
+}
+.bm-workflow-dot {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: 2px solid #cbd5e1;
+  border-radius: 50%;
+  background: #fff;
+  font-size: 10px;
+  font-weight: 700;
+}
+.bm-workflow-step.done,
+.bm-workflow-step.current {
+  color: #1d4ed8;
+  font-weight: 600;
+}
+.bm-workflow-step.done .bm-workflow-dot,
+.bm-workflow-step.current .bm-workflow-dot {
+  border-color: #2563eb;
+  background: #2563eb;
+  color: #fff;
+}
 .bm-section-title {
   margin: 0 0 10px;
   font-size: 10px;
@@ -1410,6 +1543,21 @@ onMounted(() => {
 .bm-field-strong .bm-label,
 .bm-field-strong .bm-value {
   font-weight: 700;
+}
+.bm-payment-countdown {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 4px;
+  padding: 9px 10px;
+  border-radius: 8px;
+  background: #fff7ed;
+  color: #9a3412;
+  font-size: 11px;
+}
+.bm-payment-countdown strong {
+  font-variant-numeric: tabular-nums;
+  font-size: 14px;
 }
 .bm-hint {
   font-size: 11px;
@@ -1650,6 +1798,22 @@ onMounted(() => {
     width: 100%;
     position: static;
     max-height: none;
+  }
+}
+
+@media (max-width: 600px) {
+  .bm-header {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .bm-export-btn {
+    width: 100%;
+    justify-content: center;
+  }
+  .bm-tabs {
+    margin-right: -16px;
+    padding-right: 16px;
   }
 }
 </style>
