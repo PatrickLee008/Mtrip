@@ -1,5 +1,7 @@
 # Mtrip 开发工作计划总览
 
+2026-09-18更新：商户认证测试模式改为后台可控的全局安全开关 `merchant_auth_test_mode`，与消费者注册的 `register_sms_required` 保持独立。有效条件为“非生产环境 + 部署门禁 `MTRIP_MERCHANT_AUTH_TEST_ALLOWED=true` + 数据库开关开启”；默认关闭，生产硬锁，仅超管可保存/重置。同步补齐既有 `config:global:reset` 菜单权限键，并修正全局参数页布尔配置分支，三个安全开关统一显示为开关与元信息，不再额外出现 `false` 输入框。迁移账本 23/23，三套商户入驻回归、后台控制器 14 项安全断言、admin-web 构建、PHP lint、运行态 `false→true→false` 网关验证和全栈健康检查通过；当前数据库开关已恢复为关闭，两个 App 未修改。详见[运行时开关报告](./audits/2026-09-18-merchant-auth-runtime-toggle.md)。
+
 2026-09-18更新：Merchant M4 预订管理按 PRD v1.0.3 与 Figma 详情节点 `1289:24340`、列表节点 `1289:16725` 完成本轮代码整改。已收口退款上限与库存、旧核销生命周期、通知深链/物业范围、Pay at Hotel / Mark as Paid、Figma 表格与详情交互、All Properties 聚合，以及带站点时区快照的 No-show 截止时间。迁移账本 21/21，专项、全量 PHP lint、shared 99/975、两个 Web 构建和 client 类型检查通过；补充完成 1440×900、1366×768、393×852 真实登录态视觉验收和 authenticated Mark as Paid 无副作用 HTTP 探测，并修复支付时间线翻译缺口。仅剩物业级 No-show 截止时间/费用策略/配置入口等产品决策；Mark as Paid 登录态成功写入若需再验，须使用专用 Pay at Hotel 测试订单。详见[M4 方案](./实现方案-Merchant-M4-酒店预订管理.md)。
 
 2026-09-16修复：merchant-web 客房列表兼容 `/merchant/rooms/list` 未返回 `metrics` 或返回空值的响应，不再把 `undefined` 写入页面状态并触发 `totalRooms` 渲染异常；失败响应同时清空列表、总数和统计，避免显示上一物业的旧数据。当前 goods-service 仍按标准契约返回真实统计；merchant-web 生产构建通过。详见[客房管理整改计划](./20-客房管理Figma与PRD整改计划.md)。
@@ -144,7 +146,7 @@ MTrip/
 | M4 | [实现方案-Merchant-M4-酒店预订管理.md](./实现方案-Merchant-M4-酒店预订管理.md) | Merchant PRD 模块4：酒店预订列表、履约状态、库存、退款、通知、同步框架及原型 UI | 2026-09-18 v1.0.3 / Figma 整改、自动化回归、真实登录态视觉与 authenticated Mark as Paid 无副作用探测完成；待确认物业级 No-show 配置模型 | 98% |
 | 17 | [17-商户移动端merchant-app.md](./17-商户移动端merchant-app.md) | Merchant PRD 移动端：入驻/认证/KYC、Dashboard、酒店运营、预订、结算、通知、RBAC、营销、评价、帮助中心 | 注册 OTP/申请提交已联动；统一申请级 KYC 清单、后台 Send KYC 门禁、真实文件选择/上传/提交已接入；M9-M12 待实现 | 进行中 |
 | 18 | [18-酒店商品收敛为物业整改计划.md](./18-酒店商品收敛为物业整改计划.md) | 酒店域去除重复商品实体，以物业统一 KYC、房型、库存、交易、运营和消费者展示 | 批次 A-G 已完成；旧酒店商品模型已退役；新增物业 KYC 请求上下文已修复 | 100% |
-| 19 | [19-商户入驻审批整改计划.md](./19-商户入驻审批整改计划.md) | PRD 模块 1 注册、KYC、最终批准、账号激活及首批物业转换 | 阶段 0–7 全部完成；App 真机接入另行实施 | 已完成 |
+| 19 | [19-商户入驻审批整改计划.md](./19-商户入驻审批整改计划.md) | PRD 模块 1 注册、KYC、最终批准、账号激活及首批物业转换 | 阶段 0–7 全部完成；认证测试模式已改为后台运行时开关；App 真机接入另行实施 | 已完成 |
 
 ## 实施顺序(首期里程碑)
 

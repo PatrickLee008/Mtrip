@@ -1,4 +1,14 @@
 # 会话交接文档(HANDOFF)
+### ★ 2026-09-18（商户认证测试模式改为后台运行时开关）
+
+商户固定 OTP 测试模式不再复用消费者注册的 `register_sms_required`，也不再由单一环境变量直接启停。新增全局安全配置 `sys_config.merchant_auth_test_mode`（默认 `0`）和部署能力门禁 `MTRIP_MERCHANT_AUTH_TEST_ALLOWED`（模板默认 `false`）；仅当环境不是 `prod/production`、部署门禁为 `true`、数据库开关为 `1` 时，商户注册/激活/登录/恢复才接受 `000000` 并跳过最终批准的外部凭证投递。生产环境始终关闭。
+
+后续页面走查修复了布尔配置模板分支：后台 IP 白名单、注册强制短信验证和商户认证测试模式现在统一只渲染开关与元信息，不再为前两项额外显示 `false` 文本输入框；商户测试模式继续保留生效状态标签，配置行为未改变。
+
+后台入口为“系统配置 → 全局参数 → 安全配置 → 商户认证测试模式”。只有超级管理员可以保存或重置该项；部署门禁关闭时不能开启，但可关闭遗留的数据库开启值。开关双向确认并展示“已生效/未开启/部署环境禁止”状态。最终批准在请求开始时冻结一次测试模式判定并传给凭证投递，避免审批过程中切换导致投递行为前后不一致；全局配置批量保存先完整校验再事务写入，失败批次不会留下已切换的安全开关。
+
+迁移 `V20260918120000__add-merchant-auth-test-toggle.sql` 和权限对齐迁移 `V20260918121000__add-global-config-reset-permission.sql` 已应用，账本 23/23、待执行 0。开发 `deploy/.env` 的部署门禁为 `true`，运行时数据库开关已恢复为 `0`；主池、APP 池和网关已重建并健康。注册、认证、最终批准三套隔离回归及新增后台控制器 14 项安全断言通过；真实网关验证 `0→1→0` 即时返回 `testMode:false→true→false`，无需重启。admin-web 构建、迁移校验、PHP lint 和 `git diff --check` 通过。两个 App 未修改。详见 `docs/plans/audits/2026-09-18-merchant-auth-runtime-toggle.md`。
+
 ### ★ 2026-09-18（Merchant M4 预订管理 PRD v1.0.3 / Figma 整改）
 
 > 本节是当前口径，取代 2026-09-17 菜单记录中“All Properties 隐藏 Booking Management”的部分；`/availability` 仍要求具体物业，`/order` 现支持 All Properties 聚合。
@@ -848,7 +858,7 @@ merchant-web 的 `/merchant/activation/*` 后端已存在但网关遗漏 activat
 
 ### ★ 2026-09-15（测试凭证弹窗与固定 OTP）
 
-用户授权跳过邮件渠道后，本地已开启 `MTRIP_MERCHANT_AUTH_TEST_MODE=true`，仅 dev/local/test 生效。最终批准后自动弹出凭证，既有待激活申请可由超管在详情查看；邮箱/SMS 外部投递跳过，注册/激活/登录/恢复 OTP 获取后输入 000000，生产与关闭开关后拒绝测试上下文。Authenticator 不变。两个 Web 构建、8 文件 lint、43 注册/42 认证/36 凭证测试通过，双池和商户 Web 代理已确认 testMode=true。用户 ID 2 账号仍待激活，未替用户激活。无迁移，两个 App 未修改。详见 `docs/plans/audits/2026-09-15-merchant-auth-test-mode.md`。
+该节记录初版实现，启停方式已由 2026-09-18 的后台运行时开关取代。最终批准后自动弹出凭证、测试 OTP 上下文、生产拒绝、审计和 Authenticator 行为保持不变；旧变量 `MTRIP_MERCHANT_AUTH_TEST_MODE` 已退役。详见 `docs/plans/audits/2026-09-15-merchant-auth-test-mode.md` 顶部的取代说明及最新运行时开关报告。
 
 ### ★ 2026-09-15（后台线索默认确认注册联系方式）
 
