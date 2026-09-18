@@ -32,7 +32,8 @@ class OnboardingFinalApprovalService
             throw new BusinessException(ErrorCode::PARAM_ERROR, '缺少有效 requestId');
         }
 
-        $result = Db::transaction(function () use ($applicationId, $requestId, $channels): array {
+        $testMode = MerchantAuthTestMode::enabled();
+        $result = Db::transaction(function () use ($applicationId, $requestId, $channels, $testMode): array {
             $app = Db::table('merchant_application')->where('id', $applicationId)->whereNull('deleted_at')->lockForUpdate()->first();
             if (! $app) {
                 throw new BusinessException(ErrorCode::NOT_FOUND, '入驻申请不存在');
@@ -146,11 +147,11 @@ class OnboardingFinalApprovalService
                 'applicationId' => $applicationId, 'merchantId' => $merchantId, 'accountId' => $accountId,
                 'propertyIds' => array_values($propertyIds), 'accessCode' => $accessCode,
                 'accountStatus' => 'pending_activation', 'finalApprovedAt' => $now,
-                'testMode' => MerchantAuthTestMode::enabled(),
+                'testMode' => $testMode,
             ];
         });
 
-        $result['deliveries'] = $this->delivery->deliverApplication($applicationId);
+        $result['deliveries'] = $this->delivery->deliverApplication($applicationId, $testMode);
         return $result;
     }
 

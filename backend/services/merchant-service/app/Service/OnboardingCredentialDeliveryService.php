@@ -59,12 +59,13 @@ class OnboardingCredentialDeliveryService
     }
 
     /** @return list<array<string,mixed>> */
-    public function deliverApplication(int $applicationId): array
+    public function deliverApplication(int $applicationId, ?bool $testMode = null): array
     {
+        $testMode ??= MerchantAuthTestMode::enabled();
         $ids = Db::table('merchant_credential_delivery')->where('application_id', $applicationId)
             ->whereIn('status', ['pending', 'failed'])->orderBy('id')->pluck('id')->all();
         foreach ($ids as $id) {
-            $this->deliver((int) $id);
+            $this->deliver((int) $id, false, $testMode);
         }
         return $this->receipts($applicationId);
     }
@@ -79,7 +80,7 @@ class OnboardingCredentialDeliveryService
         if ((string) $row->status === 'delivered') {
             return $this->receipt((array) $row);
         }
-        $this->deliver($deliveryId, true);
+        $this->deliver($deliveryId, true, MerchantAuthTestMode::enabled());
         return $this->receipt((array) Db::table('merchant_credential_delivery')->where('id', $deliveryId)->first());
     }
 
@@ -129,14 +130,15 @@ class OnboardingCredentialDeliveryService
         });
     }
 
-    private function deliver(int $deliveryId, bool $manual = false): void
+    private function deliver(int $deliveryId, bool $manual = false, ?bool $testMode = null): void
     {
-        $row = Db::transaction(function () use ($deliveryId, $manual): ?array {
+        $testMode ??= MerchantAuthTestMode::enabled();
+        $row = Db::transaction(function () use ($deliveryId, $manual, $testMode): ?array {
             $record = Db::table('merchant_credential_delivery')->where('id', $deliveryId)->lockForUpdate()->first();
             if (! $record || (string) $record->status === 'delivered') {
                 return null;
             }
-            if (MerchantAuthTestMode::enabled() && $record->channel !== 'inapp') return null;
+            if ($testMode && $record->channel !== 'inapp') return null;
             if ((string) $record->status === 'processing'
                 && (string) $record->locked_at > gmdate('Y-m-d H:i:s', time() - 300)) {
                 return null;

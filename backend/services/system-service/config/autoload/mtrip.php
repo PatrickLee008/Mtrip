@@ -8,6 +8,8 @@ use function Hyperf\Support\env;
  * Mtrip 平台级配置(shared 组件与本服务共用)
  */
 return [
+    // 允许后台在非生产环境开启商户固定 OTP 测试模式。
+    'merchant_auth_test_allowed' => env('MTRIP_MERCHANT_AUTH_TEST_ALLOWED', false),
     // 后台 JWT 签名密钥(全部微服务一致,便于网关透传)
     'jwt_secret' => env('MTRIP_JWT_SECRET', ''),
     // AccessToken 有效期(秒),与 sys_config.jwt_expire_minutes 初始一致

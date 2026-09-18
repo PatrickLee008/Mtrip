@@ -246,7 +246,7 @@ Expo 51 / TypeScript / Zustand / React Navigation 6 / Axios / i18next + react-i1
   `hydrate()` 未改 —— 本地存过 `mtrip:app-mode` 的照旧读回,**显式选择优先于默认值**。
   改模式的唯一入口是「更多」页的 Lite Mode 开关(`MineScreen` / `MoreLiteScreen` 各一个,同一份状态)。
 
-- [x] **【临时】注册验证码走纯前端固定码页**(2026-09-15):新增 `screens/user/FixedOtpScreen.tsx`
+- [x] ~~**【临时】注册验证码走纯前端固定码页**(2026-09-15)~~ —— **已于 2026-09-16 整体撤销**,见下一条。新增 `screens/user/FixedOtpScreen.tsx`
   (路由 `FixedOtp`),**只认 `123456`、纯前端校验、不发任何网络请求**;
   注册流程 `Register → FixedOtp → ReferralCode`,**后端一行没改**。
   可行的前提:后台没有启用中的短信渠道 → `SmsVerifyService::enabled()` 为 false →
@@ -260,6 +260,66 @@ Expo 51 / TypeScript / Zustand / React Navigation 6 / Axios / i18next + react-i1
   提示文案复用 `user.otp.fixedHint`(三语);
   **先前那版后端万能码 `MTRIP_SMS_BYPASS_CODE` 已整体回滚**(它是真的认证绕过,
   且与渠道解耦 —— 删光短信渠道也关不掉)。
+
+- [x] **全局「强制短信验证」开关**(2026-09-17 下午,`sys_config` 的 `security` / `register_sms_required`):
+      把下面那条**站点级**方案**搬到了全局配置**,`sys_site.sms_verify_required` 列已删除
+      (迁移 `V20260917040000`,账本 19→20)。
+      **搬家原因**:注册请求的站点来自**客户端可控的 `X-Site-Id`**(`requireSiteId()` 只校验 `>0`),
+      站点级开关挡不住「挑一个最宽松的站点」;且这本质是平台级安全策略,不是站点差异化配置。
+      **实现**:`siteForcesSms(int)` → `registerSmsRequired(): bool`(读 `sys_config`,不再吃 siteId);
+      `registerRequiresSms($siteId)` = `registerSmsRequired() || enabled($siteId)`,siteId 只用于判渠道归属。
+      站点页与 4 个 `config.site.sms*` i18n 键**全部撤销**;client-app 逻辑零改动(50021/50022 契约未变)。
+      **开关位置**:后台「系统配置 → 全局参数」(`/config/global`)→ **安全配置** 分组。
+      `value_type=3` 由该页既有逻辑自动渲染成 `a-switch`,**没为它写专门控件**。
+      **切换要确认、要留痕**:开/关**双向** `Modal.confirm`(关闭走 danger,文案讲清后果);
+      留痕复用既有 `OperationLogMiddleware` —— 该页只提交变更项,故日志 `content` 里只有这一个键,
+      附管理员 / IP / 时间。**局限:只有新值没有旧值**。
+      **验证**:真值表 13 项全过,其中关键一格是「开关=1 时 `X-Site-Id` 取 1/2/7/999/12345(含不存在的站点号)
+      调 `register` 全部被 `40111` 拦下」,证明「挑弱站点」已堵死;shared 单测 99/975 全绿;
+      后台走查开/关确认、取消不保存、落库、还原全过;两端构建零报错。
+      唯一未实测:「开关=1 + 渠道启用 → `sms/send` 正常」——会真发短信(花钱且打扰用户),
+      该格本次未触碰且当天早些时候已验证。
+
+- [x] ~~**站点级「强制短信验证」开关**(2026-09-17 上午,`sys_site.sms_verify_required`)~~ · **已被上一条取代**
+      (该列已删除,后台站点管理也没有那个开关了;动机与 50021/50022 设计仍有效):
+      把「注册是否要求短信验证」与「渠道是否可用」**解耦**。
+      **动机**:原实现是 `AuthController::register` 读 `SmsVerifyService::enabled()`,即「渠道启用即强制」——
+      渠道一旦停用 / 软删 / 凭证失效,`enabled()` 变 false,注册就**静默降级成免验证码注册**,且无任何告警。
+      9/17 实测复现:渠道 `status` 置 2 后,不带 `verifyToken` 的 `register` 直接 `code=0` 建号(`user_info` 6→7)。
+      **实现**:迁移 `V20260917032003`(账本 18→19)给 `sys_site` 加 `sms_verify_required TINYINT NOT NULL DEFAULT 1`;
+      `SmsVerifyService` 新增 `siteForcesSms()` 与 `registerRequiresSms()`(= 站点强制 OR 渠道可用),
+      `register` 改读后者;`requireChannel()` 在无渠道时按站点开关抛不同码。
+      **`enabled()` 语义未动**(仍是「渠道能否解析」),既有语义与单测不受影响。
+      **新增错误码 `50022 SMS_REQUIRED_UNAVAILABLE`**,与既有 50021 的区别是**调用方能不能降级**:
+      50021 = 不强制且无渠道 → App 照旧跳过验证码页;50022 = 站点强制但渠道不可用 → App **不能跳过**
+      (跳过去也会在推荐码页被 40111 打回),停在注册页由 request 层 Toast 后端文案。
+      App 侧只改两处:`API_CODE` 加 50022、`RegisterScreen` 的 catch 仍只对 50021 降级(**i18n 零新增**)。
+      后台:站点管理列表加一列标签、编辑弹窗加一个开关(`config.site.smsVerifyRequired` 等 4 键 × 2 份 i18n);
+      布尔↔0/1 用带 setter 的 `computed` 转换 —— 写在模板里的箭头函数参数会是隐式 any,本仓库模板禁类型标注,
+      `vue-tsc` 会报 TS7006。
+      **⚠️ 存量 7 个站点与新建站点一律默认 `1`(强制)**,这是用户的明确决定。
+      代价:**SMSPoh 一旦挂掉或凭证失效,所有站点的注册会立即全部不可用**(而不是降级放行)。
+      要放开的站点在后台站点管理逐个把开关翻成 0。
+      **验证**:真值表三格逐格实测(见 HANDOFF);shared 单测 97/968 → **99/975** 全绿(新增 2 用例 7 断言);
+      5 个改动 PHP 文件容器内 `php -l` 通过;`admin-web build` 与 `client-app typecheck` 零报错;
+      测试后渠道状态、站点开关、测试账号全部还原(站点 7×1 / 渠道 status=1 / 用户 6)。
+      **未做**:真实收发短信的端到端仍待用户用真号自测(与上一条同)。
+
+- [x] **恢复注册的真实短信 OTP 链路**(2026-09-16,SMSPoh 已可测试、后台已配渠道):
+      按上一条留的删除清单**四处全删**,并删掉 `screens/user/FixedOtpScreen.tsx`;
+      注册恢复为 `Register →(sms/send)→ VerifyOtp →(sms/verify 换 verifyToken)→ ReferralCode`。
+      `VerifyOtpScreen` 一直原样留着没动过,所以删完即自动接回,**没有新写任何代码**。
+      **这次不是清理而是必修**:后台新配的渠道
+      (`sys_sms_channel` id=4,`provider_code=smspoh`、`status=1`、`site_id=0` 全局、未删除)
+      已使 `SmsVerifyService::enabled()` 对所有站点返回 true,
+      而 `AuthController::register` 是「渠道启用即强制」——
+      固定码页永远拿不到 `verifyToken`,留着的话每次注册都会被 `40111` 打回。
+      **验证**:① 把 `api_key`/`api_secret` 密文取出、在 user-service 容器内用它自己的
+      `MTRIP_AES_KEY` 解密成功(41 / 32 字符,`sign_name=SMSPohTest` 非空)——
+      这四项正是 `channel()` 判 null 的全部条件,故 `50021 短信服务未配置` 不可能再出现;
+      ② 经网关不带 `verifyToken` 调 `register` 返回 `40111 请先完成手机号短信验证`,
+      且 `user_info` 行数 6→6 **无副作用**,反证渠道确实已生效;③ typecheck 零报错。
+      **未做**:真实收发短信的端到端(需要一个能收码的真实缅甸号码,由用户自测)。
 
 - [x] **注册页邮箱换姓名 + 右上角按钮改版**(2026-09-15,Figma Onboarding `2540:13083`):
   注册表单第二栏由邮箱改为**姓名且必填**(原邮箱是选填),图标用设计稿同款
@@ -284,7 +344,7 @@ Expo 51 / TypeScript / Zustand / React Navigation 6 / Axios / i18next + react-i1
   新增 `HomeIcon.mic`(字形取自设计稿导出 SVG)与本地键 `mtrip:hotel-recent`(最近搜索,最多 3 条)。
   **未照抄**:设计稿「输入中」的联想列表(没有地点库,不编造联想词);
   Nearby / Search on Map / 语音 / how do I book 走 comingSoon;
-  房间与入住人只回显不进请求(`/app/goods/list` 无此参数,日期同理)。
+  房间与入住人只回显不进请求(日期同理)。
   i18n 三份各补 26 键(共 912)。
 
 - [x] **关怀模式酒店详情七屏**(2026-09-15,Figma section `Hotel Details Lite` `2352:5591`):
@@ -330,3 +390,46 @@ Expo 51 / TypeScript / Zustand / React Navigation 6 / Axios / i18next + react-i1
       **顺带修掉 3 处既有类型错**(都在上一批未提交的 Lite 文件里):`HotelDetailLite` /
       `RoomDetailLite` 传给向导的 `goodsId/skuId` 应为 `propertyId/roomTypeId`;
       `HotelResultsLite` 的收藏映射 `f.goods_id` 应为 `f.property_id`(`FavoriteItem` 早已改名)。
+
+- [x] **酒店页用户指引(Coach Mark 七步)**(2026-09-16,Figma section `Hotel Search Coach mark UI` `2150:4865`):
+      新增 `components/hotel/guide/HotelGuideOverlay.tsx`(遮罩 / 箭头 / 文案 / 底部控件)与
+      `guideSteps.tsx`(七步插图)。七步讲完整条订房链路:目的地 → 日期 → 住客 → 选酒店 →
+      选房 → 填资料 → 付款。
+      **三处入口**(用户指定「筛选旁边的问号」):完整版搜索页 `HotelsScreen` 与结果页
+      `HotelResultsScreen` 顶栏筛选旁各加一枚 `questionCircle` 圆按钮;关怀版 `HotelsLiteScreen`
+      顶栏那枚「how do I book ?」药片由 `comingSoon` 死链接到同一浮层并传 `lite`(字号放大一档)。
+      **不自动弹**,只有点问号才出;左上角 Skip Tutorial 为快速关闭。
+      设计稿实测(取自 Coach Mark 2 `2154:7076` 的 design context):遮罩纯黑 .95、文案块宽 320、
+      标题 Inter Bold 24 白 / 说明 Inter 400 16 `#D9E1FB`、底栏 Previous + 7 点 + Next
+      (1px `#D9E1FB` 描边圆角 32);曲线箭头是设计稿导出 SVG 的单路径,**逐字符照搬未重绘**,
+      旋转 -53.55°。
+      **示例卡复用现成组件与设计稿同源演示数据**:步 4 `HotelResultCard` + `DEMO_RESULTS[0]`
+      (就是稿上那家 Heritage Bagan)、步 5 `HotelRoomCard` + `DETAIL_ROOMS[0]`(Standard Room /
+      4 Left / 1 Queen / 32 sqft / MMK 195,000 与稿逐字段吻合)、步 6 `FormInput`、
+      步 7 `PaymentMethodRow` + `TEMP_PAY_ICONS`;关怀模式下步 4/5 换 `LiteHotelCard` / `LiteRoomCard`。
+      i18n 三份各补 18 键(`hotels.guide.*`);连同下面那条修复共 990。
+      **冒烟时抓到一个既有 bug 并修了**:`hotels.detail.rooms.breakfast` 三份里根本不存在,
+      而 `lite/LiteRoomCard.tsx:109` 一直在 `t()` 它 —— 关怀模式房型卡上凡 `breakfast===1`
+      的房型都会把原始键名画出来(与本次引导无关,是第 5 步复用该卡后暴露的)。
+      已补:en `Breakfast` / zh `含早餐` / my `မနက်စာ`。
+      **已知偏差**:4~7 步高亮的元素属于结果页 / 详情页 / 订房页 / 支付页,那几页当下并未挂载,
+      做不成真实挖洞高亮 —— 设计稿本身也是「遮罩 + 元素副本画在遮罩上」,故七步统一成
+      「遮罩之上画该步示例卡」;遮罩 95% 黑,底层几乎不可见,差别只在透出的那层页面不同。
+      示例卡是演示数据,**不反映用户当前搜索结果**。步 6 只画三栏(稿上四栏 + 提示 + Save Info
+      整卡近 450 高,叠上文案后小屏放不下,砍掉与姓名说明重复的手机号栏)。
+      **缅文文案是照着现有 `my-MM.json` 同类措辞拼的,不是母语者产出,需人工过一遍。**
+      **验证**:typecheck 零报错;i18n 三份 990 键零差异;**Web 冒烟已做**
+      (`expo start --web` + headless Chrome 402×874,两种模式各 35 条断言全绿,
+      逐屏看过截图,完整版顶栏三枚按钮实测 x=20/298/346,问号确在筛选旁)。
+      冒烟时后端没起,金额显示为 EUR(`siteStore.currency` 初值,全局如此),接上网关即为 MMK。
+- 2026-09-17:订房向导缺省入离日期与搜索页口径统一。`components/hotel/booking/bookingFormat.ts`
+  的 `normalizeDates()` 兜底由「明天起 1 晚」(`dayAfter(1)/dayAfter(2)`)改为「**今天起 2 晚**」
+  (`dayAfter(0)/dayAfter(2)`),与 `DatePickerSheet.defaultDateRange(2)` 及完整版/关怀版搜索页默认
+  一致;`useBookingWizard.ts` 与 `navigation/types.ts` 的「缺省时向导用明天起 1 晚」注释同步。
+  **动因**:「我的精选 → 酒店详情 → 订房向导」这条链路只传 `propertyId`
+  (`MyPickScreen.tsx:191` / `MyPickLiteScreen.tsx:174`),向导因此静默把住宿订成明天/后天,
+  而商户在客房管理里看的是"今天"的库存(按日期存),于是"下了单但今日可售没变"被当成 bug 报回来;
+  详情见 `docs/plans/20-客房管理Figma与PRD整改计划.md` 第 12 节与本文件对应的 HANDOFF 顶部条目。
+  **未动**门票下单页 `screens/order/OrderConfirmScreen.tsx` 的同款默认值(门票业务另论)。
+  **验证**:`npm run typecheck` 零报错;`normalizeDates` 用 Node 直跑 TS 源文件跑 6 组断言
+  (缺省 / 空串 / 离店不晚于入住 / 过去日期 / 正常区间原样透传)全绿。未做真机走查。

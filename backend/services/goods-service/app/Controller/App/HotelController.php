@@ -6,6 +6,7 @@ namespace App\Controller\App;
 
 use App\Controller\AbstractController;
 use Hyperf\DbConnection\Db;
+use Mtrip\Shared\Support\RoomDefaults;
 use Mtrip\Shared\Constants\ErrorCode;
 use Mtrip\Shared\Context\UserContext;
 use Mtrip\Shared\Exception\BusinessException;
@@ -77,14 +78,23 @@ final class HotelController extends AbstractController
 
         $rooms = Db::table('hotel_room_type')->where('site_id', $siteId)->where('property_id', $propertyId)
             ->where('status', 1)->where('publish_status', 2)->where('approved_version', '>', 0)->whereNull('deleted_at')
-            ->orderBy('sort')->orderBy('id')->get()->map(function ($row): array {
+            ->orderBy('sort')->orderBy('id')->get([
+                'id', 'property_id', 'room_name', 'description', 'bed_type', 'bed_count', 'bedding', 'area', 'area_unit',
+                'max_adults', 'max_children', 'max_guests', 'floor_name', 'room_view', 'smoking', 'breakfast', 'meal_plan',
+                'cancellation_policy', 'currency', 'checkin_notes', 'base_price', 'weekend_price', 'extra_bed_price',
+                'images', 'image_gallery', 'video_url', 'facilities', 'panorama', 'vr_tour', 'floor_plan', 'sort',
+            ])->map(function ($row): array {
                 $room = (array) $row;
-                foreach (['images', 'facilities'] as $field) $room[$field] = $this->jsonList($room[$field] ?? null);
-                unset($room['deleted_at']);
+                $room = \App\Service\RoomContentService::unpack($room);
+                foreach (['panorama', 'vr_tour', 'floor_plan'] as $field) {
+                    if (empty($room[$field]['enabled'])) unset($room[$field]);
+                }
                 $room['room_type_id'] = (int) $room['id'];
                 return $room;
             })->all();
-        $rules = Db::table('goods_refund_rule')->where('site_id', $siteId)->where('property_id', $propertyId)
+        $roomIds = array_column($rooms, 'id');
+        $rules = $roomIds === [] ? [] : Db::table('goods_refund_rule')->where('site_id', $siteId)
+            ->where('property_id', $propertyId)->where('sku_type', 1)->whereIn('sku_id', $roomIds)
             ->whereNull('deleted_at')->get(['id', 'sku_type', 'sku_id', 'rule_type', 'rules', 'remark'])
             ->map(function ($row): array {
                 $rule = (array) $row;
@@ -177,10 +187,10 @@ final class HotelController extends AbstractController
                     'stock' => (int) $stock['is_closed'] === 1 ? 0 : max(0, (int) $stock['stock_total'] - (int) $stock['stock_sold'] - (int) $stock['stock_locked']),
                     'closed' => (int) $stock['is_closed'] === 1];
             } else {
-                $price = (float) $room['base_price'];
+                $price = RoomDefaults::price($room, $date);
                 $citizen = (float) ($room['base_price_citizen'] ?? 0);
                 $calendar[] = ['date' => $date, 'price' => $price, 'priceCitizen' => $citizen > 0 ? $citizen : $price,
-                    'stock' => (int) $room['base_stock'], 'closed' => false];
+                    'stock' => RoomDefaults::stock($room), 'closed' => false];
             }
         }
         return Result::success(['propertyId' => $propertyId, 'roomTypeId' => $roomTypeId, 'calendar' => $calendar]);

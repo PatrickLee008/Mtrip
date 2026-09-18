@@ -94,7 +94,7 @@ function stage5Claims(string $token): array
 }
 
 $security = new MerchantAccountSecurityService();
-$config->set('mtrip.merchant_auth_test_mode', false);
+setMerchantAuthTestMode($config, false, false, 'test');
 $legacyAuth = new MerchantAuthService();
 $auth = new Stage5Authentication($security, $legacyAuth);
 $siteOne = 995;
@@ -190,10 +190,13 @@ $audit = json_encode(Db::table('merchant_activity_log')->whereIn('merchant_id', 
 check(! str_contains((string) $audit, $emailAccount['password']) && ! str_contains((string) $audit, $auth->lastEmailCode)
     && ! str_contains((string) $audit, $totpSecret), 'authentication audit excludes passwords, OTP values and Authenticator secrets');
 
-$config->set('app_env', 'test');
-$config->set('mtrip.merchant_auth_test_mode', true);
+$config->set('app_env', 'staging');
+setMerchantAuthTestMode($config, false, true);
 $testAuth = new MerchantAuthenticationService($security, $legacyAuth);
-check($testAuth->config()['testMode'], 'auth config exposes explicitly enabled local test mode');
+check(! $testAuth->config()['testMode'], 'database switch cannot bypass the deployment capability gate');
+setMerchantAuthTestMode($config, true, true);
+$testAuth = new MerchantAuthenticationService($security, $legacyAuth);
+check($testAuth->config()['testMode'], 'auth config exposes explicitly enabled staging test mode');
 $testAccount = stage5Pending($siteOne, 'T0003', 'owner-test@example.test', '+95950000003');
 $testStart = $testAuth->startActivation($siteOne, $testAccount['accessCode'], '', '', '');
 $testOtp = $testAuth->sendActivationOtp($testStart['activationToken'], 'email', '');
@@ -202,19 +205,19 @@ check($testOtp['testMode'] && Db::table('merchant_auth_challenge')->where('token
 rejects(ErrorCode::SMS_SEND_TOO_FREQUENT, fn () => $testAuth->sendActivationOtp($testStart['activationToken'], 'email', ''), 'test OTP retains resend cooldown');
 rejects(ErrorCode::SMS_CODE_INVALID, fn () => $testAuth->verifyActivationOtp($testOtp['challengeToken'], '111111', ''), 'test mode does not accept arbitrary OTP values');
 $testVerified = $testAuth->verifyActivationOtp($testOtp['challengeToken'], '000000', '');
-$config->set('mtrip.merchant_auth_test_mode', false);
+setMerchantAuthTestMode($config, true, false);
 rejects(ErrorCode::SMS_CODE_EXPIRED, fn () => $testAuth->finishActivation($testVerified['activationToken'], ''), 'disabling test mode invalidates an already verified test activation');
-$config->set('mtrip.merchant_auth_test_mode', true);
+setMerchantAuthTestMode($config, true, true);
 $config->set('app_env', 'production');
 check(! $testAuth->config()['testMode'], 'production ignores the test-mode flag');
 rejects(ErrorCode::SMS_CODE_EXPIRED, fn () => $testAuth->finishActivation($testVerified['activationToken'], ''), 'production cannot consume a test activation');
-$config->set('app_env', 'test');
+$config->set('app_env', 'staging');
 $testSession = $testAuth->finishActivation($testVerified['activationToken'], '');
 check(stage5Claims($testSession['token'])['amr'] === 'activation_email_otp', '000000 completes the normal activation state transition');
 $testLogin = $testAuth->loginChallenge($siteOne, 'email', $testAccount['email'], '', '');
 $config->set('app_env', 'production');
 rejects(ErrorCode::SMS_CODE_EXPIRED, fn () => $testAuth->verifyLogin('email', $testLogin['challengeToken'], '000000', ''), 'production rejects a pending test login OTP');
-$config->set('app_env', 'test');
+$config->set('app_env', 'staging');
 check(isset($testAuth->verifyLogin('email', $testLogin['challengeToken'], '000000', '')['token']), 'verified registration email can log in with the test OTP');
 rejects(ErrorCode::SMS_CODE_EXPIRED, fn () => $testAuth->verifyLogin('email', $testLogin['challengeToken'], '000000', ''), 'test login OTP cannot be replayed');
 $testUnknown = $testAuth->loginChallenge($siteOne, 'email', 'missing-test@example.test', '', '');
@@ -236,6 +239,6 @@ Db::table('merchant_auth_challenge')->where('token_hash', hash('sha256', $expire
 rejects(ErrorCode::SMS_CODE_EXPIRED, fn () => $testAuth->verifyActivationOtp($expiredOtp['challengeToken'], '000000', ''), 'expired test OTP is not accepted');
 $testAudit = Db::table('merchant_activity_log')->where('merchant_id', $testAccount['merchantId'])->pluck('description')->all();
 check(str_contains(implode(' ', $testAudit), 'activation_test_otp_verified') && ! str_contains(implode(' ', $testAudit), '000000'), 'test authentication is distinguishable in audit without logging OTP');
-$config->set('mtrip.merchant_auth_test_mode', false);
+setMerchantAuthTestMode($config, true, false);
 
 echo "Stage 5 merchant activation and login assertions passed\n";

@@ -29,7 +29,7 @@ class AuthController extends AbstractController
     #[Inject]
     protected SmsVerifyService $sms;
 
-    /** 注册:手机号 + 密码,站点从 X-Site-Id 取;站点配了短信渠道时强制校验 verifyToken */
+    /** 注册:手机号 + 密码,站点从 X-Site-Id 取;平台开了全局强制开关或本站点配了可用渠道时校验 verifyToken */
     public function register(): array
     {
         $siteId = $this->requireSiteId();
@@ -43,12 +43,16 @@ class AuthController extends AbstractController
         }
 
         /*
-         * 短信验证按「渠道启用即强制」:
-         * 本站点配了启用中的 smspoh 渠道就必须带 verifyToken,没配则照旧放行,
-         * 这样本机开发不必申请真实凭证,生产装上凭证即自动生效,无需再改代码或加开关。
+         * 是否要 verifyToken = 全局强制开关 OR 渠道可用(见 SmsVerifyService::registerRequiresSms):
+         *   `sys_config.register_sms_required=1` → 恒要求。渠道挂了也不放行 ——
+         *     否则「短信一挂注册门就开」,而且没有任何告警(这正是加这个开关的原因)。
+         *   `=0` → 维持旧的「渠道启用即强制」:本机开发不必申请凭证,装上凭证自动生效。
+         *
+         * **开关是全局的,不按站点**:这里的 `$siteId` 来自客户端可控的 `X-Site-Id`,
+         * 做成站点级会被「挑一个最宽松的站点」绕过;`$siteId` 只用于判渠道归属。
          */
         $verifyToken = $this->strInput('verifyToken');
-        $smsRequired = $this->sms->enabled($siteId);
+        $smsRequired = $this->sms->registerRequiresSms($siteId);
         if ($smsRequired) {
             $this->sms->assertTicket($siteId, 'register', $mobile, $verifyToken);
         }

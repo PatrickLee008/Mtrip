@@ -34,7 +34,7 @@ import { useNavigation, useRoute, type RouteProp } from '@react-navigation/nativ
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTranslation } from 'react-i18next';
 
-import { fetchGoodsDetail } from '@/api/goods';
+import { fetchHotelDetail } from '@/api/goods';
 import { TEMP_HOTEL_COVERS } from '@/assets/tempImages';
 import { ErrorView, LoadingView } from '@/components/common/StateViews';
 import HomeIcon from '@/components/home/HomeIcon';
@@ -62,7 +62,7 @@ export default function RoomDetailLiteScreen() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      setDetail(await fetchGoodsDetail(params.goodsId));
+      setDetail(await fetchHotelDetail(params.goodsId));
       setError('');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Error');
@@ -239,7 +239,8 @@ const styles = StyleSheet.create({
   flexCol: { flex: 1, minWidth: 0 },
   pressed: { opacity: 0.85 },
 
-  hero: { position: 'absolute', left: 0, right: 0, top: 0, height: HERO_HEIGHT },
+  /** 同 `HotelsLiteScreen`:H5 端必须显式 `width:'100%'`,否则 RNW 会用图片固有宽度撑爆页面 */
+  hero: { position: 'absolute', left: 0, top: 0, width: '100%', height: HERO_HEIGHT },
 
   topBar: {
     flexDirection: 'row',

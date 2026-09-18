@@ -23,6 +23,7 @@ INSERT IGNORE INTO `sys_config` (`config_group`, `config_key`, `config_value`, `
 ('security', 'jwt_refresh_days',     '7',    2, 'RefreshToken有效期(天)', '7',    ''),
 ('security', 'password_min_length',  '8',    2, '密码最小长度',           '8',    '需含字母+数字'),
 ('security', 'ip_white_enabled',     '0',    3, '后台IP白名单开关',       '0',    '0关闭 1开启'),
+('security', 'merchant_auth_test_mode', '0', 3, '商户认证测试模式',       '0',    '仅测试环境可开启;固定验证码000000并跳过外部凭证投递'),
 -- upload 上传限制
 ('upload', 'upload_max_size_mb',   '10',                        2, '单文件上传上限(MB)', '10', ''),
 ('upload', 'upload_allow_ext',     'jpg,jpeg,png,webp,gif,pdf', 1, '允许上传扩展名',     'jpg,jpeg,png,webp,gif,pdf', '逗号分隔'),

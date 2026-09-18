@@ -44,7 +44,7 @@ function seedEmailOtp(Redis $redis, int $siteId, string $phone, string $email, s
 }
 
 $otp = $container->get(MerchantRegistrationOtpService::class);
-$config->set('mtrip.merchant_auth_test_mode', false);
+setMerchantAuthTestMode($config, false, false, 'test');
 $onboarding = $container->get(MerchantAppOnboardingService::class);
 $admin = $container->get(OnboardingController::class);
 $redis = $container->get(Redis::class);
@@ -204,8 +204,7 @@ try {
     rejects(ErrorCode::PARAM_ERROR, fn () => $otp->verify(991, '+95911122003', 'admin-lead@example.test', 'admin', $code),
         'public OTP API cannot request the admin confirmation channel');
 
-    $config->set('app_env', 'test');
-    $config->set('mtrip.merchant_auth_test_mode', true);
+    setMerchantAuthTestMode($config, true, true, 'staging');
     check(count($otp->availableChannels(991)) === 2, 'test registration exposes email and SMS without provider configuration');
     foreach (['email', 'sms'] as $index => $channel) {
         $phone = '+9591112200' . ($index + 4);
@@ -217,16 +216,16 @@ try {
         rejects(ErrorCode::SMS_CODE_INVALID, fn () => $otp->verify(991, $phone, $email, $channel, '111111'), 'wrong test registration code rejected for ' . $channel);
         $config->set('app_env', 'production');
         rejects(ErrorCode::SMS_CODE_EXPIRED, fn () => $otp->verify(991, $phone, $email, $channel, '000000'), 'production rejects persisted test registration code for ' . $channel);
-        $config->set('app_env', 'test');
+        $config->set('app_env', 'staging');
         $verifiedTest = $otp->verify(991, $phone, $email, $channel, '000000');
         $applicationIds[] = $verifiedTest['applicationId'];
         check($verifiedTest['applicationId'] > 0, '000000 creates a test registration draft for ' . $channel);
         rejects(ErrorCode::SMS_CODE_EXPIRED, fn () => $otp->verify(991, $phone, $email, $channel, '000000'), 'test registration code remains single use for ' . $channel);
-        $config->set('mtrip.merchant_auth_test_mode', false);
+        setMerchantAuthTestMode($config, true, false);
         rejects(ErrorCode::UNAUTHORIZED, fn () => $otp->registrationClaims(991, $verifiedTest['registrationToken']), 'test registration token stops working when test mode is disabled');
-        $config->set('mtrip.merchant_auth_test_mode', true);
+        setMerchantAuthTestMode($config, true, true);
     }
-    $config->set('mtrip.merchant_auth_test_mode', false);
+    setMerchantAuthTestMode($config, true, false);
 } finally {
     foreach ($emails as $index => $email) {
         [, $emailHash] = otpHashes($phones[$index], $email);

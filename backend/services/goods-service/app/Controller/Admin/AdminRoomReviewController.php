@@ -59,7 +59,7 @@ class AdminRoomReviewController extends AbstractAdminController
         $submitted['payload'] = $service->decode((string) $submitted['payload_json']);
         unset($submitted['payload_json']);
         $effective = $room ? (array) $room : [];
-        foreach (['images', 'facilities'] as $field) {
+        foreach (\App\Service\RoomContentService::JSON_FIELDS as $field) {
             $effective[$field] = isset($effective[$field]) ? $service->decode((string) $effective[$field]) : [];
             $submitted['payload'][$field] = isset($submitted['payload'][$field]) && is_string($submitted['payload'][$field])
                 ? $service->decode($submitted['payload'][$field]) : ($submitted['payload'][$field] ?? []);

@@ -302,6 +302,7 @@ INSERT IGNORE INTO `sys_menu` (`id`,`parent_id`,`menu_name`,`menu_name_en`,`i18n
 (1312,1300,'邮件配置','Email','menu.configEmail','config:email:list',2,'/config/email','config/email/index','',6);
 INSERT IGNORE INTO `sys_menu` (`id`,`parent_id`,`menu_name`,`menu_name_en`,`perm_key`,`menu_type`,`sort`) VALUES
 (130101,1301,'编辑参数','Edit','config:global:edit',3,1),
+(130102,1301,'恢复默认','Reset','config:global:reset',3,2),
 (130201,1302,'新增站点','Add Site','config:site:add',3,1),
 (130202,1302,'编辑站点','Edit Site','config:site:edit',3,2),
 (130301,1303,'新增存储','Add Storage','config:storage:add',3,1),

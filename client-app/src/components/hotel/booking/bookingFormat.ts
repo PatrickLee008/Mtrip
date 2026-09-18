@@ -33,15 +33,19 @@ export function dayAfter(days: number): string {
 /**
  * 校正一组入离日期,返回可以直接下单的 `{checkIn, checkOut}`。
  *
- * 三种情况回落到「明天起 1 晚」:没传、离店不晚于入住、入住早于今天
- * —— 最后一条是后端 `order/create` 的硬校验(「使用日期不能早于今天」),
- * 搜索页留在页面上的旧日期很容易踩到。
+ * 三种情况回落到「今天起 2 晚」(与搜索页 `defaultDateRange(2)` 同一口径):
+ * 没传、离店不晚于入住、入住早于今天 —— 最后一条是后端 `order/create` 的硬校验
+ * (「使用日期不能早于今天」),搜索页留在页面上的旧日期很容易踩到。
+ *
+ * 兜底**不能**写成「明天起 1 晚」:从「我的精选」这类不带日期的入口进酒店详情时,
+ * 向导会把住宿静默挪到明天/后天,而商户以为订的是今天 —— 客房管理的「今日可售」
+ * 是按日期算的,自然不动,这曾被当成 bug 报回来(见 docs/plans/20)。
  */
 export function normalizeDates(
   checkIn?: string,
   checkOut?: string,
 ): { checkIn: string; checkOut: string } {
-  const fallback = { checkIn: dayAfter(1), checkOut: dayAfter(2) };
+  const fallback = { checkIn: dayAfter(0), checkOut: dayAfter(2) };
   if (!checkIn || !checkOut) return fallback;
   if (nightsBetween(checkIn, checkOut) < 1) return fallback;
   if (checkIn < dayAfter(0)) return fallback;

@@ -1,4 +1,4 @@
-import { get, post, request } from '@/utils/http';
+import { request } from '@/utils/http';
 import type { PageData } from '@/api/types';
 
 export interface RoomHotelOption {
@@ -9,7 +9,16 @@ export interface RoomHotelOption {
   cover_image: string;
   address: string;
   status: number;
+  currency: string;
 }
+
+export interface Bedding { id: string; type: string; quantity: number }
+export interface RoomImage { url: string; category: 'bedroom' | 'bathroom' | 'view' | 'other' }
+export interface Hotspot { id: string; x: number; y: number; title: string; description: string; image: string }
+export interface RefundPolicy { ruleType: number; rules: { hours_before: number; refund_rate: number }[]; remark: string }
+export type MediaKind = 'image' | 'video' | 'panorama' | 'vr_cover' | 'floorplan' | 'closeup';
+export interface RoomMetrics { totalRooms: number; roomTypes: { id: number; room_name: string; base_stock: number; property_id: number }[] }
+const headers = (propertyId = 0) => propertyId > 0 ? { 'X-Mtrip-Property-Id': String(propertyId) } : {};
 
 export interface MerchantRoom {
   id: number;
@@ -39,6 +48,13 @@ export interface MerchantRoom {
   extra_bed_price: number;
   base_stock: number;
   launch_stock: number;
+  bedding?: Bedding[];
+  area_unit?: 'sqm' | 'sqft';
+  image_gallery?: RoomImage[];
+  panorama?: { enabled: boolean; url: string };
+  vr_tour?: { enabled: boolean; url: string; cover: string };
+  floor_plan?: { enabled: boolean; image: string; hotspots: Hotspot[] };
+  refund_policy?: RefundPolicy;
   images: string[];
   video_url: string;
   facilities: string[];
@@ -54,14 +70,21 @@ export interface MerchantRoom {
   sort: number;
   today_stock_total?: number;
   today_stock_left?: number;
+  /** 未来窗口天数(后端固定 7):今天之后 N 天内最低可售 */
+  upcoming_days?: number;
+  upcoming_stock_left?: number;
+  /** 最低可售所在日期(YYYY-MM-DD);窗口内全关房时为空串 */
+  upcoming_stock_date?: string;
+  /** 明天起窗口内已售+锁定合计(间夜):非今日订单的信号,> 0 时卡片高亮 */
+  upcoming_sold?: number;
 }
 
 export function apiRoomHotels(): Promise<RoomHotelOption[]> {
-  return get('/merchant/rooms/hotel-options');
+  return request({ url: '/merchant/rooms/hotel-options', headers: headers() });
 }
 
-export function apiRoomList(params: Record<string, unknown>): Promise<PageData<MerchantRoom>> {
-  return get('/merchant/rooms/list', params);
+export function apiRoomList(params: Record<string, unknown>): Promise<PageData<MerchantRoom> & { metrics: RoomMetrics }> {
+  return request({ url: '/merchant/rooms/list', params, headers: headers(Number(params.propertyId || 0)) });
 }
 
 export interface RoomRevision {
@@ -78,39 +101,42 @@ export interface RoomRevision {
 }
 
 export interface RoomDetailResult {
+  currentRefundPolicy: RefundPolicy;
   room: MerchantRoom;
   editable: Partial<MerchantRoom>;
   latestRevision: RoomRevision | null;
   history: RoomRevision[];
 }
 
-export function apiRoomDetail(id: number): Promise<RoomDetailResult> {
-  return get('/merchant/rooms/detail', { id });
+export function apiRoomDetail(id: number, propertyId = 0): Promise<RoomDetailResult> {
+  return request({ url: '/merchant/rooms/detail', params: { id }, headers: headers(propertyId) });
 }
 
 export function apiRoomSave(data: Record<string, unknown>): Promise<{ id: number; revisionId: number; version: number; reviewStatus: number }> {
-  return post('/merchant/rooms/save', data);
+  return request({ method: 'POST', url: '/merchant/rooms/save', data, headers: headers(Number(data.propertyId)) });
 }
 
-export function apiRoomCopy(id: number): Promise<{ id: number; revisionId: number }> {
-  return post('/merchant/rooms/copy', { id });
+export function apiRoomCopy(id: number, propertyId: number): Promise<{ id: number; revisionId: number }> {
+  return request({ method: 'POST', url: '/merchant/rooms/copy', data: { id }, headers: headers(propertyId) });
 }
 
-export function apiRoomWithdraw(revisionId: number): Promise<null> {
-  return post('/merchant/rooms/withdraw', { revisionId });
+export function apiRoomWithdraw(revisionId: number, propertyId: number): Promise<null> {
+  return request({ method: 'POST', url: '/merchant/rooms/withdraw', data: { revisionId }, headers: headers(propertyId) });
 }
 
-export function apiRoomUpload(file: File, kind: 'image' | 'video'): Promise<{ url: string; name: string; kind: string }> {
+export function apiRoomUpload(file: File, kind: MediaKind, propertyId: number, roomId = 0): Promise<{ url: string; name: string; kind: string }> {
   const data = new FormData();
   data.append('file', file);
   data.append('kind', kind);
-  return request({ method: 'POST', url: '/merchant/rooms/media/upload', data });
+  data.append('propertyId', String(propertyId));
+  data.append('roomId', String(roomId));
+  return request({ method: 'POST', url: '/merchant/rooms/media/upload', data, headers: headers(propertyId), timeout: 600000 });
 }
 
-export function apiRoomToggleStatus(id: number): Promise<{ status: number }> {
-  return post('/merchant/rooms/toggle-status', { id });
+export function apiRoomToggleStatus(id: number, propertyId: number): Promise<{ status: number }> {
+  return request({ method: 'POST', url: '/merchant/rooms/toggle-status', data: { id }, headers: headers(propertyId) });
 }
 
-export function apiRoomDelete(id: number): Promise<{ reviewRequired: boolean; revisionId?: number }> {
-  return post('/merchant/rooms/delete', { id });
+export function apiRoomDelete(id: number, propertyId: number): Promise<{ reviewRequired: boolean; revisionId?: number }> {
+  return request({ method: 'POST', url: '/merchant/rooms/delete', data: { id }, headers: headers(propertyId) });
 }

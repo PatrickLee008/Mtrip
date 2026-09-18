@@ -6,6 +6,7 @@ namespace App\Service\Booking;
 
 use App\Constants\BookingConst;
 use App\Service\OrderStockService;
+use Hyperf\Context\Context;
 use Hyperf\DbConnection\Db;
 use Hyperf\Di\Annotation\Inject;
 use Mtrip\Shared\Constants\ErrorCode;
@@ -18,6 +19,8 @@ use Mtrip\Shared\Exception\BusinessException;
  */
 class BookingLifecycleService
 {
+    private const SITE_TIMEZONE_CACHE_KEY = 'booking.lifecycle.site_timezones';
+
     #[Inject]
     protected BookingEventService $events;
 
@@ -26,6 +29,9 @@ class BookingLifecycleService
 
     #[Inject]
     protected BookingNotificationService $notify;
+
+    #[Inject]
+    protected BookingRefundService $refunds;
 
     /**
      * 下单时组装预订字段(须在下单事务内调用):
@@ -45,8 +51,7 @@ class BookingLifecycleService
             $fields['cancellation_policy_snapshot'] = $policy !== null
                 ? json_encode($policy + ['snapshotAt' => date('Y-m-d H:i:s')], JSON_UNESCAPED_UNICODE)
                 : null;
-            // No-show 政策:平台默认首晚房费,酒店级政策接入后按酒店配置覆盖
-            $fields['no_show_policy_snapshot'] = json_encode(['feeType' => 'first_night', 'source' => 'default'], JSON_UNESCAPED_UNICODE);
+            $fields['no_show_policy_snapshot'] = json_encode($this->currentNoShowPolicy($propertyId), JSON_UNESCAPED_UNICODE);
         }
         return $fields;
     }
@@ -68,7 +73,7 @@ class BookingLifecycleService
         $rule = (array) $rule;
         return [
             'ruleType' => (int) $rule['rule_type'],
-            'rules' => $rule['rules'] ?? [],
+            'rules' => is_string($rule['rules'] ?? null) ? (json_decode($rule['rules'], true) ?: []) : ($rule['rules'] ?? []),
             'remark' => (string) ($rule['remark'] ?? ''),
             'source' => 'goods_refund_rule',
         ];
@@ -109,9 +114,15 @@ class BookingLifecycleService
     }
 
     /** 入住(可带房号);幂等重复调用不重复通知(§9.1) */
-    public function checkIn(int $orderId, int $operatorId, string $operatorName, string $roomNo = ''): array
+    public function checkIn(
+        int $orderId,
+        int $operatorId,
+        string $operatorName,
+        string $roomNo = '',
+        int $operatorType = BookingConst::OPERATOR_MERCHANT,
+    ): array
     {
-        [$order, $changed] = Db::transaction(function () use ($orderId, $operatorId, $operatorName, $roomNo) {
+        [$order, $changed] = Db::transaction(function () use ($orderId, $operatorId, $operatorName, $roomNo, $operatorType) {
             $order = $this->lockOrder($orderId);
             if ((int) $order['booking_status'] === BookingConst::STATUS_CHECKED_IN) {
                 return [$order, false]; // 幂等:已入住直接返回,不再通知
@@ -125,7 +136,7 @@ class BookingLifecycleService
                 'checked_in_at' => date('Y-m-d H:i:s'),
             ], $roomNo !== '' ? ['assigned_room_no' => mb_substr($roomNo, 0, 50)] : []));
             $order = $this->lockOrder($orderId);
-            $this->events->log($order, 'checked_in', BookingConst::OPERATOR_MERCHANT, $operatorId, $operatorName, 1, [
+            $this->events->log($order, 'checked_in', $operatorType, $operatorId, $operatorName, 1, [
                 'roomNo' => (string) $order['assigned_room_no'],
             ]);
             return [$order, true];
@@ -135,6 +146,60 @@ class BookingLifecycleService
             $this->notifyQuietly($order, '住客已入住', "预订「{$order['goods_name']}」(订单 {$order['order_no']})已办理入住" . ($roomText !== '' ? ",房号:{$roomText}" : '') . '。');
         }
         return $order;
+    }
+
+    /** 后台撤销酒店核销:已入住恢复为已确认,并保留不可覆盖的时间线。 */
+    public function revertCheckIn(int $orderId, int $operatorId, string $operatorName, string $reason): array
+    {
+        return Db::transaction(function () use ($orderId, $operatorId, $operatorName, $reason) {
+            $order = $this->lockOrder($orderId);
+            if ((int) $order['booking_status'] === BookingConst::STATUS_CONFIRMED) {
+                return $order;
+            }
+            if ((int) $order['booking_status'] !== BookingConst::STATUS_CHECKED_IN) {
+                throw new BusinessException(ErrorCode::DATA_CONFLICT, '仅已入住预订可撤销入住');
+            }
+            $this->transition($order, [
+                'booking_status' => BookingConst::STATUS_CONFIRMED,
+                'order_status' => 1,
+                'checked_in_at' => null,
+                'assigned_room_no' => '',
+            ]);
+            $order = $this->lockOrder($orderId);
+            $this->events->log($order, 'check_in_reverted', BookingConst::OPERATOR_PLATFORM, $operatorId, $operatorName, 1, [
+                'reason' => mb_substr($reason, 0, 500),
+            ]);
+            return $order;
+        });
+    }
+
+    /** 到店付款线下收款确认:仅显式 Pay at Hotel 预订,不伪造第三方支付流水。 */
+    public function markPaidAtHotel(int $orderId, int $operatorId, string $operatorName): array
+    {
+        return Db::transaction(function () use ($orderId, $operatorId, $operatorName) {
+            $order = $this->lockOrder($orderId);
+            if ((int) $order['pay_method'] !== BookingConst::PAY_METHOD_PAY_AT_HOTEL) {
+                throw new BusinessException(ErrorCode::DATA_CONFLICT, '仅到店付款预订可标记为已支付');
+            }
+            if ((int) $order['payment_status'] === BookingConst::PAY_PAID) {
+                return $order;
+            }
+            if (! in_array((int) $order['booking_status'], [BookingConst::STATUS_CONFIRMED, BookingConst::STATUS_CHECKED_IN], true)) {
+                throw new BusinessException(ErrorCode::DATA_CONFLICT, '当前预订状态不可确认到店收款');
+            }
+            if (! in_array((int) $order['payment_status'], [BookingConst::PAY_PENDING, BookingConst::PAY_FAILED], true)) {
+                throw new BusinessException(ErrorCode::DATA_CONFLICT, '当前支付状态不可标记为已支付');
+            }
+            $this->transition($order, [
+                'payment_status' => BookingConst::PAY_PAID,
+                'pay_time' => date('Y-m-d H:i:s'),
+            ]);
+            $order = $this->lockOrder($orderId);
+            $this->events->log($order, 'payment_collected_at_hotel', BookingConst::OPERATOR_MERCHANT, $operatorId, $operatorName, 1, [
+                'payMethod' => BookingConst::PAY_METHOD_PAY_AT_HOTEL,
+            ], 'payment');
+            return $order;
+        });
     }
 
     /** 退房;幂等重复调用不重复通知(§9.1) */
@@ -211,9 +276,9 @@ class BookingLifecycleService
             if ((int) $order['booking_status'] !== BookingConst::STATUS_CONFIRMED) {
                 throw new BusinessException(ErrorCode::DATA_CONFLICT, '仅已确认预订可标记 No-show');
             }
-            $deadline = BookingConst::noShowDeadline((string) $order['use_date']);
-            if (strtotime($deadline) >= time()) {
-                throw new BusinessException(ErrorCode::DATA_CONFLICT, "未到入住截止时间({$deadline}),不能标记 No-show");
+            $deadline = $this->noShowDeadline($order);
+            if ($deadline->getTimestamp() >= time()) {
+                throw new BusinessException(ErrorCode::DATA_CONFLICT, "未到入住截止时间({$deadline->format('Y-m-d H:i:s P')}),不能标记 No-show");
             }
             $fee = $waiveFee ? 0.0 : $this->noShowFee($order);
             $this->transition($order, [
@@ -269,18 +334,35 @@ class BookingLifecycleService
                 $actions[] = 'cancel';
                 break;
             case BookingConst::STATUS_CONFIRMED:
-                $actions = ['check-in', 'cancel', 'refund', 'message'];
-                if ($order['use_date'] !== null && strtotime(BookingConst::noShowDeadline((string) $order['use_date'])) < $now) {
+                $actions = ['check-in', 'cancel', 'message'];
+                if ($this->canRefund($order)) {
+                    $actions[] = 'refund';
+                }
+                if ($this->canMarkPaidAtHotel($order)) {
+                    $actions[] = 'mark-paid';
+                }
+                if ($order['use_date'] !== null && $this->noShowDeadline($order)->getTimestamp() < $now) {
                     $actions[] = 'no-show';
                 }
                 break;
             case BookingConst::STATUS_CHECKED_IN:
                 $actions = ['check-out', 'room', 'message'];
+                if ($this->canMarkPaidAtHotel($order)) {
+                    $actions[] = 'mark-paid';
+                }
                 break;
             case BookingConst::STATUS_CHECKED_OUT:
-                $actions = ['voucher', 'refund', 'message'];
+                $actions = ['voucher', 'message'];
+                if ($this->canRefund($order)) {
+                    $actions[] = 'refund';
+                }
                 break;
             case BookingConst::STATUS_CANCELLED:
+                if ($this->canRefund($order)) {
+                    $actions[] = 'refund';
+                }
+                $actions[] = 'voucher';
+                break;
             case BookingConst::STATUS_NO_SHOW:
                 $actions = ['voucher'];
                 break;
@@ -290,6 +372,79 @@ class BookingLifecycleService
             $actions[] = 'voucher';
         }
         return array_values(array_unique($actions));
+    }
+
+    private function canMarkPaidAtHotel(array $order): bool
+    {
+        return (int) ($order['pay_method'] ?? 0) === BookingConst::PAY_METHOD_PAY_AT_HOTEL
+            && in_array((int) ($order['payment_status'] ?? 0), [BookingConst::PAY_PENDING, BookingConst::PAY_FAILED], true);
+    }
+
+    private function canRefund(array $order): bool
+    {
+        return in_array((int) ($order['payment_status'] ?? 0), [BookingConst::PAY_PAID, BookingConst::PAY_PARTIAL_REFUNDED], true)
+            && $this->refunds->quote($order)['remainingRefundable'] > 0;
+    }
+
+    /** 返回带时区的 No-show 截止时间;新订单读快照,旧订单回退到站点时区。 */
+    public function noShowDeadline(array $order): \DateTimeImmutable
+    {
+        $policy = $this->jsonPolicy($order['no_show_policy_snapshot'] ?? null);
+        $timezone = (string) ($policy['timezone'] ?? '');
+        if ($timezone === '') {
+            $timezone = $this->siteTimezone((int) ($order['site_id'] ?? 0));
+        }
+        return BookingConst::noShowDeadline(
+            (string) ($order['use_date'] ?? ''),
+            $timezone,
+            (string) ($policy['deadlineTime'] ?? '23:59:59')
+        );
+    }
+
+    public function noShowDeadlineIso(array $order): ?string
+    {
+        return ($order['use_date'] ?? null) !== null ? $this->noShowDeadline($order)->format(DATE_ATOM) : null;
+    }
+
+    private function currentNoShowPolicy(int $propertyId): array
+    {
+        $siteId = (int) Db::table('merchant_store')->where('id', $propertyId)->value('site_id');
+        return [
+            'feeType' => 'first_night',
+            'deadlineTime' => '23:59:59',
+            'timezone' => $this->siteTimezone($siteId),
+            'source' => 'default',
+        ];
+    }
+
+    private function siteTimezone(int $siteId): string
+    {
+        $cache = (array) Context::get(self::SITE_TIMEZONE_CACHE_KEY, []);
+        if (array_key_exists($siteId, $cache)) {
+            return (string) $cache[$siteId];
+        }
+        $timezone = (string) Db::connection('system')->table('sys_site')
+            ->where('id', $siteId)->whereNull('deleted_at')->value('timezone');
+        try {
+            new \DateTimeZone($timezone);
+        } catch (\Throwable) {
+            $timezone = 'UTC';
+        }
+        $cache[$siteId] = $timezone;
+        Context::set(self::SITE_TIMEZONE_CACHE_KEY, $cache);
+        return $timezone;
+    }
+
+    private function jsonPolicy(mixed $value): array
+    {
+        if (is_array($value)) {
+            return $value;
+        }
+        if (! is_string($value) || $value === '') {
+            return [];
+        }
+        $decoded = json_decode($value, true);
+        return is_array($decoded) ? $decoded : [];
     }
 
     /** No-show 费用:按政策快照,默认首晚房费(单价×数量) */

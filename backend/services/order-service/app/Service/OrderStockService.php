@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Service;
 
 use Hyperf\DbConnection\Db;
+use Mtrip\Shared\Support\RoomDefaults;
 use Mtrip\Shared\Constants\ErrorCode;
 use Mtrip\Shared\Exception\BusinessException;
 
@@ -57,9 +58,9 @@ class OrderStockService
                     'sku_type' => $skuType,
                     'sku_id' => $skuId,
                     'stock_date' => $date,
-                    'price' => $sku['base_price'],
+                    'price' => $skuType === 1 ? RoomDefaults::price($sku, $date) : $sku['base_price'],
                     'price_citizen' => $sku['base_price_citizen'] ?? 0,
-                    'stock_total' => $sku['base_stock'],
+                    'stock_total' => $skuType === 1 ? RoomDefaults::stock($sku) : $sku['base_stock'],
                 ]);
                 $row = $this->lockRow($propertyId, $goodsId, $skuType, $skuId, $date);
             }

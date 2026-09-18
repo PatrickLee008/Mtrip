@@ -1,7 +1,8 @@
 /**
  * 关怀模式酒店搜索结果页(Figma `Hotel Search Lite` / Search Results `2312:6745`)
  *
- * 与完整模式 `HotelResultsScreen`(1695:6325)的关系:同一份 `/app/goods/list` 数据,
+ * 与完整模式 `HotelResultsScreen`(1695:6325)的关系:同一份 `/app/hotels/list` 数据(与 `fetchHotelList` 同源,
+ * 见 HANDOFF 2026-09-16 那条 —— 早先误用了只收门票的 `/app/goods/list`,必被 400 打回),
  * 但关怀稿**去掉了 chips 行、排序面板与地址/徽章**,只剩「Choose a Hotel + 一列大卡」;
  * 顶部栏也换成白底一行:返回 + 目的地/日期胶囊 + 筛选按钮。
  * 因为版式差得远,和首页 / 我的精选一样另起一页,不在完整版里加分支(见 HANDOFF 关怀模式那条)。
@@ -16,7 +17,9 @@
  * 筛选浮层**直接复用完整模式的 `HotelFilterSheet`(408:1824)** —— Lite 稿 `2485:7101`
  * 与它逐段同构(Filter By / Recent Filters / Budget 直方图 + 双滑块 / Popular Filters / Show Results),
  * 没有需要放大的差异,再抄一份只会多一处要同步维护的地方。
- * 同完整模式:列表接口没有价格/设施筛选参数,**选择只留在前端状态里**,不参与请求。
+ * 同完整模式:`/app/hotels/list` 虽然收 `priceMin/priceMax/amenities` 等参数,但 Lite 版没有 chips 行,
+ * 筛选浮层里的选择(设计稿的静态计数与直方图)**只留在前端状态里**,不参与请求
+ * —— 与完整版的取舍逐条一致(完整版只有 chips/排序进请求)。
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -26,7 +29,7 @@ import { useNavigation, useRoute, type RouteProp } from '@react-navigation/nativ
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTranslation } from 'react-i18next';
 
-import { fetchGoodsList } from '@/api/goods';
+import { fetchHotelList } from '@/api/goods';
 import { addFavorite, fetchFavoriteList, removeFavorite } from '@/api/user';
 import { tempCoverFor } from '@/assets/tempImages';
 import { EmptyView, ErrorView, LoadingView } from '@/components/common/StateViews';
@@ -36,7 +39,6 @@ import HotelFilterSheet, {
   HotelFilterValue,
 } from '@/components/hotel/HotelFilterSheet';
 import LiteHotelCard from '@/components/hotel/lite/LiteHotelCard';
-import { GOODS_TYPE } from '@/config/global';
 import { PAGE_PADDING, colors, radius } from '@/config/theme';
 import { fonts } from '@/config/typography';
 import type { RootStackParamList } from '@/navigation/types';
@@ -71,10 +73,11 @@ export default function HotelResultsLiteScreen() {
 
   const query = useMemo(
     () => ({
-      goodsType: GOODS_TYPE.HOTEL,
+      countryCode: params.countryCode,
+      cityKey: params.cityKey,
       keyword: params.keyword || undefined,
     }),
-    [params.keyword],
+    [params.countryCode, params.cityKey, params.keyword],
   );
 
   const load = useCallback(
@@ -85,7 +88,7 @@ export default function HotelResultsLiteScreen() {
       if (mode === 'refresh') setRefreshing(true);
       if (mode === 'more') setLoadingMore(true);
       try {
-        const data = await fetchGoodsList({ ...query, page, pageSize: PAGE_SIZE });
+        const data = await fetchHotelList({ ...query, page, pageSize: PAGE_SIZE });
         pageRef.current = page;
         setItems((prev) => (page === 1 ? data.list : [...prev, ...data.list]));
         setTotal(data.total);

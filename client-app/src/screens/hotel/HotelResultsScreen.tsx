@@ -60,6 +60,7 @@ import HotelFilterSheet, {
   DEFAULT_HOTEL_FILTER,
   HotelFilterValue,
 } from '@/components/hotel/HotelFilterSheet';
+import HotelGuideOverlay from '@/components/hotel/guide/HotelGuideOverlay';
 import HotelResultCard from '@/components/hotel/HotelResultCard';
 import SortSheet, { type SortAnchor } from '@/components/hotel/SortSheet';
 import { PAGE_PADDING, colors, radius, shadows } from '@/config/theme';
@@ -124,6 +125,7 @@ export default function HotelResultsScreen() {
   const [sortAnchor, setSortAnchor] = useState<SortAnchor | null>(null);
   const [dateOpen, setDateOpen] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
+  const [guideOpen, setGuideOpen] = useState(false);
   const [filter, setFilter] = useState<HotelFilterValue>(DEFAULT_HOTEL_FILTER);
 
   /* ---- 列表 ---- */
@@ -526,15 +528,27 @@ export default function HotelResultsScreen() {
           >
             <HomeIcon name="arrowLeft" size={20} color="#FFFFFF" />
           </Pressable>
-          <Pressable
-            style={({ pressed }) => [styles.roundBtn, styles.filterBtn, pressed && styles.pressed]}
-            onPress={() => setFilterOpen(true)}
-            hitSlop={8}
-          >
-            <HomeIcon name="filter" size={20} color="#FFFFFF" />
-          </Pressable>
+          <View style={styles.topRight}>
+            {/* 用户指引:筛选旁边的问号(Figma section Hotel Search Coach mark UI 2150:4865) */}
+            <Pressable
+              style={({ pressed }) => [styles.roundBtn, styles.filterBtn, pressed && styles.pressed]}
+              onPress={() => setGuideOpen(true)}
+              hitSlop={8}
+            >
+              <HomeIcon name="questionCircle" size={20} color="#FFFFFF" />
+            </Pressable>
+            <Pressable
+              style={({ pressed }) => [styles.roundBtn, styles.filterBtn, pressed && styles.pressed]}
+              onPress={() => setFilterOpen(true)}
+              hitSlop={8}
+            >
+              <HomeIcon name="filter" size={20} color="#FFFFFF" />
+            </Pressable>
+          </View>
         </View>
       </SafeAreaView>
+
+      <HotelGuideOverlay visible={guideOpen} onClose={() => setGuideOpen(false)} />
 
       <SortSheet
         visible={sortOpen}
@@ -617,6 +631,8 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.4)',
   },
   filterBtn: { borderRadius: 999 },
+  /** 顶栏右侧:问号 + 筛选两枚 */
+  topRight: { flexDirection: 'row', alignItems: 'center', gap: 12 },
 
   searchCard: {
     backgroundColor: colors.surface,

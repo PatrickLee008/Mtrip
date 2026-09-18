@@ -6,6 +6,7 @@ import * as Icons from '@ant-design/icons-vue';
 import type { MenuNode } from '@/api/types';
 import { useUserStore } from '@/stores/user';
 import { menuTitle } from '@/locales/menuI18n';
+import { isMenuPathVisible } from '@/config/menuSections';
 
 const route = useRoute();
 const router = useRouter();
@@ -14,13 +15,25 @@ const { t } = useI18n();
 
 interface MenuItem { path: string; label: string; icon: string }
 
-const sections = [
+/** 不进侧边栏的历史页面(页面与路由保留:工作台与「所有物业」列表仍有 /store 入口) */
+const HIDDEN_PATHS = ['/store', '/goods'];
+
+/** 当前选中酒店的详情页(酒店资料入口);未选物业或选中非酒店物业时为空,该分组随之消失 */
+const hotelProfilePath = computed(() =>
+  userStore.selectedProperty?.business_type === 'hotel'
+    ? `/properties/${userStore.selectedProperty.id}/profile`
+    : '',
+);
+
+/** 侧边栏分组:hotelManagement / operations 的物业专属口径见 config/menuSections.ts */
+const sections = computed(() => [
   { key: 'portfolio', paths: ['/properties', '/dashboard'] },
-  { key: 'business', paths: ['/earnings', '/promotions', '/reviews', '/order', '/notifications'] },
-  { key: 'operations', paths: ['/store', '/goods', '/rooms', '/availability'] },
+  { key: 'business', paths: ['/earnings', '/promotions', '/reviews', '/notifications'] },
+  { key: 'hotelManagement', paths: [hotelProfilePath.value, '/rooms'] },
+  { key: 'operations', paths: ['/availability', '/order'] },
   { key: 'team', paths: ['/account/list', '/account/role'] },
   { key: 'system', paths: ['/support', '/settings'] },
-];
+]);
 
 function pages(nodes: MenuNode[]): MenuNode[] {
   return nodes.flatMap((node) => [
@@ -36,28 +49,41 @@ const groups = computed(() => {
     '/earnings': t('sidebar.dashboardEarnings'),
     '/account/list': t('sidebar.staffManagement'),
     '/settings': t('sidebar.settingsSecurity'),
+    ...(hotelProfilePath.value ? { [hotelProfilePath.value]: t('properties.profile.title') } : {}),
   };
   const icon: Record<string, string> = {
     '/properties': 'HomeOutlined',
     '/dashboard': 'AppstoreOutlined',
     '/earnings': 'BarChartOutlined',
     '/account/list': 'TeamOutlined',
+    ...(hotelProfilePath.value ? { [hotelProfilePath.value]: 'BankOutlined' } : {}),
   };
   const item = (path: string): MenuItem | null => {
+    // 物业专属菜单:未选物业(或选中非酒店物业)时不出现在侧边栏
+    if (!path || !isMenuPathVisible(path, userStore.selectedProperty)) return null;
     const node = authorized.get(path);
-    if (!node && path !== '/properties' && path !== '/dashboard') return null;
+    if (!node && path !== '/properties' && path !== '/dashboard' && path !== hotelProfilePath.value) return null;
     return { path, label: label[path] || (node ? menuTitle(node) : t('dashboard.title')), icon: icon[path] || node?.icon || 'AppstoreOutlined' };
   };
-  const result = sections.map((section) => ({
+  const result = sections.value.map((section) => ({
     key: section.key,
     title: t('sidebar.sections.' + section.key),
     items: section.paths.map(item).filter((entry): entry is MenuItem => entry !== null),
   })).filter((section) => section.items.length > 0);
-  const listed = new Set(sections.flatMap((section) => section.paths));
-  const extra = [...authorized.keys()].filter((path) => !listed.has(path)).map(item).filter((entry): entry is MenuItem => entry !== null);
+  const listed = new Set(sections.value.flatMap((section) => section.paths));
+  const extra = [...authorized.keys()]
+    .filter((path) => !listed.has(path) && !HIDDEN_PATHS.includes(path))
+    .map(item)
+    .filter((entry): entry is MenuItem => entry !== null);
   if (extra.length) result.push({ key: 'other', title: t('sidebar.sections.other'), items: extra });
   return result;
 });
+
+/** 当前高亮项:物业详情页由「酒店资料」自己高亮,「所有物业」不再重复高亮 */
+function isActive(entry: MenuItem): boolean {
+  if (route.path === entry.path) return true;
+  return entry.path === '/properties' && route.path.startsWith('/properties/') && !/^\/properties\/\d+\/profile$/.test(route.path);
+}
 
 function resolveIcon(name: string) {
   return (Icons as Record<string, unknown>)[name] as (() => unknown) | undefined;
@@ -72,7 +98,7 @@ function resolveIcon(name: string) {
         v-for="entry in group.items"
         :key="entry.path"
         type="button"
-        :class="['menu-item', { active: route.path === entry.path || (entry.path === '/properties' && route.path.startsWith('/properties/')) }]"
+        :class="['menu-item', { active: isActive(entry) }]"
         @click="router.push(entry.path)"
       >
         <component :is="resolveIcon(entry.icon)" class="item-icon" />

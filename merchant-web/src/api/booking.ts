@@ -33,7 +33,9 @@ export interface BookingRow {
   sku_name: string;
   quantity: number;
   unit_price: string | number;
+  total_amount: string | number;
   pay_amount: string | number;
+  pay_method: number;
   use_date: string | null;
   end_date: string | null;
   booking_status: number;
@@ -42,6 +44,7 @@ export interface BookingRow {
   channel_reference: string;
   assigned_room_no: string;
   payment_expires_at: string | null;
+  no_show_deadline: string | null;
   created_at: string;
 }
 
@@ -159,6 +162,10 @@ export function apiBookingCheckIn(id: number, roomNo = ''): Promise<null> {
 
 export function apiBookingCheckOut(id: number): Promise<null> {
   return post('/merchant/order/check-out', { id });
+}
+
+export function apiBookingMarkPaid(id: number): Promise<null> {
+  return post('/merchant/order/mark-paid', { id });
 }
 
 export function apiBookingCancel(id: number, reason: string): Promise<null> {

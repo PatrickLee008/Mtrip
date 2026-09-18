@@ -6,13 +6,16 @@ import { useI18n } from 'vue-i18n';
 import {
   BankOutlined,
   CoffeeOutlined,
+  CloseOutlined,
   DownOutlined,
   HomeOutlined,
   LogoutOutlined,
+  MenuOutlined,
   ShopOutlined,
 } from '@ant-design/icons-vue';
 import type { MerchantProperty, MenuNode } from '@/api/types';
 import { useUserStore } from '@/stores/user';
+import { isMenuPathVisible } from '@/config/menuSections';
 import SupportBanner from '@/components/SupportBanner.vue';
 import AppHeader from './components/AppHeader.vue';
 import SideMenu from './components/SideMenu.vue';
@@ -23,6 +26,8 @@ const route = useRoute();
 const router = useRouter();
 
 const switcherOpen = ref(false);
+const mobileMenuOpen = ref(false);
+const isPropertyProfile = computed(() => /^\/properties\/\d+\/profile$/.test(route.path));
 const currentProperty = computed(() => userStore.selectedProperty);
 const propertyGroups = computed(() => {
   const groups = new Map<string, MerchantProperty[]>();
@@ -50,7 +55,10 @@ function toggleSwitcher(): void {
 function selectProperty(id: number | null): void {
   userStore.selectProperty(id);
   switcherOpen.value = false;
-  if (!['/dashboard', '/properties'].includes(route.path) && !route.path.startsWith('/properties/') && !containsPath(userStore.visibleMenus, route.path)) {
+  const path = route.path;
+  const alwaysAvailable = ['/dashboard', '/properties'].includes(path) || path.startsWith('/properties/');
+  // 切到 All Properties(或切到非酒店物业)后物业专属菜单会从侧边栏消失,此时把停留在这些页面的用户送回「所有物业」
+  if (!alwaysAvailable && (!isMenuPathVisible(path, userStore.selectedProperty) || !containsPath(userStore.visibleMenus, path))) {
     void router.push('/properties');
   }
 }
@@ -82,9 +90,11 @@ function onLogout(): void {
 </script>
 
 <template>
-  <div class="layout-container">
+  <div :class="['layout-container', { 'property-profile-layout': isPropertyProfile, 'mobile-menu-open': mobileMenuOpen }]" @keydown.esc="mobileMenuOpen = false">
+    <button v-if="isPropertyProfile && mobileMenuOpen" class="mobile-menu-backdrop" :aria-label="t('properties.profile.closeNavigation')" @click="mobileMenuOpen = false" />
     <!-- 侧边栏:贯穿整个页面高度(原型 228px 白底) -->
     <aside class="layout-sidebar">
+      <button v-if="isPropertyProfile && mobileMenuOpen" class="mobile-menu-close" type="button" :aria-label="t('properties.profile.closeNavigation')" @click="mobileMenuOpen = false"><CloseOutlined /></button>
       <!-- Logo 区(原型:纯文字 mTrip + Merchant 副标题) -->
       <div class="sider-logo">
         <div class="logo-text">
@@ -171,6 +181,7 @@ function onLogout(): void {
     <!-- 右侧主区域 -->
     <a-layout class="layout-main">
       <a-layout-header class="layout-header">
+        <button v-if="isPropertyProfile" class="mobile-menu-toggle" type="button" :aria-label="t('properties.profile.navigation')" :aria-expanded="mobileMenuOpen" @click="mobileMenuOpen = !mobileMenuOpen"><MenuOutlined /></button>
         <AppHeader />
       </a-layout-header>
       <!-- 内容区域(多页签已移除:直接渲染当前路由页面) -->
@@ -455,5 +466,19 @@ function onLogout(): void {
   flex: 1;
   overflow: auto;
   min-height: 0;
+}
+
+.mobile-menu-toggle, .mobile-menu-backdrop, .mobile-menu-close { display: none; }
+@media (max-width: 600px) {
+  .property-profile-layout {
+    .layout-sidebar { display: none; }
+    &.mobile-menu-open .layout-sidebar { display: flex; position: fixed; inset: 0 auto 0 0; z-index: 1001; width: 228px; }
+    .mobile-menu-backdrop { display: block; position: fixed; inset: 0; z-index: 1000; border: 0; background: rgb(15 23 42 / 35%); }
+    .layout-header { display: flex; align-items: center; }
+    .mobile-menu-toggle { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; width: 40px; height: 40px; margin-left: 8px; border: 0; border-radius: 6px; background: transparent; color: var(--mtrip-text-main); cursor: pointer; }
+    .mobile-menu-close { display: block; position: absolute; top: 8px; right: 8px; width: 32px; height: 32px; border: 0; border-radius: 6px; background: var(--mtrip-bg-soft); cursor: pointer; }
+    :deep(.app-header) { flex: 1; min-width: 0; padding: 0 10px; gap: 8px; }
+    :deep(.header-search), :deep(.crumb-root), :deep(.crumb-arrow) { display: none; }
+  }
 }
 </style>

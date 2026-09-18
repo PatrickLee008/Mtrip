@@ -86,6 +86,7 @@ Router::addGroup('/api/v1/merchant/order', static function () {
     Router::post('/confirm', [MerchantBookingController::class, 'confirm']);
     Router::post('/check-in', [MerchantBookingController::class, 'checkIn']);
     Router::post('/check-out', [MerchantBookingController::class, 'checkOut']);
+    Router::post('/mark-paid', [MerchantBookingController::class, 'markPaid']);
     Router::post('/cancel', [MerchantBookingController::class, 'cancel']);
     Router::post('/no-show', [MerchantBookingController::class, 'noShow']);
     Router::get('/refund/quote', [MerchantBookingController::class, 'refundQuote']);

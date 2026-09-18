@@ -1,5 +1,13 @@
 # Mtrip 开发工作计划总览
 
+2026-09-18更新：商户认证测试模式改为后台可控的全局安全开关 `merchant_auth_test_mode`，与消费者注册的 `register_sms_required` 保持独立。有效条件为“非生产环境 + 部署门禁 `MTRIP_MERCHANT_AUTH_TEST_ALLOWED=true` + 数据库开关开启”；默认关闭，生产硬锁，仅超管可保存/重置。同步补齐既有 `config:global:reset` 菜单权限键，并修正全局参数页布尔配置分支，三个安全开关统一显示为开关与元信息，不再额外出现 `false` 输入框。迁移账本 23/23，三套商户入驻回归、后台控制器 14 项安全断言、admin-web 构建、PHP lint、运行态 `false→true→false` 网关验证和全栈健康检查通过；当前数据库开关已恢复为关闭，两个 App 未修改。详见[运行时开关报告](./audits/2026-09-18-merchant-auth-runtime-toggle.md)。
+
+2026-09-18更新：Merchant M4 预订管理按 PRD v1.0.3 与 Figma 详情节点 `1289:24340`、列表节点 `1289:16725` 完成本轮代码整改。已收口退款上限与库存、旧核销生命周期、通知深链/物业范围、Pay at Hotel / Mark as Paid、Figma 表格与详情交互、All Properties 聚合，以及带站点时区快照的 No-show 截止时间。迁移账本 21/21，专项、全量 PHP lint、shared 99/975、两个 Web 构建和 client 类型检查通过；补充完成 1440×900、1366×768、393×852 真实登录态视觉验收和 authenticated Mark as Paid 无副作用 HTTP 探测，并修复支付时间线翻译缺口。仅剩物业级 No-show 截止时间/费用策略/配置入口等产品决策；Mark as Paid 登录态成功写入若需再验，须使用专用 Pay at Hotel 测试订单。详见[M4 方案](./实现方案-Merchant-M4-酒店预订管理.md)。
+
+2026-09-16修复：merchant-web 客房列表兼容 `/merchant/rooms/list` 未返回 `metrics` 或返回空值的响应，不再把 `undefined` 写入页面状态并触发 `totalRooms` 渲染异常；失败响应同时清空列表、总数和统计，避免显示上一物业的旧数据。当前 goods-service 仍按标准契约返回真实统计；merchant-web 生产构建通过。详见[客房管理整改计划](./20-客房管理Figma与PRD整改计划.md)。
+
+2026-09-16 数据库增量复核：以 Git 提交 `2a32fe1996376e3b917aba838e2560ef52760217` 为起点检查到当前 `dev` 的迁移，指定提交本身无数据库变更，其后新增 16 个版本化迁移。命名校验通过；正式执行 `scripts/db-migrate.sh` 显示账本已执行 18、待执行 0，并完成二次全账本复核，当前数据库已是最新版本。
+
 2026-09-15 本地提交归档：按用户授权统一提交当前商户入驻、酒店物业模型、三端适配、迁移及测试文档，基于 dev `29614ea` 保留双方改动；由用户自行推送。详见[提交记录](audits/2026-09-15-local-dev-commit.md)。
 
 2026-09-15 dev 同步：已从 `14bbd94` 快进至 `29614ea`，保留本地未提交改动及远端余额支付、关怀模式和登录注册更新。三个冲突文件已整合，物业收藏逻辑迁入共享 `useMyPickData`，关怀模式酒店详情参数同步为 `propertyId`。本地原始改动保留于 stash `codex-backup-before-dev-sync-2026-09-15`；client-app 类型检查通过。
@@ -53,15 +61,35 @@ MTrip/
 
 ## 模块进度总览
 
+2026-09-17更新：新增**全局「强制短信验证」开关**(`sys_config` 的 `security`/`register_sms_required`,迁移 `V20260917040000`,账本 19→20)。动机:注册原本是「渠道启用即强制」,短信渠道一旦停用/软删/凭证失效,`enabled()` 变 false,注册就**静默降级成免验证码注册**且无任何告警(9/17 实测复现:渠道停用后不带 token 的 `register` 直接建号成功)。现在把「是否要求验证」与「渠道是否可用」解耦:`1=强制`(渠道不可用则拒绝注册)/`0=跟随渠道`(旧行为),**默认 1**。**该开关同日曾先做成站点级 `sys_site.sms_verify_required`(`V20260917032003`),当天即搬到全局并删除该列** —— 注册的站点来自客户端可控的 `X-Site-Id`,站点级挡不住「挑一个最宽松的站点」。开关在后台「系统配置 → 全局参数 → 安全配置」,开/关都弹二次确认并经 `OperationLogMiddleware` 留痕(只有新值)。新增错误码 `50022 SMS_REQUIRED_UNAVAILABLE` 与既有 50021 区分「能否降级」——App 遇 50021 照旧跳过验证码页,遇 50022 停在注册页报错(跳过去也会被 40111 打回)。真值表 13 项已逐格实测,含「换任意 `X-Site-Id` 均被 40111 拦」。详见[模块10](./10-移动端App框架.md)。
+
+2026-09-17更新：客房管理「今日可售」看不出**非今日订单**。根因不是丢单：`goods_daily_stock` 按日期存、订单只占「入住日 → 离店前一晚」，而列表只读 `stock_date = 今天` 的一行；报告里那笔单入住次日，今天这行不存在 → 列表按房型默认可售配额兜底，与下单前一致（同房型次日剩余确实 30→29）。该单落在次日则源于订房向导 `normalizeDates()` 缺省兜底写死「明天起 1 晚」（「我的精选」链路不带日期），与搜索页默认「今天 → 后天」口径不一致。**原计划的"审核通过时预生成日库存行"经复核治不了本现象，已放弃**。修复两处：①`GET /merchant/rooms/list` 新增 `upcoming_days / upcoming_stock_left / upcoming_stock_date / upcoming_sold`（明天起 7 天窗口、关房日不计入最低值），merchant-web 卡片显示「未来 7 天最低 29 · 9/18」并在窗口内有占用时高亮；②`normalizeDates()` 兜底统一为「今天起 2 晚」。新增 goods-service `test/room-list-availability.php`（13 断言，并入 `scripts/test-room-remediation.sh`）；质量基线等价执行（390 文件 `php -l`、shared 97/968、admin-web build、client-app typecheck）加 merchant-web build 全绿；真库核验 `room 6 today=28 upcoming=29@09-18`、`room 5 today=37`。详见[模块20](./20-客房管理Figma与PRD整改计划.md)第 12 节与[模块10](./10-移动端App框架.md)。
+
+2026-09-16更新：修复 C 端 `order/create` 报 409「库存不足」的根因 —— `RoomDefaults::stock()` 的 `launch_stock ?? base_stock` 在 `launch_stock=0`（merchant-web 新建房型初值）时不回退，导致无日库存记录的日期被补建成 `stock_total=0`（消费者日历同样显示 `stock=0`）。已改为 `launch_stock > 0 ? launch_stock : base_stock`，shared 单测补 0/null/缺失/负数与周末价回退用例（95/957 → 97/968 全绿）；开发库房型 5 的 `launch_stock` 设为 40，日历 `stock` 恢复为 40。同日 merchant-web `RoomEditor.vue` 收口默认可售配额（自动同步/打开补历史 0 值/提交拦截），13 条 Vue 响应式断言与生产构建通过。详见[模块20](./20-客房管理Figma与PRD整改计划.md)。
+
+2026-09-16更新：client-app **恢复注册的真实短信 OTP 链路**(SMSPoh 可测试、后台已配渠道):按既定删除清单移除临时固定码页(`FixedOtpScreen` + `USE_FIXED_OTP` + 路由 + import 四处),注册恢复为 `Register →(sms/send)→ VerifyOtp →(sms/verify 换 verifyToken)→ ReferralCode`;`VerifyOtpScreen` 一直原样保留,删完即自动接回,**没有新写代码**。**这是必修而非清理**:新配的全局渠道(`sys_sms_channel` id=4)已让 `enabled()` 恒 true,而 register 是「渠道启用即强制」,固定码页拿不到 `verifyToken`,留着会让每次注册都被 `40111` 打回。已实证:容器内用服务自身 `MTRIP_AES_KEY` 成功解密渠道 key/secret;不带 token 调 register 返 `40111` 且用户数 6→6 无副作用。真实收发短信待用户用真号自测。详见[模块10](./10-移动端App框架.md)。
+
+2026-09-16更新：修复客房管理首次进入时的“物业上下文格式不正确”；未选物业时不再发送 `X-Mtrip-Property-Id: 0`，有效物业 ID 和通用拦截器逻辑保持不变。merchant-web 生产构建通过。
+
+2026-09-16更新：[客房管理 Figma 与 PRD 整改计划](./20-客房管理Figma与PRD整改计划.md) 阶段 0–5 已完成。merchant-web 已落地房型卡片列表、More Details 及四步编辑，后端收口站点币种、默认库存/周末价、取消规则快照、媒体归属与审核、订单删除门禁，admin-web 可审核完整媒体。迁移 18/18，客房专项、物业发布/消费者、389 PHP lint、shared 95/957、双 Web 构建与 client 类型检查通过。外部 VR/PMS 等待服务商；两个 App 功能代码未改。
+
+2026-09-15更新：Hotel Amenities 按 Figma `696:4238` / `743:4446` 开放分组查看和整页编辑，支持图标、名称、说明、启用/亮点状态及新增编辑删除；结构化 `amenities` 随物业资料审核版本保存，启用项兼容投影到 `facilities`，旧数据自动回退，两个 App 未改。迁移已应用，双 Web 构建及隔离发布/消费者回归通过。详见[模块13](./13-商家端merchant-web落地.md)。
+
+2026-09-15更新：酒店物业详情按 Figma `696:4024` / `712:6419` 完成三项真实指标、六页签与 Hotel Details 整页编辑；新增双电话密文、邮箱、经纬度及图片上传/启停，消费者维持启用图片 URL 契约。地图暂用占位，两个 App 未改。迁移已应用，双 Web 构建、隔离回归、383 PHP lint、95 shared 测试和桌面/手机预览通过。详见[模块13](./13-商家端merchant-web落地.md)。
+
+2026-09-16更新：client-app **关怀模式酒店结果页取数对齐完整版** —— `HotelResultsLiteScreen` 此前带 `goodsType=1` 打 `/api/v1/app/goods/list`,而该端点在 `GoodsController::list` 里明确只收 `0|2`(门票),**必返 400**,关怀模式结果页实际拿不到真实酒店;现改用完整版同一个 `fetchHotelList`(`/api/v1/app/hotels/list`,与 `HotelResultsScreen` 同源 `MarketplaceReader::searchable`,字段一致)。Lite 稿没有排序面板与 chips 行,故 `sortBy`/`reviewScore`/`breakfast`/`freeCancel`/`amenities` 一律不发;路由参数补可选 `countryCode`/`cityKey`。**typecheck 待补跑**(本轮 shell 起不来)。详见[模块10](./10-移动端App框架.md)与 [HANDOFF](./HANDOFF.md)。
+
+2026-09-16更新：client-app **酒店页用户指引**落地(Figma `Hotel Search Coach mark UI` `2150:4865`):七步 coach mark 覆盖目的地 → 日期 → 住客 → 选酒店 → 选房 → 填资料 → 付款;入口是**筛选旁边的问号**(完整版搜索页 + 结果页各一枚,关怀版复用顶栏「how do I book ?」药片并放大一档),**不自动弹**。示例卡复用 `HotelResultCard` / `HotelRoomCard` / `FormInput` / `PaymentMethodRow` 与设计稿同源演示数据,箭头用设计稿导出 SVG 原路径。4~7 步高亮的元素属于别的页面、做不成真实挖洞高亮,统一成「95% 黑遮罩之上画该步示例卡」(设计稿本身也是这么排的)。i18n 三份各补 18 键(连同下述修复共 990)。**Web 冒烟已做**(headless Chrome 402×874,两种模式各 35 条断言全绿并逐屏看过截图);冒烟中抓到并修掉一个既有 bug —— `hotels.detail.rooms.breakfast` 三份 i18n 里不存在,`LiteRoomCard` 却一直在 `t()` 它,导致关怀模式房型卡把原始键名当文案画出来。详见[模块10](./10-移动端App框架.md)。
+
 2026-09-15更新：client-app **关怀模式订房流程**落地(Figma `Booking Flow` `759:9777`):新增 `HotelBookingLite`(日期→入住人→复核→支付 4 步)与 `BookingSuccessLite` 两个路由 + `liteBookingShared` 与四个步骤组件,Lite 详情/房型详情的 Choose 改跳 Lite 向导,关怀模式从搜索到下单成功全程同一套字号。**该 section 与完整模式已实现的 `1675:5776` 逐屏同构、设计侧没有 Lite 稿**,故按既定换算规则推导。**下单逻辑抽成共享 `useBookingWizard`**,完整版只改取值来源、渲染零变化,两种模式的实付与用券口径必然一致;日历、选券弹窗、常旅客/新增旅客/保险子页一律复用完整模式,文案复用 `hotels.booking.*`(i18n 零新增)。多住宿 `trip` 步与 Add More Stay **刻意不做**(后端一单一个 sku)。详见[模块10](./10-移动端App框架.md)。
 
 2026-09-15更新：client-app **关怀模式酒店详情七屏**落地(Figma `Hotel Details Lite` `2352:5591`):主详情页(单选/多选一页两态)、房型详情、信息页、政策页、评价页、实景预览共 6 个路由 + `LiteRoomCard`/`liteShared`;内容与完整模式同源(复用 `detailDemo` 与 `hotels.detail.*`),退改规则接真实 `refundRules`;结果页卡片改跳 Lite 详情。多选只算合计不多间下单(后端一单一个 sku),订房流程 Lite 版另排。详见[模块10](./10-移动端App框架.md)。
 
-2026-09-15更新：client-app **关怀模式酒店搜索三屏**落地(Figma `Hotel Search Lite` `2312:6435`):Lite 搜索页 `HotelsLite` + 结果页 `HotelResultsLite` + 筛选浮层(复用完整模式的 `HotelFilterSheet`),关怀模式首页 Hotels 卡改跳新页。数据与完整版同一套 `/app/goods/list`;最近搜索存本地,联想/地图/语音等无依赖能力走 comingSoon。详见[模块10](./10-移动端App框架.md)。
+2026-09-15更新：client-app **关怀模式酒店搜索三屏**落地(Figma `Hotel Search Lite` `2312:6435`):Lite 搜索页 `HotelsLite` + 结果页 `HotelResultsLite` + 筛选浮层(复用完整模式的 `HotelFilterSheet`),关怀模式首页 Hotels 卡改跳新页。数据与完整版同一套接口(该条写就时是 `/app/goods/list`,已于 2026-09-16 修正为 `/app/hotels/list`,见上方更新);最近搜索存本地,联想/地图/语音等无依赖能力走 comingSoon。详见[模块10](./10-移动端App框架.md)。
 
 2026-09-15更新：client-app 注册页**邮箱栏换成姓名**(必填,AES 加密落 `user_info.real_name`;后端 `register` 新收 `realName`,不动 `real_name_status`、不写 `nickname`),登录/注册右上角入口按改版稿 Figma Onboarding `2540:13083` 改成黑 25% 底的药丸按钮(改在共用的 `AuthShell`,五屏同时生效;其余样式未动)。详见[模块09](./09-移动端微服务.md)与[模块10](./10-移动端App框架.md)。
 
-2026-09-15更新：【临时】注册验证码改为**纯前端固定码页**(client-app 新增 `FixedOtpScreen`,只认 123456、不发请求;注册流程 `Register → FixedOtp → ReferralCode`)。后端未改 —— 当前没有启用中的短信渠道,`register` 本就不强制 `verifyToken`;先前那版后端万能码 `MTRIP_SMS_BYPASS_CODE` 已整体回滚。接通真实 OTP 时按四处「临时」注释删除即可恢复原链路。详见[模块10](./10-移动端App框架.md)与 [HANDOFF](./HANDOFF.md)。
+2026-09-15更新(**已于 2026-09-16 撤销,见上**)：【临时】注册验证码改为**纯前端固定码页**(client-app 新增 `FixedOtpScreen`,只认 123456、不发请求;注册流程 `Register → FixedOtp → ReferralCode`)。后端未改 —— 当前没有启用中的短信渠道,`register` 本就不强制 `verifyToken`;先前那版后端万能码 `MTRIP_SMS_BYPASS_CODE` 已整体回滚。接通真实 OTP 时按四处「临时」注释删除即可恢复原链路。详见[模块10](./10-移动端App框架.md)与 [HANDOFF](./HANDOFF.md)。
 
 2026-09-15更新：client-app **关怀模式改为默认模式**,开屏选完语言直接进主流程,不再问模式(`liteMode` 初值改 true;模式选择页与整条 phase 链路保留,由 `App.tsx` 的 `ASK_MODE_ON_LAUNCH=false` 跳过)。本地存过模式的用户仍按自己的选择走;改模式走「更多」页的开关。详见[模块10](./10-移动端App框架.md)。
 
@@ -115,10 +143,10 @@ MTrip/
 | 10 | [10-移动端App框架.md](./10-移动端App框架.md) | client-app Expo51+RN+TS 多端工程 | 已完成(冒烟联调归模块08) | 100% |
 | 13 | [13-商家端merchant-web落地.md](./13-商家端merchant-web落地.md) | 商户后台、动态 RBAC 与业务页面 | All Properties、Add New Property 第 1 步及全局菜单 Figma 对齐；新增沿用原门店流程；真实账号联动验收待补 | 进行中 |
 | 15 | [15-M12-merchant-management.md](./15-M12-merchant-management.md) | PRD模块12：酒店优先的商户管理，餐厅资料展示、运营延期 | 8/29列表整改已提交；追加取消详情餐厅隐藏，admin构建及Browser混合业务核验通过，追加改动未提交；S7整体原型待收口 | 列表及餐厅展示已验证，S7进行中 |
-| M4 | [实现方案-Merchant-M4-酒店预订管理.md](./实现方案-Merchant-M4-酒店预订管理.md) | Merchant PRD 模块4：酒店预订列表、履约状态、库存、退款、通知、同步框架及原型 UI | 阶段0～6全部完成：生命周期+过期任务、商户API(22/22)、原型UI真实登录态验收、通知/住客消息/同步框架(23/23)、PermissionAspect平台级修复、跨端回归与check.ps1全绿 | 100% |
+| M4 | [实现方案-Merchant-M4-酒店预订管理.md](./实现方案-Merchant-M4-酒店预订管理.md) | Merchant PRD 模块4：酒店预订列表、履约状态、库存、退款、通知、同步框架及原型 UI | 2026-09-18 v1.0.3 / Figma 整改、自动化回归、真实登录态视觉与 authenticated Mark as Paid 无副作用探测完成；待确认物业级 No-show 配置模型 | 98% |
 | 17 | [17-商户移动端merchant-app.md](./17-商户移动端merchant-app.md) | Merchant PRD 移动端：入驻/认证/KYC、Dashboard、酒店运营、预订、结算、通知、RBAC、营销、评价、帮助中心 | 注册 OTP/申请提交已联动；统一申请级 KYC 清单、后台 Send KYC 门禁、真实文件选择/上传/提交已接入；M9-M12 待实现 | 进行中 |
 | 18 | [18-酒店商品收敛为物业整改计划.md](./18-酒店商品收敛为物业整改计划.md) | 酒店域去除重复商品实体，以物业统一 KYC、房型、库存、交易、运营和消费者展示 | 批次 A-G 已完成；旧酒店商品模型已退役；新增物业 KYC 请求上下文已修复 | 100% |
-| 19 | [19-商户入驻审批整改计划.md](./19-商户入驻审批整改计划.md) | PRD 模块 1 注册、KYC、最终批准、账号激活及首批物业转换 | 阶段 0–7 全部完成；App 真机接入另行实施 | 已完成 |
+| 19 | [19-商户入驻审批整改计划.md](./19-商户入驻审批整改计划.md) | PRD 模块 1 注册、KYC、最终批准、账号激活及首批物业转换 | 阶段 0–7 全部完成；认证测试模式已改为后台运行时开关；App 真机接入另行实施 | 已完成 |
 
 ## 实施顺序(首期里程碑)
 
@@ -129,6 +157,8 @@ MTrip/
 
 | 日期 | 变更内容 |
 |------|---------|
+| 2026-09-17 | 客房管理「今日可售」看不出非今日订单：`goods_daily_stock` 按日期存，订单只占「入住日 → 离店前一晚」，而列表只读 `stock_date = 今天` 的一行 —— 报告里那笔单入住次日，今天这行不存在，列表按房型默认可售配额兜底，与下单前一致（同房型次日剩余确实 30→29，不是丢单）。该单落在次日是订房向导 `normalizeDates()` 缺省兜底写死「明天起 1 晚」所致（「我的精选」链路不带日期），与搜索页默认「今天 → 后天」口径不一致。**原计划的"审核通过时预生成日库存行"经复核治不了本现象，已放弃**。修复：**①** `GET /merchant/rooms/list` 新增 `upcoming_days / upcoming_stock_left / upcoming_stock_date / upcoming_sold`（明天起 7 天窗口，关房日不计入最低值），merchant-web 卡片显示「未来 7 天最低 29 · 9/18」并在窗口内有占用时高亮；**②** `normalizeDates()` 兜底统一为「今天起 2 晚」。新增 goods-service `test/room-list-availability.php`（13 断言，并入 `scripts/test-room-remediation.sh`）；等价执行质量基线（390 文件 `php -l`、shared 97/968、admin-web build、client-app typecheck）+ merchant-web build 全绿；真库核验 `room 6 today=28 upcoming=29@09-18`。遗留：浏览器走查未做、"今天"的 UTC/本地时区错位（00:00–08:00 北京时间）、门票页默认日期未统一。 |
+| 2026-09-16 | 客房默认可售配额回退修复（C 端下单 409「库存不足」根因）：`RoomDefaults::stock()` 写成 `launch_stock ?? base_stock`，而 `??` 在 `launch_stock=0`（merchant-web 新建房型初值）时不回退，导致无日库存记录的日期被补建成 `stock_total=0`，`order/create` 抛 `DATA_CONFLICT`(409)、消费者日历长期显示 `stock=0`。已改为 `launch_stock > 0 ? launch_stock : base_stock`（0/null/缺失视为未设置），`shared/tests/cases/SupportTest.php` 补 0/null/缺失/负数与周末价回退用例，shared 95 用例/957 断言 → 97/968 全绿；开发库房型 5 的 `launch_stock` 设为 40，日历 `stock` 恢复为 40。同轮把 merchant-web `RoomEditor.vue` 一并收口（客房总数变化自动同步配额、打开补历史 0 值且不产生"打开即脏"、提交审核拦截 base>0 且配额≤0），13 条真实 Vue 响应式断言与生产构建通过。未修改两个 App 功能代码。 |
 | 2026-09-15 | 商户入驻整改阶段 7：新增跨 merchant/goods/user 同库 E2E，56 项断言贯通注册补正、两家首批物业 KYC、签署、并发最终批准、投递失败重试、激活、资料/房型审核、发布、用户端消费接口、商户暂停恢复和物业下线恢复。阶段 2–6 回归、PHP 8.1 lint、shared tests、两套 Web 构建、client 类型检查、签名网关、迁移 15/15 与六实例健康均通过；交付 App 接入包，两个 App 代码未修改。 |
 | 2026-09-15 | 商户入驻整改阶段 6：首批物业与商户账号直接衔接，物业资料/房型批准版本、首次发布和实时用户端门禁收口；无排名合格酒店可普通搜索，排名只叠加默认顺序与标记，推荐榜单保持独立。阶段 6 主链路 49 项、阶段 2–5 回归 92 项、真实签名网关冒烟、PHP 8.1、merchant-web 构建、迁移账本 15/15 和 6 个服务实例健康检查通过；未修改两个 App，未新增迁移或权限键。 |
 | 2026-09-15 | 商户入驻整改阶段 5：待激活账号通过批准凭证和注册联系方式 OTP 完成激活；新增访问码/TOTP、邮箱 OTP、短信 OTP、Google + mTrip OTP、联系方式恢复和 Authenticator 轮换，merchant-web 接入登录/激活/恢复，App 仅冻结契约。24 项阶段 5、68 项阶段 2–4 和旧 S4 回归、PHP 8.1、merchant-web 构建与桌面/移动渲染通过；账本 15/15，两个 App 未修改。 |

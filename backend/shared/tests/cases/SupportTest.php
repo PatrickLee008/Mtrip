@@ -13,6 +13,7 @@ use Mtrip\Shared\Support\JwtHelper;
 use Mtrip\Shared\Support\MaskHelper;
 use Mtrip\Shared\Support\OrderNoGenerator;
 use Mtrip\Shared\Support\Result;
+use Mtrip\Shared\Support\RoomDefaults;
 
 // ---------- Result ----------
 MiniTest::add('Result::success 默认结构', static function (): void {
@@ -198,4 +199,27 @@ MiniTest::add('OrderNoGenerator 连续生成不重复(1000次)', static function
         $set[OrderNoGenerator::orderNo(1)] = true;
     }
     MiniTest::assertSame(1000, count($set), '订单号应全局唯一');
+});
+
+// ---------- RoomDefaults ----------
+MiniTest::add('RoomDefaults::stock 显式配额优先,0 视为未设置回退物理房量', static function (): void {
+    // 显式设置(> 0):无日历记录时按它作为默认可售配额
+    MiniTest::assertSame(3, RoomDefaults::stock(['launch_stock' => 3, 'base_stock' => 8]), '显式配额优先');
+    // 回归:merchant-web 新建房型时 launch_stock 初值为 0,必须回退 base_stock,
+    // 否则房型建好后所有日期都判"库存不足"(409)
+    MiniTest::assertSame(40, RoomDefaults::stock(['launch_stock' => 0, 'base_stock' => 40]), '0 回退 base_stock');
+    MiniTest::assertSame(40, RoomDefaults::stock(['launch_stock' => null, 'base_stock' => 40]), 'null 回退 base_stock');
+    MiniTest::assertSame(40, RoomDefaults::stock(['base_stock' => 40]), '键缺失回退 base_stock');
+    // 两者都为 0 / 空数组:兜底 0,不得为负
+    MiniTest::assertSame(0, RoomDefaults::stock(['launch_stock' => 0, 'base_stock' => 0]));
+    MiniTest::assertSame(0, RoomDefaults::stock([]), '空数组兜底 0');
+    MiniTest::assertSame(0, RoomDefaults::stock(['launch_stock' => -5, 'base_stock' => 0]), '负数不外溢');
+});
+
+MiniTest::add('RoomDefaults::price 周末价优先,为 0 时回退基础价', static function (): void {
+    $room = ['base_price' => 1000, 'weekend_price' => 1200];
+    MiniTest::assertSame(1200.0, RoomDefaults::price($room, '2026-09-18'), '周五用周末价');
+    MiniTest::assertSame(1200.0, RoomDefaults::price($room, '2026-09-19'), '周六用周末价');
+    MiniTest::assertSame(1000.0, RoomDefaults::price($room, '2026-09-20'), '周日用基础价');
+    MiniTest::assertSame(1000.0, RoomDefaults::price(['base_price' => 1000, 'weekend_price' => 0], '2026-09-18'), '周末价 0 回退基础价');
 });

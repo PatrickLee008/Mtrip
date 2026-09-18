@@ -309,6 +309,7 @@ Router::addGroup('/api/v1/merchant', static function () {
     Router::get('/properties/profile', [MerchantPropertyController::class, 'profile']);
     Router::post('/properties/save', [MerchantPropertyController::class, 'save']);
     Router::post('/properties/profile/save', [MerchantPropertyController::class, 'saveProfile']);
+    Router::post('/properties/profile/media/upload', [MerchantPropertyController::class, 'uploadProfileImage']);
     Router::post('/properties/publish', [MerchantPropertyController::class, 'publish']);
     Router::post('/properties/kyc/upload', [MerchantPropertyController::class, 'upload']);
     Router::post('/properties/kyc/submit', [MerchantPropertyController::class, 'submit']);

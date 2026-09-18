@@ -7,6 +7,7 @@ ENV TIMEZONE=UTC \
     SCAN_CACHEABLE=true
 
 RUN set -ex \
+    && apk add --no-cache ffmpeg \
     && ln -sf /usr/share/zoneinfo/${TIMEZONE} /etc/localtime \
     && echo "${TIMEZONE}" > /etc/timezone
 

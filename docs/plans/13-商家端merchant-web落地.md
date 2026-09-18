@@ -3,6 +3,46 @@
 > 参考 admin-web 从零搭建平行的 merchant-web(Vue3+Vite+TS+antdv),为商户账号(`merchant_admin`,account_type 1集团/2商户/3门店)落地一套完整仿 admin 的动态 RBAC:独立四表菜单/角色,登录按 `account_type` 下发菜单树+权限集,接口权限继续由 `#[Permission]` 注解按 `perm_key` 联动(与前端 `v-perm` 同一把钥匙)。
 > 承接 12-商家账号体系.md 的二期清单。
 
+## 2026-09-17 侧边栏菜单调整(Stores/Goods 移出 + 物业专属分组)
+
+按用户要求调整商户端侧边栏,5 个待确认点已逐条确认(均为推荐方案):
+
+- [x] **Stores、Goods 移出侧边栏**:只在 `SideMenu.vue` 的 `HIDDEN_PATHS` 隐藏,数据库菜单行、权限键与路由全部保留 —— 工作台「View All Properties」与「所有物业」列表对非酒店物业的 Manage 按钮仍跳 `/store`,不会 404。
+- [x] **Operations 仅在选中具体物业时出现**:子菜单为 Availability & Pricing(`/availability`)、Booking Management(`/order`,从原「经营」分组移入)。未选物业(All Properties)整组隐藏。
+- [x] **新增 HOTEL MANAGEMENT 分组**:仅选中**酒店**物业时显示,含 Hotel Profile 与 Room Types。Hotel Profile 复用既有 `/properties/:id/profile` 页面(与「所有物业」列表 Manage 按钮同一页),入口按当前选中物业动态生成;Room Types 即原 Rooms 菜单改名,路由 `/rooms` 与权限 `mch:rooms:list` 不变。
+- [x] **切回 All Properties 的兜底**:`BasicLayout.selectProperty()` 切换后若当前页面已不在菜单口径内(物业专属页面),直接跳回「所有物业」页。
+- [x] 菜单口径抽到 `src/config/menuSections.ts`(`isMenuPathVisible`),侧边栏与切换兜底共用一份,避免两处漂移;`userStore.visibleMenus` 仍按既有 `module_key` 过滤(房型 600、房量与价格 700 本就是 `module_key='hotel'`)。
+- [x] 菜单改名走增量 `database/merchant/42-merchant-menu-restructure.sql`(守卫式 UPDATE,已 db-apply),`database/seed/04-merchant-menu.sql` 同步为「房型管理 / Room Types」供空库初始化;不改 `module_key`、不新增 menu 行(Hotel Profile 与 `/dashboard`、`/properties` 一样由前端直接挂入口,避免菜单树注册重复路由)。
+- [x] i18n:新增 `sidebar.sections.hotelManagement`(en `HOTEL MANAGEMENT`/zh 酒店管理),`menu.rooms` 改为 Room Types/房型管理;Hotel Profile 复用既有 `properties.profile.title`(en/zh 已是 Hotel Profile/酒店资料)。
+
+验证:用真实 `SideMenu.vue` + 真实 store/i18n/router 喂本地开发库的真实菜单树,在无头 Chrome 里跑三种物业上下文(临时探针已删除)——All Properties 下无 Operations/HOTEL MANAGEMENT/Stores/Goods;选中酒店时两组齐全,Hotel Profile 点击落到 `/properties/5/profile`、Room Types 落到 `/rooms`;选中餐厅时不出现 HOTEL MANAGEMENT,Operations 只剩 Booking Management。该轮实测还抓出一个真实缺陷并已修:**Hotel Profile 的动态路径初版没有业务类型判断,选中餐厅时仍会显示**,现 `hotelProfilePath` 仅在 `business_type === 'hotel'` 时生成。merchant-web 生产构建(vue-tsc + vite build)通过。
+
+## 2026-09-16 客房管理 Figma 与 PRD 整改
+
+- [x] 进入客房管理提示“物业上下文格式不正确”已修复：原因是酒店选项和 All Properties 列表把 `0` 作为 `X-Mtrip-Property-Id` 发出。现在未选物业时省略该头，有效物业仍显式发送；merchant-web 生产构建通过。
+- [x] `/rooms` 已按 Figma `930:11444` 改为真实统计、搜索/酒店/状态/审核筛选、服务端排序和三列房型卡片；More Details 与旧的新建/编辑/详情路由共用同一套组件，复制、启停、删除审核和历史未被删减。
+- [x] 四步弹窗实现 Room Information / Room Images / VR Tour / 3D Floor Plan，包含多床型、sqm/sqFt、客房设施、餐食计划、默认可售配额、取消政策、图片管理、视频、WebGL 360 全景和平面图热点。外部 VR 无服务商，可保存合法 HTTPS 配置但不能启用。
+- [x] 站点币种由后端确定；`base_stock` 是物理房量，`launch_stock` 是无日库存时的默认可售配额，周五/周六统一使用周末价。显式日库存不会被房型内容审核覆盖，取消政策批准后更新执行规则并由订单冻结快照。
+  - **2026-09-16 补修（后端 + 本页表单）**：该语义在 `RoomDefaults::stock()` 里被 `launch_stock ?? base_stock` 实现错了 —— `??` 不会在 `launch_stock=0` 时回退，而本页新建房型时该字段初值就是 0，导致房型建好后所有无日库存的日期都判「库存不足」(409)、消费者日历也显示 `stock=0`。后端已改为 `launch_stock > 0 ? launch_stock : base_stock` 并补单测。**本页表单同步收口**（`RoomEditor.vue`）：① 客房总数变化时，尚未设置或仍在跟随的默认可售配额自动同步（商户显式填过的更小值不覆盖）；② 打开编辑器时把历史 0 值按客房总数补上，且因补值发生在 baseline 捕获之前，不会出现「打开即脏/误弹放弃修改」；③ 提交审核时若客房总数 > 0 而配额 ≤ 0 直接拦截并提示（仅提交拦截，草稿仍允许不完整，与原有校验口径一致；客房总数 0 的复制草稿不拦）。13 条真实 Vue 响应式断言与 merchant-web 生产构建通过。
+- [x] 新增 `hotel_room_media` 物业附件登记及房型结构化字段，服务端校验真实 MIME、尺寸/比例、大小、视频时长和归属；admin 房型审核可对比并预览全部新媒体。消费者接口仅返回已批准、在售、启用媒体及明确白名单字段。
+- [x] `V20260916005000` 已本地应用，迁移账本 18/18。客房专项 61 个通过场景、物业发布/消费者回归、389 PHP lint、shared 95/957、双 Web 构建、client-app 类型检查、OpenResty 配置、迁移和差异检查通过；桌面和约 430px 窄屏已检查。未修改两个 App 的功能代码。
+
+## 2026-09-15 Hotel Amenities 页签 Figma 对齐
+
+- [x] 对照 Figma `696:4238` 主页面和 `743:4446` 编辑页面开放 Hotel Amenities 页签；查看态按 Essential Amenities、Reception Amenities、Dinning Amenities、Hotel Tags 分组展示，状态点、标签说明、三列设施/双列标签布局与原型一致。
+- [x] 编辑态支持每组新增、编辑、删除，选择设施图标，并分别维护 Amenity Status 与 Add Highlight；每组最多启用 5 项、最多设置 5 项亮点，前后端同时校验，关闭设施时同步取消亮点。
+- [x] 新增物业级结构化 `amenities` JSON 字段，随既有资料草稿、提交、审核、驳回和批准版本流转；启用且非 Hotel Tags 的名称继续自动投影到 `facilities`，旧物业的 `facilities` 自动转为 Essential Amenities，现有消费者接口与两个 App 无需修改。后台物业资料审核差异表可读展示完整结构化变更。
+- [x] 已应用迁移 `V20260916004000`（17 已执行、0 待执行）。隔离发布/消费者兼容回归通过，覆盖旧数据回退、分组状态、5 项限制、审核落库和 `facilities` 投影；merchant-web/admin-web production build 通过。两个 App 未修改。
+
+## 2026-09-15 酒店物业详情 Figma 对齐
+
+- [x] 对照 Figma `696:4024` 主页面和 `712:6419` 编辑页面，将 `/properties/:id/profile` 落地为三项真实指标、六页签、双列详情、行程亮点、设施和图片网格；编辑由弹窗改为原型对应的整页分区表单。当时只开放 Hotel Details，Hotel Amenities 已在上方后续记录中完成。
+- [x] 物业资料新增电话 1、电话 2、邮箱、经纬度和带启用状态的图片图库。两部电话在 `merchant_store` 与资料修订记录中均使用 AES-256-GCM 密文保存，商户编辑与后台审核接口解密展示；邮箱、经纬度范围均在服务端校验。
+- [x] 新增 `/merchant/properties/profile/media/upload`，复用 `mch:properties:profile-edit` 权限并强制物业上下文。仅接收不超过 10MB、至少 800×600 的 JPG/PNG/WEBP，保存到物业隔离目录；编辑页支持上传、预览、删除和 Image Status 开关。`image_gallery` 保存完整列表，既有 `images` 只投影启用 URL，消费者接口及 App 无需改动。
+- [x] 顶部 Room Types 读取已审核发布且在售的房型名称，Total Rooms 汇总这些房型的 `base_stock`，Guest Rating 汇总该物业可见评价的平均分和数量。地图区域按确认使用静态占位，经纬度真实保存，为以后地图服务对接保留数据。
+- [x] 原有草稿、提交审核、驳回回显、审核中锁定、发布/下线、`v-perm` 和显式 `X-Mtrip-Property-Id` 全部保留；后台物业资料审核差异表同步展示新增字段。手机端详情路由沿用可展开侧栏。未修改 `client-app` 或 `merchant-app`。
+- [x] 本地迁移账本已应用 `V20260916003000`（16 已执行、0 待执行）。隔离数据库完整物业发布/消费者兼容回归通过，覆盖电话密文、图片启停投影、上传格式/尺寸、坐标、邮箱和真实指标；merchant-web/admin-web 构建、383 个 PHP 文件语法检查、shared 95 用例/957 断言、桌面和 400×842 手机视口检查及 `git diff --check` 通过。
+
 ## 2026-09-14 All Properties 与全局菜单 Figma 对齐
 
 - [x] 续接 Figma `585:7146` 的 Add New Property 第 1 步：新增 `/properties/new` 独立页面，完成面包屑、Basic Information/KYC Documents 步骤提示、物业名称/类型/房型数量/位置、图片拖放预览及底部操作栏；所有新增入口改进该页。用户确认本轮仍使用现有门店新增流程，Next 将名称和位置预填至 `/store` 新增弹窗；类型、房型数量、图片仅作页面预览，明确提示尚不保存。未新增物业专项 KYC 或上传接口。`merchant-web npm run build` 通过；1536×826 本地隔离预览截图已核对布局，临时预览文件已删除；无商户登录态，真实提交仍待验收。

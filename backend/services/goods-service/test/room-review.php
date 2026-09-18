@@ -25,6 +25,7 @@ $payload = [
 ];
 
 try {
+    Db::connection('system')->table('sys_site')->updateOrInsert(['id' => 991], ['site_name' => 'Room test', 'currency' => 'THB']);
     $suffix = bin2hex(random_bytes(6));
     $merchantId = (int) Db::table('merchant_info')->insertGetId([
         'site_id' => 991, 'merchant_name' => 'Room review merchant', 'credit_code' => 'RR-' . $suffix,
@@ -35,6 +36,7 @@ try {
         'business_type' => 'hotel', 'status' => 1, 'kyc_status' => 1,
     ]);
     $property = (array) Db::table('merchant_store')->where('id', $propertyId)->first();
+    Db::table('hotel_room_media')->insert(['site_id' => 991, 'property_id' => $propertyId, 'uploaded_by' => 99101, 'kind' => 'image', 'url' => '/uploads/rooms/test.jpg', 'mime' => 'image/jpeg', 'size_bytes' => 1024]);
     $hotelGoodsBefore = Db::table('goods_info')->where('goods_type', 1)->count();
     MerchantContext::set(['admin_id' => 99101, 'admin_name' => 'Merchant tester', 'site_id' => 991, 'merchant_id' => $merchantId, 'account_type' => 2, 'is_owner' => true]);
     $created = $service->save($property, 0, $payload, true);
@@ -104,6 +106,7 @@ try {
     check((int) Db::table('goods_info')->where('id', $ticketGoodsId)->value('goods_type') === 2,
         'ticket goods creation remains available');
 } finally {
+    Db::table('hotel_room_media')->where('property_id', $propertyId)->delete();
     if ($roomId > 0) Db::table('goods_stock_log')->where('sku_type', 1)->where('sku_id', $roomId)->delete();
     if ($roomId > 0) Db::table('goods_daily_stock')->where('sku_type', 1)->where('sku_id', $roomId)->delete();
     if ($roomId > 0) Db::table('hotel_room_type_revision')->where('room_id', $roomId)->delete();
