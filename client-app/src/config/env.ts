@@ -25,6 +25,13 @@ export const API_BASE_URL: string =
 
 export const DEFAULT_SITE_ID: number = Number(process.env.EXPO_PUBLIC_DEFAULT_SITE_ID ?? 1);
 
+/**
+ * 推荐链接前缀(Refer & Earn 分享用),最终链接 = `${REFERRAL_LINK_BASE}/${推荐码}`。
+ * 后端只下发推荐码不下发链接;按 PRD 模块14,该链接指向 Web 注册页并预填推荐码。
+ */
+export const REFERRAL_LINK_BASE: string =
+  process.env.EXPO_PUBLIC_REFERRAL_LINK_BASE ?? 'https://mtrip.app/r';
+
 /** 客户端密钥(管理后台客户端管理下发):app 接口 HMAC 签名与登录/注册 AES 加密 */
 export const CLIENT_ID: string = process.env.EXPO_PUBLIC_CLIENT_ID ?? '';
 

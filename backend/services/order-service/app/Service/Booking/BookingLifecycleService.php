@@ -6,6 +6,7 @@ namespace App\Service\Booking;
 
 use App\Constants\BookingConst;
 use App\Service\OrderStockService;
+use App\Service\ReferralService;
 use Hyperf\Context\Context;
 use Hyperf\DbConnection\Db;
 use Hyperf\Di\Annotation\Inject;
@@ -32,6 +33,9 @@ class BookingLifecycleService
 
     #[Inject]
     protected BookingRefundService $refunds;
+
+    #[Inject]
+    protected ReferralService $referralService;
 
     /**
      * 下单时组装预订字段(须在下单事务内调用):
@@ -113,7 +117,13 @@ class BookingLifecycleService
         });
     }
 
-    /** 入住(可带房号);幂等重复调用不重复通知(§9.1) */
+    /**
+     * 入住(可带房号);幂等重复调用不重复通知(§9.1)
+     *
+     * 推荐返利在这里发放(PRD 模块14「入住完成后奖励」):商户后台点入住 / 商户核销 / 平台手工核销
+     * 三个入口都汇到本方法,放这里一处即可覆盖。**不要挪回支付成功**——
+     * 支付即发会让「订金付了就退」的单也拿到奖励。
+     */
     public function checkIn(
         int $orderId,
         int $operatorId,
@@ -139,6 +149,15 @@ class BookingLifecycleService
             $this->events->log($order, 'checked_in', $operatorType, $operatorId, $operatorName, 1, [
                 'roomNo' => (string) $order['assigned_room_no'],
             ]);
+            // 推荐返利:被推荐人首个「已入住」酒店订单达成 → 奖励入推荐人+新人钱包(PRD 模块14)。
+            // 在本事务内发放,reward_status 0→1 + lockForUpdate 保证仅首单一次;幂等重复入住走上面的提前返回,到不了这里。
+            if ((int) $order['order_type'] === 1) {
+                $this->referralService->grantOnFirstBooking(
+                    (int) $order['site_id'],
+                    (int) $order['user_id'],
+                    (int) $order['id'],
+                );
+            }
             return [$order, true];
         });
         if ($changed) {

@@ -168,6 +168,49 @@ export function deleteTraveler(id: number): Promise<null> {
   return post<null>('/api/v1/app/user/traveler/delete', { id });
 }
 
+/* ---- 推荐返利(Refer & Earn,需登录) ---- */
+
+/** 奖励状态:0 待达成 1 已发放 2 已失效(对齐 `user_referral.reward_status`) */
+export const REFERRAL_STATUS = {
+  PENDING: 0,
+  REWARDED: 1,
+  EXPIRED: 2,
+} as const;
+
+export interface ReferralSummary {
+  /** 本人推荐码;后端首次访问时惰性生成,不会为空 */
+  referralCode: string;
+  inviteeCount: number;
+  pendingCount: number;
+  rewardedCount: number;
+  /** 累计已到账奖励(仅 reward_status=1 的合计) */
+  rewardTotal: number;
+}
+
+/** 被推荐人行(列表行按后端约定 snake_case 直出) */
+export interface RefereeItem {
+  id: number;
+  reward_status: number;
+  reward_amount: string | number;
+  reward_order_id: number;
+  bind_time: string | null;
+  reward_time: string | null;
+  nickname: string;
+  avatar: string | null;
+}
+
+/** 我的推荐码与战绩(统计卡 + 推荐码/链接卡) */
+export function fetchReferralMy(): Promise<ReferralSummary> {
+  return get<ReferralSummary>('/api/v1/app/user/referral/my');
+}
+
+/** 我邀请的人;`status` 不传为全部,推荐明细页按页签传 0/1 */
+export function fetchReferralInvitees(
+  params: PageParams & { status?: number },
+): Promise<PageData<RefereeItem>> {
+  return get('/api/v1/app/user/referral/invitees', { ...params });
+}
+
 export function addFeedback(params: {
   content: string;
   feedbackType?: number;

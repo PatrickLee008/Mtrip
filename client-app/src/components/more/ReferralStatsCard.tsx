@@ -13,18 +13,23 @@ import HomeIcon from '@/components/home/HomeIcon';
 import { moreShared } from '@/components/more/moreShared';
 import { colors } from '@/config/theme';
 import { fonts } from '@/config/typography';
-import { REFERRAL_STATS } from '@/screens/more/moreDemo';
+import type { ReferralSummary } from '@/api/user';
 import { useSiteStore } from '@/store/siteStore';
 import { formatAmount } from '@/utils/format';
 
-export default function ReferralStatsCard() {
+/** 数据由两页各自的 `useReferralSummary()` 传入,卡片本身不取数(两页口径必须一致) */
+interface ReferralStatsCardProps {
+  summary: ReferralSummary;
+}
+
+export default function ReferralStatsCard({ summary }: ReferralStatsCardProps) {
   const { t } = useTranslation();
   const currency = useSiteStore((s) => s.currency);
 
   const cells = [
-    { key: 'invited', value: REFERRAL_STATS.invited, color: colors.heading },
-    { key: 'pending', value: REFERRAL_STATS.pending, color: colors.orange },
-    { key: 'rewarded', value: REFERRAL_STATS.rewarded, color: colors.primary },
+    { key: 'invited', value: summary.inviteeCount, color: colors.heading },
+    { key: 'pending', value: summary.pendingCount, color: colors.orange },
+    { key: 'rewarded', value: summary.rewardedCount, color: colors.primary },
   ] as const;
 
   return (
@@ -34,9 +39,7 @@ export default function ReferralStatsCard() {
         <View style={styles.headText}>
           <Text style={styles.headLabel}>{t('more.referral.totalRewards')}</Text>
           <View style={styles.amountRow}>
-            <Text style={styles.amount}>
-              {formatAmount(REFERRAL_STATS.totalRewards, currency)}
-            </Text>
+            <Text style={styles.amount}>{formatAmount(summary.rewardTotal, currency)}</Text>
             <Text style={styles.currency}>{currency}</Text>
           </View>
         </View>

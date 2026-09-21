@@ -12,7 +12,6 @@ use App\Service\NotifyService;
 use App\Service\OrderStockService;
 use App\Service\PaymentResultHandler;
 use App\Service\PricingService;
-use App\Service\ReferralService;
 use App\Service\SettlementService;
 use Hyperf\Contract\ConfigInterface;
 use Hyperf\DbConnection\Db;
@@ -40,9 +39,6 @@ class TripController extends AbstractController
 
     #[Inject]
     protected SettlementService $settlementService;
-
-    #[Inject]
-    protected ReferralService $referralService;
 
     #[Inject]
     protected NotifyService $notifyService;
@@ -248,12 +244,8 @@ class TripController extends AbstractController
 
 
             $codes = [];
-            $firstBookingId = 0;
             foreach ($bookings as $b) {
                 $b = (array) $b;
-                if ($firstBookingId === 0) {
-                    $firstBookingId = (int) $b['id'];
-                }
                 $verifyCode = OrderNoGenerator::verifyCode();
                 // 支付状态变更统一走 PaymentResultHandler(幂等+时间线)
                 $verifyCode = $this->payHandler->markPaid($b, $payMethod, 'MOCK' . OrderNoGenerator::flowNo(), $verifyCode);
@@ -273,10 +265,7 @@ class TripController extends AbstractController
                     Db::table('marketing_coupon')->where('id', $rec->coupon_id)->increment('used_count');
                 }
             }
-            // 推荐返利:Trip 内均为酒店订单,首单达成即发放(仅首单,幂等)
-            if ($firstBookingId > 0) {
-                $this->referralService->grantOnFirstBooking((int) $trip['site_id'], (int) $trip['user_id'], $firstBookingId);
-            }
+            // 推荐返利不在支付时发放:Trip 下各酒店订单各自入住核销时由 BookingLifecycleService::checkIn 发放(PRD 模块14)
             return ['siteId' => (int) $trip['site_id'], 'userId' => (int) $trip['user_id'], 'tripNo' => (string) $trip['trip_no'], 'codes' => $codes, 'orders' => array_map(static fn ($x) => (array) $x, $bookings->all())];
         });
 
