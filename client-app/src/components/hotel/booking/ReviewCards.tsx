@@ -288,9 +288,25 @@ interface AddMoreProps {
   desc: string;
   action: string;
   onPress: () => void;
+  /**
+   * 紧凑态(多房间新稿 2659:12508):房型明细挪到「Selected Rooms」后,这张卡不再占整块,
+   * 收成一行「+ Add Another Hotel」小按钮 —— 去掉说明文字与楼宇水印。
+   */
+  compact?: boolean;
 }
 
-export function AddMoreStayCard({ title, desc, action, onPress }: AddMoreProps) {
+export function AddMoreStayCard({ title, desc, action, onPress, compact = false }: AddMoreProps) {
+  if (compact) {
+    return (
+      <Pressable
+        style={({ pressed }) => [styles.addMoreCompact, pressed && bookingShared.pressed]}
+        onPress={onPress}
+      >
+        <HomeIcon name="plus" size={12} color={colors.primary} />
+        <Text style={styles.addMoreCompactText}>{action}</Text>
+      </Pressable>
+    );
+  }
   return (
     <View style={styles.addMoreCard}>
       {/* 右上角 95 的楼宇水印,被卡片圆角裁掉(设计稿 2302:8994) */}
@@ -554,6 +570,25 @@ const styles = StyleSheet.create({
     backgroundColor: colors.softBlue,
     overflow: 'hidden',
     ...shadows.card,
+  },
+  /* 紧凑态:与购物车页「Add Another Room」同规格的一行小按钮 */
+  addMoreCompact: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    padding: 12,
+    borderRadius: radius.btn,
+    borderWidth: 1,
+    borderColor: colors.primary,
+    backgroundColor: colors.softBlue,
+  },
+  addMoreCompactText: {
+    fontFamily: fonts.interSemi,
+    fontSize: 14,
+    lineHeight: 20,
+    letterSpacing: 0.14,
+    color: colors.primary,
   },
   addMoreWatermark: { position: 'absolute', right: -12, top: -1, opacity: 0.35 },
   addMoreTitleBox: { paddingVertical: 12, opacity: 0.9 },

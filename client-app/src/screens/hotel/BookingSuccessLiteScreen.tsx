@@ -67,9 +67,23 @@ export default function BookingSuccessLiteScreen() {
     showToast(t('hotels.booking.lite.idCopied'));
   };
 
-  /** 核销二维码在订单详情页;没有订单号(演示模式)就退回订单列表 */
+  /**
+   * 核销码在订单详情页;没有订单号(演示模式)就退回订单列表。
+   *
+   * **用 `reset` 不用 `navigate`**(与完整模式成功页同一处理):本屏是下单流程的终点、没有返回入口,
+   * 再 push 一层订单详情的话,详情页返回又回到本屏,用户会卡在「成功页 ⇄ 订单详情」里出不来。
+   * 重置成「底部 Tab(我的预订)+ 订单详情」,已完成的结账流程整个从历史里移除。
+   */
   const viewBooking = () =>
-    p.orderId ? navigation.navigate('OrderDetail', { orderId: p.orderId }) : navigation.navigate('OrderList');
+    navigation.reset({
+      index: 1,
+      routes: [
+        { name: 'MainTabs', params: { screen: 'MyPickTab' } },
+        p.orderId
+          ? { name: 'OrderDetail', params: { orderId: p.orderId } }
+          : { name: 'OrderList' },
+      ],
+    });
 
   return (
     <View style={styles.root}>

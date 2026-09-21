@@ -7,7 +7,8 @@
  *   Rooms      222:1428 → components/hotel/HotelRoomsTab
  *   Amenities  222:2539 → components/hotel/HotelAmenitiesTab
  *   Nearby     222:2758 → components/hotel/HotelNearbyTab(设计稿名 Hotel Details Location)
- *   Reviews    222:2978 → components/hotel/HotelReviewsTab
+ *   Reviews    222:2978 → components/hotel/HotelReviewsTab(薄容器,内容为共享的
+ *              components/hotel/HotelReviewDashboard;与评价整页 1133:2998 共用同一份总览)
  *   Policies   222:3189 → components/hotel/HotelPoliciesTab
  *
  * 有真实商品 id 时接 `/goods/detail` 渲染酒店与房型;无 id 时仍回落到设计稿演示数据。
@@ -15,12 +16,14 @@
  * 页面壳的实现要点:
  *   状态栏黑条(760:10037)不随内容滚动;二级导航吸顶用 `ScrollView` 的 `stickyHeaderIndices`,
  *   因此它必须是 ScrollView 的直接子节点 —— 设计稿 Main 的 24 间距改由各块自己的 paddingTop 承担。
- *   **底部价格栏在 Rooms 页签隐藏**:设计稿 222:2529 是 hidden 的(每张房型卡自带 Select)。
+ *   **Rooms 页签的底栏是购物车栏**(新稿 222:1428 / 2659:11490):其余页签仍是「起价 + Choose my room」,
+ *   Rooms 页签则在选中任一房型后换成「合计 + 购物车角标 + Continue」;一间没选时不显示底栏。
  *
  * 设计稿有、当前没有对应实现的交互一律走 comingSoon:See Map / Get Directions / 提醒 / 分享 /
- * 客服 / 房型卡的收藏 / Read All Reviews / 面积单位切换。
- * (「Choose my room」已改为切到 Rooms 页签,房型卡 Select 已接上订房流程 1675:5776)
- * 设计稿里另有几张二级页(Rooms Details 281:1041、Reviews Page 1133:2998、Map Location 864:1775、
+ * 客服 / 房型卡的收藏 / 面积单位切换。
+ * (「Choose my room」已改为切到 Rooms 页签,房型卡改为 Choose 加购、由底栏 Continue 进订房流程 1675:5776,
+ *  Reviews 页签的「Read All Reviews」已接上评价整页 1133:2998)
+ * 设计稿里另有几张二级页(Rooms Details 281:1041、Map Location 864:1775、
  * Property Preview / VR View / 3d View)不属于页签,本次未实现。
  */
 
@@ -35,7 +38,7 @@ import { useTranslation } from 'react-i18next';
 import { fetchHotelDetail } from '@/api/goods';
 import { TEMP_HOTEL_GALLERY } from '@/assets/tempImages';
 import { ErrorView, LoadingView } from '@/components/common/StateViews';
-import HomeIcon from '@/components/home/HomeIcon';
+import HomeIcon, { type HomeIconName } from '@/components/home/HomeIcon';
 import HotelAmenitiesTab from '@/components/hotel/HotelAmenitiesTab';
 import HotelDetailTabs from '@/components/hotel/HotelDetailTabs';
 import HotelGallery from '@/components/hotel/HotelGallery';
@@ -47,8 +50,9 @@ import HotelRoomsTab from '@/components/hotel/HotelRoomsTab';
 import { PAGE_PADDING, SECTION_GAP, colors, radius, shadows } from '@/config/theme';
 import { fonts } from '@/config/typography';
 import type { RootStackParamList } from '@/navigation/types';
-import { DETAIL_DEMO, DETAIL_TABS, type DetailTabKey } from '@/screens/hotel/detailDemo';
+import { DETAIL_DEMO, DETAIL_REVIEW_SUMMARY, DETAIL_TABS, type DetailTabKey } from '@/screens/hotel/detailDemo';
 import { useCommonStore } from '@/store/commonStore';
+import { nightsBetween, useRoomCartStore } from '@/store/roomCartStore';
 import { useSiteStore } from '@/store/siteStore';
 import type { GoodsDetail, GoodsSku } from '@/types/models';
 import { formatMoney } from '@/utils/format';
@@ -69,6 +73,15 @@ export default function HotelDetailScreen() {
   const showToast = useCommonStore((s) => s.showToast);
 
   const [tab, setTab] = useState<DetailTabKey>('overview');
+  /**
+   * 房型购物车(新稿 222:1428 / Room Cart 2659:11842)。
+   * 放在 `roomCartStore` 而不是本页 state —— 购物车页要读同一份,两份状态必然对不上。
+   */
+  const cartItems = useRoomCartStore((s) => s.items);
+  const cartToggle = useRoomCartStore((s) => s.toggle);
+  /** 房型卡加减器:0 会被 store 当作移出(与购物车页同一个 action,行为不会走偏) */
+  const cartSetQuantity = useRoomCartStore((s) => s.setQuantity);
+  const setCartContext = useRoomCartStore((s) => s.setContext);
   const propertyId = route.params?.propertyId;
   const [detail, setDetail] = useState<GoodsDetail | null>(null);
   const [loading, setLoading] = useState(Boolean(propertyId));
@@ -91,6 +104,29 @@ export default function HotelDetailScreen() {
     void loadDetail();
   }, [loadDetail]);
 
+  /**
+   * 评价整页底栏的「Choose my room」会带 `tab: 'rooms'` 回跳本页。
+   * 本页在栈里是**已挂载**的,`navigate` 只改 params 不重挂 —— 只在 useState 初值里读一次
+   * `route.params.tab` 会让这次回跳看起来没生效,所以跟着 params 同步。
+   */
+  useEffect(() => {
+    const next = route.params?.tab;
+    if (next) setTab(next);
+  }, [route.params?.tab]);
+
+  /**
+   * 同步购物车上下文:换了酒店 `setContext` 会清空车(跨物业没法下一单),
+   * 同一家则保留已选。购物车页的酒店名与日期也从这里来。
+   */
+  useEffect(() => {
+    setCartContext({
+      propertyId,
+      hotelName: detail?.goods_name ?? '',
+      checkIn: route.params?.checkIn,
+      checkOut: route.params?.checkOut,
+    });
+  }, [propertyId, detail?.goods_name, route.params?.checkIn, route.params?.checkOut, setCartContext]);
+
   const comingSoon = () => showToast(t('home.comingSoon'));
   /**
    * 选房一律进设计稿那套 4 步订房向导(Figma section 1675:5776)。
@@ -108,12 +144,63 @@ export default function HotelDetailScreen() {
       roomTypeId: sku?.id,
     });
 
+  /**
+   * Choose:把房型加进车并置 1 间(只在间数为 0 时出现,所以 `toggle` 在这里等同于「加入」)。
+   * 一并把卡片上要复用的封面与属性带进车里 —— 购物车页不再重新请求详情。
+   */
+  const chooseRoom = (
+    roomKey: string,
+    price: number,
+    sku?: GoodsSku,
+    extra?: { name: string; cover?: ImageSourcePropType; attrs: { key: string; icon: HomeIconName; label: string }[] },
+  ) =>
+    cartToggle({
+      roomKey,
+      name: extra?.name ?? roomKey,
+      price,
+      cover: extra?.cover,
+      attrs: extra?.attrs ?? [],
+      sku,
+    });
+
+  const pickedKeys = cartItems.map((item) => item.roomKey);
+  /** 房型卡的加减器要按 roomKey 取间数;未选的不在表里(卡片按 0 处理,显示 Choose) */
+  const cartQuantities = Object.fromEntries(
+    cartItems.map((item) => [item.roomKey, item.quantity]),
+  );
+  /** 角标与购物车页「Selected Rooms (n)」同口径:总间数(不是房型数) */
+  const cartRoomCount = cartItems.reduce((sum, item) => sum + item.quantity, 0);
+  /**
+   * 底栏合计与购物车页必须同口径 —— 都是 Σ 单价 × 间数 × 晚数。
+   * 设计稿画的是 1 晚,乘不乘看不出差别,但选了 2 晚就会两处对不上。
+   */
+  const cartNights = nightsBetween(route.params?.checkIn, route.params?.checkOut);
+  const cartTotal = cartItems.reduce(
+    (sum, item) => sum + item.price * item.quantity * cartNights,
+    0,
+  );
+
+  /**
+   * Continue:整车进订房向导(与购物车页 Check Out 同一入口)。
+   * 多选走 `trip/create`(1~10 个预订一次下单、券只消耗一次),所以这里不再只带第一个房型 ——
+   * 传给向导的 `propertyId` / `roomTypeId` 只是让它进「真实模式」拉商品详情,
+   * 真正下单的房型与间数由向导读同一份购物车决定。
+   */
+  const continueBooking = () => {
+    const real = cartItems.find((item) => item.sku);
+    const first = cartItems[0];
+    if (!first) return;
+    selectRoom(first.roomKey, real?.sku);
+  };
+
   if (loading) return <LoadingView />;
   if (error) return <ErrorView message={error} onRetry={() => void loadDetail()} />;
 
-  /** 设计稿 Rooms 页的底部价格栏是 hidden 的(每张房型卡自带 Select) */
+  /** Rooms 页签显示购物车栏(选中任一房型才出现),其余页签仍是起价栏 */
+  const showCartBar = tab === 'rooms' && pickedKeys.length > 0;
   const showBottomBar = tab !== 'rooms';
-  const bottomInset = showBottomBar ? BOTTOM_BAR_HEIGHT + insets.bottom : insets.bottom;
+  const bottomInset =
+    showBottomBar || showCartBar ? BOTTOM_BAR_HEIGHT + insets.bottom : insets.bottom;
   /**
    * 顶部图库:只收**可用**的图片地址(`resolveMediaUri` 会把相对路径补全、把脏值判掉 ——
    * 实际遇到过后台把 `cover_image` 填成 `'111'`,非空却加载不出来,只按「非空」判断会留白块)。
@@ -130,13 +217,28 @@ export default function HotelDetailScreen() {
   const address = detail?.address ?? t('hotels.results.demo.heritageBagan.address');
   const priceFrom = detail?.minPrice && detail.minPrice > 0 ? detail.minPrice : DETAIL_DEMO.priceFrom;
 
+  /**
+   * 评价总览的分数与条数:有真实详情就用 `reviewSummary`(`rating` 是 1-5,×2 换算成设计稿的
+   * 10 分制,与搜索结果页同口径);演示酒店(无 propertyId,detail 为 null)回落到设计稿数值 ——
+   * 与本页其余部分的兜底口径一致(图库 / 起价 / 房型都这么做)。
+   */
+  const reviewRating = detail?.reviewSummary?.rating;
+  const reviewCount = detail?.reviewSummary?.count;
+  const reviewScore =
+    typeof reviewRating === 'number' && Number.isFinite(reviewRating)
+      ? reviewRating * 2
+      : DETAIL_REVIEW_SUMMARY.score;
+  const reviewTotal = typeof reviewCount === 'number' ? reviewCount : DETAIL_REVIEW_SUMMARY.total;
+
   const renderTab = () => {
     switch (tab) {
       case 'rooms':
         return (
           <HotelRoomsTab
             onComingSoon={comingSoon}
-            onSelectRoom={selectRoom}
+            onChooseRoom={chooseRoom}
+            onChangeQuantity={cartSetQuantity}
+            quantities={cartQuantities}
             rooms={detail?.skus}
           />
         );
@@ -145,7 +247,15 @@ export default function HotelDetailScreen() {
       case 'nearby':
         return <HotelNearbyTab onComingSoon={comingSoon} />;
       case 'reviews':
-        return <HotelReviewsTab onComingSoon={comingSoon} />;
+        return (
+          <HotelReviewsTab
+            score={reviewScore}
+            total={reviewTotal}
+            propertyId={propertyId}
+            checkIn={route.params?.checkIn}
+            checkOut={route.params?.checkOut}
+          />
+        );
       case 'policies':
         return <HotelPoliciesTab />;
       default:
@@ -254,6 +364,39 @@ export default function HotelDetailScreen() {
           </Pressable>
         </View>
       ) : null}
+
+      {/* 购物车栏(新稿 2659:11490):Rooms 页签选中任一房型后出现 */}
+      {showCartBar ? (
+        <View style={[styles.bottomBar, { paddingBottom: 16 + insets.bottom }]}>
+          <View>
+            <Text style={styles.startAt}>{t('hotels.detail.totalPrice')}</Text>
+            <Text style={styles.price}>{formatMoney(cartTotal, currency)}</Text>
+            <Text style={styles.discount}>
+              {t('hotels.detail.discountToday', { percent: DETAIL_DEMO.discountPercent })}
+            </Text>
+          </View>
+
+          <View style={styles.cartActions}>
+            <Pressable
+              style={({ pressed }) => [styles.cartBtn, pressed && styles.pressed]}
+              onPress={() => navigation.navigate('RoomCart')}
+              hitSlop={6}
+            >
+              <HomeIcon name="cart" size={32} color={colors.primary} />
+              <View style={styles.cartBadge}>
+                <Text style={styles.cartBadgeText}>{cartRoomCount}</Text>
+              </View>
+            </Pressable>
+
+            <Pressable
+              style={({ pressed }) => [styles.continueBtn, pressed && styles.pressed]}
+              onPress={continueBooking}
+            >
+              <Text style={styles.continueText}>{t('hotels.detail.continue')}</Text>
+            </Pressable>
+          </View>
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -359,6 +502,49 @@ const styles = StyleSheet.create({
     fontSize: 10,
     lineHeight: 15,
     color: colors.emergencyFg,
+  },
+
+  /* ---- 购物车栏(2659:11490);与关怀模式 HotelDetailLiteScreen 的同名块同规格 ---- */
+  cartActions: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  cartBtn: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 12,
+    borderRadius: radius.btn,
+    borderWidth: 1,
+    borderColor: colors.primary,
+  },
+  /* 角标压在购物车图标右上角(设计稿 2659:11553:left 31 / top -8) */
+  cartBadge: {
+    position: 'absolute',
+    left: 31,
+    top: -8,
+    minWidth: 24,
+    paddingHorizontal: 4,
+    borderRadius: 99,
+    backgroundColor: colors.primary,
+  },
+  cartBadgeText: {
+    fontFamily: fonts.interBold,
+    fontSize: 12,
+    lineHeight: 24,
+    textAlign: 'center',
+    color: '#FFFFFF',
+  },
+  continueBtn: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 32,
+    paddingVertical: 16,
+    borderRadius: radius.btn,
+    backgroundColor: colors.primary,
+  },
+  continueText: {
+    fontFamily: fonts.interBold,
+    fontSize: 16,
+    lineHeight: 24,
+    textAlign: 'center',
+    color: '#FFFFFF',
   },
   cta: {
     alignItems: 'center',

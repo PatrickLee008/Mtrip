@@ -83,12 +83,6 @@ export const TEMP_ADDON_COVERS: Record<string, ImageSourcePropType> = {
   transfer: require('../../assets/images/temp/hotel/booking/addon-transfer.jpg'),
 };
 
-/**
- * 预订成功页的数字凭证二维码(设计稿 1675:6728,展示框 174x174)
- * —— 静态页阶段用导出的静态图,不引 qrcode 库;接口给出凭证串后改运行时生成
- */
-export const TEMP_VOUCHER_QR: ImageSourcePropType = require('../../assets/images/temp/hotel/booking/voucher-qr.png');
-
 /** 支付方式图标,键为 PAYMENT_METHODS 的 key(展示框 40x40;mmqr 是 22x34 的窄图) */
 export const TEMP_PAY_ICONS: Record<string, ImageSourcePropType> = {
   mmqr: require('../../assets/images/temp/hotel/booking/pay-mmqr.png'),

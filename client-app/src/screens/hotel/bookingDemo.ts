@@ -225,14 +225,6 @@ export const INSURANCE_LINKS = ['eligibility', 'terms', 'cancellation'] as const
 export const INSURANCE_DEFAULT_DAYS = 3;
 export const INSURANCE_DEFAULT_PERSONS = 1;
 
-/* ------------------------------------------------------------------ 成功页 */
-
-/** 凭证卡下方两枚胶囊(设计稿 1675:6739 / 1675:6741,底色略有差别) */
-export const VOUCHER_TAGS = [
-  { key: 'room', bg: '#DDE1FF' },
-  { key: 'breakfast', bg: '#DBE2FA' },
-] as const;
-
 /* ------------------------------------------------------------- 金额随日期/间数重算 */
 
 /**

@@ -959,9 +959,9 @@
           "breakfast": "优质早餐"
         },
         "perNight": "/ 晚",
-        "select": "选择",
         "bestseller": "热销",
-        "breakfast": "含早餐"
+        "breakfast": "含早餐",
+        "choose": "选择"
       },
       "amenityGroups": {
         "essentials": "基础设施",
@@ -1100,7 +1100,9 @@
             "body": "每日 07:00 至 20:00 开放,请穿着正规泳装。"
           }
         }
-      }
+      },
+      "totalPrice": "合计",
+      "continue": "继续"
     },
     "filter": {
       "title": "筛选",
@@ -1230,7 +1232,11 @@
         "agreeSeparator": "、",
         "privacy": "隐私政策",
         "agreeSuffix": "以及酒店的入住规定,并理解 mTrip 在本次预订中仅为中介代理。",
-        "agreeRequired": "请先勾选同意条款。"
+        "agreeRequired": "请先勾选同意条款。",
+        "selectedRooms": "已选房型({{rooms}})",
+        "editRooms": "修改房间",
+        "roomTimes": "× {{count}}",
+        "agreeNote": "继续即表示你同意服务条款、隐私政策以及该住宿的入住规定。"
       },
       "trip": {
         "stay": "第 {{index}} 段住宿",
@@ -1306,24 +1312,25 @@
       },
       "success": {
         "title": "预订成功",
-        "referencePrefix": "预订编号:",
-        "voucher": "您的电子凭证",
-        "summary": "预订摘要",
+        "confirmedTitle": "预订已确认！",
+        "confirmedDesc": "酒店已确认您的预订，房间已保留。",
+        "confirmingTitle": "预订确认中",
+        "confirmingDesc": "酒店正在确认您的预订请求。",
+        "travelWithUs": "与我们一同旅行",
+        "paymentStatus": "支付状态",
+        "bookingStatus": "预订状态",
+        "statusRoom": "（房间 {{index}}）",
+        "statusRoomTimes": "（房间 {{index}} × {{rooms}}）",
         "paid": "已支付",
-        "checkIn": "入住",
-        "checkOut": "退房",
-        "guests": "入住人",
-        "totalPaid": "实付金额",
-        "guestsValue": "{{adults}} 位成人,{{rooms}} 间房",
-        "download": "下载凭证",
+        "confirmed": "已确认",
+        "confirming": "确认中",
+        "bookingId": "预订编号：",
+        "idCopied": "预订编号已复制",
+        "bookingDetails": "预订详情",
+        "dateRange": "{{checkIn}} - {{checkOut}}",
         "viewBooking": "查看订单",
         "upsell": "准备好开启{{city}}之旅了吗?",
-        "upsellLink": "探索当地美食与玩乐",
-        "backHome": "返回首页",
-        "tags": {
-          "room": "豪华房",
-          "breakfast": "含早餐"
-        }
+        "upsellLink": "探索当地美食与玩乐"
       },
       "insurance": {
         "title": "旅行保障",
@@ -1405,6 +1412,13 @@
           "saveEreceipt": "保存电子回执"
         }
       }
+    },
+    "reviewsPage": {
+      "title": "评价 ({{reviews}})",
+      "empty": "暂无评价",
+      "anonymous": "匿名用户",
+      "outOfTen": "/10",
+      "replyFrom": "商家回复"
     },
     "lite": {
       "title": "酒店与民宿",
@@ -1519,6 +1533,26 @@
           }
         }
       }
+    },
+    "cart": {
+      "title": "我的房间",
+      "selected": "已选房型({{rooms}})",
+      "empty": "还没有选择房型",
+      "roomIndex": "第 {{index}} 间",
+      "addAnother": "再加一间",
+      "dateRange": "{{from}} - {{to}}(共 {{nights}} 晚)",
+      "noDate": "未选择日期",
+      "breakdown": "费用明细",
+      "roomSubtotal": "房费小计({{rooms}} 间 × {{nights}} 晚)",
+      "tax": "税费({{percent}}%)",
+      "service": "服务费({{percent}}%)",
+      "memberDiscount": "会员折扣({{percent}}%)",
+      "totalAmount": "合计金额",
+      "earnPoints": "可得 {{points}} 积分",
+      "back": "返回",
+      "checkout": "去结算",
+      "removeTitle": "移除该房型?",
+      "removeMessage": "确定要把这间房从购物车移除吗?"
     }
   }
 }

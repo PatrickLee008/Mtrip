@@ -10,7 +10,12 @@
  *     参数行  三格两端对齐:人数 / 床型 / 面积,图标 + Inter 500/12 `--text-2`
  *     设施行  上下各一条分隔线,中间等分若干格:图标 + Inter 400/10 `--text-2` 居中
  *     价格行  左划线原价 + 促销小字(Inter 600/10)、主价 Inter 600/16 主色 +「/ night」
- *            右 Select 按钮(主色底 / 圆角 16 / px16 py8 / Inter 500/14 白)
+ *            右 Choose 按钮(设计稿组件名 Add/Remove Cart Button,2863:7565):
+ *            主色底 / 圆角 12 / px16 py8 / Inter 600/16(行高 20)白
+ *
+ * **多选**:Choose 点一下把该房型加入底部购物车,按钮**就地换成加减器**,减到 0 变回 Choose。
+ * 设计稿 222:1428 三张卡画的都是未选态、**没给已选态的视觉**,所以已选态直接复用购物车页那只
+ * 加减器(`RoomStepper`,`2659:12366`)—— 同一件事在两个页面必须长一样,不自创第三种样式。
  *
  * 设计稿的 backdrop-blur 在 RN 无原生等价,只保留半透明底色(同图库)。
  */
@@ -20,6 +25,7 @@ import { Image, Pressable, StyleSheet, Text, View, type ImageSourcePropType } fr
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 
 import HomeIcon, { type HomeIconName } from '@/components/home/HomeIcon';
+import RoomStepper from '@/components/hotel/RoomStepper';
 import { colors, radius, shadows } from '@/config/theme';
 import { fonts } from '@/config/typography';
 
@@ -57,14 +63,20 @@ interface Props {
   promo?: string | null;
   price: string;
   perNightLabel?: string | null;
+  /** 未选态的按钮文案(Choose);已选态是加减器,没有文案 */
   selectLabel: string;
+  /** 购物车里这个房型的间数,0 = 未选(卡片本身无状态,由调用方给) */
+  quantity: number;
   bestsellerLabel?: string | null;
   favorite: boolean;
   /** 封面右下角是否带 360°/全景两枚按钮(设计稿只有前两张卡有) */
   viewer?: boolean;
   onPress: () => void;
   onToggleFavorite: () => void;
+  /** 点 Choose(只在 quantity 为 0 时出现):把房型加入购物车并置 1 间 */
   onSelect: () => void;
+  /** 加减器改间数;传 0 表示移出购物车(**不弹确认**,与购物车页的删除确认刻意不同) */
+  onChangeQuantity: (quantity: number) => void;
   /** 360°/全景按钮点击(设计稿对应 VR View / 3d View 两张二级页,未实现) */
   onOpenViewer?: () => void;
 }
@@ -86,12 +98,14 @@ export default function HotelRoomCard({
   price,
   perNightLabel,
   selectLabel,
+  quantity,
   bestsellerLabel,
   favorite,
   viewer = false,
   onPress,
   onToggleFavorite,
   onSelect,
+  onChangeQuantity,
   onOpenViewer,
 }: Props) {
   /** 渐变 id 要跟着卡片走,同屏三张卡共用一个 id 在 web 上会互相顶掉 */
@@ -239,12 +253,21 @@ export default function HotelRoomCard({
               {perNightLabel ? <Text style={styles.perNight}>{perNightLabel}</Text> : null}
             </View>
           </View>
-          <Pressable
-            style={({ pressed }) => [styles.selectBtn, pressed && styles.pressed]}
-            onPress={onSelect}
-          >
-            <Text style={styles.selectText}>{selectLabel}</Text>
-          </Pressable>
+          {/* 已选:就地换成购物车页那只加减器;减到 0(传 0)由调用方移出,按钮自然变回 Choose */}
+          {quantity > 0 ? (
+            <RoomStepper
+              quantity={quantity}
+              onIncrease={() => onChangeQuantity(quantity + 1)}
+              onDecrease={() => onChangeQuantity(quantity - 1)}
+            />
+          ) : (
+            <Pressable
+              style={({ pressed }) => [styles.selectBtn, pressed && styles.pressed]}
+              onPress={onSelect}
+            >
+              <Text style={styles.selectText}>{selectLabel}</Text>
+            </Pressable>
+          )}
         </View>
       </View>
     </View>
@@ -420,14 +443,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 16,
     paddingVertical: 8,
-    borderRadius: radius.lg,
+    borderRadius: radius.btn,
     backgroundColor: colors.primary,
   },
   selectText: {
-    fontFamily: fonts.interMedium,
-    fontSize: 14,
+    fontFamily: fonts.interSemi,
+    fontSize: 16,
     lineHeight: 20,
-    letterSpacing: 0.14,
     color: '#FFFFFF',
     textAlign: 'center',
   },

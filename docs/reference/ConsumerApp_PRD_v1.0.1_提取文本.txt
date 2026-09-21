@@ -1,0 +1,1473 @@
+
+## 
+## 
+## mTrip Product Requirements Document (PRD)
+
+
+## Consumer App (Hotel Booking Feature) -  v1.0.1
+
+
+
+
+
+
+
+## 
+Author: Mr. Aung Phyo Maw (Mario)
+Team: Product Team
+
+
+| Product Manager | Mr. Aung Khant Kyaw |
+| Engineering Lead/Team Lead | Mr. Li Sir |
+| Designer | Mr. Chit Ko Ko |
+| Approvers/Sign-Off | Mr. Kaung Htet Oo |
+
+
+PM Sprint Planner: mTrip Sprint Plan
+Status of PRD: In Progress
+### Table of Contents
+### 
+### 
+### 
+
+
+
+
+### Overview
+This Product Requirements Document (PRD) outlines the mTrip Hotel Booking feature for the User App. The first release targets Myanmar travelers and hotel partners, ensuring a smooth and user-friendly booking process. Users can find hotels, choose rooms, apply discounts, and pay through various methods. Refunds for eligible cancellations will go to the mTrip Wallet. After their stay, users can manage their hotel reviews and ratings. This PRD details the user journey from hotel search to post-stay feedback.
+### Problem
+Travelers in Myanmar struggle to find a local hotel booking platform that provides genuine reviews, detailed hotel info, good prices, special deals, and a smooth booking process. This makes it hard for users to select hotels that fit their needs and budget, while many local hotels lack online presence and chances to reach travelers. These issues lower user trust, increase booking hassle, and present an opportunity for mTrip to offer a reliable hotel booking platform designed for the Myanmar market.
+### Objectives
+Deliver a seamless and intuitive hotel booking experience that enables users to search, compare, and book accommodations quickly and effortlessly.
+Enhance booking confidence with AI-powered features by providing personalized hotel recommendations, AI-generated review summaries, and authentic verified guest reviews.
+Build a trusted end-to-end travel platform by integrating value-added services such as travel insurance, secure payments, and a modern user experience that increases customer satisfaction, booking conversions, and user retention.
+### Constraints
+Limited MVP scope and timeline – The initial release focuses on core hotel booking capabilities, with advanced features and future ecosystem services planned for subsequent phases.
+Dependency on third-party integrations – Features such as hotel inventory, pricing, payment gateways, travel insurance, and notifications rely on external partners and APIs, which may affect delivery timelines.
+AI feature maturity and data availability – AI recommendations and review summaries depend on the availability and quality of hotel, review, and user data, and will be continuously improved as the platform grows.
+### Persona
+Who are the target personas for this product, and which is the key persona?
+
+
+| Key Persona | Description Key Persona |
+| Leisure Traveler | Books hotels for vacations and wants a fast, easy, and trustworthy booking experience. |
+| Business Traveler | Books hotels for work and values speed, flexibility, and convenience. |
+| Family / Group Traveler | Books accommodations for multiple guests and needs an easy way to manage group bookings. |
+
+### Use Journey and Platform Workflow
+Scenario 1: Search & Book a Hotel
+The user searches for a destination, compares hotels, selects a room, completes payment, and receives a booking confirmation.
+Scenario 2: Discover Hotels with AI
+The user receives AI-powered hotel recommendations, reviews AI-generated summaries, and chooses the most suitable hotel based on their preferences.
+Scenario 3: Manage an Existing Booking
+User views booking details, modifies or cancels a reservation (if allowed), accesses booking confirmation, and receives status updates and notifications.
+
+
+
+
+
+
+Module 1: Overall Hotel Booking Journey & Booking Lifecycle + Multi Hotel Booking
+Diagram: End-to-End Hotel Booking User Journey Flow (Consumer App)
+
+Diagram: End-to-End Hotel Search & Discovery Workflow
+
+Figma UI: End-to-End Hotel Booking Process (Screen 1 to 10)
+
+
+High-Level Description
+
+This guide outlines the end-to-end user process flow for hotel booking in the mTrip Super App, covering steps 1 to 10.
+Click the Hotel icon to access the hotel booking feature.
+Search for hotels by entering your destination, travel dates, number of guests, and Myanmar Citizen pricing preference.
+View the hotel list based on your search criteria.
+Select a hotel to see detailed information.
+Choose your preferred room type.
+Fill in guest information for the booking.
+Check and confirm your details before proceeding.
+Complete the payment process.
+Receive confirmation of your booking.
+Access the My Booking page for booking management.
+Throughout this process, the chosen Myanmar Citizen pricing preference is consistently applied, ensuring a seamless experience from search to booking management.
+
+Module 1.1 : Multi-Hotel Booking
+Feature: Single Checkout → Separate Booking Transactions
+#### Feature Description
+The Multi-Hotel Booking feature allows users to book multiple hotels across different destinations or stay periods within a single checkout. Users complete one payment transaction, while the system creates individual hotel booking transactions for each selected hotel. Each booking is managed independently after payment, including booking confirmation, modification, cancellation, refund, settlement, and booking history.
+Note: This feature is subject to technical feasibility assessment with the Engineering Team before development.
+Functional Requirements for Multi Hotel Booking
+
+| Module | Requirement | Business Rule |
+| Trip Management | System shall create one Trip ID to group all selected hotel bookings. | One Trip may contain one or more hotel bookings. |
+| Booking | The system shall generate a unique Booking ID for each hotel booking. | Each booking follows the existing booking lifecycle independently. |
+| Checkout | Users shall complete one checkout for all selected hotels. | All selected hotels are displayed in one review page before payment. |
+| Payment | Users shall make one payment for all hotel bookings. | One payment transaction is linked to one Trip ID. |
+| Payment Success | The system shall create individual hotel bookings after successful payment. | Booking creation starts only after payment is confirmed. |
+| Booking Failure | If one hotel booking cannot be confirmed, the failed booking shall not affect successfully created bookings. | Only the failed booking is refunded. |
+| Booking Management | Users shall manage each hotel booking separately after payment. | View, modify, cancel, and track each booking independently. |
+| Promotion Coupon | The system shall allow one promotion coupon to be applied during checkout. | Coupon discount shall be allocated proportionally across all hotel bookings. |
+| Discount Allocation | The system shall store the allocated discount amount for each booking. | Required for refund calculation, merchant settlement, and reporting. |
+| Cancellation | Users may cancel individual hotel bookings. | Cancellation policy follows each hotel's policy. |
+| Refund | Refunds shall be processed only for the cancelled booking. | Refunds are credited to the customer's mTrip Wallet only. |
+| Merchant Settlement | Merchant settlement shall be processed independently for each booking. | Settlement occurs according to the agreed settlement schedule after eligible booking completion. |
+| Commission | Platform commission shall be calculated for each booking individually. | The commission follows the merchant contract. |
+| Notification | The system shall send booking confirmation for each hotel booking. | Payment confirmation is sent once; booking confirmations are sent separately. |
+| Trip History | Users shall view all hotel bookings under one Trip. | Trip page displays all booking statuses. |
+| Customer Support | The support team shall search bookings by Trip ID or Booking ID. | Individual bookings can be handled independently. |
+
+
+Promotion Coupon Requirements
+
+| Requirement | Description |
+| Coupon Scope | One coupon can be applied to the entire checkout. |
+| Allocation Method | Coupon discount shall be distributed proportionally across all hotel bookings based on booking value. |
+| Booking Amount | Each booking shall store its own original amount, discount amount, and final payable amount. |
+| Refund Calculation | Refund amount shall be calculated using the discounted booking amount. |
+| Settlement | Merchant settlement shall use the final booking amount according to the promotion sponsorship rules. |
+
+
+
+Merchant Settlement Requirements
+
+| Requirement | Description |
+| Settlement Unit | Settlement is processed per Booking ID. |
+| Settlement Timing | Settlement is processed after the booking becomes eligible for payout (subject to business policy). |
+| Settlement Amount | Settlement amount = Booking Amount − Commission − Platform-sponsored Promotion (if applicable). |
+| Settlement Status | Each booking maintains its own settlement status. |
+| Settlement Report | Finance shall generate settlement reports per booking and merchant. |
+
+Refund Requirements
+
+| Requirement | Description |
+| Refund Scope | Refund applies only to the cancelled or failed booking. |
+| Refund Method | Refund shall be credited to the customer's mTrip Wallet only. |
+| Refund Status | Refund status is tracked separately for each booking. |
+| Partial Refund | Other hotel bookings under the same Trip shall not be affected. |
+
+
+Booking Failure Requirements
+
+| Requirement | Description |
+| Partial Success | Successful bookings remain confirmed if another booking fails. |
+| Failed Booking | Failed booking status is set to Booking Failed. |
+| Refund | The system automatically initiates a refund for the failed booking amount. |
+| User Notification | Customers are notified which booking failed and which bookings were successfully confirmed. |
+
+
+Trip Management Requirements
+
+| Requirement | Description |
+| Trip Summary | Display all hotel bookings under one Trip. |
+| Trip Timeline | Display bookings in chronological check-in order. |
+| Booking Status | Show booking status for each hotel. |
+| Hotel Management | Users manage each hotel booking individually. |
+
+
+
+
+
+
+
+
+
+
+
+Flow Diagram: Multi-Hotel Booking Checkout (Single Payment + Separate Booking)
+
+#### Module 2: Hotel Search & Discovery + Long Stay
+Scenario 1: Search & Book a Hotel – User Journey Flow
+Search → Discover → Select → Customize → Checkout → Payment → Confirmation → Post Booking
+
+Expected Outcome
+The user successfully completes the hotel booking journey, receives a confirmed reservation, and can access booking details, notifications, and post-booking services through the mTrip app.
+Table 1: User Experience & Engagement Features
+
+| User Features | Communication |
+| • Saved Hotels
+• Saved Guest Information
+• User Preferences
+ (Language, Currency, Measurement Unit) | • Notifications
+• Live Chat & Customer Support |
+
+#### 
+
+
+
+
+
+
+
+
+
+
+
+#### Table 2: Smart & Growth Features (Future Roadmap)
+
+| Engagement | AI Services (Future) |
+| • Affiliate & Referral Program | • AI Hotel Assistant / • AI Review Summary |
+
+### 
+### Functional Requirements
+
+
+| Feature | Description |
+| Feature 1:  / Hotel Discovery & Booking | Enable users to search, compare, and book hotels through a seamless end-to-end booking journey, including hotel search, filters, room selection, guest information, pricing, payment, and booking confirmation. |
+| Feature 2:  / Booking Management & Travel Services | Allow users to manage bookings, receive notifications, save favorite hotels, access live customer support, purchase travel insurance, and participate in affiliate and referral programs. |
+| Feature 3:  / AI-Powered Travel Experience | Enhance the user experience with AI hotel recommendations, AI-generated review summaries, and an AI Hotel Assistant to help users make informed booking decisions. |
+
+
+Module 2.1 - Long-Stay Deals
+Overview
+The Long Stay Deals feature enables users to discover and book accommodations with exclusive discounts for extended stays. Unlike the standard hotel booking entry, long-stay is provided as a dedicated entry point on the mTrip Home page to increase visibility and promote long-stay campaigns.
+The booking journey remains largely consistent with the existing hotel booking flow, allowing users to enjoy a familiar booking experience while automatically receiving eligible long-stay discounts based on their stay duration.
+
+Objectives
+Promote long-stay accommodations through a dedicated Home page entry.
+Encourage longer bookings by displaying attractive discount tiers.
+Reuse the existing hotel booking workflow to reduce complexity.
+Automatically calculate and apply eligible long-stay discounts.
+Support long-stay exclusive promotions and coupons.
+## Entry Point of “Long Stay Deals” | “Long Stay”
+A dedicated "Long Stay" icon button shall be displayed on the mTrip Home page as a standalone service, separate from the existing Hotel entry.
+Selecting the Long Stay entry shall navigate users to the Long Stay Deals search experience.
+
+User Flow Diagram
+
+## Functional Requirements
+### 1. Long Stay Entry
+The system shall provide a dedicated “Long Stay” icon entry on the Home page.
+The entry shall:
+Be visually separated from the standard Hotel service.
+Navigate users to the Long Stay Deals page.
+Allow future campaign banners and promotional content.
+### 2. Long Stay Deals Search Page
+The system shall display a dedicated search page titled "Long-Stay Deals."
+The search form shall reuse the existing hotel search experience, including:
+Destination
+Check-in Date
+Check-out Date
+Guest & Room Selection
+Myanmar Citizen Selection
+### 3. Stay Duration Validation
+The system shall automatically calculate the total stay duration after users select their check-in and check-out dates.
+The calculated duration shall determine whether the booking qualifies for a long-stay deal.
+
+Example: 
+
+| Stay Duration | Eligible |
+| 2 Nights | No |
+| 5 Nights | No |
+| 7 Nights | Yes |
+| 14 Nights | Yes |
+| 30 Nights | Yes |
+
+The minimum qualifying duration shall be configurable through the Admin Portal.
+### 4. Long Stay Discount Tier
+The system shall support configurable discount tiers based on stay duration.
+Example configuration:
+
+| Stay Duration | Discount |
+| 7 Nights | Save 30% |
+| 14 Nights | Save 35% |
+| 30 Nights | Save 45% |
+| 60 Nights | Save 50% |
+
+The system shall determine the highest eligible tier automatically.
+Discount percentages and qualifying durations shall be configurable.
+### 5. Search Result Display
+Eligible hotels shall display Long Stay promotional information directly on the hotel card.
+Example information:
+Long Stay Deal badge
+Save XX%
+Original Price
+Discounted Price
+Total Savings
+Hotels that do not participate in Long Stay Deals shall continue displaying their normal pricing.
+
+6. Hotel Detail Page
+For eligible bookings, the Hotel Detail page shall display:
+Long Stay Deal badge
+Eligible discount percentage
+Original price
+Discounted price
+Total savings
+### 7. Long Stay Coupon
+The system shall support Long Stay exclusive coupons.
+Eligible users may:
+Claim Long Stay coupons
+View available Long Stay coupons
+Apply eligible coupons during checkout
+Coupon validation shall follow the existing Promotion & Coupon module.
+
+8. Checkout
+The checkout process shall remain identical to the standard Hotel booking flow.
+If the booking qualifies for Long Stay Deals, the pricing summary shall display:
+Original Price
+Long Stay Discount
+Coupon Discount (if applicable)
+Final Payable Amount
+All discounts shall be calculated before payment.
+9. Business Rules for Long Stay Deals 
+
+| Rule | Description |
+| BR-01 | Long Stay shall be accessed through a dedicated Home page entry. “Long Stay” |
+| BR-02 | The booking flow shall reuse the standard Hotel booking journey. |
+| BR-03 | Stay duration shall be calculated automatically based on check-in and check-out dates. |
+| BR-04 | Long Stay discounts shall only apply when the booking meets the configured minimum stay duration. |
+| BR-05 | Discount tiers shall be configurable through the Admin Portal. |
+| BR-06 | The highest eligible discount tier shall be applied automatically. |
+| BR-07 | Long Stay discounts shall be reflected throughout Search Results, Hotel Detail, Checkout, and Booking Confirmation. |
+| BR-08 | Long Stay coupons shall follow the existing coupon eligibility and validation rules. |
+| BR-09 | Hotels without configured Long Stay Deals shall continue displaying standard pricing. |
+| BR-10 | Long Stay discounts and coupons may be stackable or mutually exclusive based on campaign configuration defined in the Promotion module. |
+
+Module 3: Hotel Listing, Filter & Sorting
+Hotel Filter
+The Hotel Filter feature allows users to quickly refine hotel search results based on their preferences and requirements. Users can apply multiple filters at once, including:
+Price Range
+Star Rating
+Property Type
+Amenities & Facilities
+Breakfast Included
+Guest Review Score
+Free Cancellation
+Pay at Hotel
+Bed Type
+Room Features/View
+Location (Neighborhood/Township)
+Number of Bedrooms
+The system updates search results dynamically based on selected criteria, helping users find hotels that fit their budget and needs efficiently.
+For future flexibility, all filter options and criteria are configurable through the mTrip Admin Portal. Administrators can:
+Manage filter values
+Add new options
+Modify existing filters
+Disable or reorder values
+This ensures adaptability to changing business needs, merchant offerings, and market trends without requiring app updates.
+#### Hotel List Sorting
+The Hotel List Sorting feature allows users to reorder hotel search results based on their preferred priority, making it easier to find the most suitable accommodation. Users can select only one sorting option at a time. Once selected, the hotel list is refreshed while preserving the user's existing search criteria and applied filters.
+The supported sorting options include:
+Lowest Price
+Highest Price
+Nearest Distance
+Star Rating (High to Low)
+Top Guest Ratings
+To support future business and operational flexibility, all sorting options and their display order shall be configurable through the mTrip Admin Portal. Administrators can add, modify, reorder, or disable sorting options without requiring a mobile application update.
+
+Module 4: Hotel Detail & Room Selection + Chat with Property / Hotel
+The Hotel Detail & Room Selection module offers key information for informed bookings:
+Comprehensive hotel details: description, photo gallery, address with map, amenities, policies
+Check-in/check-out times and early check-in options
+Verified guest reviews
+Users can:
+Browse and compare room types
+View room-specific details: photos, name, bed type, size, occupancy, amenities, breakfast, cancellation policy, pricing
+This module ensures accurate, transparent information for easy comparison and selection of suitable accommodations.
+The Hotel Detail page includes the following information:
+Hotel Description
+Hotel Photos
+Hotel Address
+Interactive Google Map
+Amenities & Facilities
+Hotel Policies
+Check-in Time
+Check-out Time
+Early Check-in Availability
+Guest Reviews & Ratings
+Each room option displays the following information:
+Room Name
+Room Photos
+Bed Type
+Room Size
+Maximum Occupancy
+Room Amenities
+Breakfast Included
+Cancellation Policy
+Room Price & Booking Action
+To support future business and operational flexibility, hotel information, room details, amenities, policies, room attributes, and display content shall be configurable through the mTrip Merchant Portal and managed by merchants, while administrative configurations and moderation shall be available through the mTrip Admin Portal.
+
+Module 4.1 Chat with Property / Hotel
+Chat with Property is available on the Hotel Detail Page, allowing users to connect with the hotel before or after booking. 
+Key features include:
+“What is the check-in/check-out policy?”
+“Is free parking available?”
+“Is airport transfer available?”
+Predefined FAQs like:
+Users can send predefined messages or type their own.
+Conversation history is saved for easy reference on return visits.
+This feature provides a quick way to address hotel-related inquiries.
+
+Module 5: Guest Information
+Guest Information
+The Guest Information module enables users to input essential guest details for hotel bookings prior to payment. It supports multiple guests by allowing the addition of guest profiles based on room occupancy. The Lead Guest's information is auto-filled from the logged-in user's profile, with options for editing.
+Users can also choose from their saved Frequent Traveller list, avoiding repetitive data entry. Required guest information includes:
+First Name, Last Name
+Phone Number
+Email Address
+The system validates mandatory fields before proceeding to payment. Guest information is securely stored for booking purposes, and saved profiles can be managed through the Frequent Traveller feature for future use.
+
+
+
+
+
+
+
+
+
+
+
+
+
+Module 6: Pricing, Promotion & Insurance + My Coupons
+Diagram : mTrip Travel Insurance Workflow (Phase 2 | Not Included in MVP 1st Release)
+
+
+High-Level User Journey Flow
+
+Add On Service → Select Travel Insurance → Choose Coverage Duration & Guests → Review Insurance Details → Payment → Booking & Insurance Confirmation
+
+Expected Outcome
+The mTrip Insurance add-on allows users to purchase travel insurance during hotel bookings. Users can review coverage, premium, and benefits before adding it. If chosen, the premium is included in the total and shown in the Booking Summary, Payment, and Confirmation screens. Post-booking, the insurance is linked to the record for future reference and support. This feature boosts user confidence by offering travel protection and creates revenue opportunities through insurance partnerships.
+Module 6.1: My Coupons (Promotion Coupons + in App Landing Page - web)
+### Overview
+The Promotion & My Coupons feature allows users to find, claim, manage, and redeem coupons in the mTrip Super App. It offers a user-friendly experience for Myanmar users by reducing manual steps and enhancing coupon use and booking rates.
+
+The Promotion Center includes a dynamic web-based landing page within the mTrip app, enabling real-time updates of campaign pages, banners, and marketing content without app updates.
+Claimed coupons are saved in My Coupons, and eligible ones are applied automatically at hotel checkout for maximum discounts. Users can modify or remove the coupon before payment.
+
+Core Functional Requirements
+#### Promotion Center
+Provide an interactive promotion landing page embedded within the mTrip application.
+Display campaign banners and promotional activities.
+Support seasonal, weekly, monthly, and special event campaigns.
+Allow users to browse available promotional campaigns.
+Allow users to claim coupons directly from campaign pages.
+Redirect users to the relevant booking journey when selecting Use Now.
+#### My Coupons
+Users shall be able to:
+View all claimed coupons.
+Manually add a coupon using a promo code.
+View coupon details.
+Manage Available, Used, and Unavailable coupons.
+Navigate to the related booking flow using Use Now.
+#### Coupon Application
+Automatically validate eligible coupons during hotel checkout.
+Automatically apply the best available coupon.
+Display the applied coupon within the checkout page.
+Display the discount in the price breakdown.
+Allow users to change or remove the applied coupon before payment.
+No manual coupon selection should be required for standard bookings.
+Diagram: mTrip Super App – My Coupons Workflow
+Module 7: Booking Preferences & Saved Items + Lite Mode Feature
+
+Frequent Traveler Info Management
+Feature Overview
+The Frequent Traveler Info feature allows users to securely save and manage traveler information for faster bookings across hotel, flight, and future travel services. Users can manually enter traveler details or scan a passport to automatically populate supported fields.
+### Functional Requirements
+
+| Module | Requirement |
+| Feature Name | Frequent Traveler Info |
+| Location | Account → Frequent Traveler Info |
+| Description | Users can add, view, edit, and delete saved traveler profiles for future bookings. |
+
+#### Add Traveler
+The system shall allow users to create a new traveler profile.
+Required Fields
+Nationality
+First Name
+Last Name
+ID Type
+NRC
+Passport
+Other ID
+ID Number
+Expiration Date (for Passport or applicable ID types)
+#### Passport Scan
+The system shall provide a Scan Passport button.
+When a passport is successfully scanned, the system shall automatically populate:
+Passport Number
+Passport Expiration Date
+First Name
+Last Name
+Users may manually edit any auto-filled information before saving.
+#### Traveler List
+The system shall display all saved traveler profiles as a list.
+Each traveler card shall display:
+Full Name
+Nationality
+ID Type
+ID Number (partially masked)
+Users may tap a traveler card to view its details.
+#### Delete Traveler
+The system shall support two methods for deleting a traveler profile.
+##### Method 1 — Swipe to Delete
+The user swipes the traveler card to the left.
+A Delete action is displayed.
+User taps Delete.
+The traveler profile is permanently removed.
+A toast message is displayed:
+Deleted
+The traveler card is removed from the list.
+##### Method 2 — Delete from Detail Page
+The user opens a traveler profile.
+Scrolls to the bottom.
+Taps Delete Traveler.
+The system deletes the traveler profile.
+Toast message:
+Deleted
+The user is returned to the traveler list.
+The deleted traveler no longer appears.
+### Business Rules
+A user may save multiple traveler profiles.
+Traveler information is stored securely within the user's account.
+Passport scanning is optional.
+Auto-filled information can be edited before saving.
+Deleted traveler profiles cannot be recovered.
+#### Module 7 : Feature 3 Lite Mode (Global UI Experience)
+Lite Mode is a user-friendly feature in the mTrip Consumer App, aimed at simplifying the interface for users with limited digital experience, especially in Myanmar. It provides larger touch targets, improved readability, and fewer distractions while maintaining the same functionality and services as the standard interface.
+Users can switch between Lite Mode and Full Version Mode through two entry points:
+Homepage – Floating Action Button (FAB)
+A dedicated FAB is available on the homepage for quick access.
+Users can tap the FAB to switch between Lite Mode and Full Version Mode.
+The FAB reflects the user's current mode and provides a simple way to switch back and forth at any time.
+Profile > Settings
+Users can manually enable or disable Lite Mode from Profile > Settings.
+This provides a secondary entry point for users who prefer to manage the mode through app settings.
+Once Lite Mode is activated, it applies globally throughout the app until the user switches back to Full Version Mode. The selected mode remains consistent across all supported screens and MVP features.
+Lite Mode is implemented as a global presentation layer, meaning it does not remove or change the underlying functionality or services. All MVP features should support Lite Mode to ensure a consistent, accessible, and user-friendly experience across the mTrip Consumer App.
+## Module 7 - Feature 2: Saved Hotels
+### Feature Overview
+The Saved Hotels feature allows users to manage their favorite hotels for quick access and future bookings.
+### Functional Requirements
+
+| Module | Requirement |
+| Feature Name | Saved Hotels |
+| Location | Account → Saved Hotels |
+| Description | Displays all hotels saved by the user. |
+
+#### Saved Hotel List
+The system shall display all saved hotels in a vertical list.
+Each hotel card shall display:
+Hotel Image
+Hotel Name
+Location
+Star Rating (if available)
+Users may tap a hotel card to open the hotel detail page.
+#### Delete Saved Hotel
+The system shall support swipe-to-delete.
+##### Swipe Action
+The user swipes a hotel card to the left.
+A Delete icon appears.
+The user taps the Delete icon.
+The hotel is removed from the saved list.
+A toast message is displayed:
+Removed from Saved Hotels
+The hotel card disappears from the list.
+### Business Rules
+Users may save an unlimited number of hotels.
+Deleted hotels can be saved again from the hotel detail page.
+Removing a hotel from Saved Hotels does not affect any bookings or booking history.
+Saved Hotels are synchronized with the user's account across supported devices.
+
+Module 8: Payment (Settlement) 
+Overview
+The Campaign Funding & Settlement Workflow allows mTrip to efficiently track and allocate promotion costs. Successful coupon redemptions automatically update the campaign budget and prepare settlement data for Finance and merchants, ensuring clear visibility and simplifying financial reconciliation.
+The Hotel Booking feature integrates Payment, Promotion, and Settlement workflows, applying eligible promotions, processing payments, and preparing settlement data for merchants. It maintains accurate records while enabling real-time budget tracking and automated cost allocation for a smooth customer booking experience.
+### Sample mTrip Campaign Expense Record
+
+| Booking No. | Campaign | Discount (MMK) | mTrip Pays | Merchant Pays | Partner Pays | Status |
+| BK10001 | New User Campaign | 20,000 | 20,000 | 0 | 0 | Completed |
+| BK10015 | Summer Sale | 30,000 | 15,000 | 15,000 | 0 | Completed |
+| BK10032 | Hotel Week | 40,000 | 0 | 40,000 | 0 | Completed |
+| BK10058 | Bank Partner Promo | 50,000 | 0 | 0 | 50,000 | Completed |
+
+
+Settlement Architecture Diagram (System Architecture)
+
+High Level Description
+After booking completion, the Settlement Engine applies promotion funding rules and allocates funds to the Platform Commission, Partner Commission Payable, and Merchant Settlement Payable accounts, while the Refund Engine handles cancellation and refund processing.
+Settlement Decision Flow (Business Rules)
+
+Financial Settlement Matrix
+
+| Scenario | Customer Payment | Hotel Settlement | mTrip Commission | Customer Refund |
+| Successful Hotel Booking | Hotel Booking Amount | Hotel Amount − Commission / (e.g., MMK 50,000 −10%) | Commission deducted based on merchant agreement (e.g., 10%) | Not Applicable |
+| Customer Cancels (Free Cancellation) | Paid | No Settlement | No Commission | 100% Refund to mTrip Wallet |
+| Customer Cancels (Partially Refundable) | Paid | Settled according to hotel cancellation policy | Commission applied according to merchant agreement | Partial Refund to mTrip Wallet |
+| Customer Cancels (Non-refundable) | Paid | Settled according to hotel cancellation policy | Commission retained according to merchant agreement | No Refund |
+| Hotel Cancels Booking | Paid | No Settlement | No Commission | 100% Refund to mTrip Wallet |
+| Payment Failed | Payment Unsuccessful | No Settlement | No Commission | No Charge |
+
+8.3 Refund Settlement Matrix
+
+| Scenario | Refund Amount | Refund Method | Settlement Action |
+| Customer Cancels (Free Cancellation) | 100% | mTrip Wallet | No settlement to hotel merchant |
+| Customer Cancels (Partially Refundable) | According to hotel cancellation policy | mTrip Wallet | Settlement adjusted according to refundable amount |
+| Customer Cancels (Non-refundable) | No Refund | Not Applicable | Hotel settlement proceeds according to merchant agreement |
+| Hotel Cancels Booking | 100% | mTrip Wallet | Hotel settlement cancelled |
+| Payment Failed | 100% (if payment captured) or No Charge | Original payment reversal or automatic void | No settlement |
+
+
+### Business Rules
+Customers make a single payment to mTrip for the hotel booking.
+mTrip deducts the agreed commission before settling the remaining amount to the hotel merchant.
+Merchant settlement is processed according to the configured settlement cycle (e.g., weekly, bi-weekly, or monthly).
+Hotel settlement is processed only for completed bookings after the guest has checked out.
+Refund eligibility follows the hotel's cancellation policy.
+All approved refunds are credited to the customer's mTrip Wallet.
+Cancelled bookings that are fully refunded are excluded from merchant settlement.
+Settlement reports shall be generated for Finance and hotel merchants for reconciliation purposes.
+Each hotel merchant shall have an independently configurable settlement cycle managed through the Admin Portal.
+The system shall support different settlement cycles for different hotel merchants (e.g., daily, weekly, bi-weekly, monthly, or specific settlement dates).
+The settlement engine shall automatically process settlements according to each merchant's configured settlement schedule without affecting other merchants.
+Settlement batches shall group eligible booking transactions based on each merchant's configured settlement cycle.
+The system shall maintain accounting entries for every financial transaction, including booking payments, commissions, merchant payables, settlement payouts, refunds, adjustments, taxes, fees, and promotional transactions.
+Promotion-related transactions shall record the promotion funding source (e.g., Merchant-funded, mTrip-funded, Shared-funded, or Partner-funded) to ensure accurate settlement and accounting.
+When promotions are applied, the system shall automatically calculate and allocate promotional costs according to the configured funding responsibility before determining the merchant's final settlement amount.
+Every financial transaction shall generate auditable accounting records to support reconciliation, financial reporting, and auditing.
+The system shall maintain a complete audit trail of settlement calculations, adjustments, payout status, promotion funding, and accounting history for every booking transaction.
+The settlement engine shall support multiple payable parties (e.g., Hotel Merchant, Agent, Affiliate, or External Partner) based on the configured commission and settlement rules.
+Settlement Business Scenarios
+Scenario 1 – Successful Booking (Shared-funded Promotion)
+
+| Stakeholder / Balance | Debit (-) | Credit (+) | Balance / Outcome | Remarks |
+| Customer | 950,000 | - | -950,000 | Customer pays |
+| Platform Escrow | - | 950,000 | +950,000 | Holds customer payment |
+| Merchant Settlement Payable | 875,000 | - | 875,000 payable | Hotel receives payment after commission and merchant-funded promo |
+| Platform Revenue | - | 75,000 | +75,000 | 10% commission (100,000) - 25,000 mTrip promotion share |
+| Partner Commission Payable | 30,000 | - | 30,000 payable | 3% agent commission from mTrip revenue |
+| Merchant Campaign Contribution | 25,000 | - | Merchant subsidy | Merchant-funded promotion |
+| mTrip Campaign Expense | 25,000 | - | Marketing expense | mTrip-funded promotion |
+
+Scenario 2 – Customer Cancels Before Settlement
+
+| Stakeholder / Balance | Debit (-) | Credit (+) | Remarks |
+| Platform Escrow | 950,000 | - | Reverse escrow |
+| Customer Wallet | - | 950,000 | Refund to mTrip Wallet |
+| Merchant Settlement | 0 | 0 | No settlement |
+| Platform Revenue | 0 | 0 | No revenue recognized |
+| Partner Commission | 0 | 0 | No commission |
+| Campaign Budget | Depends on business rule | Usually no consumption |  |
+
+Scenario 3 – Merchant-funded Promotion
+Promotion = 100,000 MMK 
+
+| Stakeholder | Impact |
+| Customer | Pays 900,000 |
+| Merchant | Promotion cost 100,000 |
+| mTrip | Still earns 100,000 commission |
+| Agent | Gets 30,000 |
+| Merchant Receives | 800,000 |
+
+Scenario 4 – mTrip-funded Promotion
+Promotion = 100,000 MMK 
+
+| Stakeholder | Impact |
+| Customer | Pays 900,000 |
+| Merchant | Receives 900,000 |
+| mTrip | Commission 100,000 - Promotion 100,000 = 0 |
+| Agent | 30,000 (if still applicable) |
+| Marketing | Expense 100,000 |
+
+Scenario 5 – Referral Reward (50,000 MMK Wallet Credit)
+
+| Stakeholder | Debit (-) | Credit (+) | Remarks |
+| mTrip Marketing / Reward Budget | 50,000 | - | Referral campaign expense |
+| Customer Wallet | - | 50,000 | Wallet credit issued after successful booking |
+
+
+Module 9: Booking Confirmation & Booking Management
+Diagram: No. 1 Complete Payment & Booking Confirmed Work flow
+
+Expected Outcome
+The user initiates the payment process after selecting a payment method. If the user taps the Back button while the payment is still being processed, the system displays a confirmation dialog asking whether the user wants to continue the payment or change the payment method.
+If the user selects Continue to Pay, the payment processing continues, and the system checks the payment status until it is completed.
+If the user selects Change Payment Method, the user is redirected to the Payment Method Selection page to choose another payment method and restart the payment process.
+Once the payment is successfully completed, the system displays the Booking Confirmation page. After booking confirmation, the user is still allowed to update Contact Information, Guest Information, and Special Requests, subject to the hotel's modification policy.
+
+Key Business Rules
+Payment
+Users must select one payment method before clicking Pay Now.
+During payment processing, users can return and change the payment method.
+Payment status remains Confirming until the gateway confirms the transaction.
+Users may manually refresh the payment status. 
+Booking Confirmation
+After successful payment, the booking status changes to Confirmed.
+A booking confirmation is sent to the registered email.
+Users can resend the confirmation email.
+Only Contact Information, Guest Information, and Special Requests can be modified after confirmation (subject to hotel policy).
+
+
+
+
+Diagram: No. 1.1 Booking Cancellation Journey
+Overall Flow: Payment → Confirmation → Cancellation → Refund
+
+Hotel Booking Cancellation
+
+Cancellation eligibility follows the hotel's cancellation policy.
+The cancellation page displays:
+### Cancellation Fee
+### Refund Amount
+### Cancellation Reason
+### Users must select one cancellation reason before confirming. 
+### Refund
+### After cancellation, the booking status changes to Cancelled.
+### The refund request is initiated.
+### The booking details page displays:
+### Refund Status (e.g., Refund Processing)
+### Next Step
+### Booking Total
+### Price Details
+### Cancellation Policy
+### Booking Details
+### Users can only get refund to their mTrip wallet account.
+
+
+
+
+
+
+
+
+
+
+
+
+
+Diagram: Case No. 2 (Error Case), Booking Confirmation Failed by Merchant Work Flow
+
+Overall Flow: Payment Success → Booking Confirmation Failed (By Hotel  Merchant)
+### 
+
+Exception Handling – Hotel Unable to Honor Booking 
+
+High-Level Description
+This scenario describes how the system handles situations where a hotel is unable to fulfill a confirmed reservation due to operational or unforeseen circumstances. Since these events are uncommon and typically require manual coordination, they are managed as an exception process rather than a standard user booking flow. 
+Possible Reasons
+Hotel overbooking
+Room unavailable
+Hotel maintenance or temporary closure
+Force majeure (e.g., natural disaster, government restrictions)
+Hotel operational issues
+Supplier-initiated cancellation 
+Business Rules
+The hotel or supplier must notify mTrip when a confirmed booking cannot be honored.
+The Operations or Customer Support team reviews and verifies the cancellation request.
+The customer is notified immediately through push notification, email, and in-app notification.
+Customer Support may assist the customer in finding an alternative hotel, subject to availability and business policy.
+If an alternative booking cannot be arranged or is declined by the customer, the booking will be cancelled and a full refund will be initiated.
+No cancellation fee shall be charged to the customer for hotel-initiated cancellations.
+The refund will follow the standard refund processing workflow and status tracking.
+All cancellation activities shall be recorded in the booking history for audit purposes.
+Expected Outcome
+The customer is informed promptly when a confirmed booking cannot be fulfilled by the hotel. The Operations team coordinates the resolution by assisting with an alternative booking where possible or initiating a full refund if no suitable replacement is available. The booking status, refund status, and communication history are updated to ensure transparency and provide complete tracking for both the customer and support teams.
+
+Diagram: Case No. 3 ~ Cancel Pending Booking (Pay at Hotel)
+
+Pending Payment → Cancel / Timeout
+
+#### Expected Outcome
+If the user taps Cancel Booking or the payment countdown timer expires before the payment is completed, the pending booking will be cancelled.
+When cancelling the booking, the user is required to select a cancellation reason and tap the Cancel Booking button. The system then cancels the pending booking since no payment has been completed.
+After the cancellation is successful, the system will:
+Update the booking status to Cancelled.
+Automatically release the temporarily reserved room inventory back to the hotel's available inventory.
+Display the Booking Cancelled page with the cancellation details and a Book Again button, allowing the user to return to the hotel details page and create a new booking if desired.
+Module 10: Notification Center + Booking Risk Management & Appeal
+
+Notification Channel Overview
+The Notification Management module keeps users informed throughout the hotel booking lifecycle by delivering timely updates via multiple communication channels.
+Notifications are triggered automatically based on predefined booking events and may be delivered through Push Notifications, In-App Notifications, SMS, and Email, depending on the event type and business requirements.
+The notification system aims to:
+Keep users informed of important booking updates.
+Improve customer engagement and post-booking experience.
+Reduce customer support inquiries by providing proactive communication.
+Support additional operational services such as call center follow-up when required.
+
+
+
+Notification Channel Matrix
+
+| Event | Push | In-App | SMS | Email | Additional Service |
+| Hotel Booking Confirmed | ✅ | ✅ | ✅ | ✅ | CC Follow-up |
+| Hotel Booking Cancelled | ✅ | ✅ | ✅ | ✅ | CC Follow-up |
+| “Write a Review” Request | ✅ | ✅ | Optional | ✅ | — |
+
+Notification Event Specifications
+
+| Event | Trigger | Push Notification | In-App Notification | SMS | Email |
+| Hotel Booking Confirmed | Payment is successful and booking status changes to Confirmed. | Notify the user that the hotel booking has been confirmed and provide quick access to booking details. | Display booking confirmation with a link to the booking voucher in My Bookings. | Send a confirmation message including the booking ID. | Send a confirmation email with a booking summary and booking voucher. |
+| Hotel Booking Cancelled | Booking is cancelled by the user or hotel. | Notify the user that the booking has been cancelled. | Display cancellation status and refund information. | Send cancellation confirmation with refund reference. | Send cancellation confirmation with refund amount, refund method, and estimated processing time. |
+| Review Request | Automatically triggered 1 day after check-out if no review has been submitted. | Invite the user to rate and review their stay. | Display a reminder to submit a hotel review. | (Optional) Send a reminder via SMS. | Send an email requesting the user to share their hotel experience. |
+
+## Business Rules
+Notifications shall be triggered automatically by system events.
+A single event may trigger multiple notification channels simultaneously.
+Push and In-App notifications shall be enabled by default for all users.
+SMS notifications shall be sent only for important booking-related events or when enabled by business configuration.
+Email notifications shall include booking details and downloadable booking vouchers where applicable.
+Users shall receive “write a review” request only once per completed booking.
+Review request notifications shall not be sent if a review has already been submitted.
+Notification templates shall support localization and multiple languages.
+Notification content shall support dynamic variables (e.g., Hotel Name, Booking ID, Check-in Date, Guest Name, Refund Amount).
+## Module 10.1: Booking Risk Management & Appeal
+User Fraud Management
+To protect the mTrip platform from abuse while maintaining a fair user experience, the system shall implement a configurable multi-level fraud management mechanism based on user behavior, booking patterns, and cancellation history. Fraud detection rules are evaluated automatically using configurable thresholds managed through the mTrip Admin Portal, while the Operations or Risk Management team reviews flagged accounts and performs manual enforcement actions when necessary.
+#### Level 1 – Warning
+Users who exceed the configured fraud threshold will receive an in-app warning regarding unusual booking or cancellation activities. No feature restrictions are applied at this stage, and the user's activities continue to be monitored.
+#### Level 2 – Account Suspension
+If the user's fraud score reaches the next configured threshold, the system shall automatically apply an account suspension. Suspended users cannot use the app until the suspension is removed through a successful appeal or an administrative decision.
+#### Appeal Process 
+Users under account suspension  may submit an appeal through the application by providing:
+## A written explanation.
+## Supporting attachments (photo or file). [can attach screenshots or files (up to 20 MB).]
+## The Operations or Risk Management team shall review the appeal together with the user's booking history and fraud indicators. Based on the review, administrators may:
+## Remove the feature restriction.
+## Maintain the restriction.
+## Escalate the account to Banned status if fraudulent activity is confirmed.
+## The user shall be notified of the appeal result within the application.
+#### Banned Account
+For confirmed or repeated fraudulent activities, administrators may permanently ban the user account. Once banned:
+## An account suspension alert shall be displayed upon login.
+## All application features shall be disabled.
+## The user may only log out of the application.
+#### Fraud Detection Rules
+## The fraud detection engine shall support configurable rules and thresholds, including but not limited to:
+## Excessive booking cancellations within a configurable period.
+## Cancellation rate exceeding the configured threshold.
+## Multiple bookings for the same hotel on the same stay dates exceeding the configured threshold.
+## Additional fraud rules defined by the Operations or Risk Management team.
+## The mTrip Admin Portal shall provide fraud management capabilities, including:
+## Fraud threshold and rule configuration.
+## Dashboard of flagged users.
+## Fraud level (Warning, Feature Restriction, Banned).
+## Fraud triggers history and reasons.
+## Booking and cancellation history.
+## Same hotel / same stay date booking detection.
+## Appeal review queue with submitted explanations and attachments.
+## Administrative actions to approve appeals, maintain restrictions, remove restrictions, suspend users, or ban users.
+## Fraud Management State Transition Flow: Normal → Warning → Feature Restriction → Appeal → (Approved → Normal) / (Rejected → Restricted) / (Escalated → Banned)
+### Refund Policy & Platform Fee Transparency
+## To promote transparency, mTrip shall provide an online Refund Policy that is accessible before and after booking. During checkout, users shall be able to access a "What is the Platform Fee?" or "Convenience Fee" information link explaining how refunds are calculated.
+## The Refund Policy shall clearly state that:
+## No Platform Fee is charged during the initial booking payment.
+## The Platform Fee is deducted only when the customer initiates a booking cancellation, subject to the Platform Fee policy.
+## Hotel cancellation charges, where applicable, are determined by the hotel's cancellation policy.
+## The remaining eligible refund amount is credited to the customer's mTrip Wallet.
+## Refund processing typically requires 3–7 business days.
+## Refund examples may be provided to help users understand refund calculations.
+## This information ensures users understand the refund policy before confirming their booking, improves transparency throughout the booking journey, and helps reduce refund-related disputes.
+## Diagram: Booking Cancellation Flow  (+ Platform Fee)
+
+## Cancellation, Refund & Platform Fee Policy
+## No platform fee is charged for hotel bookings at checkout; customers only pay the hotel amount.
+## If the booking is cancelled, the system shall calculate the refundable amount based on the hotel's cancellation policy. Before processing the refund, the system shall deduct the applicable platform fee (convenience fee) and any hotel cancellation charges, if applicable. The remaining eligible refund amount will then be credited to the customer's mTrip Wallet.
+## Refunds are processed solely to the mTrip Wallet and may take 3–7 business days. Customers will receive a notification once the refund is complete.
+
+Platform Fee Applicability
+
+| Scenario | Platform Fee | Business Rule |
+| Booking Payment Completed (Active Booking) | 0 (Not Charged) | No Platform Fee is charged when the customer successfully completes the hotel booking payment. The booking remains active until check-in, completion, or cancellation. |
+| Customer-Initiated Cancellation | ✅ Applies | The Platform Fee shall be deducted from the refundable amount before the refund is processed to the customer's mTrip Wallet. |
+| Payment Timeout (Booking Not Confirmed) | ❌ Not Applied | No Platform Fee shall be charged if the booking is automatically cancelled due to payment timeout before confirmation. |
+| Hotel Rejection | ❌ Not Applied | No Platform Fee shall be charged if the hotel is unable to accept or confirm the booking. |
+| System Booking Failure | ❌ Not Applied | No Platform Fee shall be charged if the booking fails due to a system or technical issue. |
+| Merchant-Initiated Cancellation | ❌ Not Applied | No Platform Fee shall be charged if the merchant or hotel cancels the confirmed booking. |
+
+
+Module 11: Reviews, Ratings & AI Review Summary
+
+High-Level Description
+Users can submit a review and rating after completing their hotel stay. The review includes an overall rating, category ratings for Cleanliness, Location, Service, and Amenities, traveller type,  written review content, and up to 10 photos.
+
+Traveler Types:
+Solo
+Couple
+Family
+Friends
+Business
+Reviews require mTrip Admin approval before publication.
+Hotel merchants can reply to published reviews only.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+User Review & Rating Workflow Diagram
+
+
+
+
+
+
+Review & Rating Permission Matrix Table
+
+| Action Owner | Can Submit | Can Approve/Reject | Can Edit | Can Reply | Can Delete |
+| Customer | ✅ | — | ❌ | ❌ | ❌ |
+| mTrip Admin | — | ✅ | ❌ | — | ✅ |
+| Hotel Merchant | — | ❌ | ❌ | ✅ | ❌ |
+
+
+Hotel Rating Score & Label Criteria
+
+| Score Range | Display Label | Criteria / Meaning |
+| 9.0–10.0 | Exceptional | Outstanding experience |
+| 8.0–8.9 | Excellent | Excellent experience |
+| 7.0–7.9 | Very Good | Very good experience |
+| 6.0–6.9 | Good | Generally good experience |
+| 5.0–5.9 | Average | Acceptable experience |
+| 4.0–4.9 | Below Average | Below expected standard |
+| 3.0–3.9 | Poor | Multiple problems |
+| 2.0–2.9 | Very Poor | Significant problems |
+| 1.0–1.9 | Terrible | Extremely poor experience |
+
+Display Label = Label assigned based on the final Overall Rating score range.
+
+No approved reviews: Display “New · No reviews yet” instead of a numerical rating.
+Rating is calculated only from approved and published reviews.
+
+Review Rating Score Calculation
+Each user rates the hotel using 5 rating categories, with each category scored from 1 to 5 points.
+
+| Category | Score Range |
+| Overall | 1–5 |
+| Cleanliness | 1–5 |
+| Location | 1–5 |
+| Service | 1–5 |
+| Amenities | 1–5 |
+| Maximum Total | 25 |
+
+##### Calculate Each User's Review Score
+The system adds the user's scores from all 5 categories.
+Formula: User Review Score = (Total Category Score ÷ 25) × 10
+The result is converted from a 5-point category system to a 10-point review score.
+Example:
+
+| Category | User Score |
+| Overall | 5 |
+| Cleanliness | 4 |
+| Location | 5 |
+| Service | 4 |
+| Amenities | 4 |
+| Total | 22 / 25 |
+
+Calculation: (22 ÷ 25) × 10 = 8.8
+Therefore, the user's review score is 8.8 / 10.
+##### 
+##### 
+##### 
+##### 
+##### Calculate the Hotel's Overall Rating
+The hotel's overall rating is calculated using the average of all approved user review scores.
+Formula: Hotel Overall Rating = Sum of all User Review Scores ÷ Number of Approved Reviews
+Example:
+
+| User | User Review Score |
+| User 1 | 8.8 |
+| User 2 | 9.2 |
+| User 3 | 7.6 |
+| User 4 | 8.4 |
+
+Calculation: (8.8 + 9.2 + 7.6 + 8.4) ÷ 4 = 8.5
+Therefore: Hotel Overall Rating = 8.5 / 10
+The hotel rating is displayed to 1 decimal place.
+#####  Review Eligibility for Hotel Rating
+Only approved and published reviews are included in the hotel rating calculation.
+Rejected, unpublished, or deleted reviews are not included.
+If the hotel has no approved reviews, display “New · No reviews yet” instead of a numerical rating.
+When the first approved review is published, the hotel rating is calculated using that review.
+The hotel rating is recalculated whenever a new approved review is published or an existing approved review is removed.
+
+
+
+
+Module 12: AI Hotel Assistant  (Phase 2 | Not included in 1st Release)
+Diagram 3: AI Assistant User Journey
+
+### High-Level Journey
+Launch AI → Ask or Select Question → AI Understands Intent → AI Assists → Continue to Relevant Service
+### Expected Outcome
+The user successfully interacts with the mTrip AI Assistant to obtain personalized travel recommendations, compare hotels, translate languages, recognize images, and access intelligent travel assistance, enabling seamless navigation across mTrip services.
+Module 13: Live Chat & Customer Support
+Overview
+The Customer Support Chat module offers quick help for hotel booking inquiries before, during, and after stays. It starts with a Chatbot/AI Assistance for common issues. If unresolved, users can connect with a Live Customer Support Agent. Chat sessions stay active and can be resumed from Messages.
+## Objectives
+Provide fast self-service support for common booking inquiries.
+Reduce customer support workload through automated responses.
+Allow users to quickly access booking-specific support.
+Provide seamless escalation to live customer support.
+Preserve chat history for ongoing conversations.
+High-Level User Journey 
+
+### Functional Requirements for Customer Support Module
+
+| Feature | Requirement |
+| Welcome Screen | Display a welcome message when the support chat is opened. |
+| Booking Selection | Allow users to select a current or previous booking for contextual support. |
+| General Inquiry | Allow users to start a support session without selecting a booking. |
+| Suggested Questions | Display predefined FAQs related to the selected booking or general inquiries. |
+| Chatbot | Provide automated responses for common customer support questions. |
+| Live Agent | Allow users to connect with a live Customer Support Agent when additional assistance is required. |
+| Chat History | Save chat history and allow users to continue previous conversations. |
+| Finish Session | Allow users to end the current support session. |
+| Feedback | Allow users to rate their support experience after the session ends. |
+| Recently Viewed Hotels | Display recently viewed hotels for quick reference during support. |
+
+## Live Agent Escalation
+### Users may connect to a Live Customer Support Agent at any time by selecting "Contact Customer Support". The system shall also recommend escalation when:
+### The chatbot cannot answer the user's question.
+### The user requests to speak with an agent.
+### The inquiry involves payment disputes, complaints, or special requests.
+### Manual intervention is required to resolve the issue.
+### Conversation Management
+### Chat sessions shall remain active after the user exits the chat page.
+### Users may continue previous conversations from the Messages section.
+### All chat history shall be synchronized across the user's devices after login.
+### Users may end the support session at any time by selecting Finish Session.
+
+Module 14: Affiliate & Referral Program
+Refer & Earn Feature Overview
+The Refer & Earn feature allows mTrip users to invite friends via a unique referral code or link. Its goal is to boost user acquisition through trusted recommendations, rewarding both the referrer and the new user after the invited friend completes their first hotel booking.
+Users can share their referral link through messaging apps or social media, or manually share their referral code. The feature tracks the referral journey, from invitation to reward issuance. Once criteria are met, rewards are credited to the user's mTrip Wallet for future bookings.
+Designed for simplicity and scalability, the Refer & Earn feature supports marketing campaigns and additional referral programs while ensuring a smooth user experience within the mTrip Travel Super App.
+mTrip’s Refer & Earn – User to User Referral Journey (Overall work flow)
+
+
+
+Referral Link and Code Handling
+
+| Scenario | System Behavior |
+| User shares Referral Link | Each user is assigned a unique pre-generated referral link that is ready to share. When a friend opens the link, the mTrip Web Registration/Login page is displayed and the referral code is automatically pre-filled during registration. (User can’t delete the referral code from the input box if the user register via referral link) |
+| User shares Referral Code | Friend manually enters the referral code during registration on the mTrip Web or Mobile App. The system validates the referral code before completing registration. |
+| Existing User | Referral benefits are only applied to eligible new user registrations in accordance with the referral campaign rules. |
+| Referral Association | Upon successful registration, the referral relationship is permanently linked to the new user's account, and rewards are granted after all campaign conditions have been satisfied. |
+
+#### mTrip Refer & Earn – Referral Journey (Overall Workflow)
+The mTrip Refer & Earn Referral Journey describes the complete referral process from invitation to reward issuance. An existing user shares a unique referral link or code with a friend, who then registers and completes their first eligible hotel booking on mTrip. The system tracks each referral's progress through registration, booking, stay completion, and reward eligibility. Once all referral conditions are met, the reward is automatically credited to the referrer's mTrip Wallet, providing a transparent and seamless referral experience.
+Referral Program Sequence diagram (end-to-end)
+
+#### Referral Program Sequence Diagram (End-to-End)
+The Referral Program Sequence Diagram outlines the interactions among the referrer, referred user, mTrip platform, hotel booking system, and wallet service during the referral process. It shows how the referral relationship is formed, how eligibility is checked at each step, and how rewards are automatically issued after the referred user's first successful hotel booking.
+This process ensures that rewards are given only for legitimate bookings, maintaining transparency and automation for all involved parties.
+The referral program is fully configurable via the Admin Portal. Administrators can easily adjust reward amounts for both the referrer and referred user, set eligibility criteria, define qualifying booking conditions, manage the referral validity period, establish reward expiry, determine campaign duration, and modify other program rules without needing system changes.
+
+Module 15: Dynamic App Theme Management
+Overview
+The Dynamic Seasonal Theme Management module allows the mTrip Super App to easily change its look based on set seasonal and promotional themes, without disrupting its main functions. It includes default themes that can be managed through the Admin Portal, and administrators can also create, schedule, and manage custom themes. Changes will happen automatically according to the set schedule, providing a smooth and engaging experience for users.
+### Business Requirements
+The system shall provide predefined default themes (which are customizable by admin), including:
+Default mTrip Theme
+Myanmar New Year (Thingyan Festival) Theme
+Thadingyut Theme
+Christmas Theme
+Happy New Year Theme
+Chinese New Year Theme
+Supported Theme Screens
+The active theme shall support updating the following application screens and UI components:
+
+| Screen | Theme Elements |
+| Splash Screen | Default Splash Screen or Seasonal Splash Screen |
+| Application Logo | Default Logo or Seasonal Logo (App Store / Play Store icon updates may require a new app release) |
+| Login & Register | Background Image / Illustration |
+| Home Page | Header Background / Hero Banner |
+| Service Menu | Theme Icons for Hotels, Restaurant Reservation, Premium Transport, and Travel Packages |
+| Bottom Navigation Bar | Navigation Icons, Icon Accent Color, Navigation Background (configurable) |
+| Booking Confirmation | Top Background Banner / Celebration Illustration |
+| Booking Voucher / Invoice | Header Banner and Footer Branding |
+| Hotel Search Page | Top Promotional Banner Background |
+
+Theme updates shall modify only visual assets while maintaining the existing application layout, navigation, and functionality.
+Administrators shall also be able to create unlimited custom themes for marketing campaigns, promotional events, destination campaigns, partnerships, anniversaries, or future seasonal events.
+Each theme shall support:
+Theme Name
+Theme Description
+Theme Thumbnail / Previews
+Theme Status (Draft, Scheduled, Active, Inactive)
+Start Date & Time
+End Date & Time
+Theme Priority (when multiple themes overlap)
+Administrators shall be able to preview the complete theme before publishing, save themes as drafts, schedule future activation, edit existing themes, duplicate themes, activate or deactivate themes, and automatically revert to the Default mTrip Theme when no active theme is available.
+### Theme Management
+The system shall automatically activate and deactivate themes according to the configured schedule.
+If multiple themes are active simultaneously, the system shall display the theme with the highest configured priority.
+If a theme asset is unavailable or fails to load, the application shall automatically display the corresponding default asset.
+### User Experience
+Users shall not be required to manually select or switch themes. The application shall automatically retrieve and display the currently active theme. Theme updates shall not interrupt user sessions or affect booking, payment, navigation, or any other application functionality.
+### Acceptance Criteria for dynamic theme management via Admin Portal
+Built-in default seasonal themes are available and configurable.
+Administrators can create, edit, duplicate, preview, schedule, activate, and deactivate custom themes.
+Themes support configurable activation periods and priority.
+Supported application screens automatically display the active theme.
+Default assets are displayed when no active theme or asset is available.
+Theme updates affect only branding and visual presentation.
+App Store and Play Store icons can require a new application release when changed; all other theme assets update dynamically through the configured theme.
+—-----------—-----------—-----------—-----------—-----------—-----------—-----------—-----------—-----------—-----
+
+## Module 16 – User Guidance & Tutorials 
+### Module Objective
+To help users understand and confidently use mTrip Consumer App features by providing contextual onboarding guidance, helpful information tips, and reusable tutorial content. The module is designed especially for users with limited digital experience and supports a consistent learning experience across Hotel, Food, and future app features.
+### 16.1 Hotel Booking Coach Mark
+#### Requirement
+Provide an interactive coach mark onboarding experience for first-time users of the Hotel Booking feature.
+#### Objective
+To guide first-time users through the key steps of the hotel booking journey and help them understand how to search for and complete a hotel booking without requiring prior knowledge of the app.
+#### Description
+When a user accesses the Hotel Booking feature for the first time, the system will display a series of contextual coach marks highlighting the main elements of the hotel booking journey.
+The coach mark flow will contain 7 main guidance steps, covering the key actions from entering the Hotel feature through the booking process.
+The coach mark should:
+Highlight the relevant UI element for each step.
+Provide a short title and simple explanation.
+Clearly indicate the user's progress through the guidance.
+Allow the user to proceed to the next step.
+Provide a Skip option so users can exit the guidance at any time.
+Display the guidance only for the user's first-time Hotel Booking experience.
+Avoid interrupting the user after the onboarding has been completed or skipped.
+#### Re-entry to Guidance
+After completing or skipping the coach mark, users can access the Hotel Booking Guide again through the Guide icon located on the Hotel Search Page.
+The Guide entry point will provide access to:
+Hotel Booking Tutorial Video
+Step-by-Step Hotel Booking Guide
+#### Diagram: Hotel Feature — User Guidance & Coach Mark UI Instruction
+
+### 16.2 Myanmar Citizen Information Tooltips
+#### Requirement
+Provide contextual information tips for the Myanmar Citizen option displayed on the Hotel Search Page.
+#### Objective
+To help users understand the purpose and potential impact of the Myanmar Citizen selection before searching for hotels.
+#### Description
+Two informational tooltip/tip messages will be provided around the Myanmar Citizen option.
+The tooltip should:
+Explain what the Myanmar Citizen option represents.
+Help users understand why selecting the option may affect the displayed hotel price or availability.
+Use simple and easy-to-understand language.
+Be accessible without disrupting the hotel search flow.
+Allow users to close or dismiss the information after reading it.
+The tooltip content should be consistent with the actual hotel pricing and eligibility rules implemented by the system.
+
+| Element | Final Copy for Myanmar Citizen Tooltip |
+| Target | Myanmar Citizen checkbox + ⓘ |
+| Title | What does “Myanmar Citizen” mean? |
+| Description | Select this option if you are a Myanmar citizen. Hotel rates and conditions may vary depending on citizenship. |
+| Close / CTA | Got it |
+
+### 
+### 16.3 Tutorials & Video Guide
+#### Requirement
+Provide a centralized Tutorials page where users can access educational videos and step-by-step guides for different mTrip Consumer App features.
+#### Objective
+To provide users with a reusable learning center where they can learn how to use Hotel, Food, and other supported features at any time, rather than relying only on first-time onboarding.
+#### Entry Point
+Users can access the Tutorials page through:
+Profile / Settings → Tutorials
+#### Description
+The Tutorials page will organize learning content by feature category.
+Initial categories may include:
+Hotel
+Food
+Other / Future Features
+Each category will contain relevant tutorial content displayed in a two-column grid layout, with each tutorial presented as a video card.
+Each video card should include:
+Video thumbnail
+Play indicator
+Tutorial title
+Relevant category
+Users can select a tutorial to open the Video Detail / View Video Page, where they can watch the tutorial.
+#### Hotel Tutorial Content
+The Hotel category should include content related to the Hotel Booking journey, including:
+Hotel Booking Guide Video
+Step-by-Step Hotel Booking Guide
+Other relevant Hotel tutorials added in future
+#### Scalability
+The Tutorials module should be designed as a reusable content structure so that new categories, videos, and guides can be added without changing the overall page structure.
+The module should support future expansion to additional mTrip Consumer App features such as Food and other services.
+### Module-Level User Experience
+The three features work together as a single user guidance system:
+First-Time User → Hotel Coach Mark → Learn the Booking Flow
+Returning User → Hotel Guide Icon → Video + Step-by-Step Guide
+Anytime → Settings → Tutorials → Hotel / Food / Other Tutorials
+This approach provides both contextual guidance during the user's first experience and self-service learning that users can access whenever they need help.
+
+
+Module 17 – Hotel Booking UI, UX & Feature Updates (4 September 2026)
+
+This module records major UI, UX, functional, and flow changes made to the Hotel Booking Feature after the previous PRD/design baseline. The latest approved Figma design and the updated requirements in this PRD should be treated as the current source of truth for development and QA.
+
+Hotel Booking UI & Feature Update Change Log
+
+| No. | Area / Feature | Change Description | Updated Flow / Behavior | Status |
+| 1 | Hotel Booking Status | Updated the Hotel Booking Status screen to clearly separate Hotel Booking Status and Payment Status. (View Updated UI) | Hotel Booking Status: Confirming → Confirmed / Payment Status: Pending → Paid | Updated |
+| 2 | Sign Up / Sign In | Replaced the Email input field with a Name input field on the initial Sign Up entry screen. Updated the Sign Up / Sign In button design and CTA presentation. | Sign Up Entry → Updated authentication UI Input (Removed Email, Added Name input) | Updated |
+| 3 | Initial App Loading — Language Selection | Added a dedicated Language Selection screen during the initial app loading/entry experience. | App Loading → Language Selection → Lite Mode / Full Mode Selection | Added |
+| 4 | Initial App Loading — Lite / Full Mode | Set Lite Mode as the default experience after language selection, without displaying an initial Lite Mode / Full Mode selection popup. | App Loading → Language Selection → App Home→ Lite Mode | Added |
+| 5 | Booking ID | Added a unique Booking ID to key booking-related screens for easier booking identification and reference.
+Booking ID: MT-2025-123456 | Booking Confirmation → Booking Details → Booking History / Completed Booking → Booking ID displayed | Updated |
+| 6 | Global Card / Rectangle Border Radius | Standardized the border radius of Hotel Feature and App Feature cards/rectangular UI components. Updated the radius to 24px to maintain consistent visual styling across the app. | Previous radius → 24px standardized radius | Updated |
+| 7 | Refund Method Screen | Updated the typography of the Refund Method Card and Estimated Refund Timeline Card under “Refund Summary” including the title and content text, to improve readability and visual consistency. | Previous typography → Updated title/content typography (font size adjusted for title and content) | Updated |
+| 8 | Booking Confirmation — Lite Mode & Full Mode | Updated the Booking Confirmation screen for both Lite Mode and Full Mode to align with the latest booking information and UX design. | Booking Completed → Updated Booking Confirmation screen | Updated |
+| 9 | Cancel Booking on Confirmation | Removed the Cancel Booking button from the Booking Confirmation screen. Users can now only access booking details from this screen. Modification or cancellation is managed from My Picks. | Booking Confirmation → View Details → My Picks / Booking Details → Modify Booking / Cancel Booking | Updated |
+| 10 | Account Login Required Alert | Updated the title and content of the account-required alert displayed when a user attempts to access a hotel booking feature without being logged in. | Title: Account Login Required! Content: Go to Login/Register screen now? Confirm → Sign Up / Login screen | Updated |
+| 11 | Set Up Profile — Step 1 & Step 2 | Removed the Skip buttons from both Set Up Profile Step 1 and Step 2. Added a confirmation alert allowing users to either complete setup immediately or postpone it. | Set Up Profile → Set Up Profile Now? → Later / Set Up Now | Updated |
+| 12 | Set Up Profile Alert | Added a new profile setup alert with the following content: Title: Set Up Profile Now? Content: Add your information once to make your future bookings faster and easier. Buttons: Later / Set Up Now | —Later → Skip Step 1 & Step 2 
+
+— Set Up Now → Complete Step 1 → Complete Step 2 | Added |
+| 13 | Link Email — Account Security | Added the “Link Email” Screen under Settings → Account → Account Security. Users who have not linked an email will see the Link an email option. | Settings → Account → Account Security → Link an email → Enter Email → Send Verification Code | Added |
+| 14 | Link Email — Verification | Added an email linking screen allowing users to enter an email address and receive a verification code. | Link an email → Email Input → Send Verification Code → Email Verification | Added |
+| 15 | Hotel Reviews — Helpful / Report | Removed the Helpful (thumbs-up) reaction button and the Report Review icon from the Hotel User Reviews List page. | Previous Review Actions → Review Content Only | Updated |
+| 16 | Multi-Hotel Booking — Add More Stay | Updated the Multi-Hotel Booking experience by introducing an expandable/collapsible Add More Stay card to make additional hotel stays easier to manage.
+Multi-Stay Limit: The maximum number of stays that a user can add is controlled by the Backend Admin Portal configuration. / For example, if the maximum stay limit is configured as 3 stays, the user can add up to 3 stays in a single booking. Once the maximum limit is reached, the “Add More Stay” button will be hidden or disabled. / The “Add More Stay” option will become available again when the user removes one or more previously added stays. | Hotel Booking → Add More Stay → Expand / Collapse → Add Additional Stay
+
+User can add multiple stays based on the maximum stay limit configured in the Backend Admin Portal. Once the configured maximum is reached, the “Add More Stay” button is hidden/disabled. If the user removes an added stay, the button becomes available again until the maximum limit is reached. | Updated |
+| 17 | Multi-Hotel Booking — Lite Mode Restriction | Disabled/Removed Multi-Hotel Booking in Lite Mode. The feature is available only in Full Mode. | Lite Mode → Single Hotel Booking only / Full Mode → Multi-Hotel Booking available | Updated |
+| 18 | Terms of Service / Privacy Policy / House Rules Agreement | Updated the agreement content displayed on the Review & Confirm step. The previous checkbox/confirmation interaction has been removed. | Step 3 of 4: Review & Confirm → Display agreement text → Continue / Confirm | Updated |
+| 19 | Booking Agreement Content | Updated the agreement text to clearly communicate the user's acceptance and mTrip's intermediary role. | “By continuing, I agree to the Terms of Service, Privacy Policy, and the property's house rules. I understand that mTrip acts as an intermediary agent for this booking.” | Updated |
+| 20 | Agreement Interaction | Users are no longer required to manually select a checkbox or confirm the agreement through an additional alert. The agreement is presented as informational text on the Review & Confirm step. | Review & Confirm → Read Agreement → Continue / Confirm
+(Check Box Removed) | Updated |
+| 21 | Choose Room (Same or Different Room Types) | Previous: Users could book only one room. 
+Updated: Users can now select and book multiple rooms, either with the same room type or different room types. | Choose a Room → Select Multiple Rooms (Same or Different Room Types) | Updated |
+
+#### 17.1: Booking Cancellation Access
+Previous: Booking Confirmation → Cancel Booking
+Updated: Booking Confirmation → View Details → My Picks / Booking Details → Modify Booking / Cancel Booking
+
+Requirement:
+“Cancel Booking” button shall no longer be displayed on the Booking Confirmation screen.
+The Booking Confirmation screen shall provide a “View Details” button.
+Users who want to modify or cancel a booking shall access the booking through My Picks.
+The “Modify Booking” and “Cancel Booking” actions shall be available from the relevant Booking Details screen.
+17.2: Lite Mode / Full Mode
+Updated entry flow: App Loading → Language Selection → Lite Mode / Full Mode Selection → Home
+Mode Availability
+
+| Feature | Lite Mode | Full Mode |
+| Hotel Search | ✓ | ✓ |
+| Hotel Booking | ✓ | ✓ |
+| Single Hotel Booking | ✓ | ✓ |
+| Multi-Hotel Booking | — | ✓ |
+
+### 17.3: Set Up Profile
+Previous:
+Set Up Profile Step 1 → Skip
+Set Up Profile Step 2 → Skip
+Updated: Set Up Profile → Set Up Profile Now?
+Later
+ → Skip both Step 1 and Step 2
+ → Continue to next destination
+Set Up Now
+ → Step 1 → Step 2 → Complete Profile Setup
+Alert Title: “Set Up Profile Now?”
+Alert Content: “Add your information once to make your future bookings faster and easier.”
+Alert Buttons: “Later” | “Set Up Now”
+
+17.4 Multi-Room Selection – Room Count Synchronization
+The room count selected on the Hotel Search page is linked to the room quantity on the Room List / Room Selection page.
+When the user selects a room type by clicking “Choose”, the room quantity button will automatically use the same room count requested in the Hotel Search. This avoids requiring the user to manually re-enter the number of rooms.
+
+| Search Page Room Count | Room List Before Selection | User Action | After Clicking “Choose” |
+| 1 Room | Choose | Click Choose | − 1 + |
+| 2 Rooms | Choose | Click Choose | − 2 + |
+| 3 Rooms | Choose | Click Choose | − 3 + |
+| 4 Rooms | Choose | Click Choose | − 4 + |
+
+Normal Single-Room Scenario
+For a normal single-room booking:
+User selects 1 Room on the Hotel Search page.
+User searches for hotels and opens the Room Selection page.
+Each available room type displays a “Choose” button.
+User clicks “Choose” for the desired room type.
+The “Choose” button changes to the room quantity control − 1 +.
+The room quantity is initialized to 1, based on the room count selected on the Hotel Search page.
+#### Multi-Room Scenario
+For example, if the user searches with 2 Rooms, the selected room type will automatically start with 2 rooms after clicking “Choose”.
+
+Key rule: The initial room quantity is always synchronized with the room count selected during Hotel Search. The user can then adjust the quantity using the − / + control, subject to the total room requirement.
+
+Applicable to both Lite Mode and Full Mode: The same “Choose” → − N + interaction will be used in both modes to maintain consistency and avoid user confusion when selecting rooms.
+
+17.5 Promotion Coupon Eligibility and Admin Configuration
+Coupon eligibility is controlled by the Admin Portal. Admin can configure the conditions for each coupon based on the promotion requirement.
+The system should check the booking against the configured conditions before applying the coupon.
+
+| Coupon Condition | Admin Configuration Example | System Behavior |
+| Room-Specific | Select specific room type(s) | Apply discount only to the selected room type(s). |
+| Hotel-Specific | Select specific hotel(s) | Apply discount only to the selected hotel(s). |
+| Multi-Room | Minimum room count = 2 | Coupon is eligible when the booking has 2 or more rooms. |
+| Multi-Hotel | Minimum hotel count = 2 | Coupon is eligible when the booking contains 2 or more hotels. |
+| Minimum Booking Amount | Minimum = 200,000 MMK | Coupon is eligible when the eligible booking amount reaches the configured amount. |
+| Early Bird | Book at least 30 days before check-in | Coupon is eligible when the booking meets the configured advance-booking period. |
+| Long Stay | Minimum stay = 5 nights | Coupon is eligible when the configured minimum stay is reached. |
+| Specific Stay Date | Select specific date/period | Coupon is eligible only for bookings within the configured stay period. |
+| Maximum Discount | Maximum = 50,000 MMK | Discount cannot exceed the configured maximum amount. |
+
+#### Booking Type Examples
+The same booking can satisfy multiple conditions at the same time.
+
+| Booking Scenario | Possible Coupon Conditions |
+| 1 Hotel + 1 Room | Room-Specific, Hotel-Specific, Minimum Booking Amount, Early Bird, etc. |
+| 1 Hotel + Multiple Rooms | Room-Specific, Hotel-Specific, Multi-Room, Minimum Booking Amount, etc. |
+| Multiple Hotels + 1 Room per Hotel | Hotel-Specific, Multi-Hotel, Minimum Booking Amount, Early Bird, etc. |
+| Multiple Hotels + Multiple Rooms | Room-Specific, Hotel-Specific, Multi-Room, Multi-Hotel, and other configured conditions |
+
+Important: The booking type itself does not automatically determine whether a coupon is eligible. Admin configuration determines the eligibility rules.
+For example, Admin may configure:
+Coupon A: Hotel A only
+Coupon B: Deluxe Room only
+Coupon C: Minimum 2 rooms
+Coupon D: Minimum 2 hotels
+Coupon E: Hotel A + minimum 2 rooms
+Coupon F: Minimum 2 hotels + minimum booking amount 500,000 MMK
+The system should evaluate all configured conditions and apply the coupon only when the booking satisfies the required conditions.
+
+17.6 Coupon Allocation and Discount Distribution
+When a coupon is eligible, the system should determine which room(s) or hotel(s) receive the discount based on the coupon configuration.
+For multi-room or multi-hotel bookings, the coupon discount should not be applied to ineligible rooms or hotels.
+
+| Coupon Scenario | Example Booking | Coupon Allocation Rule |
+| Room-Specific Coupon | Hotel A: Deluxe × 2 + Suite × 1 | Apply the coupon only to the eligible Deluxe rooms. Suite does not receive the discount. |
+| Hotel-Specific Coupon | Hotel A + Hotel B in one booking | Apply the coupon only to the eligible rooms under the selected hotel. Do not apply it to other hotels. |
+| Multi-Room Coupon | 2 or more rooms in one hotel | If the minimum room count condition is met, apply the configured discount according to the coupon rule. |
+| Multi-Hotel Coupon | Hotel A + Hotel B | If the minimum hotel count condition is met, apply the configured discount to the eligible booking amount. |
+| Multi-Room + Room-Specific | Deluxe × 2 + Suite × 1 | Check both conditions. If eligible, apply the discount only to the selected room type(s). |
+| Multi-Hotel + Hotel-Specific | Hotel A + Hotel B | Apply the discount only to the configured hotel. Other hotels are excluded. |
+| Booking-Level Coupon | Multiple hotels and rooms | Apply the discount to the eligible booking amount based on the configured coupon conditions. |
+| Maximum Discount | 10% discount, maximum 30,000 MMK | Calculate the discount first, then cap the discount at the configured maximum amount. |
+
+#### Discount Allocation for Fixed-Amount Coupons
+For a fixed-amount coupon that applies to multiple eligible rooms, the discount should be distributed proportionally based on the eligible room price.
+Example:
+Room A = 50,000 MMK
+Room B = 150,000 MMK
+Eligible total = 200,000 MMK
+Coupon discount = 20,000 MMK
+
+| Room | Room Price | Discount Allocation | Final Price |
+| Room A | 50,000 MMK | 5,000 MMK | 45,000 MMK |
+| Room B | 150,000 MMK | 15,000 MMK | 135,000 MMK |
+| Total | 200,000 MMK | 20,000 MMK | 180,000 MMK |
+
+Allocation Formula:
+Room Discount = Total Coupon Discount × (Eligible Room Price ÷ Total Eligible Room Price)
+This proportional allocation should be used when the coupon is configured to apply across multiple eligible rooms.
+#### Important Rules
+Coupon discount must only be applied to eligible rooms/hotels.
+Ineligible rooms/hotels must not receive any part of the coupon discount.
+For a fixed-amount coupon covering multiple eligible rooms, use proportional allocation based on eligible room price.
+If the coupon has a maximum discount amount, the system must not exceed the configured limit.
+The price breakdown should clearly show the coupon discount and the rooms/hotels to which it was applied.
+The exact allocation method can be controlled by the Admin Portal where required.
+Module 18: mTrip App Features (“More” tab’s  features, mTrip Wallet)
+Work in Progress for this module..
+### Acceptance Criteria
+These criteria define the requirements for the core Phase 1 modules of the mTrip platform:
+1. Onboarding & KYC (P1-01)
+Registration: OTP must be received within 30s; invalid numbers show error; verified users redirected to profile setup.
+SSO: Google OAuth completes; existing account linked; new account created if first login.
+KYC Tier 2: ID upload accepted; selfie liveness passed; Tier 2 status reflected within 24h.
+Vendor Submission: Document upload flow; status tracking (Pending/Approved/Rejected); rejection reason shown.
+2. Hotel Bookings (P1-02)
+Search: Results displayed in < 3s; filters accessible; map toggle available.
+Filtering: Filter applied instantly; non-matching results hidden; filter chip shows active count.
+Details: Gallery swipeable; all room types listed with prices; policies, room 360 tour feature clearly shown.
+Voucher: PDF generated within 10s of payment; sent via SMS, email and accessible in app.
+Cancellation: Cancel button active before deadline; confirmation modal; refund initiated immediately.
+3. Restaurant Services (P1-03)
+Discovery: GPS permission requested; results ranked by distance; open restaurants shown first.
+Customization: Modifier groups shown per item; required selections enforced before add-to-cart.
+Tracking: Live map shown after rider assigned; status bar updates at each milestone; ETA visible.
+Vendor Management: Toggle sold-out per item; instant sync to customer app; auto-restore next day option.
+4. Unified Search (P1-05)
+Global Search: Suggestions appear instantly; results grouped by category (hotel/restaurant).
+Personalization: Home feed includes 'Near Me' and 'Recommended for You' sections; recommendations change based on past bookings.
+Note: For all features, early sketches are included in the linked design files. Detailed requirements for subsequent phases will be added as the project progresses.
+### Design 
+Include any needed early sketches, and throughout the project, link to the actual designs once they’re available.
+
+Prototype: mTrip Prototype Design (User App)
+### Technical Considerations - (optional) 
+Link to engineering technical approach document.
+### Success Metrics
+What are the success metrics that indicate you’re achieving your internal goals for the project? How will you measure success? You can use any goal-setting and tracking system you prefer (OKRs, KPIs, etc). 
+
+Note: Link to Analytics requirements and approach document.
+### Open Issues
+What factors do you still need to figure out? What problems may arise and how do you plan on addressing them? 
+### Q&A
+What are common questions about the product along with the answers you’ve decided? This is a good place to note key decisions.
+
+
+| Asked by | Question | Answer |
+|  | Invoice Format (PDF) |  |
+|  |  |  |
+|  |  |  |
+
+### Feature Timeline and Phasing
+
+
+| Feature | Status | Dates |
+| Module 1: Overall Hotel Booking Journey & Booking Lifecycle + Multi Hotel Booking | In Review | Jul 1, 2026 |
+| Module 2: Hotel Search & Discovery + Long Stay | In Review |  |
+| Module 3: Hotel Listing, Filter & Sorting | In Review |  |
+| Module 4: Hotel Detail & Room Selection + Chat with Property / Hotel | In Review |  |
+| Module 5: Guest Information | In Review |  |
+| Module 6: Pricing, Promotion & Insurance + My Coupons | In Review |  |
+| Module 7: Booking Preferences & Saved Items + Lite Mode Feature | In Review |  |
+| Module 8: Payment (Settlement) | In Review |  |
+| Module 9: Booking Confirmation & Booking Management | In Review |  |
+| Module 10: Notification Center + Booking Risk Management & Appeal | In Review |  |
+| Module 11: Reviews, Ratings & AI Review Summary | In Review |  |
+| Module 12: AI Hotel Assistant | In Review |  |
+| Module 13: Live Chat & Customer Support | In Review |  |
+| Module 14: Affiliate & Referral Program | In Review |  |
+| Module 15: Dynamic App Theme Management | In Review |  |
+| Module 16: User Guidance & Tutorials | In Review | Aug 25, 2026 |
+| Module 17 – Hotel Booking UI, UX & Feature Updates (4 September 2026) | In Review | Sep 7, 2026 |
+| Module 18 - Add-On Features | Backlog | Date |
+
+
+## PRD Checklist:
+Here’s a list of topics you must include in your PRD: 
+
+
+| PRD Checklist |  |
+| Order | Topic | Done |
+| 1. | Title | Added |
+| 2. | Author | Added |
+| 3. | Decision Log | Backlog |
+| 4. | Change History | Backlog |
+| 5. | Overview | Added |
+| 6. | Success Overview | Backlog |
+| 7. | Messaging | Backlog |
+| 8. | Timeline/Release Planning | Backlog |
+| 9. | Personas | In Review |
+| 10. | User Scenarios | In Review |
+| 11. | User Stories/Features/Requirements | In Review |
+| 12. | Features In | Backlog |
+| 13. | Features Out | Backlog |
+| 14. | Design | Backlog |
+| 15. | Open Issues | Backlog |
+| 16. | Q&A | Backlog |
+| 17. | Other Considerations | Backlog |
+
+
+Change History
+
+| Version | Date | Changes |
+| 1.0 | Jul 31, 2026 | Initial PRD covering Modules 1–15. |
+| 1.0.1 | Aug 25, 2026 | - Updated Module 7 to add the Lite Mode Change Button on the Home Page. / - Added Module 16 as a new module. |
+| 1.0.2 | Sep 11, 2026 | - Added Module 17 as a new module. |
+
+
+

@@ -42,11 +42,15 @@ import { PAGE_PADDING, colors, shadows } from '@/config/theme';
 import { fonts } from '@/config/typography';
 import type { RootStackParamList } from '@/navigation/types';
 import { ADDITIONAL_QUOTA, useBookingWizard } from '@/screens/hotel/useBookingWizard';
+import { useRoomCartStore } from '@/store/roomCartStore';
 import { formatAmount, formatMoney } from '@/utils/format';
 
 export default function HotelBookingScreen() {
   const route = useRoute<RouteProp<RootStackParamList, 'HotelBooking'>>();
   const insets = useSafeAreaInsets();
+  /** 复核步的「Selected Rooms」与顶部酒店卡都取购物车这一份 */
+  const cartRooms = useRoomCartStore((s) => s.items);
+  const cartHotelName = useRoomCartStore((s) => s.hotelName);
 
   const {
     t,
@@ -62,10 +66,11 @@ export default function HotelBookingScreen() {
     current,
     multi,
     loadingGoods,
+    cartMode,
+    roomsTotal,
+    roomCount,
     request,
     setRequest,
-    agreed,
-    setAgreed,
     form,
     setForm,
     patchStay,
@@ -119,8 +124,12 @@ export default function HotelBookingScreen() {
           <View style={styles.reviewGroup}>
             <ReviewBody
               stay={current}
-              agreed={agreed}
-              onToggleAgree={() => setAgreed((v) => !v)}
+              /* 新稿:顶部酒店卡 + Selected Rooms,Edit Rooms 回购物车页 */
+              cartRooms={cartRooms}
+              hotelName={cartHotelName}
+              /* 多房间:房费明细与合计按整车算,不能只算路由带进来的那一间 */
+              roomTotal={cartMode ? roomsTotal : undefined}
+              onEditRooms={() => navigation.navigate('RoomCart')}
               onComingSoon={comingSoon}
               coupon={
                 couponEnabled
@@ -133,11 +142,13 @@ export default function HotelBookingScreen() {
                   : undefined
               }
             />
+            {/* 新稿把这张卡收成了一行小按钮(compact),不再占整块 */}
             <AddMoreStayCard
               title={t('hotels.booking.review.addMoreStay')}
               desc={t('hotels.booking.review.addMoreStayDesc')}
               action={t('hotels.booking.review.addHotel')}
               onPress={addSecondStay}
+              compact
             />
           </View>
         );
@@ -226,7 +237,7 @@ export default function HotelBookingScreen() {
             checkOut={current.checkOut}
             adults={current.adults}
             childCount={current.childCount}
-            rooms={current.rooms}
+            rooms={roomCount}
             addons={current.addons}
             request={request}
             onChangeDates={(checkIn, checkOut) => patchStay({ checkIn, checkOut })}

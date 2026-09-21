@@ -959,9 +959,9 @@
           "breakfast": "Good Breakfast"
         },
         "perNight": "/ night",
-        "select": "Select",
         "bestseller": "Bestseller",
-        "breakfast": "Breakfast"
+        "breakfast": "Breakfast",
+        "choose": "Choose"
       },
       "amenityGroups": {
         "essentials": "Essentials",
@@ -1100,7 +1100,9 @@
             "body": "Open from 07:00 to 20:00. Proper swimwear required."
           }
         }
-      }
+      },
+      "totalPrice": "Total Price",
+      "continue": "Continue"
     },
     "filter": {
       "title": "Filter By",
@@ -1230,7 +1232,11 @@
         "agreeSeparator": ", ",
         "privacy": "Privacy Policy",
         "agreeSuffix": ", and the property's house rules. I understand that mTrip acts as an intermediary agent for this booking.",
-        "agreeRequired": "Please accept the terms and conditions to continue."
+        "agreeRequired": "Please accept the terms and conditions to continue.",
+        "selectedRooms": "Selected Rooms ({{rooms}})",
+        "editRooms": "Edit Rooms",
+        "roomTimes": "x {{count}}",
+        "agreeNote": "By continuing, I agree to the Terms of Service, Privacy Policy, and the property's house rules."
       },
       "trip": {
         "stay": "Stay {{index}}",
@@ -1306,24 +1312,25 @@
       },
       "success": {
         "title": "Booking Confirmed",
-        "referencePrefix": "Reference ID: ",
-        "voucher": "YOUR DIGITAL VOUCHER",
-        "summary": "Booking Summary",
-        "paid": "PAID",
-        "checkIn": "CHECK-IN",
-        "checkOut": "CHECK-OUT",
-        "guests": "GUESTS",
-        "totalPaid": "TOTAL PAID",
-        "guestsValue": "{{adults}} Adults, {{rooms}} Room",
-        "download": "Download Voucher",
+        "confirmedTitle": "Booking Confirmed!",
+        "confirmedDesc": "Your hotel booking is confirmed by the hotel. Your room is reserved and guaranteed.",
+        "confirmingTitle": "Booking Confirming",
+        "confirmingDesc": "The hotel is confirming your booking request.",
+        "travelWithUs": "Travel with us",
+        "paymentStatus": "Payment Status",
+        "bookingStatus": "Booking Status",
+        "statusRoom": "(Room {{index}})",
+        "statusRoomTimes": "(Room {{index}} x {{rooms}})",
+        "paid": "Paid",
+        "confirmed": "Confirmed",
+        "confirming": "Confirming",
+        "bookingId": "Booking ID: ",
+        "idCopied": "Booking ID copied",
+        "bookingDetails": "Booking Details",
+        "dateRange": "{{checkIn}} - {{checkOut}}",
         "viewBooking": "View Booking",
         "upsell": "Ready for your adventure in {{city}}?",
-        "upsellLink": "Explore local dining & tours",
-        "backHome": "Back to Home",
-        "tags": {
-          "room": "Deluxe Room",
-          "breakfast": "Breakfast Included"
-        }
+        "upsellLink": "Explore local dining & tours"
       },
       "insurance": {
         "title": "Travel Protection",
@@ -1405,6 +1412,13 @@
           "saveEreceipt": "Save E-receipt"
         }
       }
+    },
+    "reviewsPage": {
+      "title": "Reviews ({{reviews}})",
+      "empty": "No reviews yet",
+      "anonymous": "Anonymous User",
+      "outOfTen": "/10",
+      "replyFrom": "Reply from the property"
     },
     "lite": {
       "title": "Hotel & Homestay",
@@ -1519,6 +1533,26 @@
           }
         }
       }
+    },
+    "cart": {
+      "title": "My Rooms",
+      "selected": "Selected Rooms ({{rooms}})",
+      "empty": "No rooms selected yet",
+      "roomIndex": "Room {{index}}",
+      "addAnother": "Add Another Room",
+      "dateRange": "{{from}} - {{to}} ({{nights}} Nights)",
+      "noDate": "Dates not selected",
+      "breakdown": "Price Breakdown",
+      "roomSubtotal": "Room subtotal ({{rooms}} Rooms, {{nights}} nights)",
+      "tax": "Taxes & Fees ({{percent}}%)",
+      "service": "Service Charges ({{percent}}%)",
+      "memberDiscount": "Member discount ({{percent}}%)",
+      "totalAmount": "Total Amount",
+      "earnPoints": "Earn {{points}} Points",
+      "back": "Back",
+      "checkout": "Check Out",
+      "removeTitle": "Remove Room?",
+      "removeMessage": "Are you sure you want to remove this room?"
     }
   }
 }

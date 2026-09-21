@@ -752,3 +752,191 @@ Expo 51 / TypeScript / Zustand / React Navigation 6 / Axios / i18next + react-i1
       `check-property-preview-lite.cjs` 仍 **81/81**(确认抽取没连带破坏)。
       ⚠️ `scripts/check.ps1` 本机仍不可跑(未装 php,第 1 步即断);⚠️ **仍未做真机 / Web 冒烟**,需人工对图;
       ⚠️ 缅文新增 1 条待母语复核(连同实景预览页 7 条,共 **8 条**待复核)。
+
+- [x] **完整模式酒店详情「住客评价」整页**(2026-09-21 晚,Figma `Hotel Details Reviews Page` `1133:2998`):
+      需求是「按 Figma 做正常模式(非关怀)下 hotel detail 的 reviews 页面」。该节点正是 2026-08-25
+      那条里点名「不属于页签、本次未实现」的二级页,而 `HotelReviewsTab` 的「Read All Reviews」
+      当时走 `comingSoon` —— 本次两件事一起收口。设计数据经 Figma MCP `get_figma_data` 取回
+      (整帧渲染图 `.figma-cache/hotel-reviews-page-full.png`)。
+
+      **稿面实测**:根 frame padding-top 124(= 状态栏 54 + 顶栏 70)、底色 `#EBF0FF`;
+      顶栏 `1133:3247` 悬浮(y=54)padding 16/20、gap 16、底 `#FEFEFE` + Effect/DS、
+      标题「Reviews (1,240)」Outfit 600/24/32 主色;Main padding 24px 16px 124px、gap 24;
+      总览卡与评论卡同为 padding 24 / gap 32|12 / **圆角 24** / `#FEFEFE` / 1px `#D9E1FB` / Effect/DS;
+      评论卡:48 圆头像、药丸底 `rgba(66,104,244,.1)` + 1px `rgba(32,77,218,.2)` + 圆角 32、
+      图墙单图 192×128 圆角 32、商家回复块 `#ECF5FE` + 4px 左蓝边 + 圆角 32 + padding 16。
+
+      **总览区抽成共享组件** `components/hotel/HotelReviewDashboard.tsx`:页签 `222:3117` 与本页
+      `1133:3257` 是同一组设计,只留一份实现;`HotelReviewsTab` 退化成薄容器(只把 CTA 接到整页,
+      `HotelDetailScreen.renderTab` 的「一个壳 + 六个页签内容组件」结构不变,未删文件)。
+      **顺带修正圆角**:两个 Figma 节点都写 `borderRadius=24`,而 `detailShared.panel` 是 32 ——
+      Reviews 相关卡改用 `CARD_RADIUS = 24`,**其余五个页签的壳仍是 32(`detailShared.panel` 没动)**。
+
+      **⚠️ 取数口径是本轮逐项拍板的,不是沿用本项目「酒店详情先把设计稿数值固化」的旧惯例** ——
+      评价内容接真实接口 `/api/v1/app/hotels/reviews`(`HotelController::reviews`,**接口早已存在**,
+      `HotelReviewsTab` 里「后端没有评价接口」的注释从本次起作废)。四件事没有数据源,按拍板拆开:
+
+      | 稿面元素 | 处理 | 原因 |
+      |---|---|---|
+      | 总分行 /「Based on N reviews」/ 顶栏 `Reviews (N)` | **真实** | `reviewSummary.rating ×2` + 列表 `total`,顶栏与卡内同源,不会自相矛盾 |
+      | 维度条 4 条、AI Summary 两段引述 | **设计稿静态文案** | `goods_review` 只有单一 `rating`(1-5),无分维度列、无 AI 总结源 |
+      | 评论标题、同行类型(Solo/Couple/Family) | **整行不渲染** | 表里没有这两列,不编造 |
+      | Helpful / Report 底行 | **不做** | 本页稿面三张卡都没有(只有关怀模式 `2352:6648` 那张有) |
+
+      **评分口径**:后端 `rating` 是 **1-5**、稿面是 **/10**,按 `×2` 换算(与搜索结果页 9.3 同口径),
+      卡片写 `toFixed(1)`。⚠️ **`EXCELLENT` 档位阈值是按 10 分制 8.0 推定的**(稿面只给了
+      「8.8 → EXCELLENT」一个样本,没有分档表),**与 `HotelResultCard` 的 `EXCELLENT_FROM = 4.5`
+      (5 分制,等价 9.0/10)**不是同一把尺子** —— 设计给出分档表后需统一。低于阈值不画胶囊。
+
+      **⚠️ 后端兜底值污染 i18n**:`HotelController::reviews` 在 `nickname` 为空时填**中文字面量
+      「匿名用户」**,英文/缅文界面会冒中文;客户端把它当「没有昵称」换成
+      `hotels.reviewsPage.anonymous`。**根治要在后端**,这里只是客户端 shim。
+
+      **底栏「Choose my room」按用户拍板不是进订房向导,而是回详情页并切到 Rooms 页签**:
+      `HotelDetail` 路由新增可选 `tab`,详情页用 `useEffect` 跟着 `route.params.tab` 走 ——
+      本页在栈里是**已挂载**的,`navigate` 只改 params 不重挂,只在 `useState` 初值里读一次
+      会让这次回跳看起来没生效。底栏金额取真实 `minPrice`,拿不到就只留 CTA、**不编造金额**。
+
+      **空态**:无 `propertyId`(演示酒店)不发请求直接空态;总数为 0 时 `EmptyView`「暂无评价」,
+      顶栏显示 `Reviews (0)`;请求失败 `ErrorView` 可重试。列表自持分页(PAGE_SIZE 10,触底加载 +
+      下拉刷新),分页请求失败保留已有内容不清空。
+
+      **新增**:`screens/hotel/HotelReviewsScreen.tsx`、`components/hotel/HotelReviewCard.tsx`;
+      `api/goods.ts` 增 `HotelReview` + `fetchHotelReviews`;`types/models.ts` 给 `GoodsDetail`
+      补可选 `reviewSummary{rating,count}`;**`HomeIcon.tsx` 新增 `verifiedBadge`**
+      (`fluent:checkmark-starburst-16-filled`,商家回复抬头;星星中间的对号靠组件固定的
+      `fillRule="evenodd"` 挖空,改成 nonzero 就没有对号了)。i18n 新增 `hotels.reviewsPage`
+      三语各 5 键(`title`/`empty`/`anonymous`/`outOfTen`/`replyFrom`),插值用 `{{reviews}}`
+      避开 i18next 保留字 `count`;总览区文案复用既有 `hotels.detail.reviews.*` 与
+      `hotels.results.excellent`,不重复造词条。⚠️ **缅文 5 条待母语者复核**。
+
+      **新增校验脚本** `scripts/check-hotel-reviews-page.cjs`(稿面几何/字号/色值 + 三语键结构 +
+      「不做 Helpful/Report」+ 圆角只影响 Reviews 卡等),⚠️ **未接进 `scripts/check.ps1`**。
+
+      **验证(真跑过)**:`npm run typecheck` **零报错(exit 0)**;`scripts/check-hotel-reviews-page.cjs`
+      **红→绿 157/161 → 161/161(exit 0)**。⚠️ 那次红是**断言过度约束**而非实现错:4 条否定断言直接扫原文,
+      命中的是"解释性注释里提到的那个词"(卡片注释写了「Helpful (12) / Report」、总览注释写了
+      「`detailShared.panel` 的 32」、卡壳注释写了「overflow 会连阴影一起吃掉」)—— 已加 `stripComments()`
+      先剥注释再判。⚠️ `scripts/check.ps1` 第 1 步因本机 `php` 不在 PATH 即断(本次未改任何 PHP 文件)。
+      ⚠️ 本会话执行器一度整体不可用(`0xC0000142`),绿灯是恢复后取的。⚠️ **未做真机 / Web 冒烟**,需人工对图。
+
+      🐞 **交付后用户报缺陷并已修(Web/H5)**:症状是「顶栏返回点不动 / 顶栏层级错 / 上拉时内容挡住顶栏」。
+      根因是 JSX 声明顺序:`headerBar` 与 `bottomBar` 都是 `position: 'absolute'`,而顶栏被声明在
+      **FlatList 之前** —— RN / react-native-web 的同级兄弟按**声明顺序**绘制,后声明者在上,于是列表盖住顶栏,
+      既挡内容又吃掉返回按钮的点击。**同仓库的 `HotelDetailScreen` 就是正确参照**:它的悬浮 topBar 声明在
+      ScrollView 之后,只差这一处。修法:① 顶栏/底栏移到 FlatList **之后**;② 两个悬浮层显式 `zIndex: 2`
+      (Android 的 z-order 靠 elevation,由 `shadows.subtle` 提供);③ FlatList 补 `style={styles.flex}`
+      (`flex: 1`)—— 原先连 style 都没有,滚动视口会被撑成内容高。**稿面几何/字号/色值未动**,顶栏仍是
+      稿面的绝对定位悬浮(用户选定,没改成固定分栏)。
+
+      另新增全仓审计 `scripts/audit-overlay-order.cjs`(整宽悬浮栏是否声明在滚动容器之前):
+      12 个候选文件里**报 0 处**,本页是唯一一处、已修;其余 11 个顺序本就正确,按「拿不准的不改」只加守卫。
+      该审计**做过灵敏度自检**(故意放违规样本 → `FOUND 1 处 (bar@192 < scroller@213)` + exit 1,样本即删),
+      否则只会报 OK 的审计等于没有。修复验证:契约脚本新增 5 条层级断言,**RED 161/166 → GREEN 166/166**;
+      typecheck exit 0;`expo export -p web` exit 0;审计 exit 0。
+
+
+- [x] **购物车 Check Out 接进支付流程 + 整车金额口径**(2026-09-21):上一条已把 Trip 链路
+      (`order/trip/create` + `order/trip/pay`)接通,但**入口没打通** —— `RoomCart` 页的 Check Out
+      仍只弹「暂不支持多房型」,详情页多选 Continue 也照旧提示一次。本次两处都改为进订房向导:
+      带过去的 `propertyId` / `roomTypeId` **只用于让向导进真实模式**拉商品详情(酒店名 / 退改规则),
+      真正下单的房型与间数由向导读**同一份购物车**决定;`hotels.detail.rooms.singleOnly` 三份 i18n 已删。
+
+      **同时修掉跟着暴露的三处口径问题**:
+      ① **向导金额与间数改整车口径**(`useBookingWizard` 新增 `cartMode / roomsTotal / roomCount`,
+         房费 = Σ 单价 × 间数 × 晚数,券试算基数 `couponBase` 同步)。此前复核页、支付页汇总卡、
+         吸底栏与**余额校验**都只算路由带进来的那一间 —— 余额不足的账号会被放过去,到 `trip/pay`
+         才被后端打回,用户看到的数字也比实扣少。`ReviewBody` 新增可选 `roomTotal`(不传按单间算,
+         Stay 明细页 / 关怀模式 / 演示模式行为不变)。
+      ② **成功页「本单订了几间」修复**:下单成功会清空购物车,而 `BookingSuccessScreen` 读的是
+         `items`,那块**永远渲染不出来**。`roomCartStore` 改为 `checkout()` —— 先把车转存进 `booked`
+         快照再清空,成功页读快照;单房型旧链路也走一次 `checkout()`,免得串到上一单的快照。
+      ③ **后端 `TripController::create` 的券适用范围**按 Trip 实际覆盖的物业/房型校验:原来一律传
+         `propertyId=0 / roomTypeId=0`,「指定物业 / 指定房型」的券会被判不适用而**整单失败** ——
+         而 App 侧恰恰是按 `/coupon/match-list`(带 propertyId/roomTypeId)算出可用并**自动应用**的。
+         现在整车同一家酒店(购物车必然如此)就把该物业/房型传下去,跨物业 / 跨房型才传 0。
+         **只放宽不收紧**,`order/create` 单订单链路一行未动。
+
+      **关怀模式两道护栏**:`useBookingWizard` 新增 `useCart`(Lite 传 `false`),另加「车的
+      `propertyId` 必须等于本次下单的 `propertyId`」判定 —— 否则完整模式留在车里的房会被关怀模式
+      悄悄拿去下单。
+
+      ⚠️ 不带日期(如从「我的精选」)进来时,购物车页按「没选日期 = 1 晚」算合计,而向导会按
+      `normalizeDates` 规整成「今天起 2 晚」,两页合计差一倍晚数;以向导为准,实付仍以
+      `trip/create` 返回的 `payAmount` 为准。
+      **验证**:`npm run typecheck` 零报错;`TripController.php` 借 order-service 容器的 PHP 跑
+      `php -l` 通过。⚠️ 本机未装 php,`scripts/check.ps1` 仍停在第 1 步(本次 PHP 改动已单独 lint);
+      ⚠️ **未做真机 / Web 冒烟**。
+
+- [x] **Rooms 页签房型卡:Choose 后就地变加减器**(2026-09-21,加减器取自 Room Cart `2659:12366`):
+      正常模式房型卡原本是 Choose ⇄ Remove 两段文案,现改为 Choose → **就地换成加减器**,
+      减到 0 移出并变回 Choose、**不弹确认**(购物车页那张 Alert Overlay `2659:12483` 是删整条时
+      才有的;房型卡点错再点一下就回来,多一次确认反而碍事)。
+      设计稿 `222:1428` 三张卡画的都是未选态、没给已选态视觉,所以已选态**直接复用购物车页那只**,
+      不自创第三种样式。
+
+      **新增 `components/hotel/RoomStepper.tsx`** 给购物车页与房型卡共用 —— 此前加减器在
+      `RoomCartScreen` 内联了一份、`lite/LiteRoomCard` 又有一份,改一处忘另一处就会出现
+      「同一个控件两种样子」。`RoomCartScreen` 已切过去(内联样式删掉),**关怀模式那份没动**
+      (它是旧稿 `2707:13670` 的规格,尺寸字号都不同,合并反而会改掉 Lite 的版式)。
+
+      接口改动:`HotelRoomCard` 的 `selectLabel` 只剩未选态文案,新增 `quantity` + `onChangeQuantity`;
+      `HotelRoomsTab` 的 `onToggleRoom` / `pickedKeys` 换成 `onChooseRoom` / `onChangeQuantity` /
+      `quantities`;`HotelDetailScreen` 把加减器直接接到 `roomCartStore.setQuantity`
+      (传 0 即移出,与购物车页同一个 action,两处行为不会走偏),Choose 仍走 `toggle`
+      —— 它只在间数为 0 时出现,等同于「加入」。引导页那张示意卡显式 `quantity={0}` 恒为未选态。
+      `hotels.detail.rooms.remove` 已无调用点,三份 i18n 删除,**1060 键零差异**。
+      **验证**:`npm run typecheck` 零报错;⚠️ **未做真机 / Web 冒烟**。
+
+- [x] **正常模式预订结果页整页重做**(2026-09-21,Figma `2659:13475` 多房间 / `224:3826` 单房间):
+      用户给的两张稿**其实是同一页** —— 唯一差别是状态卡里「Booking Status」有几行:
+      多房间一行一个预订(标 `(Room n)`),单房间只有一行、不带房号。所以一份实现两用,
+      行数由下单快照 `roomCartStore.booked` 决定(**一条 = 一个预订**,`trip/create` 按房型各建一单);
+      同一房型订了多间时稿面没画,按既有的「× n」口径补在房号里,不另造版式。
+
+      **整页换掉上一版**(`1675:6714` 二维码凭证页):QR、Booking Summary 四行(入离 / 人数 / 实付)、
+      Download Voucher、Back to Home 稿面都没有了。现在是:结果头(状态色 10% 的 96x88 圆底 + 40 图标 +
+      Inter 700 24/32 标题 + 说明)→ 凭证卡(1px 白描边 / 圆角 24 / p25 / 投影 0 -4 20 `rgba(78,115,255,.08)`;
+      logo 100x74 +「Travel with us」+ 状态行 + 可复制的 Booking ID)→ Booking Details
+      (96 缩略图圆角 12.8 + 酒店名 + 日期行)→ 引流卡 → 吸底只剩一枚 View Booking。
+      **核销码没有丢**:它在订单详情页(`OrderDetailScreen` 的 `VerifyCodeView`),
+      所以「View Booking」跳 `OrderDetail`,演示模式没有单号就退回 `OrderList` —— 与关怀模式成功页同一处理。
+
+      **一屏两态**,与 `BookingSuccessLiteScreen` 同一套状态机(路由参数 `status`):
+      `confirmed` 绿勾 PAID/CONFIRMED,`confirming` 橙钟 PAID/CONFIRMING(**稿面画的是这一态**)。
+      ⚠️ **`confirming` 目前产生不了,不是漏接**:后端 `ORDER_STATUS` 没有「等酒店确认」这一档,
+      `order/pay` 与 `trip/pay` 成功即已支付且预订已确认,所以缺省 `confirmed`;
+      后端补上该状态时只需让 `useBookingWizard.goSuccess` 传 `status: 'confirming'`,页面不用再动。
+
+      **新增两枚图标 + 一张图**:`HomeIcon` 补 `walletCreditCard` / `calendarClock`
+      (fluent:wallet-credit-card-20-filled / calendar-clock-20-filled,20 原生画布,
+      path 由稿面导出的 SVG 直接提取)—— 与已有的 `wallet`(15.833)、`wallet20`、`calendar`
+      都是**不同字形**,没有互相顶替;`assets/images/logo-2026.png`(532x386)是稿面那张蓝底 logo,
+      仓库原有的 `logo.png` 是白底蓝字那版,**不是同一张**。
+
+      ⚠️ **两处照稿不能照抄**:① 稿面的说明文字与两枚状态药丸是 Plus Jakarta Sans,本项目没装这个字族
+      (`App.tsx` 只加载 Outfit + Inter),与关怀模式成功页同一口径用 Inter 顶替 ——
+      同一套设计的两页,顶替口径必须一致;② 详情标题稿面写 20/16,那个 16 是 Figma 文本框高度,
+      RN 上会切掉下行字母,按 24(关怀模式成功页同一处也是这么做的)。
+      ⚠️ 稿面缩略图是酒店照片,接口这一层没把酒店封面透到成功页 —— 用**本单第一间房的封面**
+      (购物车快照里现成的真实图),没有才回落临时图,不假装有图。
+
+      i18n:`hotels.booking.success` 段重写(+15 新键,清掉 8 个旧凭证页的键),三份**零差异 1062 键**;
+      ⚠️ 新增缅文 10 条待母语复核。顺带删掉失去调用点的 `TEMP_VOUCHER_QR` 与 `VOUCHER_TAGS`
+      (`voucher-qr.png` 文件留在原地);`react-native-qrcode-svg` 全仓已无调用,依赖未动。
+
+      **验证**:新增 `scripts/check-booking-success-page.cjs`(67 项:稿面尺寸/色值/结构 + 新图标与资产 +
+      路由参数 + i18n 结构),**GREEN 67/67**,并做过**灵敏度自检**(故意把缩略图圆角 12.8 改成 12、
+      多画一条分隔线 → `RED 65/67`,样本即删);`npm run typecheck` 零报错;
+      `npx expo export -p web` 通过(顺带验证新 logo 打进了包)。
+      ⚠️ 该脚本**未接进 `scripts/check.ps1`**(本机仍未装 php,那条链第 1 步即断);
+      ⚠️ **未做真机 / Web 冒烟,需人工对图**。
+
+      🐞 **交付后用户报缺陷并已修**:点 View Booking 进订单详情,**详情页返回又回到成功页** ——
+      本屏是下单流程的终点、稿面**没有任何返回入口**(吸底只有这一枚按钮),于是卡成
+      「成功页 ⇄ 订单详情」出不来。根因是那枚按钮用了 `navigate`(往栈上再 push 一层);
+      上一版之所以没暴露,是因为它吸底还有一枚「Back to Home」,而新稿把它去掉了。
+      改成 `navigation.reset` 重置为「底部 Tab(我的预订)+ 订单详情」:详情页返回落到预订列表,
+      已完成的结账流程整个从历史里移除(本来也不该退回去)。
+      **关怀模式成功页 `BookingSuccessLiteScreen` 是同一段代码、同一个坑,一并修了。**
+      契约脚本补 2 条断言(必须用 `reset`、底下垫的是 `MyPickTab`):**GREEN 69/69**;typecheck 零报错。

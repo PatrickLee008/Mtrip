@@ -13,6 +13,7 @@ use App\Service\OrderStockService;
 use App\Service\PaymentResultHandler;
 use App\Service\PricingService;
 use App\Service\SettlementService;
+use App\Service\WalletService;
 use Hyperf\Contract\ConfigInterface;
 use Hyperf\DbConnection\Db;
 use Hyperf\Di\Annotation\Inject;
@@ -48,6 +49,10 @@ class TripController extends AbstractController
 
     #[Inject]
     protected BookingEventService $bookingEvents;
+
+    /** 余额支付(payMethod=3)扣款用,与 OrderController 同一个服务 */
+    #[Inject]
+    protected WalletService $walletService;
 
     #[Inject]
     protected PaymentResultHandler $payHandler;
@@ -104,8 +109,25 @@ class TripController extends AbstractController
             $couponRefId = 0;
             $couponDiscount = 0.0;
             if ($couponId > 0) {
+                /**
+                 * 适用范围要按**本 Trip 实际覆盖的物业/房型**校验:整车同一家酒店时
+                 * (App 的房型购物车正是这种)把该物业/房型传下去,跨物业/跨房型才传 0。
+                 * 一律传 0 会把「指定物业/指定房型」的券全判成不适用 —— 而 App 那一侧是按
+                 * `/coupon/match-list`(带 propertyId/roomTypeId)算出可用并自动应用的,
+                 * 两边口径不一致会让整单在这里直接失败。
+                 */
+                $propertyIds = array_values(array_unique(array_map('intval', array_column($legs, 'propertyId'))));
+                $roomTypeIds = array_values(array_unique(array_map('intval', array_column($legs, 'roomTypeId'))));
                 [$couponRefId, $couponDiscount] = $this->pricingService->resolveCoupon(
-                    $siteId, $userId, $couponId, 1, 0, 0, 0, 0, $tripTotal
+                    $siteId,
+                    $userId,
+                    $couponId,
+                    1,
+                    count($propertyIds) === 1 ? $propertyIds[0] : 0,
+                    count($roomTypeIds) === 1 ? $roomTypeIds[0] : 0,
+                    0,
+                    0,
+                    $tripTotal
                 );
             }
             $allocs = $this->allocate($couponDiscount, array_column($legs, 'net'), $tripTotal);
@@ -194,8 +216,9 @@ class TripController extends AbstractController
     public function pay(): array
     {
         $tripId = $this->requireId('tripId');
+        // 1 Stripe / 2 PayPal(均为 mock)/ 3 余额(真扣 user_info.balance,与 order/pay 同口径)
         $payMethod = $this->intInput('payMethod', 1);
-        if (! in_array($payMethod, [1, 2], true)) {
+        if (! in_array($payMethod, [1, 2, 3], true)) {
             throw new BusinessException(ErrorCode::PARAM_ERROR, '支付方式不正确');
         }
 
@@ -235,10 +258,26 @@ class TripController extends AbstractController
                     throw new BusinessException(ErrorCode::DATA_CONFLICT, 'Trip包含非待支付预订');
                 }
             }
+            /**
+             * 余额支付:Trip 是**整单一次收款**,所以在这里按 Trip 实付总额扣一次,
+             * 不是逐个预订各扣一次(那样会把同一笔钱拆成多条流水,且中途余额不足只成功一半)。
+             * 余额不足由 `WalletService::debit` 抛错,整个事务回滚。
+             */
+            $tripPayAmount = round((float) $trip['pay_amount'], 2);
+            if ($payMethod === 3 && $tripPayAmount > 0) {
+                $this->walletService->debit(
+                    $siteId,
+                    (int) $trip['user_id'],
+                    $tripPayAmount,
+                    2,
+                    $tripId,
+                    "行程 {$trip['trip_no']} 钱包支付",
+                );
+            }
             Db::table('order_trip')->where('id', $tripId)->update([
                 'pay_status' => 1,
                 'pay_method' => $payMethod,
-                'pay_trade_no' => 'MOCK' . OrderNoGenerator::flowNo(),
+                'pay_trade_no' => ($payMethod === 3 ? 'WALLET' : 'MOCK') . OrderNoGenerator::flowNo(),
                 'pay_time' => date('Y-m-d H:i:s'),
             ]);
 

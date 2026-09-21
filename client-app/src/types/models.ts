@@ -170,6 +170,11 @@ export interface GoodsDetail extends GoodsItem {
   close_time: string;
   skus: GoodsSku[];
   refundRules: RefundRule[];
+  /**
+   * 评价聚合(`/app/hotels/detail` 下发,普通 `/app/goods/detail` 没有)。
+   * `rating` 是 **1-5** 分制 —— 页面按 ×2 换算成设计稿的 10 分制,与搜索结果页同一口径。
+   */
+  reviewSummary?: { rating: number; count: number };
 }
 
 /** 价格库存日历项 */

@@ -98,6 +98,8 @@ export default function HotelBookingLiteScreen() {
     enableMultiStay: false,
     steps: ['guests', 'payment'],
     confirmLogin: true,
+    /* 关怀模式只订一间:车里可能还留着完整模式挑的房,不能拿来替它下单 */
+    useCart: false,
   });
 
   const onPay = step === 'payment';

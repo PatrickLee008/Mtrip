@@ -24,6 +24,7 @@ import { useTranslation } from 'react-i18next';
 import { fetchHotelDetail } from '@/api/goods';
 import { fetchCouponMatchList, type BestCoupon } from '@/api/marketing';
 import { createOrder, payOrder } from '@/api/order';
+import { apiTripCreate, apiTripPay } from '@/api/trip';
 import { fetchTravelerList } from '@/api/user';
 import {
   formatDayMonth,
@@ -43,6 +44,7 @@ import {
   type PaymentMethodKey,
 } from '@/screens/hotel/bookingDemo';
 import { useCommonStore } from '@/store/commonStore';
+import { useRoomCartStore } from '@/store/roomCartStore';
 import { useSiteStore } from '@/store/siteStore';
 import { useUserStore } from '@/store/userStore';
 import type { CouponView, RefundRule } from '@/types/models';
@@ -71,6 +73,12 @@ interface Options {
    * 还是直接跳。完整模式的稿子里没有这张浮层,默认 false 保持原行为。
    */
   confirmLogin?: boolean;
+  /**
+   * 是否使用房型购物车(多房间预订走 `trip/create`)。
+   * 关怀模式传 false —— 它的详情页不加购,但车里可能还留着完整模式挑的房,
+   * 不关掉的话会在关怀模式下悄悄按车里的内容下单。
+   */
+  useCart?: boolean;
 }
 
 /**
@@ -116,6 +124,7 @@ export function useBookingWizard({
   enableMultiStay = true,
   steps,
   confirmLogin = false,
+  useCart = true,
 }: Options) {
   const { t, i18n } = useTranslation();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -158,6 +167,10 @@ export function useBookingWizard({
   const [expanded, setExpanded] = useState<'card' | 'mobileBanking' | null>(null);
   const [payResult, setPayResult] = useState<'success' | 'error' | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  /** 房型购物车:有内容就走 Trip 多房间下单,支付成功后清空 */
+  const cartRooms = useRoomCartStore((s) => s.items);
+  const cartPropertyId = useRoomCartStore((s) => s.propertyId);
+  const checkoutCart = useRoomCartStore((s) => s.checkout);
   const [failReason, setFailReason] = useState('');
   /**
    * 真实下单成功后的订单主键 / 单号 / 实付金额 / 核销码(二维码),传给成功页。
@@ -281,6 +294,39 @@ export function useBookingWizard({
   const multi = stays.length > 1;
   const current = stays[0];
 
+  /* ------------------------------------------------------------ 房型购物车(多房间预订) */
+  /**
+   * 车里**能落单**的房型:有真实 `sku` 且车属于某个物业(演示房型没有 sku,进不了真实下单)。
+   * 这个判定必须与 `submit` 里组 `tripItems` 的条件**完全一致** ——
+   * 否则页面显示/校验的金额会与实际提交的内容错开。
+   */
+  const tripRooms = useMemo(
+    () =>
+      useCart && cartPropertyId && cartPropertyId === propertyId
+        ? cartRooms.filter((room) => room.sku)
+        : [],
+    [useCart, cartRooms, cartPropertyId, propertyId],
+  );
+  /** 多房间模式:金额与间数一律以车为准,不再是路由带进来的那一个 `roomTypeId` */
+  const cartMode = tripRooms.length > 0;
+  /**
+   * 车内房费合计 = Σ 单价 × 间数 × 晚数,与详情页底栏、购物车页的合计**同一公式**。
+   * 半选日期(`checkOut` 为空)时按 1 晚,跟 `roomCartStore.nightsBetween` 的兜底一致。
+   *
+   * 这是**预估值**(单价取 `base_price`),实付仍以 `trip/create` 返回的 `payAmount` 为准 ——
+   * 与单房型链路拿 `base_price × 晚数 × 间数` 预估是同一口径。
+   */
+  const cartTotal = useMemo(() => {
+    if (!cartMode) return 0;
+    const nights = Math.max(1, nightsBetween(current.checkIn, current.checkOut));
+    return tripRooms.reduce((sum, room) => sum + room.price * room.quantity * nights, 0);
+  }, [cartMode, tripRooms, current.checkIn, current.checkOut]);
+  /** 向导各处要用的房费与间数口径:多房间看车,单房型看当前住宿 */
+  const roomsTotal = cartMode ? cartTotal : current.total;
+  const roomCount = cartMode
+    ? tripRooms.reduce((sum, room) => sum + room.quantity, 0)
+    : current.rooms;
+
   /* ------------------------------------------------------------ 结账优惠券(C-M6) */
   /**
    * 进入复核步时**自动应用最优券**,用户可在弹窗里换一张 / 不用券 / 恢复最优券。
@@ -300,7 +346,8 @@ export function useBookingWizard({
   const [couponOpen, setCouponOpen] = useState(false);
 
   const couponEnabled = realMode && isLogin && !multi;
-  const couponBase = current.roomPrice;
+  /* 试算基数:多房间要按整车净额算,否则券的抵扣额会按单间去匹配门槛,与后端整单口径对不上 */
+  const couponBase = cartMode ? cartTotal : current.roomPrice;
 
   useEffect(() => {
     if (!couponEnabled || !propertyId || !roomTypeId || couponBase <= 0) {
@@ -391,8 +438,12 @@ export function useBookingWizard({
   };
 
   const tripTotal = stays.reduce((sum, stay) => sum + stay.total, 0);
-  /** 吸底栏与支付页汇总卡的金额:多住宿走 Trip 合计,单段住宿要扣掉已应用的券 */
-  const payableTotal = multi ? tripTotal : Math.max(0, current.total - couponDiscount);
+  /**
+   * 吸底栏与支付页汇总卡的金额:多住宿(演示)走 Trip 合计,其余用 `roomsTotal` 扣掉已应用的券。
+   * `roomsTotal` 在多房间模式下是**整车**合计 —— 这里若还按单间算,余额校验会放过余额不足的账号,
+   * 到 `trip/pay` 才被后端打回,用户看到的也会是比实扣少的数字。
+   */
+  const payableTotal = multi ? tripTotal : Math.max(0, roomsTotal - couponDiscount);
 
   /**
    * 真实下单:`create` 建单 → `pay` 支付。
@@ -405,7 +456,8 @@ export function useBookingWizard({
    * (形如 `09****1234`),提交上去就是一条联系不上的假号码。
    */
   const submit = async () => {
-    if (!current.propertyId || !current.roomTypeId) {
+    /* 多房间模式下房型来自购物车,路由不一定带 roomTypeId,所以只在单房型链路上拦 */
+    if (!cartMode && (!current.propertyId || !current.roomTypeId)) {
       comingSoon();
       return;
     }
@@ -417,6 +469,50 @@ export function useBookingWizard({
     }
     setSubmitting(true);
     try {
+      /**
+       * 多房间预订走 Trip:购物车里有房型(且拿得到真实房型 id)时,
+       * 整车一次 `trip/create` + `trip/pay`(券只消耗一次、各预订各自出核销码)。
+       * 车是空的(单房型旧链路 / 演示模式)仍走 `order/create` + `order/pay`。
+       */
+      const tripItems = tripRooms.map((room) => ({
+        propertyId: cartPropertyId as number,
+        roomTypeId: room.sku!.id,
+        quantity: room.quantity,
+        useDate: current.checkIn,
+        endDate: current.checkOut,
+        contactName,
+        contactPhone,
+        remark: request.trim() || undefined,
+      }));
+
+      if (tripItems.length > 0) {
+        const trip = await apiTripCreate({
+          items: tripItems,
+          couponId: appliedCoupon?.receiveId,
+        });
+        /**
+         * 钱包余额 → 3(后端真扣 `user_info.balance`,整单扣一次);
+         * 其余渠道(card / mmqr / kbzpay / wavepay / mobileBanking)本期都是 mock,统一走 1。
+         * 本项目没有 PayPal 这个选项,所以不映射 2。
+         */
+        const paidTrip = await apiTripPay({
+          tripId: trip.tripId,
+          payMethod: method === 'wallet' ? 3 : 1,
+        });
+        void refreshProfile().catch(() => undefined);
+        /* 下单完成:清空购物车(转存为快照,成功页要按它列本单明细) */
+        checkoutCart();
+        const first = trip.bookings[0];
+        setPaid({
+          orderId: first?.orderId ?? 0,
+          orderNo: trip.tripNo,
+          payAmount: trip.payAmount,
+          verifyCode: paidTrip.codes?.[0]?.verifyCode ?? '',
+        });
+        setPayResult('success');
+        return;
+      }
+
       const order = await createOrder({
         propertyId: current.propertyId,
         roomTypeId: current.roomTypeId,
@@ -440,6 +536,8 @@ export function useBookingWizard({
       });
       /* 余额支付(payOrder 默认 PAY_METHOD.BALANCE):后端真扣 user_info.balance 并落流水 */
       const paidResult = await payOrder(order.orderId);
+      /* 单房型链路车本就是空的;仍要走一次,把上一单的快照清掉,成功页不会串到上次的房型 */
+      checkoutCart();
       /* 余额变了,把本地资料刷一次,钱包卡与「我的」页不至于还显示扣款前的数 */
       void refreshProfile().catch(() => undefined);
       setPaid({
@@ -485,10 +583,10 @@ export function useBookingWizard({
         return;
       }
     }
-    if (step === 'review' && !agreed) {
-      showToast(t('hotels.booking.review.agreeRequired'));
-      return;
-    }
+    /**
+     * 复核步不再有「同意条款」勾选框(新稿 2659:13281 把它改成了 Continue 下方的一行说明文字,
+     * 继续即视为同意),所以这里不再拦截。`agreed` 仍保留导出给关怀模式等旧调用方。
+     */
     if (step === 'payment') {
       if (!method) {
         showToast(t('hotels.booking.payment.methodRequired'));
@@ -530,7 +628,8 @@ export function useBookingWizard({
       nights: nightsLabel(t, nightsBetween(stay.checkIn, stay.checkOut)),
     }),
     roomLabel: t('hotels.booking.payment.roomLine', {
-      rooms: stay.rooms,
+      /* 多房间模式下「间数」是整车的总间数,不是这一段住宿里那个计数器 */
+      rooms: cartMode ? roomCount : stay.rooms,
       room: roomNameOf(stay),
       guests: stay.adults + stay.childCount,
     }),
@@ -561,7 +660,7 @@ export function useBookingWizard({
       checkIn: current.checkIn,
       checkOut: current.checkOut,
       adults: current.adults + current.childCount,
-      rooms: current.rooms,
+      rooms: roomCount,
       paidTotal: paid?.payAmount,
     };
     if (successRoute === 'BookingSuccessLite') {
@@ -592,6 +691,10 @@ export function useBookingWizard({
     multi,
     loadingGoods,
     refundRules,
+    /* 多房间(购物车)模式:页面据此把房费与间数换成整车口径 */
+    cartMode,
+    roomsTotal,
+    roomCount,
     request,
     setRequest,
     agreed,

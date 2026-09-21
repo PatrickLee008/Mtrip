@@ -5,6 +5,7 @@
 import type { NavigatorScreenParams } from '@react-navigation/native';
 
 import type { SmsScene } from '@/api/user';
+import type { DetailTabKey } from '@/screens/hotel/detailDemo';
 import type { TravelerItem } from '@/types/models';
 
 /**
@@ -88,8 +89,22 @@ export type RootStackParamList = {
    * 真实卡带 id 拉 `/goods/detail`,演示卡无 id 时使用设计稿数据。
    * `checkIn`/`checkOut` 是搜索页选好的日期,只是过一道手透传给订房向导 ——
    * 否则选完房日期会跳回向导自己挑的默认值。
+   * `tab` 是**回跳时要落在哪个页签**:评价整页底栏的「Choose my room」用它把本页切到 Rooms
+   * (本页在栈里已挂载,`navigate` 只改 params 不重挂,页面里要跟着 params 同步一次)。
    */
-  HotelDetail: { propertyId?: number; checkIn?: string; checkOut?: string } | undefined;
+  HotelDetail: { propertyId?: number; checkIn?: string; checkOut?: string; tab?: DetailTabKey } | undefined;
+  /**
+   * 房型购物车(Figma Room Cart `2659:11842`)。
+   * 不收参数 —— 车里的内容与所属酒店都在 `store/roomCartStore` 里,避免与详情页两份状态。
+   */
+  RoomCart: undefined;
+  /**
+   * 住客评价整页(Figma `Hotel Details Reviews Page` `1133:2998`),
+   * 酒店详情 Reviews 页签里「Read All Reviews」的落地页。
+   * `checkIn`/`checkOut` 只是过一道手 —— 底栏「Choose my room」回跳详情时要带回搜索页选的日期。
+   * 无 `propertyId`(演示酒店)时页面为空态,不发请求。
+   */
+  HotelReviews: { propertyId?: number; checkIn?: string; checkOut?: string } | undefined;
   /**
    * 订房向导(Figma section 1675:5776),房型卡 Select 的落地页。
    * 4 步在同一个路由内切换,`roomKey` 只用来指定进来时选中的房型(演示模式下可缺省)。
@@ -136,13 +151,19 @@ export type RootStackParamList = {
   Insurance: undefined;
   /** Trip 里单段住宿的复核页(1675:9677);index 从 0 起 */
   StayDetail: { index?: number } | undefined;
-  /** 预订成功(1675:6714);真实下单后带上订单结果,缺省则显示设计稿演示值 */
+  /**
+   * 预订结果页(Figma `2659:13475` 多房间 / `224:3826` 单房间)。
+   * 真实下单后带上订单结果,缺省则显示设计稿演示值。
+   */
   BookingSuccess:
     | {
         /** 订单数字主键,给「View Booking」跳 `OrderDetail` 用 */
         orderId?: number;
         orderNo?: string;
-        /** 支付接口返回的核销码,成功页的二维码就是它 */
+        /**
+         * 支付接口返回的核销码。新稿的成功页不再画二维码(核销码在订单详情页),
+         * 这个参数留着是因为向导两条链路都拿得到它,后续要在成功页加凭证时不用再改一遍调用方。
+         */
         verifyCode?: string;
         hotelName?: string;
         address?: string;
@@ -151,6 +172,8 @@ export type RootStackParamList = {
         adults?: number;
         rooms?: number;
         paidTotal?: number;
+        /** 与关怀模式同一套状态机;缺省 `confirmed`(后端目前没有「等酒店确认」这一档) */
+        status?: 'confirming' | 'confirmed';
       }
     | undefined;
   /**

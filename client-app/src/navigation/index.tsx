@@ -32,7 +32,9 @@ import BookingSuccessScreen from '@/screens/hotel/BookingSuccessScreen';
 import HotelBookingLiteScreen from '@/screens/hotel/HotelBookingLiteScreen';
 import HotelBookingScreen from '@/screens/hotel/HotelBookingScreen';
 import HotelDetailScreen from '@/screens/hotel/HotelDetailScreen';
+import RoomCartScreen from '@/screens/hotel/RoomCartScreen';
 import HotelResultsScreen from '@/screens/hotel/HotelResultsScreen';
+import HotelReviewsScreen from '@/screens/hotel/HotelReviewsScreen';
 import HotelDetailLiteScreen from '@/screens/hotel/HotelDetailLiteScreen';
 import HotelInfoLiteScreen from '@/screens/hotel/HotelInfoLiteScreen';
 import HotelPolicyLiteScreen from '@/screens/hotel/HotelPolicyLiteScreen';
@@ -225,6 +227,18 @@ export default function AppNavigator() {
         <Stack.Screen
           name="HotelDetail"
           component={HotelDetailScreen}
+          options={{ title: t('hotels.title'), headerShown: false }}
+        />
+        {/* 房型购物车(Figma Room Cart 2659:11842)自带顶栏与吸底结算栏 */}
+        <Stack.Screen
+          name="RoomCart"
+          component={RoomCartScreen}
+          options={{ title: t('hotels.title'), headerShown: false }}
+        />
+        {/* 住客评价整页(Figma Hotel Details Reviews Page 1133:2998)自带悬浮顶栏与吸底价格栏 */}
+        <Stack.Screen
+          name="HotelReviews"
+          component={HotelReviewsScreen}
           options={{ title: t('hotels.title'), headerShown: false }}
         />
         {/* 订房流程(Figma section 1675:5776)整组都自带设计稿顶栏 / 吸底栏,关掉 Stack 头 */}

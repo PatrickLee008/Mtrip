@@ -220,7 +220,10 @@ function StepRoom({ lite }: StepProps) {
       promo={DEMO_ROOM.promoKey ? t(DEMO_ROOM.promoKey) : null}
       price={formatMoney(DEMO_ROOM.price, currency)}
       perNightLabel={DEMO_ROOM.perNight ? t('hotels.detail.rooms.perNight') : null}
-      selectLabel={t('hotels.detail.rooms.select')}
+      selectLabel={t('hotels.detail.rooms.choose')}
+      /* 引导页只是张示意卡:恒为未选态(显示 Choose),加减器不会出现 */
+      quantity={0}
+      onChangeQuantity={noop}
       bestsellerLabel={t('hotels.detail.rooms.bestseller')}
       favorite={DEMO_ROOM.favorite}
       viewer={DEMO_ROOM.viewer}

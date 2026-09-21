@@ -114,12 +114,8 @@ export default function StayDetailScreen() {
         </View>
       </View>
 
-      <ReviewBody
-        stay={stay}
-        agreed={agreed}
-        onToggleAgree={() => setAgreed((v) => !v)}
-        onComingSoon={comingSoon}
-      />
+      {/* Stay 明细页仍是单段住宿:不传 cartRooms,ReviewBody 走原来的单房型版式 */}
+      <ReviewBody stay={stay} onComingSoon={comingSoon} />
     </MorePageLayout>
   );
 }

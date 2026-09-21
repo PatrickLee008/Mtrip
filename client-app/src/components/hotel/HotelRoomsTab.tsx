@@ -7,10 +7,13 @@
  * 两种单位之间的换算口径没有依据(设计稿数值本身也对不上),故**单位按卡片各自的原值展示**,
  * 切换按钮走 comingSoon。
  *
- * 设计稿这一页的底部价格栏是 hidden 的(每张卡自带 Select),页面据此在本页签隐藏底栏。
+ * 新稿 222:1428 把底栏改成了**购物车栏**:每张卡的按钮由 Select 改为 Choose,点一下把该房型
+ * 加入购物车,按钮**就地换成加减器**(与购物车页同一个 `RoomStepper`),减到 0 直接移出、
+ * 变回 Choose 且**不弹确认**(购物车页那张确认框是删除整条时才有的,这里点错再点一下就回来了);
+ * 底栏显示合计与已选件数,由「Continue」统一进订房流程 —— 所以本页签不再隐藏底栏,
+ * 卡片按钮也不再直接跳转。选中态与间数由页面持有(`roomCartStore`),本组件只做展示与回调。
  *
- * 房型卡的 Select 已接上订房流程(Figma section 1675:5776):由页面传 `onSelectRoom` 进来,
- * 落到 `HotelBooking` 路由;其余交互(收藏、See Details、360°/全景、面积单位切换)仍是 comingSoon。
+ * 其余交互(收藏、See Details、360°/全景、面积单位切换)仍是 comingSoon。
  */
 
 import React from 'react';
@@ -19,7 +22,7 @@ import { useTranslation } from 'react-i18next';
 
 import { TEMP_ROOM_COVERS } from '@/assets/tempImages';
 import { EmptyView } from '@/components/common/StateViews';
-import HomeIcon from '@/components/home/HomeIcon';
+import HomeIcon, { type HomeIconName } from '@/components/home/HomeIcon';
 import HotelRoomCard from '@/components/hotel/HotelRoomCard';
 import { detailShared } from '@/components/hotel/detailShared';
 import { colors } from '@/config/theme';
@@ -33,8 +36,25 @@ import { resolveMediaUri } from '@/utils/media';
 interface Props {
   /** 设计稿有、当前没有对应实现的交互统一走这里 */
   onComingSoon: () => void;
-  /** 点 Select 进订房流程 */
-  onSelectRoom: (roomKey: string, sku?: GoodsSku) => void;
+  /**
+   * 点 Choose 把房型加入购物车(置 1 间)。
+   * 单价与 `extra`(名称/封面/属性)一并回传:演示房型没有 `GoodsSku`,
+   * 且购物车页不重新请求详情,展示所需的字段只能在加购这一刻带过去。
+   */
+  onChooseRoom: (
+    roomKey: string,
+    price: number,
+    sku?: GoodsSku,
+    extra?: {
+      name: string;
+      cover?: ImageSourcePropType;
+      attrs: { key: string; icon: HomeIconName; label: string }[];
+    },
+  ) => void;
+  /** 加减器改间数;0 表示移出购物车(按钮变回 Choose,**不弹确认**) */
+  onChangeQuantity: (roomKey: string, quantity: number) => void;
+  /** 各房型在购物车里的间数(未选的不在表里 = 0),决定卡片显示 Choose 还是加减器 */
+  quantities: Record<string, number>;
   /** 真实商品详情下发的房型;不传时仍显示设计稿演示房型 */
   rooms?: GoodsSku[];
 }
@@ -47,6 +67,11 @@ function mediaSource(uri: string | undefined, fallback: ImageSourcePropType): Im
   return remote ? { uri: remote } : fallback;
 }
 
+/** 购物车卡片那排属性;走函数而不是对象字面量,icon 才能自然推成 HomeIconName */
+function attr(key: string, icon: HomeIconName, label: string) {
+  return { key, icon, label };
+}
+
 function facilityIcon(label: string) {
   const key = label.toLowerCase();
   if (key.includes('breakfast') || key.includes('餐')) return ROOM_FACILITY_ICONS.breakfast;
@@ -55,7 +80,13 @@ function facilityIcon(label: string) {
   return ROOM_FACILITY_ICONS.wifi;
 }
 
-export default function HotelRoomsTab({ onComingSoon, onSelectRoom, rooms }: Props) {
+export default function HotelRoomsTab({
+  onComingSoon,
+  onChooseRoom,
+  onChangeQuantity,
+  quantities,
+  rooms,
+}: Props) {
   const { t } = useTranslation();
   const currency = useSiteStore((s) => s.currency);
   const realMode = Array.isArray(rooms);
@@ -113,13 +144,27 @@ export default function HotelRoomsTab({ onComingSoon, onSelectRoom, rooms }: Pro
                 promo={null}
                 price={formatMoney(room.base_price, currency)}
                 perNightLabel={t('hotels.detail.rooms.perNight')}
-                selectLabel={t('hotels.detail.rooms.select')}
+                selectLabel={t('hotels.detail.rooms.choose')}
+                quantity={quantities[`room-${room.id}`] ?? 0}
                 bestsellerLabel={index === 0 ? t('hotels.detail.rooms.bestseller') : null}
                 favorite={false}
                 viewer={images.length > 1}
                 onPress={onComingSoon}
                 onToggleFavorite={onComingSoon}
-                onSelect={() => onSelectRoom(`room-${room.id}`, room)}
+                onChangeQuantity={(quantity) => onChangeQuantity(`room-${room.id}`, quantity)}
+                onSelect={() =>
+                  onChooseRoom(`room-${room.id}`, Number(room.base_price), room, {
+                    name: room.room_name ?? `#${room.id}`,
+                    cover: mediaSource(images[0], fallback),
+                    attrs: [
+                      attr('guests', 'guests', t('hotels.detail.rooms.guests', { guests: room.max_guests ?? 2 })),
+                      attr('bed', 'bedSize', room.bed_type || t('hotels.detail.rooms.beds.king')),
+                      ...(room.breakfast
+                        ? [attr('breakfast', 'breakfast', t('hotels.detail.rooms.facilities.breakfast'))]
+                        : []),
+                    ],
+                  })
+                }
                 onOpenViewer={onComingSoon}
               />
             );
@@ -158,13 +203,24 @@ export default function HotelRoomsTab({ onComingSoon, onSelectRoom, rooms }: Pro
             promo={room.promoKey ? t(room.promoKey) : null}
             price={formatMoney(room.price, currency)}
             perNightLabel={room.perNight ? t('hotels.detail.rooms.perNight') : null}
-            selectLabel={t('hotels.detail.rooms.select')}
+            selectLabel={t('hotels.detail.rooms.choose')}
+            quantity={quantities[room.key] ?? 0}
             bestsellerLabel={room.bestseller ? t('hotels.detail.rooms.bestseller') : null}
             favorite={room.favorite}
             viewer={room.viewer}
             onPress={onComingSoon}
             onToggleFavorite={onComingSoon}
-            onSelect={() => onSelectRoom(room.key)}
+            onChangeQuantity={(quantity) => onChangeQuantity(room.key, quantity)}
+            onSelect={() =>
+              onChooseRoom(room.key, room.price, undefined, {
+                name: t(`hotels.detail.rooms.names.${room.key}`),
+                cover: TEMP_ROOM_COVERS[room.key],
+                attrs: [
+                  attr('guests', 'guests', t('hotels.detail.rooms.guests', { guests: room.guests })),
+                  attr('bed', 'bedSize', t(`hotels.detail.rooms.beds.${room.bed}`)),
+                ],
+              })
+            }
             onOpenViewer={onComingSoon}
           />
           ))}

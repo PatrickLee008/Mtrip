@@ -65,6 +65,29 @@ export function fetchHotelDetail(propertyId: number): Promise<GoodsDetail> {
   return get('/api/v1/app/hotels/detail', { propertyId });
 }
 
+/**
+ * 一条住客评价(`/app/hotels/reviews` 的行,字段 snake_case 直出)。
+ *
+ * **设计稿有、这里没有的字段**:评论标题、同行类型(Solo/Couple/Family)、分维度评分 ——
+ * `goods_review` 表只有单一 `rating`,这些行在页面上不渲染(见 `HotelReviewCard`)。
+ * `nickname` 后端在为空时会填中文字面量「匿名用户」,客户端要按「没有昵称」处理。
+ */
+export interface HotelReview {
+  id: number;
+  /** 1-5 分制,页面按 ×2 换算成设计稿的 /10 */
+  rating: number;
+  content: string;
+  images: string[] | null;
+  reply_content: string;
+  created_at: string;
+  nickname: string;
+  avatar: string | null;
+}
+
+export function fetchHotelReviews(params: { propertyId: number } & PageParams): Promise<PageData<HotelReview>> {
+  return get('/api/v1/app/hotels/reviews', { ...params });
+}
+
 export function fetchHotelCalendar(params: {
   propertyId: number;
   roomTypeId: number;
