@@ -182,7 +182,7 @@ class AvailabilityController extends AbstractAdminController
 
         $rows = $query->orderBy('p.id')->orderBy('r.sort')->orderBy('r.id')
             ->get([
-                'r.id', 'r.site_id', 'r.property_id', 'r.room_name', 'r.bed_type', 'r.base_price', 'r.weekend_price', 'r.base_stock', 'r.launch_stock', 'r.status',
+                'r.id', 'r.site_id', 'r.property_id', 'r.room_name', 'r.bed_type', 'r.base_price', 'r.weekend_price', 'r.base_stock', 'r.launch_stock', 'r.status', 'r.currency',
                 'p.store_name as property_name', 'p.merchant_id', 'p.images as property_images', 'p.address',
             ])->map(static fn ($row) => (array) $row)->all();
 
@@ -210,6 +210,7 @@ class AvailabilityController extends AbstractAdminController
                 'base_stock' => (int) $row['base_stock'],
                 'launch_stock' => (int) $row['launch_stock'],
                 'status' => (int) $row['status'],
+                'currency' => (string) ($row['currency'] ?: 'THB'),
             ];
         }
         return array_values($hotels);

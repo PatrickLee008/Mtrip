@@ -1,147 +1,536 @@
 <template>
   <PageContainer>
-    <div class="availability-page">
-      <div class="toolbar">
-        <div class="selector-wrap">
-          <HomeOutlined class="selector-icon" />
-          <a-select v-model:value="filters.propertyId" class="hotel-filter" :placeholder="t('availability.filters.allHotels')" allow-clear @change="handleHotelChange">
-            <a-select-option v-for="hotel in hotelOptions" :key="hotel.id" :value="hotel.id">{{ hotel.name }}</a-select-option>
-          </a-select>
-        </div>
-        <span class="property-pill"><HomeOutlined />{{ t('availability.propertyCount', { count: hotelOptions.length }) }}</span>
-        <a-select v-if="filters.propertyId" v-model:value="filters.roomId" class="room-filter" :placeholder="t('availability.filters.allRooms')" allow-clear @change="loadCalendar">
-          <a-select-option v-for="room in roomsForSelectedHotel" :key="room.id" :value="room.id">{{ room.name }}</a-select-option>
-        </a-select>
-        <a-range-picker v-model:value="dateRange" value-format="YYYY-MM-DD" class="date-range" @change="loadCalendar" />
-        <div class="spacer"></div>
-        <div class="view-toggle"><button class="active">{{ t('availability.views.calendar') }}</button><button>{{ t('availability.views.list') }}</button></div>
-        <a-button v-perm="'mch:availability:bulk-update'" @click="bulkOpen = true"><SlidersOutlined />{{ t('availability.actions.bulkUpdate') }}</a-button>
-        <a-button v-perm="'mch:availability:sync'" :loading="syncing" @click="syncNow"><SyncOutlined />{{ t('availability.actions.syncNow') }}</a-button>
-      </div>
+    <div class="avail-page">
+      <header class="avail-heading">
+        <h1>{{ t('availability.title') }}</h1>
+        <p>{{ t('availability.subtitle') }}</p>
+      </header>
 
-      <div class="sync-row">
-        <div class="sync-pill success"><span></span><strong>{{ t('availability.sync.pms') }}: {{ t('availability.sync.connected') }}</strong><em>{{ t('availability.sync.lastSync', { time: summary.lastSyncAt || '-' }) }}</em></div>
-        <div class="sync-pill danger"><span></span><strong>{{ t('availability.sync.cm') }}: {{ t('availability.sync.disconnected') }}</strong><em>{{ t('availability.sync.pending', { count: summary.closedCells || 0 }) }}</em></div>
-      </div>
-
-      <div class="legend-row"><strong>{{ t('availability.legend.title') }}</strong><span class="dot available"></span>{{ t('availability.legend.available') }}<span class="dot low"></span>{{ t('availability.legend.low') }}<span class="dot sold"></span>{{ t('availability.legend.sold') }}<span class="dot closed"></span>{{ t('availability.legend.closed') }}</div>
-
-      <div class="calendar-shell" :class="{ 'with-drawer': !!activeCell }">
-        <div class="calendar-main">
-          <a-spin :spinning="loading">
-            <div class="calendar-card">
-              <table class="calendar-table">
-                <thead><tr><th class="sticky room-col">{{ filters.propertyId ? t('availability.columns.roomType') : t('availability.columns.hotelRoom') }}</th><th v-for="date in dates" :key="date" :class="{ weekend: isWeekend(date) }"><strong>{{ dayNumber(date) }}</strong><span>{{ weekdayLabel(date) }}</span></th></tr></thead>
-                <tbody>
-                  <template v-for="hotel in hotels" :key="hotel.id">
-                    <tr v-if="!filters.propertyId" class="hotel-row"><td :colspan="dates.length + 1"><span></span><strong>{{ hotel.name }}</strong><em>{{ t('availability.roomTypeCount', { count: hotel.rooms.length }) }}</em></td></tr>
-                    <tr v-for="room in hotel.rooms" :key="room.id">
-                      <td class="sticky room-col room-cell"><strong>{{ room.name }}</strong><span>{{ t('availability.roomMeta', { total: room.base_stock, available: room.base_stock }) }}</span></td>
-                      <td v-for="day in room.days || []" :key="day.date" :class="{ weekend: isWeekend(day.date) }" @click="openCell(hotel, room, day)">
-                        <div :class="['day-cell', cellTone(day), isActiveCell(room.id, day.date) ? 'selected' : '']"><strong>{{ day.isClosed ? '-' : day.stockLeft }}</strong><span>{{ day.isClosed ? t('availability.cell.stop') : priceShort(day.price) }}</span></div>
-                      </td>
-                    </tr>
-                  </template>
-                </tbody>
-              </table>
+      <section class="controls-row">
+        <div class="controls-left">
+          <div class="control">
+            <span class="control-label">{{ mode === 'bulk' ? t('availability.filters.quickRoomType') : t('availability.filters.roomType') }}</span>
+            <RoomTypeSelect v-model="filterRoomId" :options="roomOptions" :variant="mode === 'bulk' ? 'default' : 'primary'" :placeholder="t('availability.filters.selectRoom')" />
+          </div>
+          <div class="control">
+            <span class="control-label">{{ mode === 'bulk' ? t('availability.filters.bulkDateRange') : t('availability.filters.selectPeriod') }}</span>
+            <MonthNavigator v-if="mode === 'calendar'" v-model="month" />
+            <div v-else class="range-control">
+              <button type="button" class="range-trigger" @click="rangeOpen = !rangeOpen">
+                <AvIcon name="calendar" />
+                <span class="range-text">{{ rangeLabel }}</span>
+                <AvIcon name="chevron-down" />
+              </button>
+              <!-- 稿面触发器是自绘按钮(日历图标 + 区间文本 + chevron),面板沿用 antd 原生区间选择器 -->
+              <a-range-picker
+                v-model:value="bulkRange"
+                v-model:open="rangeOpen"
+                class="range-proxy"
+                value-format="YYYY-MM-DD"
+                :allow-clear="false"
+                :format="'MMM D, YYYY'"
+                @change="onRangeChange"
+              />
             </div>
-          </a-spin>
-
-          <div class="bottom-panels">
-            <div class="panel-card"><div class="panel-head"><strong>{{ t('availability.rules.title') }}</strong><a-button type="text" size="small"><PlusOutlined />{{ t('availability.rules.add') }}</a-button></div><button v-for="rule in pricingRules" :key="rule.id" class="rule-row"><span :class="{ active: rule.active }"></span><em>{{ rule.label }}</em><strong>{{ rule.value }}</strong><RightOutlined /></button></div>
-            <div class="panel-card"><div class="panel-head"><strong>{{ t('availability.alerts.title') }}</strong><a-tag color="warning">{{ t('availability.alerts.active', { count: activeAlertCount }) }}</a-tag></div><div v-for="alert in alerts" :key="alert.key" class="alert-row"><WarningOutlined /><div><strong>{{ alert.title }}</strong><p>{{ alert.desc }}</p></div><a-button size="small" type="text" @click="alert.resolved = true">{{ t('availability.alerts.resolve') }}</a-button></div></div>
           </div>
         </div>
+        <button v-if="mode === 'calendar'" v-perm="'mch:availability:bulk-update'" type="button" class="mode-btn primary" @click="enterBulk">
+          <AvIcon name="edit" />
+          <span>{{ t('availability.actions.bulkUpdate') }}</span>
+        </button>
+        <button v-else type="button" class="mode-btn" @click="exitBulk">
+          <span>{{ t('availability.actions.cancelBulkUpdate') }}</span>
+        </button>
+      </section>
 
-        <aside v-if="activeCell" class="cell-drawer">
-          <div class="drawer-head"><div><strong>{{ activeCell.room.name }}</strong><span>{{ activeCell.day.date }} · {{ isWeekend(activeCell.day.date) ? t('availability.weekend') : t('availability.weekday') }}</span><em>{{ activeCell.hotel.name }}</em></div><a-button type="text" @click="activeCell = null"><CloseOutlined /></a-button></div>
-          <div class="drawer-section"><p>{{ t('availability.drawer.availabilityPricing') }}</p><div class="two-grid"><a-form-item :label="t('availability.fields.availableRooms')"><a-input-number v-model:value="cellForm.stockTotal" :min="0" class="full" /></a-form-item><a-form-item :label="t('availability.fields.price')"><a-input-number v-model:value="cellForm.price" :min="0" :precision="2" class="full" /></a-form-item><a-form-item :label="t('availability.fields.minStay')"><a-input-number v-model:value="cellForm.minStay" :min="1" class="full" /></a-form-item><a-form-item :label="t('availability.fields.maxStay')"><a-input-number v-model:value="cellForm.maxStay" :min="1" class="full" /></a-form-item></div></div>
-          <div class="drawer-section"><p>{{ t('availability.drawer.restrictions') }}</p><div class="switch-row"><div><strong>{{ t('availability.fields.stopSell') }}</strong><span>{{ t('availability.hints.stopSell') }}</span></div><a-switch v-model:checked="cellForm.isClosed" /></div><div class="switch-row"><div><strong>{{ t('availability.fields.cta') }}</strong><span>{{ t('availability.hints.cta') }}</span></div><a-switch v-model:checked="cellForm.closedToArrival" /></div><div class="switch-row"><div><strong>{{ t('availability.fields.ctd') }}</strong><span>{{ t('availability.hints.ctd') }}</span></div><a-switch v-model:checked="cellForm.closedToDeparture" /></div></div>
-          <div class="drawer-section"><p>{{ t('availability.drawer.source') }}</p><div class="source-row"><span>{{ t('availability.sync.pms') }}</span><a-tag color="success">{{ t('availability.sync.synced') }}</a-tag></div><div class="source-row"><span>{{ t('availability.sync.cm') }}</span><a-tag>{{ t('availability.sync.notConnected') }}</a-tag></div><div class="source-row"><span>{{ t('availability.sync.manual') }}</span><a-tag color="blue">{{ activeCell.day.hasRecord ? t('availability.sync.active') : t('availability.sync.off') }}</a-tag></div></div>
-          <div class="drawer-section"><p>{{ t('availability.drawer.history') }}</p><div v-for="log in logs" :key="log.id" class="history-row"><ClockCircleOutlined /><div><strong>{{ log.remark }}</strong><span>{{ log.created_at }} · {{ log.change_qty }}</span></div></div><a-empty v-if="logs.length === 0" :description="t('availability.drawer.noHistory')" /></div>
-          <div class="drawer-footer"><a-button @click="activeCell = null">{{ t('common.cancel') }}</a-button><a-button v-perm="'mch:availability:edit'" type="primary" :loading="saving" @click="saveCell"><CheckOutlined />{{ t('availability.actions.saveChanges') }}</a-button></div>
-        </aside>
-      </div>
+      <section class="workspace">
+        <div class="workspace-main">
+          <a-spin :spinning="loading">
+            <a-empty v-if="!loading && rooms.length === 0" :description="t('availability.errors.noRooms')" />
+            <template v-else-if="mode === 'calendar'">
+              <CalendarGrid
+                :days="calendarDays"
+                :month="month"
+                :selected-date="selectedDate"
+                :currency="currency"
+                @select="selectDate"
+              />
+            </template>
+            <template v-else>
+              <BulkGrid
+                :rows="bulkRows"
+                :dates="bulkDates"
+                :currency="currency"
+                :selected="selection"
+                @toggle="toggleCell"
+              />
+            </template>
+          </a-spin>
+        </div>
 
-      <a-modal v-model:open="bulkOpen" :title="t('availability.bulk.title')" :width="600" :confirm-loading="bulkSaving" @ok="applyBulk">
-        <p class="modal-subtitle">{{ t('availability.bulk.subtitle') }}</p>
-        <div class="modal-section"><p>{{ t('availability.bulk.dateRange') }}</p><a-range-picker v-model:value="bulkForm.range" value-format="YYYY-MM-DD" class="full" /></div>
-        <div class="modal-section"><p>{{ t('availability.bulk.roomTypes') }}</p><a-select v-model:value="bulkForm.roomIds" mode="multiple" class="full" :placeholder="t('availability.bulk.selectRooms')"><a-select-option v-for="room in allRooms" :key="room.id" :value="room.id">{{ room.name }}</a-select-option></a-select></div>
-        <a-tabs v-model:activeKey="bulkTab"><a-tab-pane key="prices" :tab="t('availability.bulk.tabs.prices')"><div class="two-grid"><a-form-item :label="t('availability.fields.price')"><a-input-number v-model:value="bulkForm.price" :min="0" :precision="2" class="full" /></a-form-item></div></a-tab-pane><a-tab-pane key="inventory" :tab="t('availability.bulk.tabs.inventory')"><a-form-item :label="t('availability.fields.availableRooms')"><a-input-number v-model:value="bulkForm.stockTotal" :min="0" class="full" /></a-form-item></a-tab-pane><a-tab-pane key="restrictions" :tab="t('availability.bulk.tabs.restrictions')"><div class="restriction-grid"><a-checkbox v-model:checked="bulkForm.isClosed">{{ t('availability.fields.stopSell') }}</a-checkbox><a-checkbox v-model:checked="bulkForm.closedToArrival">{{ t('availability.fields.cta') }}</a-checkbox><a-checkbox v-model:checked="bulkForm.closedToDeparture">{{ t('availability.fields.ctd') }}</a-checkbox></div></a-tab-pane></a-tabs>
-      </a-modal>
+        <EditPanel
+          v-if="panelOpen"
+          v-model:status="form.status"
+          v-model:rooms="form.rooms"
+          v-model:price="form.price"
+          :variant="mode === 'bulk' ? 'bulk' : 'normal'"
+          :date-label="selectedLabel"
+          :selected-count="selection.length"
+          :currency="currency"
+          :save-perm="mode === 'bulk' ? 'mch:availability:bulk-update' : 'mch:availability:edit'"
+          :saving="saving"
+          @close="clearSelection"
+          @save="mode === 'bulk' ? saveBulk() : saveCalendar()"
+        />
+      </section>
     </div>
   </PageContainer>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue';
+import { computed, onMounted, reactive, ref, watch } from 'vue';
 import dayjs from 'dayjs';
 import { message } from 'ant-design-vue';
-import { CheckOutlined, ClockCircleOutlined, CloseOutlined, HomeOutlined, PlusOutlined, RightOutlined, SlidersOutlined, SyncOutlined, WarningOutlined } from '@ant-design/icons-vue';
 import { useI18n } from 'vue-i18n';
 import PageContainer from '@/components/PageContainer.vue';
-import { apiAvailabilityBatchSet, apiAvailabilityCalendar, apiAvailabilityLogs, apiAvailabilitySaveDay, apiAvailabilitySyncNow, type AvailabilityDay, type AvailabilityHotel, type AvailabilityRoom, type StockLogRow } from '@/api/availability';
+import AvIcon from './components/AvIcon.vue';
+import BulkGrid from './components/BulkGrid.vue';
+import CalendarGrid from './components/CalendarGrid.vue';
+import EditPanel from './components/EditPanel.vue';
+import MonthNavigator from './components/MonthNavigator.vue';
+import RoomTypeSelect from './components/RoomTypeSelect.vue';
+import {
+  apiAvailabilityBatchSet,
+  apiAvailabilityCalendar,
+  apiAvailabilityOptions,
+  apiAvailabilitySaveDay,
+  type AvailabilityDay,
+  type AvailabilityRoom,
+} from '@/api/availability';
 
 const { t } = useI18n();
+
+/** 全部已授权房型(来自 options 接口,不随视图刷新) */
+const rooms = ref<AvailabilityRoom[]>([]);
+/** 当前模式下的日单元:`roomId → (date → day)` */
+const daysByRoom = ref<Record<number, Record<string, AvailabilityDay>>>({});
+const mode = ref<'calendar' | 'bulk'>('calendar');
 const loading = ref(false);
 const saving = ref(false);
-const syncing = ref(false);
-const bulkOpen = ref(false);
-const bulkSaving = ref(false);
-const bulkTab = ref('prices');
-const hotels = ref<AvailabilityHotel[]>([]);
-const dates = ref<string[]>([]);
-const summary = reactive({ hotelCount: 0, roomCount: 0, lowInventoryCells: 0, closedCells: 0, pms: '', channelManager: '', lastSyncAt: '' });
-const filters = reactive<{ propertyId?: number; roomId?: number }>({});
-const dateRange = ref<[string, string]>([dayjs().format('YYYY-MM-DD'), dayjs().add(13, 'day').format('YYYY-MM-DD')]);
-const activeCell = ref<{ hotel: AvailabilityHotel; room: AvailabilityRoom; day: AvailabilityDay } | null>(null);
-const logs = ref<StockLogRow[]>([]);
-const cellForm = reactive({ price: 0, stockTotal: 0, minStay: 1, maxStay: 30, isClosed: false, closedToArrival: false, closedToDeparture: false });
-const bulkForm = reactive<{ range?: [string, string]; roomIds: number[]; price?: number; stockTotal?: number; isClosed: boolean; closedToArrival: boolean; closedToDeparture: boolean }>({ roomIds: [], isClosed: false, closedToArrival: false, closedToDeparture: false });
-const alerts = reactive([{ key: 'low', title: computed(() => t('availability.alerts.lowTitle')), desc: computed(() => t('availability.alerts.lowDesc')), resolved: false }, { key: 'sync', title: computed(() => t('availability.alerts.syncTitle')), desc: computed(() => t('availability.alerts.syncDesc')), resolved: false }]);
-const pricingRules = computed(() => [{ id: 'weekend', label: t('availability.rules.weekend'), value: '1.28x', active: true }, { id: 'early', label: t('availability.rules.earlyBird'), value: '-10%', active: true }, { id: 'min', label: t('availability.rules.minStay'), value: '2', active: true }]);
-const hotelOptions = computed(() => hotels.value.map(({ id, name }) => ({ id, name })));
-const roomsForSelectedHotel = computed(() => hotels.value.find((hotel) => hotel.id === filters.propertyId)?.rooms || []);
-const allRooms = computed(() => hotels.value.flatMap((hotel) => hotel.rooms));
-const activeAlertCount = computed(() => alerts.filter((item) => !item.resolved).length);
 
-async function loadCalendar() { loading.value = true; try { const data = await apiAvailabilityCalendar({ propertyId: filters.propertyId, roomId: filters.roomId, startDate: dateRange.value?.[0], endDate: dateRange.value?.[1] }); hotels.value = data.hotels; dates.value = data.dates; Object.assign(summary, data.summary); } finally { loading.value = false; } }
-function handleHotelChange() { filters.roomId = undefined; void loadCalendar(); }
-function isWeekend(date: string) { const day = dayjs(date).day(); return day === 5 || day === 6; }
-function dayNumber(date: string) { return dayjs(date).format('DD'); }
-function weekdayLabel(date: string) { return dayjs(date).format('ddd'); }
-function priceShort(price: number) { return price >= 1000 ? `${(price / 1000).toFixed(1)}K` : String(price); }
-function cellTone(day: AvailabilityDay) { if (day.isClosed) return 'closed'; if (day.stockLeft === 0) return 'sold'; if (day.stockLeft <= 2) return 'low'; return 'available'; }
-function isActiveCell(roomId: number, date: string) { return activeCell.value?.room.id === roomId && activeCell.value?.day.date === date; }
-async function openCell(hotel: AvailabilityHotel, room: AvailabilityRoom, day: AvailabilityDay) { activeCell.value = { hotel, room, day }; Object.assign(cellForm, { price: day.price, stockTotal: day.stockTotal, minStay: day.minStay, maxStay: day.maxStay, isClosed: day.isClosed === 1, closedToArrival: day.closedToArrival === 1, closedToDeparture: day.closedToDeparture === 1 }); logs.value = await apiAvailabilityLogs({ propertyId: hotel.id, roomTypeId: room.id, stockDate: day.date }); }
-async function saveCell() { if (!activeCell.value) return; saving.value = true; try { await apiAvailabilitySaveDay({ propertyId: activeCell.value.hotel.id, roomTypeId: activeCell.value.room.id, stockDate: activeCell.value.day.date, price: cellForm.price, stockTotal: cellForm.stockTotal, minStay: cellForm.minStay, maxStay: cellForm.maxStay, isClosed: cellForm.isClosed ? 1 : 0, closedToArrival: cellForm.closedToArrival ? 1 : 0, closedToDeparture: cellForm.closedToDeparture ? 1 : 0, source: 'manual' }); message.success(t('common.saveSuccess')); await loadCalendar(); } finally { saving.value = false; } }
-async function applyBulk() { if (!bulkForm.range?.[0] || !bulkForm.range?.[1] || bulkForm.roomIds.length === 0) { message.warning(t('availability.bulk.requiredTip')); return; } bulkSaving.value = true; try { const payload: Record<string, unknown> = { startDate: bulkForm.range[0], endDate: bulkForm.range[1], roomIds: bulkForm.roomIds }; if (bulkTab.value === 'prices') payload.price = bulkForm.price; if (bulkTab.value === 'inventory') payload.stockTotal = bulkForm.stockTotal; if (bulkTab.value === 'restrictions') { payload.isClosed = bulkForm.isClosed ? 1 : 0; payload.closedToArrival = bulkForm.closedToArrival ? 1 : 0; payload.closedToDeparture = bulkForm.closedToDeparture ? 1 : 0; } await apiAvailabilityBatchSet(payload); message.success(t('common.opSuccess')); bulkOpen.value = false; await loadCalendar(); } finally { bulkSaving.value = false; } }
-async function syncNow() { syncing.value = true; try { const data = await apiAvailabilitySyncNow(); summary.lastSyncAt = data.lastSyncAt; message.success(t('common.opSuccess')); } finally { syncing.value = false; } }
+/** 日历模式:选中的房型与月份 */
+const activeRoomId = ref<number | null>(null);
+const month = ref(dayjs().format('YYYY-MM'));
+const selectedDate = ref<string | null>(null);
 
-onMounted(loadCalendar);
+/** 批量模式:房型筛选(0 = 全部)、日期区间、选中的 `roomId_date` 键 */
+const bulkRoomFilter = ref(0);
+const bulkRange = ref<[string, string]>([dayjs().format('YYYY-MM-DD'), dayjs().add(4, 'day').format('YYYY-MM-DD')]);
+const rangeOpen = ref(false);
+const selection = ref<string[]>([]);
+
+const form = reactive<{ status: 'open' | 'blocked'; rooms: number; price: number }>({ status: 'open', rooms: 0, price: 0 });
+/** 面板每次“从无到有”打开时用选中数据回填,之后沿用用户输入(补选格子不重置) */
+let panelWasOpen = false;
+/** 首屏 options → calendar 的串联加载完成前,抑制 activeRoomId 的重复请求 */
+let booted = false;
+
+/** 批量模式多一个「全部房型」筛选项;日历模式必须落到具体房型,故不提供 */
+const roomOptions = computed(() => {
+  const list = rooms.value.map((room) => ({ id: room.id, name: room.name }));
+  return mode.value === 'bulk' ? [{ id: 0, name: t('availability.filters.allRooms') }, ...list] : list;
+});
+/** Room Type 控件两种模式共用:日历模式选具体房型,批量模式选筛选(0 = 全部) */
+const filterRoomId = computed<number | null>({
+  get: () => (mode.value === 'bulk' ? bulkRoomFilter.value : activeRoomId.value),
+  set: (value) => {
+    if (mode.value === 'bulk') bulkRoomFilter.value = value ?? 0;
+    else activeRoomId.value = value;
+  },
+});
+const activeRoom = computed(() => rooms.value.find((room) => room.id === activeRoomId.value) ?? null);
+/** 日历模式取当前房型的日单元;未选中房型时退回第一个,保留稿面“总有选中房型”的形态 */
+const calendarRoom = computed(() => activeRoom.value ?? rooms.value[0] ?? null);
+const calendarDays = computed(() => (calendarRoom.value ? (daysByRoom.value[calendarRoom.value.id] ?? {}) : {}));
+const selectedDay = computed(() => (selectedDate.value ? (calendarDays.value[selectedDate.value] ?? null) : null));
+const selectedLabel = computed(() => (selectedDate.value ? dayjs(selectedDate.value).format('MMM D, YYYY') : ''));
+
+const bulkDates = computed(() => {
+  const [start, end] = bulkRange.value;
+  if (!start || !end) return [];
+  const total = dayjs(end).diff(dayjs(start), 'day') + 1;
+  return Array.from({ length: Math.max(total, 0) }, (_, index) => dayjs(start).add(index, 'day').format('YYYY-MM-DD'));
+});
+const bulkRows = computed(() =>
+  rooms.value
+    .filter((room) => bulkRoomFilter.value === 0 || room.id === bulkRoomFilter.value)
+    .map((room) => ({ room, days: daysByRoom.value[room.id] ?? {} })),
+);
+const panelOpen = computed(() => (mode.value === 'bulk' ? selection.value.length > 0 : !!selectedDate.value));
+/**
+ * 页面级只读币种:日历模式取当前房型,批量模式取当前筛选下首个房型。
+ * 后端 calendar 按房型返回 currency;同一物业下的房型币种一致,故整页共用一个。
+ */
+const currency = computed(() => {
+  const room = mode.value === 'bulk' ? (bulkRows.value[0]?.room ?? null) : calendarRoom.value;
+  return room?.currency ?? 'THB';
+});
+const rangeLabel = computed(() => {
+  const [start, end] = bulkRange.value;
+  if (!start || !end) return '';
+  return `${dayjs(start).format('MMM D, YYYY')} – ${dayjs(end).format('MMM D, YYYY')}`;
+});
+
+/** 稿面网格覆盖整月所在周:回退到 1 日所在周的周日,前进到月末所在周的周六 */
+function monthRange(value: string): [string, string] {
+  const first = dayjs(`${value}-01`);
+  const last = first.endOf('month');
+  return [first.subtract(first.day(), 'day').format('YYYY-MM-DD'), last.add(6 - last.day(), 'day').format('YYYY-MM-DD')];
+}
+
+function collectDays(hotels: { rooms: AvailabilityRoom[] }[]): void {
+  const next: Record<number, Record<string, AvailabilityDay>> = {};
+  for (const hotel of hotels) {
+    for (const room of hotel.rooms) {
+      const map: Record<string, AvailabilityDay> = {};
+      for (const day of room.days ?? []) map[day.date] = day;
+      next[room.id] = map;
+    }
+  }
+  daysByRoom.value = next;
+}
+
+async function loadOptions(): Promise<void> {
+  const tree = await apiAvailabilityOptions();
+  rooms.value = tree.flatMap((hotel) => hotel.rooms);
+}
+
+async function loadCalendar(): Promise<void> {
+  const room = calendarRoom.value;
+  if (!room) return;
+  const [start, end] = monthRange(month.value);
+  loading.value = true;
+  try {
+    const data = await apiAvailabilityCalendar({ propertyId: room.property_id, roomId: room.id, startDate: start, endDate: end });
+    collectDays(data.hotels);
+  } finally {
+    loading.value = false;
+  }
+}
+
+async function loadBulk(): Promise<void> {
+  const [start, end] = bulkRange.value;
+  if (!start || !end) return;
+  loading.value = true;
+  try {
+    const data = await apiAvailabilityCalendar({ roomId: bulkRoomFilter.value || undefined, startDate: start, endDate: end });
+    collectDays(data.hotels);
+  } finally {
+    loading.value = false;
+  }
+}
+
+function selectDate(date: string): void {
+  if (date < dayjs().format('YYYY-MM-DD')) {
+    message.warning(t('availability.errors.pastDate'));
+    return;
+  }
+  selectedDate.value = date;
+}
+
+function toggleCell(roomId: number, date: string): void {
+  if (date < dayjs().format('YYYY-MM-DD')) {
+    message.warning(t('availability.errors.pastDate'));
+    return;
+  }
+  const key = `${roomId}_${date}`;
+  selection.value = selection.value.includes(key) ? selection.value.filter((item) => item !== key) : [...selection.value, key];
+}
+
+function clearSelection(): void {
+  selectedDate.value = null;
+  selection.value = [];
+}
+
+/**
+ * 面板从关闭变为打开时回填(单日取当日值,批量取首个选中格的值)。
+ * ⚠ 「Available Rooms」回填的是 `stockTotal`(库存总量)而不是 `stockLeft`(剩余):
+ * 保存写回的是 `goods_daily_stock.stock_total`,回填剩余量会把已售间夜永久扣掉。
+ */
+function prefill(): void {
+  const day = mode.value === 'bulk' ? firstSelectedDay() : selectedDay.value;
+  form.status = day?.isClosed === 1 ? 'blocked' : 'open';
+  form.rooms = day?.stockTotal ?? calendarRoom.value?.base_stock ?? 0;
+  form.price = day?.price ?? calendarRoom.value?.base_price ?? 0;
+}
+
+function firstSelectedDay(): AvailabilityDay | null {
+  for (const key of selection.value) {
+    const [roomId, date] = key.split('_');
+    const day = daysByRoom.value[Number(roomId)]?.[date];
+    if (day) return day;
+  }
+  return null;
+}
+
+watch(panelOpen, (open) => {
+  if (open && !panelWasOpen) prefill();
+  panelWasOpen = open;
+});
+watch(selectedDate, () => {
+  if (mode.value === 'calendar' && selectedDate.value) prefill();
+});
+watch(month, () => {
+  selectedDate.value = null;
+  void loadCalendar();
+});
+watch(activeRoomId, () => {
+  selectedDate.value = null;
+  // onMounted 里首次赋值由下方显式 loadCalendar 负责,避免重复请求
+  if (booted) void loadCalendar();
+});
+watch(bulkRoomFilter, () => {
+  selection.value = [];
+  void loadBulk();
+});
+
+function enterBulk(): void {
+  mode.value = 'bulk';
+  clearSelection();
+  void loadBulk();
+}
+
+function exitBulk(): void {
+  mode.value = 'calendar';
+  clearSelection();
+  void loadCalendar();
+}
+
+function onRangeChange(): void {
+  rangeOpen.value = false;
+  const [start, end] = bulkRange.value;
+  // 区间过长会让表格横向铺出上百列,收敛到 31 天(稿面样例为 5 列)
+  if (start && end && dayjs(end).diff(dayjs(start), 'day') > 30) {
+    bulkRange.value = [start, dayjs(start).add(30, 'day').format('YYYY-MM-DD')];
+    message.warning(t('availability.errors.rangeTooLong', { count: 31 }));
+  }
+  selection.value = [];
+  void loadBulk();
+}
+
+async function saveCalendar(): Promise<void> {
+  const room = calendarRoom.value;
+  const day = selectedDay.value;
+  if (!room || !day) return;
+  saving.value = true;
+  try {
+    await apiAvailabilitySaveDay({
+      propertyId: room.property_id,
+      roomTypeId: room.id,
+      stockDate: day.date,
+      price: form.price,
+      stockTotal: form.rooms,
+      // 面板只编辑状态/房量/价格,其余限制沿用当日原值,避免保存时被静默清零
+      minStay: day.minStay,
+      maxStay: day.maxStay,
+      isClosed: form.status === 'blocked' ? 1 : 0,
+      closedToArrival: day.closedToArrival,
+      closedToDeparture: day.closedToDeparture,
+      source: 'manual',
+    });
+    message.success(t('common.saveSuccess'));
+    clearSelection();
+    await loadCalendar();
+  } finally {
+    saving.value = false;
+  }
+}
+
+/** 把某房型已选日期切成连续区间 —— 后端 batch-set 只接受 [startDate, endDate] 区间 */
+function continuousRuns(dates: string[]): [string, string][] {
+  const sorted = [...dates].sort();
+  const runs: [string, string][] = [];
+  for (const date of sorted) {
+    const last = runs[runs.length - 1];
+    if (last && dayjs(date).diff(dayjs(last[1]), 'day') === 1) last[1] = date;
+    else runs.push([date, date]);
+  }
+  return runs;
+}
+
+async function saveBulk(): Promise<void> {
+  const grouped = new Map<number, string[]>();
+  for (const key of selection.value) {
+    const [roomId, date] = key.split('_');
+    const id = Number(roomId);
+    grouped.set(id, [...(grouped.get(id) ?? []), date]);
+  }
+  if (grouped.size === 0) return;
+  saving.value = true;
+  try {
+    let affected = 0;
+    for (const [roomId, dates] of grouped) {
+      for (const [start, end] of continuousRuns(dates)) {
+        const result = await apiAvailabilityBatchSet({
+          startDate: start,
+          endDate: end,
+          roomIds: [roomId],
+          price: form.price,
+          stockTotal: form.rooms,
+          isClosed: form.status === 'blocked' ? 1 : 0,
+        });
+        affected += result.affectedCells;
+      }
+    }
+    message.success(t('availability.bulkSaved', { count: affected }));
+    clearSelection();
+    await loadBulk();
+  } finally {
+    saving.value = false;
+  }
+}
+
+onMounted(async () => {
+  loading.value = true;
+  try {
+    await loadOptions();
+    activeRoomId.value = rooms.value[0]?.id ?? null;
+    booted = true;
+    await loadCalendar();
+  } finally {
+    loading.value = false;
+  }
+});
 </script>
 
 <style scoped lang="less">
-.availability-page { color: #0f172a; }
-.toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
-.selector-wrap { position: relative; } .selector-icon { position: absolute; left: 11px; top: 50%; z-index: 2; transform: translateY(-50%); color: #64748b; } .hotel-filter { width: 230px; } .selector-wrap :deep(.ant-select-selector) { padding-left: 28px !important; } .room-filter { width: 180px; } .date-range { width: 240px; } .spacer { flex: 1; }
-.property-pill { display: inline-flex; align-items: center; gap: 5px; padding: 4px 8px; border: 1px solid #e2e8f0; border-radius: 999px; background: #f1f5f9; color: #64748b; font-size: 10.5px; font-weight: 700; }
-.view-toggle { display: flex; gap: 2px; padding: 4px; border-radius: 8px; background: #f1f5f9; } .view-toggle button { border: 0; border-radius: 6px; padding: 6px 12px; background: transparent; color: #64748b; font-size: 12px; font-weight: 700; cursor: pointer; } .view-toggle button.active { background: #fff; color: #0f172a; box-shadow: 0 1px 2px rgba(15, 23, 42, .08); }
-.sync-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; } .sync-pill { display: flex; align-items: center; gap: 7px; padding: 6px 12px; border-radius: 8px; font-size: 11px; } .sync-pill span { width: 6px; height: 6px; border-radius: 50%; } .sync-pill em { font-style: normal; } .sync-pill.success { border: 1px solid #bbf7d0; background: #f0fdf4; color: #15803d; } .sync-pill.success span { background: #22c55e; } .sync-pill.danger { border: 1px solid #fecaca; background: #fef2f2; color: #dc2626; } .sync-pill.danger span { background: #f87171; }
-.legend-row { display: flex; align-items: center; gap: 8px; margin: 0 0 12px 4px; color: #64748b; font-size: 11px; } .legend-row strong { color: #94a3b8; font-size: 10.5px; text-transform: uppercase; letter-spacing: .06em; } .dot { width: 16px; height: 16px; border-radius: 4px; border: 1px solid; } .dot.available { background: #dcfce7; border-color: #86efac; } .dot.low { background: #fef3c7; border-color: #fcd34d; } .dot.sold { background: #fee2e2; border-color: #fca5a5; } .dot.closed { background: #f1f5f9; border-color: #cbd5e1; }
-.calendar-shell { display: flex; align-items: flex-start; gap: 16px; } .calendar-main { flex: 1; min-width: 0; } .calendar-card { overflow-x: auto; border: 1px solid #e2e8f0; border-radius: 12px; background: #fff; }
-.calendar-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 11px; } .calendar-table th { min-width: 68px; padding: 10px 8px; border-bottom: 1px solid #e2e8f0; color: #64748b; text-align: center; font-weight: 700; } .calendar-table th span { display: block; font-size: 10px; font-weight: 500; } .calendar-table th.weekend { background: #eff6ff; color: #1d4ed8; } .calendar-table td { padding: 4px; border-top: 1px solid #f1f5f9; text-align: center; cursor: pointer; } .calendar-table td.weekend { background: rgba(239, 246, 255, .45); }
-.sticky { position: sticky; left: 0; z-index: 5; } .room-col { min-width: 180px !important; background: #fff; text-align: left !important; border-right: 1px solid #f1f5f9; } .room-cell { padding: 10px 16px !important; cursor: default !important; } .room-cell strong { display: block; font-size: 12px; } .room-cell span { display: block; margin-top: 2px; color: #94a3b8; font-size: 10px; }
-.hotel-row td { position: sticky; left: 0; z-index: 4; padding: 8px 16px !important; background: #f8fafc; text-align: left; cursor: default; } .hotel-row span { display: inline-block; width: 8px; height: 8px; margin-right: 8px; border-radius: 50%; background: #2563eb; } .hotel-row em { margin-left: 6px; color: #94a3b8; font-style: normal; font-size: 10px; }
-.day-cell { border: 1px solid; border-radius: 5px; padding: 6px 4px; transition: all .18s ease; } .day-cell:hover, .day-cell.selected { box-shadow: 0 0 0 2px #93c5fd; } .day-cell strong { display: block; font-size: 11px; } .day-cell span { display: block; font-size: 9px; opacity: .78; } .day-cell.available { border-color: #bbf7d0; background: #f0fdf4; color: #15803d; } .day-cell.low { border-color: #fde68a; background: #fffbeb; color: #b45309; } .day-cell.sold { border-color: #fecaca; background: #fef2f2; color: #b91c1c; } .day-cell.closed { border-color: #e2e8f0; background: #f1f5f9; color: #64748b; }
-.bottom-panels { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-top: 16px; } .panel-card { padding: 16px; border: 1px solid #e2e8f0; border-radius: 12px; background: #fff; } .panel-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
-.rule-row { width: 100%; display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid #f1f5f9; border-radius: 8px; background: #fff; text-align: left; cursor: pointer; } .rule-row + .rule-row { margin-top: 6px; } .rule-row span { width: 6px; height: 6px; border-radius: 50%; background: #cbd5e1; } .rule-row span.active { background: #22c55e; } .rule-row em { flex: 1; min-width: 0; color: #334155; font-style: normal; font-size: 12px; } .rule-row strong { color: #2563eb; }
-.alert-row { display: flex; align-items: flex-start; gap: 10px; padding: 12px; border: 1px solid #fde68a; border-radius: 8px; background: #fffbeb; color: #b45309; } .alert-row + .alert-row { margin-top: 8px; } .alert-row div { flex: 1; } .alert-row strong { font-size: 12px; } .alert-row p { margin: 2px 0 0; color: #64748b; font-size: 11px; }
-.cell-drawer { width: 340px; flex-shrink: 0; max-height: calc(100vh - 118px); overflow: auto; border: 1px solid #e2e8f0; border-radius: 12px; background: #fff; } .drawer-head { position: sticky; top: 0; z-index: 2; display: flex; justify-content: space-between; padding: 14px 16px; border-bottom: 1px solid #e2e8f0; background: #fff; } .drawer-head strong, .drawer-head span, .drawer-head em { display: block; } .drawer-head strong { font-size: 13px; } .drawer-head span { color: #64748b; font-size: 11.5px; } .drawer-head em { color: #94a3b8; font-size: 10.5px; font-style: normal; }
-.drawer-section { padding: 16px; border-bottom: 1px solid #f1f5f9; } .drawer-section > p, .modal-section > p { margin: 0 0 12px; color: #94a3b8; font-size: 10px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; } .two-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; } .full { width: 100%; }
-.switch-row { display: flex; justify-content: space-between; gap: 12px; } .switch-row + .switch-row { margin-top: 14px; } .switch-row strong { display: block; font-size: 12px; } .switch-row span { display: block; color: #94a3b8; font-size: 10.5px; } .source-row { display: flex; justify-content: space-between; align-items: center; font-size: 12px; } .source-row + .source-row { margin-top: 8px; }
-.history-row { display: flex; gap: 9px; font-size: 11px; } .history-row + .history-row { margin-top: 10px; } .history-row strong, .history-row span { display: block; } .history-row span { color: #94a3b8; } .drawer-footer { position: sticky; bottom: 0; display: flex; justify-content: space-between; padding: 12px 16px; border-top: 1px solid #e2e8f0; background: #fff; }
-.modal-subtitle { margin-top: -6px; color: #64748b; font-size: 12px; } .modal-section { margin-top: 18px; } .restriction-grid { display: grid; gap: 12px; }
-@media (max-width: 1100px) { .calendar-shell { flex-direction: column; } .cell-drawer { width: 100%; max-height: none; } .bottom-panels { grid-template-columns: 1fr; } }
-</style>
+@import './tokens.less';
 
+.avail-page {
+  color: @av-ink;
+}
+
+.avail-heading {
+  h1 {
+    margin: 0;
+    color: @av-ink-page;
+    font-family: @av-font-page;
+    font-size: 20px;
+    font-weight: 700;
+    line-height: 1.5;
+  }
+  p {
+    margin: 2px 0 0;
+    max-width: 487px;
+    color: @av-ink-sub;
+    font-family: @av-font-body;
+    font-size: 14px;
+    font-weight: 400;
+    line-height: 1.5;
+  }
+}
+
+.controls-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 20px;
+  padding: 12px;
+  border: 1px solid @av-line;
+  border-radius: 12px;
+  background: #fff;
+}
+.controls-left {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px;
+}
+.control {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.control-label {
+  color: @av-ink-muted;
+  font-family: @av-font-body;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.5;
+  text-transform: uppercase;
+}
+
+.range-control {
+  position: relative;
+}
+.range-trigger {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 37px;
+  padding: 8px 12px;
+  border: 1px solid @av-line;
+  border-radius: 8px;
+  background: @av-soft;
+  color: @av-ink;
+  font-family: @av-font-body;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.5;
+  cursor: pointer;
+}
+.range-text {
+  white-space: nowrap;
+}
+/* 原生区间选择器只用于承载弹层,触发器由上方按钮承担 */
+.range-proxy {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.mode-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 44px;
+  padding: 10px 16px;
+  border: 1px solid @av-line;
+  border-radius: 8px;
+  background: #fff;
+  color: @av-ink-muted;
+  font-family: @av-font-body;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.5;
+  cursor: pointer;
+
+  &.primary {
+    border-color: @av-primary;
+    background: @av-primary-soft;
+    color: @av-primary;
+  }
+}
+
+.workspace {
+  display: flex;
+  align-items: flex-start;
+  gap: 24px;
+  margin-top: 20px;
+}
+.workspace-main {
+  min-width: 0;
+  flex: 1;
+}
+
+@media (max-width: 1180px) {
+  .workspace {
+    flex-direction: column;
+  }
+  .workspace-main {
+    width: 100%;
+  }
+}
+</style>

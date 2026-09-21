@@ -26,7 +26,10 @@ export interface AvailabilityRoom {
   base_price: number;
   weekend_price: number;
   base_stock: number;
+  launch_stock: number;
   status: number;
+  /** 房型币种(ISO 4217);Figma 稿面 Edit Panel 的只读币种胶囊取自此字段 */
+  currency: string;
   days?: AvailabilityDay[];
 }
 

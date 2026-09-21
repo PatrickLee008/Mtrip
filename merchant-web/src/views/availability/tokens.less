@@ -1,0 +1,37 @@
+/**
+ * Availability & Pricing 页设计令牌(Figma `1163:16345`,逐字取自稿面)。
+ *
+ * ⚠ 本页主色是稿面的 `#4169ED`,与全局 `--mtrip-primary`(`#2563eb`)不同 —— 稿面在同一张
+ * 设计里两者并存,照稿要求本页必须用 `#4169ED`,故在此独立成组,不要替换为全局变量。
+ * 纯变量文件,无选择器,`@import` 到各组件 `<style scoped lang="less">` 不会产生重复 CSS。
+ */
+
+// 主色
+@av-primary: #4169ed;
+@av-primary-soft: rgba(65, 105, 237, 0.08);
+
+// 文本
+@av-ink: #1b1d30; // 正文 / 数字 / 徽标
+@av-ink-page: #0f172a; // 页面 H1
+@av-ink-sub: #64748b; // 页面副标题
+@av-ink-label: #334155; // 表单 Label
+@av-ink-muted: rgba(25, 26, 37, 0.5); // 控件小标 / 次要文本
+
+// 线与底
+@av-line: #e2e8f0;
+@av-soft: #f8fafc; // 工具栏控件 / 表头 / 面板页脚
+@av-chip-bg: #ebf0ff; // 分段控件底 / 下拉选中项 / 已屏蔽格底
+
+// 状态色
+@av-low: #bb4d00;
+@av-low-soft: rgba(187, 77, 0, 0.08);
+@av-sold: #ec1317;
+@av-sold-soft: rgba(236, 19, 23, 0.08);
+
+// 阴影
+@av-shadow-panel: 0 3px 8px 0 rgba(0, 0, 0, 0.14);
+@av-shadow-dropdown: 0 8px 24px -8px rgba(0, 0, 0, 0.08);
+
+// 字体(稿面混排:页面标题与面板标题用 Plus Jakarta Sans,表体/徽标/图例用 Inter)
+@av-font-page: 'Plus Jakarta Sans', Inter, system-ui, -apple-system, 'Segoe UI', 'PingFang SC', sans-serif;
+@av-font-body: Inter, 'Plus Jakarta Sans', system-ui, -apple-system, 'Segoe UI', 'PingFang SC', sans-serif;

@@ -287,6 +287,103 @@
 
 ---
 
+## 2026-09-21 Availability & Pricing 按 Figma `1163:16345` 整页重写
+
+### 设计源
+Figma file `fsK2rrl2sadcowrxspvGV8`（mTrip_Merchant）SECTION `1163:16345`
+「Availability & Pricing / Normal Edit / Bulk Update」。**4 个画板 = 同一页的 2 种模式**：
+
+| 画板 | 节点 |
+|---|---|
+| Normal Edit（月历，默认） | `1153:15457` |
+| Normal Edit + Edit Panel | `1225:14495` |
+| Bulk Update（房型 × 日期网格） | `1170:23485` |
+| Bulk Update + Edit Panel | `1170:24672` |
+
+组件帧：`calendar-popover` `1163:16291`（月份浮层）、`room-type-dropdown-panel` `1163:16331`、
+Edit Panel component set `1145:10347`（Normal）/ `1163:17357`（Bulk）。
+
+数据经 **Figma MCP** `get_figma_data` 逐节点取回，规格落档 `.figma-cache/1163-16345.md`
+（gitignored），整帧渲染图在 `~/Documents/FigmaImages/mtrip/availability-1163-16345/`。
+
+### 用户确认的取舍
+1. **完整照稿重写两种模式**，替换现有「房型 × 日期表格 + 单格抽屉 + 批量弹窗」。
+2. 稿面没画的块**全部移除**。
+3. 币种**只读展示**（取房型自带 `currency`），不做可切换下拉。
+
+### 实现
+- 页面壳 `views/availability/index.vue`：H1 + 副标题 + 工具栏卡 + `workspace`（主区 `fill` + 380 宽面板）。
+- 新增组件 `views/availability/components/`：
+  `AvIcon.vue`（内联 lucide 线性图标，稿面图标与 antd 不同形）、
+  `CalendarGrid.vue`（月历 + 图例）、`BulkGrid.vue`（房型 × 日期多选网格 + 图例）、
+  `EditPanel.vue`（两模式共用，仅标题/头部徽标不同）、
+  `MonthNavigator.vue`（月份步进 + 年份/月份浮层）、`RoomTypeSelect.vue`（自绘下拉）。
+- 新增 `helpers.ts`（`cellState` 四态判定与后端 `summary()` 同阈值、`priceShort` 复刻稿面 `85K` 写法）、
+  `useDismiss.ts`（点击外部/Esc 关闭自绘浮层）、`tokens.less`（本页设计令牌）。
+- **本页主色是稿面 `#4169ED`，不是全局 `--mtrip-primary` `#2563eb`**，故独立成令牌组并注释说明。
+- `merchant-web/index.html`：Plus Jakarta Sans 补 `800` 字重、增载 `Inter`（稿面混排两种字体）。
+- **i18n**：`availability.*` 整块重写（en-US + zh-CN），旧键（sync/views/rules/alerts/drawer/hints/bulk.tabs 等）随 UI 一并删除。
+
+### 删除项（稿面没有）
+房型×日期表格、单日编辑抽屉、Bulk Update 弹窗、PMS/CM 同步状态条与 Sync Now 按钮、
+Pricing Rules 面板、Active Alerts 面板、Calendar/List 视图切换。
+⚠️ 权限键 `mch:availability:sync` 与后端 `sync-now` 接口**保留未删**，仅前端不再有入口。
+
+### 后端改动（唯一一处）
+`backend/services/goods-service/app/Controller/Merchant/AvailabilityController.php`：
+`roomTree()` 增选 `r.currency`，房型数组返回 `currency`（空值回退 `THB`），供面板币种胶囊只读展示。
+**无新接口、无新权限键、无菜单种子改动、无迁移。**
+
+### 实现侧定的交互语义（稿面未表达）
+1. 日历为**单选一个日期** —— Edit Panel 主组件的日期徽标原文是多状态叠加的占位串
+   （`Sep 14, 2026 – Sep 15, 2026 - Sep 16, 2026 `），实例里只有单日。
+2. 两种模式都**禁止选过去日期**（后端 `saveDay` / `batchSet` 本就拒绝，前端提前拦下避免报错弹窗）。
+3. 批量保存按**房型分组 → 切连续日期区间 → 逐段调用既有 `batch-set`**，不新增接口
+   （稿面的选中格是任意散点，而 `batch-set` 只接受 `[startDate, endDate]`）。
+4. 单日保存把当日原有 `minStay / maxStay / closedToArrival / closedToDeparture` 原样回传 ——
+   面板只编辑状态/房量/价格，不传会被后端按缺省值写成 0/1/30。
+5. 批量日期区间上限 31 天（稿面样例 5 列）；超限前端收敛并提示。
+
+### 照稿逐字但存疑
+稿面副标题为 `Manage your restaurant's availability, operating hours, pricing options, and menu rates
+visible to your customers.` —— 本页是酒店，`restaurant` / `menu rates` 疑似从餐饮模板复制。
+按「严格照稿」逐字实现，i18n 键独立，改文案只需动一处。
+
+### 未照抄并已说明理由
+1. **币种下拉改只读胶囊且去掉 chevron** —— 后端 `saveDay` / `batchSet` 只落 `price` 不接收 `currency`，
+   做成可切换等于假控件（用户选定）。
+2. **日历的 `Blocked` 态稿面没画**（只在图例与批量网格出现），采用批量网格同一套灰态：
+   徽标 `Blocked`（底/描边 `#E2E8F0`、字 `rgba(25,26,37,.5)`）+ 价格 `-`。
+3. **选中格的稿面 2px 主色描边**用「1px 边框 + 1px inset 阴影」实现，避免 2px 撑动网格布局。
+
+### 验证
+- [x] `cd merchant-web && npm run build`（`vue-tsc --noEmit && vite build`）零报错。
+- [x] 新增 `merchant-web/scripts/check-availability-figma.mjs`：用 Vite SSR 打包 + `@vue/server-renderer`
+      真实渲染 `CalendarGrid` / `BulkGrid` / `EditPanel`（带覆盖四态的样本数据），断言四态样式类、
+      `Avail: 5` / `MMK 85K` / `1 Left!` / `Sold Out` / `Blocked` / `-`、选中与勾选徽标、图例四项、
+      面板三字段与两种标题/徽标，另断言编译产物 CSS 与 `tokens.less` 的稿面令牌 —— **72/72 GREEN**。
+      ⚠️ 该脚本**未接进 `scripts/check.ps1`**，需手动跑。
+- [x] 容器内 `docker exec mtrip-goods-service-1 php -l app/Controller/Merchant/AvailabilityController.php`
+      通过（本机未装 php，`scripts/check.ps1` 第 1 步即断，与本次改动无关）；`goods-service` 已热重启。
+- [x] dev server 下 7 个新增/改动模块（页面 + 6 组件 + `tokens.less`）全部 HTTP 200。
+- [x] 开发库 `mtrip_business.hotel_room_type` 物业 7 两个房型 `currency='MMK'`，与稿面样例一致。
+
+### 走查修复：Select Period 右侧箭头渲染成斜杠（用户截图报告）
+`AvIcon.vue` 的 `chevron-right` 写成了 `m9 18 6-6-6 6`——**末段 `-6 6` 把折线原路画回去了**，
+于是只渲染出一条斜杠（`chevron-left` 写的是 `m15 18-6-6 6-6`，是对的，所以左边正常）。
+已改为 lucide 原值 `m9 18 6-6-6-6`；同时把 `edit`（square-pen）与 `check-circle`（circle-check-big）
+补成 lucide 精确值（原先手写取整到 1 位小数，14px 下无可见差异但不必要地偏离源）。
+**防回归**：校验脚本新增 15 条图标断言（12 条「与 lucide 路径逐字一致」+ 3 条 chevron 几何自检
+「三顶点互不重合」——后者与写法无关，专门抓「折回」这一类错误）。
+红→绿留痕：把路径改回 `-6 6` 重跑得 **RED 70/72**（`points=[[9,18],[15,12],[9,18]]`，首末点重合），
+修复后 **GREEN 72/72**。
+
+### 未做 / 受限
+- ⚠️ **没有登录态浏览器走查**：本环境无浏览器自动化工具，开发库也没有已知密码的商户账号，
+  因此 `calendar` 响应新增的 `currency` **未做端到端实测**，仅三重旁证（容器内 lint + 纯增选列 +
+  库内确有该字段）。需要一次人工对图验收。
+- ⚠️ 新校验脚本未接进质量基线入口。
+
 ## 2026-09-21 M8 促销与活动管理按 Figma 整页重写 + 三块新增
 
 设计源:Figma `fsK2rrl2sadcowrxspvGV8` SECTION `2285:21516`「Promotion tables」（6 画板 =

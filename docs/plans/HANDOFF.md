@@ -75,6 +75,31 @@
 `test/adhoc/m8-promotion-demo.sql`（11 条促销覆盖四个 Tab + 108 行曝光 + 108 条领券 + 54 条结算
 + 2 个平台活动 + 5 条券码镜像；**不登记 initdb、不被 `test/apply.sh` 导入**，可重复执行）。
 
+### ★ 2026-09-21（商户端 Availability & Pricing 按 Figma `1163:16345` 整页重写）
+
+**范围**：仅 `merchant-web` 房量与价格页 + `goods-service` 一处字段补充；不扩展两个 App、不新增接口与权限键、不动菜单种子。
+
+**设计源**：file `fsK2rrl2sadcowrxspvGV8`（mTrip_Merchant）SECTION `1163:16345`「Availability & Pricing / Normal Edit / Bulk Update」= **4 个画板实为同一页的 2 种模式**（日历 Normal Edit `1153:15457` / `1225:14495`，批量 Bulk Update `1170:23485` / `1170:24672`）+ 4 个组件帧（`calendar-popover` `1163:16291`、`room-type-dropdown-panel` `1163:16331`、Edit Panel `1145:10347` / `1163:17357`）。数据经 **Figma MCP** `get_figma_data` 取回，规格逐条落档 `.figma-cache/1163-16345.md`（gitignored），整帧渲染图在 `~/Documents/FigmaImages/mtrip/availability-1163-16345/`。
+
+**用户已确认的三项取舍**：① 完整照稿重写两种模式（删除现有「房型×日期表格 + 单格抽屉 + 批量弹窗」）；② 稿面没画的块全部移除；③ 币种只读。
+
+**改动**：
+- `views/availability/index.vue` 重写为页面壳（H1 + 副标题 + 工具栏卡 + `workspace` 主区/面板），新增 `components/{AvIcon,CalendarGrid,BulkGrid,EditPanel,MonthNavigator,RoomTypeSelect}.vue`、`helpers.ts`（`cellState` / `priceShort`）、`useDismiss.ts`、`tokens.less`（本页设计令牌，**本页主色取稿面 `#4169ED`，不是全局 `--mtrip-primary` `#2563eb`**）。
+- **删除**：房型×日期表格、单日抽屉、批量更新弹窗、PMS/CM 同步状态条与 Sync Now 按钮、Pricing Rules 面板、Active Alerts 面板、Calendar/List 视图切换。⚠️ 权限键 `mch:availability:sync` 与后端 `sync-now` 接口**保留未删**，仅前端不再有入口。
+- **后端**：`AvailabilityController::roomTree()` 增选 `r.currency` 并在房型数组返回 `currency`（空值回退 `THB`），供面板币种胶囊只读展示；**无新接口、无新权限键、无迁移**。
+- **i18n**：`availability.*` 整块重写（en-US + zh-CN）；`index.html` 的 Plus Jakarta Sans 补 800 字重并加载 Inter（稿面混排两种字体）。
+- **交互语义**（稿面没写、实现侧定的规则）：日历为**单选一个日期**（主组件那串叠加日期文本是多状态占位串，实例只有单日）；批量保存把选中格**按房型分组、切成连续日期区间**，逐段调用既有 `batch-set`（**不新增接口**）；两种模式都**禁止选过去日期**（后端本就拒绝），单日保存会把当日原有 `minStay/maxStay/CTA/CTD` 原样回传，避免被静默清零。
+
+**照稿逐字但存疑**：稿面副标题写的是 `Manage your restaurant's ... menu rates`——本页是酒店，疑似从餐饮模板复制；按「严格照稿」保留原文，i18n 键独立，改文案只需改一处。
+
+**未照抄并已说明理由的 3 处**：① 币种下拉（MMK + chevron）改为**只读胶囊且去掉 chevron**——后端只落 `price` 不接收 `currency`，做成可切换等于假控件；② 日历的 `Blocked` 态稿面**没画**（只在图例与批量网格出现），采用批量网格同一套灰态（徽标 `Blocked` + 价格 `-`）；③ 选中格的稿面 2px 主色描边用「1px 边框 + 1px inset 阴影」实现，避免 2px 撑动网格。
+
+**验证**：`merchant-web npm run build`（vue-tsc + vite）零报错；新增 `merchant-web/scripts/check-availability-figma.mjs`——**真实 SSR 渲染**三个组件（带四态样本数据）+ 编译产物 CSS 与 `tokens.less` 令牌断言 + 15 条图标断言，**72/72 GREEN**（含四态样式类、`Avail: 5` / `MMK 85K` / `1 Left!` / `Sold Out` / `Blocked` / `-`、选中与勾选徽标、图例四项、面板三字段与两种标题、`#4169ed` / `#bb4d00` / `#ec1317` / `#ebf0ff` / `110px` / `380px`）；容器内 `php -l` 通过（本机未装 php），`goods-service` 已热重启；dev server 下 7 个新增/改动模块全部 HTTP 200；开发库 `hotel_room_type.currency='MMK'`（物业 7 两个房型）与稿面一致。
+
+**走查修复（用户截图）**：Select Period 右侧箭头渲染成斜杠 —— `AvIcon.vue` 的 `chevron-right` 写成了 `m9 18 6-6-6 6`，**末段 `-6 6` 把折线原路画回去**，只剩一条斜杠（`chevron-left` 的 `6-6` 是对的，所以左边正常）。已改为 lucide 原值 `m9 18 6-6-6-6`，并把 `edit` / `check-circle` 补成 lucide 精确值。校验脚本新增 15 条图标断言（12 条逐字一致 + 3 条 chevron「三顶点互不重合」几何自检，后者专门抓折回），留痕 **RED 70/72 → GREEN 72/72**。
+
+**未做/受限**：⚠️ **没有登录态浏览器走查**（本环境无浏览器自动化工具，开发库也没有已知密码的商户账号），因此 `calendar` 响应新增的 `currency` **未做端到端实测**，只做了「容器内 lint + 选择列改动 + 库内确有该字段」三重旁证；⚠️ `scripts/check.ps1` 本机仍跑不了（第 1 步 `php -l` 因未装 php 即断）；⚠️ 新校验脚本**未接进 `check.ps1`**，需手动 `cd merchant-web && node scripts/check-availability-figma.mjs`。
+
 ### ★ 2026-09-18（商户认证测试模式改为后台运行时开关）
 
 商户固定 OTP 测试模式不再复用消费者注册的 `register_sms_required`，也不再由单一环境变量直接启停。新增全局安全配置 `sys_config.merchant_auth_test_mode`（默认 `0`）和部署能力门禁 `MTRIP_MERCHANT_AUTH_TEST_ALLOWED`（模板默认 `false`）；仅当环境不是 `prod/production`、部署门禁为 `true`、数据库开关为 `1` 时，商户注册/激活/登录/恢复才接受 `000000` 并跳过最终批准的外部凭证投递。生产环境始终关闭。
