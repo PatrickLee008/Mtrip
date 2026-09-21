@@ -100,6 +100,42 @@
 
 **未做/受限**：⚠️ **没有登录态浏览器走查**（本环境无浏览器自动化工具，开发库也没有已知密码的商户账号），因此 `calendar` 响应新增的 `currency` **未做端到端实测**，只做了「容器内 lint + 选择列改动 + 库内确有该字段」三重旁证；⚠️ `scripts/check.ps1` 本机仍跑不了（第 1 步 `php -l` 因未装 php 即断）；⚠️ 新校验脚本**未接进 `check.ps1`**，需手动 `cd merchant-web && node scripts/check-availability-figma.mjs`。
 
+### ★ 2026-09-21(client-app 邀请码接后端:Refer & Earn 三页脱离假数据 + 奖励金额补种子)
+
+client-app 推荐三页此前整页读 `screens/more/moreDemo.ts` 的设计稿常量(推荐码写死 `MTRIP-8D7H92`、统计写死 5/2/3),
+而后端 `/api/v1/app/user/referral/my|invitees` 早已存在 —— 本次把 UI 接到真实接口,并删掉这两组已无用的 demo 常量。
+
+- **注册绑定本就是通的,未改**:`UserAuthService::setupReferral`(无效码拦截注册、禁用自己的码)。
+  已用真实账号端到端验证:注册邀请人 → 取码 → 带码注册被邀请人 → `user_referral` 落 1 行(26→27,status=0)
+  → 两个接口读数正确;测试账号已清理。
+- **发放时机改为入住核销(按用户口径纠正)**:原实现是**支付成功即发**(`OrderController::pay` / `TripController::pay`),
+  与 PRD「入住完成后奖励」及 App 规则文案 `afterStay` 不符 —— 订金付完就退的单也会拿到奖励。
+  现移到 `Booking\BookingLifecycleService::checkIn`:**商户后台点入住 / 商户核销 / 平台后台手工核销**
+  三个入口都汇到这一个方法,放一处即可全覆盖;发放在 checkIn 的事务内,`reward_status` 0→1 + `lockForUpdate` 保证仅一次。
+  两处支付时的调用连同已无用的 `ReferralService` 注入、`$firstBookingId` 一并删除。
+  ⚠️ `revertCheckIn`(撤销入住)**不会退回已发奖励** —— 钱可能已被花掉,没有做追回,需要的话要单独设计。
+- **后端小改**(`user-service ReferralController`):`my` 增 `pendingCount`/`rewardedCount`(统计卡三格要拆分,
+  单条聚合 SQL 查完,无记录时 SUM 为 NULL 已强转兜 0);`invitees` 增选填 `status`(0/1)供 Pending/Rewarded 两页签,
+  并补出 `reward_order_id`。**`status=0` 是合法值,判空只能判 null/''**。
+- **前端**:新增 `screens/more/useReferralData.ts`(仿 `useMyPickData`,用 `useFocusEffect` 而非 `useEffect` ——
+  奖励由后端在支付成功时入账,从订单页切回来必须拿到新战绩);`ReferralStatsCard` 改 props 驱动,两页共用同一份口径;
+  推荐链接由前端按 `REFERRAL_LINK_BASE`(新增 env,可用 `EXPO_PUBLIC_REFERRAL_LINK_BASE` 覆盖)拼。
+- **奖励金额补种子** `V20260921030000__add-referral-reward-config.sql`:`referral_reward_inviter/invitee`
+  此前**全库零行**(无种子、无后台入口),于是首单达成时钱包一分不进、`reward_status` 却已置 1,推荐关系被静默消耗。
+  ⚠️ **只给 MMK 站点(5/6/7)写 50000** —— `reward()` 取的是绝对金额,50000 落到 EUR 站点(1/2/3/4)就是每单 5 万欧元;
+  EUR 站点要开推荐返利须按欧元口径另配。账本 25/25。
+- ⚠️ **按用户决定保留现状**:奖励为 0 时 `grantOnFirstBooking` 仍会置 `reward_status=1`,
+  推荐关系被消耗且事后补配金额也补发不了 —— EUR 站点在配额到位前命中首单即属此情形。
+- ⚠️ 进度条五步(邀请→注册→下单→入住→奖励):改到核销发放后「已发放=确实住完了」,第5步是实的;
+  但 `user_referral` 只落绑定与奖励两个事实,中间的「下单/入住」没单独跟踪,
+  待达成一律停在第3步,分不清「刚注册」与「已下单未入住」。要精确点亮中间两步需后端补记首单订单状态。
+- 验收:backend `php -l` 393/393、shared 单测 99 例 975 断言全过、admin-web build、client-app typecheck 均通过。
+  **核销发奖已真机跑通**(非静态推断):在 order-service 容器内引导 Hyperf 容器直调 `checkIn(订单9)` ——
+  订单 2→3(已入住),`user_referral` 0→1/50000/reward_order_id=9,邀请人钱包 0→50000、新人 +50000,
+  两条 `user_balance_log`(change_type=4);**重复调用余额与流水不变**(幂等)。
+  测试用的绑定行、余额、订单状态与时间线已全部还原到原值。
+  ⚠️ `scripts/check.ps1` 本机仍不可跑(未装 php,第 1 步即断,与本次改动无关),上述两步 PHP 检查是在容器内跑的。
+
 ### ★ 2026-09-18（商户认证测试模式改为后台运行时开关）
 
 商户固定 OTP 测试模式不再复用消费者注册的 `register_sms_required`，也不再由单一环境变量直接启停。新增全局安全配置 `sys_config.merchant_auth_test_mode`（默认 `0`）和部署能力门禁 `MTRIP_MERCHANT_AUTH_TEST_ALLOWED`（模板默认 `false`）；仅当环境不是 `prod/production`、部署门禁为 `true`、数据库开关为 `1` 时，商户注册/激活/登录/恢复才接受 `000000` 并跳过最终批准的外部凭证投递。生产环境始终关闭。

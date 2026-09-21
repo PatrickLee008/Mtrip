@@ -8,15 +8,18 @@ use Hyperf\DbConnection\Db;
 use Hyperf\Di\Annotation\Inject;
 
 /**
- * 推荐返利发放(PRD 模块14):被推荐人首个已支付酒店订单达成时,给推荐人+新人钱包入账。
- * 单酒店(OrderController)与多酒店 Trip(TripController)共用;reward_status=0→1 保证仅首单发放。
+ * 推荐返利发放(PRD 模块14):被推荐人首个**已入住核销**的酒店订单达成时,给推荐人+新人钱包入账。
+ *
+ * 触发点是 `Booking\BookingLifecycleService::checkIn`(商户后台点入住 / 商户核销 / 平台手工核销
+ * 三个入口都汇到那里),单酒店与多酒店 Trip 下的订单一视同仁;reward_status=0→1 保证仅首单发放。
+ * 早期版本在支付成功时发放,已于 2026-09-21 按「入住后才发」的口径移走。
  */
 class ReferralService
 {
     #[Inject]
     protected WalletService $walletService;
 
-    /** 首单达成发放(须在支付事务内调用) */
+    /** 首单达成发放(须在入住核销事务内调用) */
     public function grantOnFirstBooking(int $siteId, int $inviteeUserId, int $orderId): void
     {
         $ref = Db::table('user_referral')

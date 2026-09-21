@@ -14,7 +14,6 @@ use App\Service\NotifyService;
 use App\Service\OrderStockService;
 use App\Service\PaymentResultHandler;
 use App\Service\PricingService;
-use App\Service\ReferralService;
 use App\Service\SettlementService;
 use App\Service\WalletService;
 use Hyperf\Contract\ConfigInterface;
@@ -52,9 +51,6 @@ class OrderController extends AbstractController
 
     #[Inject]
     protected PricingService $pricingService;
-
-    #[Inject]
-    protected ReferralService $referralService;
 
     #[Inject]
     protected BookingLifecycleService $bookingLifecycle;
@@ -313,10 +309,7 @@ class OrderController extends AbstractController
                     Db::table('marketing_coupon')->where('id', $rec->coupon_id)->increment('used_count');
                 }
             }
-            // 推荐返利:被推荐人首个已支付酒店订单达成 → 奖励入推荐人钱包(PRD 模块14)
-            if ((int) $order['order_type'] === 1) {
-                $this->referralService->grantOnFirstBooking((int) $order['site_id'], (int) $order['user_id'], $orderId);
-            }
+            // 推荐返利不在支付时发放:改为入住核销时由 BookingLifecycleService::checkIn 发放(PRD 模块14)
             // 结算分录:按优惠券出资方生成按订单分账(PRD 模块8),回填订单佣金/商户实收
             $this->settlementService->recordBooking($order);
             return [

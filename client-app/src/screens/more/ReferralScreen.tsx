@@ -10,7 +10,9 @@
  *            值框 `--secondary` 底、圆角 20、px16 py12,右侧 Copy(Inter 600/14 主色)+ 20 复制图标
  *   入口卡   1px `--secondary`、圆角 24、px12 py20,文字 Inter 600/12 tracking 1.2 居中
  *
- * 后端没有推荐接口,推荐码/链接/统计取 moreDemo.ts 的设计稿值;复制走 expo-clipboard(真复制)。
+ * 推荐码/链接/统计走 user-service `/app/user/referral/my`(`useReferralSummary`);
+ * 链接由推荐码按 `REFERRAL_LINK_BASE` 拼出。复制走 expo-clipboard(真复制)。
+ * 未登录或还没取到码时,复制按钮不可用 —— 复制一个空串比不给按钮更糟。
  */
 
 import React from 'react';
@@ -29,13 +31,14 @@ import { moreShared } from '@/components/more/moreShared';
 import { colors, radius } from '@/config/theme';
 import { fonts } from '@/config/typography';
 import type { RootStackParamList } from '@/navigation/types';
-import { REFERRAL_STATS } from '@/screens/more/moreDemo';
+import { useReferralSummary } from '@/screens/more/useReferralData';
 import { useCommonStore } from '@/store/commonStore';
 
 export default function ReferralScreen() {
   const { t } = useTranslation();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const showToast = useCommonStore((s) => s.showToast);
+  const { summary, link } = useReferralSummary();
 
   const copy = (value: string) => {
     void (async () => {
@@ -49,10 +52,15 @@ export default function ReferralScreen() {
       <Text style={styles.copyLabel}>{label}</Text>
       <View style={styles.copyBox}>
         <Text style={[styles.copyValue, small && styles.copyValueSmall]} numberOfLines={1}>
-          {value}
+          {value || '--'}
         </Text>
         <Pressable
-          style={({ pressed }) => [styles.copyBtn, pressed && moreShared.pressed]}
+          style={({ pressed }) => [
+            styles.copyBtn,
+            !value && styles.copyBtnDisabled,
+            pressed && !!value && moreShared.pressed,
+          ]}
+          disabled={!value}
           onPress={() => copy(value)}
         >
           <Text style={styles.copyText}>{t('more.referral.copy')}</Text>
@@ -83,9 +91,9 @@ export default function ReferralScreen() {
       </View>
 
       <View style={styles.stack}>
-        <ReferralStatsCard />
-        {renderCopyCard(t('more.referral.codeLabel'), REFERRAL_STATS.code)}
-        {renderCopyCard(t('more.referral.linkLabel'), REFERRAL_STATS.link, true)}
+        <ReferralStatsCard summary={summary} />
+        {renderCopyCard(t('more.referral.codeLabel'), summary.referralCode)}
+        {renderCopyCard(t('more.referral.linkLabel'), link, true)}
 
         <View style={styles.entryRow}>
           <Pressable
@@ -164,6 +172,7 @@ const styles = StyleSheet.create({
   },
   copyValueSmall: { fontSize: 12 },
   copyBtn: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  copyBtnDisabled: { opacity: 0.4 },
   copyText: {
     fontFamily: fonts.interSemi,
     fontSize: 14,

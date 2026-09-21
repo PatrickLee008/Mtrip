@@ -348,8 +348,18 @@ CREATE TABLE IF NOT EXISTS `user_favorite` (
 - [x] **M2-c 推荐返利**(`user-service`+`order-service`,check.ps1 四步全绿):
   - 数据:`user_info.referral_code`(唯一,惰性生成)+ 新表 `user_referral`(绑定/奖励,invitee 唯一,compose 86)。
   - 注册绑定:`UserAuthService.register` 收 `referralCode`——生成本人推荐码(MT+userId36进制+随机),按码绑定推荐人(无效码拦截注册,PRD 模块14);`AuthController` 透传。
-  - 我的推荐:`ReferralController` my(推荐码/邀请数/累计奖励)、invitees(邀请列表+奖励状态)。
+  - 我的推荐:`ReferralController` my(推荐码/邀请数/待结算数/已奖励数/累计奖励)、invitees(邀请列表+奖励状态,选填 `status` 过滤 0待达成/1已发放)。
   - 奖励发放:新增 `order-service WalletService`(统一钱包入账,退款确认已重构复用);`OrderController::pay` 在被推荐人**首个已支付酒店订单**达成时,按 `sys_site_config.referral_reward_inviter/invitee` 给推荐人+新人钱包入账并置 `reward_status=1`(0→1 保证仅首单发放)。
+  - **App 对接(2026-09-21)**:client-app Refer & Earn / Referral Status 两页与统计卡改读真实接口
+    (此前整页是 `moreDemo.ts` 的设计稿常量),取数抽进 `screens/more/useReferralData.ts`
+    (仿 `useMyPickData`,`useFocusEffect` 刷新);推荐链接由前端按 `REFERRAL_LINK_BASE` 拼。
+  - **奖励金额种子(2026-09-21)**:`V20260921030000__add-referral-reward-config.sql` 补
+    `referral_reward_inviter/invitee=50000`。此前两个键**全库零行**,奖励恒发 0 元却仍置 `reward_status=1`。
+    ⚠️ 仅写 MMK 站点(5/6/7) —— 取的是绝对金额,落到 EUR 站点即每单 5 万欧元;EUR 站点须另配。
+  - **发放时机(2026-09-21 纠正)**:原为支付成功即发,现移到 `Booking\BookingLifecycleService::checkIn`,
+    即**商户后台点入住 / 商户核销 / 平台手工核销**后才发(PRD「入住完成后奖励」)。已真机验证并确认幂等。
+  - ⚠️ 遗留:`revertCheckIn` 撤销入住不退回已发奖励;奖励为 0 时仍消耗推荐关系(`reward_status=1`,按用户决定保留);
+    进度条「入住」一步无数据可依(奖励在支付成功时发放,`user_referral` 未记首单订单状态)。
 
 **M2 促销与用户资产 = 已完成**(a/b/c 全绿)。
 

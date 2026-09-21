@@ -8,13 +8,15 @@
  * 下方一条 `--secondary` 底、圆角 24、py12 的五格进度:已完成打勾、当前节点 info、未到的是空心圆,
  * 相邻两格之间有一条 32 宽的连接线。
  *
- * 后端没有推荐明细接口,数据取 moreDemo.ts 的设计稿值。
+ * 数据走 user-service `/app/user/referral/invitees`,按页签传 `status`(0待达成 / 1已发放);
+ * 进度条与说明文案由 `reward_status` 推导(口径见 `useReferralData.ts` 头部)。
  */
 
 import React, { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 
+import { REFERRAL_STATUS } from '@/api/user';
 import SegmentedTabs from '@/components/common/SegmentedTabs';
 import HomeIcon from '@/components/home/HomeIcon';
 import MorePageLayout from '@/components/more/MorePageLayout';
@@ -22,21 +24,31 @@ import ReferralStatsCard from '@/components/more/ReferralStatsCard';
 import { moreShared } from '@/components/more/moreShared';
 import { colors, radius } from '@/config/theme';
 import { fonts } from '@/config/typography';
-import { DEMO_REFEREES, REFERRAL_PROGRESS } from '@/screens/more/moreDemo';
+import { REFERRAL_PROGRESS } from '@/screens/more/moreDemo';
+import {
+  refereeDescKey,
+  refereeDoneUntil,
+  useReferralInvitees,
+  useReferralSummary,
+} from '@/screens/more/useReferralData';
 
 type StatusTab = 'pending' | 'rewarded';
 const TABS: StatusTab[] = ['pending', 'rewarded'];
+const TAB_STATUS: Record<StatusTab, number> = {
+  pending: REFERRAL_STATUS.PENDING,
+  rewarded: REFERRAL_STATUS.REWARDED,
+};
 
 export default function ReferralStatusScreen() {
   const { t } = useTranslation();
   const [tab, setTab] = useState<StatusTab>('pending');
-
-  const list = DEMO_REFEREES.filter((r) => r.status === tab);
+  const { summary } = useReferralSummary();
+  const { list } = useReferralInvitees(TAB_STATUS[tab]);
 
   return (
     <MorePageLayout title={t('more.referral.status.title')}>
       <View style={styles.stack}>
-        <ReferralStatsCard />
+        <ReferralStatsCard summary={summary} />
 
         <SegmentedTabs
           tabs={TABS}
@@ -49,32 +61,33 @@ export default function ReferralStatusScreen() {
           <Text style={styles.empty}>{t('more.referral.status.empty')}</Text>
         ) : (
           list.map((referee) => (
-            <View key={referee.key} style={[moreShared.panel, styles.card]}>
+            <View key={referee.id} style={[moreShared.panel, styles.card]}>
               <View style={styles.head}>
                 <View style={styles.avatar}>
-                  <Text style={styles.avatarText}>{referee.name.slice(0, 1)}</Text>
+                  <Text style={styles.avatarText}>{referee.nickname.slice(0, 1)}</Text>
                 </View>
                 <View style={styles.headText}>
                   <View style={styles.nameRow}>
                     <Text style={styles.name} numberOfLines={1}>
-                      {referee.name}
+                      {referee.nickname}
                     </Text>
                     <View style={styles.statusPill}>
                       <Text style={styles.statusText}>
-                        {t(`more.referral.status.tabs.${referee.status}`)}
+                        {t(`more.referral.status.tabs.${tab}`)}
                       </Text>
                     </View>
                   </View>
                   <Text style={styles.desc} numberOfLines={2}>
-                    {t(`more.referral.status.desc.${referee.descKey}`)}
+                    {t(`more.referral.status.desc.${refereeDescKey(referee.reward_status)}`)}
                   </Text>
                 </View>
               </View>
 
               <View style={styles.progress}>
                 {REFERRAL_PROGRESS.map((step, index) => {
-                  const done = index < referee.doneUntil;
-                  const current = index === referee.doneUntil;
+                  const doneUntil = refereeDoneUntil(referee.reward_status);
+                  const done = index < doneUntil;
+                  const current = index === doneUntil;
                   return (
                     <View key={step} style={styles.progressCell}>
                       {/* 连接线画在格子左侧,首格不画 */}
