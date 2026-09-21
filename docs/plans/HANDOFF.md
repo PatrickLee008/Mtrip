@@ -1,4 +1,80 @@
 # 会话交接文档(HANDOFF)
+### ★ 2026-09-21（商户端 M8 促销与活动管理按 Figma `2285:21516` 整页重写 + 长住/平台活动/效果分析三块新增）
+
+**范围**：`merchant-web` 重写 `/promotions` 并新增 `/promotions/analytics`、`/campaigns`；
+`marketing-service` 扩展商户促销接口 + 新增商户活动接口与 C 端曝光上报接口；
+`client-app` 两个页面接曝光上报；新增 1 个营销迁移 + 1 个菜单迁移 + 1 个一次性演示数据 fixture。
+
+**设计源**：file `fsK2rrl2sadcowrxspvGV8`（mTrip_Merchant）SECTION `2285:21516`「Promotion tables」
+= **6 个画板实为同一页的 2 种呈现（Percentage/Fixed 用卡片网格、Coupon Code 用表格）+ 1 个抽屉**。
+数据经 Figma MCP `get_figma_data` 取回。
+
+**用户已确认的三项取舍**：① 做全功能需求（不只稿面）；② `/promotions` 按稿整体重写；
+③ 曝光量走真实埋点（新增按日聚合表 + C 端上报），不做估算口径。
+
+**两个必须记住的口径（本次最大坑）**：
+1. `coupon_type` 是**计价轴** —— `coupon_type=2` 时 `discount_value` 是 **10 分制折扣率**
+   （8.50 = 用户付 85% = 15% off），`order-service/PricingService` 与 `SettlementService` 都按此读。
+   稿面三个 Tab 混了「面额轴」与「是否需券码」两个维度，`coupon_type` 表达不了，
+   故新增展示轴 `marketing_coupon.promotion_kind`（1百分比 2固定金额 3优惠码 4长住），
+   换算收口在后端 `PromotionController::discountPair()`；列表行额外返回 `discount_percent_off`
+   供前端直接渲染，**前端不要重复做 10 分制换算**。计价与结算链路零改动。
+2. `finance_account_entry.coupon_id` 存的是**领券记录 ID，不是券模板 ID**。
+   效果分析的「促销收益 / 商户出资」必须经 `marketing_coupon_receive` 换算模板维度，
+   按模板 ID 直接过滤会**恒为 0**（不是报错，最难发现）。
+
+**改动**：
+- **数据库**：`database/marketing/09-merchant-promotion-rules.sql`（幂等，登记 initdb `99m1-`）：
+  `marketing_coupon` 补 `promotion_kind`/`promo_code`(+`idx_site_promo_code`)/`description`/`staff_note`/
+  `min_nights`/`max_nights`/`book_advance_days`；`marketing_campaign` 补 `funding_source`/`funding_rules`/
+  `requirements`/`terms`/`invite_mode`；新增 `marketing_campaign_participant`（uk campaign+merchant）与
+  `marketing_promotion_impression`（按日聚合，uk coupon+campaign+date+source）。
+  01/04 快照同步补列。菜单：`04-merchant-menu.sql` 补页面 1005/1006 + 按钮 100005/100601，
+  存量库走 `database/migrations/V20260921120000__merchant-promotion-campaign-menu.sql`。
+- **后端**：`Merchant/PromotionController` 新增 `options`（物业+房型+只读币种一次取齐）/`performance`/
+  `duplicate`，补新字段读写与校验；kind=3 时 `syncPromoCode()` 同步 `marketing_promo_code` 镜像
+  （C 端 `/coupon/redeem` 查的是那张表，不镜像则券码兑不了），校验码唯一性时排除自己的镜像行。
+  新增 `Merchant/CampaignController`（summary/list/detail/respond，定向邀请 vs 公开报名可见性，
+  响应时快照出资模式）。`App/MarketingController::impression` 新增曝光上报
+  （`insertOrIgnore` 占位 + `increment` 累加，并发靠唯一键兜底）。`Admin/CampaignController::save`
+  接收出资与条款五参。网关 `map $merchant_module` 新增 `campaigns marketing_service`。
+- **前端**：`views/promotions/index.vue` 重写为页面壳（H1 + Add New Promotion + 4 张统计卡 + Tab 条
+  + 卡片网格/表格 + 抽屉），新增 `components/{PromoIcon,StatCards,PromoGrid,PromoCard,PromoTable,PromoDrawer}.vue`
+  与 `tokens.less`（**本页主色 `#4169ED`，不是全局 `--mtrip-primary`**）、`helpers.ts`（纯函数）；
+  新增 `views/promotions/analytics/index.vue`、`views/campaigns/{index.vue,components/*}`；
+  `api/promotions.ts` 重写 + 新增 `api/campaigns.ts`；i18n 整块重写并新增 `campaigns.*`；
+  `SideMenu.vue` 的 `business` 分组加两个入口。**删除**稿面没画的聚光灯卡/筛选卡/antd 表格+弹窗。
+- **C 端**：`client-app` 的 `RequestOptions` 新增 `silent?: boolean`（埋点失败连网络错也不弹 Toast）；
+  `PromotionsScreen`（`app_list` + `campaign_page`）与 `CouponDetailScreen`（`app_detail`）接上报。
+
+**照稿但存疑 / 未照抄（已声明）**：① 稿面 Active 卡的操作键文案是 `Resume`（模板复用痕迹），
+按语义实现 Active→`Pause`/Paused→`Resume`/草稿→`Start`；② 三种促销呈现不一致照稿保留；
+③ 稿面卡片日期补零、表格不补零，统一取不补零且同年省略起始年份；
+④ 稿面抽屉缺「适用物业/房型/出资模式/兑换上限」，按功能需求以同一 Label/Input 令牌追加；
+⑤ 优惠码促销稿面无「促销名称/描述」输入框，按稿隐藏并用券码兜底 `coupon_name`；
+⑥「不限量」= `total_count=0`、「不过期」= `valid_end=NULL`（复用 `valid_type`，不加列）；
+⑦ 币种整页只读（与 availability 同口径）；⑧ 统计卡多一张 Long Stay（稿面三张），形状照稿。
+
+**验证**：`merchant-web npm run build` 零 TS 报错；`client-app npm run typecheck` 零报错；
+新增 `merchant-web/scripts/check-promotions-figma.mjs` —— **真实 SSR 渲染** 6 个展示组件 + 3 个页面壳，
+断言稿面硬值（Tab 名、统计卡、表格 6 列表头与 5 行样例文案、卡片 Target/Validity、抽屉字段、
+状态徽标、30 枚断言集 path 逐字一致 + chevron 几何自检）与 `helpers.ts` 纯函数行为
+（含折扣口径、不限量、不过期、跨年日期），**199/199 GREEN**；容器内 `php -l` 4 个改动文件全过；
+迁移与菜单脚本重复执行幂等；网关 `/merchant/campaigns/*` 返回 **401 而非 404**（模块已登记）；
+埋点 upsert 实测「同日同来源 2 次上报(3+2) → 1 行累计 5」。
+
+**未做/受限**：⚠️ **没有登录态浏览器走查**（本环境无浏览器自动化工具，开发库也没有已知密码的商户账号），
+新接口未做端到端实测，只有「容器内 lint + SSR 真实渲染断言 + 库内 SQL 旁证」三重验证，需人工对图一次
+（`/promotions` 四个 Tab、`/campaigns`、`/promotions/analytics`）；⚠️ admin-web 的平台活动
+「出资模式/参与资格/条款/参与方式」表单未做（后端已接收五参），运营暂时只能走接口或改库；
+⚠️ 商户自建促销固定商户全额出资，「平台出资/共担」目前只来自平台活动；
+⚠️ 长住促销尚未与房量价格页的 `minStay` 联动；⚠️ 曝光只接了促销中心列表/券详情/活动横幅，
+首页静态促销卡未接；⚠️ 新校验脚本未接进 `scripts/check.ps1`（该入口本机因未装 PHP 本就跑不了）。
+
+**演示数据**：开发库无已知密码商户账号，为让页面可见真实数据，新增一次性 fixture
+`test/adhoc/m8-promotion-demo.sql`（11 条促销覆盖四个 Tab + 108 行曝光 + 108 条领券 + 54 条结算
++ 2 个平台活动 + 5 条券码镜像；**不登记 initdb、不被 `test/apply.sh` 导入**，可重复执行）。
+
 ### ★ 2026-09-18（商户认证测试模式改为后台运行时开关）
 
 商户固定 OTP 测试模式不再复用消费者注册的 `register_sms_required`，也不再由单一环境变量直接启停。新增全局安全配置 `sys_config.merchant_auth_test_mode`（默认 `0`）和部署能力门禁 `MTRIP_MERCHANT_AUTH_TEST_ALLOWED`（模板默认 `false`）；仅当环境不是 `prod/production`、部署门禁为 `true`、数据库开关为 `1` 时，商户注册/激活/登录/恢复才接受 `000000` 并跳过最终批准的外部凭证投递。生产环境始终关闭。
@@ -2961,6 +3037,21 @@ Mtrip 海外旅游 SaaS 平台:后端 Hyperf 3.1 微服务(backend/)+ 平台管�
 - **多语言**(vue-i18n,默认/fallback 均 en-US):en-US.ts 为全量词条源,zh-CN.ts 只维护已翻译部分;菜单三字段 `menu_name`(中文)/`menu_name_en`(英文回退)/`i18n_key`(词条 key,目录与页面必填、按钮不占词条);显示名统一走 `locales/menuI18n.ts` 的 `resolveMenuTitle/menuTitle`(i18n_key 命中→t(key),未命中→非中文环境用英文名、中文用中文名);扩展新语言只需前端加语言包+SUPPORTED_LOCALES,菜单数据与后端零改动;详细规范见 `docs/guides/standards/README.md`。
 
 ## 6. 下一步(模块08 部署与网关联调,任务清单见 docs/plans/08-部署与网关.md)
+
+M8 促销与活动下一步（2026-09-21，承接本文件顶部那条）：
+1. **登录态浏览器对图**（本环境无浏览器自动化、开发库无已知密码商户账号）：`/promotions` 四个 Tab
+   的卡片/表格与抽屉、`/campaigns` 的活动卡与详情抽屉、`/promotions/analytics` 的指标卡与趋势图。
+   演示数据已就位（`test/adhoc/m8-promotion-demo.sql`），清空方式见 `test/adhoc/README.md`。
+2. **admin-web 补平台活动表单**：出资模式 / 参与资格 / 条款 / 参与方式四项后端已接收
+   （`Admin/CampaignController::save`），但后台还没有输入口，运营目前只能走接口或改库。
+3. **商户自建促销的出资模式**目前固定商户 100%（平台出资/共担只来自平台活动）。
+   若要让商户申请共担，需要一条平台审批链 —— `funding_source`/`funding_rules` 字段已具备。
+4. **长住促销与房量价格页联动**：现在只落到「券 + 最少晚数」，未与 `hotel_room_type` 的
+   `minStay`/`maxStay` 交叉校验；`marketing_coupon.max_nights` 已预留。
+5. **曝光埋点覆盖面**：已接促销中心列表 / 券详情 / 活动横幅；首页静态促销卡与搜索页未接。
+6. **口径复核**：效果分析里「转化率 = 领券量 / 曝光量」「ROI = 带券订单 GMV / 商户出资」两条
+   是否需要改成「下单转化」或「净收益口径」，需业务侧确认后改 `PromotionController::performance()`
+   一处（分母/分子都在同方法内）。
 
 客房可用性可见性下一步(2026-09-17,承接本文件顶部「客房管理今日可售」一条):
 1. **登录态浏览器走查**(merchant-web 5174 已在跑):新建房型 → 审核通过 → APP 订**明天**的房,

@@ -28,7 +28,8 @@ const hotelProfilePath = computed(() =>
 /** 侧边栏分组:hotelManagement / operations 的物业专属口径见 config/menuSections.ts */
 const sections = computed(() => [
   { key: 'portfolio', paths: ['/properties', '/dashboard'] },
-  { key: 'business', paths: ['/earnings', '/promotions', '/reviews', '/notifications'] },
+  // M8 促销与活动:促销页 + 效果分析 + 平台活动同属「Business」分组
+  { key: 'business', paths: ['/earnings', '/promotions', '/promotions/analytics', '/campaigns', '/reviews', '/notifications'] },
   { key: 'hotelManagement', paths: [hotelProfilePath.value, '/rooms'] },
   { key: 'operations', paths: ['/availability', '/order'] },
   { key: 'team', paths: ['/account/list', '/account/role'] },

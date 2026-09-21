@@ -34,6 +34,11 @@ export interface RequestOptions {
    * 此时再弹一句「短信服务未配置」只会让用户以为注册失败了。
    */
   silentCodes?: number[];
+  /**
+   * 完全静默:业务错误与网络错误都不弹 Toast(仍照常抛 ApiError,由调用方自行处理)。
+   * 用于埋点/曝光上报这类「失败也绝不能打扰用户」的后台请求。
+   */
+  silent?: boolean;
 }
 
 /** 由 store/导航注入的钩子(避免循环依赖) */
@@ -125,7 +130,7 @@ export async function request<T>(config: AxiosRequestConfig, options?: RequestOp
       hooks.onUnauthorized();
     }
     logger.warn('api', config.url, body.code, body.message);
-    if (!options?.silentCodes?.includes(body.code)) {
+    if (!options?.silent && !options?.silentCodes?.includes(body.code)) {
       hooks.onToast(body.message);
     }
     throw new ApiError(body.code, body.message);
@@ -134,7 +139,7 @@ export async function request<T>(config: AxiosRequestConfig, options?: RequestOp
     const axiosError = error as AxiosError;
     const message = axiosError.message ?? 'Network Error';
     logger.error('api', config.url, message);
-    hooks.onToast(message);
+    if (!options?.silent) hooks.onToast(message);
     throw new ApiError(-1, message);
   }
 }

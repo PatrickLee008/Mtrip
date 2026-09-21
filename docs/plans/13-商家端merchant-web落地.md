@@ -284,3 +284,66 @@
 ### Git 记录
 - 用户已授权将本节 M2 房型管理、审核流程、开发入口与图片显示修复做一次本地提交，不推送。
 - 明确排除项目根目录 `start.bat`、`stop.bat`、`设计文档/` 下新增文件及与本任务无关的 OpenResty DNS 配置改动；实际提交哈希见 Git 日志。
+
+---
+
+## 2026-09-21 M8 促销与活动管理按 Figma 整页重写 + 三块新增
+
+设计源:Figma `fsK2rrl2sadcowrxspvGV8` SECTION `2285:21516`「Promotion tables」（6 画板 =
+同一页的 2 种呈现 + 1 个抽屉）。用户确认三项取舍:做全功能需求、按稿整体重写、曝光走真实埋点。
+
+**前端**（与同日 availability 页同一做法:整页壳 + 子组件 + 页面级 `tokens.less`）
+- `views/promotions/index.vue` 重写为页面壳:H1「Promotion Tables」+ 副标题 + `Add New Promotion`
+  + 统计卡（Percentage / Fixed Amount / Coupon Code / Long Stay，点击切 Tab）
+  + Tab 条（58 高、选中态 4px 主色下划线）+ 内容区（Percentage/Fixed/Long Stay 卡片网格、
+  Coupon Code 表格）+ 新建/编辑抽屉。
+- 新增 `components/{PromoIcon,StatCards,PromoGrid,PromoCard,PromoTable,PromoDrawer}.vue`、
+  `tokens.less`（本页主色 `#4169ED`，非全局 `#2563eb`）、`helpers.ts`（形态判定 / 折扣文案 /
+  状态徽标 / 进度 / 表单↔载荷，全部纯函数）。
+- 新增 `views/promotions/analytics/index.vue`（效果分析:7 张指标卡 + 趋势图 + 逐券明细表）与
+  `views/campaigns/{index.vue,components/*}`（平台活动:概览卡 + 筛选 + 活动卡 + 详情抽屉，
+  含资格/出资/条款与接受/拒绝邀请）。
+- `api/promotions.ts` 重写（+options/performance/duplicate）、新增 `api/campaigns.ts`。
+- **删除**（稿面没画）:聚光灯卡、筛选表单卡、antd 表格 + a-modal 表单、`create` 按钮的 `New Promotion` 文案。
+- i18n:`promotions.*` 整块重写、新增 `promotions.performance.*` / `promotions.drawer.*` /
+  `campaigns.*` / `menu.promotionPerformance` / `menu.campaigns`（en-US 全量，zh-CN 同步）。
+- `SideMenu.vue` 的 `business` 分组新增 `/promotions/analytics`、`/campaigns`。
+
+**后端**
+- `Merchant/PromotionController` 扩展:`options` / `performance` / `duplicate` 三个新接口，
+  新增 7 个字段的读写与校验，kind=3 同步 `marketing_promo_code` 镜像（让 C 端券码真能兑换）。
+- 新增 `Merchant/CampaignController`:`summary` / `list` / `detail` / `respond`。
+- `App/MarketingController::impression`（新）:C 端曝光上报，`insertOrIgnore` + `increment` 按日累加。
+- `Admin/CampaignController::save` 接收 `fundingSource/fundingRules/requirements/terms/inviteMode`。
+- 网关 `map $merchant_module` 新增 `campaigns marketing_service`。
+
+**数据库**
+- `database/marketing/09-merchant-promotion-rules.sql`（幂等，已登记 initdb `99m1-`）:
+  `marketing_coupon` 补 `promotion_kind`/`promo_code`/`description`/`staff_note`/`min_nights`/`max_nights`/`book_advance_days`；
+  `marketing_campaign` 补 5 列入资与条款；新增 `marketing_campaign_participant`、`marketing_promotion_impression`。
+- `database/seed/04-merchant-menu.sql` 补菜单 1005/1006 与按钮 100005/100601；
+  存量库走 `database/migrations/V20260921120000__merchant-promotion-campaign-menu.sql`。
+- 01/04 快照同步补列，保证全新库自洽。
+
+**关键结论（返工点）**
+- `coupon_type` 是**计价轴**（`coupon_type=2` 的 `discount_value` 是 10 分制折扣率），
+  稿面三个 Tab 是**展示轴**，两者维度不同，故另立 `promotion_kind`，换算收口在后端
+  `discountPair()`；返回行带 `discount_percent_off`，前端不重复换算。计价与结算链路零改动。
+- `finance_account_entry.coupon_id` 存的是**领券记录 ID 而不是券模板 ID**，
+  效果分析的收益/出资必须经 `marketing_coupon_receive` 换算模板维度，否则恒为 0。
+
+**验证**
+- `merchant-web npm run build` 零 TS 报错；`client-app npm run typecheck` 零报错。
+- 新增 `merchant-web/scripts/check-promotions-figma.mjs`:**真实 SSR 渲染** 6 个展示组件 +
+  3 个页面壳，断言稿面硬值（Tab 名、统计卡、表格 6 列表头与 5 行样例、卡片 Target/Validity、
+  抽屉字段、状态徽标、30 枚断言集 path 逐字、`#4169ED`/`#22C55E`/`#EC1317`/`562px`/`172px`/`58px`）
+  + `helpers.ts` 纯函数行为，**199/199 GREEN**。
+- 容器内 `php -l` 全部通过；迁移与菜单脚本重复执行幂等；网关新模块返回 401 而非 404。
+- 埋点 upsert 语义实测:同日同来源 2 次上报（3+2）→ 1 行累计 5。
+- 演示数据 `test/adhoc/m8-promotion-demo.sql` 下效果分析 SQL 手算:曝光 28,356 / 领券 108 /
+  核销 54 / 收益 1,235,000 MMK / 商户出资 310,550 / ROI 3.98。
+
+**未做 / 受限**
+- 无登录态浏览器走查（本环境无浏览器自动化、开发库无已知密码的商户账号），未做端到端实测。
+- admin-web 的活动出资/资格/条款表单未做（后端已接收入参）。
+- 新校验脚本未接进 `scripts/check.ps1`（该入口本机因未装 PHP 本就跑不了）。

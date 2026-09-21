@@ -23,6 +23,8 @@ INSERT IGNORE INTO `merchant_menu` (`id`, `parent_id`, `menu_name`, `menu_name_e
 (800, 0, '收益结算',   'Earnings',  'menu.earnings',  'mch:earnings:list', 2, '/earnings', 'earnings/index', 'AccountBookOutlined', 8, '1,2,3'),
 (900, 0, '通知中心',   'Notifications', 'menu.notifications', 'mch:notifications:list', 2, '/notifications', 'notifications/index', 'BellOutlined', 9, '1,2,3'),
 (1000, 0, '营销活动',  'Promotions', 'menu.promotions', 'mch:promotions:list', 2, '/promotions', 'promotions/index', 'TagOutlined', 10, '1,2,3'),
+(1005, 0, '效果分析',  'Promotion Performance', 'menu.promotionPerformance', 'mch:promotions:performance', 2, '/promotions/analytics', 'promotions/analytics/index', 'LineChartOutlined', 14, '1,2,3'),
+(1006, 0, '平台活动',  'Campaigns', 'menu.campaigns', 'mch:campaigns:list', 2, '/campaigns', 'campaigns/index', 'SoundOutlined', 15, '1,2,3'),
 (1100, 0, '评价管理',  'Reviews', 'menu.reviews', 'mch:reviews:list', 2, '/reviews', 'reviews/index', 'StarOutlined', 11, '1,2,3'),
 (1200, 0, '帮助中心',  'Support', 'menu.support', 'mch:support:list', 2, '/support', 'support/index', 'CustomerServiceOutlined', 12, '1,2,3'),
 (1300, 0, '设置',      'Settings', 'menu.settings', 'mch:settings:list', 2, '/settings', 'settings/index', 'SettingOutlined', 13, '1,2,3');
@@ -111,7 +113,12 @@ INSERT IGNORE INTO `merchant_menu` (`id`, `parent_id`, `menu_name`, `menu_name_e
 (100001, 1000, '新增活动', 'Add Promotion',    'mch:promotions:add',    3, 1, '1,2'),
 (100002, 1000, '编辑活动', 'Edit Promotion',   'mch:promotions:edit',   3, 2, '1,2'),
 (100003, 1000, '发布/停发', 'Publish/Pause',   'mch:promotions:status', 3, 3, '1,2'),
-(100004, 1000, '删除活动', 'Delete Promotion', 'mch:promotions:delete', 3, 4, '1,2');
+(100004, 1000, '删除活动', 'Delete Promotion', 'mch:promotions:delete', 3, 4, '1,2'),
+(100005, 1000, '复制活动', 'Duplicate Promotion', 'mch:promotions:duplicate', 3, 5, '1,2');
+
+-- ---------- 平台活动按钮 ----------
+INSERT IGNORE INTO `merchant_menu` (`id`, `parent_id`, `menu_name`, `menu_name_en`, `perm_key`, `menu_type`, `sort`, `account_scope`) VALUES
+(100601, 1006, '响应邀请', 'Accept or Decline Invitation', 'mch:campaigns:respond', 3, 1, '1,2');
 
 -- ---------- 评价管理按钮 ----------
 INSERT IGNORE INTO `merchant_menu` (`id`, `parent_id`, `menu_name`, `menu_name_en`, `perm_key`, `menu_type`, `sort`, `account_scope`) VALUES

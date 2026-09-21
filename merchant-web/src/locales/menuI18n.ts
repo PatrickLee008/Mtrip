@@ -19,6 +19,8 @@ export const MENU_I18N: Record<string, string> = {
   收益结算: 'menu.earnings',
   通知中心: 'menu.notifications',
   营销活动: 'menu.promotions',
+  效果分析: 'menu.promotionPerformance',
+  平台活动: 'menu.campaigns',
   评价管理: 'menu.reviews',
   帮助中心: 'menu.support',
   设置: 'menu.settings',

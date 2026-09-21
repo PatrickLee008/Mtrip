@@ -405,6 +405,56 @@ class MarketingController extends AppAbstractController
     }
 
     /**
+     * 促销曝光上报(M8 效果分析的曝光量来源;此前全平台无任何埋点)。
+     *
+     * 入参:`items` = `[{couponId, campaignId, source, count}]`,列表渲染时批量调用。
+     * 落到按日聚合表 `marketing_promotion_impression`(uk: coupon_id + campaign_id + stat_date + source),
+     * 用 `ON DUPLICATE KEY UPDATE` 累加 —— 不写行级流水,避免 C 端每次渲染都插一行。
+     *
+     * 幂等边界:同一天同一来源重复上报会继续累加,所以客户端只在**真正渲染出卡片**时上报一次,
+     * 不要放在每次组件重渲染里。`count` 上限 50,`items` 上限 50 条,防止刷量。
+     */
+    public function impression(): array
+    {
+        $siteId = $this->requireSiteId();
+        $items = $this->input('items');
+        if (! is_array($items) || $items === []) {
+            throw new BusinessException(ErrorCode::PARAM_ERROR, 'items is required');
+        }
+
+        $today = date('Y-m-d');
+        $accepted = 0;
+        foreach (array_slice(array_values($items), 0, 50) as $item) {
+            if (! is_array($item)) {
+                continue;
+            }
+            $couponId = (int) ($item['couponId'] ?? 0);
+            $campaignId = (int) ($item['campaignId'] ?? 0);
+            if ($couponId <= 0 && $campaignId <= 0) {
+                continue;
+            }
+            $count = min(50, max(1, (int) ($item['count'] ?? 1)));
+            $source = mb_substr(preg_replace('/[^a-z0-9_]/i', '', (string) ($item['source'] ?? 'app')) ?: 'app', 0, 32);
+
+            $scope = [
+                'coupon_id' => $couponId,
+                'campaign_id' => $campaignId,
+                'stat_date' => $today,
+                'source' => $source,
+            ];
+            // 先 insertOrIgnore 占位再累加:并发下靠唯一键兜底,避免「先查后插」的竞态
+            Db::table('marketing_promotion_impression')->insertOrIgnore($scope + [
+                'site_id' => $siteId,
+                'impressions' => 0,
+            ]);
+            Db::table('marketing_promotion_impression')->where($scope)->increment('impressions', $count);
+            $accepted++;
+        }
+
+        return Result::success(['accepted' => $accepted]);
+    }
+
+    /**
      * 批量把券模板行转成统一视图(补本人已领数,避免 N+1)
      *
      * @param array<int, array>     $rows

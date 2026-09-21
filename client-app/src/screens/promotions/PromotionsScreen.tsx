@@ -36,6 +36,8 @@ import {
   fetchCampaigns,
   fetchMyCoupons,
   redeemPromoCode,
+  reportImpressions,
+  type ImpressionItem,
 } from '@/api/marketing';
 import { API_CODE } from '@/api/types';
 import HomeIcon from '@/components/home/HomeIcon';
@@ -106,9 +108,16 @@ export default function PromotionsScreen() {
           fetchMyCoupons(myType, { page: 1, pageSize: 50 }),
         ]);
         // 设计稿只有一张活动横幅,取排序最前的展示中活动
-        setCampaign(campaigns[0] ?? null);
+        const banner = campaigns[0] ?? null;
+        setCampaign(banner);
         setAvailable(availablePage.list);
         setMine(minePage.list);
+        // M8 曝光上报:只在拿到列表、卡片真的会渲染出来时按批上报一次(埋点失败静默,不影响领券)
+        const items: ImpressionItem[] = availablePage.list
+          .filter((item) => Number(item.coupon_id) > 0)
+          .map((item) => ({ couponId: Number(item.coupon_id), source: 'app_list' }));
+        if (banner) items.push({ campaignId: Number(banner.id), source: 'campaign_page' });
+        if (items.length > 0) void reportImpressions(items).catch(() => undefined);
       } catch {
         // request.ts 已经统一 Toast 过一次,这里只负责把页面退回空态
         setCampaign(null);

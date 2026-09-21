@@ -115,3 +115,24 @@ export interface CouponMatchList {
 export function fetchCouponMatchList(params: BestCouponParams): Promise<CouponMatchList> {
   return get<CouponMatchList>('/api/v1/app/marketing/coupon/match-list', { ...params });
 }
+
+/* ---- 曝光上报(M8 促销效果分析) ---- */
+
+/** 单条曝光:给券模板(couponId)或平台活动(campaignId)记一次曝光 */
+export interface ImpressionItem {
+  couponId?: number;
+  campaignId?: number;
+  /** 来源口径:app_list / app_detail / campaign_page,与后端 marketing_promotion_impression.source 一致 */
+  source: string;
+  count?: number;
+}
+
+/**
+ * 促销曝光上报。后端按「券 + 活动 + 日期 + 来源」按日累加,不存行级流水。
+ *
+ * ⚠ 只在卡片**真正渲染出来**时调用一次(不要放在每次组件重渲染里),否则会把同一屏重复计数。
+ * 埋点失败必须静默:`silent` 让它既不弹 Toast 也不影响领券主流程。
+ */
+export function reportImpressions(items: ImpressionItem[]): Promise<{ accepted: number }> {
+  return post<{ accepted: number }>('/api/v1/app/marketing/impression', { items }, { silent: true });
+}

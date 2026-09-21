@@ -45,12 +45,19 @@ class CampaignController extends AbstractController
     public function save(): array
     {
         $couponIds = $this->input('couponIds');
+        $fundingRules = $this->input('fundingRules');
         $data = [
             'title' => mb_substr($this->requireStr('title'), 0, 200),
             'subtitle' => mb_substr($this->strInput('subtitle'), 0, 255),
             'banner' => $this->strInput('banner'),
             'landing_url' => $this->strInput('landingUrl'),
             'coupon_ids' => is_array($couponIds) ? json_encode(array_map('intval', $couponIds)) : null,
+            // M8:商户端活动详情要展示的出资模式 / 参与资格 / 活动条款 / 参与方式
+            'funding_source' => in_array($this->intInput('fundingSource', 1), [1, 2, 3, 4], true) ? $this->intInput('fundingSource', 1) : 1,
+            'funding_rules' => is_array($fundingRules) ? json_encode($fundingRules, JSON_UNESCAPED_UNICODE) : null,
+            'requirements' => mb_substr($this->strInput('requirements'), 0, 1000),
+            'terms' => mb_substr($this->strInput('terms'), 0, 1000),
+            'invite_mode' => $this->intInput('inviteMode', 1) === 2 ? 2 : 1,
             'start_time' => ($s = $this->strInput('startTime')) !== '' ? $s : null,
             'end_time' => ($e = $this->strInput('endTime')) !== '' ? $e : null,
             'sort' => $this->intInput('sort'),

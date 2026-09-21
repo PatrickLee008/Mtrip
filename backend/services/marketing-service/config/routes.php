@@ -13,6 +13,7 @@ use App\Controller\Admin\CouponController;
 use App\Controller\Admin\LongstayController;
 use App\Controller\Admin\PromotionController;
 use App\Controller\App\MarketingController;
+use App\Controller\Merchant\CampaignController as MerchantCampaignController;
 use App\Controller\Merchant\PromotionController as MerchantPromotionController;
 use Hyperf\HttpServer\Router\Router;
 use Mtrip\Shared\Middleware\AdminAuthMiddleware;
@@ -35,6 +36,8 @@ Router::addGroup('/api/v1/app/marketing', static function () {
     Router::get('/coupon/my', [MarketingController::class, 'myCoupons']);
     Router::get('/coupon/best-match', [MarketingController::class, 'bestMatch']);
     Router::get('/coupon/match-list', [MarketingController::class, 'couponMatchList']);
+    // M8 促销曝光上报(促销中心列表/详情渲染时批量累加;按日聚合表 marketing_promotion_impression)
+    Router::post('/impression', [MarketingController::class, 'impression']);
 }, [
     'middleware' => [UserAuthMiddleware::class],
 ]);
@@ -77,11 +80,27 @@ Router::addGroup('/api/v1/merchant/promotions', static function () {
     Router::get('/summary', [MerchantPromotionController::class, 'summary']);
     Router::get('/list', [MerchantPromotionController::class, 'index']);
     Router::get('/detail', [MerchantPromotionController::class, 'detail']);
+    // 抽屉选项集(物业 + 房型 + 只读币种),一次取齐
+    Router::get('/options', [MerchantPromotionController::class, 'options']);
+    // 效果分析:曝光/领券/核销/预订/转化率/促销收益/商户出资/ROI
+    Router::get('/performance', [MerchantPromotionController::class, 'performance']);
     Router::post('/add', [MerchantPromotionController::class, 'add']);
     Router::post('/update', [MerchantPromotionController::class, 'update']);
+    Router::post('/duplicate', [MerchantPromotionController::class, 'duplicate']);
     Router::post('/publish', [MerchantPromotionController::class, 'publish']);
     Router::post('/toggle-status', [MerchantPromotionController::class, 'toggleStatus']);
     Router::post('/delete', [MerchantPromotionController::class, 'remove']);
+}, [
+    'middleware' => [MerchantAuthMiddleware::class, OperationLogMiddleware::class],
+]);
+
+// Merchant App M8: platform campaign participation (accept / decline invitations).
+// ⚠ 新增二级模块 `campaigns` 已同步登记网关 map $merchant_module(硬约定,漏登记网关返回 404)
+Router::addGroup('/api/v1/merchant/campaigns', static function () {
+    Router::get('/summary', [MerchantCampaignController::class, 'summary']);
+    Router::get('/list', [MerchantCampaignController::class, 'index']);
+    Router::get('/detail', [MerchantCampaignController::class, 'detail']);
+    Router::post('/respond', [MerchantCampaignController::class, 'respond']);
 }, [
     'middleware' => [MerchantAuthMiddleware::class, OperationLogMiddleware::class],
 ]);

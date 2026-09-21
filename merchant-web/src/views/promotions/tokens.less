@@ -1,0 +1,55 @@
+/**
+ * Promotions 页设计令牌(Figma `2285:21516`「Promotion tables」,逐字取自稿面 GLOBAL_VARS)。
+ *
+ * ⚠ 本页主色是稿面的 `#4169ED`,与全局 `--mtrip-primary`(`#2563eb`)不同 ——
+ * 与 2026-09-21 整页重写的 availability 页同一处理:照稿独立成组,不要替换为全局变量。
+ * 纯变量文件,无选择器,`@import` 到各组件 `<style scoped lang="less">` 不会产生重复 CSS。
+ */
+
+// 主色
+@pr-primary: #4169ed;
+@pr-primary-soft: rgba(65, 105, 237, 0.08);
+@pr-primary-chip: #ebf0ff;
+
+// 文本
+@pr-ink: #1b1d30; // 正文 / 数字 / 卡片标题
+@pr-ink-page: #0f172a; // 页面 H1
+@pr-ink-sub: #64748b; // 统计卡标签 / 卡片描述
+@pr-ink-label: #334155; // 表单 Label
+@pr-ink-muted: rgba(25, 26, 37, 0.5); // 控件小标 / 元数据 Label / 页面副标题
+@pr-ink-aux: #94a3b8; // 失效态文本
+
+// 线与底
+@pr-line: #e2e8f0;
+@pr-soft: #f8fafc; // 表头 / 卡片次级底
+@pr-chip-bg: #f1f5f9; // 券码胶囊 / 图标按钮底
+@pr-page-bg: #f4f6fb;
+@pr-card-bg: #fefefe; // 统计卡底(稿面与纯白卡片区分)
+
+// 状态色
+@pr-success: #22c55e;
+@pr-success-soft: rgba(34, 197, 94, 0.16); // 徽标底
+@pr-success-faint: rgba(34, 197, 94, 0.08); // 图标底
+@pr-warn: #bb4d00;
+@pr-warn-soft: rgba(187, 77, 0, 0.08);
+@pr-danger: #ec1317;
+@pr-danger-soft: rgba(236, 19, 23, 0.08);
+@pr-neutral-soft: #e2e8f0;
+
+// 阴影 / 遮罩
+@pr-shadow-card: 0 2px 10px 0 rgba(15, 23, 42, 0.04);
+@pr-scrim: rgba(15, 23, 42, 0.4);
+
+// 字体(稿面混排:页面标题/卡片标题/数字用 Plus Jakarta Sans,其余用 Inter,按钮用 Geist)
+@pr-font-display: 'Plus Jakarta Sans', Inter, system-ui, -apple-system, 'Segoe UI', 'PingFang SC', sans-serif;
+@pr-font-body: Inter, 'Plus Jakarta Sans', system-ui, -apple-system, 'Segoe UI', 'PingFang SC', sans-serif;
+@pr-font-button: Geist, Inter, system-ui, -apple-system, 'Segoe UI', 'PingFang SC', sans-serif;
+
+// 尺寸(稿面硬值)
+@pr-drawer-width: 562px;
+@pr-tab-width: 172px;
+@pr-tab-height: 58px;
+@pr-input-height: 44px;
+@pr-radius-card: 12px;
+@pr-radius-promo-card: 16px;
+@pr-radius-control: 8px;

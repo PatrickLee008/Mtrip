@@ -29,7 +29,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { TFunction } from 'i18next';
 import { useTranslation } from 'react-i18next';
 
-import { claimCoupon, fetchCouponDetail } from '@/api/marketing';
+import { claimCoupon, fetchCouponDetail, reportImpressions } from '@/api/marketing';
 import HomeIcon from '@/components/home/HomeIcon';
 import { promoShared } from '@/components/promotion/promoShared';
 import { PAGE_PADDING, colors, radius, shadows } from '@/config/theme';
@@ -72,6 +72,11 @@ export default function CouponDetailScreen() {
         receiveId > 0 ? { receiveId } : { couponId },
       );
       setCoupon(data);
+      // M8 券详情曝光(仅未领取的券模板;我的券已在列表计过曝光)
+      const templateId = Number(data.coupon_id);
+      if (receiveId === 0 && templateId > 0) {
+        void reportImpressions([{ couponId: templateId, source: 'app_detail' }]).catch(() => undefined);
+      }
     } catch {
       // request.ts 已 Toast;这里退回静态兜底,不留白屏
       setCoupon(null);

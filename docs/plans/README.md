@@ -170,6 +170,7 @@ MTrip/
 | 2026-09-15 | 商户入驻整改阶段 2：双联系方式 6 位 OTP 后原子创建/恢复唯一草稿，支持详情、增量多业务保存、补正重交；后台注册状态队列及开始审核/补正/批准/驳回落地，基础批准不创建正式实体。20 项隔离断言、PHP 8.1 语法、admin-web 构建和迁移校验通过；两个 App 未修改。 |
 | 2026-09-15 | 商户入驻整改阶段 1：新增三层状态、双联系方式、条款签署、首批物业文档归属、最终批准幂等和访问码唯一模型；确定性回填保留全部 15 条文档，12 条双口径冲突记录待人工处理，3 条物业文档精确关联来源业务。本地迁移 11/11，隔离升级/二次执行/跨站/冲突门禁测试通过；未改运行时逻辑及两个 App。 |
 | 2026-09-09 | merchant-app 入驻原型续接：完成 Figma 注册 Step 3/4、OTP、KYC 文档上传/审批、Merchant Access Code、QR 扫描与 Authenticator 2FA、可选生物识别和首页待设计占位；全部为本地可点击演示，尚未接入移动端入驻 API。TypeScript 与 Expo Web build 通过，构建产物已清理。 |
+| 2026-09-21 | 商户端 M8 促销与活动管理按 Figma `2285:21516` 整页重写:`/promotions` 四 Tab(百分比/固定金额/优惠码/长住)+ 卡片网格与表格两态 + 创建抽屉,新增 `/promotions/analytics` 与 `/campaigns`;后端补 `options/performance/duplicate` 与商户活动接口、C 端曝光上报,新增营销迁移 09 与菜单迁移;`merchant-web` SSR 校验脚本 199/199 GREEN,`client-app` typecheck 零报错。详见[实现方案-Merchant-M8-营销活动.md](./实现方案-Merchant-M8-营销活动.md) |
 | 2026-09-10 | 商户 App KYC 联动收敛：确认不按 Business Type 分流；新增 `V20260910110000__unify-merchant-kyc-template.sql` 创建唯一可配置的统一资料清单，后台 Send KYC 仅对申请生成占位资料并开放 stage=3；App 已接 M5-M8 轮询、读取清单、真实文件选择 multipart 上传和提交，注册页移除 Business Type。merchant-app typecheck/Web build、admin-web build、迁移校验和 diff 检查通过。 |
 | 2026-09-09 | 商户 App 后端联动第一段：新增版本化迁移 `V20260909123000__add-email-channel.sql`，system-service 提供站点级 SMTP 邮件渠道、日志与后台配置页；merchant-service 新增注册渠道读取与 SMS/Email OTP 二选一接口，registration token 仅在验证后签发。 |
 | 2026-09-10 | 商户 App 后端联动第二段：M3-M8 申请草稿/提交/状态、KYC 要求、上传和提交接口已加入 merchant-service；新增申请注册所有权哈希迁移，后端强制仅后台 Send KYC 后的 stage=3 可上传/提交，且按模板必需文件校验。 |
