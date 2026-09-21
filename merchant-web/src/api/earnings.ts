@@ -15,9 +15,13 @@ export interface EarningsSettlementSummary {
 export interface EarningsOverview {
   startDate: string;
   endDate: string;
+  /** 结算币种(merchant_account.currency → hotel_room_type.currency → THB) */
+  currency: string;
   bookingVolume: number;
   grossRevenue: number;
   commission: number;
+  /** 平台佣金率(%):commission / grossRevenue ×100;毛收入为 0 时为 null */
+  commissionRate: number | null;
   discountAmount: number;
   mtripPays: number;
   merchantPays: number;

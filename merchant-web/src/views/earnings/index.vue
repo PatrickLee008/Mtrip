@@ -1,383 +1,513 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue';
+/**
+ * Dashboard & Earnings(Figma `fsK2rrl2sadcowrxspvGV8` SECTION `1306:18423`
+ * 「Business Dashboard & Settlement」)。
+ *
+ * 稿面一页 = 页头(标题 + 周期选择 + Export Report)
+ *   + 四张概览卡(Today's Arrivals / Departures / Occupancy Rate / Pending Actions)
+ *   + financial-row(每日营收柱 + Earnings Breakdown)
+ *   + 2×2 图表网格(营收折线 / 入住率面积 / 星期预订量柱 / 房型环形)
+ *   + 近期预订结算表 + 导出弹窗。
+ *
+ * 与 /dashboard 的分工:本页是「经营 + 收益」聚合页(菜单 Business › Dashboard & Earnings),
+ * /dashboard 保持原工作台不动。稿面没画的旧块(6 张统计卡、筛选表单、结算单列表 + 详情抽屉 +
+ * 申诉弹窗)已随本次重写删除。
+ *
+ * 图表全部手写 SVG/DOM(与 availability / promotions 两页同处理),不引 echarts:
+ * 视觉能逐像素贴稿面令牌,且 SSR 校验脚本可断言(echarts 走 canvas 无法断言)。
+ */
+import { computed, onMounted, ref } from 'vue';
 import { message } from 'ant-design-vue';
-import { DownloadOutlined, EyeOutlined, FlagOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons-vue';
 import { useI18n } from 'vue-i18n';
 import PageContainer from '@/components/PageContainer.vue';
-import AmountText from '@/components/AmountText.vue';
-import StatusTag, { type StatusItem } from '@/components/StatusTag.vue';
-import { useTable, type TableRow } from '@/composables/useTable';
+import { useDismiss } from '@/composables/useDismiss';
+import { apiDashboardStats, type DashboardStats } from '@/api/stats';
+import { apiEarningsOverview, type EarningsOverview } from '@/api/earnings';
+import EaIcon from './components/EaIcon.vue';
+import SummaryCard from './components/SummaryCard.vue';
+import SparklineBars from './components/SparklineBars.vue';
+import DailyRevenueCard from './components/DailyRevenueCard.vue';
+import EarningsBreakdownCard from './components/EarningsBreakdownCard.vue';
+import TrendLineCard from './components/TrendLineCard.vue';
+import OccupancyAreaCard from './components/OccupancyAreaCard.vue';
+import BookingVolumeCard from './components/BookingVolumeCard.vue';
+import RoomTypeDonutCard from './components/RoomTypeDonutCard.vue';
+import SettlementsTable from './components/SettlementsTable.vue';
+import ExportReportModal from './components/ExportReportModal.vue';
 import {
-  apiEarningsOverview,
-  apiSettleDetail,
-  apiSettleDispute,
-  apiSettleList,
-  type EarningsOverview,
-  type MerchantSettle,
-  type SettlementEntry,
-} from '@/api/earnings';
+  EMPTY_DASHBOARD_STATS,
+  EMPTY_EARNINGS_OVERVIEW,
+  bookingBadge,
+  bookingRef,
+  deltaText,
+  deductionMoneyText,
+  deductionPercentText,
+  formatPercent,
+  isNegativeDelta,
+  isoRangeLabel,
+  lastValues,
+  moneyText,
+  monthLabel,
+  normalizeOverview,
+  normalizeStats,
+  paymentBadge,
+  stayRangeLabel,
+} from './helpers';
 
 const { t } = useI18n();
 
-const emptyOverview: EarningsOverview = {
-  startDate: '',
-  endDate: '',
-  bookingVolume: 0,
-  grossRevenue: 0,
-  commission: 0,
-  discountAmount: 0,
-  mtripPays: 0,
-  merchantPays: 0,
-  netSettlement: 0,
-  settlement: {
-    pendingAmount: 0,
-    processingAmount: 0,
-    paidAmount: 0,
-    disputedAmount: 0,
-    pendingCount: 0,
-    processingCount: 0,
-    paidCount: 0,
-    disputedCount: 0,
-  },
-};
+type RangeKey = 'thisMonth' | 'lastMonth' | 'last30' | 'last7';
 
-const overview = ref<EarningsOverview>(emptyOverview);
-const overviewLoading = ref(false);
+const stats = ref<DashboardStats>(EMPTY_DASHBOARD_STATS);
+const overview = ref<EarningsOverview>(EMPTY_EARNINGS_OVERVIEW);
+const loading = ref(false);
+const rangeKey = ref<RangeKey>('thisMonth');
+const range = ref(rangeOf('thisMonth'));
 
-const { loading, list, query, load, search, reset, pagination } = useTable(apiSettleList, {
-  settleNo: '',
-  settleCycle: '',
-  status: undefined,
+const rangeOpen = ref(false);
+const rangeRoot = ref<HTMLElement | null>(null);
+useDismiss(rangeRoot, rangeOpen, () => {
+  rangeOpen.value = false;
 });
 
-const statusMap = computed<Record<number, StatusItem>>(() => ({
-  0: { text: t('earnings.status.pending'), color: 'warning' },
-  1: { text: t('earnings.status.processing'), color: 'processing' },
-  2: { text: t('earnings.status.paid'), color: 'success' },
-  3: { text: t('earnings.status.disputed'), color: 'error' },
-}));
+const exportOpen = ref(false);
 
-const columns = computed(() => [
-  { title: t('earnings.settleNo'), dataIndex: 'settle_no', width: 180 },
-  { title: t('earnings.cycle'), dataIndex: 'settle_cycle', width: 150 },
-  { title: t('earnings.orderCount'), dataIndex: 'order_count', width: 110 },
-  { title: t('earnings.orderAmount'), dataIndex: 'order_amount', width: 130 },
-  { title: t('earnings.commission'), dataIndex: 'commission', width: 130 },
-  { title: t('earnings.taxAmount'), dataIndex: 'tax_amount', width: 120 },
-  { title: t('earnings.settleAmount'), dataIndex: 'settle_amount', width: 140 },
-  { title: t('common.status'), dataIndex: 'status', width: 120 },
-  { title: t('common.operation'), key: 'action', width: 190, fixed: 'right' as const },
+/** 本地日期 → YYYY-MM-DD(不用 toISOString,避免正时区把本地零点算到前一天) */
+function isoDate(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function rangeOf(key: RangeKey): { startDate: string; endDate: string } {
+  const now = new Date();
+  if (key === 'thisMonth') {
+    return { startDate: isoDate(new Date(now.getFullYear(), now.getMonth(), 1)), endDate: isoDate(now) };
+  }
+  if (key === 'lastMonth') {
+    return {
+      startDate: isoDate(new Date(now.getFullYear(), now.getMonth() - 1, 1)),
+      endDate: isoDate(new Date(now.getFullYear(), now.getMonth(), 0)),
+    };
+  }
+  const start = new Date(now);
+  start.setDate(start.getDate() - (key === 'last30' ? 29 : 6));
+  return { startDate: isoDate(start), endDate: isoDate(now) };
+}
+
+const rangeOptions = computed(() => [
+  { key: 'thisMonth' as RangeKey, label: t('earnings.range.thisMonth', { month: monthLabel(rangeOf('thisMonth').startDate) }) },
+  { key: 'lastMonth' as RangeKey, label: t('earnings.range.lastMonth', { month: monthLabel(rangeOf('lastMonth').startDate) }) },
+  { key: 'last30' as RangeKey, label: t('earnings.range.last30') },
+  { key: 'last7' as RangeKey, label: t('earnings.range.last7') },
 ]);
 
-const entryColumns = computed(() => [
-  { title: t('order.orderNo'), dataIndex: 'order_no', width: 180 },
-  { title: t('earnings.orderAmount'), dataIndex: 'order_amount', width: 120 },
-  { title: t('earnings.discountAmount'), dataIndex: 'discount_amount', width: 120 },
-  { title: t('earnings.mtripPays'), dataIndex: 'mtrip_pays', width: 120 },
-  { title: t('earnings.merchantPays'), dataIndex: 'merchant_pays', width: 130 },
-  { title: t('earnings.commission'), dataIndex: 'commission', width: 120 },
-  { title: t('earnings.netSettlement'), dataIndex: 'merchant_settlement', width: 140 },
-]);
+const rangeLabel = computed(
+  () => rangeOptions.value.find((option) => option.key === rangeKey.value)?.label ?? '',
+);
+
+const exportRangeLabel = computed(() => isoRangeLabel(range.value.startDate, range.value.endDate));
+
+/** 结算币种由后端按选中物业下发,未知币种走 format.currencySymbol 的「代码 + 空格」兜底 */
+const currency = computed(() => overview.value.currency || 'THB');
+
+const occupancySpark = computed(() => lastValues(stats.value.occupancyTrend, 6).map((item) => item.occupancyRate));
 
 const summaryCards = computed(() => [
-  { key: 'bookings', label: t('earnings.cards.bookingVolume'), value: String(overview.value.bookingVolume), sub: t('earnings.cards.currentPeriod') },
-  { key: 'gross', label: t('earnings.cards.grossRevenue'), value: money(overview.value.grossRevenue), sub: `${overview.value.startDate} - ${overview.value.endDate}` },
-  { key: 'commission', label: t('earnings.cards.commission'), value: money(overview.value.commission), sub: t('earnings.cards.platformFee') },
-  { key: 'net', label: t('earnings.cards.netSettlement'), value: money(overview.value.netSettlement), sub: t('earnings.cards.afterDeductions') },
-  { key: 'pending', label: t('earnings.cards.pendingPayout'), value: money(overview.value.settlement.pendingAmount + overview.value.settlement.processingAmount), sub: t('earnings.cards.awaitingTransfer') },
-  { key: 'paid', label: t('earnings.cards.paidPayout'), value: money(overview.value.settlement.paidAmount), sub: t('earnings.cards.completedPayout') },
+  {
+    key: 'arrivals',
+    label: t('earnings.summary.arrivals'),
+    value: t('earnings.summary.guests', { count: stats.value.kpi.todayArrivalGuestCount }),
+    sub: t('earnings.summary.groupsRemaining', { count: stats.value.kpi.todayArrivalRemainingCount }),
+    icon: 'log-in',
+    tone: 'default' as const,
+    sparkline: false,
+  },
+  {
+    key: 'departures',
+    label: t('earnings.summary.departures'),
+    value: t('earnings.summary.guests', { count: stats.value.kpi.todayDepartureGuestCount }),
+    sub: stats.value.kpi.todayDeparturePendingCount > 0
+      ? t('earnings.summary.checkoutsPending', { count: stats.value.kpi.todayDeparturePendingCount })
+      : t('earnings.summary.allCleared'),
+    icon: 'log-out',
+    tone: 'default' as const,
+    sparkline: false,
+  },
+  {
+    key: 'occupancy',
+    label: t('earnings.summary.occupancyRate'),
+    value: formatPercent(stats.value.kpi.occupancyRate),
+    sub: '',
+    icon: 'percent',
+    tone: 'default' as const,
+    sparkline: true,
+  },
+  {
+    key: 'actions',
+    label: t('earnings.summary.pendingActions'),
+    value: t('earnings.summary.syncErrors', { count: stats.value.kpi.syncErrorCount }),
+    sub: stats.value.kpi.syncErrorCount > 0
+      ? t('earnings.summary.needsMapping')
+      : t('earnings.summary.noActions'),
+    icon: 'alert-triangle',
+    tone: 'danger' as const,
+    sparkline: false,
+  },
 ]);
 
-const detailOpen = ref(false);
-const detailLoading = ref(false);
-const detailSettle = ref<MerchantSettle | null>(null);
-const detailEntries = ref<SettlementEntry[]>([]);
+const occupancyDelta = computed(() => deltaText(stats.value.kpi.occupancyWeekDelta));
+const occupancyDeltaNegative = computed(() => isNegativeDelta(stats.value.kpi.occupancyWeekDelta));
 
-const disputeOpen = ref(false);
-const disputeSaving = ref(false);
-const disputeTarget = ref<MerchantSettle | null>(null);
-const disputeForm = reactive({ remark: '' });
-
-async function loadOverview(): Promise<void> {
-  overviewLoading.value = true;
+async function loadAll(): Promise<void> {
+  loading.value = true;
   try {
-    overview.value = await apiEarningsOverview();
+    const params = { startDate: range.value.startDate, endDate: range.value.endDate };
+    const [statsResult, overviewResult] = await Promise.allSettled([
+      apiDashboardStats(params),
+      apiEarningsOverview(params),
+    ]);
+    if (statsResult.status === 'fulfilled') {
+      stats.value = normalizeStats(statsResult.value);
+    }
+    if (overviewResult.status === 'fulfilled') {
+      overview.value = normalizeOverview(overviewResult.value);
+    }
   } finally {
-    overviewLoading.value = false;
+    loading.value = false;
   }
 }
 
-async function refreshAll(): Promise<void> {
-  await Promise.all([loadOverview(), load()]);
+function pickRange(key: RangeKey): void {
+  rangeKey.value = key;
+  range.value = rangeOf(key);
+  rangeOpen.value = false;
+  void loadAll();
 }
 
-async function openDetail(row: TableRow): Promise<void> {
-  detailOpen.value = true;
-  detailLoading.value = true;
-  try {
-    const data = await apiSettleDetail(row.id);
-    detailSettle.value = data.settle;
-    detailEntries.value = data.entries;
-  } finally {
-    detailLoading.value = false;
-  }
-}
-
-function openDispute(row: MerchantSettle): void {
-  disputeTarget.value = row;
-  disputeForm.remark = '';
-  disputeOpen.value = true;
-}
-
-async function submitDispute(): Promise<void> {
-  if (!disputeForm.remark.trim()) {
-    message.warning(t('earnings.disputeRequired'));
-    return;
-  }
-  disputeSaving.value = true;
-  try {
-    await apiSettleDispute({ id: disputeTarget.value!.id, remark: disputeForm.remark.trim() });
-    message.success(t('common.opSuccess'));
-    disputeOpen.value = false;
-    detailOpen.value = false;
-    await refreshAll();
-  } finally {
-    disputeSaving.value = false;
-  }
-}
-
-function exportCsv(): void {
-  const rows = [
-    [t('earnings.settleNo'), t('earnings.cycle'), t('earnings.orderAmount'), t('earnings.commission'), t('earnings.settleAmount'), t('common.status')],
-    ...list.value.map((item) => [
-      item.settle_no,
-      item.settle_cycle,
-      item.order_amount,
-      item.commission,
-      item.settle_amount,
-      statusMap.value[item.status]?.text ?? item.status,
-    ]),
+/** 结算与收益报表:期间汇总 + 近期逐单明细 */
+function settlementReportRows(): string[][] {
+  return [
+    [t('earnings.exportDialog.typeSettlement')],
+    [t('earnings.exportDialog.period'), exportRangeLabel.value],
+    [],
+    [t('earnings.breakdown.grossRevenue'), moneyText(overview.value.grossRevenue, currency.value)],
+    [t('earnings.breakdown.promotions'), deductionMoneyText(overview.value.discountAmount, currency.value)],
+    [t('earnings.breakdown.commission'), deductionPercentText(overview.value.commissionRate)],
+    [t('earnings.breakdown.netPayout'), moneyText(overview.value.netSettlement, currency.value)],
+    [],
+    ...bookingReportRows(),
   ];
+}
+
+/** 预订营收报表:近期逐单明细 */
+function bookingReportRows(): string[][] {
+  const header = [
+    t('earnings.settlements.bookingId'),
+    t('earnings.settlements.guest'),
+    t('earnings.settlements.roomType'),
+    t('earnings.settlements.stay'),
+    t('earnings.settlements.amount'),
+    t('earnings.settlements.payment'),
+    t('earnings.settlements.status'),
+  ];
+  const body = stats.value.recentBookings.map((row) => [
+    bookingRef(row.orderNo),
+    row.guest,
+    row.roomType,
+    stayRangeLabel(row.checkIn, row.checkOut),
+    moneyText(row.totalAmount, currency.value),
+    t(`earnings.badge.${paymentBadge(row).key}`),
+    t(`earnings.badge.${bookingBadge(row).key}`),
+  ]);
+  return [header, ...body];
+}
+
+function downloadCsv(payload: { reportType: string; format: string }): void {
+  const rows = payload.reportType === 'bookings' ? bookingReportRows() : settlementReportRows();
   const csv = rows.map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(',')).join('\n');
   const blob = new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
-  link.download = `merchant-settlements-${Date.now()}.csv`;
+  link.download = `merchant-${payload.reportType}-${range.value.startDate}_${range.value.endDate}.csv`;
   link.click();
   URL.revokeObjectURL(url);
-}
-
-function money(value: number): string {
-  return `THB ${Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  exportOpen.value = false;
+  message.success(t('earnings.exportDialog.downloaded'));
 }
 
 onMounted(() => {
-  void refreshAll();
+  void loadAll();
 });
 </script>
 
 <template>
   <PageContainer>
-    <div class="earnings-head">
-      <div>
-        <h1>{{ t('earnings.title') }}</h1>
-        <p>{{ t('earnings.subtitle') }}</p>
-      </div>
-      <a-space>
-        <a-button @click="refreshAll">
-          <template #icon><ReloadOutlined /></template>{{ t('common.reset') }}
-        </a-button>
-        <a-button v-perm="'mch:earnings:export'" type="primary" @click="exportCsv">
-          <template #icon><DownloadOutlined /></template>{{ t('earnings.export') }}
-        </a-button>
-      </a-space>
-    </div>
+    <div class="earnings-page">
+      <header class="page-head">
+        <div class="titles">
+          <h1>{{ t('earnings.title') }}</h1>
+          <p>{{ t('earnings.subtitle') }}</p>
+        </div>
+        <div class="actions">
+          <div ref="rangeRoot" class="range-picker">
+            <button type="button" class="range-btn" :class="{ open: rangeOpen }" @click="rangeOpen = !rangeOpen">
+              <EaIcon name="calendar" :size="16" />
+              <span>{{ rangeLabel }}</span>
+            </button>
+            <ul v-if="rangeOpen" class="range-menu">
+              <li v-for="option in rangeOptions" :key="option.key">
+                <button
+                  type="button"
+                  class="range-option"
+                  :class="{ active: option.key === rangeKey }"
+                  @click="pickRange(option.key)"
+                >
+                  {{ option.label }}
+                </button>
+              </li>
+            </ul>
+          </div>
+          <button v-perm="'mch:earnings:export'" type="button" class="export-btn" @click="exportOpen = true">
+            <EaIcon name="download" :size="16" />
+            <span>{{ t('earnings.export') }}</span>
+          </button>
+        </div>
+      </header>
 
-    <a-spin :spinning="overviewLoading">
-      <div class="summary-grid">
-        <a-card v-for="card in summaryCards" :key="card.key" :bordered="false" class="mtrip-card-shadow summary-card">
-          <div class="summary-label">{{ card.label }}</div>
-          <div class="summary-value">{{ card.value }}</div>
-          <div class="summary-sub">{{ card.sub }}</div>
-        </a-card>
-      </div>
-    </a-spin>
+      <a-spin :spinning="loading">
+        <div class="main-container">
+          <div class="summary-row">
+            <SummaryCard
+              v-for="card in summaryCards"
+              :key="card.key"
+              :label="card.label"
+              :value="card.value"
+              :sub="card.sub"
+              :tone="card.tone"
+            >
+              <template #icon>
+                <EaIcon :name="card.icon" :size="18" />
+              </template>
+              <template v-if="card.sparkline" #body>
+                <div class="occupancy-body">
+                  <SparklineBars :values="occupancySpark" :count="6" />
+                  <span class="delta" :class="{ negative: occupancyDeltaNegative }">
+                    {{ t('earnings.summary.thisWeek', { delta: occupancyDelta }) }}
+                  </span>
+                </div>
+              </template>
+            </SummaryCard>
+          </div>
 
-    <a-card :bordered="false" class="mtrip-card-shadow filter-card">
-      <a-form layout="inline">
-        <a-form-item :label="t('earnings.settleNo')">
-          <a-input v-model:value="query.settleNo" allow-clear :placeholder="t('common.pleaseInput')" style="width: 180px" @press-enter="search" />
-        </a-form-item>
-        <a-form-item :label="t('earnings.cycle')">
-          <a-input v-model:value="query.settleCycle" allow-clear placeholder="2026-08" style="width: 150px" @press-enter="search" />
-        </a-form-item>
-        <a-form-item :label="t('common.status')">
-          <a-select v-model:value="query.status" allow-clear :placeholder="t('common.all')" style="width: 150px">
-            <a-select-option :value="0">{{ t('earnings.status.pending') }}</a-select-option>
-            <a-select-option :value="1">{{ t('earnings.status.processing') }}</a-select-option>
-            <a-select-option :value="2">{{ t('earnings.status.paid') }}</a-select-option>
-            <a-select-option :value="3">{{ t('earnings.status.disputed') }}</a-select-option>
-          </a-select>
-        </a-form-item>
-        <a-form-item>
-          <a-space>
-            <a-button type="primary" @click="search"><template #icon><SearchOutlined /></template>{{ t('common.search') }}</a-button>
-            <a-button @click="reset"><template #icon><ReloadOutlined /></template>{{ t('common.reset') }}</a-button>
-          </a-space>
-        </a-form-item>
-      </a-form>
-    </a-card>
+          <div class="financial-row">
+            <DailyRevenueCard :trend="stats.trend" />
+            <EarningsBreakdownCard :overview="overview" :currency="currency" />
+          </div>
 
-    <a-card :bordered="false" class="mtrip-card-shadow">
-      <template #title>{{ t('earnings.records') }}</template>
-      <a-table :columns="columns" :data-source="list" :loading="loading" :pagination="pagination" row-key="id" size="middle" :scroll="{ x: 1200 }">
-        <template #bodyCell="{ column, record }">
-          <template v-if="['order_amount', 'commission', 'tax_amount', 'settle_amount'].includes(String(column.dataIndex))">
-            <AmountText :value="record[column.dataIndex]" :type="column.dataIndex === 'settle_amount' ? 'income' : 'commission'" />
-          </template>
-          <template v-else-if="column.dataIndex === 'status'">
-            <StatusTag :value="record.status" :map="statusMap" />
-          </template>
-          <template v-else-if="column.key === 'action'">
-            <a-space :size="0" wrap>
-              <a-button type="link" size="small" @click="openDetail(record)">
-                <template #icon><EyeOutlined /></template>{{ t('common.detail') }}
-              </a-button>
-              <a-button
-                v-if="[0, 1].includes(record.status)"
-                v-perm="'mch:earnings:dispute'"
-                type="link"
-                size="small"
-                danger
-                @click="openDispute(record as MerchantSettle)"
-              >
-                <template #icon><FlagOutlined /></template>{{ t('earnings.dispute') }}
-              </a-button>
-            </a-space>
-          </template>
-        </template>
-      </a-table>
-    </a-card>
+          <div class="charts-grid">
+            <div class="grid-row">
+              <TrendLineCard :trend="stats.trend" />
+              <OccupancyAreaCard :items="stats.occupancyTrend" />
+            </div>
+            <div class="grid-row">
+              <BookingVolumeCard :trend="stats.trend" />
+              <RoomTypeDonutCard :items="stats.roomTypePerformance" />
+            </div>
+          </div>
 
-    <a-drawer v-model:open="detailOpen" :title="t('earnings.detailTitle')" width="760">
-      <a-spin :spinning="detailLoading">
-        <a-descriptions v-if="detailSettle" :column="2" bordered size="small" style="margin-bottom: 16px">
-          <a-descriptions-item :label="t('earnings.settleNo')">{{ detailSettle.settle_no }}</a-descriptions-item>
-          <a-descriptions-item :label="t('earnings.cycle')">{{ detailSettle.settle_cycle }}</a-descriptions-item>
-          <a-descriptions-item :label="t('earnings.orderAmount')"><AmountText :value="detailSettle.order_amount" type="income" /></a-descriptions-item>
-          <a-descriptions-item :label="t('earnings.commission')"><AmountText :value="detailSettle.commission" type="commission" /></a-descriptions-item>
-          <a-descriptions-item :label="t('earnings.refundAmount')"><AmountText :value="detailSettle.refund_amount" type="expense" /></a-descriptions-item>
-          <a-descriptions-item :label="t('earnings.taxAmount')"><AmountText :value="detailSettle.tax_amount" type="tax" /></a-descriptions-item>
-          <a-descriptions-item :label="t('earnings.settleAmount')"><AmountText :value="detailSettle.settle_amount" type="income" /></a-descriptions-item>
-          <a-descriptions-item :label="t('common.status')"><StatusTag :value="detailSettle.status" :map="statusMap" /></a-descriptions-item>
-          <a-descriptions-item :label="t('earnings.payTime')">{{ detailSettle.pay_time || '-' }}</a-descriptions-item>
-          <a-descriptions-item :label="t('common.remark')">{{ detailSettle.remark || '-' }}</a-descriptions-item>
-        </a-descriptions>
-
-        <a-table :columns="entryColumns" :data-source="detailEntries" :pagination="false" row-key="id" size="small" :scroll="{ x: 920 }">
-          <template #bodyCell="{ column, record }">
-            <template v-if="String(column.dataIndex).includes('amount') || ['commission', 'mtrip_pays', 'merchant_pays', 'merchant_settlement'].includes(String(column.dataIndex))">
-              <AmountText :value="record[column.dataIndex]" :type="column.dataIndex === 'merchant_settlement' ? 'income' : 'commission'" />
-            </template>
-          </template>
-        </a-table>
+          <SettlementsTable :rows="stats.recentBookings" :currency="currency" />
+        </div>
       </a-spin>
-      <template #footer>
-        <a-space>
-          <a-button @click="detailOpen = false">{{ t('common.cancel') }}</a-button>
-          <a-button
-            v-if="detailSettle && [0, 1].includes(detailSettle.status)"
-            v-perm="'mch:earnings:dispute'"
-            danger
-            @click="openDispute(detailSettle)"
-          >
-            {{ t('earnings.dispute') }}
-          </a-button>
-        </a-space>
-      </template>
-    </a-drawer>
 
-    <a-modal v-model:open="disputeOpen" :title="t('earnings.disputeTitle')" :confirm-loading="disputeSaving" width="520px" @ok="submitDispute">
-      <a-alert type="warning" show-icon :message="t('earnings.disputeTip')" style="margin-bottom: 12px" />
-      <a-form layout="vertical">
-        <a-form-item :label="t('common.remark')" required>
-          <a-textarea v-model:value="disputeForm.remark" :rows="4" :placeholder="t('earnings.disputePlaceholder')" />
-        </a-form-item>
-      </a-form>
-    </a-modal>
+      <ExportReportModal v-model:open="exportOpen" :range-label="exportRangeLabel" @download="downloadCsv" />
+    </div>
   </PageContainer>
 </template>
 
 <style scoped lang="less">
-.earnings-head {
+@import './tokens.less';
+
+.earnings-page {
   display: flex;
-  align-items: flex-end;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.page-head {
+  display: flex;
+  align-items: center;
   justify-content: space-between;
   gap: 16px;
-  margin-bottom: 18px;
 
   h1 {
     margin: 0;
-    color: var(--mtrip-text-main);
+    color: @ea-ink-page;
+    font-family: @ea-font-display;
     font-size: 20px;
-    font-weight: 800;
-    letter-spacing: -0.04em;
+    font-weight: 700;
+    line-height: 1.5;
   }
 
   p {
-    margin: 4px 0 0;
-    color: var(--mtrip-text-secondary);
-    font-size: 13px;
+    margin: 2px 0 0;
+    max-width: 640px;
+    color: @ea-ink-sub;
+    font-family: @ea-font-body;
+    font-size: 14px;
   }
 }
 
-.summary-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+.actions {
+  display: flex;
+  align-items: center;
   gap: 12px;
-  margin-bottom: 16px;
 }
 
-.summary-card :deep(.ant-card-body) {
-  padding: 16px;
+.range-picker {
+  position: relative;
 }
 
-.summary-label {
-  color: var(--mtrip-text-aux);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-
-.summary-value {
-  margin-top: 8px;
-  color: var(--mtrip-text-main);
-  font-size: 22px;
-  font-weight: 800;
+.range-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: @ea-control-height;
+  padding: 0 16px;
+  border: 0;
+  border-radius: @ea-radius-control;
+  background: #ffffff;
+  color: @ea-ink;
+  font-family: @ea-font-body;
+  font-size: 14px;
+  font-weight: 500;
   line-height: 1;
-  letter-spacing: -0.04em;
+  cursor: pointer;
+
+  &.open {
+    box-shadow: 0 0 0 2px @ea-primary-soft;
+  }
 }
 
-.summary-sub {
-  margin-top: 6px;
-  color: var(--mtrip-text-secondary);
-  font-size: 11.5px;
+.range-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 20;
+  min-width: 220px;
+  margin: 0;
+  padding: 6px;
+  list-style: none;
+  border: 1px solid @ea-line;
+  border-radius: @ea-radius-control;
+  background: #ffffff;
+  box-shadow: 0 8px 24px -8px rgba(0, 0, 0, 0.08);
 }
 
-.filter-card {
-  margin-bottom: 16px;
+.range-option {
+  display: block;
+  width: 100%;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: @ea-ink-label;
+  font-family: @ea-font-body;
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+
+  &:hover {
+    background: @ea-soft;
+  }
+
+  &.active {
+    background: @ea-primary-chip;
+    color: @ea-primary;
+    font-weight: 600;
+  }
 }
 
-@media (max-width: 900px) {
-  .earnings-head {
-    align-items: flex-start;
+.export-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: @ea-control-height;
+  padding: 0 16px;
+  border: 0;
+  border-radius: @ea-radius-control;
+  background: @ea-primary;
+  color: #ffffff;
+  font-family: @ea-font-body;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.main-container {
+  display: flex;
+  flex-direction: column;
+  gap: @ea-row-gap;
+  padding: 20px 0;
+}
+
+.summary-row {
+  display: flex;
+  gap: @ea-summary-gap;
+}
+
+.occupancy-body {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.delta {
+  color: @ea-success;
+  font-family: @ea-font-body;
+  font-size: 12px;
+  font-weight: 600;
+
+  &.negative {
+    color: @ea-danger;
+  }
+}
+
+.financial-row {
+  display: flex;
+  gap: @ea-row-gap;
+}
+
+.charts-grid {
+  display: flex;
+  flex-direction: column;
+  gap: @ea-row-gap;
+}
+
+.grid-row {
+  display: flex;
+  gap: @ea-row-gap;
+
+  > * {
+    flex: 1;
+    min-width: 0;
+  }
+}
+
+@media (max-width: 1200px) {
+  .summary-row,
+  .financial-row,
+  .grid-row {
     flex-direction: column;
   }
 
-  .summary-grid {
-    grid-template-columns: 1fr;
+  .page-head {
+    align-items: flex-start;
+    flex-direction: column;
   }
 }
 </style>

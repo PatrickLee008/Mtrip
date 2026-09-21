@@ -8,7 +8,7 @@ use App\Controller\Merchant\EarningsController;
 use Hyperf\DbConnection\Db;
 use Mtrip\Shared\Context\MerchantContext;
 
-$merchantIds = $propertyIds = $orderIds = $entryIds = $settleIds = [];
+$merchantIds = $propertyIds = $orderIds = $entryIds = $settleIds = $accountIds = [];
 
 function earningsCall(string $method, array $input = []): array
 {
@@ -26,6 +26,12 @@ try {
         ]);
     }
 
+    // 结算币种主路径:商户结算账户(默认账户优先)
+    $accountIds[] = (int) Db::table('merchant_account')->insertGetId([
+        'site_id' => 991, 'merchant_id' => $merchantId, 'bank_name' => 'Earnings Bank',
+        'account_name' => 'Fixture', 'account_no' => '', 'currency' => 'MMK', 'is_default' => 1, 'status' => 1,
+    ]);
+
     foreach ([[$propertyIds[0], 100], [$propertyIds[1], 250]] as [$propertyId, $amount]) {
         $orderId = $orderIds[] = (int) Db::table('order_main')->insertGetId([
             'order_no' => 'EARN-' . bin2hex(random_bytes(8)), 'site_id' => 991, 'merchant_id' => $merchantId,
@@ -36,7 +42,7 @@ try {
         $entryIds[] = (int) Db::table('finance_account_entry')->insertGetId([
             'site_id' => 991, 'order_id' => $orderId, 'order_no' => 'EARN-ENTRY-' . $orderId,
             'merchant_id' => $merchantId, 'property_id' => $propertyId,
-            'order_amount' => $amount, 'merchant_settlement' => $amount,
+            'order_amount' => $amount, 'commission' => $amount * 0.15, 'merchant_settlement' => $amount,
         ]);
         $settleIds[] = (int) Db::table('finance_merchant_settle')->insertGetId([
             'settle_no' => 'EARN-SETTLE-' . bin2hex(random_bytes(6)), 'site_id' => 991,
@@ -59,6 +65,15 @@ try {
     $overview = earningsCall('overview')['data'];
     check($overview['bookingVolume'] === 1 && $overview['grossRevenue'] === 100.0,
         'E selected property narrows earnings entries');
+    // 2026-09-22 Dashboard & Earnings(Figma 1306:18423):Earnings Breakdown 需要佣金率与币种
+    check($overview['commissionRate'] === 15.0, 'E commission rate derives from the scoped entries');
+    check($overview['currency'] === 'MMK', 'E settlement currency prefers the merchant settlement account');
+    $accountIds[] = (int) Db::table('merchant_account')->insertGetId([
+        'site_id' => 991, 'merchant_id' => $merchantId, 'bank_name' => 'Earnings Bank Secondary',
+        'account_name' => 'Fixture', 'account_no' => '', 'currency' => 'EUR', 'is_default' => 0, 'status' => 1,
+    ]);
+    check(earningsCall('overview')['data']['currency'] === 'MMK',
+        'E non-default settlement account does not override the default one');
     $settles = earningsCall('settleList')['data'];
     check($settles['total'] === 1 && (int) $settles['list'][0]['property_id'] === $propertyIds[0],
         'E selected property narrows settlement list');
@@ -77,6 +92,7 @@ try {
     check(earningsCall('settleList')['data']['total'] === 2,
         'E all-properties earnings aggregates attributed properties and hides legacy merchant totals');
 } finally {
+    if ($accountIds) Db::table('merchant_account')->whereIn('id', $accountIds)->delete();
     if ($settleIds) Db::table('finance_merchant_settle')->whereIn('id', $settleIds)->delete();
     if ($entryIds) Db::table('finance_account_entry')->whereIn('id', $entryIds)->delete();
     if ($orderIds) Db::table('order_main')->whereIn('id', $orderIds)->delete();

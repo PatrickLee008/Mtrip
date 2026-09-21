@@ -5,7 +5,7 @@
  */
 import { computed, ref } from 'vue';
 import AvIcon from './AvIcon.vue';
-import { useDismiss } from '../useDismiss';
+import { useDismiss } from '@/composables/useDismiss';
 
 const props = withDefaults(
   defineProps<{

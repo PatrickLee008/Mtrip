@@ -1,4 +1,106 @@
 # 会话交接文档(HANDOFF)
+### ★ 2026-09-21 晚(商户端 Dashboard & Earnings 按 Figma `1306:18423` 整页重写)
+
+**范围**：`merchant-web` 重写 `/earnings` 一页(`views/earnings/**` 整目录重写 + i18n `earnings.*` 重写);
+`order-service` 商户统计接口补字段;`finance-service` 商户收益接口补佣金率与币种;
+新增 1 个 Figma 校验脚本 + 1 个隔离集成回归脚本。**未改** `/dashboard`、路由、网关、菜单种子与权限键。
+
+**设计源**：file `fsK2rrl2sadcowrxspvGV8`(mTrip_Merchant)SECTION `1306:18423`「Business Dashboard & Settlement」
+= 1 个整页画板(`1306:14653`)+ 1 个导出弹窗(`1493:16429`)+ 1 个通知抽屉(`1352:14573`,本次不做)。
+数据经 Figma MCP `get_figma_data` 取回。稿面侧边栏同时保留 PORTFOLIO 的 Dashboard 与 BUSINESS 的
+Dashboard & Earnings,即本页 = 现有菜单 800 `/earnings`(`sidebar.dashboardEarnings` 早已是 "Dashboard & Earnings"),
+故 **菜单/RBAC/路由零改动**。
+
+**前端(merchant-web)**
+- `/earnings` 重写为:页头(H1 + 副标题 + 周期选择 + `Export Report`)→ 四张概览卡(Today's Arrivals /
+  Departures / Occupancy Rate / Pending Actions)→ financial-row(每日营收柱 + Earnings Breakdown)→
+  2×2 图表网格(营收折线 + Peak / 入住率面积 + Avg / Mon–Sun 预订量柱 / 房型环形)→ 近期预订结算表 → 导出弹窗。
+- 新增 `views/earnings/{tokens.less,helpers.ts}` 与 14 个组件(`EaIcon / SummaryCard / SparklineBars /
+  ChartPanel / EaBarChart / EaLineChart / DailyRevenueCard / EarningsBreakdownCard / TrendLineCard /
+  OccupancyAreaCard / BookingVolumeCard / RoomTypeDonutCard / SettlementsTable / ExportReportModal`)。
+- 图表全部手写 SVG/DOM,**不引 echarts**(与 availability / promotions 两页同处理):视觉能贴稿面令牌,
+  且 SSR 校验脚本可断言(echarts 走 canvas 无法断言)。折线/面积用 100×100 归一化网格 +
+  `preserveAspectRatio="none"` + `vector-effect="non-scaling-stroke"`;峰值圆点改用百分比定位的 HTML 元素,
+  避免被拉伸成椭圆;面积渐变 `<defs>` 只在 area 变体下渲染(线图不再产出重复 id)。
+- 删除稿面没画的旧块:6 张统计卡、筛选表单卡、结算单列表 + 详情抽屉 + 申诉弹窗。
+  权限键 `mch:earnings:list/export/dispute` 全部保留,导出按钮仍挂 `v-perm="'mch:earnings:export'"`。
+- 本页主色取稿面 `#4169ED`(与全局 `--mtrip-primary #2563eb` 不同),独立成 `tokens.less` 令牌组,勿替换为全局变量。
+- `views/availability/useDismiss.ts` 提升为 `src/composables/useDismiss.ts`(availability 两处 import 同步改路径),
+  供 availability 与 earnings 两页共用自绘下拉的点击外部/Esc 关闭。
+- 导出弹窗按用户决定:三张格式卡 Excel / CSV / PDF 顺序与配色照稿保留,**只有 CSV 真实可下载**,
+  Excel/PDF 置灰并标注「即将开放」,不引入 xlsx / pdf 生成依赖;报告类型是真实下拉
+  (Settlement & Earnings Report / Booking Revenue Report,两者都产出 CSV)。
+- `api/stats.ts` 扩 `DashboardKpi`(occupancyWeekDelta、到达/离店人数与单量、syncErrorCount)并新增
+  `occupancyTrend / roomTypePerformance / recentBookings`;`api/earnings.ts` 新增 `commissionRate` 与 `currency`。
+  `/dashboard` 只补 `emptyStats` 字面量的新字段以满足类型(无任何版式改动)。
+
+**后端(只补字段,不新增路由/权限)**
+- `order-service Merchant/StatsController::dashboard` 新增:真实 `occupancyRate`(替换原写死 null)、
+  `occupancyWeekDelta`、`todayArrivalGuestCount/GroupCount/RemainingCount`、
+  `todayDepartureGuestCount/GroupCount/PendingCount`、`syncErrorCount`,
+  以及 `occupancyTrend` / `roomTypePerformance` / `recentBookings`,并回显 `startDate/endDate`。
+  默认区间仍是 7 天(`/dashboard` 的「Last 7 days」副标题不受影响),本页显式传区间。
+- `finance-service Merchant/EarningsController::overview` 新增 `commissionRate`(commission/grossRevenue×100,
+  毛收入为 0 时为 null,供稿面 "- 15%")与 `currency`。
+
+**关键口径(避免返工)**
+- **入住率**逐物业计算后汇总:该物业该日有 `goods_daily_stock` 行时取 已售/总量;
+  没有日库存行时回退「`hotel_room_type.base_stock` 为分母 + 在住间夜数(`use_date ≤ 当日 < end_date`,
+  订单状态 1/2/3,按 `quantity` 计)为分子」。混合组合(部分物业有日库存、部分没有)两侧都计入,
+  不会漏掉无日库存的物业;全部取不到库存时该日 `null`,前端显示占位。
+  `occupancyRate` = 区间日均(null 不参与平均);`occupancyWeekDelta` = 近 7 日均值 − 前 7 日均值(百分点)。
+- **人数**取 `order_main.guests`(AES 密文里住客名单条数,复用 `decryptField`),为空(到店付/历史单)回退 `quantity`。
+- **Sync Errors** = `order_sync_log.status=2` 且 `created_at ∈ 区间`,**join `order_main` 按物业范围收窄**
+  (成功记录与跨站记录都不计入)。
+- **房型占比** = 区间内 `order_status IN (1,2,3)` 的订单按 `room_type_id + sku_name` 聚合取前 6,`percent` 由后端算。
+- **徽标口径**:Payment 里 `pay_method=4` 优先判为 Pay at Hotel,`payment_status 3/4` → Refund,`2` → Paid,
+  其余(待支付/失败/旧数据)→ Unpaid;Booking Status 由 `booking_status 1–6` 直映,
+  `0`(旧数据兼容)回退 `order_status`,避免历史单被一律显示成「待支付」。
+- **币种** = `merchant_account.currency`(默认账户优先)→ `hotel_room_type.currency` → `THB`。
+  ⚠ 注意 `merchant_store` **没有** currency 列(`currency` 在 `merchant_account` / `hotel_room_type` 上),
+  第一版按 `merchant_store.currency` 写会在真库报 1054。
+- 稿面副标题的 "your restaurant's sales performance" 系餐饮模板误抄,已改为 "your property's"。
+- 结算表首列放宽到 160px:真实订单号(如 `0007202609176285607783`)远长于稿面样例 `#BK-1029`,
+  并加 ellipsis + `title` 兜底。
+
+**验证**
+- 新增 `merchant-web/scripts/check-earnings-figma.mjs`:Vite SSR 打包 + `@vue/server-renderer` 真实渲染
+  各组件与整页(带稿面样例行),断言页头、四张概览卡、Earnings Breakdown 四行与 Net 高亮、四张图的
+  标题与 Peak/Avg 徽标、Mon–Sun 星期标签、环形图图例三行与圆心 128、结算表 7 列与 10 类徽标、
+  导出弹窗字段与三张格式卡、10 个图标 path,另断言编译产物 CSS 与 `tokens.less` 的稿面令牌 —— **230/230 GREEN**。
+  未接进 `scripts/check.ps1`,需手动跑。
+- 新增 `scripts/test-dashboard-earnings.sh`(隔离库克隆表结构,仿 `test-booking-remediation.sh`):
+  `order-service/test/m12-dashboard.php` 扩 21 条新口径断言(入住率混合组合/到达离店人数与 pending/
+  同步失败范围/房型占比/近期预订契约)、`finance-service/test/property-earnings.php` 扩 3 条(佣金率/币种主路径与默认账户优先)
+  —— **47/47 PASS**(订单 38 + 财务 9),既有断言全部保持通过。
+- `cd merchant-web && npm run build`(vue-tsc 零报错 + vite build)通过;全部改动 PHP `php -l` 通过。
+- **后端必须热重启才生效(本次踩坑)**:容器挂了本地源码,但 Hyperf/Swoole 是长驻 worker,PHP 类
+  一旦加载就留在进程内存里,**改控制器方法体不会自动生效**。只跑 CLI 集成测试(新起进程、必读新文件)
+  会全绿,而 HTTP 端仍返回旧结构,前端拿到缺字段的响应 →
+  `Cannot read properties of undefined (reading 'slice')` 白屏 + spinner 卡死。
+  已执行 `./mtrip.sh restart order-service`、`restart order-service-app`、`restart finance-service`
+  (`restart` 不刷网关,IP 未变故本次无需单独刷)。
+- **已用真实 HTTP 复核(这才是能抓住上面这类问题的检查)**:用 dev `MTRIP_JWT_SECRET` 现签一个
+  `aud=merchant` + `auth_version` 对齐 `merchant_admin` 的临时 token,打网关 8081
+  → `GET /merchant/stats/dashboard` 返回 `code=0`,含 `occupancyTrend(30) / roomTypePerformance(2) /
+  recentBookings(6)` 与全部新 kpi 键(occupancyRate 0.6 来自开发库真实库存);
+  → `GET /merchant/earnings/overview` 返回 `currency=MMK`、`commissionRate=8.51`。
+- **前端已加兜底并被测试覆盖**:`normalizeStats/normalizeOverview` 与 `EMPTY_DASHBOARD_STATS/EMPTY_EARNINGS_OVERVIEW`
+  放在 `views/earnings/helpers.ts`(可被校验脚本直接断言),`index.vue` 的 `loadAll` 收进 `try/finally`;
+  后端(含旧版本)缺字段时只降级为「该项无数据」,不再白屏、不再卡 spinner。
+  `check-earnings-figma.mjs` 为此加了 11 条回归断言(旧响应缺 `occupancyTrend` / `roomTypePerformance` /
+  `recentBookings` / `settlement`、null/undefined 响应、缺字段的 kpi 回落 0/null)。
+- 另用**真实接口响应**回灌 7 个图表/表格组件做 SSR 渲染,确认真实数据(含 22 位订单号)不抛错、
+  不产生 `undefined/NaN`。
+- **走查修复(用户截图):导出按钮与左侧日期选择框不等高** —— 稿面 `export-btn` 标的固定 44px、
+  而同排 `date-picker` 是 hug(内容 21px + 上下 10px = 41px),照稿两边都写就天然差 3px。
+  已在 `tokens.less` 立 `@ea-control-height: 44px` 并让页头两个控件(以及弹窗 Cancel/Download、下拉框)
+  统一钉到该值、纵向 padding 归零,只留横向内边距;校验脚本补 10 条断言(取编译产物 CSS 规则体核对高度,
+  并断言弹窗按钮不再各自覆盖高度)。240/240 GREEN。
+- 未做:登录态浏览器视觉走查(无可用会话);通知抽屉 `1352:14573` 属 M6,本次未做。
+
+---
+
 ### ★ 2026-09-21（商户端 M8 促销与活动管理按 Figma `2285:21516` 整页重写 + 长住/平台活动/效果分析三块新增）
 
 **范围**：`merchant-web` 重写 `/promotions` 并新增 `/promotions/analytics`、`/campaigns`；

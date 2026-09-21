@@ -77,12 +77,18 @@ class EarningsController extends AbstractController
             }
         }
 
+        $grossRevenue = round((float) ($entry['gross_revenue'] ?? 0), 2);
+        $commission = round((float) ($entry['commission'] ?? 0), 2);
+
         return Result::success([
             'startDate' => $startDate,
             'endDate' => $endDate,
+            'currency' => $this->settleCurrency(),
             'bookingVolume' => (int) ($entry['booking_count'] ?? 0),
-            'grossRevenue' => round((float) ($entry['gross_revenue'] ?? 0), 2),
-            'commission' => round((float) ($entry['commission'] ?? 0), 2),
+            'grossRevenue' => $grossRevenue,
+            'commission' => $commission,
+            // 平台佣金率(%),供「Earnings Breakdown」按稿面显示 "- 15%";毛收入为 0 时为 null
+            'commissionRate' => $grossRevenue > 0 ? round($commission / $grossRevenue * 100, 2) : null,
             'discountAmount' => round((float) ($entry['discount_amount'] ?? 0), 2),
             'mtripPays' => round((float) ($entry['mtrip_pays'] ?? 0), 2),
             'merchantPays' => round((float) ($entry['merchant_pays'] ?? 0), 2),
@@ -168,6 +174,37 @@ class EarningsController extends AbstractController
     private function scopePropertyIds(): array
     {
         return MerchantContext::scopePropertyIds() ?: [-1];
+    }
+
+    /**
+     * 结算币种:优先商户结算账户(merchant_account.currency,默认账户优先),
+     * 其次范围内物业的房型币种(hotel_room_type.currency),都没有才回退 THB。
+     * 前端按此渲染稿面 "MMK 5,000,000" 形态的金额。
+     */
+    private function settleCurrency(): string
+    {
+        $account = (string) Db::table('merchant_account')
+            ->whereNull('deleted_at')
+            ->where('site_id', MerchantContext::siteId())
+            ->whereIn('merchant_id', MerchantContext::scopeMerchantIds() ?: [-1])
+            ->where('currency', '<>', '')
+            ->orderByDesc('is_default')
+            ->orderBy('id')
+            ->value('currency');
+
+        if ($account !== '') {
+            return $account;
+        }
+
+        $roomType = (string) Db::table('hotel_room_type')
+            ->whereNull('deleted_at')
+            ->where('site_id', MerchantContext::siteId())
+            ->whereIn('property_id', $this->scopePropertyIds())
+            ->where('currency', '<>', '')
+            ->orderBy('id')
+            ->value('currency');
+
+        return $roomType !== '' ? $roomType : 'THB';
     }
 
     private function findScopedSettle(int $id): array

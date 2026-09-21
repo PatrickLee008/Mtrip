@@ -28,6 +28,8 @@ const loading = ref(false);
 
 const emptyStats: DashboardStats = {
   updatedAt: '',
+  startDate: '',
+  endDate: '',
   kpi: {
     totalPropertyCount: 0,
     todayBookingCount: 0,
@@ -35,14 +37,25 @@ const emptyStats: DashboardStats = {
     todayCheckOutCount: 0,
     currentGuestCount: 0,
     occupancyRate: null,
+    occupancyWeekDelta: null,
+    todayArrivalGuestCount: 0,
+    todayArrivalGroupCount: 0,
+    todayArrivalRemainingCount: 0,
+    todayDepartureGuestCount: 0,
+    todayDepartureGroupCount: 0,
+    todayDeparturePendingCount: 0,
+    syncErrorCount: 0,
     revenueToday: 0,
     pendingConfirmationCount: 0,
     pendingSettleAmount: 0,
     activePromotionCount: 0,
   },
   trend: [],
+  occupancyTrend: [],
+  roomTypePerformance: [],
   propertyPerformance: [],
   todayOperations: [],
+  recentBookings: [],
   alerts: [],
 };
 

@@ -2,7 +2,10 @@ import { onBeforeUnmount, watch, type Ref } from 'vue';
 
 /**
  * 弹出层关闭:点击组件根节点之外、或按 Esc 时关闭。
- * 用于本页图稿里自定义的 Room Type 下拉、月份选择浮层(稿面不是 antd 控件形态)。
+ * 用于图稿里自定义的下拉/浮层(稿面不是 antd 控件形态)。
+ *
+ * 2026-09-22 从 `views/availability/useDismiss.ts` 提到 `composables/`,
+ * 供 availability 与 earnings 两页共用(两页都要自绘下拉)。
  */
 export function useDismiss(root: Ref<HTMLElement | null>, active: Ref<boolean>, close: () => void): void {
   function onPointerDown(event: MouseEvent): void {

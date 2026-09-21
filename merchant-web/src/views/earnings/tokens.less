@@ -1,0 +1,57 @@
+/**
+ * Dashboard & Earnings 页设计令牌(Figma `fsK2rrl2sadcowrxspvGV8` SECTION `1306:18423`
+ * 「Business Dashboard & Settlement」,逐字取自稿面 GLOBAL_VARS)。
+ *
+ * ⚠ 本页主色是稿面的 `#4169ED`,与全局 `--mtrip-primary`(`#2563eb`)不同 ——
+ * 与 2026-09-21 整页重写的 availability / promotions 两页同一处理:照稿独立成组,
+ * 不要替换为全局变量。纯变量文件,无选择器,`@import` 到各组件 `<style scoped lang="less">`
+ * 不会产生重复 CSS。
+ */
+
+// 主色
+@ea-primary: #4169ed;
+@ea-primary-soft: rgba(65, 105, 237, 0.08);
+@ea-primary-chip: #ebf0ff; // 图标底 / Net Settlement 高亮块
+@ea-primary-chart: #d9e1fb; // 柱状图次色 / 环形图第二段
+
+// 文本
+@ea-ink: #1b1d30; // 卡片标题 / 数字
+@ea-ink-page: #0f172a; // 页面 H1
+@ea-ink-sub: #64748b; // 页面副标题
+@ea-ink-label: #334155; // 表单 Label
+@ea-ink-muted: rgba(25, 26, 37, 0.5); // 卡片标签 / 次要文本
+@ea-ink-aux: #94a3b8; // 坐标轴刻度
+
+// 线与底
+@ea-line: #e2e8f0;
+@ea-soft: #f8fafc; // 表头底
+@ea-page-bg: #f4f6fb; // 页面底
+
+// 状态色
+@ea-success: #22c55e;
+@ea-success-soft: rgba(34, 197, 94, 0.16);
+@ea-warn: #bb4d00;
+@ea-warn-soft: rgba(187, 77, 0, 0.08);
+@ea-danger: #ec1317;
+@ea-danger-soft: rgba(236, 19, 23, 0.08);
+@ea-danger-ink: #a50101; // Refund / No-show 徽标文字
+@ea-danger-ink-soft: rgba(165, 1, 1, 0.08);
+
+// 阴影
+@ea-shadow-card: 0 3px 8px 0 rgba(0, 0, 0, 0.14);
+@ea-shadow-modal: 0 12px 24px 0 rgba(15, 23, 42, 0.08);
+
+// 字体(稿面混排:页面标题 / 卡片标题 / 数字用 Plus Jakarta Sans,其余用 Inter)
+@ea-font-display: 'Plus Jakarta Sans', Inter, system-ui, -apple-system, 'Segoe UI', 'PingFang SC', sans-serif;
+@ea-font-body: Inter, 'Plus Jakarta Sans', system-ui, -apple-system, 'Segoe UI', 'PingFang SC', sans-serif;
+
+// 尺寸(稿面硬值)
+@ea-radius-card: 12px;
+@ea-radius-panel: 16px;
+@ea-radius-control: 8px;
+@ea-summary-gap: 20px;
+@ea-row-gap: 32px;
+@ea-earnings-width: 440px;
+// 控件统一高:稿面 export-btn / download-btn 标的是 44px,而同排的 date-picker、Cancel 是
+// hug(内容 21px + 上下 10px = 41px),同一排按钮会差 3px。统一钉到 44px,行内只留横向内边距。
+@ea-control-height: 44px;

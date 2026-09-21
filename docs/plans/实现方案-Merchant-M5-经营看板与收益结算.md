@@ -1,8 +1,8 @@
 # 实现方案 — Merchant App M5:经营看板真实化 + 收益结算
 
 > 配套文档:`续作-Merchant-下一步与提示词.md`(覆盖矩阵/工程约定)、`13-商家端merchant-web落地.md`、`设计文档/mTrip_Merchant App PRD_v1.0.md`(Module 5 + Merchant Dashboard 章节)。
-> 状态:**首轮已实现(待联调)**。已完成 dashboard 真实化、收益结算页、order/finance 商户视角接口、网关与菜单登记;2026-08-23 M8 完成后 Active Promotions 已改为真实统计,入住率/ADR 仍依赖 M2/M3。
-> 更新时间:2026-08-23
+> 状态:**首轮已实现(待联调);2026-09-21 收益页已按 Figma `1306:18423` 整页重写(见第 9 节)**。已完成 dashboard 真实化、收益结算页、order/finance 商户视角接口、网关与菜单登记;2026-08-23 M8 完成后 Active Promotions 已改为真实统计;2026-09-21 起入住率已接真实日库存(不再依赖 M3 占位),ADR 仍未接入。
+> 更新时间:2026-09-21
 
 ---
 
@@ -193,4 +193,79 @@ INSERT IGNORE INTO `merchant_menu` (id,parent_id,menu_name,menu_name_en,perm_key
 7. [x] **前端-dashboard**:真实化 KPI + 趋势图 + 物业表现 + 今日运营 + 告警位。
 8. [x] **前端-earnings**:`views/earnings/index.vue`(列表/详情抽屉/申诉/前端 CSV 导出)。
 9. [x] **前端-i18n**:`dashboard.*` / `earnings.*` 中英文词条 + 菜单 i18n。
-10. [~] **联调验收**:本地 `php -l` 与 `merchant-web npm run build` 已通过;服务启停由用户控制,待用户重启相关服务和网关后做接口联调。
+10. [x] **联调验收**:`php -l`、`merchant-web npm run build`、隔离库集成回归 `scripts/test-dashboard-earnings.sh`(47/47)
+    与 Figma 校验 `scripts/check-earnings-figma.mjs`(230/230)均已通过。登录态浏览器视觉走查仍待具备会话后补验。
+
+---
+
+## 11. 2026-09-21 追加:收益页按 Figma `1306:18423` 整页重写
+
+**设计源**:file `fsK2rrl2sadcowrxspvGV8`(mTrip_Merchant)SECTION `1306:18423`「Business Dashboard & Settlement」
+= 整页画板 `1306:14653` + 导出弹窗 `1493:16429` + 通知抽屉 `1352:14573`(属 M6,未做)。
+
+**范围判定**:稿面侧边栏同时保留 PORTFOLIO 的 `Dashboard` 与 BUSINESS 的 `Dashboard & Earnings`,
+后者即现有菜单 800 `/earnings`。故本次只重写 `/earnings`,**不动** `/dashboard`、路由、网关、菜单种子与权限键。
+
+### 11.1 前端落地(merchant-web)
+
+| 稿面帧 | 组件 | 数据来源 |
+|---|---|---|
+| 页头 | `index.vue` | 周期选择(This Month / Last Month / Last 30 / Last 7,功能性)+ Export Report |
+| summary-row ×4 | `SummaryCard` + `SparklineBars` | 到达/离店人数、入住率 + 周环比、Sync Errors |
+| financial-row 左 | `DailyRevenueCard` | `stats.trend` 每日营收柱(图例 Daily Revenue) |
+| financial-row 右 | `EarningsBreakdownCard` | `earnings.overview`(Gross / 折扣 / 佣金率 / Net 高亮块) |
+| grid-row-1 | `TrendLineCard` + `OccupancyAreaCard` | `stats.trend` 折线 + Peak;`stats.occupancyTrend` 面积 + Avg |
+| grid-row-2 | `BookingVolumeCard` + `RoomTypeDonutCard` | `stats.trend` 按星期聚合;`stats.roomTypePerformance` 环形 |
+| settlements-card | `SettlementsTable` | `stats.recentBookings`(7 列 + Payment/Booking Status 双徽标) |
+| Export Report Dialog | `ExportReportModal` | 报告类型下拉 + 日期区间 + 三张格式卡(仅 CSV 可用) |
+
+- 图表手写 SVG/DOM,**不引 echarts**(与 availability / promotions 同处理,SSR 可断言);主色取稿面 `#4169ED`,
+  独立 `tokens.less` 令牌组,勿替换为全局变量。
+- 删除稿面没画的旧块:6 张统计卡、筛选表单卡、结算单列表 + 详情抽屉 + 申诉弹窗(权限键全部保留)。
+- 导出弹窗的 Excel / PDF 卡按用户决定置灰并标注「即将开放」,不引入 xlsx / pdf 依赖。
+- `views/availability/useDismiss.ts` 提升为 `src/composables/useDismiss.ts`,两页共用。
+
+### 11.2 后端补字段
+
+- `order-service Merchant/StatsController::dashboard`:真实 `occupancyRate`(替换原写死 `null`)、
+  `occupancyWeekDelta`、到达/离店人数与单量、`syncErrorCount`、`occupancyTrend`、
+  `roomTypePerformance`、`recentBookings`,并回显 `startDate/endDate`。默认区间仍 7 天(`/dashboard` 不受影响)。
+- `finance-service Merchant/EarningsController::overview`:`commissionRate`、`currency`。
+- **路由、网关、菜单、权限键零改动。**
+
+### 11.3 口径(替换第 1/4 节中「入住率依赖 M2/M3」的旧表述)
+
+- **入住率**:逐物业计算后汇总 —— 有 `goods_daily_stock` 行时取 已售/总量;
+  无日库存行时回退「`hotel_room_type.base_stock` 为分母 + 在住间夜数(`use_date ≤ 当日 < end_date`,
+  状态 1/2/3,按 `quantity`)为分子」。混合组合两侧都计入。
+  `occupancyRate` = 区间日均;`occupancyWeekDelta` = 近 7 日均值 − 前 7 日均值(百分点)。
+- **人数** = `order_main.guests` 密文里的住客名单条数(复用 `decryptField`),为空回退 `quantity`。
+- **Sync Errors** = `order_sync_log.status=2` 且区间内,join `order_main` 按物业范围收窄。
+- **房型占比** = 区间内 `order_status IN (1,2,3)` 按 `room_type_id + sku_name` 聚合取前 6。
+- **币种** = `merchant_account.currency`(默认账户优先)→ `hotel_room_type.currency` → `THB`。
+  ⚠ `merchant_store` **没有** currency 列。
+- **徽标**:Payment 按 `pay_method=4` → Pay at Hotel、`payment_status 3/4` → Refund、`2` → Paid、其余 Unpaid;
+  Booking Status 由 `booking_status 1–6` 直映,`0`(旧数据)回退 `order_status`。
+- 稿面副标题 "your restaurant's sales performance" 系餐饮模板误抄,改为 "your property's"。
+
+### 11.4 验证
+
+- `merchant-web/scripts/check-earnings-figma.mjs`:SSR 真实渲染 + 稿面硬值与令牌断言,**230/230 GREEN**(手动跑)。
+- `scripts/test-dashboard-earnings.sh`:隔离库集成回归,**47/47 PASS**(订单 38 + 财务 9)。
+- `cd merchant-web && npm run build` 通过;改动 PHP `php -l` 通过。
+- **改后端后必须热重启**:容器挂了本地源码,但 Hyperf/Swoole 长驻 worker 一旦加载类就留在进程内存,
+  改方法体不重启不生效。只跑 CLI 集成测试会全绿而 HTTP 端仍返回旧结构,前端拿到缺字段响应即白屏
+  (`reading 'slice'`)且 spinner 卡死。本次已 `./mtrip.sh restart order-service` / `order-service-app` /
+  `finance-service`,并用真实 HTTP 复核:`/merchant/stats/dashboard` 返回
+  `occupancyTrend(30) / roomTypePerformance(2) / recentBookings(6)` 与全部新 kpi 键,
+  `/merchant/earnings/overview` 返回 `currency=MMK`、`commissionRate=8.51`。
+- 前端 `index.vue` 已加 `normalizeStats/normalizeOverview` 兜底并把 `loadAll` 收进 `try/finally`,
+  后端(含旧版本)缺字段时只降级为「该项无数据」。
+- 走查修复:稿面 `export-btn` 标固定 44px 而同排 `date-picker` 是 hug(≈41px),照稿实现两边天然不等高。
+  已立 `@ea-control-height: 44px` 统一页头两控件、弹窗 Cancel/Download 与下拉框,纵向 padding 归零只留横向;
+  校验脚本补 10 条断言核对编译产物 CSS 规则体高度 → **240/240 GREEN**。
+
+### 11.5 未做
+
+- ADR / 间夜数仍未接入;通知抽屉 `1352:14573` 属 M6;登录态浏览器视觉走查(无可用会话)。
+- Excel / PDF 导出未实现(依赖未引入)。

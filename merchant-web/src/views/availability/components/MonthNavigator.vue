@@ -6,7 +6,7 @@
 import { computed, ref, watch } from 'vue';
 import dayjs from 'dayjs';
 import AvIcon from './AvIcon.vue';
-import { useDismiss } from '../useDismiss';
+import { useDismiss } from '@/composables/useDismiss';
 
 const props = defineProps<{ modelValue: string }>();
 const emit = defineEmits<{ (e: 'update:modelValue', value: string): void }>();
