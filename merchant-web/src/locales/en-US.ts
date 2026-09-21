@@ -212,8 +212,9 @@ export default {
     verifiedSubtitle: 'KYC verified',
     verified: 'verified',
     manage: 'Manage',
+    actions: { completeProfile: 'Complete Profile', reviewProgress: 'View Review Progress', resubmitProfile: 'Edit and Resubmit' },
     kycStatus: { 0: 'Draft', 1: 'Verified', 2: 'Pending review', 3: 'Under review', 4: 'Rejected', 5: 'Resubmit required' },
-    publication: { live: 'Visible in app', profilePending: 'Profile review required', unpublished: 'Not published', platformHidden: 'Platform visibility pending', offline: 'Offline' },
+    publication: { live: 'Visible in app', profileIncomplete: 'Property profile incomplete', profileReviewPending: 'Property profile under review', profileRejected: 'Property profile review failed', unpublished: 'Not published', platformHidden: 'Platform visibility pending', offline: 'Offline' },
     new: {
       basic: 'Basic Information', documents: 'KYC Documents', name: 'Property Name', type: 'Property Type', roomTypes: 'Room Types', location: 'Location', image: 'Image',
       namePlaceholder: 'e.g. The Grand Palace', typePlaceholder: 'Select Type', locationPlaceholder: 'e.g. Township...', upload: 'Click to upload or drag and drop', uploadHint: 'PNG, JPG or GIF (max. 5MB)',
@@ -237,7 +238,7 @@ export default {
       amenityLimit: '( Active Only {active}/5 ,Highlight Only {highlight}/5 )', amenityStatus: 'Amenity Status', addHighlight: 'Add Highlight', addNewAmenity: 'Add New', noAmenitiesInGroup: 'No amenities in this group yet.', noHotelTags: 'No hotel tags added yet.', noTagDescription: 'No description',
       createAmenity: 'Create New {category}', editAmenity: 'Edit {category}', amenityIcon: 'Amenity Icon', amenityName: 'Amenity Name', tagDescription: 'Tag Description', createNow: 'Create Now', saveAmenity: 'Save Changes', amenityNameRequired: 'Enter an amenity name.', amenityDuplicate: 'This amenity already exists in the group.', amenityLimitReached: 'Each group supports up to 5 active amenities and 5 highlights.', enableBeforeHighlight: 'Enable the amenity before adding it as a highlight.',
       reviewStatus: { 0: 'Draft', 1: 'Pending review', 2: 'Approved', 3: 'Rejected', 4: 'Withdrawn' },
-      submitted: 'Property profile submitted for review.', rejected: 'Property profile rejected', pending: 'Property profile is under review.', live: 'Published', publish: 'Publish Property', takeOffline: 'Take Offline', published: 'Property published.', offline: 'Property taken offline.',
+      submitted: 'Property profile submitted for review.', rejected: 'Property profile rejected', pending: 'Property profile is under review.', incomplete: 'Complete the property profile', incompleteTip: 'Property KYC is approved. Complete the hotel profile and submit it for platform review.', pendingPreviousLive: 'The currently approved version remains live until this revision is approved.', rejectedPreviousLive: 'This revision was rejected: {reason}. The currently approved version remains live; update the profile and resubmit it.', live: 'Published', publish: 'Publish Property', takeOffline: 'Take Offline', published: 'Property published.', offline: 'Property taken offline.',
     },
   },
   app: {

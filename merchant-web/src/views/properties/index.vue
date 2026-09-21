@@ -46,11 +46,24 @@ function isPublic(property: PropertyRow): boolean {
 function publicationLabel(property: PropertyRow): string {
   if (property.business_type !== 'hotel') return t(`properties.kycStatus.${property.kyc_status}`);
   if (property.kyc_status !== 1) return t(`properties.kycStatus.${property.kyc_status}`);
-  if (property.content_status !== 2 || property.content_approved_version <= 0) return t('properties.publication.profilePending');
+  if (property.content_approved_version <= 0) {
+    if (property.latest_content_review_status === 1) return t('properties.publication.profileReviewPending');
+    if (property.latest_content_review_status === 3) return t('properties.publication.profileRejected');
+    return t('properties.publication.profileIncomplete');
+  }
   if (property.publish_status !== 1) return t('properties.publication.unpublished');
   if (property.status !== 1 || property.operating_status !== 1 || property.live_room_count <= 0) return t('properties.publication.offline');
   if (property.display_enabled !== 1) return t('properties.publication.platformHidden');
   return t('properties.publication.live');
+}
+
+function propertyActionLabel(property: PropertyRow): string {
+  if (property.business_type !== 'hotel' || property.kyc_status !== 1 || property.content_approved_version > 0) {
+    return t('properties.manage');
+  }
+  if (property.latest_content_review_status === 1) return t('properties.actions.reviewProgress');
+  if (property.latest_content_review_status === 3) return t('properties.actions.resubmitProfile');
+  return t('properties.actions.completeProfile');
 }
 
 function openProperty(property: PropertyRow, path: string): void {
@@ -118,7 +131,7 @@ onMounted(load);
               </div>
               <p class="property-location"><EnvironmentOutlined /> {{ property.address || property.merchant_name }}</p>
               <div class="property-actions">
-                <button class="manage-button" type="button" @click="openProperty(property, property.business_type === 'hotel' ? `/properties/${property.id}/profile` : '/store')">{{ t('properties.manage') }}</button>
+                <button class="manage-button" type="button" @click="openProperty(property, property.business_type === 'hotel' ? `/properties/${property.id}/profile` : '/store')">{{ propertyActionLabel(property) }}</button>
                 <button v-if="property.kyc_status === 1" class="dashboard-button" type="button" @click="openProperty(property, '/dashboard')">{{ t('dashboard.title') }}</button>
               </div>
             </div>

@@ -101,10 +101,13 @@ try {
     AdminContext::set(['admin_id' => 99002, 'admin_name' => 'KYC Reviewer', 'site_id' => 991,
         'is_super' => false, 'permissions' => ['merchant:document:verify']]);
     $documentService->review((int) $documents[1]->id, ['expectedVersion' => 2, 'action' => 'verify']);
-    $documentService->review((int) $documents[2]->id, ['expectedVersion' => 1, 'action' => 'verify']);
+    $completedReview = $documentService->review((int) $documents[2]->id, ['expectedVersion' => 1, 'action' => 'verify']);
     check((int) Db::table('merchant_store')->where('id', $propertyId)->value('kyc_status') === 1
         && Db::table('merchant_store')->where('id', $propertyId)->value('kyc_approved_at') !== null,
         'B all required documents approve the property');
+    check(($completedReview['propertyKycStatus'] ?? 0) === 1
+        && ($completedReview['nextStep'] ?? '') === 'complete_property_profile',
+        'B final property document review returns the profile completion next step');
     check(Db::table('merchant_property_kyc_event')->where('property_id', $propertyId)->count() >= 6,
         'B property KYC lifecycle is audited');
     check(Db::table('merchant_verify_document_revision')->where('property_id', $propertyId)->count() === 4,

@@ -124,7 +124,13 @@ class MerchantDocumentService
             Db::table('merchant_verify_document')->where('id', $id)->update(array_intersect_key($doc, array_flip(['status', 'reviewer_id', 'reviewer_name', 'last_verified_at', 'reject_reason'])));
             $this->event($doc, $action, $reason);
             $this->syncKyc($doc);
-            return ['document_version' => $doc['document_version'], 'status' => $doc['status']];
+            $result = ['document_version' => $doc['document_version'], 'status' => $doc['status']];
+            if (($doc['scope_type'] ?? 'merchant') === 'property' && (int) ($doc['property_id'] ?? 0) > 0) {
+                $propertyKycStatus = (int) Db::table('merchant_store')->where('id', $doc['property_id'])->value('kyc_status');
+                $result['propertyKycStatus'] = $propertyKycStatus;
+                $result['nextStep'] = $propertyKycStatus === 1 ? 'complete_property_profile' : 'continue_kyc_review';
+            }
+            return $result;
         });
     }
 

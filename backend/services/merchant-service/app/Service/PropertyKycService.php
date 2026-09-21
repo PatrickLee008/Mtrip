@@ -25,6 +25,8 @@ class PropertyKycService
         $total = (clone $query)->count();
         $list = $query->select('p.*', 'm.merchant_name')
             ->selectRaw('(SELECT COUNT(*) FROM hotel_room_type r WHERE r.property_id=p.id AND r.site_id=p.site_id AND r.status=1 AND r.publish_status=2 AND r.approved_version>0 AND r.deleted_at IS NULL) as live_room_count')
+            ->selectRaw('(SELECT v.status FROM merchant_property_content_revision v WHERE v.property_id=p.id ORDER BY v.version DESC, v.id DESC LIMIT 1) as latest_content_review_status')
+            ->selectRaw('(SELECT v.reject_reason FROM merchant_property_content_revision v WHERE v.property_id=p.id ORDER BY v.version DESC, v.id DESC LIMIT 1) as latest_content_reject_reason')
             ->orderByDesc('p.id')
             ->forPage($page, $pageSize)->get()->map(static function ($row): array {
                 $item = (array) $row;

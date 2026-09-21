@@ -27,8 +27,8 @@ export function apiMerchantPropertyBind(data: { merchantId: number; businessId: 
   return post('/admin/merchant/property/bind', data);
 }
 
-export function apiMerchantPropertyContentList(params: Record<string, unknown>): Promise<PageData<Row>> {
-  return get('/admin/merchant/property/content-list', params);
+export function apiMerchantPropertyContentList(params: Record<string, unknown>): Promise<PageData<Row> & { stats?: Record<string, number> }> {
+  return get<PageData<Row> & { stats?: Record<string, number> }>('/admin/merchant/property/content-list', params);
 }
 
 export function apiMerchantPropertyContentDetail(id: number): Promise<{ revision: Row; effective: Row }> {
@@ -382,7 +382,12 @@ export function apiVerifyResubmitReceived(id: number): Promise<null> {
 }
 
 /** 逐份文档核验:action=verify|reject(reject 必填 reason) */
-export function apiVerifyDocReview(data: { docId: number; action: string; reason?: string; expectedVersion: number }): Promise<null> {
+export function apiVerifyDocReview(data: { docId: number; action: string; reason?: string; expectedVersion: number }): Promise<{
+  document_version: number;
+  status: number;
+  propertyKycStatus?: number;
+  nextStep?: string;
+}> {
   return post('/admin/merchant/verify/doc-review', data);
 }
 

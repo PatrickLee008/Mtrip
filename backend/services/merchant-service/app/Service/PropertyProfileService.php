@@ -168,9 +168,26 @@ class PropertyProfileService
         $total = (clone $query)->count();
         $list = $query->orderByDesc('v.submitted_at')->orderByDesc('v.id')->forPage($page, $pageSize)
             ->get(['v.id', 'v.site_id', 'v.property_id', 'v.version', 'v.status', 'v.reject_reason',
-                'v.submitted_at', 'v.reviewed_at', 'p.store_name', 'p.content_approved_version', 'm.merchant_name'])
+                'v.submitted_at', 'v.reviewed_at', 'v.reviewed_by', 'v.review_remark',
+                'p.store_name', 'p.content_approved_version', 'm.merchant_name'])
             ->map(static fn ($row) => (array) $row)->all();
-        return compact('list', 'total', 'page', 'pageSize');
+
+        $statsQuery = Db::table('merchant_property_content_revision as v')
+            ->join('merchant_store as p', 'p.id', '=', 'v.property_id')
+            ->whereNull('p.deleted_at');
+        if (! AdminContext::isSuper()) $statsQuery->where('v.site_id', AdminContext::siteId());
+        $grouped = [];
+        foreach ($statsQuery->selectRaw('v.status, COUNT(*) AS cnt')->groupBy('v.status')->get() as $row) {
+            $grouped[(int) $row->status] = (int) $row->cnt;
+        }
+        $stats = [
+            'total' => array_sum($grouped),
+            'draft' => $grouped[0] ?? 0,
+            'pending' => $grouped[1] ?? 0,
+            'approved' => $grouped[2] ?? 0,
+            'rejected' => $grouped[3] ?? 0,
+        ];
+        return compact('list', 'total', 'page', 'pageSize', 'stats');
     }
 
     public function reviewDetail(int $revisionId): array

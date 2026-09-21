@@ -16,15 +16,17 @@ use Mtrip\Shared\Support\Result;
 /** S2：显式关联KYC业务与酒店物业，不发布展示、不赋予门店订单权限。 */
 class MerchantPropertyController extends AbstractController
 {
+    #[Permission('merchant:property:content-list')]
     public function contentList(): array
     {
         [$page, $pageSize] = $this->pageParams();
         $status = $this->input('status');
         $data = (new PropertyProfileService())->reviewList($page, $pageSize,
             $status === null || $status === '' ? null : (int) $status, $this->strInput('keyword'));
-        return Result::page($data['list'], $data['total'], $data['page'], $data['pageSize']);
+        return Result::success($data);
     }
 
+    #[Permission('merchant:property:content-list')]
     public function contentDetail(): array
     {
         return Result::success((new PropertyProfileService())->reviewDetail($this->requireId()));

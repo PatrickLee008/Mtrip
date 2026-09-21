@@ -1,4 +1,12 @@
 # 会话交接文档(HANDOFF)
+### ★ 2026-09-21（物业资料审核入口与状态整改）
+
+管理后台在“商户管理”下新增 `/merchant/property-review` 独立页面，提供版本统计、筛选、详情差异、媒体预览、通过和驳回；原“商品审核 → 物业资料审核”只保留兼容跳转。读取接口统一要求 `merchant:property:content-list`，审批继续要求 `merchant:property:content-audit`，菜单种子、迁移、后端注解与前端 `v-perm` 已对齐。迁移 `V20260921130000__add-property-profile-review-menu.sql` 会让已有审批角色继承页面查看权限，并补齐超管授权。
+
+商户端 All Properties 使用最新资料版本状态区分“待完善物业资料、物业资料审核中、物业资料审核未通过、未发布”，操作文案对应“完善资料、查看审核进度、修改并重新提交、管理”。酒店资料页在 KYC 已通过但尚无资料版本时展示引导；已有批准版本的新修订待审或驳回时明确旧版本继续生效。物业 KYC 最后一份文件通过后，后台提示下一步等待商户完善并提交物业资料，不自动生成或批准内容版本。
+
+验证：admin-web 与 merchant-web 生产构建通过；相关 PHP lint 通过；物业资料隔离回归覆盖读/审权限分离、站点统计隔离、跨站拒绝、重复审批冲突和旧批准版本保留，物业 KYC 回归覆盖最终通过返回下一步；迁移账本 27/27，菜单 311 与按钮 30116 已落库，merchant-service 重启后全栈 health 通过。未修改 `merchant-app` 与 `client-app`；无现成登录态，本轮未做浏览器人工视觉验收。详见 `docs/plans/audits/2026-09-21-property-profile-review-remediation.md`。
+
 ### ★ 2026-09-21 晚(商户端 Dashboard & Earnings 按 Figma `1306:18423` 整页重写)
 
 **范围**：`merchant-web` 重写 `/earnings` 一页(`views/earnings/**` 整目录重写 + i18n `earnings.*` 重写);

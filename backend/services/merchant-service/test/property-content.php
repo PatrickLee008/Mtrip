@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 require __DIR__ . '/M12Bootstrap.php';
 
+use App\Controller\Admin\MerchantPropertyController;
 use App\Service\PropertyProfileService;
 use Hyperf\DbConnection\Db;
 use Hyperf\HttpMessage\Upload\UploadedFile;
@@ -66,6 +67,10 @@ try {
         'site_id' => 992, 'merchant_id' => $merchantId, 'store_name' => 'Other Site Property',
         'address' => 'Bangkok', 'business_type' => 'hotel', 'status' => 1, 'kyc_status' => 1,
     ]);
+    Db::table('merchant_property_content_revision')->insert([
+        'site_id' => 992, 'merchant_id' => $merchantId, 'property_id' => $otherSitePropertyId,
+        'version' => 1, 'status' => 0, 'payload_json' => '{}',
+    ]);
     $hotelGoodsBefore = Db::table('goods_info')->where('goods_type', 1)->count();
 
     contentActor($merchantId);
@@ -111,6 +116,26 @@ try {
         'website' => 'https://example.test', 'checkinTime' => '14:00', 'checkoutTime' => '12:00',
     ], true);
     check($submitted['version'] === 1 && $submitted['reviewStatus'] === 1, 'C property profile submits version 1');
+    AdminContext::set(['admin_id' => 99101, 'admin_name' => 'Reviewer', 'site_id' => 991, 'is_super' => false]);
+    $reviewQueue = $service->reviewList(1, 20, null, '');
+    check($reviewQueue['total'] === 1 && $reviewQueue['stats'] === [
+        'total' => 1, 'draft' => 0, 'pending' => 1, 'approved' => 0, 'rejected' => 0,
+    ], 'C profile review list and stats are isolated to the admin site');
+    $reviewController = $container->get(MerchantPropertyController::class);
+    AdminContext::set(['admin_id' => 99101, 'admin_name' => 'Reviewer', 'site_id' => 991,
+        'is_super' => false, 'permissions' => []]);
+    setRequest(['page' => 1, 'pageSize' => 20]);
+    rejects(40301, fn () => $reviewController->contentList(), 'C profile review list requires read permission');
+    AdminContext::set(['admin_id' => 99101, 'admin_name' => 'Reviewer', 'site_id' => 991,
+        'is_super' => false, 'permissions' => ['merchant:property:content-list']]);
+    setRequest(['page' => 1, 'pageSize' => 20]);
+    $controllerQueue = $reviewController->contentList();
+    check(($controllerQueue['data']['total'] ?? 0) === 1 && isset($controllerQueue['data']['stats']),
+        'C read permission can access profile review list and stats');
+    setRequest(['id' => $submitted['revisionId']]);
+    check(($reviewController->contentDetail()['data']['revision']['id'] ?? 0) === $submitted['revisionId'],
+        'C read permission can access profile review detail');
+    contentActor($merchantId);
     rejects(40901, fn () => $service->uploadImage($propertyId, null),
         'F property image upload is locked during profile review');
     $storedRevision = (string) Db::table('merchant_property_content_revision')->where('id', $submitted['revisionId'])->value('payload_json');
@@ -135,10 +160,18 @@ try {
 
     AdminContext::set(['admin_id' => 99201, 'admin_name' => 'Wrong Site Reviewer', 'site_id' => 992, 'is_super' => false]);
     rejects(40302, fn () => $service->audit($submitted['revisionId'], 1, ''), 'C cross-site profile review denied');
-    AdminContext::set(['admin_id' => 99101, 'admin_name' => 'Reviewer', 'site_id' => 991, 'is_super' => false]);
-    $service->audit($submitted['revisionId'], 2, 'Improve description');
+    AdminContext::set(['admin_id' => 99101, 'admin_name' => 'Reviewer', 'site_id' => 991,
+        'is_super' => false, 'permissions' => ['merchant:property:content-list']]);
+    setRequest(['id' => $submitted['revisionId'], 'auditStatus' => 2, 'auditRemark' => 'Improve description']);
+    rejects(40301, fn () => $reviewController->contentAudit(), 'C read permission cannot audit a profile revision');
+    AdminContext::set(['admin_id' => 99101, 'admin_name' => 'Reviewer', 'site_id' => 991,
+        'is_super' => false, 'permissions' => ['merchant:property:content-audit']]);
+    setRequest(['id' => $submitted['revisionId'], 'auditStatus' => 2, 'auditRemark' => 'Improve description']);
+    $reviewController->contentAudit();
     check((int) Db::table('merchant_store')->where('id', $propertyId)->value('content_status') === 3,
         'C initial profile rejection is visible on property');
+    rejects(40901, fn () => $service->audit($submitted['revisionId'], 1, ''),
+        'C completed profile revision cannot be reviewed twice');
 
     contentActor($merchantId);
     $approvedSubmission = $service->save([

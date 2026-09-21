@@ -20,6 +20,8 @@ export interface PropertyRow {
   operating_status: number;
   display_enabled: number;
   live_room_count: number;
+  latest_content_review_status?: number | null;
+  latest_content_reject_reason?: string | null;
   source_business_id?: number | null;
 }
 

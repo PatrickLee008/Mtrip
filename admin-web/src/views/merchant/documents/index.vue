@@ -236,8 +236,10 @@ function confirmVerify(row: TableRow): void {
     content: t('merchant.documentsPage.verifyConfirm', { doc: row.name || docTypeLabel(row.doc_type) }),
     okText: t('merchant.documentsPage.verify'),
     async onOk() {
-      await apiVerifyDocReview({ docId: row.id, action: 'verify', expectedVersion: row.document_version });
-      message.success(t('merchant.documentsPage.verifySuccess'));
+      const result = await apiVerifyDocReview({ docId: row.id, action: 'verify', expectedVersion: row.document_version });
+      message.success(t(result.propertyKycStatus === 1
+        ? 'merchant.documentsPage.propertyKycComplete'
+        : 'merchant.documentsPage.verifySuccess'));
       await load();
     },
   });

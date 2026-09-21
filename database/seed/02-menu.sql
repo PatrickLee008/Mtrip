@@ -87,7 +87,8 @@ INSERT IGNORE INTO `sys_menu` (`id`,`parent_id`,`menu_name`,`menu_name_en`,`i18n
 (307,300,'集团管理','Groups','menu.merchantGroup','merchant:group:list',2,'/merchant/group','merchant/group/index','',7),
 (308,300,'门店管理','Stores','menu.merchantStore','merchant:store:list',2,'/merchant/store','merchant/store/index','',8),
 (309,300,'商户统计','Merchant Stats','menu.merchantStats','merchant:stats:list',2,'/merchant/stats','merchant/stats/index','',9),
-(310,300,'市场排名','Marketplace Ranking','','merchant:ranking:list',2,'/merchant/ranking','merchant/ranking/index','',10);
+(310,300,'市场排名','Marketplace Ranking','','merchant:ranking:list',2,'/merchant/ranking','merchant/ranking/index','',10),
+(311,300,'物业资料审核','Property Profile Review','','merchant:property:content-list',2,'/merchant/property-review','merchant/property-review/index','',11);
 INSERT IGNORE INTO `sys_menu` (`id`,`parent_id`,`menu_name`,`menu_name_en`,`perm_key`,`menu_type`,`sort`) VALUES
 (30101,301,'新增商户','Add','merchant:list:add',3,1),
 (30102,301,'编辑商户','Edit','merchant:list:edit',3,2),
@@ -104,7 +105,7 @@ INSERT IGNORE INTO `sys_menu` (`id`,`parent_id`,`menu_name`,`menu_name_en`,`perm
 (30113,301,'商户状态历史','Merchant status history','merchant:status:history',3,13),
 (30114,301,'关联酒店物业','Link hotel property','merchant:property:bind',3,14),
 (30115,301,'功能模块授权','Grant modules','merchant:list:module',3,15),
-(30116,301,'审核物业资料','Review Property Profile','merchant:property:content-audit',3,16),
+(30116,311,'审核物业资料','Review Property Profile','merchant:property:content-audit',3,1),
 (30201,302,'替换证件','Replace Document','merchant:document:replace',3,1),
 (30202,302,'审核证件','Review Document','merchant:document:verify',3,2),
 (30203,302,'下载证件','Download Document','merchant:document:download',3,3),

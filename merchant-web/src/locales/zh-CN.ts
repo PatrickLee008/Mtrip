@@ -211,8 +211,9 @@ export default {
     verifiedSubtitle: 'KYC 已通过',
     verified: '已验证',
     manage: '管理',
+    actions: { completeProfile: '完善资料', reviewProgress: '查看审核进度', resubmitProfile: '修改并重新提交' },
     kycStatus: { 0: '草稿', 1: '已认证', 2: '待审核', 3: '审核中', 4: '已驳回', 5: '待重交' },
-    publication: { live: '用户端可见', profilePending: '待资料审核', unpublished: '未发布', platformHidden: '待平台开放展示', offline: '已下线' },
+    publication: { live: '用户端可见', profileIncomplete: '待完善物业资料', profileReviewPending: '物业资料审核中', profileRejected: '物业资料审核未通过', unpublished: '未发布', platformHidden: '待平台开放展示', offline: '已下线' },
     new: {
       basic: '基本信息', documents: 'KYC 文件', name: '物业名称', type: '物业类型', roomTypes: '房型数量', location: '位置', image: '图片',
       namePlaceholder: '例如：皇宫酒店', typePlaceholder: '选择类型', locationPlaceholder: '例如：所在乡镇...', upload: '点击上传或拖放图片', uploadHint: 'PNG、JPG 或 GIF（不超过 5MB）',
@@ -236,7 +237,7 @@ export default {
       amenityLimit: '（仅启用 {active}/5，仅亮点 {highlight}/5）', amenityStatus: '设施状态', addHighlight: '添加亮点', addNewAmenity: '新增', noAmenitiesInGroup: '该分组暂未添加设施。', noHotelTags: '暂未添加酒店标签。', noTagDescription: '暂无说明',
       createAmenity: '新增{category}', editAmenity: '编辑{category}', amenityIcon: '设施图标', amenityName: '设施名称', tagDescription: '标签说明', createNow: '立即创建', saveAmenity: '保存修改', amenityNameRequired: '请输入设施名称。', amenityDuplicate: '该分组中已存在同名设施。', amenityLimitReached: '每个分组最多启用 5 项设施并设置 5 项亮点。', enableBeforeHighlight: '请先启用该设施，再将其设为亮点。',
       reviewStatus: { 0: '草稿', 1: '待审核', 2: '已通过', 3: '已驳回', 4: '已撤回' },
-      submitted: '物业资料已提交审核。', rejected: '物业资料被驳回', pending: '物业资料正在审核中。', live: '已发布', publish: '发布物业', takeOffline: '下线物业', published: '物业已发布。', offline: '物业已下线。',
+      submitted: '物业资料已提交审核。', rejected: '物业资料被驳回', pending: '物业资料正在审核中。', incomplete: '请完善物业资料', incompleteTip: '物业 KYC 已通过。请补充酒店资料并提交平台审核。', pendingPreviousLive: '当前已批准版本继续生效，本次修改将在平台审核通过后替换。', rejectedPreviousLive: '本次修改未通过：{reason}。当前已批准版本继续生效，您可以修改后重新提交。', live: '已发布', publish: '发布物业', takeOffline: '下线物业', published: '物业已发布。', offline: '物业已下线。',
     },
   },
   app: {

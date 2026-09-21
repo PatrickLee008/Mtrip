@@ -64,12 +64,17 @@ const isPublic = computed(() => Number(property.value.kyc_status) === 1 && Numbe
   && Number(property.value.display_enabled) === 1 && Number(property.value.live_room_count) > 0);
 const publicationLabel = computed(() => {
   if (Number(property.value.kyc_status) !== 1) return t(`properties.kycStatus.${Number(property.value.kyc_status || 0)}`);
-  if (Number(property.value.content_status) !== 2 || Number(property.value.content_approved_version) <= 0) return t('properties.publication.profilePending');
+  if (Number(property.value.content_approved_version) <= 0) {
+    if (latest.value?.status === 1) return t('properties.publication.profileReviewPending');
+    if (latest.value?.status === 3) return t('properties.publication.profileRejected');
+    return t('properties.publication.profileIncomplete');
+  }
   if (Number(property.value.publish_status) !== 1) return t('properties.publication.unpublished');
   if (Number(property.value.status) !== 1 || Number(property.value.operating_status) !== 1 || Number(property.value.live_room_count) <= 0) return t('properties.publication.offline');
   if (Number(property.value.display_enabled) !== 1) return t('properties.publication.platformHidden');
   return t('properties.publication.live');
 });
+const hasApprovedProfile = computed(() => Number(property.value.content_approved_version) > 0);
 
 function cloneForm(source: ProfileForm): ProfileForm {
   return {
@@ -241,8 +246,9 @@ onMounted(load);
         <button v-for="tab in tabs" :key="tab.key" type="button" :class="{ active: tab.key === activeTab }" :aria-current="tab.key === activeTab ? 'page' : undefined" :disabled="!['details', 'amenities', 'rooms'].includes(tab.key) || (editing && tab.key === 'rooms')" @click="selectTab(tab.key)">{{ tab.label }}</button>
       </nav>
 
-      <a-alert v-if="latest?.status === 3" type="error" show-icon :message="t('properties.profile.rejected')" :description="latest.reject_reason" class="state-alert" />
-      <a-alert v-else-if="latest?.status === 1" type="info" show-icon :message="t('properties.profile.pending')" class="state-alert" />
+      <a-alert v-if="latest?.status === 3" type="error" show-icon :message="t('properties.profile.rejected')" :description="hasApprovedProfile ? t('properties.profile.rejectedPreviousLive', { reason: latest.reject_reason || '-' }) : latest.reject_reason" class="state-alert" />
+      <a-alert v-else-if="latest?.status === 1" type="info" show-icon :message="t('properties.profile.pending')" :description="hasApprovedProfile ? t('properties.profile.pendingPreviousLive') : undefined" class="state-alert" />
+      <a-alert v-else-if="!hasApprovedProfile" type="warning" show-icon :message="t('properties.profile.incomplete')" :description="t('properties.profile.incompleteTip')" class="state-alert" />
 
       <template v-if="!editing && activeTab === 'details'">
         <section class="profile-card">

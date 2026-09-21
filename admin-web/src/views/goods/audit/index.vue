@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import RoomReviewMedia from './RoomReviewMedia.vue';
 import { computed, onMounted, reactive, ref } from 'vue';
+import { useRouter } from 'vue-router';
 import { message } from 'ant-design-vue';
 import { ReloadOutlined, SearchOutlined } from '@ant-design/icons-vue';
 import { useI18n } from 'vue-i18n';
@@ -8,10 +9,10 @@ import PageContainer from '@/components/PageContainer.vue';
 import { useTable, type TableRow } from '@/composables/useTable';
 import { formatAmount } from '@/utils/format';
 import { apiGoodsAudit, apiGoodsDetail, apiGoodsList, apiGoodsToggleStatus, apiRoomReviewAudit, apiRoomReviewDetail, apiRoomReviewList } from '@/api/goods';
-import { apiMerchantPropertyContentAudit, apiMerchantPropertyContentDetail, apiMerchantPropertyContentList } from '@/api/merchant';
 
 /** 商品审核工作台:待审核队列(通过=直接上架/驳回必填原因)+ 已上架强制下架 */
 const { t } = useI18n();
+const router = useRouter();
 const activeTab = ref('pending');
 
 const pending = useTable(
@@ -23,15 +24,6 @@ const onsale = useTable(
   { goodsName: '' },
 );
 const roomReviews = useTable((params) => apiRoomReviewList({ ...params, status: 1 }), { keyword: '' });
-const propertyReviews = useTable((params) => apiMerchantPropertyContentList({ ...params, status: 1 }), { keyword: '' });
-const propertyReviewColumns = [
-  { title: t('common.id'), dataIndex: 'id', width: 70 },
-  { title: t('goods.audit.propertyReview.property'), dataIndex: 'store_name', ellipsis: true },
-  { title: t('goods.audit.merchant'), dataIndex: 'merchant_name', width: 160, ellipsis: true },
-  { title: t('goods.audit.roomReview.version'), dataIndex: 'version', width: 80 },
-  { title: t('goods.audit.submitTime'), dataIndex: 'submitted_at', width: 165 },
-  { title: t('common.action'), key: 'action_col', width: 180 },
-];
 const roomReviewColumns = [
   { title: t('common.id'), dataIndex: 'id', width: 70 },
   { title: t('goods.audit.roomReview.roomType'), dataIndex: 'room_name', ellipsis: true },
@@ -63,41 +55,6 @@ function reloadAll(): void {
   pending.search();
   onsale.search();
   roomReviews.search();
-  propertyReviews.search();
-}
-
-const propertyDrawerOpen = ref(false);
-const propertyDetailLoading = ref(false);
-const propertyDetail = ref<TableRow | null>(null);
-const propertyAuditOpen = ref(false);
-const propertyAuditSaving = ref(false);
-const propertyAuditTarget = ref<TableRow | null>(null);
-const propertyAuditForm = reactive({ auditStatus: 1, auditRemark: '' });
-const propertyDiffRows = computed(() => {
-  const current = propertyDetail.value?.effective || {};
-  const submitted = propertyDetail.value?.revision?.payload || {};
-  const fields = ['store_name', 'contact_phone', 'contact_phone2', 'contact_email', 'address', 'country_code', 'city_key', 'longitude', 'latitude', 'description', 'star_level', 'facilities', 'amenities', 'images', 'website', 'checkin_time', 'checkout_time'];
-  return fields.map((field) => ({ field, current: current[field], submitted: submitted[field], changed: JSON.stringify(current[field] ?? null) !== JSON.stringify(submitted[field] ?? null) }));
-});
-async function openPropertyDetail(row: TableRow): Promise<void> { propertyDrawerOpen.value = true; propertyDetailLoading.value = true; try { propertyDetail.value = await apiMerchantPropertyContentDetail(row.id); } finally { propertyDetailLoading.value = false; } }
-function openPropertyAudit(row: TableRow, status: number): void { propertyAuditTarget.value = row; Object.assign(propertyAuditForm, { auditStatus: status, auditRemark: '' }); propertyAuditOpen.value = true; }
-async function doPropertyAudit(): Promise<void> {
-  if (!propertyAuditTarget.value) return;
-  if (propertyAuditForm.auditStatus === 2 && !propertyAuditForm.auditRemark.trim()) { message.warning(t('goods.audit.auditModal.warningRejectReasonRequired')); return; }
-  propertyAuditSaving.value = true;
-  try {
-    await apiMerchantPropertyContentAudit({ id: propertyAuditTarget.value.id, ...propertyAuditForm });
-    message.success(t(propertyAuditForm.auditStatus === 1 ? 'goods.audit.propertyReview.successApprove' : 'goods.audit.propertyReview.successReject'));
-    propertyAuditOpen.value = false;
-    propertyDrawerOpen.value = false;
-    propertyReviews.search();
-  } finally { propertyAuditSaving.value = false; }
-}
-function propertyDiffRowClass(record: TableRow): string { return record.changed ? 'changed-row' : ''; }
-function displayDiffValue(value: unknown): string {
-  if (value === null || value === undefined || value === '') return '-';
-  if (Array.isArray(value) && value.every((item) => typeof item !== 'object')) return value.join(', ');
-  return typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value);
 }
 
 const roomDrawerOpen = ref(false);
@@ -214,7 +171,6 @@ onMounted(() => {
   void pending.load();
   void onsale.load();
   void roomReviews.load();
-  void propertyReviews.load();
 });
 </script>
 
@@ -308,11 +264,18 @@ onMounted(() => {
         </a-tab-pane>
 
         <a-tab-pane key="property-review">
-          <template #tab><a-badge :count="propertyReviews.total.value" :offset="[10, -2]">{{ t('goods.audit.propertyReview.title') }}</a-badge></template>
-          <a-form layout="inline" style="margin-bottom: 16px"><a-form-item :label="t('goods.audit.propertyReview.searchLabel')"><a-input v-model:value="propertyReviews.query.keyword" allow-clear style="width: 240px" @press-enter="propertyReviews.search()" /></a-form-item><a-form-item><a-button type="primary" @click="propertyReviews.search()"><template #icon><SearchOutlined /></template>{{ t('common.search') }}</a-button></a-form-item></a-form>
-          <a-table :columns="propertyReviewColumns" :data-source="propertyReviews.list.value" :loading="propertyReviews.loading.value" :pagination="propertyReviews.pagination.value" row-key="id" size="middle">
-            <template #bodyCell="{ column, record }"><template v-if="column.key === 'action_col'"><a-space :size="0"><a-button type="link" size="small" @click="openPropertyDetail(record)">{{ t('common.detail') }}</a-button><a-button v-perm="'merchant:property:content-audit'" type="link" size="small" style="color:var(--mtrip-success,#52c41a)" @click="openPropertyAudit(record, 1)">{{ t('goods.audit.columns.pass') }}</a-button><a-button v-perm="'merchant:property:content-audit'" type="link" size="small" danger @click="openPropertyAudit(record, 2)">{{ t('goods.audit.columns.reject') }}</a-button></a-space></template></template>
-          </a-table>
+          <template #tab>{{ t('goods.audit.propertyReview.title') }}</template>
+          <a-result
+            status="info"
+            :title="t('merchant.propertyReviewPage.movedTitle')"
+            :sub-title="t('merchant.propertyReviewPage.movedSubtitle')"
+          >
+            <template #extra>
+              <a-button v-perm="'merchant:property:content-list'" type="primary" @click="router.push('/merchant/property-review')">
+                {{ t('merchant.propertyReviewPage.openReview') }}
+              </a-button>
+            </template>
+          </a-result>
         </a-tab-pane>
       </a-tabs>
     </a-card>
@@ -320,9 +283,6 @@ onMounted(() => {
     <a-drawer v-model:open="roomDrawerOpen" :title="t('goods.audit.roomReview.title')" width="920"><a-spin :spinning="roomDetailLoading"><template v-if="roomDetail"><a-descriptions :column="2" bordered size="small"><a-descriptions-item :label="t('goods.audit.roomReview.roomType')">{{ roomDetail.revision.payload.room_name }}</a-descriptions-item><a-descriptions-item :label="t('goods.audit.roomReview.hotel')">{{ roomDetail.revision.property_name }}</a-descriptions-item><a-descriptions-item :label="t('goods.audit.merchant')">{{ roomDetail.revision.merchant_name }}</a-descriptions-item><a-descriptions-item :label="t('goods.audit.roomReview.version')">v{{ roomDetail.revision.version }} · {{ roomDetail.revision.action }}</a-descriptions-item></a-descriptions><a-divider orientation="left">{{ t('goods.audit.roomReview.submittedChanges') }}</a-divider><a-table :data-source="roomDiffRows" row-key="field" size="small" :pagination="false" :columns="[{ title: t('goods.audit.roomReview.field'), dataIndex: 'field', width: 180 }, { title: t('goods.audit.roomReview.currentLive'), dataIndex: 'current' }, { title: t('goods.audit.roomReview.submitted'), dataIndex: 'submitted' }]" :row-class-name="roomDiffRowClass"><template #bodyCell="{ column, record }"><template v-if="column.dataIndex === 'current'">{{ typeof record.current === 'object' && record.current !== null ? JSON.stringify(record.current, null, 2) : (record.current ?? '-') }}</template><template v-else-if="column.dataIndex === 'submitted'">{{ typeof record.submitted === 'object' && record.submitted !== null ? JSON.stringify(record.submitted, null, 2) : (record.submitted ?? '-') }}</template></template></a-table><a-tabs><a-tab-pane key="submitted" :tab="t('goods.audit.roomReview.submitted')"><RoomReviewMedia :room="roomDetail.revision.payload" /></a-tab-pane><a-tab-pane key="effective" :tab="t('goods.audit.roomReview.currentLive')"><RoomReviewMedia :room="roomDetail.effective" /></a-tab-pane></a-tabs><a-divider /><a-space><a-button v-perm="'goods:audit:audit'" type="primary" @click="openRoomAudit(roomDetail.revision, 1)">{{ t('goods.audit.columns.pass') }}</a-button><a-button v-perm="'goods:audit:audit'" danger @click="openRoomAudit(roomDetail.revision, 2)">{{ t('goods.audit.columns.reject') }}</a-button></a-space></template></a-spin></a-drawer>
 
     <a-modal v-model:open="roomAuditOpen" :title="roomAuditForm.auditStatus === 1 ? t('goods.audit.roomReview.approveTitle') : t('goods.audit.roomReview.rejectTitle')" width="480px" :confirm-loading="roomAuditSaving" :ok-button-props="roomAuditForm.auditStatus === 2 ? { danger: true } : undefined" @ok="doRoomAudit"><a-alert :type="roomAuditForm.auditStatus === 1 ? 'success' : 'warning'" :message="roomAuditForm.auditStatus === 1 ? t('goods.audit.roomReview.approveNotice') : t('goods.audit.roomReview.rejectNotice')" show-icon style="margin:16px 0" /><a-form><a-form-item :label="t('goods.audit.roomReview.reviewNote')" :required="roomAuditForm.auditStatus === 2"><a-textarea v-model:value="roomAuditForm.auditRemark" :rows="3" :maxlength="500" /></a-form-item></a-form></a-modal>
-
-    <a-drawer v-model:open="propertyDrawerOpen" :title="t('goods.audit.propertyReview.title')" width="920"><a-spin :spinning="propertyDetailLoading"><template v-if="propertyDetail"><a-descriptions :column="2" bordered size="small"><a-descriptions-item :label="t('goods.audit.propertyReview.property')">{{ propertyDetail.revision.payload.store_name }}</a-descriptions-item><a-descriptions-item :label="t('goods.audit.merchant')">{{ propertyDetail.revision.merchant_name }}</a-descriptions-item><a-descriptions-item :label="t('goods.audit.roomReview.version')">v{{ propertyDetail.revision.version }}</a-descriptions-item><a-descriptions-item :label="t('goods.audit.submitTime')">{{ propertyDetail.revision.submitted_at }}</a-descriptions-item></a-descriptions><a-divider orientation="left">{{ t('goods.audit.roomReview.submittedChanges') }}</a-divider><a-table :data-source="propertyDiffRows" row-key="field" size="small" :pagination="false" :columns="[{ title: t('goods.audit.roomReview.field'), dataIndex: 'field', width: 180 }, { title: t('goods.audit.roomReview.currentLive'), dataIndex: 'current' }, { title: t('goods.audit.roomReview.submitted'), dataIndex: 'submitted' }]" :row-class-name="propertyDiffRowClass"><template #bodyCell="{ column, record }"><template v-if="column.dataIndex === 'current'"><pre class="diff-value">{{ displayDiffValue(record.current) }}</pre></template><template v-else-if="column.dataIndex === 'submitted'"><pre class="diff-value">{{ displayDiffValue(record.submitted) }}</pre></template></template></a-table><template v-if="propertyDetail.revision.payload.images?.length"><a-divider orientation="left">{{ t('goods.audit.roomReview.media') }}</a-divider><a-image-preview-group><a-space wrap><a-image v-for="url in propertyDetail.revision.payload.images" :key="url" :src="url" :width="120" :height="90" style="object-fit:cover;border-radius:6px" /></a-space></a-image-preview-group></template><a-divider /><a-space><a-button v-perm="'merchant:property:content-audit'" type="primary" @click="openPropertyAudit(propertyDetail.revision, 1)">{{ t('goods.audit.columns.pass') }}</a-button><a-button v-perm="'merchant:property:content-audit'" danger @click="openPropertyAudit(propertyDetail.revision, 2)">{{ t('goods.audit.columns.reject') }}</a-button></a-space></template></a-spin></a-drawer>
-    <a-modal v-model:open="propertyAuditOpen" :title="propertyAuditForm.auditStatus === 1 ? t('goods.audit.propertyReview.approveTitle') : t('goods.audit.propertyReview.rejectTitle')" width="480px" :confirm-loading="propertyAuditSaving" :ok-button-props="propertyAuditForm.auditStatus === 2 ? { danger: true } : undefined" @ok="doPropertyAudit"><a-alert :type="propertyAuditForm.auditStatus === 1 ? 'success' : 'warning'" :message="propertyAuditForm.auditStatus === 1 ? t('goods.audit.propertyReview.approveNotice') : t('goods.audit.propertyReview.rejectNotice')" show-icon style="margin:16px 0" /><a-form><a-form-item :label="t('goods.audit.roomReview.reviewNote')" :required="propertyAuditForm.auditStatus === 2"><a-textarea v-model:value="propertyAuditForm.auditRemark" :rows="3" :maxlength="500" /></a-form-item></a-form></a-modal>
 
     <!-- 详情抽屉 -->
     <a-drawer v-model:open="drawerOpen" :title="t('goods.audit.detailModal.title', { name: detail?.goods_name ?? '' })" width="720">
