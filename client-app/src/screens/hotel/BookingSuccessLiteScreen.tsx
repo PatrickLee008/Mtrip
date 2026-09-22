@@ -44,6 +44,7 @@ import { PAGE_PADDING, colors, radius } from '@/config/theme';
 import { fonts } from '@/config/typography';
 import type { RootStackParamList } from '@/navigation/types';
 import { BOOKING_DEMO } from '@/screens/hotel/bookingDemo';
+import { formatCountdown, useBookingResult } from '@/screens/hotel/useBookingResult';
 import { useCommonStore } from '@/store/commonStore';
 
 export default function BookingSuccessLiteScreen() {
@@ -54,13 +55,26 @@ export default function BookingSuccessLiteScreen() {
 
   /* 真实下单带参进来,缺参就回落到演示数值 */
   const p = route.params ?? {};
-  const confirmed = (p.status ?? 'confirmed') === 'confirmed';
-  const bookingId = p.orderNo ?? BOOKING_DEMO.referenceId;
+  /**
+   * 取数与完整模式共用 `useBookingResult`(**只共用取数,版式各留各的**)——
+   * 同一张单在两种模式下必须显示同样的单号、金额、状态与剩余时间。
+   */
+  const result = useBookingResult({
+    orderId: p.orderId,
+    orderNo: p.orderNo,
+    tripId: p.tripId,
+    paidTotal: p.paidTotal,
+    status: p.status,
+    failReason: p.failReason,
+  });
+  const failed = result.status === 'failed';
+  const confirmed = result.status === 'confirmed';
+  const bookingId = result.bookingId || BOOKING_DEMO.referenceId;
   const hotelName = p.hotelName ?? t(`hotels.results.demo.${BOOKING_DEMO.hotelKey}.name`);
   const checkIn = p.checkIn ?? BOOKING_DEMO.checkIn;
   const checkOut = p.checkOut ?? BOOKING_DEMO.checkOut;
 
-  const tone = confirmed ? colors.statusPaid : colors.orange;
+  const tone = failed ? colors.hot : confirmed ? colors.statusPaid : colors.orange;
 
   const copyId = () => {
     void Clipboard.setStringAsync(bookingId);
@@ -97,42 +111,69 @@ export default function BookingSuccessLiteScreen() {
           <View style={styles.resultCard}>
             <View style={styles.header}>
               <View style={[styles.iconWrap, { backgroundColor: `${tone}1A` }]}>
-                <HomeIcon name={confirmed ? 'checkmarkCircle' : 'clock'} size={40} color={tone} />
+                <HomeIcon
+                  name={failed ? 'dismissCircle' : confirmed ? 'checkmarkCircle' : 'clock'}
+                  size={40}
+                  color={tone}
+                />
               </View>
               <Text style={styles.title}>
                 {t(
-                  confirmed
-                    ? 'hotels.booking.lite.success.confirmedTitle'
-                    : 'hotels.booking.lite.success.confirmingTitle',
+                  failed
+                    ? result.expired
+                      ? 'hotels.booking.lite.success.expiredTitle'
+                      : 'hotels.booking.lite.success.failedTitle'
+                    : confirmed
+                      ? 'hotels.booking.lite.success.confirmedTitle'
+                      : 'hotels.booking.lite.success.confirmingTitle',
                 )}
               </Text>
               <Text style={styles.desc}>
                 {t(
-                  confirmed
-                    ? 'hotels.booking.lite.success.confirmedDesc'
-                    : 'hotels.booking.lite.success.confirmingDesc',
+                  failed
+                    ? result.expired
+                      ? 'hotels.booking.lite.success.expiredDesc'
+                      : 'hotels.booking.lite.success.failedDesc'
+                    : confirmed
+                      ? 'hotels.booking.lite.success.confirmedDesc'
+                      : 'hotels.booking.lite.success.confirmingDesc',
                 )}
               </Text>
+              {failed && !result.expired && result.failReason ? (
+                <Text style={styles.failReason}>{result.failReason}</Text>
+              ) : null}
+              {failed && !result.expired && result.secondsLeft !== null ? (
+                <Text style={styles.countdownText}>
+                  {`${t('hotels.booking.lite.success.payWithin')} ${formatCountdown(result.secondsLeft)}`}
+                </Text>
+              ) : null}
             </View>
 
             <View style={styles.statusCard}>
               <StatusRow
                 icon="wallet"
                 label={t('hotels.booking.lite.success.paymentStatus')}
-                badge={t('hotels.booking.lite.success.paid')}
-                badgeIcon="checkmarkCircle"
-                badgeColor={colors.statusPaid}
+                /* 以前写死已支付 —— 失败态下那是错的 */
+                badge={t(
+                  failed
+                    ? 'hotels.booking.lite.success.failedBadge'
+                    : 'hotels.booking.lite.success.paid',
+                )}
+                badgeIcon={failed ? 'dismissCircle' : 'checkmarkCircle'}
+                badgeColor={failed ? colors.hot : colors.statusPaid}
               />
               <View style={styles.statusDivider} />
               <StatusRow
                 icon="calendar"
                 label={t('hotels.booking.lite.success.bookingStatus')}
                 badge={t(
-                  confirmed
-                    ? 'hotels.booking.lite.success.confirmed'
-                    : 'hotels.booking.lite.success.confirming',
+                  failed
+                    ? 'hotels.booking.lite.success.pendingBadge'
+                    : confirmed
+                      ? 'hotels.booking.lite.success.confirmed'
+                      : 'hotels.booking.lite.success.confirming',
                 )}
-                badgeIcon={confirmed ? 'checkmarkCircle' : 'clock'}
+                badgeIcon={failed ? 'clock' : confirmed ? 'checkmarkCircle' : 'clock'}
                 badgeColor={tone}
               />
             </View>
@@ -178,7 +219,10 @@ export default function BookingSuccessLiteScreen() {
 
       <SafeAreaView style={styles.bar} edges={['bottom']}>
         <View style={styles.barInner}>
-          {/* 待确认态设计稿只有一枚整宽 View Booking */}
+          {/**
+           * 成功态:保存电子凭证 + View Booking(稿面待确认态只有一枚整宽 View Booking)。
+           * 失败态:稍后再付 + **对已有订单重新发起支付**(不建新单);超时后主按钮禁用。
+           */}
           {confirmed ? (
             <Pressable
               style={({ pressed }) => [styles.ghostBtn, pressed && liteBooking.pressed]}
@@ -188,12 +232,39 @@ export default function BookingSuccessLiteScreen() {
               <Text style={styles.ghostText}>{t('hotels.booking.lite.success.saveEreceipt')}</Text>
             </Pressable>
           ) : null}
+          {failed ? (
+            <Pressable
+              style={({ pressed }) => [styles.ghostBtn, pressed && liteBooking.pressed]}
+              onPress={viewBooking}
+            >
+              <Text style={styles.ghostText}>{t('hotels.booking.lite.success.payLater')}</Text>
+            </Pressable>
+          ) : null}
 
           <Pressable
-            style={({ pressed }) => [styles.primaryBtn, pressed && liteBooking.pressed]}
-            onPress={viewBooking}
+            style={({ pressed }) => [
+              styles.primaryBtn,
+              failed && (result.paying || result.expired) && styles.btnDisabled,
+              pressed && liteBooking.pressed,
+            ]}
+            disabled={failed && (result.paying || result.expired)}
+            onPress={
+              failed
+                ? () => {
+                    void result.repay().then((ok) => {
+                      if (ok) showToast(t('hotels.booking.lite.success.paidToast'));
+                    });
+                  }
+                : viewBooking
+            }
           >
-            <Text style={styles.primaryText}>{t('hotels.booking.success.viewBooking')}</Text>
+            <Text style={styles.primaryText}>
+              {failed
+                ? result.paying
+                  ? t('common.loading')
+                  : t('hotels.booking.lite.success.payNow')
+                : t('hotels.booking.success.viewBooking')}
+            </Text>
           </Pressable>
         </View>
       </SafeAreaView>
@@ -359,6 +430,25 @@ const styles = StyleSheet.create({
     letterSpacing: 0.14,
     color: colors.textSoft,
   },
+
+  /* ---- 支付失败态 ---- */
+  /** 后端给的失败原因(关怀模式字号大一档) */
+  failReason: {
+    fontFamily: fonts.inter,
+    fontSize: 16,
+    lineHeight: 24,
+    textAlign: 'center',
+    color: colors.hot,
+  },
+  /** 剩余可支付时间 */
+  countdownText: {
+    fontFamily: fonts.interSemi,
+    fontSize: 18,
+    lineHeight: 26,
+    textAlign: 'center',
+    color: colors.hot,
+  },
+  btnDisabled: { opacity: 0.5 },
 
   /* ---- 吸底栏 ---- */
   bar: {

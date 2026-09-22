@@ -160,7 +160,11 @@ if (screen) {
   check('主按钮 p16 圆角 12 主色', /padding: 16/u.test(blockOf('primaryBtn')) && /radius\.btn/u.test(blockOf('primaryBtn')) && /colors\.primary/u.test(blockOf('primaryBtn')));
   check('主按钮文字 Inter 400 16/24 白', /fontSize: 16/u.test(blockOf('primaryText')) && /lineHeight: 24/u.test(blockOf('primaryText')) && /#FFFFFF/u.test(blockOf('primaryText')));
   const pressableCount = (body.match(/<Pressable/gu) ?? []).length;
-  check('吸底只有一枚按钮(页面共 3 处可点:复制/引流/View Booking)', pressableCount === 3, `${pressableCount} 处`);
+  /* 成功态吸底仍是稿面的一枚 View Booking(复制 / 引流 / View Booking = 3 处);
+     2026-09-22 新增的支付失败态另有「稍后再付 + 立即支付」两枚,故整页 5 处 */
+  check('成功态吸底仍只有一枚按钮(整页 5 处可点:3 处成功态 + 2 处失败态)', pressableCount === 5, `${pressableCount} 处`);
+  check('失败态那两枚只在 failed 下渲染(吸底那一段,不是结果头的图标三元)',
+    /\{failed \? \(\s*<View style=\{styles\.btnRow\}>[\s\S]{0,400}?payLater/u.test(screen));
 
   /* 本次拍板的口径 */
   check('新稿没有二维码:不再引 react-native-qrcode-svg', !/qrcode/iu.test(body));
@@ -172,7 +176,14 @@ if (screen) {
   check('状态行数据来自下单快照 booked(不是 items)', /useRoomCartStore\(\(s\) => s\.booked\)/u.test(screen));
   check('单房间只出一行且不带房号(224:3826)', /\[\{ key: 'single', roomLabel: '' \}\]/u.test(screen));
   check('多房间一行一个预订并标房号(2659:13475)', /statusRoomTimes/u.test(screen) && /statusRoom'/u.test(screen));
-  check('两态由路由参数 status 决定,缺省 confirmed', /\(p\.status \?\? 'confirmed'\) === 'confirmed'/u.test(screen));
+  /* 2026-09-22:状态改由 `useBookingResult` 统一给(缺省仍是 confirmed),
+     因为成功页也要读订单、且重付成功后要就地切态 —— 不再直接读路由参数 */
+  check('三态由 useBookingResult 决定', /const result = useBookingResult\(\{/u.test(screen)
+    && /const confirmed = result\.status === 'confirmed'/u.test(screen)
+    && /const failed = result\.status === 'failed'/u.test(screen));
+  check('缺省仍是 confirmed(演示模式不带 status)', /status: p\.status/u.test(screen)
+    && /useState<BookingResultStatus>\(p\.status \?\? 'confirmed'\)/u.test(
+      readText(at('client-app/src/screens/hotel/useBookingResult.ts')) ?? ''));
   check('缩略图优先用本单第一间房的真实封面', /bookedRooms\[0\]\?\.cover \?\? tempCoverFor\(0\)/u.test(screen));
 }
 
@@ -185,7 +196,7 @@ if (screen) {
   check('logo-2026.png 已入库(稿面 MTrip Logo 2026 Profile Pic)', fs.existsSync(LOGO) && fs.statSync(LOGO).size > 1024);
 
   const navTypes = readText(NAV_TYPES) ?? '';
-  check('BookingSuccess 路由收 status 参数', /BookingSuccess:[\s\S]{0,900}?status\?: 'confirming' \| 'confirmed';/u.test(navTypes));
+  check('BookingSuccess 路由收三态 status', /BookingSuccess:[\s\S]{0,1400}?status\?: 'confirming' \| 'confirmed' \| 'failed';/u.test(navTypes));
 
   const store = readText(STORE) ?? '';
   check('roomCartStore 有 booked 快照', /booked: CartRoom\[\];/u.test(store));

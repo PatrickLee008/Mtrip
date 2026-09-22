@@ -172,8 +172,15 @@ export type RootStackParamList = {
         adults?: number;
         rooms?: number;
         paidTotal?: number;
-        /** 与关怀模式同一套状态机;缺省 `confirmed`(后端目前没有「等酒店确认」这一档) */
-        status?: 'confirming' | 'confirmed';
+        /** 多房间链路的 Trip 主键;结果页靠它读整车明细并重付整车 */
+        tripId?: number;
+        /** 支付失败的后端原因(失败态显示,空则回落稿面的固定文案) */
+        failReason?: string;
+        /**
+         * `confirmed` 成功 / `confirming` 等酒店确认(后端暂无此档,稿面 `2540:19741` 留着)/
+         * `failed` **支付失败**:单已建好、仍待支付,本页读订单并对同一张单重新发起支付。
+         */
+        status?: 'confirming' | 'confirmed' | 'failed';
       }
     | undefined;
   /**
@@ -193,7 +200,15 @@ export type RootStackParamList = {
         adults?: number;
         rooms?: number;
         paidTotal?: number;
-        status?: 'confirming' | 'confirmed';
+        /** 多房间链路的 Trip 主键;结果页靠它读整车明细并重付整车 */
+        tripId?: number;
+        /** 支付失败的后端原因(失败态显示,空则回落稿面的固定文案) */
+        failReason?: string;
+        /**
+         * `confirmed` 成功 / `confirming` 等酒店确认(后端暂无此档,稿面 `2540:19741` 留着)/
+         * `failed` **支付失败**:单已建好、仍待支付,本页读订单并对同一张单重新发起支付。
+         */
+        status?: 'confirming' | 'confirmed' | 'failed';
       }
     | undefined;
   GoodsList: { goodsType?: number; categoryId?: number; keyword?: string; title?: string };

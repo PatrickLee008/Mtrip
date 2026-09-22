@@ -58,8 +58,8 @@ import { useTranslation } from 'react-i18next';
 import * as Clipboard from 'expo-clipboard';
 
 import { fetchHotelDetail } from '@/api/goods';
-import { fetchOrderDetail } from '@/api/order';
-import { fetchTripDetail, type TripBookingRow } from '@/api/trip';
+import { fetchOrderDetail, payOrder } from '@/api/order';
+import { apiTripPay, fetchTripDetail, type TripBookingRow } from '@/api/trip';
 import { TEMP_HOTEL_GALLERY, tempCoverFor } from '@/assets/tempImages';
 import { ErrorView, LoadingView } from '@/components/common/StateViews';
 import HomeIcon from '@/components/home/HomeIcon';
@@ -75,6 +75,7 @@ import { ROOM_FACILITY_ICONS } from '@/screens/hotel/detailDemo';
 import { orderStatusColor } from '@/screens/mypick/useMyPickData';
 import { useCommonStore } from '@/store/commonStore';
 import { useSiteStore } from '@/store/siteStore';
+import { useUserStore } from '@/store/userStore';
 import type { CartRoom } from '@/store/roomCartStore';
 import type { GoodsDetail, GoodsSku, OrderDetail } from '@/types/models';
 import { formatMoney } from '@/utils/format';
@@ -91,6 +92,7 @@ export default function BookingDetailScreen() {
   const { width } = useWindowDimensions();
   const currency = useSiteStore((s) => s.currency);
   const showToast = useCommonStore((s) => s.showToast);
+  const refreshProfile = useUserStore((s) => s.refreshProfile);
   const comingSoon = () => showToast(t('home.comingSoon'));
 
   const { orderId, tripId } = route.params;
@@ -102,6 +104,8 @@ export default function BookingDetailScreen() {
   const [hotel, setHotel] = useState<GoodsDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  /** 待支付单的「立即支付」在途标记(防连点重复扣款) */
+  const [paying, setPaying] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -132,6 +136,26 @@ export default function BookingDetailScreen() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  /** 待支付:多房间付整车(`trip/pay`),单房型付这一单(`order/pay`)。付完重读,不新建单 */
+  const pending = order?.order_status === ORDER_STATUS.PENDING;
+  const payPending = async () => {
+    if (paying || !order) return;
+    setPaying(true);
+    try {
+      if (tripId && tripId > 0) await apiTripPay({ tripId, payMethod: 3 });
+      else await payOrder(order.id);
+      void refreshProfile().catch(() => undefined);
+      showToast(t('hotels.booking.success.paidToast'));
+      await load();
+    } catch (e) {
+      /* 超时被取消的单后端报「订单不是待支付状态」,原样展示 */
+      showToast(e instanceof Error ? e.message : 'Error');
+      await load();
+    } finally {
+      setPaying(false);
+    }
+  };
 
   /** 列表里的「一条 = 一个预订」;单房型链路就把代表单包成一条 */
   const rows = useMemo<TripBookingRow[]>(() => {
@@ -446,12 +470,35 @@ export default function BookingDetailScreen() {
             </Pressable>
           </View>
 
-          {/* 底部操作 2659:16265 */}
+          {/**
+           * 底部操作 2659:16265。
+           * **待支付单把左边那枚换成「立即支付」**(用户 2026-09-22 要求):
+           * 支付失败后用户从结果页「稍后再付」出来,得有地方把这张单付掉 ——
+           * 在此之前 App 里根本没有入口能再走到一张待支付单(My Pick 的卡片不论状态都只跳详情,
+           * 而这一页原本只有禁用的 Modify 与 Cancel),只能干等 10 分钟被超时任务取消。
+           * 付的是**这张已有的单**,不会新建。
+           */}
           <View style={styles.actions}>
-            {/* 稿面 opacity .5:后端没有改期/改信息接口,照稿禁用 */}
-            <View style={[styles.ghostBtn, styles.disabled]}>
-              <Text style={styles.ghostText}>{t('order.bookingDetail.modifyBooking')}</Text>
-            </View>
+            {pending ? (
+              <Pressable
+                style={({ pressed }) => [
+                  styles.payBtn,
+                  paying && styles.disabled,
+                  pressed && styles.pressed,
+                ]}
+                disabled={paying}
+                onPress={() => void payPending()}
+              >
+                <Text style={styles.payText}>
+                  {paying ? t('common.loading') : t('order.bookingDetail.payNow')}
+                </Text>
+              </Pressable>
+            ) : (
+              /* 稿面 opacity .5:后端没有改期/改信息接口,照稿禁用 */
+              <View style={[styles.ghostBtn, styles.disabled]}>
+                <Text style={styles.ghostText}>{t('order.bookingDetail.modifyBooking')}</Text>
+              </View>
+            )}
             <Pressable
               style={({ pressed }) => [styles.ghostBtn, pressed && styles.pressed]}
               /* 取消流程(Figma 1205:2159 → 1205:2480 → 1205:2679);按 PRD 只取消这一个 booking */
@@ -905,6 +952,22 @@ const styles = StyleSheet.create({
     borderRadius: radius.btn,
     borderWidth: 1,
     borderColor: colors.primary,
+  },
+  /** 待支付单的主按钮:与 ghostBtn 同尺寸,主色实底 */
+  payBtn: {
+    flex: 1,
+    minWidth: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    borderRadius: radius.btn,
+    backgroundColor: colors.primary,
+  },
+  payText: {
+    fontFamily: fonts.interSemi,
+    fontSize: 16,
+    lineHeight: 24,
+    color: '#FFFFFF',
   },
   ghostText: {
     fontFamily: fonts.interMedium,

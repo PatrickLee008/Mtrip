@@ -61,9 +61,12 @@ import BookingStatusRows from '@/components/hotel/booking/BookingStatusRows';
 import { formatMonthDayYear } from '@/components/hotel/booking/bookingFormat';
 import { DEEP_PRIMARY, bookingShared } from '@/components/hotel/booking/bookingShared';
 import { PAGE_PADDING, colors, radius } from '@/config/theme';
+import { formatMoney } from '@/utils/format';
+import { useSiteStore } from '@/store/siteStore';
 import { fonts } from '@/config/typography';
 import type { RootStackParamList } from '@/navigation/types';
 import { BOOKING_DEMO } from '@/screens/hotel/bookingDemo';
+import { formatCountdown, useBookingResult } from '@/screens/hotel/useBookingResult';
 import { useCommonStore } from '@/store/commonStore';
 import { useRoomCartStore } from '@/store/roomCartStore';
 
@@ -88,8 +91,23 @@ export default function BookingSuccessScreen() {
 
   /* 真实下单带参进来,缺参就回落到演示数值 */
   const p = route.params ?? {};
-  const confirmed = (p.status ?? 'confirmed') === 'confirmed';
-  const bookingId = p.orderNo ?? BOOKING_DEMO.referenceId;
+  /**
+   * **读订单**(用户 2026-09-22 要求):单号 / 金额 / 状态 / 支付截止时间以接口为准,
+   * 路由参数只作兜底(演示模式没有 orderId,整页仍走参数)。
+   * 支付失败态还靠它对**同一张单**重新发起支付 —— 绝不在这一屏建新单。
+   */
+  const result = useBookingResult({
+    orderId: p.orderId,
+    orderNo: p.orderNo,
+    tripId: p.tripId,
+    paidTotal: p.paidTotal,
+    status: p.status,
+    failReason: p.failReason,
+  });
+  const currency = useSiteStore((s) => s.currency);
+  const failed = result.status === 'failed';
+  const confirmed = result.status === 'confirmed';
+  const bookingId = result.bookingId || BOOKING_DEMO.referenceId;
   const hotelName = p.hotelName ?? t(`hotels.results.demo.${BOOKING_DEMO.hotelKey}.name`);
   /**
    * 地址只在演示模式回落到设计稿的 Bagan 地址;真实订单没有地址就留空并隐藏引流卡,
@@ -100,7 +118,8 @@ export default function BookingSuccessScreen() {
   const checkIn = p.checkIn ?? BOOKING_DEMO.checkIn;
   const checkOut = p.checkOut ?? BOOKING_DEMO.checkOut;
 
-  const tone = confirmed ? colors.statusPaid : colors.orange;
+  /* 失败态红、待确认橙、成功绿 —— 结果头圆底与状态徽标共用这一个色 */
+  const tone = failed ? colors.hot : confirmed ? colors.statusPaid : colors.orange;
   /** 缩略图:本单第一间房的封面(真实图),演示模式/没带图时回落临时图 */
   const thumb = bookedRooms[0]?.cover ?? tempCoverFor(0);
 
@@ -157,22 +176,51 @@ export default function BookingSuccessScreen() {
         {/* -------------------------------------------------- 结果头 2659:13477 */}
         <View style={styles.header}>
           <View style={[styles.iconWrap, { backgroundColor: `${tone}1A` }]}>
-            <HomeIcon name={confirmed ? 'checkmarkCircle' : 'clock'} size={40} color={tone} />
+            <HomeIcon
+              name={failed ? 'dismissCircle' : confirmed ? 'checkmarkCircle' : 'clock'}
+              size={40}
+              color={tone}
+            />
           </View>
           <Text style={styles.title}>
             {t(
-              confirmed
-                ? 'hotels.booking.success.confirmedTitle'
-                : 'hotels.booking.success.confirmingTitle',
+              failed
+                ? result.expired
+                  ? 'hotels.booking.success.expiredTitle'
+                  : 'hotels.booking.success.failedTitle'
+                : confirmed
+                  ? 'hotels.booking.success.confirmedTitle'
+                  : 'hotels.booking.success.confirmingTitle',
             )}
           </Text>
           <Text style={styles.desc}>
             {t(
-              confirmed
-                ? 'hotels.booking.success.confirmedDesc'
-                : 'hotels.booking.success.confirmingDesc',
+              failed
+                ? result.expired
+                  ? 'hotels.booking.success.expiredDesc'
+                  : 'hotels.booking.success.failedDesc'
+                : confirmed
+                  ? 'hotels.booking.success.confirmedDesc'
+                  : 'hotels.booking.success.confirmingDesc',
             )}
           </Text>
+          {/* 后端给的具体原因(余额不足 / 库存变化…),比稿面的固定文案有用 */}
+          {failed && !result.expired && result.failReason ? (
+            <Text style={styles.failReason}>{result.failReason}</Text>
+          ) : null}
+          {/* 应付金额取接口(多房间是整车实付),不用前端估的数 */}
+          {failed && !result.expired && result.payAmount > 0 ? (
+            <Text style={styles.amountLine}>{formatMoney(result.payAmount, currency)}</Text>
+          ) : null}
+          {/* 剩余可支付时间:到点后端超时任务会自动取消并释放库存 */}
+          {failed && !result.expired && result.secondsLeft !== null ? (
+            <View style={styles.countdown}>
+              <HomeIcon name="clock" size={16} color={colors.hot} />
+              <Text style={styles.countdownText}>
+                {`${t('hotels.booking.success.payWithin')} ${formatCountdown(result.secondsLeft)}`}
+              </Text>
+            </View>
+          ) : null}
         </View>
 
         {/* ------------------------------------------------- 凭证卡 2659:13488 */}
@@ -186,17 +234,22 @@ export default function BookingSuccessScreen() {
           <View style={styles.statusBlockWrap}>
             <BookingStatusRows
               paymentLabel={t('hotels.booking.success.paymentStatus')}
-              paymentBadge={t('hotels.booking.success.paid')}
+              /* 以前写死 PAID —— 失败态下那是错的 */
+              paymentBadge={t(
+                failed ? 'hotels.booking.success.failedBadge' : 'hotels.booking.success.paid',
+              )}
               bookingLabel={t('hotels.booking.success.bookingStatus')}
               rows={statusRows.map((row) => ({
                 key: row.key,
                 roomLabel: row.roomLabel,
                 badge: t(
-                  confirmed
-                    ? 'hotels.booking.success.confirmed'
-                    : 'hotels.booking.success.confirming',
+                  failed
+                    ? 'hotels.booking.success.pendingBadge'
+                    : confirmed
+                      ? 'hotels.booking.success.confirmed'
+                      : 'hotels.booking.success.confirming',
                 ),
-                badgeIcon: confirmed ? 'checkmarkCircle' : 'clock',
+                badgeIcon: failed ? 'clock' : confirmed ? 'checkmarkCircle' : 'clock',
                 badgeColor: tone,
               }))}
             />
@@ -261,14 +314,47 @@ export default function BookingSuccessScreen() {
         ) : null}
       </ScrollView>
 
-      {/* 吸底 2659:13620 —— 稿面只有这一枚 */}
+      {/**
+       * 吸底 2659:13620 —— 成功态稿面只有 View Booking 这一枚。
+       * 失败态多一枚「稍后再付」:主按钮对**已有订单**重新发起支付(`useBookingResult.repay`),
+       * 成功即就地切成 confirmed(不再 push 新页);超时后主按钮禁用,只能去我的预订。
+       */}
       <View style={[styles.bottomBar, { paddingBottom: 16 + insets.bottom }]}>
-        <Pressable
-          style={({ pressed }) => [styles.primaryBtn, pressed && bookingShared.pressed]}
-          onPress={viewBooking}
-        >
-          <Text style={styles.primaryText}>{t('hotels.booking.success.viewBooking')}</Text>
-        </Pressable>
+        {failed ? (
+          <View style={styles.btnRow}>
+            <Pressable
+              style={({ pressed }) => [styles.ghostBtn, pressed && bookingShared.pressed]}
+              onPress={viewBooking}
+            >
+              <Text style={styles.ghostText}>{t('hotels.booking.success.payLater')}</Text>
+            </Pressable>
+            <Pressable
+              style={({ pressed }) => [
+                styles.primaryBtn,
+                styles.flex,
+                (result.paying || result.expired) && styles.btnDisabled,
+                pressed && bookingShared.pressed,
+              ]}
+              disabled={result.paying || result.expired}
+              onPress={() => {
+                void result.repay().then((ok) => {
+                  if (ok) showToast(t('hotels.booking.success.paidToast'));
+                });
+              }}
+            >
+              <Text style={styles.primaryText}>
+                {result.paying ? t('common.loading') : t('hotels.booking.success.payNow')}
+              </Text>
+            </Pressable>
+          </View>
+        ) : (
+          <Pressable
+            style={({ pressed }) => [styles.primaryBtn, pressed && bookingShared.pressed]}
+            onPress={viewBooking}
+          >
+            <Text style={styles.primaryText}>{t('hotels.booking.success.viewBooking')}</Text>
+          </Pressable>
+        )}
       </View>
     </View>
   );
@@ -441,4 +527,56 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     color: '#FFFFFF',
   },
+
+  /* ---- 支付失败态(结果页第三态) ---- */
+  /** 后端给的失败原因:红、居中、压在说明下面 */
+  failReason: {
+    fontFamily: fonts.inter,
+    fontSize: 14,
+    lineHeight: 20,
+    textAlign: 'center',
+    color: colors.hot,
+  },
+  /** 应付金额:失败态下让用户知道这一按下去要付多少 */
+  amountLine: {
+    fontFamily: fonts.interBold,
+    fontSize: 24,
+    lineHeight: 32,
+    textAlign: 'center',
+    color: colors.primary,
+  },
+  /** 剩余可支付时间:红底浅色胶囊 */
+  countdown: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: `${colors.hot}1A`,
+  },
+  countdownText: {
+    fontFamily: fonts.interSemi,
+    fontSize: 14,
+    lineHeight: 20,
+    color: colors.hot,
+  },
+  /** 失败态吸底两枚按钮:稍后再付(描边)+ 立即支付(主色,占宽) */
+  btnRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  ghostBtn: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 52,
+    paddingHorizontal: 16,
+    borderRadius: radius.btn,
+    borderWidth: 1,
+    borderColor: colors.primary,
+  },
+  ghostText: {
+    fontFamily: fonts.interMedium,
+    fontSize: 16,
+    lineHeight: 24,
+    color: colors.primary,
+  },
+  btnDisabled: { opacity: 0.5 },
 });

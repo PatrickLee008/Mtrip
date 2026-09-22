@@ -131,16 +131,7 @@ export default function HotelBookingScreen() {
               roomTotal={cartMode ? roomsTotal : undefined}
               onEditRooms={() => navigation.navigate('RoomCart')}
               onComingSoon={comingSoon}
-              coupon={
-                couponEnabled
-                  ? {
-                      applied: appliedCoupon,
-                      hasUsable: hasUsableCoupon,
-                      loading: couponLoading,
-                      onOpen: () => setCouponOpen(true),
-                    }
-                  : undefined
-              }
+              /* 券挪到第 4 步的 COUPONS 卡(稿面 516:2381),复核步不再出现券行 */
             />
             {/* 新稿把这张卡收成了一行小按钮(compact),不再占整块 */}
             <AddMoreStayCard
@@ -227,6 +218,17 @@ export default function HotelBookingScreen() {
             onSelect={setMethod}
             onToggleExpand={(key) => setExpanded((prev) => (prev === key ? null : key))}
             onComingSoon={comingSoon}
+            /* COUPONS 卡(516:2381)从占位改成真选券;演示/未登录/多住宿态不开放 */
+            coupon={
+              couponEnabled
+                ? {
+                    applied: appliedCoupon,
+                    hasUsable: hasUsableCoupon,
+                    loading: couponLoading,
+                    onOpen: () => setCouponOpen(true),
+                  }
+                : undefined
+            }
           />
         );
       }
@@ -297,7 +299,8 @@ export default function HotelBookingScreen() {
       <BookingBottomBar
         variant={barVariant}
         primaryLabel={primaryLabel}
-        primaryArrow={step !== 'review' && step !== 'trip'}
+        /* 稿面 Continue(718:3354)与 Pay Now(718:3367)都带右箭头,只有 Check Out 没有 */
+        primaryArrow={step !== 'trip'}
         /* 真实商品的价格拉到手之前先留空,别把演示金额顶上去 */
         priceLabel={loadingGoods ? '' : formatMoney(payableTotal, currency)}
         onPrimary={goNext}
@@ -337,8 +340,18 @@ export default function HotelBookingScreen() {
             : t('hotels.booking.payment.close')
         }
         onPrimary={() => {
+          const wasError = payResult === 'error';
           setPayResult(null);
-          if (payResult !== 'success') return;
+          if (wasError) {
+            /**
+             * 走到这个弹窗只剩**建单失败**(支付失败已经跳结果页了),
+             * 此时库里没有任何单 —— 所以「Retry」就该真的重新建单,
+             * 而不是像从前那样只把弹窗关掉、让用户自己再去点一次 Pay Now。
+             * `goNext` 内部有 `submitting` 护栏,不会重复提交。
+             */
+            goNext();
+            return;
+          }
           goSuccess();
         }}
         secondaryLabel={payResult === 'error' ? t('hotels.booking.payment.cancel') : null}

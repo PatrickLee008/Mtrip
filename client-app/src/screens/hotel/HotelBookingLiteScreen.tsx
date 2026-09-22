@@ -280,8 +280,18 @@ export default function HotelBookingLiteScreen() {
             : t('hotels.booking.payment.close')
         }
         onPrimary={() => {
+          const wasError = payResult === 'error';
           setPayResult(null);
-          if (payResult !== 'success') return;
+          if (wasError) {
+            /**
+             * 走到这个弹窗只剩**建单失败**(支付失败已经跳结果页了),
+             * 此时库里没有任何单 —— 所以「Retry」就该真的重新建单,
+             * 而不是像从前那样只把弹窗关掉、让用户自己再去点一次 Pay Now。
+             * `goNext` 内部有 `submitting` 护栏,不会重复提交。
+             */
+            goNext();
+            return;
+          }
           goSuccess();
         }}
         secondaryLabel={payResult === 'error' ? t('hotels.booking.payment.cancel') : null}

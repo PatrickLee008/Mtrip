@@ -79,6 +79,8 @@ export interface TripBookingRow {
   refund_status: number;
   use_date: string | null;
   end_date: string | null;
+  /** 支付截止时间(待支付单才有值);结果页据此倒计时 */
+  payment_expires_at?: string | null;
 }
 
 export interface TripDetailResult {

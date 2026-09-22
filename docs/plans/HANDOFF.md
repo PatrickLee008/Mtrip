@@ -1,5 +1,115 @@
 # 会话交接文档(HANDOFF)
 
+### ★ 2026-09-22 支付失败 → 结果页失败态,并对**已有订单**重新发起支付
+
+**修的缺陷(用户报)**:① 支付失败后仍停在向导第 4 步,只弹一个失败弹窗;
+② 点「Retry」会重新创建订单。
+
+**根因**:`useBookingWizard.submit()` 把**建单与支付包在同一个 `try`** 里,`catch` 只
+`setFailReason + setPayResult('error')`,**从不记录已经建出来的 `orderId`/`tripId`**。
+于是建单成功、支付失败时,库里留下一张 `order_status=0` 的待支付单,而客户端把它彻底丢了 ——
+那张单在 App 里**没有任何入口能再走到**(My Pick 的卡片不论状态都只跳详情;Figma 版
+`BookingDetailScreen` 底部只有禁用的 Modify 与 Cancel;唯一能付待支付单的老版式
+`screens/order/OrderDetailScreen` 只能从「我的 → 订单列表」进)。用户只能再建一单。
+另外「Retry」其实只做了 `setPayResult(null)`(关弹窗),名不副实。
+
+**改法**
+- `submit()` **拆成两段 catch**:建单失败 → 留在第 4 步弹窗(此时无单可重付,重建是对的,
+  且「Retry」现在**真的会重新提交**);支付失败 → 带 `orderId`/`tripId`/原因进结果页失败态,
+  走 `navigation.reset`(返回不能回到第 4 步,否则再点 Pay Now 又建一单)。
+- 结果页(`BookingSuccess` / `BookingSuccessLite`)加**第三态 `failed`**:红图标、失败文案、
+  后端原因、应付金额、剩余可支付时间;吸底「稍后再付 + 立即支付」。
+  Payment 徽标**以前写死 PAID**,失败态下那是错的,改为按态取值。
+- **成功态也读订单**(用户要求):取数抽在新的 `screens/hotel/useBookingResult.ts`,
+  两种模式**只共用取数、版式各留各的**(用户明确日后样式可能分化)。
+  单号/金额/状态/截止时间以接口为准,路由参数只兜底(演示模式仍全走参数)。
+- **重付只付已有的单**(`order/pay` / `trip/pay`),重付路径里**没有任何 create 调用** ——
+  这是本次最关键的不变量,校验脚本专门锁了它。
+- 订单详情页:**待支付单把左边禁用的 Modify 换成「立即支付」**,把「稍后再付」的回流路径补上。
+- 后端一行:`TripController::detail` 的 bookings 选择列补 `payment_expires_at`(只读)。
+
+**实测中推翻的两个假设**(都已按实测改正)
+- **`order/pay` 不是「已支付就幂等返回」**:控制器在扣款前先判 `order_status !== 0` 抛 40901,
+  根本走不到 `markPaid` 里那段幂等分支。实测第二次调用返回「订单不是待支付状态」,
+  余额只动一次(99,345,000 → 99,306,000,正好一笔 39,000)。
+  因为它是**报错**而不是静默成功,「其实已扣款、只是响应丢了」时用户会看到莫名其妙的错误 ——
+  所以 `repay` 的 catch 里重读订单,**发现已是已支付就当成功**。
+- **`order/pay` 不判 `payment_expires_at`**:过期是每分钟的 `BookingExpiryService` 扫出来取消的。
+  实测把截止时间改到一分钟前,支付**仍然成功**。所以按倒计时禁用按钮会**比后端更严**,
+  把只迟到几秒的用户挡住 —— 失效改为以**服务端订单状态**为准,倒计时归零时重读一次问后端。
+
+**验证**
+- 新增 `scripts/check-payment-failure-flow.cjs` **GREEN 62/62**;灵敏度自检(重付改成重新建单 /
+  主按钮不调 repay / 去掉防连点)→ **RED 58/61**,随即还原。
+- `check-booking-success-page` 里有 **3 条旧断言描述的是改前的两态页**(吸底只有一枚按钮 /
+  两态由路由参数决定 / 路由只收两态),已按新事实更新并做灵敏度自检,**GREEN 73/73**。
+- 其余 5 个脚本 + 浮层审计全绿;typecheck 零报错;`expo export -p web` 通过;
+  i18n 三语键集一致 **1157 键**。
+- 后端容器内 `php -l` 通过。
+- **真实 HTTP 冒烟**(site 7 / user 25,容器内签 JWT 直打 order-service-app):
+  建单不支付 → `order/detail` 拿到 `payment_expires_at` → `order/pay` 重付**成功**(未新建单)→
+  再付返回 40901 且余额只扣一次 → 过期单仍可支付(见上)。
+- ⚠️ **冒烟留下两张真实已支付订单**:`id=29`(39,000)与 `id=30`(40,000),user 25 钱包共扣 79,000。
+  没有删 —— 删了会留下 `finance_flow` / `user_balance_log` 的孤儿行,要清请连同流水一起处理。
+- ⚠️ **未做真机/Web UI 冒烟**:上面验证的是接口与源码契约,失败页的渲染、倒计时走动、
+  按钮禁用这些还需在设备上看一眼。要造失败态,最省事的是用上面那条 `order/create` 建一张待支付单,
+  再进结果页带 `status:'failed'` + 该 `orderId`。
+
+### ★ 2026-09-22 订房向导第 3/4 步(Figma `759:9777`:`228:5118` step3 / `276:876` step4)
+
+**范围**:正常模式订房流程的四点调整(用户逐条指定),外加一个校验脚本。**未动**后端、路由、
+权限键与关怀模式(Lite 走 `LiteStepPay`,不受影响)。
+
+**改了什么**
+1. **Add More Stay 的两个加号**:按钮画了一枚 plus 图标,`review.addHotel` 文案里**又有一个字面「+」**。
+   去掉文案里的(三语同改)—— compact 与整卡两个变体共用这条文案,一处修两处好。
+2. **第 3 步按钮 Add To Trip → Continue**:稿面 `718:3351` 本就是 Continue + 右箭头;
+   那一步并不真把住宿加进 Trip,旧名误导。`addToTrip` 三语一并删掉(已无人用)。
+3. **券从第 3 步挪到第 4 步**:稿面 `371:1887` 的 Price Breakdown **没有券行**,
+   而第 4 步 `516:2381` 本来就留了 COUPONS 卡(原先是点了弹 Coming soon 的占位)。
+   现在接真选券,副标题三态(券名 / 选一张 / 无可用且置灰),已用券右侧显示抵扣额。
+   `ReviewBody` 的 `coupon` prop 与 `ReviewCouponState` 一并删除 —— 没有调用方了,
+   留着会让人以为第 3 步还能选券。选券弹窗本就挂页面级,不用搬。
+4. **未开放渠道折叠 + 按钮改 Pay Now**:钱包行常驻,其余 6 个渠道收进默认收起的
+   「更多支付方式 · 即将开放」;按钮按稿面 `718:3366` 改 Pay Now。
+
+**两条口径**
+- **有意偏离稿面**:稿面把 7 个渠道全摊开,实现里只有 mTrip 钱包能真扣款,所以其余 6 个折叠。
+  展开后的内容与顺序仍按稿面,注释里写明了这是偏离而非漏做。
+- 右箭头规则从「review/trip 都不带」收敛成「只有 Check Out 不带」——
+  稿面 Continue(`718:3354`)与 Pay Now(`718:3367`)都带箭头。
+
+**验证**
+- 新增 `scripts/check-booking-steps-34.cjs` **GREEN 37/37**;灵敏度自检:券卡退回 `onComingSoon`
+  占位 + 折叠区默认展开 + 文案带回「+」→ **RED 34/37**,随即还原。
+- 回归:`check-booking-success-page` 71/71、`check-mypick-trip-group` 44/44、
+  `check-booking-detail-page` 77/77、`check-cancel-flow` 65/65、
+  `check-hotel-reviews-page` 166/166、`audit-overlay-order` OK。
+- client-app typecheck 零报错;`expo export -p web` 通过;i18n 三语键集一致 **1136 键**
+  (新增 `payNow`/`payment.moreMethods`/`payment.moreMethodsDesc`,删除 `addToTrip`,净 -1)。
+- ⚠️ **未做真机冒烟**。券那条链路要看效果,得用 site 7 的账号(21/25/28,券已由
+  `test/adhoc/c-coupon-demo.sql` 造好)下一单真实预订。
+- ⚠️ 稿面的 Add More Stay 是**整宽浅蓝卡**(`#C4D2FF` 底 + 主色描边 + 右侧 chevron),
+  实现仍是一行小文字按钮 —— 本轮只按要求修加号,**没有重做这张卡的样式**,想对齐要单开一轮。
+
+
+**补充(同日)**:第 4 步吸底**两枚按钮大小不一致**已修。根因是照搬了稿面的 `px40` ——稿面 footer `718:3358` 里 Back `718:3360` 与 Pay Now `718:3364` **都是 167x52**,而 167 减去 40×2 只剩 87,内容(Pay Now 60 + gap 8 + 箭头 20)就有 88,在 402 的稿面上已是零余量,到 390/360 真机必然把文案挤到第二行、右按钮高出一截。改法:两按钮布局共用 `stretch`(`flex:1` 均分宽度 + 内边距收到 16)+ `height: 52` 锁死高度 + 文案 `numberOfLines={1}` 且可收缩 —— 拉伸态下内边距本就不影响外框宽度,只决定文字可用空间,所以稿面宽度下渲染与稿面一致,窄屏只是内边距变小。**price 变体(Step 1)不受影响**:它是内容宽按钮,`px40` 正是它的宽度来源,保持原样。顺带补上主按钮的投影(稿面 `718:3365` 可见,Back 的 `718:3361` 是 hidden,故只给主按钮 `shadows.raised`)。校验脚本扩到 **GREEN 44/44**,灵敏度自检(退回 px40 + 不锁高 + 允许换行)→ `RED 41/44`。
+
+### ★ 2026-09-22 C 端优惠券造数(`test/adhoc/c-coupon-demo.sql`)
+
+开发库原有 5 张券全在 **site 1**,而 C 端账号(21/25/28)都在 **site 7**,领券中心按 `site_id` 过滤 →
+一张都看不到。新增幂等 fixture 往 site 7 造 5 张券(满减·仅酒店 / 折扣·封顶 / 无门槛 /
+指定物业 3 胤竹酒店 / 促销码 `MTRIP2026`),前三张直接发给三个账号。
+金额按**库里真实房价**定(房型 19,500 与 29,500,历史订单 19,500~118,000),门槛压在 30,000~80,000 ——
+照搬稿面的 20 万门槛会让每张券都「未达门槛」。
+⚠️ 本库 `marketing_coupon` 比 `database/marketing/01-marketing.sql` **旧**(无 `description`/
+`promotion_kind`/`promo_code`/`staff_note`,另有 `funding_source`/`stackable`),文件按**实际列**写;
+促销码因此走独立表 `marketing_promo_code`。⚠️ 促销码绑定的券**必须 `status=1`**,
+停发(2)会报 40914;本库没有「隐藏券」概念,所以那张券在领券中心也看得见。
+已实测:领券中心 4 张可见、`match-list` 在 39,000 选中指定酒店券 6,000 / 在 118,000 选中封顶 10,000、
+`coupon/redeem` 兑换成功(用 user 21 试的,已清理)。顺带补跑上一轮欠的 `php -l`:
+`OrderController.php` 与 `TripController.php` 均通过。
+
 ### ★ 2026-09-21 晚(商户端 Hotel Profile 三个页签按 Figma `696:6334` 补全)
 
 **范围**:`merchant-web` 的 `/properties/:id/profile` 补齐此前只有按钮、点不动的三个页签 ——

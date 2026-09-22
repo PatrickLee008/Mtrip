@@ -205,6 +205,8 @@ export interface OrderItemData {
   refund_status: number;
   use_date: string | null;
   end_date: string | null;
+  /** 支付截止时间(待支付单才有值);到点由后端超时任务自动取消并释放库存 */
+  payment_expires_at?: string | null;
   created_at: string;
 }
 

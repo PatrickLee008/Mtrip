@@ -416,7 +416,8 @@
       "helpCenter": "帮助中心",
       "liveChat": "在线客服",
       "modifyBooking": "修改预订",
-      "cancelBooking": "取消预订"
+      "cancelBooking": "取消预订",
+      "payNow": "立即支付"
     },
     "tripDetail": {
       "stay": "第 {{index}} 段住宿"
@@ -1225,7 +1226,6 @@
       "stepOf": "第 {{step}} 步 / 共 {{total}} 步",
       "back": "上一步",
       "continue": "继续",
-      "addToTrip": "加入行程",
       "checkOut": "去结算",
       "totalEstimated": "预计总价",
       "nights": {
@@ -1306,7 +1306,7 @@
         "earnPoints": "可得 {{points}} 积分",
         "addMoreStay": "继续添加住宿",
         "addMoreStayDesc": "把下一家酒店加进本次行程:填写目的地与入住日期后加入本单,所有住宿一次付清。",
-        "addHotel": "+ 添加酒店与民宿",
+        "addHotel": "添加酒店与民宿",
         "cancellationPolicy": "取消政策",
         "cancellationDesc": "入住前 48 小时可免费取消;{{date}} 之后取消不予退款。",
         "agreePrefix": "我已阅读并同意",
@@ -1390,7 +1390,9 @@
         "failTitle": "支付失败!",
         "failReason": "失败原因:",
         "cancel": "取消",
-        "retry": "重试"
+        "retry": "重试",
+        "moreMethods": "更多支付方式",
+        "moreMethodsDesc": "即将开放"
       },
       "success": {
         "title": "预订成功",
@@ -1412,7 +1414,17 @@
         "dateRange": "{{checkIn}} - {{checkOut}}",
         "viewBooking": "查看订单",
         "upsell": "准备好开启{{city}}之旅了吗?",
-        "upsellLink": "探索当地美食与玩乐"
+        "upsellLink": "探索当地美食与玩乐",
+        "failedTitle": "支付失败",
+        "failedDesc": "预订已为你保留但尚未支付,请在超时前重新支付。",
+        "failedBadge": "失败",
+        "pendingBadge": "待支付",
+        "payWithin": "剩余支付时间",
+        "expiredTitle": "该预订已超时",
+        "expiredDesc": "因未在时限内完成支付,系统已自动取消。",
+        "payNow": "立即支付",
+        "payLater": "稍后再付",
+        "paidToast": "支付成功"
       },
       "insurance": {
         "title": "旅行保障",
@@ -1491,9 +1503,20 @@
           "bookingId": "预订编号：",
           "bookingDetails": "预订详情",
           "dateRange": "{{checkIn}} - {{checkOut}}",
-          "saveEreceipt": "保存电子回执"
+          "saveEreceipt": "保存电子回执",
+          "failedTitle": "支付失败",
+          "failedDesc": "预订已为你保留但尚未支付,请在超时前重新支付。",
+          "failedBadge": "失败",
+          "pendingBadge": "待支付",
+          "payWithin": "剩余支付时间",
+          "expiredTitle": "该预订已超时",
+          "expiredDesc": "因未在时限内完成支付,系统已自动取消。",
+          "payNow": "立即支付",
+          "payLater": "稍后再付",
+          "paidToast": "支付成功"
         }
-      }
+      },
+      "payNow": "立即支付"
     },
     "reviewsPage": {
       "title": "评价 ({{reviews}})",

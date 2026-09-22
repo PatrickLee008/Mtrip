@@ -416,7 +416,8 @@
       "helpCenter": "Help Center",
       "liveChat": "Live Support Chat",
       "modifyBooking": "Modify Booking",
-      "cancelBooking": "Cancel Booking"
+      "cancelBooking": "Cancel Booking",
+      "payNow": "Pay Now"
     },
     "tripDetail": {
       "stay": "Stay {{index}}"
@@ -1225,7 +1226,6 @@
       "stepOf": "Step {{step}} of {{total}}",
       "back": "Back",
       "continue": "Continue",
-      "addToTrip": "Add To Trip",
       "checkOut": "Check Out",
       "totalEstimated": "TOTAL ESTIMATED PRICE",
       "nights": {
@@ -1306,7 +1306,7 @@
         "earnPoints": "Earn {{points}} Points",
         "addMoreStay": "Add More Stay",
         "addMoreStayDesc": "Add another hotel to your trip. Enter the destination and stay dates for your next hotel, then add it to this booking and pay for all your hotel stays together in one payment",
-        "addHotel": "+ Add Hotel and Homestay",
+        "addHotel": "Add Hotel and Homestay",
         "cancellationPolicy": "Cancellation Policy",
         "cancellationDesc": "Free cancellation until 48 hours before check-in. Non-refundable if cancelled after {{date}}.",
         "agreePrefix": "I agree to the ",
@@ -1390,7 +1390,9 @@
         "failTitle": "Payment Fail!",
         "failReason": "Reason of failure:",
         "cancel": "Cancel",
-        "retry": "Retry"
+        "retry": "Retry",
+        "moreMethods": "More payment methods",
+        "moreMethodsDesc": "Coming soon"
       },
       "success": {
         "title": "Booking Confirmed",
@@ -1412,7 +1414,17 @@
         "dateRange": "{{checkIn}} - {{checkOut}}",
         "viewBooking": "View Booking",
         "upsell": "Ready for your adventure in {{city}}?",
-        "upsellLink": "Explore local dining & tours"
+        "upsellLink": "Explore local dining & tours",
+        "failedTitle": "Payment Failed",
+        "failedDesc": "Your booking is held but not paid yet. Retry the payment before it expires.",
+        "failedBadge": "FAILED",
+        "pendingBadge": "PENDING",
+        "payWithin": "Pay within",
+        "expiredTitle": "This booking has expired",
+        "expiredDesc": "It was cancelled automatically because payment was not completed in time.",
+        "payNow": "Pay Now",
+        "payLater": "Pay Later",
+        "paidToast": "Payment successful"
       },
       "insurance": {
         "title": "Travel Protection",
@@ -1491,9 +1503,20 @@
           "bookingId": "Booking ID: ",
           "bookingDetails": "Booking Details",
           "dateRange": "{{checkIn}} - {{checkOut}}",
-          "saveEreceipt": "Save E-receipt"
+          "saveEreceipt": "Save E-receipt",
+          "failedTitle": "Payment Failed",
+          "failedDesc": "Your booking is held but not paid yet. Retry the payment before it expires.",
+          "failedBadge": "FAILED",
+          "pendingBadge": "PENDING",
+          "payWithin": "Pay within",
+          "expiredTitle": "This booking has expired",
+          "expiredDesc": "It was cancelled automatically because payment was not completed in time.",
+          "payNow": "Pay Now",
+          "payLater": "Pay Later",
+          "paidToast": "Payment successful"
         }
-      }
+      },
+      "payNow": "Pay Now"
     },
     "reviewsPage": {
       "title": "Reviews ({{reviews}})",

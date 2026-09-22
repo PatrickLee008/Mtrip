@@ -181,6 +181,8 @@ export function useBookingWizard({
     orderNo: string;
     payAmount: number;
     verifyCode: string;
+    /** 多房间链路的 Trip 主键;单房型为 0。结果页要靠它读整车明细与重付 */
+    tripId: number;
   } | null>(null);
 
   /**
@@ -468,11 +470,19 @@ export function useBookingWizard({
       return;
     }
     setSubmitting(true);
+    /* 上一次失败的原因不能留到这一次(本来一直没清,失败弹窗会显示过期信息) */
+    setFailReason('');
     try {
       /**
        * 多房间预订走 Trip:购物车里有房型(且拿得到真实房型 id)时,
        * 整车一次 `trip/create` + `trip/pay`(券只消耗一次、各预订各自出核销码)。
        * 车是空的(单房型旧链路 / 演示模式)仍走 `order/create` + `order/pay`。
+       *
+       * ⚠️ **建单与支付必须分两段 catch**(2026-09-22 修的缺陷):
+       * 以前两者包在同一个 try 里,建单成功、支付失败时 `orderId` 根本没被记下来,
+       * 那张 `order_status=0` 的待支付单在 App 里再也走不到,用户只能重新建一单。
+       * 现在:建单失败 → 留在第 4 步弹窗(无单可重付,重建是对的);
+       *      支付失败 → 带着单号进结果页的失败态,在那里对**同一张单**重新发起支付。
        */
       const tripItems = tripRooms.map((room) => ({
         propertyId: cartPropertyId as number,
@@ -490,26 +500,37 @@ export function useBookingWizard({
           items: tripItems,
           couponId: appliedCoupon?.receiveId,
         });
-        /**
-         * 钱包余额 → 3(后端真扣 `user_info.balance`,整单扣一次);
-         * 其余渠道(card / mmqr / kbzpay / wavepay / mobileBanking)本期都是 mock,统一走 1。
-         * 本项目没有 PayPal 这个选项,所以不映射 2。
-         */
-        const paidTrip = await apiTripPay({
-          tripId: trip.tripId,
-          payMethod: method === 'wallet' ? 3 : 1,
-        });
-        void refreshProfile().catch(() => undefined);
-        /* 下单完成:清空购物车(转存为快照,成功页要按它列本单明细) */
+        /* 单已落库:房型转存为快照并清空购物车,免得留在车里诱发重复下单 */
         checkoutCart();
         const first = trip.bookings[0];
-        setPaid({
-          orderId: first?.orderId ?? 0,
-          orderNo: trip.tripNo,
-          payAmount: trip.payAmount,
-          verifyCode: paidTrip.codes?.[0]?.verifyCode ?? '',
-        });
-        setPayResult('success');
+        try {
+          /**
+           * 钱包余额 → 3(后端真扣 `user_info.balance`,整单扣一次);
+           * 其余渠道(card / mmqr / kbzpay / wavepay / mobileBanking)本期都是 mock,统一走 1。
+           * 本项目没有 PayPal 这个选项,所以不映射 2。
+           */
+          const paidTrip = await apiTripPay({
+            tripId: trip.tripId,
+            payMethod: method === 'wallet' ? 3 : 1,
+          });
+          void refreshProfile().catch(() => undefined);
+          setPaid({
+            orderId: first?.orderId ?? 0,
+            orderNo: trip.tripNo,
+            payAmount: trip.payAmount,
+            verifyCode: paidTrip.codes?.[0]?.verifyCode ?? '',
+            tripId: trip.tripId,
+          });
+          setPayResult('success');
+        } catch (e) {
+          /* 单已经建好了 —— 去结果页的失败态,在那里重付这张 Trip,不再建新单 */
+          goResult('failed', {
+            orderId: first?.orderId ?? 0,
+            orderNo: trip.tripNo,
+            tripId: trip.tripId,
+            failReason: e instanceof Error ? e.message : '',
+          });
+        }
         return;
       }
 
@@ -534,21 +555,35 @@ export function useBookingWizard({
           },
         ],
       });
-      /* 余额支付(payOrder 默认 PAY_METHOD.BALANCE):后端真扣 user_info.balance 并落流水 */
-      const paidResult = await payOrder(order.orderId);
       /* 单房型链路车本就是空的;仍要走一次,把上一单的快照清掉,成功页不会串到上次的房型 */
       checkoutCart();
-      /* 余额变了,把本地资料刷一次,钱包卡与「我的」页不至于还显示扣款前的数 */
-      void refreshProfile().catch(() => undefined);
-      setPaid({
-        orderId: order.orderId,
-        orderNo: order.orderNo,
-        payAmount: order.priceDetail.payAmount,
-        verifyCode: paidResult.verifyCode,
-      });
-      setPayResult('success');
+      try {
+        /* 余额支付(payOrder 默认 PAY_METHOD.BALANCE):后端真扣 user_info.balance 并落流水 */
+        const paidResult = await payOrder(order.orderId);
+        /* 余额变了,把本地资料刷一次,钱包卡与「我的」页不至于还显示扣款前的数 */
+        void refreshProfile().catch(() => undefined);
+        setPaid({
+          orderId: order.orderId,
+          orderNo: order.orderNo,
+          payAmount: order.priceDetail.payAmount,
+          verifyCode: paidResult.verifyCode,
+          tripId: 0,
+        });
+        setPayResult('success');
+      } catch (e) {
+        /* 单已经建好了 —— 去结果页的失败态重付这张单,不再建新单 */
+        goResult('failed', {
+          orderId: order.orderId,
+          orderNo: order.orderNo,
+          failReason: e instanceof Error ? e.message : '',
+        });
+      }
     } catch (e) {
-      /* 库存不足 / 日期不可售等都由后端给中文原因,直接展示,不套设计稿的固定失败文案 */
+      /**
+       * 走到这里只剩**建单**失败(库存不足 / 日期不可售 / 券失效等,后端给中文原因)。
+       * 此时数据库里没有任何单,没得读也没得重付 —— 留在第 4 步弹稿面那个失败弹窗,
+       * 用户改完(换券 / 改日期 / 减房)再点 Pay Now,这种情况下重新建单才是对的。
+       */
       setFailReason(e instanceof Error ? e.message : '');
       setPayResult('error');
     } finally {
@@ -640,9 +675,14 @@ export function useBookingWizard({
 
   const primaryLabel = (() => {
     if (step === 'payment' && submitting) return t('common.loading');
-    /* 关怀模式没有 Trip,复核步的下一步直接是支付,按钮仍叫 Continue */
-    if (step === 'review' && enableMultiStay) return t('hotels.booking.addToTrip');
+    /**
+     * 复核步一律叫 Continue(稿面 `718:3351` 就是 Continue + 右箭头)——
+     * 以前多住宿态叫「Add To Trip」,但那一步并不真的把住宿加进 Trip,只是往下走一步,
+     * 名字反而让人以为点了会新增一段住宿。
+     */
     if (step === 'trip') return t('hotels.booking.checkOut');
+    /* 支付步是流程终点,稿面 `718:3366` 写的是 Pay Now,不是 Continue */
+    if (step === 'payment') return t('hotels.booking.payNow');
     return t('hotels.booking.continue');
   })();
 
@@ -650,10 +690,22 @@ export function useBookingWizard({
    * 支付成功浮层关闭后进成功页。两个模式各有一页、参数同形 ——
    * 这里按目标路由分开写,不给 `navigation.replace` 传联合类型的路由名(TS 展不开对应的参数)。
    */
-  const goSuccess = () => {
+  /**
+   * 进预订结果页。`status` 决定那一屏是成功态还是**支付失败态**。
+   *
+   * **用 `reset` 不用 `replace`**:向导第 4 步不该留在历史里 ——
+   * 支付失败页返回若能回到第 4 步,用户再点一次 Pay Now 就又建一单,
+   * 正是本次要修的缺陷(与之前「成功页 ⇄ 订单详情」死循环同一类问题)。
+   * 栈底垫「我的预订」Tab,结果页返回落到预订列表,那张待支付单在列表里点得到。
+   */
+  const goResult = (
+    status: 'confirmed' | 'failed',
+    over?: { orderId?: number; orderNo?: string; tripId?: number; failReason?: string },
+  ) => {
     const payload = {
-      orderId: paid?.orderId,
-      orderNo: paid?.orderNo,
+      orderId: over?.orderId ?? paid?.orderId,
+      orderNo: over?.orderNo ?? paid?.orderNo,
+      tripId: over?.tripId ?? paid?.tripId,
       verifyCode: paid?.verifyCode,
       hotelName: current.demo ? undefined : hotelNameOf(current),
       address: current.address || undefined,
@@ -662,13 +714,20 @@ export function useBookingWizard({
       adults: current.adults + current.childCount,
       rooms: roomCount,
       paidTotal: paid?.payAmount,
+      status,
+      failReason: over?.failReason,
     };
-    if (successRoute === 'BookingSuccessLite') {
-      navigation.replace('BookingSuccessLite', payload);
-      return;
-    }
-    navigation.replace('BookingSuccess', payload);
+    const route = successRoute === 'BookingSuccessLite' ? 'BookingSuccessLite' : 'BookingSuccess';
+    navigation.reset({
+      index: 1,
+      routes: [
+        { name: 'MainTabs', params: { screen: 'MyPickTab' } },
+        { name: route, params: payload },
+      ],
+    });
   };
+
+  const goSuccess = () => goResult('confirmed');
 
   return {
     /* 环境 */

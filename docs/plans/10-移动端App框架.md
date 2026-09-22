@@ -1032,3 +1032,7 @@ Expo 51 / TypeScript / Zustand / React Navigation 6 / Axios / i18next + react-i1
       **验证**:`check-cancel-flow.cjs` **GREEN 65/65**(灵敏度自检 RED 63/65)、另四脚本全绿、
       typecheck 零报错、`expo export -p web` 通过、i18n 零差异 1134 键。
       ⚠️ 后端未过 `php -l`(本机无 php + Docker daemon 连不上);⚠️ **未做真机冒烟**。
+
+- 2026-09-22 订房向导第 3/4 步(Figma `228:5118` / `276:876`):Add More Stay 去掉重复加号;第 3 步按钮改 Continue 并移除券行;优惠券挪到第 4 步稿面本就有的 COUPONS 卡并接真选券;未开放的 6 个支付渠道默认折叠(有意偏离稿面);第 4 步按钮改 Pay Now。校验 `scripts/check-booking-steps-34.cjs` GREEN 37/37。
+
+- 2026-09-22 支付失败流程(缺陷修复):`submit()` 建单与支付拆成两段 catch;支付失败进预订结果页新增的 `failed` 态并对**已有订单**重付(取数抽在 `useBookingResult`,两种模式共用取数、版式各留各的);订单详情页待支付单 Modify → 立即支付;后端 `trip/detail` 补 `payment_expires_at`。校验 `scripts/check-payment-failure-flow.cjs` GREEN 62/62。

@@ -341,8 +341,11 @@ class TripController extends AbstractController
             ->orderBy('use_date')->orderBy('id')
             /* property_id / room_type_id:C 端订单详情页(Figma 2659:16092)要按房型去 `/hotels/detail`
                取封面与房型属性(人数/床型/含早)与图库,没有这两个 id 就只能显示房型名 */
+            /* payment_expires_at:C 端支付失败页要显示「剩余可支付时间」。
+               过期时间只在 order_main 上(order_trip 没有这一列),整车取各预订里最早的那个。 */
             ->get(['id', 'order_no', 'property_id', 'room_type_id', 'goods_name', 'goods_image', 'sku_name', 'quantity',
-                'pay_amount', 'alloc_coupon_discount', 'order_status', 'refund_status', 'use_date', 'end_date'])
+                'pay_amount', 'alloc_coupon_discount', 'order_status', 'refund_status', 'use_date', 'end_date',
+                'payment_expires_at'])
             ->map(static fn ($row) => (array) $row)->all();
         $trip['bookings'] = $bookings;
         return Result::success($trip);
