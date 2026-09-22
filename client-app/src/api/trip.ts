@@ -60,8 +60,42 @@ export function apiTripPay(params: {
   return post('/api/v1/app/order/trip/pay', params);
 }
 
-export function fetchTripDetail(tripId: number): Promise<Record<string, unknown>> {
-  return get('/api/v1/app/order/trip/detail', { tripId });
+/**
+ * Trip 详情里的一条预订(`order_main` 的子集)。
+ * `property_id` / `room_type_id` 是订单详情页拿来去 `/hotels/detail` 取封面与房型属性用的
+ * (订单快照里没有人数/床型/含早)。
+ */
+export interface TripBookingRow {
+  id: number;
+  order_no: string;
+  property_id: number;
+  room_type_id: number;
+  goods_name: string;
+  goods_image: string;
+  sku_name: string;
+  quantity: number;
+  pay_amount: string;
+  order_status: number;
+  refund_status: number;
+  use_date: string | null;
+  end_date: string | null;
+}
+
+export interface TripDetailResult {
+  id: number;
+  trip_no: string;
+  total_amount: string;
+  coupon_discount: string;
+  pay_amount: string;
+  booking_count: number;
+  pay_status: number;
+  created_at: string;
+  /** 后端按入住日 + id 排序返回(对应 PRD 的 Trip Timeline) */
+  bookings: TripBookingRow[];
+}
+
+export function fetchTripDetail(tripId: number): Promise<TripDetailResult> {
+  return get<TripDetailResult>('/api/v1/app/order/trip/detail', { tripId });
 }
 
 export function fetchTripList(params: PageParams): Promise<PageData<Record<string, unknown>>> {

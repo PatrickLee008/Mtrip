@@ -56,7 +56,8 @@ import { useTranslation } from 'react-i18next';
 import * as Clipboard from 'expo-clipboard';
 
 import { tempCoverFor } from '@/assets/tempImages';
-import HomeIcon, { type HomeIconName } from '@/components/home/HomeIcon';
+import HomeIcon from '@/components/home/HomeIcon';
+import BookingStatusRows from '@/components/hotel/booking/BookingStatusRows';
 import { formatMonthDayYear } from '@/components/hotel/booking/bookingFormat';
 import { DEEP_PRIMARY, bookingShared } from '@/components/hotel/booking/bookingShared';
 import { PAGE_PADDING, colors, radius } from '@/config/theme';
@@ -181,30 +182,24 @@ export default function BookingSuccessScreen() {
             <Text style={styles.tagline}>{t('hotels.booking.success.travelWithUs')}</Text>
           </View>
 
-          <View style={styles.statusBlock}>
-            <StatusRow
-              icon="walletCreditCard"
-              label={t('hotels.booking.success.paymentStatus')}
-              badge={t('hotels.booking.success.paid')}
-              badgeIcon="checkmarkCircle"
-              badgeColor={colors.statusPaid}
-            />
-            <View style={styles.statusDivider} />
-            {statusRows.map((row) => (
-              <StatusRow
-                key={row.key}
-                icon="calendarClock"
-                label={t('hotels.booking.success.bookingStatus')}
-                subLabel={row.roomLabel}
-                badge={t(
+          {/* 状态行与订单详情页共用一份(同一个 Figma 组件 `2661:16931`) */}
+          <View style={styles.statusBlockWrap}>
+            <BookingStatusRows
+              paymentLabel={t('hotels.booking.success.paymentStatus')}
+              paymentBadge={t('hotels.booking.success.paid')}
+              bookingLabel={t('hotels.booking.success.bookingStatus')}
+              rows={statusRows.map((row) => ({
+                key: row.key,
+                roomLabel: row.roomLabel,
+                badge: t(
                   confirmed
                     ? 'hotels.booking.success.confirmed'
                     : 'hotels.booking.success.confirming',
-                )}
-                badgeIcon={confirmed ? 'checkmarkCircle' : 'clock'}
-                badgeColor={tone}
-              />
-            ))}
+                ),
+                badgeIcon: confirmed ? 'checkmarkCircle' : 'clock',
+                badgeColor: tone,
+              }))}
+            />
           </View>
 
           <View style={styles.idRow}>
@@ -279,41 +274,6 @@ export default function BookingSuccessScreen() {
   );
 }
 
-/** 状态行:左 32 圆形图标 + 文案(多房间时第二行是房号),右状态药丸 */
-function StatusRow({
-  icon,
-  label,
-  subLabel,
-  badge,
-  badgeIcon,
-  badgeColor,
-}: {
-  icon: HomeIconName;
-  label: string;
-  subLabel?: string;
-  badge: string;
-  badgeIcon: HomeIconName;
-  badgeColor: string;
-}) {
-  return (
-    <View style={styles.statusRow}>
-      <View style={styles.statusLeft}>
-        <View style={styles.statusIcon}>
-          <HomeIcon name={icon} size={20} color="#FFFFFF" />
-        </View>
-        <Text style={styles.statusLabel}>
-          {label}
-          {subLabel ? `\n${subLabel}` : ''}
-        </Text>
-      </View>
-      <View style={[styles.badge, { backgroundColor: badgeColor }]}>
-        <HomeIcon name={badgeIcon} size={12} color="#FFFFFF" />
-        <Text style={styles.badgeText}>{badge}</Text>
-      </View>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: PAGE_BG },
   flex: { flex: 1 },
@@ -375,48 +335,8 @@ const styles = StyleSheet.create({
     textShadowRadius: 4,
   },
 
-  statusBlock: { width: '100%', gap: 12, paddingVertical: 20 },
-  statusRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12,
-    paddingVertical: 4,
-  },
-  statusLeft: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 12 },
-  statusIcon: {
-    width: 32,
-    height: 32,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 999,
-    backgroundColor: colors.primary,
-  },
-  statusLabel: {
-    flex: 1,
-    minWidth: 0,
-    fontFamily: fonts.interMedium,
-    fontSize: 16,
-    lineHeight: 20,
-    color: colors.textSoft,
-  },
-  statusDivider: { height: 1, backgroundColor: colors.softBlue },
-  badge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 999,
-  },
-  badgeText: {
-    fontFamily: fonts.interSemi,
-    fontSize: 12,
-    lineHeight: 16,
-    letterSpacing: 0.24,
-    textTransform: 'uppercase',
-    color: '#FFFFFF',
-  },
+  /* 稿面状态区整体 py20;行内样式在 components/hotel/booking/BookingStatusRows */
+  statusBlockWrap: { width: '100%', paddingVertical: 20 },
 
   idRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
   idLabel: {

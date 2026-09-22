@@ -190,6 +190,11 @@ export interface OrderItemData {
   id: number;
   order_no: string;
   order_type: number;
+  /** 所属 Trip(多房间 / 多酒店一次结账);0 = 独立单。「我的预订」按它归并成一张卡 */
+  trip_id: number;
+  property_id: number;
+  /** 房型 id;订单详情页要拿它去 `/hotels/detail` 匹配房型属性 */
+  room_type_id: number;
   goods_id: number;
   goods_name: string;
   goods_image: string;
@@ -219,6 +224,16 @@ export interface OrderDetail extends OrderItemData {
   verify_code: string;
   cancel_reason: string;
   remark: string;
+  /**
+   * 仅已取消/退款中/已退款的单会带:谁取消的 + 退款单号与金额。
+   * `operatorType` 取自 `order_booking_event` 最后一条 `cancelled` 事件
+   * (0系统 1住客 **2商户** 3平台)—— `order_main` 上没有这个字段。
+   */
+  cancelInfo?: {
+    operatorType: number;
+    refundNo: string;
+    refundAmount: number;
+  };
 }
 
 /** 核销码展示数据 */

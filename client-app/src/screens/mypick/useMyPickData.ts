@@ -34,12 +34,119 @@ export function orderStatusColor(status: number): string {
   return colors.muted;
 }
 
+/**
+ * 归并卡的状态优先级:**取最靠前的「待办态」**(用户 2026-09-22 定的口径)。
+ *
+ * 一个 Trip 下各预订是**各自独立**的生命周期(PRD 模块 1.1),状态天然可以不同,
+ * 而设计稿(`289:1112`)每张卡只有一枚状态胶囊 —— 所以按「谁最需要用户处理」排序,
+ * 取组内最靠前的那个:待支付(要付钱)> 退款中(在处理)> 已支付(待入住)> 已核销 >
+ * 已完成 > 已退款 > 已取消 > 已过期。
+ *
+ * 页签过滤也按归并后的状态走(见 `tabBookings`),这样一个 Trip 只会出现在一个页签里。
+ */
+const STATUS_PRIORITY: number[] = [
+  ORDER_STATUS.PENDING,
+  ORDER_STATUS.REFUNDING,
+  ORDER_STATUS.PAID,
+  ORDER_STATUS.USED,
+  ORDER_STATUS.FINISHED,
+  ORDER_STATUS.REFUNDED,
+  ORDER_STATUS.CANCELLED,
+  ORDER_STATUS.EXPIRED,
+];
+
+function statusRank(status: number): number {
+  const i = STATUS_PRIORITY.indexOf(status);
+  /* 没登记的状态排最后,不要让它抢走整组的显示状态 */
+  return i === -1 ? STATUS_PRIORITY.length : i;
+}
+
+/**
+ * 「我的预订」列表的一行 = 一个 Trip 或一个独立单(Figma `289:1112`)。
+ *
+ * 多房间与多酒店在列表里都**只占一张卡**,明细留到详情页 —— 所以这里把同 `trip_id`
+ * 的预订折成一条,卡片需要的展示字段一次算好,两个模式的页面只管排版。
+ */
+export interface MyPickBooking {
+  /** 列表 key:Trip 用 `trip-<id>`,独立单用 `order-<id>` */
+  key: string;
+  /** 点「View Details」进的那一单:取组内状态最靠前的(与卡上显示的状态一致) */
+  orderId: number;
+  /** 0 = 独立单 */
+  tripId: number;
+  /** 组内预订数(Trip 下有几个 Booking) */
+  bookingCount: number;
+  /** 组内总间数 Σquantity */
+  roomCount: number;
+  /** 涉及几家酒店(按 property_id 去重) */
+  stayCount: number;
+  /** 归并后的状态(见 STATUS_PRIORITY) */
+  status: number;
+  /** 首段的单号 / 酒店 / 封面 / 房型 */
+  orderNo: string;
+  hotelName: string;
+  coverUri: string;
+  skuName: string;
+  /** 第二段的封面(仅多酒店卡用,叠在首图下面那条缩略图带里) */
+  secondCoverUri: string;
+  /** 组内最早入住 → 最晚离店(多酒店时是整个行程的跨度) */
+  useDate: string | null;
+  endDate: string | null;
+  createdAt: string;
+}
+
+/** 把订单列表按 `trip_id` 折成列表行;独立单(trip_id=0)各自一行,顺序沿用接口的倒序 */
+export function groupOrdersByTrip(orders: OrderItemData[]): MyPickBooking[] {
+  const groups = new Map<string, OrderItemData[]>();
+  for (const o of orders) {
+    const key = o.trip_id > 0 ? `trip-${o.trip_id}` : `order-${o.id}`;
+    const bucket = groups.get(key);
+    if (bucket) bucket.push(o);
+    else groups.set(key, [o]);
+  }
+
+  return [...groups.entries()].map(([key, rows]) => {
+    /* 组内按「待办优先」排一次:第一条既是卡上的状态,也是点详情要进的那一单 */
+    const byPriority = [...rows].sort((a, b) => statusRank(a.order_status) - statusRank(b.order_status));
+    const lead = byPriority[0];
+    /* 展示用的「首段」按 id 升序取,即下单时的第一项(Trip 建单顺序),不受状态排序影响 */
+    const ordered = [...rows].sort((a, b) => a.id - b.id);
+    const first = ordered[0];
+    const properties = new Set(ordered.map((o) => o.property_id));
+    const second = ordered.find((o) => o.property_id !== first.property_id);
+    const dates = ordered.map((o) => o.use_date).filter((d): d is string => !!d);
+    const ends = ordered.map((o) => o.end_date).filter((d): d is string => !!d);
+
+    return {
+      key,
+      orderId: lead.id,
+      tripId: first.trip_id,
+      bookingCount: rows.length,
+      roomCount: ordered.reduce((sum, o) => sum + (Number(o.quantity) || 0), 0),
+      stayCount: properties.size,
+      status: lead.order_status,
+      orderNo: first.order_no,
+      hotelName: first.goods_name,
+      coverUri: first.goods_image,
+      skuName: first.sku_name,
+      secondCoverUri: second?.goods_image ?? '',
+      /* 日期跨度:最早入住 → 最晚离店(同一天多段也能正确显示成一段) */
+      useDate: dates.length > 0 ? dates.sort()[0] : null,
+      endDate: ends.length > 0 ? ends.sort()[ends.length - 1] : null,
+      createdAt: first.created_at,
+    };
+  });
+}
+
 export interface MyPickData {
   isLogin: boolean;
   orders: OrderItemData[];
   favorites: GoodsItem[];
-  /** 当前页签下的订单(按 TAB_STATUS 过滤) */
-  tabOrders: OrderItemData[];
+  /**
+   * 当前页签下的**列表行**(同 Trip 已归并成一条,按归并后的状态过滤)。
+   * 页面一律渲染这一份 —— 直接用 `orders` 会把一个多房间 Trip 拆成 N 张卡。
+   */
+  tabBookings: MyPickBooking[];
   tab: MyPickTab;
   setTab: (tab: MyPickTab) => void;
   refreshing: boolean;
@@ -122,8 +229,9 @@ export function useMyPickData(): MyPickData {
     [showToast, t],
   );
 
-  const tabOrders = useMemo(
-    () => orders.filter((o) => TAB_STATUS[tab].includes(o.order_status)),
+  /* 先归并再按页签过滤:过滤用的是**归并后的状态**,一个 Trip 只会出现在一个页签 */
+  const tabBookings = useMemo(
+    () => groupOrdersByTrip(orders).filter((b) => TAB_STATUS[tab].includes(b.status)),
     [orders, tab],
   );
 
@@ -131,7 +239,7 @@ export function useMyPickData(): MyPickData {
     isLogin,
     orders,
     favorites,
-    tabOrders,
+    tabBookings,
     tab,
     setTab,
     refreshing,

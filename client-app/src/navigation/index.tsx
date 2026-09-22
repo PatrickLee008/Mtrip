@@ -58,7 +58,11 @@ import MyPickLiteScreen from '@/screens/mypick/MyPickLiteScreen';
 import MyPickScreen from '@/screens/mypick/MyPickScreen';
 import NotificationScreen from '@/screens/notification/NotificationScreen';
 import OrderConfirmScreen from '@/screens/order/OrderConfirmScreen';
+import BookingCancelledScreen from '@/screens/order/BookingCancelledScreen';
+import BookingDetailScreen from '@/screens/order/BookingDetailScreen';
+import CancelBookingScreen from '@/screens/order/CancelBookingScreen';
 import OrderDetailScreen from '@/screens/order/OrderDetailScreen';
+import TripDetailScreen from '@/screens/order/TripDetailScreen';
 import OrderListScreen from '@/screens/order/OrderListScreen';
 import CouponDetailScreen from '@/screens/promotions/CouponDetailScreen';
 import PromotionsScreen from '@/screens/promotions/PromotionsScreen';
@@ -302,6 +306,29 @@ export default function AppNavigator() {
           name="OrderDetail"
           component={OrderDetailScreen}
           options={{ title: t('order.detailTitle') }}
+        />
+        {/* 酒店订单详情(Figma 2659:16092)自带悬浮顶栏与图库,关掉 Stack 头 */}
+        <Stack.Screen
+          name="BookingDetail"
+          component={BookingDetailScreen}
+          options={{ title: t('order.bookingDetail.title'), headerShown: false }}
+        />
+        {/* 多酒店行程详情(Figma 2142:4389)同样自带悬浮顶栏 */}
+        <Stack.Screen
+          name="TripDetail"
+          component={TripDetailScreen}
+          options={{ title: t('order.bookingDetail.title'), headerShown: false }}
+        />
+        {/* 取消预订两步页(Figma 1205:2159 / 1205:2480)与取消成功页(1205:2679) */}
+        <Stack.Screen
+          name="CancelBooking"
+          component={CancelBookingScreen}
+          options={{ title: t('order.cancel.title'), headerShown: false }}
+        />
+        <Stack.Screen
+          name="BookingCancelled"
+          component={BookingCancelledScreen}
+          options={{ title: t('order.cancelled.title'), headerShown: false }}
         />
         {/* 通知页与「更多」子页共用同一套顶部栏,同样关掉 Stack 头 */}
         <Stack.Screen

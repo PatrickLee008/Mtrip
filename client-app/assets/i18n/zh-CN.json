@@ -36,7 +36,12 @@
         "address": "蒲甘 敏南都村",
         "room": "佛塔景观豪华房",
         "dates": "6月4日(周四) - 6月5日(周五)"
-      }
+      },
+      "bookingId": "预订编号：",
+      "multiBooking": "多酒店预订（{{stays}} 段住宿）",
+      "secondStay": "第 2 段",
+      "rooms": "间数",
+      "roomsValue": "{{rooms}} 间"
     },
     "feedback": {
       "title": "上次入住体验如何?",
@@ -391,6 +396,83 @@
       "refunding": "退款中",
       "refunded": "已退款",
       "expired": "已过期"
+    },
+    "bookingDetail": {
+      "title": "预订详情",
+      "checkInOut": "入住 / 离店",
+      "dateRange": "{{checkIn}} - {{checkOut}}({{nights}})",
+      "guestsRooms": "住客与房间",
+      "roomsValue": "{{rooms}} 间",
+      "totalAmount": "订单总额",
+      "roomAmenities": "房型设施",
+      "breakfastTitle": "含早餐",
+      "breakfastDesc": "该房型已包含早餐。",
+      "contactProperty": "联系酒店",
+      "messageProperty": "给酒店发消息",
+      "getDirections": "导航前往",
+      "viewOnMap": "在地图上查看",
+      "support": "帮助与支持",
+      "bookingReference": "预订编号",
+      "helpCenter": "帮助中心",
+      "liveChat": "在线客服",
+      "modifyBooking": "修改预订",
+      "cancelBooking": "取消预订"
+    },
+    "tripDetail": {
+      "stay": "第 {{index}} 段住宿"
+    },
+    "cancel": {
+      "title": "取消预订",
+      "deadlineTitle": "免费取消已截止",
+      "deadlineDesc": "免费取消期已过,本次退款将收取手续费。",
+      "bookingDetails": "预订详情",
+      "refundSummary": "退款明细",
+      "originalAmount": "订单实付",
+      "cancellationFee": "取消手续费",
+      "platformFee": "平台服务费",
+      "refundAmount": "退款金额",
+      "refundMethod": "退款方式",
+      "refundMethodDesc": "退款将退回你的 mTrip 钱包。",
+      "refundTimeline": "预计到账时间",
+      "refundTimelineDesc": "款项将在 3-5 个工作日内到账。",
+      "proceed": "继续取消",
+      "keep": "保留这笔预订",
+      "needHelp": "需要帮助?",
+      "contactSupport": "联系客服",
+      "reasonTitle": "取消原因",
+      "reasons": {
+        "plans": "行程有变",
+        "dates": "出行日期调整",
+        "price": "找到了更便宜的价格",
+        "health": "健康问题 / 紧急情况",
+        "others": "其他"
+      },
+      "policyTitle": "取消政策提醒",
+      "policyDesc": "退款将在 3-5 个工作日内退回你的 mTrip 钱包。",
+      "back": "上一步",
+      "continue": "确认取消",
+      "commentsLabel": "补充说明(选填)",
+      "commentsPlaceholder": "可以再多告诉我们一些…",
+      "reviewTitle": "确认取消",
+      "reviewDesc": "很遗憾你要取消。提交前请再核对一下取消详情。",
+      "refundNote": "退款将在 3-5 个工作日内退回你的 mTrip 钱包。",
+      "finalNoticeTitle": "最后提醒",
+      "finalNoticeDesc": "此操作不可撤销,其中 {{fee}} 手续费不予退还。",
+      "confirm": "确认取消预订",
+      "terms": "点击确认即表示你同意我们的服务条款与取消政策。"
+    },
+    "cancelled": {
+      "title": "预订已取消",
+      "desc": "这笔预订已从系统中移除,确认邮件稍后送达。",
+      "confirmedRefund": "退款已确认",
+      "refundInitiated": "退款已发起",
+      "transactionRef": "退款单号:",
+      "backToBookings": "回到我的预订",
+      "startNew": "重新预订",
+      "detailsTitle": "取消详情",
+      "merchantTitle": "酒店已取消这笔预订",
+      "merchantDesc": "酒店方以下述原因取消了这笔预订,确认邮件稍后送达。",
+      "cancelReason": "取消原因"
     }
   },
   "user": {

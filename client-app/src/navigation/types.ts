@@ -202,6 +202,38 @@ export type RootStackParamList = {
   OrderConfirm: { goodsId: number; skuId: number };
   OrderDetail: { orderId: number };
   /**
+   * 酒店订单详情(Figma `2659:16092` 多房间 / `289:1670` 单房间,同一页两用)。
+   * `tripId` > 0 时按 Trip 展开同单下各预订;缺省就是单个预订。
+   * 通用的 `OrderDetail` 仍在(门票等非酒店订单、以及取消/退款动作暂时还在那边)。
+   */
+  BookingDetail: { orderId: number; tripId?: number };
+  /**
+   * 多酒店行程详情(Figma `2142:4389`):一个 Trip 下各段住宿排成时间轴,
+   * 单段的 View Details 再进 `BookingDetail`。**只读** —— 后端没有改期/改信息接口。
+   */
+  TripDetail: { tripId: number };
+  /**
+   * 取消预订(Figma `1205:2159` 退款摘要 → `1205:2480` 取消原因,一个路由内两步)。
+   * **按 PRD 取消粒度是「一个 booking」**(§1.1 line 110/142/145),所以只收一个 `orderId`;
+   * 同 Trip 下的其他预订不受影响,要取消得各进各的详情页。
+   */
+  CancelBooking: { orderId: number };
+  /**
+   * 取消结果页,一页两态:
+   *   用户自己取消(Figma `1205:2679`)—— 取消流程 `replace` 进来,退款单号/金额/酒店名/日期都带着,不再请求;
+   *   **商户取消**(`1685:3429`)—— 从「我的预订」的已取消单点进来,**只给 `orderId`**,
+   *     页面自己拉 `order/detail`(后端附的 `cancelInfo` 里有谁取消的与退款单号)。
+   * `by` 不传就按 `cancelInfo.operatorType` 判断(2 = 商户)。
+   */
+  BookingCancelled: {
+    orderId: number;
+    refundNo?: string;
+    refundAmount?: number;
+    hotelName?: string;
+    dateRange?: string;
+    by?: 'guest' | 'merchant';
+  };
+  /**
    * 优惠券详情(Figma 1625:2009),优惠中心的券卡落地页。
    * `receiveId` = 我的券(带券码),`couponId` = 尚未领取的券模板;
    * 两者都不传 = 未登录时的设计稿静态详情。

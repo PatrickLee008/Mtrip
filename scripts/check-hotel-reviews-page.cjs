@@ -391,7 +391,9 @@ check(
 );
 
 // ================================================================ 图标 ====
-check('HomeIcon 新增 verifiedBadge', iconSource !== null && /^\s*\| 'verifiedBadge';/mu.test(iconSource));
+/* 断言的是「联合类型里有这个名字」,不是「它排在最后」—— 原来的正则带着行尾分号,
+   后面任何人往联合里追加图标都会让这条假红(2026-09-22 新增 walletCreditCard/calendarClock 时踩到) */
+check('HomeIcon 新增 verifiedBadge', iconSource !== null && /^\s*\| 'verifiedBadge';?$/mu.test(iconSource));
 check(
   'verifiedBadge 用抠图的 fillRule(evenodd 由组件统一给)',
   iconSource !== null && iconSource.includes('checkmark-starburst'),

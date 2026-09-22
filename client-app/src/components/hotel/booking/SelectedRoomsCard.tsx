@@ -27,8 +27,12 @@ import { formatMoney } from '@/utils/format';
 
 interface Props {
   rooms: CartRoom[];
-  /** 「Edit Rooms」:回购物车页增删改数量 */
-  onEdit: () => void;
+  /**
+   * 「Edit Rooms」:回购物车页增删改数量。
+   * **不传就不渲染那枚按钮** —— 订单详情页(Figma `2659:16386`)复用这张卡但订单已成立、不能再改房,
+   * 稿面那里也没有这个入口。
+   */
+  onEdit?: () => void;
 }
 
 export default function SelectedRoomsCard({ rooms, onEdit }: Props) {
@@ -50,6 +54,7 @@ export default function SelectedRoomsCard({ rooms, onEdit }: Props) {
             {t('hotels.booking.review.selectedRooms', { rooms: roomCount })}
           </Text>
         </View>
+        {onEdit ? (
         <Pressable
           style={({ pressed }) => [styles.editBtn, pressed && styles.pressed]}
           onPress={onEdit}
@@ -58,6 +63,7 @@ export default function SelectedRoomsCard({ rooms, onEdit }: Props) {
           <Text style={styles.editText}>{t('hotels.booking.review.editRooms')}</Text>
           <HomeIcon name="chevronRight" size={12} color="#1F4ED3" />
         </Pressable>
+        ) : null}
       </View>
 
       {rooms.map((room, index) => (

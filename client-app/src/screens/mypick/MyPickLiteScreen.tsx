@@ -37,7 +37,7 @@ import {
   LiteSavedRestaurantCard,
   LiteTabs,
 } from '@/components/lite/LiteMyPickCards';
-import { GOODS_TYPE, ORDER_STATUS_I18N } from '@/config/global';
+import { GOODS_TYPE, ORDER_STATUS, ORDER_STATUS_I18N } from '@/config/global';
 import { PAGE_PADDING, SECTION_GAP, colors } from '@/config/theme';
 import { fonts } from '@/config/typography';
 import type { RootStackParamList } from '@/navigation/types';
@@ -62,7 +62,7 @@ export default function MyPickLiteScreen() {
 
   const profile = useUserStore((s) => s.profile);
   const showToast = useCommonStore((s) => s.showToast);
-  const { isLogin, favorites, tabOrders, tab, setTab, refreshing, refresh, unfavorite } =
+  const { isLogin, favorites, tabBookings, tab, setTab, refreshing, refresh, unfavorite } =
     useMyPickData();
 
   const comingSoon = () => showToast(t('home.comingSoon'));
@@ -92,28 +92,46 @@ export default function MyPickLiteScreen() {
         <LiteTabs items={tabItems} value={tab} onChange={(key) => setTab(key as MyPickTab)} />
 
         <View style={styles.stack}>
-          {tabOrders.length > 0 ? (
-            tabOrders.map((o, i) => (
+          {tabBookings.length > 0 ? (
+            /**
+             * 归并口径与完整模式**同一份**(`useMyPickData` 已按 trip 折好):一个 Trip 一张卡。
+             * 关怀模式的卡没有「Multi Booking (N Stay)」那行版式(稿面没画),
+             * 多房间/多酒店一律把房型行显示成「N Rooms」,详情页再展开 —— 不自创 Lite 版式。
+             */
+            tabBookings.map((b, i) => (
               <LiteBookingCard
-                key={o.id}
+                key={b.key}
                 width={contentWidth}
-                title={o.goods_name}
-                coverUri={o.goods_image}
+                title={b.hotelName}
+                coverUri={b.coverUri}
                 /* 订单快照里的酒店图多是脏值/空值,先用设计稿临时图兜底(同完整模式) */
                 coverSource={tempCoverFor(i)}
-                skuName={o.sku_name}
-                statusLabel={t(ORDER_STATUS_I18N[o.order_status] ?? 'common.empty')}
-                statusColor={orderStatusColor(o.order_status)}
+                skuName={
+                  b.roomCount > 1 ? t('myPick.booking.roomsValue', { rooms: b.roomCount }) : b.skuName
+                }
+                statusLabel={t(ORDER_STATUS_I18N[b.status] ?? 'common.empty')}
+                statusColor={orderStatusColor(b.status)}
                 datesLabel={t('myPick.booking.dates')}
                 dates={
-                  o.use_date
-                    ? `${formatDate(o.use_date)}${o.end_date ? ` - ${formatDate(o.end_date)}` : ''}`
-                    : formatDate(o.created_at)
+                  b.useDate
+                    ? `${formatDate(b.useDate)}${b.endDate ? ` - ${formatDate(b.endDate)}` : ''}`
+                    : formatDate(b.createdAt)
                 }
-                travelersLabel={t('order.quantity')}
-                travelers={String(o.quantity)}
+                travelersLabel={t('myPick.booking.rooms')}
+                travelers={t('myPick.booking.roomsValue', { rooms: b.roomCount })}
                 detailLabel={t('myPick.booking.viewDetails')}
-                onPressDetail={() => navigation.navigate('OrderDetail', { orderId: o.id })}
+                onPressDetail={() =>
+                  /**
+                   * 跨酒店的 Trip 进行程详情(Figma 2142:4389,各段排成时间轴);
+                   * 同一家酒店的多房间 / 单间进订单详情(2659:16092),后者带 tripId 才会展开各预订。
+                   */
+                  b.status === ORDER_STATUS.CANCELLED
+                    ? /* 已取消的单直接看取消详情(含商户取消那一态,Figma 1685:3429) */
+                      navigation.navigate('BookingCancelled', { orderId: b.orderId })
+                    : b.stayCount > 1
+                      ? navigation.navigate('TripDetail', { tripId: b.tripId })
+                      : navigation.navigate('BookingDetail', { orderId: b.orderId, tripId: b.tripId })
+                }
               />
             ))
           ) : isLogin ? (

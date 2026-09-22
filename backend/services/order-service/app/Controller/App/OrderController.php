@@ -352,7 +352,9 @@ class OrderController extends AbstractController
         }
         $total = (clone $query)->count();
         $list = $query->forPage($page, $pageSize)
-            ->get(['id', 'order_no', 'order_type', 'property_id', 'goods_id', 'goods_name', 'goods_image',
+            /* trip_id:同一 Trip 下的多个预订要在 C 端「我的预订」归并成一张卡(Figma 289:1112),
+               客户端按它分组;0 = 独立单。列早已存在(M0 预留),这里只是补进 select */
+            ->get(['id', 'order_no', 'order_type', 'trip_id', 'property_id', 'goods_id', 'goods_name', 'goods_image',
                 'room_type_id', 'sku_id', 'sku_name', 'quantity', 'pay_amount', 'order_status', 'refund_status',
                 'use_date', 'end_date', 'created_at'])
             ->map(static fn ($row) => (array) $row)->all();
@@ -369,6 +371,27 @@ class OrderController extends AbstractController
             $order['verify_code'] = '';
         }
         unset($order['platform_commission'], $order['merchant_receivable'], $order['supplier_cost'], $order['deleted_at']);
+        /**
+         * 已取消/退款中/已退款的单,补一段 `cancelInfo` 给 C 端取消详情页
+         * (Figma `1685:3429`「Booking Cancelled by Merchant」要区分是谁取消的):
+         *   - 谁取消的只记在 `order_booking_event.operator_type`(0系统 1住客 2商户 3平台),
+         *     `order_main` 上没有这个字段 —— 这里取最后一条 `cancelled` 事件,不加列、不动表。
+         *   - 退款单号/金额在 `order_refund`,订单行上只有 `refund_status`。
+         * 未取消的单不带这一段,省一次查询。
+         */
+        if (in_array((int) $order['order_status'], [4, 5, 6], true)) {
+            $event = Db::table('order_booking_event')
+                ->where('order_id', (int) $order['id'])->where('event_type', 'cancelled')
+                ->orderByDesc('id')->first(['operator_type']);
+            $refund = Db::table('order_refund')
+                ->where('order_id', (int) $order['id'])->whereNull('deleted_at')
+                ->orderByDesc('id')->first(['refund_no', 'refund_amount']);
+            $order['cancelInfo'] = [
+                'operatorType' => $event ? (int) $event->operator_type : 0,
+                'refundNo' => $refund ? (string) $refund->refund_no : '',
+                'refundAmount' => $refund ? (float) $refund->refund_amount : 0.0,
+            ];
+        }
         return Result::success($order);
     }
 

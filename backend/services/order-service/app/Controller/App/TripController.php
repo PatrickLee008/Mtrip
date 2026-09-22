@@ -339,7 +339,9 @@ class TripController extends AbstractController
         unset($trip['deleted_at']);
         $bookings = Db::table('order_main')->where('trip_id', $tripId)->whereNull('deleted_at')
             ->orderBy('use_date')->orderBy('id')
-            ->get(['id', 'order_no', 'goods_name', 'goods_image', 'sku_name', 'quantity',
+            /* property_id / room_type_id:C 端订单详情页(Figma 2659:16092)要按房型去 `/hotels/detail`
+               取封面与房型属性(人数/床型/含早)与图库,没有这两个 id 就只能显示房型名 */
+            ->get(['id', 'order_no', 'property_id', 'room_type_id', 'goods_name', 'goods_image', 'sku_name', 'quantity',
                 'pay_amount', 'alloc_coupon_discount', 'order_status', 'refund_status', 'use_date', 'end_date'])
             ->map(static fn ($row) => (array) $row)->all();
         $trip['bookings'] = $bookings;

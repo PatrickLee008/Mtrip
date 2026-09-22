@@ -109,16 +109,24 @@ if (screen) {
   check('Logo 用 contain(稿面 object-contain)', /resizeMode="contain"/u.test(screen));
   check('Tagline Inter 600 20/24 主色 + 0 0 4 文字投影', /fontSize: 20/u.test(blockOf('tagline')) && /textShadowRadius: 4/u.test(blockOf('tagline')));
 
-  /* 状态区 */
-  check('状态区 py20 gap12', /paddingVertical: 20/u.test(blockOf('statusBlock')) && /gap: 12/u.test(blockOf('statusBlock')));
-  check('状态行 py4 两端对齐', /paddingVertical: 4/u.test(blockOf('statusRow')) && /justifyContent: 'space-between'/u.test(blockOf('statusRow')));
-  check('行首图标 32 圆主色底', /width: 32/u.test(blockOf('statusIcon')) && /borderRadius: 999/u.test(blockOf('statusIcon')) && /colors\.primary/u.test(blockOf('statusIcon')));
-  check('行文案 Inter 500 16/20 --text-2', /fontSize: 16/u.test(blockOf('statusLabel')) && /lineHeight: 20/u.test(blockOf('statusLabel')) && /colors\.textSoft/u.test(blockOf('statusLabel')));
-  check('药丸 px12 py4 圆角 999', /paddingHorizontal: 12/u.test(blockOf('badge')) && /paddingVertical: 4/u.test(blockOf('badge')) && /borderRadius: 999/u.test(blockOf('badge')));
-  check('药丸文字 12/16 tracking .24 大写白', /fontSize: 12/u.test(blockOf('badgeText')) && /letterSpacing: 0\.24/u.test(blockOf('badgeText')) && /textTransform: 'uppercase'/u.test(blockOf('badgeText')));
-  check('分隔线 1px softBlue', /height: 1/u.test(blockOf('statusDivider')) && /colors\.softBlue/u.test(blockOf('statusDivider')));
+  /**
+   * 状态行(`2661:16931`)已抽到 `components/hotel/booking/BookingStatusRows.tsx`,
+   * 与订单详情页(`2659:16092`)共用同一份 —— 所以这几条断言读那个文件。
+   */
+  const rowsFile = readText(at('client-app/src/components/hotel/booking/BookingStatusRows.tsx')) ?? '';
+  const rowsBlocks = readStyleBlocks(rowsFile);
+  const rowBlockOf = (name) => rowsBlocks.get(name) ?? '';
+  check('状态行已抽成共用组件', rowsFile !== '' && /BookingStatusRows/u.test(screen));
+  check('状态区外层 py20', /paddingVertical: 20/u.test(blockOf('statusBlockWrap')));
+  check('状态组 gap12', /gap: 12/u.test(rowBlockOf('block')));
+  check('状态行 py4 两端对齐', /paddingVertical: 4/u.test(rowBlockOf('row')) && /justifyContent: 'space-between'/u.test(rowBlockOf('row')));
+  check('行首图标 32 圆主色底', /width: 32/u.test(rowBlockOf('icon')) && /borderRadius: 999/u.test(rowBlockOf('icon')) && /colors\.primary/u.test(rowBlockOf('icon')));
+  check('行文案 Inter 500 16/20 --text-2', /fontSize: 16/u.test(rowBlockOf('label')) && /lineHeight: 20/u.test(rowBlockOf('label')) && /colors\.textSoft/u.test(rowBlockOf('label')));
+  check('药丸 px12 py4 圆角 999', /paddingHorizontal: 12/u.test(rowBlockOf('badge')) && /paddingVertical: 4/u.test(rowBlockOf('badge')) && /borderRadius: 999/u.test(rowBlockOf('badge')));
+  check('药丸文字 12/16 tracking .24 大写白', /fontSize: 12/u.test(rowBlockOf('badgeText')) && /letterSpacing: 0\.24/u.test(rowBlockOf('badgeText')) && /textTransform: 'uppercase'/u.test(rowBlockOf('badgeText')));
+  check('分隔线 1px softBlue', /height: 1/u.test(rowBlockOf('divider')) && /colors\.softBlue/u.test(rowBlockOf('divider')));
   /* 稿面只有 Payment 与第一条 Booking 之间那一条线,房间行之间没有 */
-  const dividerUses = (body.match(/styles\.statusDivider/gu) ?? []).length;
+  const dividerUses = (stripComments(rowsFile).match(/styles\.divider/gu) ?? []).length;
   check('分隔线只画一条(房间行之间没有)', dividerUses === 1, `用了 ${dividerUses} 次`);
 
   /* 单号行 */

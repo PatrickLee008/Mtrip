@@ -36,7 +36,12 @@
         "address": "Min Nanthu Village, Bagan",
         "room": "Deluxe Room with Pagoda View",
         "dates": "Thu, 4 Jun - Fri, 5 Jun"
-      }
+      },
+      "bookingId": "Booking ID: ",
+      "multiBooking": "Multi Booking ({{stays}} Stay)",
+      "secondStay": "2nd Stay",
+      "rooms": "ROOMS",
+      "roomsValue": "{{rooms}} Rooms"
     },
     "feedback": {
       "title": "How was your last stay",
@@ -391,6 +396,83 @@
       "refunding": "Refunding",
       "refunded": "Refunded",
       "expired": "Expired"
+    },
+    "bookingDetail": {
+      "title": "Booking Details",
+      "checkInOut": "Check-in / Check-out",
+      "dateRange": "{{checkIn}} - {{checkOut}} ({{nights}})",
+      "guestsRooms": "Guests & Rooms",
+      "roomsValue": "{{rooms}} Rooms",
+      "totalAmount": "Total Amount",
+      "roomAmenities": "Room Amenities",
+      "breakfastTitle": "Breakfast Included",
+      "breakfastDesc": "A complimentary breakfast is included with this room.",
+      "contactProperty": "Contact Property",
+      "messageProperty": "Message Property",
+      "getDirections": "Get Directions",
+      "viewOnMap": "View on Map",
+      "support": "Support",
+      "bookingReference": "Booking Reference",
+      "helpCenter": "Help Center",
+      "liveChat": "Live Support Chat",
+      "modifyBooking": "Modify Booking",
+      "cancelBooking": "Cancel Booking"
+    },
+    "tripDetail": {
+      "stay": "Stay {{index}}"
+    },
+    "cancel": {
+      "title": "Cancel Booking",
+      "deadlineTitle": "Cancellation Deadline",
+      "deadlineDesc": "Free cancellation has ended. A processing fee now applies to your refund request.",
+      "bookingDetails": "Booking Details",
+      "refundSummary": "Refund Summary",
+      "originalAmount": "Original Amount",
+      "cancellationFee": "Cancellation Fee",
+      "platformFee": "Platform Fee",
+      "refundAmount": "Refund Amount",
+      "refundMethod": "Refund Method",
+      "refundMethodDesc": "The refund will be processed to your mTrip wallet.",
+      "refundTimeline": "Estimated Refund Timeline",
+      "refundTimelineDesc": "Funds will arrive in 3-5 business days.",
+      "proceed": "Proceed With Cancellation",
+      "keep": "Keep My Booking",
+      "needHelp": "Need help? ",
+      "contactSupport": "Contact Support",
+      "reasonTitle": "Reason for Cancellation",
+      "reasons": {
+        "plans": "Change of plans",
+        "dates": "Travel dates changed",
+        "price": "Found better price elsewhere",
+        "health": "Health issues / Emergency",
+        "others": "Others"
+      },
+      "policyTitle": "Cancellation Policy Reminder",
+      "policyDesc": "Your refund will be processed within 3-5 business days to your mTrip wallet.",
+      "back": "Back",
+      "continue": "Continue",
+      "commentsLabel": "Additional Comments (Optional)",
+      "commentsPlaceholder": "Please share more details with us...",
+      "reviewTitle": "Review Cancellation",
+      "reviewDesc": "We're sorry to see you go. Please review your cancellation details below.",
+      "refundNote": "The refund will be processed to your mTrip wallet within 3-5 business days.",
+      "finalNoticeTitle": "Final Notice",
+      "finalNoticeDesc": "This action cannot be undone. Your {{fee}} penalty fee is non-refundable.",
+      "confirm": "Confirm Cancellation",
+      "terms": "By clicking Confirm, you agree to our Terms of Service and cancellation policies."
+    },
+    "cancelled": {
+      "title": "Booking Cancelled",
+      "desc": "Your reservation has been successfully removed from our system. A confirmation email is on its way.",
+      "confirmedRefund": "Confirmed Refund",
+      "refundInitiated": "Refund Initiated",
+      "transactionRef": "Transaction reference: ",
+      "backToBookings": "Back to My Booking",
+      "startNew": "Start New Booking",
+      "detailsTitle": "Booking Cancel Details",
+      "merchantTitle": "Booking Cancelled by Merchant",
+      "merchantDesc": "Your reservation has been cancelled from the merchant side with the following reason. A confirmation email is on its way.",
+      "cancelReason": "Cancel Reason"
     }
   },
   "user": {

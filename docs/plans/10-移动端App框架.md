@@ -940,3 +940,95 @@ Expo 51 / TypeScript / Zustand / React Navigation 6 / Axios / i18next + react-i1
       已完成的结账流程整个从历史里移除(本来也不该退回去)。
       **关怀模式成功页 `BookingSuccessLiteScreen` 是同一段代码、同一个坑,一并修了。**
       契约脚本补 2 条断言(必须用 `reset`、底下垫的是 `MyPickTab`):**GREEN 69/69**;typecheck 零报错。
+
+- [ ] **多房间预订与 PRD v1.0.1 的 9 处差异**(2026-09-22,**只留档,本轮未改代码**):
+      逐条核对与代码锚点见 **[差距分析-多房间预订-PRDv1.0.1.md](差距分析-多房间预订-PRDv1.0.1.md)**(正文唯一事实源,此处只留指针)。
+      标题行:① §17.4 加减器初始值未同步搜索房间数(且正常模式搜索页/结果页的 Guests & Rooms 仍是
+      写死 `{adults:2, rooms:1}` + comingSoon,路由也不透传 → 无源可同步)② PRD 的 Trip 是多酒店/
+      多住宿段,我们只做了同一家酒店多房型(后端本就支持跨物业)③ 部分失败语义相反(现为单事务
+      全成全败,且无 Booking Failed 档)④ 券的「只对合格房分摊」与最少间数/最少酒店数未做
+      (`book_advance_days` 等三个字段商户端能配但下单不校验)⑤ 长住折扣在前端隐形 + 前端估价
+      不取日历价/公民价,会误拦付得起的用户 ⑥ trip 各项一个 travelers 都不提交 ⑦ 无 PDF/邮件/
+      短信凭证 ⑧ Trip 的「15 分钟」文案与实际 10 分钟不符 ⑨ **My Pick 未按 Trip 归并**
+      (Figma `289:1112`:一个 Trip 一张卡,多房间「N Rooms」、多酒店「Multi Booking (N Stay)」,
+      明细留到详情页;现在一个 3 房型的 Trip 会被拆成 3 张卡,且 `/app/order/list` 连 `trip_id`
+      都不返回)。
+      **已拍板**:§17.4 复用 Lite 的 `GuestRoomSheet`(它本来就是用向导的 `GuestCounterRow` 拼的);
+      失败态落 `booking_status = 7` 映射旧 `order_status = 4`,不新增 `order_status = 8`。
+      **待产品拍板 5 项**(Confirming 挂哪条轴 / 购物车页留不留 / 一个 stay 的定义 /
+      每间房几位入住人 / 归并卡的状态与金额口径)。优先级 P0-P2 与依赖关系见该文档第六节。
+
+- [x] **「我的预订」按 Trip 归并**(2026-09-22,Figma `3003:8863`:`289:1362` 单间 /
+      `2492:12049` 多房间 / `2291:5340` 多酒店 / `2438:7317` 待支付):多房间与多酒店在列表里
+      **只占一张卡**,明细留到详情页 —— 这是上一条留档里的差异 ⑨。
+      后端 `OrderController::list` 的 select 补 `trip_id`(列早已预留,未动表);
+      归并放在取数层 `useMyPickData.groupOrdersByTrip()`,两个模式共用。
+      **状态取组内最靠前的「待办态」**(用户拍板):待支付 > 退款中 > 已支付 > 已核销 >
+      已完成 > 已退款 > 已取消 > 已过期;**页签按归并状态过滤**,一个 Trip 只出现在一个页签。
+      `BookingCard` 加 Booking ID 行 / 多酒店缩略图带 +「Multi Booking (N Stay)」/ 可覆盖的主按钮文案,
+      地图按钮改为不传即不渲染;卡圆角按现稿 32→24。关怀模式同样归并但不画 Multi Booking 行(稿面没有)。
+      **刻意没做**:Trip 详情页(稿面未给,`trip/detail` 已按入住日返回各预订,缺 UI)、
+      待支付卡的「Continue Payment」(订单详情页没有续付入口,按了也付不了)。
+      **验证**:新增 `scripts/check-mypick-trip-group.cjs` **GREEN 44/44**(含灵敏度自检 RED 43/44)、
+      typecheck 零报错、`expo export -p web` 通过、三份 i18n 零差异 1067 键。
+      ⚠️ 脚本是源码契约断言而非执行结果(client-app 无测试框架);⚠️ 后端那一行未过 `php -l`
+      (容器全停、本机无 php);⚠️ **未做真机 / Web 冒烟**。
+
+- [x] **酒店订单详情页(多房间 / 单房间同一页)**(2026-09-22,Figma `2659:16092` / `289:1670`):
+      新增 `screens/order/BookingDetailScreen.tsx`(路由 `BookingDetail: { orderId, tripId? }`,
+      自带悬浮顶栏与图库故关掉 Stack 头);「我的预订」两个模式的 View Details 改指向它并带 `tripId`。
+      **一页两用**:差别只在状态行几行、Selected Rooms 几条,由数据决定。
+      取数三条(现成接口):`order/detail` + `order/trip/detail`(带 tripId 展开各预订)+
+      `hotels/detail`(图库/地址/房型属性)。后端补 `TripController::detail` 的
+      `property_id`/`room_type_id`(未动表)。
+      **共用不复制**:状态行组抽成 `components/hotel/booking/BookingStatusRows.tsx`
+      (Figma 同一组件 `2661:16931`,结果页改为引用);Selected Rooms 复用 `SelectedRoomsCard`
+      (`onEdit` 改可选,详情页不传)。**Modify Booking 照稿禁用**(后端无改期接口)。
+      ⚠️ Cancel Booking 暂跳通用 `OrderDetail`(取消流程 6 屏下一轮);⚠️ 地图块占位;
+      ⚠️ Guests & Rooms 只显示间数(接口无住客数);⚠️ 稿面底部 Tab 栏本页没有。
+      **验证**:新增 `scripts/check-booking-detail-page.cjs` **GREEN 57/57**(灵敏度自检 RED 55/57)、
+      另三脚本回归全绿、typecheck 零报错、`expo export -p web` 通过、i18n 零差异 1086 键。
+      ⚠️ 后端那一行未过 `php -l`(容器全停);⚠️ 缅文 19 条待复核;⚠️ **未做真机冒烟**。
+      **下一步**:多酒店详情页 `2142:4389`;再之后取消/退款 6 屏。
+
+- [x] **多酒店行程详情页**(2026-09-22,Figma `2142:4389`):新增 `screens/order/TripDetailScreen.tsx`
+      (路由 `TripDetail: { tripId }`),各段住宿按入住日排成时间轴(序号圆 +「Stay n」+ 2px 竖线 + 住宿卡),
+      单段 View Details 进 `BookingDetail`。**按只读 Trip 详情定位**(稿名 Edit booking,但后端无改期接口)。
+      卡不另写:`BookingCard` 加 `variant="stay"`(卡圆角 32/p25、封面内嵌圆角 20),
+      ⚠️ Booking ID 行在列表卡是第一行、在 Stay 卡在按钮行之后,已按 variant 换位。
+      入口分流:跨酒店进 `TripDetail`,同酒店多房间/单间进 `BookingDetail`。
+      地址按 property 去重后各拉一次 `hotels/detail`(trip/detail 不返回地址)。
+      **验证**:`check-booking-detail-page.cjs` 扩到 **GREEN 77/77**(灵敏度自检 RED 75/77)、
+      另三脚本回归全绿、typecheck 零报错、`expo export -p web` 通过、i18n 零差异 1087 键。
+      ⚠️ **未做真机冒烟**,且需先造一单**跨物业**的 Trip 才看得出时间轴(现有数据是同酒店多房间)。
+      **下一步**:取消/退款 6 屏(先定「按间取消还是整单取消」)。
+
+- [x] **取消预订主流程 3 屏**(2026-09-22,Figma `1205:2159` → `1205:2480` → `1205:2679`,规则按 PRD):
+      **取消粒度 = 单个 booking**(PRD §1.1 line 110/142/145),多房间/多酒店要各进各的详情页各取消一次。
+      新增 `screens/order/CancelBookingScreen.tsx`(一路由两步:退款摘要 → 取消原因,Continue 提交;
+      未选原因禁用提交,满足 PRD line 711-712)与 `screens/order/BookingCancelledScreen.tsx`
+      (结果页,`reset` 收尾)。**后端零改动** —— `refund/quote` 早就按 PRD 模块 11 返回
+      取消费/平台费/退款额/退款去向,提交走 `refund/apply`;金额全部服务端给。
+      摘要卡抽成 `components/order/BookingSummaryCard.tsx`(取消页 + 结果页共用)。
+      **剩余 3 屏未做**:`572:4670` / `1695:6937` + `1695:7109` 是边缘态与警示浮层(触发条件稿面没标);
+      `1685:3429` 商户取消是 PRD 742-759 的**人工异常流程**,后端无此链路,做了也到不了。
+      ⚠️ 待支付订单不走这条(是 `order/cancel`,入口仍在通用 `OrderDetail`);
+      ⚠️ 结果页的营销图卡无数据源,不渲染;⚠️ 到账时效稿面 3-5 天 / PRD 3-7 天,以稿面为准。
+      **验证**:新增 `scripts/check-cancel-flow.cjs` **GREEN 52/52**(首节断言 PRD 硬规则;
+      灵敏度自检 RED 50/52)、另四脚本回归全绿、typecheck 零报错、`expo export -p web` 通过、
+      i18n 零差异 1121 键。⚠️ 缅文 34 条待复核;⚠️ **未做真机冒烟**(涉及真实退款)。
+
+- [x] **取消流程补齐 3 屏**(2026-09-22,Figma `572:4670` / `1685:3312` / `1685:3429`):
+      ⚠️ **更正上一条**:剩余是 4 屏不是 3 屏,且 `572:4670` 不是边缘态 ——
+      它是「Review Cancellation」最终确认页,属主流程(PRD line 1385),上一条交付的流程少了这一步。
+      本轮补:① Review 确认页(第 3 步,黄色 Final Notice + 红色 Confirm,**只有它提交**);
+      ② 原因步的 Additional Comments(拼进 `reason` 提交,后端无单独备注字段);
+      ③ Booking Cancelled by Merchant(取消结果页的第二态:顶栏/标题切换 + 黄色 Cancel Reason 卡)。
+      后端补只读 `cancelInfo`(`OrderController::detail`,不动表):`operatorType` 取自
+      `order_booking_event`(2 = 商户)+ `refundNo`/`refundAmount` 取自 `order_refund`。
+      入口:「我的预订」已取消的单直接进取消详情。
+      **未做**:`1695:6937` + `1695:7109` 风控浮层(`FraudService` 没有「教育性提示」这一档,
+      也没有回传是否触发;要先定触发口径 + 后端给标志位)。
+      **验证**:`check-cancel-flow.cjs` **GREEN 65/65**(灵敏度自检 RED 63/65)、另四脚本全绿、
+      typecheck 零报错、`expo export -p web` 通过、i18n 零差异 1134 键。
+      ⚠️ 后端未过 `php -l`(本机无 php + Docker daemon 连不上);⚠️ **未做真机冒烟**。

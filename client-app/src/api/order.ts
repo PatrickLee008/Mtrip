@@ -69,6 +69,29 @@ export function cancelOrder(orderId: number, reason?: string): Promise<null> {
   return post('/api/v1/app/order/cancel', { orderId, reason });
 }
 
+/**
+ * 取消/退款试算(PRD 模块 11:结账不收平台费,**取消时才从可退额里扣**)。
+ * 取消页的「Cancellation Fee / Refund Amount / 退款去向」三处数字全部来自它,前端不自己算。
+ * 仅「已支付且未使用」的订单可试算,其余后端直接拒。
+ */
+export interface RefundQuote {
+  payAmount: number;
+  /** 按退改规则可退的部分(未扣平台费) */
+  refundable: number;
+  /** 稿面「Cancellation Fee」= payAmount − refundable */
+  cancellationFee: number;
+  platformFee: number;
+  /** 实际到账 = refundable − platformFee */
+  refundAmount: number;
+  /** 1 = mTrip 钱包(目前只有这一种) */
+  refundChannel: number;
+  refundChannelText: string;
+}
+
+export function fetchRefundQuote(orderId: number): Promise<RefundQuote> {
+  return get<RefundQuote>('/api/v1/app/order/refund/quote', { orderId });
+}
+
 export function applyRefund(params: {
   orderId: number;
   reason: string;
