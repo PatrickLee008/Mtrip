@@ -58,6 +58,8 @@ export interface PropertyProfileResult {
     totalRooms: number;
     guestRating: number;
     guestReviewCount: number;
+    /** 站点/物业币种,金额输入框右侧的胶囊用(与房型页同源:hotel_room_type.currency) */
+    currency: string;
   };
 }
 
@@ -76,6 +78,109 @@ export interface PropertyAmenity {
   description: string;
   enabled: boolean;
   highlighted: boolean;
+}
+
+/** Long Stay Details 页签(Figma 696:4375 / 747:5592) */
+export interface LongStayPromotion {
+  id: string;
+  name: string;
+  discount: number;
+  status: boolean;
+}
+
+export interface LongStayBenefit {
+  id: string;
+  name: string;
+  status: boolean;
+  bold: boolean;
+}
+
+export interface PropertyLongStay {
+  promotions: LongStayPromotion[];
+  benefits: LongStayBenefit[];
+}
+
+/** Hotel Policies 页签(Figma 696:4711 / 748:7074) */
+export interface PolicyBooking {
+  cancellation: string;
+  prepayment: string;
+  taxesFees: string;
+}
+
+export interface PolicyCheckIn {
+  time: string;
+  description: string;
+  documents: string[];
+}
+
+export interface PolicyCheckOut {
+  time: string;
+  description: string;
+}
+
+export interface PolicyChild {
+  id: string;
+  name: string;
+  description: string;
+  amount: string;
+  /** 该条政策金额用的币种(弹窗右侧下拉所选);纯数字金额在卡片上按它补前缀 */
+  currency: string;
+  unit: string;
+  status: boolean;
+}
+
+export interface PolicyRule {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+  status: boolean;
+}
+
+export interface PropertyPolicies {
+  booking: PolicyBooking;
+  checkIn: PolicyCheckIn;
+  checkOut: PolicyCheckOut;
+  /** status=0 表示该条宠物政策停用(编辑稿卡头是一个开关) */
+  pet: { description: string; status: boolean };
+  children: PolicyChild[];
+  rules: PolicyRule[];
+}
+
+/**
+ * Nearby Attraction 页签(Figma 696:4914 / 772:6252)。
+ * 一张卡 = 一张图片 + 若干「地点」(`stops`):卡面上每个地点一行(36 圆形图标 + 名称 + 路程),
+ * 地点之间用竖直虚线相连(机场 → 景点 这类行程写法)。
+ */
+export interface NearbyStop {
+  id: string;
+  icon: string;
+  name: string;
+  travelTime: string;
+  travelMode: string;
+  distance: string;
+}
+
+export interface NearbyAttraction {
+  id: string;
+  image: string;
+  status: boolean;
+  stops: NearbyStop[];
+}
+
+export function emptyLongStay(): PropertyLongStay {
+  return { promotions: [], benefits: [] };
+}
+
+export function emptyPolicies(): PropertyPolicies {
+  return {
+    booking: { cancellation: '', prepayment: '', taxesFees: '' },
+    checkIn: { time: '', description: '', documents: [] },
+    checkOut: { time: '', description: '' },
+    pet: { description: '', status: true },
+    children: [],
+    rules: [],
+  };
 }
 
 export function apiPropertyList(params: Record<string, unknown> = {}): Promise<PageData<PropertyRow>> {

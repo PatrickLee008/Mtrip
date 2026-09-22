@@ -21,7 +21,20 @@ class PropertyProfileService
         'store_name', 'contact_phone', 'contact_phone2', 'contact_email', 'address', 'country_code',
         'city_key', 'longitude', 'latitude', 'description', 'star_level', 'facilities', 'images',
         'amenities', 'image_gallery', 'website', 'checkin_time', 'checkout_time',
+        'long_stay', 'hotel_policies', 'nearby_attractions',
     ];
+
+    /** 逗号分隔的 JSON 列清单:读时统一解码,写时统一编码 */
+    private const JSON_FIELDS = [
+        'images', 'facilities', 'amenities', 'image_gallery',
+        'long_stay', 'hotel_policies', 'nearby_attractions',
+    ];
+
+    private const LONG_STAY_LIMITS = ['promotions' => 10, 'benefits' => 12];
+    private const POLICY_LIMITS = ['children' => 10, 'rules' => 12];
+    private const POLICY_TEXT_LIMIT = 500;
+    private const NEARBY_LIMIT = 20;
+    private const NEARBY_STOP_LIMIT = 8;
 
     public function detail(int $propertyId): array
     {
@@ -31,12 +44,20 @@ class PropertyProfileService
         $live = $this->formatProperty($property);
         $rooms = Db::table('hotel_room_type')->where('property_id', $propertyId)
             ->where('site_id', $property['site_id'])->where('status', 1)->where('publish_status', 2)
-            ->where('approved_version', '>', 0)->whereNull('deleted_at')->get(['room_name', 'base_stock']);
+            ->where('approved_version', '>', 0)->whereNull('deleted_at')->get(['room_name', 'base_stock', 'currency']);
         $roomTypes = [];
         $totalRooms = 0;
+        $currency = '';
         foreach ($rooms as $room) {
             $roomTypes[] = (string) $room->room_name;
             $totalRooms += max(0, (int) $room->base_stock);
+            if ($currency === '') $currency = strtoupper(trim((string) ($room->currency ?? '')));
+        }
+        // 在售房型都没填币种时,回退到该物业任意一条房型的币种(金额输入框右侧的币种胶囊要用)
+        if ($currency === '') {
+            $currency = strtoupper(trim((string) (Db::table('hotel_room_type')->where('property_id', $propertyId)
+                ->where('site_id', $property['site_id'])->whereNull('deleted_at')
+                ->where('currency', '<>', '')->value('currency') ?? '')));
         }
         $live['live_room_count'] = count($rooms);
         $reviewQuery = Db::table('goods_review')->where('property_id', $propertyId)
@@ -50,7 +71,7 @@ class PropertyProfileService
             'editable' => $this->formatPayload($editable),
             'latestRevision' => $latest ? $this->formatRevision((array) $latest) : null,
             'metrics' => ['roomTypes' => array_values(array_unique($roomTypes)), 'totalRooms' => $totalRooms,
-                'guestRating' => $rating, 'guestReviewCount' => $reviewCount],
+                'guestRating' => $rating, 'guestReviewCount' => $reviewCount, 'currency' => $currency],
         ];
     }
 
@@ -330,14 +351,26 @@ class PropertyProfileService
             $base['image_gallery'] = $this->encode($gallery);
             $base['images'] = $this->encode(array_column($gallery, 'url'));
         }
+        if (array_key_exists('longStay', $input)) {
+            $base['long_stay'] = $this->encode($this->normalizeLongStay($input['longStay']));
+        }
+        if (array_key_exists('hotelPolicies', $input)) {
+            $base['hotel_policies'] = $this->encode($this->normalizePolicies($input['hotelPolicies']));
+        }
+        if (array_key_exists('nearbyAttractions', $input)) {
+            $base['nearby_attractions'] = $this->encode($this->normalizeNearby($input['nearbyAttractions']));
+        }
         return array_intersect_key($base, array_flip(self::FIELDS));
     }
 
     private function formatProperty(array $property): array
     {
-        foreach (['images', 'facilities', 'amenities', 'image_gallery'] as $key) $property[$key] = $this->decode((string) ($property[$key] ?? ''));
+        foreach (self::JSON_FIELDS as $key) $property[$key] = $this->decode((string) ($property[$key] ?? ''));
         $property['amenities'] = $this->amenitiesWithLegacyFallback($property['amenities'], $property['facilities']);
         $property['image_gallery'] = $this->galleryWithLegacyFallback($property['image_gallery'], $property['images']);
+        $property['long_stay'] = $this->normalizeLongStay($property['long_stay']);
+        $property['hotel_policies'] = $this->normalizePolicies($property['hotel_policies']);
+        $property['nearby_attractions'] = $this->normalizeNearby($property['nearby_attractions']);
         foreach (['contact_phone', 'contact_phone2'] as $key) $property[$key] = $this->decryptPhone((string) ($property[$key] ?? ''));
         unset($property['deleted_at']);
         return $property;
@@ -345,7 +378,7 @@ class PropertyProfileService
 
     private function formatPayload(array $payload): array
     {
-        foreach (['images', 'facilities', 'amenities', 'image_gallery'] as $key) {
+        foreach (self::JSON_FIELDS as $key) {
             if (isset($payload[$key]) && is_string($payload[$key])) $payload[$key] = $this->decode($payload[$key]);
         }
         $payload['images'] = is_array($payload['images'] ?? null) ? $payload['images'] : [];
@@ -354,6 +387,9 @@ class PropertyProfileService
             is_array($payload['amenities'] ?? null) ? $payload['amenities'] : [], $payload['facilities']);
         $payload['image_gallery'] = $this->galleryWithLegacyFallback(
             is_array($payload['image_gallery'] ?? null) ? $payload['image_gallery'] : [], $payload['images']);
+        $payload['long_stay'] = $this->normalizeLongStay($payload['long_stay'] ?? []);
+        $payload['hotel_policies'] = $this->normalizePolicies($payload['hotel_policies'] ?? []);
+        $payload['nearby_attractions'] = $this->normalizeNearby($payload['nearby_attractions'] ?? []);
         foreach (['contact_phone', 'contact_phone2'] as $key) $payload[$key] = $this->decryptPhone((string) ($payload[$key] ?? ''));
         return $payload;
     }
@@ -379,6 +415,165 @@ class PropertyProfileService
     {
         $value = json_decode($json, true);
         return is_array($value) ? $value : [];
+    }
+
+    /**
+     * 长住促销与长住权益。status/bold 用布尔,与 amenities 的 enabled/highlighted 同口径。
+     * 名称必填(空行直接丢弃),避免前端删空后落一堆无名行。
+     */
+    private function normalizeLongStay(mixed $value): array
+    {
+        $value = is_array($value) ? $value : [];
+        return [
+            'promotions' => $this->normalizeRows($value['promotions'] ?? [], self::LONG_STAY_LIMITS['promotions'],
+                function (array $row, int $index): ?array {
+                    $name = mb_substr(trim((string) ($row['name'] ?? '')), 0, 60);
+                    if ($name === '') return null;
+                    return [
+                        'id' => $this->itemId($row['id'] ?? '', 'lsp', $index),
+                        'name' => $name,
+                        'discount' => max(0, min(100, (int) ($row['discount'] ?? 0))),
+                        'status' => filter_var($row['status'] ?? true, FILTER_VALIDATE_BOOLEAN),
+                    ];
+                }),
+            'benefits' => $this->normalizeRows($value['benefits'] ?? [], self::LONG_STAY_LIMITS['benefits'],
+                function (array $row, int $index): ?array {
+                    $name = mb_substr(trim((string) ($row['name'] ?? '')), 0, 60);
+                    if ($name === '') return null;
+                    $status = filter_var($row['status'] ?? true, FILTER_VALIDATE_BOOLEAN);
+                    return [
+                        'id' => $this->itemId($row['id'] ?? '', 'lsb', $index),
+                        'name' => $name,
+                        'status' => $status,
+                        // 与 amenities 的 highlighted 同口径:停用的条目不可能同时是加粗项
+                        'bold' => $status && filter_var($row['bold'] ?? false, FILTER_VALIDATE_BOOLEAN),
+                    ];
+                }),
+        ];
+    }
+
+    /** 酒店政策:预订条款 / 入住 / 退房 / 宠物 / 儿童加床 / 物业规则,结构固定,缺项补空。 */
+    private function normalizePolicies(mixed $value): array
+    {
+        $value = is_array($value) ? $value : [];
+        $booking = is_array($value['booking'] ?? null) ? $value['booking'] : [];
+        $checkIn = is_array($value['checkIn'] ?? null) ? $value['checkIn'] : [];
+        $checkOut = is_array($value['checkOut'] ?? null) ? $value['checkOut'] : [];
+        $pet = is_array($value['pet'] ?? null) ? $value['pet'] : [];
+        $documents = [];
+        foreach (array_slice(array_values(is_array($checkIn['documents'] ?? null) ? $checkIn['documents'] : []), 0, 8) as $document) {
+            $document = mb_substr(trim((string) $document), 0, 80);
+            if ($document !== '') $documents[] = $document;
+        }
+        return [
+            'booking' => [
+                'cancellation' => $this->policyText($booking['cancellation'] ?? ''),
+                'prepayment' => $this->policyText($booking['prepayment'] ?? ''),
+                'taxesFees' => $this->policyText($booking['taxesFees'] ?? ''),
+            ],
+            'checkIn' => [
+                'time' => mb_substr(trim((string) ($checkIn['time'] ?? '')), 0, 20),
+                'description' => $this->policyText($checkIn['description'] ?? ''),
+                'documents' => $documents,
+            ],
+            'checkOut' => [
+                'time' => mb_substr(trim((string) ($checkOut['time'] ?? '')), 0, 20),
+                'description' => $this->policyText($checkOut['description'] ?? ''),
+            ],
+            // status=0 表示该条宠物政策停用(编辑稿卡头就是一个开关);缺省视为启用,兼容旧数据
+            'pet' => [
+                'description' => $this->policyText($pet['description'] ?? ''),
+                'status' => filter_var($pet['status'] ?? true, FILTER_VALIDATE_BOOLEAN),
+            ],
+            'children' => $this->normalizeRows($value['children'] ?? [], self::POLICY_LIMITS['children'],
+                function (array $row, int $index): ?array {
+                    $name = mb_substr(trim((string) ($row['name'] ?? '')), 0, 60);
+                    if ($name === '') return null;
+                    return [
+                        'id' => $this->itemId($row['id'] ?? '', 'chd', $index),
+                        'name' => $name,
+                        'description' => $this->policyText($row['description'] ?? ''),
+                        'amount' => mb_substr(trim((string) ($row['amount'] ?? '')), 0, 40),
+                        // 该条政策金额用的币种(弹窗下拉所选);大写、限长,空值允许
+                        'currency' => strtoupper(mb_substr(trim((string) ($row['currency'] ?? '')), 0, 8)),
+                        'unit' => mb_substr(trim((string) ($row['unit'] ?? '')), 0, 20),
+                        'status' => filter_var($row['status'] ?? true, FILTER_VALIDATE_BOOLEAN),
+                    ];
+                }),
+            'rules' => $this->normalizeRows($value['rules'] ?? [], self::POLICY_LIMITS['rules'],
+                function (array $row, int $index): ?array {
+                    $name = mb_substr(trim((string) ($row['name'] ?? '')), 0, 60);
+                    if ($name === '') return null;
+                    return [
+                        'id' => $this->itemId($row['id'] ?? '', 'rule', $index),
+                        'name' => $name,
+                        'description' => $this->policyText($row['description'] ?? ''),
+                        'icon' => mb_substr(trim((string) ($row['icon'] ?? '')), 0, 40) ?: 'sparkles',
+                        'status' => filter_var($row['status'] ?? true, FILTER_VALIDATE_BOOLEAN),
+                    ];
+                }),
+        ];
+    }
+
+    /**
+     * 附近景点:一张卡 = 一张图片 + 若干「地点」(Figma 696:4992:图片 + 若干个 36 圆形图标行,地点之间用竖虚线相连)。
+     * 兼容第一版的扁平结构(景点字段直接挂在卡片上):视为只有一个地点。
+     */
+    private function normalizeNearby(mixed $value): array
+    {
+        $items = [];
+        foreach (array_slice(array_values(is_array($value) ? $value : []), 0, self::NEARBY_LIMIT) as $index => $row) {
+            if (! is_array($row)) continue;
+            $image = mb_substr(trim((string) ($row['image'] ?? '')), 0, 1000);
+            $rawStops = is_array($row['stops'] ?? null) ? $row['stops'] : [];
+            if ($rawStops === [] && (isset($row['name']) || isset($row['distance']))) $rawStops = [$row];
+            $stops = [];
+            foreach (array_slice(array_values($rawStops), 0, self::NEARBY_STOP_LIMIT) as $stopIndex => $stop) {
+                if (! is_array($stop)) continue;
+                $name = mb_substr(trim((string) ($stop['name'] ?? '')), 0, 80);
+                $distance = mb_substr(trim((string) ($stop['distance'] ?? '')), 0, 40);
+                if ($name === '' && $distance === '') continue;
+                $stops[] = [
+                    'id' => $this->itemId($stop['id'] ?? '', 'stop', $stopIndex),
+                    'icon' => mb_substr(trim((string) ($stop['icon'] ?? '')), 0, 40) ?: 'location',
+                    'name' => $name,
+                    'travelTime' => mb_substr(trim((string) ($stop['travelTime'] ?? '')), 0, 40),
+                    'travelMode' => mb_substr(trim((string) ($stop['travelMode'] ?? '')), 0, 20) ?: 'drive',
+                    'distance' => $distance,
+                ];
+            }
+            if ($stops === [] && $image === '') continue;
+            $items[] = [
+                'id' => $this->itemId($row['id'] ?? '', 'nby', $index),
+                'image' => $image,
+                'status' => filter_var($row['status'] ?? true, FILTER_VALIDATE_BOOLEAN),
+                'stops' => $stops,
+            ];
+        }
+        return $items;
+    }
+
+    /** @param callable(array,int):?array $mapper 返回 null 表示该行无效,直接丢弃 */
+    private function normalizeRows(mixed $rows, int $limit, callable $mapper): array
+    {
+        $result = [];
+        foreach (array_slice(array_values(is_array($rows) ? $rows : []), 0, $limit) as $index => $row) {
+            if (! is_array($row)) continue;
+            $item = $mapper($row, $index);
+            if ($item !== null) $result[] = $item;
+        }
+        return $result;
+    }
+
+    private function policyText(mixed $value): string
+    {
+        return mb_substr(trim((string) $value), 0, self::POLICY_TEXT_LIMIT);
+    }
+
+    private function itemId(mixed $raw, string $prefix, int $index): string
+    {
+        $id = mb_substr(trim((string) $raw), 0, 40);
+        return $id !== '' ? $id : $prefix . '-' . ($index + 1);
     }
 
     private function normalizeGallery(array $images): array

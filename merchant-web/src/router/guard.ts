@@ -46,6 +46,25 @@ export function setupRouterGuard(router: Router): void {
       }
     }
 
+    // 物业专属入口自带物业 id(「所有物业」列表点 Manage、深链、刷新都算):直接对齐全局选中物业,
+    // 效果与在左上角下拉里选同一家酒店一致 —— 下拉读 selectedProperty,左侧物业专属菜单读 visibleMenus,
+    // 两者都挂在 selectedPropertyId 上,所以这一句就能让下拉与侧边栏一起联动。
+    // ⚠️ 只有 PropertyProfile 的 :id 才是物业 id;`/rooms/:id` 是**房型** id,绝不能拿来选物业。
+    const pathPropertyId = to.name === 'PropertyProfile' ? Number(to.params.id) || 0 : 0;
+    const queryPropertyId = Number(to.query.propertyId) || 0;
+    const routePropertyId = pathPropertyId || queryPropertyId;
+    if (routePropertyId > 0) {
+      userStore.selectProperty(routePropertyId);
+    }
+
+    // 「所有物业」列表页就是全局的 **All Properties 模式**:进入时必须清掉选中物业。
+    // 否则左上角下拉仍停在某家酒店,而且列表接口会带上 X-Mtrip-Property-Id,
+    // 被后端 scopePropertyIds() 收窄成只剩那一家(用户报的两半问题)。
+    // 放在守卫里(而不是页面 onMounted)是为了在页面挂载前就清干净,列表只按无 header 拉一次。
+    if (to.name === 'AllProperties') {
+      userStore.selectProperty(null);
+    }
+
     return true;
   });
 

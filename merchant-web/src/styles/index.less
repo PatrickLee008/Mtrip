@@ -186,6 +186,37 @@ textarea.ant-input {
   min-height: auto !important;
 }
 
+/* 卡片头的「编辑」药丸:酒店资料页四个页签共用同一份(稿面:透明底 + 1px 主色描边 + 主色 600/12 + 14 图标)。
+   抽到这里而不是各组件各写一遍 —— 之前 Long Stay 自己写了一份、其余页签用 antd 默认按钮,样式就漂了。 */
+/* 弹窗标题:各页签的 a-modal 共用同一号(稿面 Plus Jakarta Sans SemiBold 600/18 #1B1D30) */
+.mtrip-modal-title {
+  color: #1b1d30;
+  font-family: 'Plus Jakarta Sans', Inter, sans-serif;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.mtrip-edit-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 34px;
+  padding: 0 16px;
+  border: 1px solid #4d6cf4;
+  border-radius: 8px;
+  background: transparent;
+  color: #4d6cf4;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.mtrip-edit-pill .anticon { font-size: 14px; }
+
+.mtrip-edit-pill:hover:not(:disabled) { background: rgb(77 108 244 / 6%); }
+
+.mtrip-edit-pill:disabled { opacity: .5; cursor: not-allowed; }
+
 .ant-btn {
   height: 34px;
   border-radius: var(--mtrip-radius-control);

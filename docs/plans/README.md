@@ -153,7 +153,7 @@ MTrip/
 | 08 | [08-部署与网关.md](./08-部署与网关.md) | docker-compose/OpenResty/联调验证 | 部分完成(新增 auto-deploy 指定目标强制发布;08-7 联调待执行) | 82% |
 | 09 | [09-移动端微服务.md](./09-移动端微服务.md) | C端 /api/v1/app/* 接口(user/goods/order等) | 已完成(联调归模块07/08) | 100% |
 | 10 | [10-移动端App框架.md](./10-移动端App框架.md) | client-app Expo51+RN+TS 多端工程 | 已完成(冒烟联调归模块08) | 100% |
-| 13 | [13-商家端merchant-web落地.md](./13-商家端merchant-web落地.md) | 商户后台、动态 RBAC 与业务页面 | All Properties、Add New Property 第 1 步及全局菜单 Figma 对齐；新增沿用原门店流程；真实账号联动验收待补 | 进行中 |
+| 13 | [13-商家端merchant-web落地.md](./13-商家端merchant-web落地.md) | 商户后台、动态 RBAC 与业务页面 | All Properties、Add New Property 第 1 步、全局菜单与 Hotel Profile 三页签 Long Stay / Policies / Nearby（视图 + 编辑 + 提交审核）Figma 对齐；新增沿用原门店流程；真实账号联动与浏览器视觉走查待补 | 进行中 |
 | 15 | [15-M12-merchant-management.md](./15-M12-merchant-management.md) | PRD模块12：酒店优先的商户管理，餐厅资料展示、运营延期 | 8/29列表整改已提交；追加取消详情餐厅隐藏，admin构建及Browser混合业务核验通过，追加改动未提交；S7整体原型待收口 | 列表及餐厅展示已验证，S7进行中 |
 | M4 | [实现方案-Merchant-M4-酒店预订管理.md](./实现方案-Merchant-M4-酒店预订管理.md) | Merchant PRD 模块4：酒店预订列表、履约状态、库存、退款、通知、同步框架及原型 UI | 2026-09-18 v1.0.3 / Figma 整改、自动化回归、真实登录态视觉与 authenticated Mark as Paid 无副作用探测完成；待确认物业级 No-show 配置模型 | 98% |
 | 17 | [17-商户移动端merchant-app.md](./17-商户移动端merchant-app.md) | Merchant PRD 移动端：入驻/认证/KYC、Dashboard、酒店运营、预订、结算、通知、RBAC、营销、评价、帮助中心 | 注册 OTP/申请提交已联动；统一申请级 KYC 清单、后台 Send KYC 门禁、真实文件选择/上传/提交已接入；M9-M12 待实现 | 进行中 |

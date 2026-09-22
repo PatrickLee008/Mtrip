@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, reactive, ref } from 'vue';
+import { computed, h, reactive, ref } from 'vue';
 import { message } from 'ant-design-vue';
 import {
   BgColorsOutlined,
@@ -15,6 +15,7 @@ import {
   PlusOutlined,
   RocketOutlined,
   ShopOutlined,
+  StarFilled,
   StarOutlined,
   TeamOutlined,
   WifiOutlined,
@@ -60,6 +61,8 @@ const groups = computed(() => categoryKeys.map((key) => ({
 })));
 const amenityGroups = computed(() => groups.value.filter((group) => group.key !== 'tags'));
 const tagGroup = computed(() => groups.value.find((group) => group.key === 'tags')!);
+/** 图标下拉:选中项按稿面只显示图标(居中),下拉列表里再带名称 */
+const iconSelectOptions = computed(() => iconOptions.value.map((option) => ({ value: option.key, label: h(iconFor(option.key)) })));
 const modalOpen = ref(false);
 const editingId = ref('');
 const amenityForm = reactive<PropertyAmenity>(emptyAmenity('essential'));
@@ -155,14 +158,19 @@ function changeModalEnabled(checkedValue: boolean | string | number): void {
     <section class="amenities-panel">
       <div class="panel-head">
         <h2>{{ t('properties.profile.amenities') }}</h2>
-        <a-button v-perm="['mch:properties:profile-edit', 'mch:properties:profile-submit']" :disabled="disabled" @click="emit('editRequested')"><EditOutlined />{{ t('common.edit') }}</a-button>
+        <button v-perm="['mch:properties:profile-edit', 'mch:properties:profile-submit']" type="button" class="mtrip-edit-pill" :disabled="disabled" @click="emit('editRequested')"><EditOutlined />{{ t('common.edit') }}</button>
       </div>
       <template v-if="amenityGroups.some((group) => group.items.length)">
         <div v-for="group in amenityGroups" :key="group.key" class="view-group">
           <h3>{{ group.label }}</h3>
           <div v-if="group.items.length" class="view-grid">
             <article v-for="item in group.items" :key="item.id" class="view-amenity">
-              <component :is="iconFor(item.icon)" /><span>{{ item.name }}</span><i :class="{ inactive: !item.enabled }" />
+              <component :is="iconFor(item.icon)" /><span>{{ item.name }}</span>
+              <i class="flags">
+                <StarFilled v-if="item.highlighted" class="on" />
+                <StarOutlined v-else class="off" />
+                <i :class="{ inactive: !item.enabled }" />
+              </i>
             </article>
           </div>
           <p v-else class="empty-row">{{ t('properties.profile.noAmenitiesInGroup') }}</p>
@@ -174,13 +182,17 @@ function changeModalEnabled(checkedValue: boolean | string | number): void {
     <section class="amenities-panel tags-panel">
       <div class="panel-head">
         <h2>{{ tagGroup.label }}</h2>
-        <a-button v-perm="['mch:properties:profile-edit', 'mch:properties:profile-submit']" :disabled="disabled" @click="emit('editRequested')"><EditOutlined />{{ t('common.edit') }}</a-button>
+        <button v-perm="['mch:properties:profile-edit', 'mch:properties:profile-submit']" type="button" class="mtrip-edit-pill" :disabled="disabled" @click="emit('editRequested')"><EditOutlined />{{ t('common.edit') }}</button>
       </div>
       <div v-if="tagGroup.items.length" class="tag-grid">
         <article v-for="item in tagGroup.items" :key="item.id" class="tag-card">
           <component :is="iconFor(item.icon)" />
           <div><strong>{{ item.name }}</strong><small>{{ item.description || t('properties.profile.noTagDescription') }}</small></div>
-          <i :class="{ inactive: !item.enabled }" />
+          <i class="flags">
+            <StarFilled v-if="item.highlighted" class="on" />
+            <StarOutlined v-else class="off" />
+            <i :class="{ inactive: !item.enabled }" />
+          </i>
         </article>
       </div>
       <p v-else class="empty-row">{{ t('properties.profile.noHotelTags') }}</p>
@@ -196,7 +208,7 @@ function changeModalEnabled(checkedValue: boolean | string | number): void {
       <div v-if="group.items.length" :class="['amenity-edit-grid', { 'tag-edit-grid': group.key === 'tags' }]">
         <article v-for="item in group.items" :key="item.id" :class="['amenity-edit-card', { muted: !item.enabled }]">
           <div class="card-tools"><button type="button" :aria-label="t('common.edit')" @click="openEdit(item)"><EditOutlined /></button><button type="button" :aria-label="t('common.delete')" @click="removeAmenity(item)"><DeleteOutlined /></button></div>
-          <div class="card-identity"><component :is="iconFor(item.icon)" /><strong>{{ item.name }}</strong><small v-if="item.description">{{ item.description }}</small></div>
+          <div class="card-identity"><component :is="iconFor(item.icon)" /><strong>{{ item.name }}</strong></div>
           <div class="card-switch"><span>{{ t('properties.profile.amenityStatus') }}</span><a-switch :checked="item.enabled" @change="changeFlag(item, 'enabled', $event)" /></div>
           <div class="card-switch"><span>{{ t('properties.profile.addHighlight') }}</span><a-switch :checked="item.highlighted" :disabled="!item.enabled" @change="changeFlag(item, 'highlighted', $event)" /></div>
         </article>
@@ -205,15 +217,16 @@ function changeModalEnabled(checkedValue: boolean | string | number): void {
     </section>
   </template>
 
-  <a-modal v-model:open="modalOpen" :title="t(editingId ? 'properties.profile.editAmenity' : 'properties.profile.createAmenity', { category: t(`properties.profile.amenityModalGroups.${amenityForm.category}`) })" :footer="null" width="980px">
+  <a-modal v-model:open="modalOpen" :footer="null" width="980px">
+    <template #title><span class="mtrip-modal-title">{{ t(editingId ? 'properties.profile.editAmenity' : 'properties.profile.createAmenity', { category: t(`properties.profile.amenityModalGroups.${amenityForm.category}`) }) }}</span></template>
     <div class="modal-switches">
       <label><span>{{ t('properties.profile.amenityStatus') }}</span><a-switch :checked="amenityForm.enabled" @change="changeModalEnabled" /></label>
       <label><span>{{ t('properties.profile.addHighlight') }}</span><a-switch v-model:checked="amenityForm.highlighted" :disabled="!amenityForm.enabled" /></label>
     </div>
     <a-form layout="vertical" class="amenity-form">
       <a-form-item :label="t('properties.profile.amenityIcon')">
-        <a-select v-model:value="amenityForm.icon">
-          <a-select-option v-for="option in iconOptions" :key="option.key" :value="option.key"><component :is="iconFor(option.key)" /> {{ option.label }}</a-select-option>
+        <a-select v-model:value="amenityForm.icon" class="amenity-icon-select" :options="iconSelectOptions" :dropdown-match-select-width="false">
+          <template #option="{ value }"><component :is="iconFor(value)" /> {{ t(`properties.profile.amenityIcons.${value}`) }}</template>
         </a-select>
       </a-form-item>
       <a-form-item :label="t('properties.profile.amenityName')" required><a-input v-model:value="amenityForm.name" :maxlength="80" /></a-form-item>
@@ -228,20 +241,60 @@ function changeModalEnabled(checkedValue: boolean | string | number): void {
 .panel-head, .edit-section-head, .card-tools, .card-switch, .modal-switches label, .modal-actions { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
 .panel-head { min-height: 32px; padding-bottom: 10px; border-bottom: 1px solid #eef0f4; }
 .panel-head h2, .edit-section-head h2 { margin: 0; font-size: 14px; line-height: 22px; }
-.panel-head :deep(.ant-btn) { border-color: #4d6cf4; color: #4d6cf4; }
-.view-group { padding-top: 14px; }.view-group h3 { margin: 0 0 9px; color: #9699a5; font-size: 11px; font-weight: 500; }
-.view-grid, .tag-grid, .amenity-edit-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px 14px; }.tag-grid, .tag-edit-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-.view-amenity, .tag-card { position: relative; display: flex; align-items: center; gap: 10px; min-height: 38px; padding: 0 13px; border: 1px solid #e5e9f2; border-radius: 20px; color: #496fe8; font-size: 13px; font-weight: 600; }
-.view-amenity > svg, .tag-card > svg { flex: 0 0 auto; }.view-amenity > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.view-amenity i, .tag-card i { width: 8px; height: 8px; margin-left: auto; border-radius: 50%; background: #16c96b; box-shadow: 0 0 0 3px rgb(22 201 107 / 12%); }.view-amenity i.inactive, .tag-card i.inactive { background: #ff4d5d; box-shadow: 0 0 0 3px rgb(255 77 93 / 10%); }
-.tags-panel { margin-top: 18px; }.tag-card { min-height: 54px; border-radius: 10px; }.tag-card > svg { font-size: 23px; opacity: .2; }.tag-card div { display: grid; min-width: 0; }.tag-card strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.tag-card small { margin-top: 2px; overflow: hidden; color: #a2a5ae; font-size: 10px; font-weight: 400; text-overflow: ellipsis; white-space: nowrap; }
+.view-group { padding-top: 16px; }.view-group h3 { margin: 0 0 12px; color: rgb(25 26 37 / 50%); font-size: 16px; font-weight: 500; }
+.view-grid, .tag-grid, .amenity-edit-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }.tag-grid, .tag-edit-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+/* 设施胶囊(Figma EL-802870b8):padding 12x16 / gap 16 / 圆角 32 / 白底 1px #E2E8F0;名称 600/16 主色(字距 .0088em) */
+.view-amenity, .tag-card { position: relative; display: flex; align-items: center; gap: 16px; padding: 12px 16px; border: 1px solid #e2e8f0; border-radius: 32px; background: #fefefe; color: #4d6cf4; font-size: 16px; font-weight: 600; letter-spacing: .0088em; }
+.view-amenity > svg, .tag-card > svg { flex: 0 0 auto; }.view-amenity > svg { font-size: 24px; }.view-amenity > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* 行尾「星 + 状态点」(Figma EL-235879b0:row gap 8;星 12x12 —— 加亮=实心主色、未加亮=描边灰;点 12x12 绿 #00A63E / 停用红 #EC1317) */
+.flags { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 8px; margin-left: auto; }
+.flags > .on, .flags > .off { font-size: 12px; }.flags > .on { color: #4d6cf4; }.flags > .off { color: #a5a8b1; }
+.flags > i { width: 12px; height: 12px; border-radius: 50%; background: #00a63e; }
+.flags > i.inactive { background: #ec1317; }
+.tags-panel { margin-top: 18px; }
+/* 标签卡(Figma EL-2deb2dc1):padding 16 / gap 16 / 高 84 / 圆角 32 / 白底 1px 边 + 0 1 2 阴影 */
+.tag-card { min-height: 84px; border-radius: 32px; box-shadow: 0 1px 2px rgb(0 0 0 / 8%); }
+.tag-card > svg { font-size: 40px; opacity: .18; }
+.tag-card div { display: grid; flex: 1; gap: 2px; min-width: 0; }
+.tag-card strong { overflow: hidden; font-size: 16px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.tag-card small { overflow: hidden; color: rgb(25 26 37 / 50%); font-size: 14px; font-weight: 400; text-overflow: ellipsis; white-space: nowrap; }
 .empty-row { margin: 14px 0 0; color: #a5a8b1; font-size: 12px; }.edit-empty { padding-bottom: 4px; }
 .edit-section-head { padding-bottom: 12px; border-bottom: 1px solid #edf0f4; }.edit-section-head h2 { display: flex; align-items: center; gap: 12px; }.edit-section-head em { color: #c87542; font-size: 11px; font-style: normal; font-weight: 600; }.edit-section-head > div { display: flex; align-items: center; gap: 20px; color: #9699a4; }
-.amenity-edit-grid { padding-top: 14px; }.amenity-edit-card { overflow: hidden; border: 1px solid #4d6cf4; border-radius: 7px; background: #fff; }.amenity-edit-card.muted { border-color: #e1e4ec; }.card-tools { padding: 10px 11px 0; }.card-tools button { padding: 0; border: 0; background: transparent; color: #c66e35; cursor: pointer; }.card-tools button:last-child { color: #ff303f; }
-.card-identity { display: grid; min-height: 90px; padding: 3px 15px 14px; place-items: center; align-content: center; color: #456de8; text-align: center; }.card-identity > svg { margin-bottom: 7px; font-size: 28px; }.card-identity strong { max-width: 100%; overflow: hidden; font-size: 16px; text-overflow: ellipsis; white-space: nowrap; }.card-identity small { max-width: 100%; margin-top: 3px; overflow: hidden; color: #9a9da8; font-size: 10px; font-weight: 400; text-overflow: ellipsis; white-space: nowrap; }
-.card-switch { min-height: 32px; padding: 0 13px; border-top: 1px solid #eff1f5; color: #454956; font-size: 12px; font-weight: 600; }
-.modal-switches { margin: -8px 0 20px; padding: 3px 0 16px; border-bottom: 1px solid #eceef3; }.modal-switches label { flex: 1; color: #414552; font-size: 13px; font-weight: 600; }.modal-switches label + label { padding-left: 20px; border-left: 1px solid #eceef3; }
-.amenity-form :deep(.ant-form-item-label > label) { color: #686c78; font-size: 12px; font-weight: 600; }.amenity-form :deep(.ant-select) { width: 100%; }.modal-actions { justify-content: flex-end; padding-top: 10px; border-top: 1px solid #eceef3; }
+/* 编辑卡(Figma 743:4446):与儿童/规则/长住卡同壳 —— 主色 1.5px 描边 / 圆角 8 / padding 0 0 24px / gap 16,
+   一屏 3 张并排(gap 16);顶部铅笔左·垃圾桶右;内容行 padding 16 16 24 + 底部 1px 分隔线(图标 20 + 名称 16 居中);
+   底部两行「标签 + 开关」,标签 16/600 */
+.amenity-edit-grid { margin-top: 16px; }
+.amenity-edit-card { display: grid; gap: 16px; padding: 0 0 24px; overflow: hidden; border: 1.5px solid #4d6cf4; border-radius: 8px; background: #fff; }
+.amenity-edit-card.muted { border-color: #e1e4ec; }
+.card-tools { justify-content: space-between; }
+.card-tools button { display: grid; padding: 12px; border: 0; background: transparent; color: #c66e35; cursor: pointer; place-items: center; }
+.card-tools button:last-child { color: #ff303f; }
+.card-tools :deep(svg) { font-size: 24px; }
+.card-identity { display: grid; gap: 8px; padding: 0 16px 24px; border-bottom: 1px solid #e2e8f0; justify-items: center; color: #4d6cf4; text-align: center; }
+.card-identity > svg { font-size: 20px; }
+.card-identity strong { max-width: 100%; overflow: hidden; font-size: 16px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.card-switch { padding: 0 16px; color: #1b1d30; font-size: 16px; font-weight: 600; }
+/* 开关行按稿(Figma 869:12478):Amenity Status 与 Add Highlight **同一行左右分列**,中间 1px 竖分隔 */
+.modal-switches { display: flex; gap: 24px; align-items: center; margin: -8px 0 20px; padding: 3px 0 16px; border-bottom: 1px solid #eceef3; }
+.modal-switches label { flex: 1; color: #1b1d30; font-size: 16px; font-weight: 600; }
+/* 中间那根竖线两侧要各留 24:label 用 space-between 时开关是贴右的,只加 padding-left 会让线紧贴开关(用户截图报的缺陷) */
+.modal-switches label + label { padding-left: 24px; border-left: 1px solid #eceef3; }
+.amenity-form :deep(.ant-form-item-label > label) { color: #686c78; font-size: 12px; font-weight: 600; }
+.amenity-form :deep(.ant-select) { width: 100%; }
+/* 图标下拉:稿面是一只 **60 高**的框,选中项**只显示图标**(32px 居中、主色),右侧才是 chevron */
+.amenity-form :deep(.ant-input) { height: 44px !important; min-height: 44px !important; border-radius: 8px; }
+.amenity-icon-select :deep(.ant-select-selector) {
+  display: flex;
+  height: 60px !important;
+  min-height: 60px !important;
+  align-items: center;
+  justify-content: center;
+  border-color: #e2e8f0 !important;
+  border-radius: 8px !important;
+  background: #fff !important;
+}
+.amenity-icon-select :deep(.ant-select-selection-item) { display: flex; align-items: center; justify-content: center; color: #4d6cf4 !important; font-size: 32px !important; line-height: 1 !important; }
+.modal-actions { justify-content: flex-end; padding-top: 10px; border-top: 1px solid #eceef3; }
 @media (max-width: 900px) { .view-grid, .tag-grid, .amenity-edit-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (max-width: 600px) { .view-grid, .tag-grid, .amenity-edit-grid { grid-template-columns: 1fr; }.edit-section-head { align-items: flex-start; flex-direction: column; }.edit-section-head > div { width: 100%; justify-content: space-between; }.modal-switches { align-items: stretch; flex-direction: column; }.modal-switches label + label { padding: 12px 0 0; border-top: 1px solid #eceef3; border-left: 0; } }
+@media (max-width: 600px) { .view-grid, .tag-grid, .amenity-edit-grid { grid-template-columns: 1fr; }.edit-section-head { align-items: flex-start; flex-direction: column; }.edit-section-head > div { width: 100%; justify-content: space-between; }.modal-switches { gap: 0; align-items: stretch; flex-direction: column; }.modal-switches label + label { padding: 12px 0 0; border-top: 1px solid #eceef3; border-left: 0; } }
 </style>

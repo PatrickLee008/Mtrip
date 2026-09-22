@@ -1,4 +1,436 @@
 # 会话交接文档(HANDOFF)
+
+### ★ 2026-09-21 晚(商户端 Hotel Profile 三个页签按 Figma `696:6334` 补全)
+
+**范围**:`merchant-web` 的 `/properties/:id/profile` 补齐此前只有按钮、点不动的三个页签 ——
+**Long Stay Details**(`696:4375` / 编辑 `747:5592` + 4 个弹窗)、**Hotel Policies**(`696:4711` /
+编辑 `748:7074` + 2 个弹窗)、**Nearby Attraction**(`696:4914` / 弹窗 `772:6252` / `814:13351`),
+视图 + 编辑 + 提交审核全链路;`merchant-service` 的 `PropertyProfileService` 增三块字段;
+1 个迁移 + 1 个 Figma 校验脚本。**未改**路由、权限键、菜单种子与网关。
+
+**用户已确认的两项取舍**:① 全功能(视图 + 编辑 + 增删改弹窗 + Save Draft / Submit Review);
+② 三块数据**新增 `merchant_store` JSON 列**并复用现有 content revision 草稿/审核/版本流。
+
+**关键口径**
+- 三列 `long_stay` / `hotel_policies` / `nearby_attractions`(JSON NULL),迁移
+  `V20260921140000__add-property-profile-hotel-tabs.sql`(守卫式,幂等)+ `03-group-store.sql` 快照;
+  **账本 28/28**。
+- 后端归一化集中在 `normalizeLongStay / normalizePolicies / normalizeNearby`:名称 trim、
+  条数上限(促销 10 / 权益 12 / 儿童 10 / 规则 12 / 景点 20)、折扣夹 0–100、**空名行丢弃**、
+  `status`/`bold` 布尔化 —— `bold` 与 amenities 的 `highlighted` 同口径,**停用项不可能同时加粗**。
+- 前端三个组件沿用 `HotelAmenities.vue` 的 `modelValue / editing / disabled` + `editRequested` 契约,
+  视图与编辑两态同文件;`activeTab`/`editingTab` 从 2 值扩到 5 值联合类型(rooms 仍跳 `/rooms`)。
+- **零新增 RBAC**:三个页签沿用 `mch:properties:profile-edit` / `profile-submit`,不触碰三处对齐。
+- **稿面偏差(已与用户逐条确认)**:Nearby 弹窗的 `Mark 1 / Mark 2` 多分组 + `Add More` **不做**
+  (按「一张卡 = 一个景点」);Check In/Out 的数字滚轮**不做**(沿用本页 `checkin_time`/`checkout_time`
+  文本口径);编辑态底部保留 `Cancel / Save Draft / Submit Review`(稿面 `Step 1 of 2 / Preview`
+  无对应能力);Property Rules 稿面无编辑弹窗,行内编辑;行尾细徽标按弹窗里确实存在的开关数还原;
+  主色沿用本页既有 `#4d6cf4` 而非稿面 `#4169ED`,避免同页两种蓝。
+
+**验证**
+- `merchant-web npm run build`(vue-tsc + vite)零报错。
+- 新增 `merchant-web/scripts/check-property-profile-tabs-figma.mjs`:**真实 SSR 渲染**三个组件的
+  视图/编辑/空态(必须 `app.use(Antd)` —— 不注册时 a-* 组件渲染成注释,文本断言会全落空)
+  + 编译产物 CSS 令牌 + i18n 两份键结构 + **跨层契约**(profile.vue 读写字段名 / 后端 `FIELDS`、
+  `JSON_FIELDS`、归一化方法 / 迁移与快照列名)—— **GREEN 131/131**;
+  灵敏度自检:把 `5 %` 改成 `5%` → `RED 127/131`,随即还原。
+- 后端容器内 `php -l` 通过;**真实 HTTP 往返 21/21 PASS**(GET 回落空结构 → POST 草稿保存含越界/脏值
+  → GET 读回归一化结果 → 跨站读被拒 → 无权限写被拒),测试用的 revision 与三列已还原为原值。
+- ⚠️ **改 `PropertyProfileService` 必须热重启**(本次踩到:不重启时 HTTP 仍返回旧结构、三块字段为 null,
+  只有 CLI 进程会读新文件)。已 `./mtrip.sh restart merchant-service` 并 `docker restart
+  mtrip-merchant-service-app-1`。⚠️ `./mtrip.sh restart` 的服务名白名单里**没有** `merchant-service-app`
+  (APP 池只列 system/user/goods/order/marketing),孪生要直接 `docker restart`。
+- ⚠️ **未做登录态浏览器视觉走查**(环境无浏览器自动化、开发库无已知密码的商户账号),需人工对图一次。
+- ⚠️ 该脚本**未接进 `scripts/check.ps1`**(本机未装 php / pwsh,该入口第 1 步即断,与本次改动无关)。
+
+**🐞 交付后用户走查报缺陷并已修(两条,同一组件)**
+1. **入住/退房政策重复「未填写」**:视图里时间与说明各自 `|| notProvided`,整块没填时会连出两条提示(时间一条、说明一条)。
+   改为「**整块是否填过**」判定(`checkInFilled` / `checkOutFilled`:时间 / 说明 / 证件任一有值即算填过),
+   空块只给**一处**提示;同时把时间从独立大号行改成与标签同排(`hp-check-head`,标签左 / 时间右,`align-items: baseline`),
+   两块之间加 1px 分隔线,布局更紧凑。
+2. **编辑态卡片顺序与视图对调**:编辑态此前是 Booking → **Pet** → Check In → Check Out(照 Figma 编辑画板),
+   而视图是 Booking → Check In & Out → Children(末尾 Pet)→ Rules,点编辑后宠物政策的输入位置与入退房政策**换了位**。
+   已把 Pet Policy 卡移到 Children & Extra Beds 之后,两态顺序一致。
+   校验脚本补 5 条回归断言(两态标题**出现顺序**递增、空块「未填写」恰好 2 处、空块不渲染大号占位时间、
+   只填时间时该块不出现「未填写」),**GREEN 136/136**;灵敏度自检:把顺序换回去 + 恢复重复占位 → `RED 133/136`,随即还原。
+
+**🐞 第二轮走查:Hospital Policies 的 Check In & Out 与稿面不一致(用户指定 `696:4711`),已逐值对齐**
+上一轮我按「优化布局」把标签与时间并排(space-between)且时间取 34px —— 与稿面**结构就不是一回事**。回到
+`696:4811` 逐节点取规格后按稿重排:**标签独占一行**(Inter 500/16 `rgba(25,26,37,.5)`),下面是**整体居中的值块**
+(`EL-a3671375` column / fill / gap 16 / 文本居中):时间 **Plus Jakarta Sans 700/48 + letter-spacing -0.02em**、
+说明 **Inter 400/16 居中 `#1B1D30`**、证件行 **row 居中 + align-items flex-end + gap 16**(`Require Documents`
+红 Inter 500/16)、两份证件之间按稿插入**独立 `.` 文本节点**;两块之间保留 1px `#E2E8F0` 分隔。
+顺带把同一卡片内与稿面不符的共享字号对齐:段标题 14→**16** + chevron 12→**24×24**、标签与取值 14→**16**。
+上一轮的「空块只给一处未填写」保持不变(占位改到居中值块内)。校验脚本把 CSS 断言从「正则扫全文」改为
+**按选择器取 scoped 声明块**(`.cls[data-v-x]{…}`,并区分普通后代与 `:deep()` 两种编译形态),
+新增 9 条断言(48/-0.02em/Plus Jakarta Sans、值块居中、说明居中、证件行居中与 gap、红字 500、证件名 600、
+分隔线、段标题 16、chevron 24)—— **GREEN 150/150**;灵敏度自检(时间改回 34px + 去掉居中 + 删掉 `.` 分隔)
+→ `RED 146/150`,随即还原。
+
+**🐞 第三轮走查:Add New 的中文译文串场景**
+`properties.profile.addNew` 原本是给「酒店图片」编辑器写的,zh 被特化成 **`新增图片`**,而英文仍是通用的 `Add New`;
+我把它当成通用按钮文案复用到三个新页签的 6 处按钮上,于是入住政策(证件)、儿童加床、物业规则、长住促销/权益、
+附近景点的「新增」在中文界面全显示成「新增图片」。修法:**通用键回归通用**(`addNew` zh = `新增`),
+图片编辑器另立专用键 `addNewImage`(zh = `新增图片`,en 仍 `Add New`,英文界面零变化)。
+顺带修掉自己引入的另一处混语言:景点「路程时间」占位符 `例如：10 mins` → `例如：10 分钟`。
+**译文体检**:脚本对照 en/zh 全量 key 走了一遍(缺失键 0、与英文完全相同的 16 条全是 Google/Stripe/PMS/ROI 等专有名词),
+并按「en 极短且通用、zh 多出具体名词」筛出 10 条,逐条核对后确认**只有 `addNew` 一条是串场景误译**,
+其余(`酒店星级`/`基础设施`/`每笔订单` 等)都是中文表达必需的具体化。
+校验脚本新增 7 条断言(通用键与图片键的值、占位符不再混英文、三个页签中文编辑态渲染出「新增」且不含「新增图片」),
+渲染器支持指定语言(新增 zh 渲染入口)—— **GREEN 157/157**;灵敏度自检(把 `addNew` 改回 `新增图片`)
+→ `RED 152/157`,随即还原。
+
+**🐞 第四轮走查:Children & Extra Beds 与稿面不一致(用户指定 `748:7074`),已逐值对齐 + 改名**
+我把这一组做成了**堆叠的行**(名称/说明在左、金额在右、Policy Status 挂在行尾),而稿面**视图(`696:4840`)与编辑(`772:12395`)都是「一屏 3 张并排卡」**。
+这次先经 Figma MCP 取节点 + **导出渲染图核对**(`~/Documents/FigmaImages/mtrip/policies-748-7074/`,三张:视图卡 / 编辑卡 / 整帧),再改:
+- **视图卡**:白底 / 1px `#E2E8F0` / 圆角 **12** / padding **20**,卡内名称 Inter 700/16 `#1B1D30`、说明 Inter 500/14 `rgba(25,26,37,.5)`、
+  金额 Inter 600/16 **主色**+ 单位 Inter 400/12(行内 gap 4)。Pet Policy 的说明按稿改成 Inter 600/16 `#1B1D30`(渲染图确认确实比正文重)。
+- **编辑卡**:白底 / **主色 1.5px 描边** / 圆角 **8** / `padding 0 0 24px`;顶部工具栏 **space-between**(铅笔左、垃圾桶右,图标 **24**),
+  内容块 `padding 16 16 24` + **底部 1px 分隔线**,底部独立 `Policy Status ` 行(`padding 0 16`)。垃圾桶改用 `DeleteFilled`(稿面是 `tabler:trash-filled`)。
+- **改名(用户要求)**:en `Children & Extra Beds` → **`Children & Extra Beds Policies`**,zh `儿童与加床` → **`儿童与加床政策`**(视图组标题与编辑卡标题同一个键,两处同改;`emptyChildren` 等其余文案本就带「政策」,未动)。
+- ⚠️ **同屏发现的同类差异(本轮按范围未改,待你定)**:① `Property Rules` 在稿面也是「3 张并排卡」(视图 `696:4882` / 编辑 `772:12307`,编辑卡与儿童卡同构,只是把金额行换成 36×36 图标),
+  我现在仍是堆叠行;② 稿面这两组的**组标题是灰色 500/16**(另两组是蓝色 600/16,属稿面自身不一致),本页四组共用一个蓝色标题样式;
+  ③ 编辑卡头的 `Add New` 在稿面是自定义药丸(padding 10×16/圆角 8/文字 12),本页统一用 antd primary 按钮;
+  ④ `Pet Policy` 在编辑稿的卡头带一个状态开关(需要给 `pet` 加 `status` 字段,属数据模型变更,本轮未做)。
+- 校验脚本把 3 条按旧结构写的断言改到新结构,并新增 14 条(改名后的中英文、视图 3 卡与其三段、编辑 3 卡与其工具栏/内容块/状态行、
+  以及并排网格/视图卡/编辑卡/内容块/工具栏/状态行/金额/名称说明共 7 条**编译产物 CSS 令牌**断言;为此给脚本加了「按选择器取 scoped 声明块」的助手)——
+  **GREEN 171/171**;灵敏度自检(网格改 1 列 + 编辑卡描边改回灰底) → `RED 169/171`,随即还原。
+
+**🐞 第五轮走查:儿童与加床政策的 Add New 弹窗(用户指定 `816:13556`),已对齐**
+原弹窗是「竖排 a-form + 底部两列网格」,稿面是**2×2 字段网格**。同样先取节点 + 导出渲染图再改:
+标题 **Plus Jakarta Sans 600/18** → `Policy Status` 行(**space-between**,Inter 600/16)+ **1px 分隔线** →
+**2×2 网格**(label↔input gap 6、行/列 gap 24;`Policy Name`/`Short Description`/`Amount`/`Per Unit`,标签 Inter 600/12 `#334155`)→
+底部 **Cancel**(白底描边/圆角 6/高 44)+ **Create Now**(主色/圆角 8/高 44/尾部箭头;编辑态为 `Save`);输入框统一 **高 44 / 圆角 8 / 边 `#E2E8F0`**。
+**金额框**按稿在右侧加了**币种胶囊**(圆角 4 / 底 `rgba(65,105,237,.08)` / 文字 Inter 600/12 主色)。
+- **唯一取舍(已声明)**:胶囊做**只读**(去掉稿面的 chevron)。币种是物业/站点级事实,做成可选下拉就是假控件,
+  与房量价格页、收益页「币种只读」同一口径;并且它**需要后端下发** —— 本页此前没有币种,已给
+  `PropertyProfileService::detail()` 的房型查询补选 `currency`(在售房型为空时回退到该物业任意房型),以 `metrics.currency` 返回。
+  `editingChildId` 为空时胶囊即物业币种,拍板可改成「金额类型下拉(币种/Complimentary)」——那需要给 `children[]` 加字段,本轮未做。
+- **验证**:容器内 `php -l` 通过;merchant-service 与 app 孪生已热重启;**真实 HTTP** `GET properties/profile?propertyId=7`
+  → `code=0`、`metrics.currency='MMK'`(房型 2 / 房间 70 一并核对)。校验脚本新增 17 条断言
+  (弹窗 i18n 新键、9 条编译产物 CSS 令牌、5 条 SFC 结构、3 条**币种贯通**:后端 metrics / api 类型 / profile.vue 两个分支都传 `:currency`)——
+  **GREEN 188/188**;灵敏度自检(网格改 1 列 + 删币种胶囊 + Cancel 圆角改 4) → `RED 185/188`,随即还原。
+- ⚠️ 弹窗内容**未做 SSR 真实渲染断言**(antd Modal 关闭时经 Teleport 不产出 HTML,`renderToString` 拿不到),
+  与 Long Stay / Nearby 两个弹窗同口径:用**编译产物 CSS 令牌 + SFC 结构 + i18n** 三重断言替代。
+
+**🐞 第六轮走查:弹窗里「计费单位」比另外三个输入框矮(用户截图)**
+用户报「新建政策中表单输入框的高度不一致」。**没有靠肉眼猜**:把附件截图转成 PNG(Swift 不参与,用 macOS `sips` 转格式)
+后用 Node 解 PNG 扫描线逐行扫像素,量出(源图 2× DPR,括号内为换算 CSS px):
+`政策名称/简短说明/金额` 边框行都在 **88px(44)**、底部按钮 **87px(≈44)**、而 `计费单位` 下拉框只有 **68px(34)** —— 只差下拉框一个。
+- **根因**:`merchant-web/src/styles/index.less` 用 `!important` 把 antd 控件钉死了
+  (`.ant-input{min-height:34px!important}`、`.ant-select-single:not(.ant-select-customize-input) .ant-select-selector{height:34px!important}`、
+  下拉文本 `line-height:32px!important`)。我上一轮给弹窗写的 `height: 44px` / `border-radius: 8px` / `border-color` / `background`
+  **全是不带 `!important` 的**,所以通通被吃掉:下拉框回落到 34px,而 `.ant-input` 的 `height` 恰好没被全局声明、侥幸生效成 44px —— 于是「四个控件只有一个不一样」。
+- **修法**:弹窗作用域内对这四条同样加 `!important`,并保证特异性高于全局(下拉框选选择器到 `(0,5,0)`),四个控件统一 **高 44 / 圆角 8 / 边 `#E2E8F0` / 白底**;
+  下拉选中文本 `line-height: 42px !important` 保证垂直居中;金额框内层输入框 42 高、无边框、透底,不撑破外框。
+  ⚠️ 连带影响:输入框底色由全局的 `--mtrip-bg-soft` 变为稿面的**白底**、圆角由 `--mtrip-radius-control` 变为 **8** ——
+  这是上一轮「按稿对齐」的意图原本就该生效的效果,现在才真正落到运行时。
+- 校验脚本把 1 条断言拆成 4 条并断言 `!important` 本身(高度 / 圆角 / 描边 / 下拉行高 / 金额内层输入不撑高),
+  **GREEN 191/191**;灵敏度自检(只删下拉框那条 `!important` 覆盖 = 复现用户报的缺陷) → `RED 190/191`,随即还原。
+
+**🐞 第七轮走查:儿童与加床政策卡片(用户截图,两条)**
+1. **卡片紧贴分组头的分隔线,缺上边距**。`.hp-card-grid` / `.hp-rule-list` 只有网格自身的间距,没有与分组头之间的外边距
+   → 编辑态卡片顶边贴住 1px 分隔线。按稿补:`margin-top: 16px`(编辑态,`772:12395` 实例 gap 16);
+   视图态分组头自身已有 10px 下内边距,故 `.hp-section-body .hp-card-grid / .hp-rule-list` 补 14 凑成稿面的 24(`696:4841`)。
+   **同屏的物业规则列表是同一个缺陷,一并修了**。
+2. **金额为空或 0 时卡片显示占位破折号「—」**,用户要求显示 **`Complimentary`(中文「免费」)**。
+   新增 `amountLabel(row)`:金额去掉千分位/空白后为空或数值为 0 → 返回 i18n `policiesTab.complimentary`(en `Complimentary` / zh `免费`),
+   否则原样显示;视图卡与编辑卡两处都换成它(`row.amount || '—'` 写法已无残留)。非数字文本(如手填 `Complimentary`)不受影响。
+- 校验脚本新增 4 条断言(渲染:空/`0`/`0.00` 三张卡都出 `Complimentary`、中文出「免费」、填了 `1,000` 的照原样且不再出现「—」、
+  两张卡都走 `amountLabel`;CSS:卡片与规则列表的上边距编辑 16 / 视图 14)—— **GREEN 195/195**;
+  灵敏度自检(恢复破折号 + 删掉上边距) → `RED 191/195`(4 条命中),随即还原。
+
+**🐞 第八轮走查:金额右侧的 MMK 由只读胶囊改成可选下拉(用户要求)**
+用户指出「MMK 是货币单位、不是固定的,应该是个下拉选择;但系统货币字典还没定,先改成下拉」。
+我上一轮把它做成只读并写了「币种是物业级事实、做成可选择就是假控件」——**这个判断是错的**:稿面的胶囊本来就带 chevron,
+就是个选择器。改法:
+- **货币字典收敛在一处**:新增 `merchant-web/src/config/currencies.ts`(占位 EUR/MMK/THB/PHP/USD,
+  取自 `sys_site.currency`(EUR/MMK)与仓库其它处(THB/PHP/USD)),附「**定稿后只改这一个文件**」说明;
+  下拉选项 = 字典 + 当前值,保证**物业币种不在字典里也能显示**(否则会出现选不中的空壳)。
+- **政策行自带币种**:`children[].currency` 新增字段,后端 `normalizePolicies` 归一化(大写、限长 8),
+  随 revision 一起走草稿/审核;前端 `PolicyChild` 类型与 `profile.vue` 读取同步;新建默认 = 物业币种(`metrics.currency`),
+  取不到回落字典兜底(`FALLBACK_CURRENCY`)。
+- **组件**:金额框右侧由 `<span>` 换成 `<a-select :bordered="false">`,样式仍是稿面的 24 高 / 圆角 4 / 蓝底胶囊 + chevron;
+  ⚠️ 关键是把它**从「四个控件等高 44」那条 `!important` 规则里排除**(`:not(.hp-currency-select)`),否则胶囊会被撑到 44。
+- **卡片渲染**:纯数字金额按该行币种补前缀(`35000` + `MMK` → `MMK 35000`);金额里已写货币的照原样,避免 `MMK MMK 35,000`。
+- **验证**:容器内 `php -l` 通过;merchant-service 与 app 孪生热重启;**真实 HTTP 往返 5/5 PASS**
+  (初始为空 → 保存两条含 `mmk`/空币种 → 读回 `MMK` 大写归一化、空值保留空串、金额原样),测试用的 revision 与三列已还原。
+  校验脚本新增/改写 12 条断言(字典文件与「只改一处」说明、字典覆盖平台已出现币种、选项=字典+当前值、默认取物业币种、
+  跨层三处字段贯通、渲染补前缀与不重复货币、CSS 胶囊 24/圆角 4/蓝底/文字 600/12、以及**不被 44 规则扫进去**)——
+  **GREEN 207/207**;灵敏度自检(改回只读 `<span>` 并去掉 `:not`) → `RED 203/207`(4 条命中),随即还原。
+
+**🐞 第九轮走查:币种下拉里「MMK」被截成「M...」(用户截图)**
+上一轮把币种改成下拉后,面板沿用了 antd 默认的「与触发器等宽」(72px),而**选中项还要给右侧勾选图标让位**,
+于是 3 位货币代码被 ellipsis 掉(`EUR`/`THB`/`PHP`/`USD` 看着正常,只有选中项变成 `M...`,最容易漏掉)。
+修法:给下拉加 `:dropdown-match-select-width="false"`(面板改由选项内容自适应),触发器 64→**72px** 留余量。
+校验脚本补 2 条断言(触发器宽度 72、面板自适应属性在)—— **GREEN 208/208**;灵敏度自检(去掉该属性 + 宽度改回 64) → `RED 206/208`,随即还原。
+⚠️ 这类「看着正常其实被截断」的问题只有真机/截图能发现,`hasDecl` 那类 CSS 断言抓不到 —— 面板宽度不是我们的 CSS 决定的。
+
+**🐞 第十轮走查:分组头的向下箭头太大(用户截图)**
+`.hp-section-head` 的 chevron 我照稿写成 `font-size: 24px` —— 照抄了稿面节点的**方框尺寸**。稿面那枚是 `lucide/chevron-down`,
+lucide 的笔画(`m6 9 6 6 6-6` + 2px 描边)在 24 方框里只有约 **14×8**,内边距很大;而 antd 的 `DownOutlined` 字形几乎填满方框。
+**实测**(把用户截图转 PNG 后扫像素,按 16px 分组标题的 CJK 字高定标 /2):现状字形 **20×14 CSS px**,稿面应为 **14×8** —— 差 1.4~1.7 倍。
+改为 **`font-size: 16px`**(antd 字形约 13.3×9.3,与稿面视觉等大)。校验脚本把那条断言从「必须是 24」改成「必须是 16」并写明理由;
+**GREEN 208/208**;灵敏度自检(改回 24) → `RED 207/208`,随即还原。
+⚠️ **教训**:稿面给图标写的是**方框尺寸**,不同图标库的字形占空比差别很大(antd 填满 / lucide 留白),照抄数字必错 —— 这类问题只能靠截图/真机发现。
+
+**🐞 第十一轮走查:宠物政策编辑态补开关 + 所有编辑卡右上角箭头换图标(用户截图/指定 `748:7074`)**
+1. **宠物政策卡头是状态开关,不是 chevron** —— 这条我在第四轮就发现并写进「未做」清单(当时判断要给 `pet` 加字段、属数据模型变更),
+   这次按用户要求补上。取节点 `772:11667` 确认:卡头 `Paragraph`(row, space-between)里只有标题和 **49.45×24 开关**;
+   新增 `pet.status`(后端归一化缺省 **true** 兼容旧数据、api 类型、`profile.vue` 兜底、`emptyPolicies` 默认),
+   视图侧停用时整块淡化(`.hp-pet.inactive`,与儿童卡同口径)。
+2. **所有编辑卡右上角的展开箭头太小** —— 我原先用的是**文字箭头字符**(一个 Unicode 字符),而稿面两处
+   (视图分组头 `696:4815`、编辑卡头)实测都是 **14×8**(24 方框的 lucide chevron)。已统一换成 `DownOutlined`,
+   `font-size: 16px`、色 `#9aa0ae`,与视图分组头完全一致(共 5 处:预订/入住/退房/儿童/规则)。
+- **验证**:容器内 `php -l` 通过;merchant-service 与 app 孪生热重启;**真实 HTTP 往返 5/5 PASS**
+  (未填默认 true → 存 `status=false` 读回 false 且描述保留 → 不传 status 回落 true),测试数据已还原。
+  校验脚本新增 9 条断言(箭头是图标而非文字、共 5 处、宠物卡头是开关且不再有 chevron、`.collapse-mark` 16px/同色、
+  跨层三处 pet.status 贯通、视图启用/停用两态的 inactive 类;并把 `Policy Status` 计数从 6 改 7)——
+  **GREEN 217/217**;灵敏度自检(箭头换回文字字符 + 宠物卡头换回箭头 + 字号改 12) → `RED 211/217`(6 条命中),随即还原。
+
+**🐞 第十二轮走查:宠物政策的标签颜色与「未填写」占位(用户截图)**
+用户报「宠物政策字体与其他标题不一致,应该用蓝色;未填写的字体颜色应该淡化,与页面整体风格一致」。先量截图确认现状:
+「宠物政策」标签实测 (133,134,145) 与「入住/退房」标签**完全相同**(都是稿面的灰色标签,并没有写错);
+「未填写」实测 **(22,22,33)** —— 又粗又深,问题在这。
+- **未填写**:根因是宠物块的 `<p>` **漏了 `empty` 类**,`|| notProvided` 的占位跟着说明文案一起套用了
+  `.hp-text`(按稿面 600/`#1b1d30`)。补上 `:class="{ empty: !description }"` 即走页面既有的
+  `.hp-text.empty`(`#a5a8b1` / 400),与「预订政策」几行的未填写同口径。
+- **标签颜色**:稿面 `696:4879` 确实是**灰色**(与 入住/退房 同款),但这一块夹在两个蓝色分组标题
+  (「儿童与加床政策」/「物业规则」)之间,用户要它跟其它标题一样是蓝色 → 加 `.hp-pet .hp-label { color:#4d6cf4; font-weight:600 }`。
+  ⚠️ **这是按用户口径覆盖稿面**,已在代码注释与规格文档写明,别再「照稿改回灰色」。
+- 校验脚本新增 3 条断言(渲染:未填时占位必须带 `empty` 类;样式:`.hp-text.empty` 为 `#a5a8b1`/400;
+  样式:`.hp-pet .hp-label` 为 `#4d6cf4`/600)—— **GREEN 220/220**;灵敏度自检(去掉 `empty` 绑定 + 删蓝色规则) → `RED 218/220`,随即还原。
+
+**🐞 第十三轮走查:物业规则对齐稿面(用户指定 `748:7074`)**
+这条在第四轮就发现并写进了「未做清单」——稿面 `Property Rules` 与 `Children & Extra Beds Policies` 是**同一套卡片**,
+我当时仍是堆叠行。这次补齐:
+- **视图** `696:4882`:堆叠行 → **一屏 3 张并排卡**(白底 / 1px `#E2E8F0` / 圆角 12 / padding 20),
+  卡内 **36×36 图标** + 名称 700/16 + 说明 400/14 灰。
+- **编辑** `772:12307`:与儿童卡**同壳**(主色 1.5px 描边 / 圆角 8 / `padding 0 0 24px`),顶部工具栏(铅笔左 / 垃圾桶右,24×24)、
+  内容块(`padding 16 16 24` + 底部 1px 分隔线,内含 36×36 图标 + 名称/说明)、底部 `Policy Status` 行 + 开关。
+  **卡面按稿做成纯展示**,顺带删掉旧的 `.hp-rule-list / .hp-rule / .hp-rule-icon / .hp-rule-main / .hp-rule-edit /
+  .hp-rule-fields / .hp-card-tools / .hp-status / .hp-rule-icon-select` 一堆只服务旧版式的样式。
+- ⚠️ **稿面没画规则编辑弹窗**,但编辑卡有铅笔(入口)。我按同屏「儿童与加床政策」**既有的弹窗语言**补了一个
+  (标题 / Policy Status 行 / 规则名称 / 规则图标 / 简短说明),**复用** `.hp-child-form` / `.hp-form-grid`(含新增的
+  `.hp-form-span` 让说明占满整行)/ `.hp-modal-actions` 那套样式与尺寸,不另造视觉;原来的「行内直接编辑」随之取消。
+  新增 i18n `ruleIcon` / `ruleNameRequired` / `editRule` / `createRule`(en + zh)。
+- **验证**:`vue-tsc --noEmit` 零报错;并顺手修掉一处**类型漏改** —— `patch({ pet: { description } })` 在上一轮给
+  `pet` 加了 `status` 后缺字段(`Property 'status' is missing`),改为 `{ ...modelValue.pet, description }`。
+  校验脚本改 8 条 + 新增 4 条(两段各 3 张卡、卡片网格共 2 个、金额行只儿童卡有、规则图标 36×36 主色、
+  旧的堆叠行样式必须清除、规则弹窗字段齐全)—— **GREEN 222/222**;
+  灵敏度自检(视图规则改回堆叠 + 图标字号改回 22) → `RED 219/222`(3 条命中),随即还原。
+
+**🐞 第十四轮走查:预订政策对齐稿面(用户指定 `696:4711`)**
+这一组的排版一直做错了:**稿面是「标签独占一行 + 取值在下方」**(`EL-56135fb6`:column / gap 16),
+我却做成了**左右两列**(`.hp-field` flex + `.hp-label` flex-basis 190px)。取节点 `696:4787` 后按稿重排:
+- 每组换成 `.hp-field.hp-field-block`(grid / gap 16),标签 500/16 灰、取值 600/16 `#1B1D30`;
+- 组与组之间补**独立的分隔线元素**(`.hp-form-line`,1px `#E2E8F0`)——稿面用的是 `Separator`(`EL-6beff68f`),
+  不是给某一块加 `border-top`;
+- **顺带统一了四个分组的间距**:稿面四个分组容器(`696:4787/4811/4840/4882`)都是 **column + gap 24**,
+  而我的 `.hp-section-body` 是 gap 14 —— 改成 `gap: 24px; padding: 14px 0`(头部自身 10px 下内边距 → 头部到首块 24)。
+  于是两处特例可以删掉:`.hp-section-body .hp-card-grid { margin-top: 14px }` 与
+  `.hp-check + .hp-check { padding-top: 16px; border-top: … }`(入住/退房两块之间改成与预订政策同样的独立分隔线元素);
+  另外去掉宠物块自造的 `border-top` —— 稿面那里只有一条几乎看不见的 `#F8FAFC` **下**边框,没有可见上边框。
+- 校验脚本新增 4 条 + 改 2 条(预订政策 3 组都是块级、组间恰好 2 条分隔线、分组体 24 间距与 14 上下内边距、
+  标签↔取值 16、入住/退房之间的分隔线元素)—— **GREEN 226/226**;
+  灵敏度自检(预订政策改回左右两列 + 分组体间距改回 14) → `RED 222/226`(4 条命中),随即还原。
+
+**🐞 第十五轮走查:附近景点按稿重做(用户指定 `696:4914`)——数据模型也要改**
+第一轮我把弹窗里的 `Mark 1 / Mark 2` 当成设计侧的重复示例,**做成了「一张卡 = 一个地点」**,并在文档里写成「已与用户确认的偏差」。
+这次导出渲染图 + 放大核对后确认**我理解错了**:稿面一张卡画的是「**机场 → 景点**」两段行程 ——
+图片 + **若干地点(`stops`)**,地点之间用竖直虚线相连,底部是整宽的 `Edit Details` 按钮。所以这轮连**数据结构一起改**:
+- **数据模型**:`nearby_attractions` 由 `[{id,name,image,icon,travelTime,travelMode,distance,status}]`
+  改为 `[{id,image,status,stops:[{id,icon,name,travelTime,travelMode,distance}]}]`;
+  后端 `normalizeNearby` 增 `NEARBY_STOP_LIMIT=8`、丢弃空名地点,**并兼容旧扁平结构**(旧数据直接挂字段 → 视为单地点卡),
+  前端 `normalizeNearby` 同样兜底。**真实 HTTP 往返 10/10 PASS**(含「旧扁平结构被迁移为单地点卡」)。
+- **卡面**:图片 388×201 + **顶部 68px 渐变蒙层**(`0deg` 透明 → 50% 黑;渲染图实测首行亮度 ~104 vs 自然值 ~184,确认稿面确实画了)
+  + 左上角 **12px 绿色状态圆点**(放大 4 倍核对过:**不是数字序号**,我先前在缩略图里看成了「1/2/3」);
+  信息区 padding 20 / gap 24;**地点行** = 36 圆形图标底(`rgba(31,78,211,.08)`) + 20px 主色图标 + 名称 600/16 + 路程 400/14,
+  行间距 **40**;**竖直虚线** 2px 主色 4/4、40% 透明;**`Edit Details` 按钮**整宽 / 高 34 / 圆角 8 / 主色描边。
+- **交互**:视图态点 `Add New` 或 `Edit Details` 会**先切到编辑态、再自动打开对应弹窗**(`watch(editing)` + `pending`),
+  不用点两次;弹窗支持 `Add More` 追加地点、多于一条时可删单条,整卡删除仍在弹窗左下。
+- **i18n** 新增 `editDetails` / `addMore` / `mark`(Location {index})/ `stopLimitReached`(en + zh);
+  ⚠️ 稿面的 `Mark 1` 是设计侧速记,实现用 `Location {index}`,已在规格文档写明。
+- 校验脚本改 8 条 + 新增 5 条(三张并排卡、每卡 2 个地点行、地点名与路程写法、每卡 1 条虚线共 3 条、
+  蒙层 + 圆点、`Edit Details` 视图态也有、多地点弹窗与 `Add More`、跨层三处 stops 贯通)—— **GREEN 231/231**;
+  灵敏度自检(退回「一卡一地点」+ 去掉蒙层/圆点/Edit Details) → `RED 223/231`(8 条命中),随即还原。
+
+**🐞 第十六轮走查:附近景点空态按钮 + 底部操作栏置底(用户截图/口述)**
+1. **无数据时头部给「编辑」而不是「新增」**:`Add New` 是「在已有列表里再加一张」的语义,空列表时它没有落点
+   (而且点了只是切编辑态,并不会真的新建)。改为:空 → `<a-button :disabled="disabled" @click="emit('editRequested')">
+   <EditOutlined />{{ t('common.edit') }}</a-button>`(**与 Hotel Details / Amenities / Policies 三个页签的编辑按钮逐字同款**);
+   有数据时才用稿面的 `Add New`。
+2. **底部操作栏置底**:`.edit-actions` 只有 `position: sticky; bottom: 0` —— **内容比视口短时它不会吸底**
+   (sticky 只在元素「本来会被滚出视口」时生效),于是附近景点这种短内容页里,那条件在内容下方而不是页面底部。
+   修法:`.profile-page` 改为 flex column,把 `a-spin` 的**两层包裹容器**(`.ant-spin-nested-loading` / `.ant-spin-container`)
+   也撑满并设为 flex column,操作栏 `margin: auto -28px -48px`(`margin-top: auto` 负责「短内容也贴底」,
+   原来的 `sticky` 负责「长内容滚动中吸底」,两者并存)。窄屏 media query 里的 `margin` 同步改成 `auto`。
+- 校验脚本新增 4 条断言(空态头部出 `Edit`、不出 `Add New`;空态按钮与 HotelPolicies 的编辑按钮同款;
+  profile.vue 的 **scoped 样式单独用 `@vue/compiler-sfc` 编译后再断言** —— 它不在 SSR 构建入口里 ——
+  检查页面 flex column / spin 两层撑满 / 操作栏 `margin:auto…` + `position:sticky`)—— **GREEN 235/235**;
+  灵敏度自检(空态改回 `Add New` + 操作栏 `margin` 改回 `20px`) → `RED 232/235`(3 条命中),随即还原。
+
+**🐞 交付后用户报缺陷并已修:空列表进编辑态后没有「新增」入口**
+上一轮把「无数据 → 编辑按钮」的条件写成 `v-if="!modelValue.length"` —— **编辑态下这个条件仍为真**,
+于是点「编辑」进了编辑态之后,头部又渲染回「编辑」按钮,而它只会再发一次 `editRequested`,**空列表永远加不了卡片**。
+条件改为 **`v-if="!editing && !modelValue.length"`**(编辑态一律 `Add New`)。四种状态已逐个实渲染核对:
+视图态/空 → `Edit`;视图态/有数据 → `Add New`;**编辑态/空 → `Add New`**;编辑态/有数据 → `Add New`。
+校验脚本补 1 条回归断言(空列表 + `editing: true` 必须出 `Add New` 且不出裸 `Edit`)—— **GREEN 236/236**;
+灵敏度自检(去掉 `!editing &&`) → `RED 234/236`(2 条命中),随即还原。
+⚠️ 教训:「按状态切换的按钮」必须把**两个状态维度**(有无数据 × 是否编辑态)都枚举出来验一遍,只验「视图态空列表」会漏掉这次这种。
+
+**🐞 第十七轮走查:长住详情页签按稿重排(用户指定 `696:4375`)**
+先导出渲染图 + 逐节点取规格,发现四处结构性差异(不是微调):
+1. **稿面是两张卡**:促销卡**带卡头**(标题 + Edit 药丸)、权益卡**没有卡头**;我做成了一张卡里两段。
+2. **卡头的 Edit 是「描边药丸」**(透明底 / 1px `#4169ED` 边 / 主色文字 600/12 / padding 10x16 / 圆角 8),
+   我用的是 antd 默认按钮。⚠️ 这枚药丸在稿面**四个页签的卡片头都是这个样子**,本轮只按请求改了长住这一处,
+   其余三处仍是 antd 默认按钮 —— 要不要一并统一,等你定。
+3. **促销行**稿面是「名称列 **右对齐** + **固定 300px** 分隔线 + 取值列 **左对齐**」(三者在行内居中),
+   行尾是一枚 **12×12 状态绿点**;我做成「名称左 + 弹性线 + 取值 + **chevron 箭头**」——箭头是我加的,稿面没有。
+4. 分组小标 13px → 稿面的 **16/500**;权益圆点 **6px → 12px**(渲染图实测促销行与权益都是 12×12、色 `#00A63E`),
+   权益行间距 12 → **16**。
+- 校验脚本改 1 条 + 新增 6 条(行尾是绿点不是箭头、行的三段对齐与 300px 线、两卡且只有促销卡有卡头、
+  Edit 药丸的渲染与样式、分组小标 16/500、行间距与权益圆点 12px)—— **GREEN 242/242**;
+  灵敏度自检(改回「左名称 + 弹性线 + chevron + 6px 圆点 + antd 按钮」) → `RED 238/242`(4 条命中),随即还原。
+
+**🐞 第十八轮走查:长住详情「编辑态」按稿重排(用户指定 `747:5592`)**
+接着上一轮的视图,这轮把编辑态也按稿改了。导出渲染图后发现我第一版**整块版式都不对**:
+- **一屏 3 张并排卡**(实测卡宽 **392** / 间距 **16**),卡壳与儿童加床卡**完全同构**(主色 1.5px 描边 / 圆角 8 / `padding 0 0 24px`);
+  我原来是一列堆叠行。
+- 工具栏 **铅笔左 / 垃圾桶右**(space-between、图标 24、各 12 内边距);我原来两个图标挤在右上角。
+- 内容行 `padding 16 16 24` + **底部 1px 分隔线**;促销是「名称 — 弹性线 — 折扣%」两端 **PJS SemiBold 24 主色**,
+  权益**只有名称**(`bold` 字段直接决定字重 Regular/Bold 24,不是徽标)。
+- 状态区是「标签 + **开关**」:促销 1 行、权益 2 行(状态 + 加粗)。**我原来那两枚 `Active/Paused/Bold` 文字徽标是自己加的**,
+  稿面根本没有;现已换成开关,并补了 `changePromotionStatus` / `changeBenefitStatus` / `changeBenefitBold`(停用项自动取消加粗)。
+- ⚠️ 稿面两处状态标签都写的是 **`Amenity Status`**(从设施组件复制的痕迹),实现用语义正确的
+  `Promotion Status`(已有键)与 `Bold Benefit`(与稿面一致),已在规格文档写明。
+- 校验脚本改 4 条 + 新增 6 条(12 张编辑卡、工具栏/内容行计数、20 行状态行、未加粗权益 6 条、
+  旧徽标与堆叠行样式必须清除、栅格 3 列 gap 16、卡壳 1.5px/圆角 8、内容行 padding+分隔线、工具栏两端对齐、
+  PJS 24 主色与 light 字重、状态行 padding)—— **GREEN 248/248**;
+  灵敏度自检(改回一列堆叠 + 文字徽标) → `RED 246/248`(2 条命中),随即还原。
+
+**🐞 第十九轮走查:四个页签的「编辑」按钮统一(用户要求)**
+前几轮我按页签逐个对齐时,**编辑按钮一度是两种样子**:长住那枚是稿面的描边药丸,其余页签还是 antd 默认按钮
+(上一轮我已经把这个不一致标出来问过)。这次按要求统一,做法是**抽一份共享样式**而不是复制四遍:
+- `src/styles/index.less` 新增 **`.mtrip-edit-pill`**(稿面 `EL-e3fb87d1` + 透明底 + 1px 主色描边):
+  行高 **34px** / `padding 0 16px` / gap 8 / 圆角 8 / 图标 14 / 文字 600/12,颜色沿用本页既有令牌 `#4d6cf4`。
+- **五个引用点全部改用它**:profile.vue 的酒店详情卡、设施卡 ×2、长住详情卡、酒店政策卡、附近景点空态按钮。
+- 顺带删掉三处**已经失效的旧规则**(`.ls-edit-pill`、两处 `.panel-head :deep(.ant-btn)` 与长住那处)——
+  它们只服务旧的 antd 按钮,留着就是下一次"样式漂移"的种子。
+- 页头那枚 `Edit Hotel Profile` **不动**(稿面它是**实心**蓝底白字,与卡片头的描边药丸不是同一个东西)。
+- 校验脚本新增 8 条断言(共享样式只在 index.less 定义一份且尺寸齐全、五个引用点逐个断言用的是同一个类且 markup 一致、
+  一个组件都不许再自带药丸样式、渲染层断言各页签都是 `.mtrip-edit-pill` 且**没有混进 `ant-btn`**)——
+  **GREEN 256/256**;灵敏度自检(政策页改回 antd 按钮 + 共享高度改 30) → `RED 253/256`(3 条命中),随即还原。
+
+**🐞 第二十轮走查:酒店设施页签按 11 个节点逐个核对(用户给的一组 Figma 链接)**
+用户一次给了 11 个节点(视图 `696:4238`、编辑 `743:4446` + 餐饮/接待/基础设施各 Edit/Create 弹窗 + 3 条连线),
+要求核对**酒店设施**页签。同样先导出渲染图 + 取样像素,发现两处**真缺口**:
+- **「加亮」在视图里根本没画**:稿面每枚胶囊/标签卡的行尾是「**星 + 状态点**」两个 12×12(星:加亮=实心主色 `#4169ED`、
+  未加亮=描边灰;点:启用 `#00A63E`、停用 `#EC1317`)。我第一版**只有点**,而且点还画成了 8px 带光晕的圆。
+- **尺寸/壳差一档**:胶囊稿面是 `padding 12 16` / gap 16 / **圆角 32** / 白底 1px 边、图标 **24**、名称 **600/16**(字距 .0088em);
+  标签卡稿面 `padding 16` / **高 84** / 圆角 32 / 图标 **40**;编辑卡与其它页签**同壳**(1.5px 描边 / 圆角 8 / `padding 0 0 24px`),
+  内容行 `padding 16 16 24` + 底部 1px 分隔线、**只显示图标(20)+名称、不显示描述**、状态行标签 16/600。
+  我第一版是 1px 描边 / 圆角 7 / 无内边距与分隔线 / 描述也画了。
+- 顺带把**弹窗标题**也收敛成全局共享的 `.mtrip-modal-title`(PJS 600/18),各页签 a-modal 同号。
+- 校验脚本新增 17 条断言(胶囊/标签卡的尺寸与圆角、行尾星与点各自的颜色与尺寸、加亮/未加亮两种星、
+  编辑卡同壳、内容行 padding 与分隔线、不显示描述、状态行 16/600、弹窗标题与开关行字号),
+  并为此**把 HotelAmenities 也纳入 SSR 渲染校验**(新增渲染入口 + 夹具)—— **GREEN 273/273**;
+  灵敏度自检(去掉星、胶囊样式与编辑卡壳改回旧值) → `RED 269/273`(4 条命中),随即还原。
+
+**🐞 第二十一轮走查:设施弹窗(用户指定 `869:12478` Create New Essential Amenity)**
+上一轮我核对了设施页签的视图/编辑,漏了弹窗内部的排布。这次导出 Create 弹窗渲染图后量了两处:
+1. **两个开关行必须同一行左右分列** —— 稿面 `Amenity Status [开关] │ Add Highlight [开关]`;
+   我的 `.modal-switches` **自身没设 `display:flex`**(只有里面的 `label` 是 flex),于是两行**竖着堆**了。已补 `display:flex`。
+   (顺带确认:HotelLongStay 的 `.modal-switches` 本身有 flex,所以那边两个开关是对的。)
+2. **`Amenity Icon` 是「只显示图标」的选择器** —— 稿面是一只 **60 高**的框,选中项**只有图标**(实测 32×34,居中、主色),
+   右侧才有 chevron;我第一版是 antd 标准下拉(图标 + 文字、32 高)。改法:`:options` 的 `label` 传 **VNode**
+   (`label: h(iconFor(key))`,需引 `h`),下拉列表再用 `#option` 插槽补上名称;框高 60、圆角 8(全局 `!important` 需同口径覆盖)。
+   同时把弹窗里的输入框统一到 **44 高**(与长住/政策/附近三个弹窗同号;稿面实测 43)。
+- 校验脚本新增 4 条断言(开关行 flex 与竖分隔、图标下拉的 VNode label 与 `#option` 插槽、框高 60 与图标 32 居中主色、输入框 44)——
+  **GREEN 277/277**;灵敏度自检(开关行去掉 flex + 图标下拉改回图标+文字) → `RED 275/277`(2 条命中),随即还原。
+- ⚠️ 但弹窗是**关闭态**、antd Modal 经 Teleport 不产出 SSR HTML,所以这 4 条仍是**源码 + 编译产物 CSS** 级断言
+  (渲染级要拆组件才能做,仍在待办里),这次的缺陷正是「CSS 断言全绿、结构却错了」的典型。
+
+**🐞 第二十一轮补修:竖线紧贴左侧开关(用户截图)**
+上一轮把两个开关行改成横向后,中间那根 1px 竖线**紧贴左侧开关**(用户截图圈出)。根因是:
+`label` 用 `flex:1` + `justify-content: space-between`,**开关是贴右的**;我只给第二个 label 加了 `padding-left`,
+左侧却没有任何留白 —— 竖线正好落在第一个 label 的右边界上,于是左边 0、右边 20。
+修法:`.modal-switches` 加 **`gap: 24px`**(管线左侧)+ `label + label` 的 `padding-left` 改 **24**(管线右侧),
+两侧等距(稿面 renderer 实测 30 / 23,取整 24);窄屏竖排时 `gap` 归零,避免和 `border-top` 叠出双份间距。
+校验脚本把那条断言扩成「gap 与 padding-left 都 24 + 窄屏 gap 归零」—— **GREEN 278/278**;
+灵敏度自检(去掉 gap、padding-left 改回 20 = 复现截图)→ `RED 277/278`,随即还原。
+⚠️ 又一次「**CSS 断言全绿但视觉不对**」:上一轮那条断言只要求 `.modal-switches` 是 flex、两个 label 各占一半,
+**没有任何一条断言管两侧留白**,所以线贴左边它照样绿 —— 这次补的断言就是补这个盲区。
+
+**🐞 第二十二轮走查:Hotel Images 卡头 Add New 按钮文字看不清(用户截图)**
+`profile.vue` 里有一条 `.section-head .ant-btn { border-color: var(--profile-primary); color: var(--profile-primary); }` ——
+它原本是给「酒店详情」卡头的**描边编辑按钮**染蓝的,但**没有排除主按钮**。而第 19 轮把编辑按钮换成
+`.mtrip-edit-pill`(普通 `<button>`,不再是 `.ant-btn`)之后,这条规则在该卡头已经**不再命中任何东西**;
+反倒是 **Hotel Images 卡头的 `Add New`(primary)** 被它命中:
+- 背景被全局 `.ant-btn-primary{background:var(--mtrip-primary)!important}` 定成 `#2563EB`;
+- 文字被这条规则染成 `#4d6cf4`;
+两个都是蓝、只差一点明度 → 截图里就是「蓝底上几乎看不见的蓝字」。
+修法:规则加 **`:not(.ant-btn-primary)`** 守卫(只染描边按钮)。**顺手把全仓的同类规则审计了一遍**:
+`profile-head .ant-btn`(只设尺寸/圆角)、`order/index.vue` 的 `.bm-action-btns :deep(.ant-btn)`(只设尺寸,且 primary 另有规则)、
+`HotelPolicies` 的 `.hp-modal-actions`(只设高度)—— **没有第二处染色泄漏**。
+- 校验脚本新增 1 条断言:把 profile.vue 的 scoped 样式**编译后**逐条扫「选择器同时含 `.section-head` 与 `.ant-btn` 且声明里有 `color`」的规则,
+  要求**每一条都带 `:not(.ant-btn-primary)`** —— **GREEN 279/279**;
+  灵敏度自检(去掉守卫 = 复现截图) → `RED 278/279`(详情里直接打出被编译后的那条规则),随即还原。
+
+**🐞 第二十三轮走查:左上角切换酒店时 Hotel Profile 不换资料(用户报的缺陷)**
+`/properties/:id/profile` 的物业 id 挂在**路由参数**上,但左上角切换器只改了 store 里的 `selectedPropertyId`:
+- `BasicLayout.selectProperty()` 里 `alwaysAvailable = ['/dashboard','/properties'].includes(path) || path.startsWith('/properties/')`
+  —— **Hotel Profile 正好命中 `startsWith('/properties/')`**,于是被当成「与物业无关的页面」直接跳过跳转,路由停在旧 id。
+- 即使跳了路由,**组件也会被复用**:同一条 `/properties/:id/profile` 记录只换参数,Vue 不会重新挂载 →
+  `const propertyId = Number(route.params.id)` 是 setup 时的**常量**,`onMounted(load)` 也不会再跑 → 还是旧资料。
+所以两头都要改:
+1. `selectProperty()` 增加分支:当前路由 name 是 `PropertyProfile` 时,`router.push` 到新物业的 profile
+   (清掉选中物业则回「所有物业」)。
+2. `profile.vue` 的 `propertyId` 改为 `computed(() => Number(route.params.id))`(取用点全部跟 `.value`),
+   并新增 `watch(propertyId)`:复位编辑态与页签后重新 `load()`。
+- 对照:`views/rooms/index.vue` **早就有** `watch(() => user.selectedPropertyId, …)`,所以房型页跟随切换是好的
+  —— 这次是 Hotel Profile 漏了同一件事。
+- 验证:`vue-tsc --noEmit` 与 `npm run build` 零报错;校验脚本新增 4 条断言(切换时必跳路由、`propertyId` 必须是 computed、
+  必须有 watch 且调用 `load()`、取用点无残留旧写法)—— **GREEN 283/283**;灵敏度自检(删掉切换分支 + 改回常量)→
+  `RED 281/283`,随即还原。
+- ⚠️ **本机没有 DOM/浏览器测试环境**(`package.json` 无 vitest/jsdom/puppeteer/playwright),这条链路的
+  「点切换 → 页面重新拉数据」**没有运行时自动化覆盖**,目前是源码级断言 + 类型/构建。人工验收步骤:
+  打开某物业的 Hotel Profile → 左上角切到另一家酒店 → URL 应变 `/properties/<新id>/profile` 且资料整体刷新。
+
+**🐞 第二十四轮走查:侧边栏点「All Properties」没切到 All Properties 模式(用户报的缺陷)**
+现象两半:左上角下拉仍停在某家酒店 + 列表页看不到全部物业。查下来是**一个原因**:
+- `views/properties/index.vue` 本身**没有**物业筛选(`apiPropertyList({page:1,pageSize:200})`),但
+  `utils/http.ts` 会给**每个请求**自动加 `X-Mtrip-Property-Id`(取自 store 的选中物业),
+  而后端 `PropertyKycService::applyPropertyScope` → `MerchantContext::scopePropertyIds()`
+  **选中物业时只返回那一条** → 列表被默默收窄。
+  **真实 HTTP 复核**(site 7):不带 header `total=2 / ids=[10,7]`;带 `X-Mtrip-Property-Id: 7` → `total=1 / ids=[7]`。
+- 侧边栏点「All Properties」只做了路由跳转(`/properties`),**没有清掉选中物业** → 下拉不变、header 照发。
+修法:放进**路由守卫**(而不是页面 `onMounted`),`to.name === 'AllProperties'` 时 `userStore.selectProperty(null)`
+—— 在页面挂载前就清干净,列表只按「无 header」拉一次;下拉直接读 store,自然切回 All Properties。
+- 校验脚本新增 3 条断言(守卫里必须清选中、列表页本身无筛选、**跨层**断言后端确实按选中物业收窄列表 ——
+  把「为什么必须清」也钉住)—— **GREEN 286/286**;灵敏度自检(删掉守卫里的清理)→ `RED 285/286`,随即还原。
+
+**🐞 第二十五轮走查:「所有物业」列表点 Manage 应与左上角下拉切换物业同效(用户报的缺陷)**
+`views/properties/index.vue` 的 `openProperty()` 只做 `router.push({ path, query: { propertyId } })`,
+**从不设置选中物业** → 从列表点 Manage 进 Hotel Profile 后:左上角下拉仍显示 All Properties、
+左侧物业专属菜单(房型 / 房量与价格等)也不出现 —— 与在左上角下拉里选同一家酒店的效果不一致。
+修法(与上一轮的 All Properties 清理同一个位置,都在**路由守卫**里):
+```ts
+const pathPropertyId = to.name === 'PropertyProfile' ? Number(to.params.id) || 0 : 0;  // ⚠️ 只有它才是物业 id
+const queryPropertyId = Number(to.query.propertyId) || 0;                                // 列表 Manage/Dashboard 都带这个
+if (pathPropertyId || queryPropertyId) userStore.selectProperty(pathPropertyId || queryPropertyId);
+```
+- 为什么这一句就够:左上角下拉读 `selectedProperty`,左侧菜单读 `visibleMenus`(按选中物业的 `business_type`
+  过滤 module_key),两者**都挂在 `selectedPropertyId`** 上 → 一起联动。
+- ⚠️ **必须只认 `PropertyProfile` 的 `:id`**:`/rooms/:id`、`/rooms/:id/edit` 的 `:id` 是**房型 id**,
+  直接 `Number(to.params.id)` 会把房型 id 当成物业 id 选进去(已专门加断言钉死这个坑)。
+- 校验脚本新增 3 条断言(守卫里对齐物业 id、只认 PropertyProfile 的 :id、跨层断言左侧菜单确实挂在选中物业上)——
+  **GREEN 289/289**;灵敏度自检两次:①删掉对齐逻辑 → `RED 287/289`;②把 `/rooms/:id` 也当物业 id → 同样 `RED 287/289`,
+  两次都随即还原。人工验收:所有物业 → 某酒店 Manage → 左上角下拉应显示该酒店、左侧应出现该酒店的专属菜单。
+
+规格落档:`.figma-cache/696-6334.md`(含原始节点区间与解析器 `resolve.py`,均 gitignored)。
+详见 `docs/plans/13-商家端merchant-web落地.md`。
+
 ### ★ 2026-09-21（物业资料审核入口与状态整改）
 
 管理后台在“商户管理”下新增 `/merchant/property-review` 独立页面，提供版本统计、筛选、详情差异、媒体预览、通过和驳回；原“商品审核 → 物业资料审核”只保留兼容跳转。读取接口统一要求 `merchant:property:content-list`，审批继续要求 `merchant:property:content-audit`，菜单种子、迁移、后端注解与前端 `v-perm` 已对齐。迁移 `V20260921130000__add-property-profile-review-menu.sql` 会让已有审批角色继承页面查看权限，并补齐超管授权。

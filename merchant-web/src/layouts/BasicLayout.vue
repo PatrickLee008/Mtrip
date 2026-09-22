@@ -56,6 +56,12 @@ function selectProperty(id: number | null): void {
   userStore.selectProperty(id);
   switcherOpen.value = false;
   const path = route.path;
+  // Hotel Profile 是 `/properties/:id/profile`,资料挂在**路由参数**上 —— 切物业必须跟着换路由,
+  // 否则页面还停在旧物业(用户报的缺陷);清掉选中物业则回「所有物业」。
+  if (route.name === 'PropertyProfile') {
+    void router.push(id === null ? '/properties' : `/properties/${id}/profile`);
+    return;
+  }
   const alwaysAvailable = ['/dashboard', '/properties'].includes(path) || path.startsWith('/properties/');
   // 切到 All Properties(或切到非酒店物业)后物业专属菜单会从侧边栏消失,此时把停留在这些页面的用户送回「所有物业」
   if (!alwaysAvailable && (!isMenuPathVisible(path, userStore.selectedProperty) || !containsPath(userStore.visibleMenus, path))) {
