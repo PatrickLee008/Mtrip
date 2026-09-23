@@ -11,7 +11,7 @@ admin/*
 merchant/*
 supplier/*
 client/*
-!admin/index.html
-!merchant/index.html
-!supplier/index.html
-!client/index.html
+!admin/blank.html
+!merchant/blank.html
+!supplier/blank.html
+!client/blank.html
