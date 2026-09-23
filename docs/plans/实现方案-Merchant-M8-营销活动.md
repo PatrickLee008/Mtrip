@@ -39,7 +39,7 @@ Long Stay 促销、`/campaigns` 平台活动参与、`/promotions/analytics` 效
 的出资分摊已由 `order-service/SettlementService` 按 平台/商户/合作方/共担 拆账；
 领券/核销/订单关联走 `marketing_coupon_receive`。
 
-### 2.1 `marketing_coupon` 补列（`database/marketing/09-merchant-promotion-rules.sql`）
+### 2.1 `marketing_coupon` 补列（`database/migrations/V20260921121500__merchant-promotion-rules.sql`）
 
 | 列 | 类型 | 用途 |
 |---|---|---|

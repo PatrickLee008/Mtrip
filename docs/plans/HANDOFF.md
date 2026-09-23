@@ -1062,7 +1062,7 @@ Dashboard & Earnings,即本页 = 现有菜单 800 `/earnings`(`sidebar.dashboard
    按模板 ID 直接过滤会**恒为 0**（不是报错，最难发现）。
 
 **改动**：
-- **数据库**：`database/marketing/09-merchant-promotion-rules.sql`（幂等，登记 initdb `99m1-`）：
+- **数据库**：`database/migrations/V20260921121500__merchant-promotion-rules.sql`（幂等）：
   `marketing_coupon` 补 `promotion_kind`/`promo_code`(+`idx_site_promo_code`)/`description`/`staff_note`/
   `min_nights`/`max_nights`/`book_advance_days`；`marketing_campaign` 补 `funding_source`/`funding_rules`/
   `requirements`/`terms`/`invite_mode`；新增 `marketing_campaign_participant`（uk campaign+merchant）与

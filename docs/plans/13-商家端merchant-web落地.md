@@ -569,7 +569,7 @@ visible to your customers.` —— 本页是酒店，`restaurant` / `menu rates`
 - 网关 `map $merchant_module` 新增 `campaigns marketing_service`。
 
 **数据库**
-- `database/marketing/09-merchant-promotion-rules.sql`（幂等，已登记 initdb `99m1-`）:
+- `database/migrations/V20260921121500__merchant-promotion-rules.sql`（幂等）:
   `marketing_coupon` 补 `promotion_kind`/`promo_code`/`description`/`staff_note`/`min_nights`/`max_nights`/`book_advance_days`；
   `marketing_campaign` 补 5 列入资与条款；新增 `marketing_campaign_participant`、`marketing_promotion_impression`。
 - `database/seed/04-merchant-menu.sql` 补菜单 1005/1006 与按钮 100005/100601；
