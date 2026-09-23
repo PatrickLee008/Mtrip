@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n';
 import { message } from 'ant-design-vue';
 import type { Dayjs } from 'dayjs';
 import { apiViolationHandle, apiWarningIssue, apiWarningRevoke } from '@/api/compliance';
+import { genUUID } from '@/utils/uuid';
 const props = defineProps<{ open: boolean; action: string; row: Record<string, any> }>();
 const emit = defineEmits<{ 'update:open': [boolean]; changed: [] }>();
 const { t } = useI18n();
@@ -12,7 +13,7 @@ const deadline = ref<Dayjs>();
 const form = reactive({ note: '', reason: '', level: 1, expiresAt: '', confirmed: false, requestId: '' });
 const changesState = computed(() => ['suspend', 'restore'].includes(props.action));
 watch(() => props.open, (open) => {
-  if (open) { Object.assign(form, { note: '', reason: '', level: 1, expiresAt: '', confirmed: false, requestId: crypto.randomUUID() }); deadline.value = undefined; }
+  if (open) { Object.assign(form, { note: '', reason: '', level: 1, expiresAt: '', confirmed: false, requestId: genUUID() }); deadline.value = undefined; }
 });
 async function submit(): Promise<void> {
   if (!form.note.trim() || (props.action === 'warn' && !form.reason.trim()) || (changesState.value && !form.confirmed)) { message.warning(t('common.required')); return; }

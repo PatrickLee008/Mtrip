@@ -5,6 +5,7 @@ import { Modal, message } from 'ant-design-vue';
 import { apiMerchantNotifySend, apiMerchantNotifyTemplates } from '@/api/merchant';
 import type { TableRow } from '@/composables/useTable';
 import { get } from '@/utils/http';
+import { genUUID } from '@/utils/uuid';
 import type { Dayjs } from 'dayjs';
 
 /**
@@ -62,7 +63,7 @@ watch(
       sendAt: '',
     });
     templateId.value = undefined;
-    requestId.value = crypto.randomUUID();
+    requestId.value = genUUID();
     schedule.value = undefined;
     try {
       availableChannels.value = await get('/admin/merchant/notification/channels');
@@ -87,7 +88,7 @@ function applyTemplate(id: number | undefined): void {
   }
 }
 
-watch(() => JSON.stringify([form, templateId.value, schedule.value?.toISOString()]), () => { requestId.value = crypto.randomUUID(); }, { flush: 'sync' });
+watch(() => JSON.stringify([form, templateId.value, schedule.value?.toISOString()]), () => { requestId.value = genUUID(); }, { flush: 'sync' });
 function preview(): void {
   Modal.info({
     title: form.title || t('merchant.notifyPage.previewNoTitle'),

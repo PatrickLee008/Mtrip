@@ -7,6 +7,7 @@ import dayjs, { type Dayjs } from 'dayjs';
 import { useUserStore } from '@/stores/user';
 import { useTable, type TableRow } from '@/composables/useTable';
 import { apiMerchantDetail, apiMerchantStatusChange, apiMerchantStatusHistory, type MerchantStatusAction } from '@/api/merchant';
+import { genUUID } from '@/utils/uuid';
 
 const props = defineProps<{ merchant: TableRow; suspendIconOnly?: boolean }>();
 const emit = defineEmits<{ changed: [] }>();
@@ -61,7 +62,7 @@ function confirm(): void {
   };
   const key = JSON.stringify([action.value, payload]);
   if (key !== retryPayload) {
-    requestId = crypto.randomUUID();
+    requestId = genUUID();
     retryPayload = key;
   }
   Modal.confirm({

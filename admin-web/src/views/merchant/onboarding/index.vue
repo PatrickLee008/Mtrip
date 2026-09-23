@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { openMerchantDocument } from '@/utils/merchantDocument';
+import { genUUID } from '@/utils/uuid';
 import { computed, onMounted, reactive, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { message, Modal, type TablePaginationConfig } from 'ant-design-vue';
@@ -788,7 +789,7 @@ async function doFinalApprove(): Promise<void> {
   }
   finalApproveSaving.value = true;
   try {
-    const requestId = `final-${app.value.id}-${crypto.randomUUID().replace(/-/g, '')}`;
+    const requestId = `final-${app.value.id}-${genUUID().replace(/-/g, '')}`;
     finalApprovalResult.value = await apiOnboardingFinalApprove({ id: app.value.id, requestId, channels: finalChannels.value });
     message.success(t('merchant.onboardingPage.finalApproveSuccess'));
     finalApproveOpen.value = false;

@@ -12,6 +12,7 @@ import { useTable, type TableRow } from '@/composables/useTable';
 import { useCompliancePresentation } from '@/composables/useCompliancePresentation';
 import { useUserStore } from '@/stores/user';
 import { apiViolations, apiViolationRecord, apiRules } from '@/api/compliance';
+import { genUUID } from '@/utils/uuid';
 const { t } = useI18n();
 const route = useRoute();
 const user = useUserStore();
@@ -36,7 +37,7 @@ const selectedRule = computed(() => options.value.find((r) => r.id === form.rule
 const form = reactive({ merchantId: undefined as number | undefined, ruleId: undefined as number | undefined, details: '', detectedDate: '', note: '', requestId: '' });
 const ruleKeyword = ref('');
 function newRecord(): void {
-  Object.assign(form, { merchantId: query.merchantId, ruleId: undefined, details: '', detectedDate: new Date().toISOString().slice(0, 10), note: '', requestId: crypto.randomUUID() });
+  Object.assign(form, { merchantId: query.merchantId, ruleId: undefined, details: '', detectedDate: new Date().toISOString().slice(0, 10), note: '', requestId: genUUID() });
   options.value = []; ruleKeyword.value = ''; recordOpen.value = true;
 }
 watch(() => form.merchantId, () => { options.value = []; form.ruleId = undefined; });

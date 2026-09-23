@@ -18,7 +18,8 @@ require BASE_PATH . '/vendor/autoload.php';
 ! defined('SWOOLE_HOOK_FLAGS') && define('SWOOLE_HOOK_FLAGS', Hyperf\Engine\DefaultOption::hookFlags());
 
 (function () {
-    Hyperf\Di\ClassLoader::init();
+    // 无 pcntl 环境(Windows 原生 / Swow)改用 ProcScanHandler;Linux 生产有 pcntl,仍走默认 PcntlScanHandler,行为不变
+    Hyperf\Di\ClassLoader::init(null, null, extension_loaded('pcntl') ? null : new Hyperf\Di\ScanHandler\ProcScanHandler());
     /** @var Psr\Container\ContainerInterface $container */
     $container = require BASE_PATH . '/config/container.php';
 
