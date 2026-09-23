@@ -86,7 +86,7 @@ mysqldump -h 127.0.0.1 -P 3307 -u root -proot@2026 --single-transaction --routin
 mysql -h 127.0.0.1 -P 3306 -u root -p < mtrip-dump.sql
 ```
 
-> 纯不碰 Docker 的替代法:按 `deploy/docker-compose.yml` 里 mysql 服务 `initdb` 挂载的**顺序**,依次对 `127.0.0.1:3306` 执行 `database/` 下的 SQL(顺序敏感、约 130 个),或用 `scripts/db-apply.ps1` 逐个补灌。比 dump 法繁琐易错,能用 dump 就用 dump。
+> 纯不碰 Docker 的替代法:按 `deploy/docker-compose.yml` 里 mysql 服务 `initdb` 挂载的**顺序**,依次对 `127.0.0.1:3306` 执行 `database/` 下的 SQL(顺序敏感、约 130 个),Windows 下用 `scripts\db-apply.bat` 按序补灌(见 §2.1),或 Git Bash 里用 `scripts/db-apply.ps1` 逐个灌。比 dump 法繁琐易错,能用 dump 就用 dump。
 
 ### 1.4 放置统一配置文件
 
@@ -113,6 +113,55 @@ deploy\swow-windows\start-svc.bat goods-service 9503
 
 - 端口:system 9501 / user 9502 / goods 9503 / order 9504 / merchant 9505 / finance 9506 / marketing 9507 / payment 9508。
 - 联调可直连 `http://127.0.0.1:95xx`;需要走网关(`/api/v1/...` 分发)时,另跑一个 OpenResty 指向这些本地端口即可(可选)。
+
+### 2.1 数据库迭代升级(scripts\db-migrate.bat / db-apply.bat,Windows 原生)
+
+拉到新代码、`database/migrations/` 下多了迁移 SQL 后,用它把本机库升级到最新版本。**不依赖 Docker/WSL**,直接调用本机 `mysql.exe`。
+
+#### db-migrate.bat —— 版本迁移(日常主用)
+
+`scripts\db-migrate.sh` 的 bat 等价实现,**同一本账**(记在 `mtrip_system.schema_migrations`,Linux/Windows 两边互通,谁跑过另一边都能识别):
+
+```bat
+scripts\db-migrate.bat            REM 对比账本并执行所有待执行迁移(= db-migrate.sh 默认 apply)
+scripts\db-migrate.bat status     REM 只列待执行版本,不写库
+scripts\db-migrate.bat dry-run    REM 同 status,发布前预检用
+scripts\db-migrate.bat validate   REM 只校验迁移文件命名/唯一性,完全不解数据库
+scripts\db-migrate.bat help
+```
+
+行为与 sh 版一致的语义保障:
+
+- 迁移文件命名 `VYYYYMMDDHHMMSS__lower-kebab.sql`(单层目录、UTC 时间戳、小写连字符描述),脚本校验命名合法性、日期有效性、版本重号、版本号不得早于已应用最高版本(**禁止倒序补迁移**)。
+- 每版本记录 **SHA-256**,已登记文件被改写会直接拒绝执行;账本里存在 `running`/`failed` 记录时拒绝继续,需人工核对。
+- 执行时每版本走 `GET_LOCK('mtrip_schema_migrations')` 咨询锁 + 控制 SQL(INSERT running → SOURCE 迁移 → UPDATE applied),防并发串改;失败标 `failed` 并停止后续版本。
+- 账本表不存在时 apply 模式自动执行 `database/init/01-schema-migrations.sql` 建表;全部成功后自动跑一遍 `status` 复核。
+
+**前置要求**:`mysql.exe` 在 PATH 里(或设 `MYSQL_EXE` 指向它);SHA-256 用 Windows 自带 `certutil`;`git.exe` 可选(仅用于账本记录 `git_commit`,没有则记全 0)。
+
+**配置读取**(与 `start-svc.bat` 同源,优先级:**进程环境变量 > `%USERPROFILE%\.mtrip\mtrip.env` > 内置默认** `127.0.0.1:3306/mtrip`):
+
+| 变量 | 作用 |
+| --- | --- |
+| `DB_HOST` / `DB_PORT` / `DB_USERNAME` / `DB_PASSWORD` | 连接信息(读自 mtrip.env,需对 `mtrip_system` 有建表/DDL 权限) |
+| `DB_ROOT_USER` / `DB_ROOT_PASSWORD` | 临时覆盖执行账号(如用 root 跑迁移) |
+| `MYSQL_EXE` | mysql.exe 完整路径(默认取 PATH 中的 mysql) |
+| `ENV_FILE` | 统一配置文件路径(默认 `%USERPROFILE%\.mtrip\mtrip.env`) |
+| `GIT_EXE` | git.exe 路径(可选) |
+| `MYSQL_MIGRATION_LOCK_TIMEOUT` | 咨询锁等待秒数(默认 60) |
+
+> 密码经临时 `--defaults-file` 凭证文件传给 mysql.exe(规避密码中 `@` 等特殊字符转义问题),执行结束即删。脚本本体为 **GBK(代码页 936)+ CRLF** 编码,内部 `chcp 936`,请勿用 UTF-8 编辑器改动后另存。
+
+#### db-apply.bat —— 手动补灌 SQL(非版本迁移)
+
+`scripts/db-apply.ps1`(容器版)的本机 MySQL 等价实现:按传入顺序直接用 `mysql.exe < file` 灌任意 SQL 文件,任一步失败继续跑完剩余文件并以退出码 1 汇总。适合 §1.3 ② 那种历史/初始化/种子 SQL 的补灌,**不参与迁移账本**——带版本号的迁移一律走 `db-migrate.bat`,保证可追溯:
+
+```bat
+scripts\db-apply.bat database\seed\02-menu.sql database\seed\04-merchant-menu.sql
+REM 相对路径以仓库根为基准;绝对路径(盘符开头或 \\UNC)直接使用
+```
+
+配置读取规则与 db-migrate.bat 完全相同(含 `DB_ROOT_USER`/`DB_ROOT_PASSWORD` 覆盖)。
 
 ---
 
@@ -154,6 +203,8 @@ deploy\swow-windows\start-svc.bat goods-service 9503
 | `mtrip.env.example` | 统一配置模板(复制到项目外维护) |
 | `start-svc.bat` | 单服务启动器(注入环境变量 + 传端口 + 起 php) |
 | `start-all.bat` | 一键起全部 8 个服务 |
+| `../../scripts/db-migrate.bat` | 数据库版本迁移(Windows 原生,GBK 编码;账本/校验与 `db-migrate.sh` 一致,见 §2.1) |
+| `../../scripts/db-apply.bat` | 手动按序补灌 SQL(GBK 编码;不进迁移账本,见 §2.1) |
 | `../backend/services/*/composer-swow.json` | Swow 版依赖清单(已生成,引擎换 engine-swow) |
 | `README-swow-windows.md` | 本文档 |
 
