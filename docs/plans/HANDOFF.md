@@ -1,5 +1,30 @@
 # 会话交接文档(HANDOFF)
 
+### ★ 2026-09-23 auto-deploy.sh 发布阻断修复 + mtrip-ops 自动部署接入 DB 迁移
+
+**修的缺陷(生产 cron 报错)**:`auto-deploy.sh` 拦下 `database/marketing/09-merchant-promotion-rules.sql`——
+M8 促销活动那次提交(`e12e3f2`)把一个全新文件当成旧快照编号文件加进了 `database/marketing/`
+并登记进 `docker-compose.yml` 的 initdb 挂载,而 initdb 挂载**只在空数据卷首次初始化时执行**,
+现网已跑过一次 init 的库永远不会执行到它。已 `git mv` 为
+`database/migrations/V20260921121500__merchant-promotion-rules.sql`,并删掉对应的 initdb 挂载行
+(migrations 目录已整体挂载,见 `deploy/docker-compose.yml` 注释),同步改了 4 处文档里写死的旧路径。
+
+**顺带查清并修的第二个缺口**:`mtrip-ops`「发布管理」页的「自动部署」按钮
+(`mtrip-ops/src/runner.js` 的 `deploy-auto`)此前调用不带任何参数的裸
+`scripts/auto-deploy.sh`,而该脚本默认 `APPLY_DB=0`——只有 `--prod`/`--apply-db`/强制目标
+`db` 三种方式之一才会执行 `database/migrations/` 待执行版本,裸命令只告警不执行。
+**没有直接改成 `--prod`**:`--prod` 会把 `MODE_FLAG` 透传给 `mtrip.sh`,导致其跳过
+`docker-compose.override.yml`(不再挂载本地源码),而 `auto-deploy.sh` 对普通后端代码改动
+默认走 `restart` 而非 `build`——一旦不挂载本地源码,`restart` 就会静默地什么也不生效。
+改用 `--apply-db`:只打开迁移执行,不碰 `MODE_FLAG`,`mtrip-ops` 现在会「先迁移、再按变更
+构建/重启」,`deploy-dry-run` 同步加了 `--apply-db` 以便预检里也能看到待执行迁移列表。
+
+**验证**:`git status` 确认迁移文件搬家后不会被 `auto-deploy.sh` 的 rename-guard
+(`MIGRATION_ORIGIN_VIOLATIONS`)误伤——该文件在上次成功发布点之前并不存在,两点 diff 里只会
+表现为新增,不会被识别为「旧快照 rename 成迁移」。`mtrip-ops` 无测试覆盖,改动为纯参数级 diff。
+**未做**:实际登录 `mtrip-ops` 面板点击验证(本地无该服务运行环境);服务器 crontab 若也裸跑
+`auto-deploy.sh` 需人工检查是否要一并加 `--apply-db`(不在本次改动范围,已提醒用户自查)。
+
 ### ★ 2026-09-22 支付失败 → 结果页失败态,并对**已有订单**重新发起支付
 
 **修的缺陷(用户报)**:① 支付失败后仍停在向导第 4 步,只弹一个失败弹窗;
