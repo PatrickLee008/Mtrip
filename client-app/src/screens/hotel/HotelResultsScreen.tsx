@@ -18,13 +18,8 @@
  *   Free Wifi → amenities=Wifi(按物业 facilities 的 JSON 值匹配),Sort by → sortBy 白名单。
  *   搜索卡里改目的地/日期/公民身份后要点 Search 才生效(设计稿有 CTA);chips 与排序即时生效。
  *
- * **演示数据**:接口没连通或没返回结果时,列表回落到 `demoResults.ts` —— 设计稿那四张卡的原始数值与文案
- *   (评分 9.3/7.8/4.3、SUMMER PROMO、Long Stay Not Supported、PREFERRED/HIGH DEMAND/BEST SELLER…),
- *   结果头的总数也随之显示演示条数,并在其下给一条可点重试的提示条(请求失败时附带错误原因)。
- *   演示态下 chips / 排序 / 关键词在前端本地生效,点心只切本地状态;
- *   点演示卡跳酒店详情静态页(`HotelDetail` 不带商品 id);真实卡带 id 进入酒店详情并渲染接口房型。
- *   演示卡也被 chips/关键词筛空时才落到 `EmptyView`;`ErrorView` 只在演示兜底之外的场景出现
- *   (演示态下错误原因走上面那条提示条,不再单独占位)。
+ * 无结果时显示 `EmptyView`,请求失败显示可重试的 `ErrorView`(已接真实数据,不再回落设计稿演示卡)。
+ *   点卡片带物业 id 进入酒店详情并渲染接口房型。
  *
  * 未实现的能力(设计稿有、当前没有对应依赖或接口),一律走 comingSoon:
  *   入住人选择、View map(未引入地图)。
@@ -66,15 +61,6 @@ import SortSheet, { type SortAnchor } from '@/components/hotel/SortSheet';
 import { PAGE_PADDING, colors, radius, shadows } from '@/config/theme';
 import { fonts } from '@/config/typography';
 import type { RootStackParamList } from '@/navigation/types';
-import {
-  DEMO_BADGE,
-  DEMO_COVERS,
-  DEMO_KEY_BY_ID,
-  DEMO_PROMO,
-  DEMO_RATING_TIER,
-  queryDemoResults,
-  type DemoKey,
-} from '@/screens/hotel/demoResults';
 import { useCommonStore } from '@/store/commonStore';
 import { useUserStore } from '@/store/userStore';
 import type { GoodsItem } from '@/types/models';
@@ -213,13 +199,6 @@ export default function HotelResultsScreen() {
   }, [isLogin]);
 
   const toggleFavorite = (goods: GoodsItem) => {
-    /* 演示卡(id 取负数)没有真实商品,只切本地状态 */
-    if (goods.id < 0) {
-      setFavorites((prev) =>
-        prev.includes(goods.id) ? prev.filter((id) => id !== goods.id) : [...prev, goods.id],
-      );
-      return;
-    }
     if (!isLogin) {
       navigation.navigate('Login');
       return;
@@ -262,22 +241,7 @@ export default function HotelResultsScreen() {
     });
   };
 
-  /**
-   * 演示数据:接口没连通或没有结果时,先用设计稿那四张卡把页面撑起来。
-   * 关键词匹配要用译文,故把「名称 + 地址」喂给 queryDemoResults。
-   */
-  const demoText = useCallback(
-    (key: DemoKey) =>
-      `${t(`hotels.results.demo.${key}.name`)} ${t(`hotels.results.demo.${key}.address`)}`,
-    [t],
-  );
-  const demoItems = useMemo(
-    () => queryDemoResults({ chips, keyword: applied.keyword, sortBy, textOf: demoText }),
-    [chips, applied.keyword, sortBy, demoText],
-  );
-  const showDemo = !loading && items.length === 0;
-  const data = loading ? [] : showDemo ? demoItems : items;
-  const shownTotal = showDemo ? demoItems.length : total;
+  const data = loading ? [] : items;
 
   const header = (
     <View>
@@ -391,7 +355,7 @@ export default function HotelResultsScreen() {
         <View style={styles.resultHeader}>
           <View style={styles.resultHeaderLeft}>
             <Text style={styles.resultCount}>
-              {t('hotels.results.found', { total: shownTotal })}
+              {t('hotels.results.found', { total })}
             </Text>
             <Text style={styles.resultNote}>{t('hotels.results.taxNote')}</Text>
           </View>
@@ -406,21 +370,6 @@ export default function HotelResultsScreen() {
           </Pressable>
         </View>
 
-        {/* 演示数据提示:点一下重试真实请求 */}
-        {showDemo ? (
-          <Pressable
-            style={({ pressed }) => [styles.demoNotice, pressed && styles.pressed]}
-            onPress={() => void load(1, 'init')}
-          >
-            {/* 请求失败时把原因一并带出来,别让演示数据把错误盖掉 */}
-            <Text style={styles.demoNoticeText}>
-              {error
-                ? `${t('hotels.results.demoNotice')} · ${error}`
-                : t('hotels.results.demoNotice')}
-            </Text>
-            <Text style={styles.demoNoticeLink}>{t('common.retry')}</Text>
-          </Pressable>
-        ) : null}
       </View>
     </View>
   );
@@ -432,63 +381,24 @@ export default function HotelResultsScreen() {
           data={data}
           keyExtractor={(item) => String(item.id)}
           ListHeaderComponent={header}
-          renderItem={({ item, index }) => {
-            /* 演示卡(id 取负数)的名称/地址/促销/徽章全部照设计稿回填,真实数据一律走接口字段 */
-            const key = item.id < 0 ? DEMO_KEY_BY_ID[item.id] : undefined;
-            if (!key) {
-              return (
-                <HotelResultCard
-                  goods={item}
-                  /* 接口暂时没有可用封面,轮流用设计稿临时图兜底(与我的精选同一套,见 tempCoverFor) */
-                  coverSource={tempCoverFor(index)}
-                  favorite={favorites.includes(item.id)}
-                  citizen={applied.citizen}
-                  /* 带上已选日期,一路透传到订房向导 —— 否则选完房日期会跳回默认值 */
-                  onPress={(g) =>
-                    navigation.navigate('HotelDetail', {
-                      propertyId: g.id,
-                      checkIn: range.checkIn,
-                      checkOut: range.checkOut,
-                    })
-                  }
-                  onToggleFavorite={toggleFavorite}
-                />
-              );
-            }
-            const tier = DEMO_RATING_TIER[key];
-            const badge = DEMO_BADGE[key];
-            const promo = DEMO_PROMO[key];
-            return (
-              <HotelResultCard
-                goods={{
-                  ...item,
-                  goods_name: t(`hotels.results.demo.${key}.name`),
-                  address: t(`hotels.results.demo.${key}.address`),
-                }}
-                coverSource={DEMO_COVERS[key]}
-                favorite={favorites.includes(item.id)}
-                citizen={applied.citizen}
-                ratingTier={tier ? t(`hotels.results.${tier}`) : null}
-                badge={badge ? { text: t(badge.textKey), tone: badge.tone } : null}
-                promo={
-                  promo
-                    ? {
-                        strike: promo.strike,
-                        tags: promo.tags?.map((tag) => ({ text: t(tag.textKey), tone: tag.tone })),
-                      }
-                    : undefined
-                }
-                /* 演示卡没有真实商品 id,跳详情静态页(页面自己用设计稿数据渲染) */
-                onPress={() =>
-                  navigation.navigate('HotelDetail', {
-                    checkIn: range.checkIn,
-                    checkOut: range.checkOut,
-                  })
-                }
-                onToggleFavorite={toggleFavorite}
-              />
-            );
-          }}
+          renderItem={({ item, index }) => (
+            <HotelResultCard
+              goods={item}
+              /* 接口暂时没有可用封面,轮流用设计稿临时图兜底(与我的精选同一套,见 tempCoverFor) */
+              coverSource={tempCoverFor(index)}
+              favorite={favorites.includes(item.id)}
+              citizen={applied.citizen}
+              /* 带上已选日期,一路透传到订房向导 —— 否则选完房日期会跳回默认值 */
+              onPress={(g) =>
+                navigation.navigate('HotelDetail', {
+                  propertyId: g.id,
+                  checkIn: range.checkIn,
+                  checkOut: range.checkOut,
+                })
+              }
+              onToggleFavorite={toggleFavorite}
+            />
+          )}
           ListEmptyComponent={loading ? <LoadingView /> : error ? <ErrorView message={error} onRetry={() => void load(1, 'init')} /> : <EmptyView />}
           ListFooterComponent={
             items.length > 0 ? (
@@ -746,30 +656,6 @@ const styles = StyleSheet.create({
     letterSpacing: 0.14,
     color: colors.textSoft,
   },
-  demoNotice: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 8,
-    marginTop: -12,
-    padding: 12,
-    borderRadius: radius.btn,
-    backgroundColor: colors.tintBg,
-  },
-  demoNoticeText: {
-    flexShrink: 1,
-    fontFamily: fonts.inter,
-    fontSize: 12,
-    lineHeight: 16,
-    color: colors.textSoft,
-  },
-  demoNoticeLink: {
-    fontFamily: fonts.interSemi,
-    fontSize: 12,
-    lineHeight: 16,
-    color: colors.primary,
-  },
-
   mapBtn: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   mapText: {
     fontFamily: fonts.interSemi,

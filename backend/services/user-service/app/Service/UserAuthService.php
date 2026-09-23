@@ -253,6 +253,11 @@ class UserAuthService
             'balance' => (string) $user['balance'],
             'points' => (int) $user['points'],
             'realNameStatus' => (int) $user['real_name_status'],
+            // 资料向导(Set Up Profile):profileCompleted=false 时 App 在注册/登录后弹「Set Up Profile Now?」
+            'gender' => (int) ($user['gender'] ?? 0),
+            'birthday' => $user['birthday'] ?? null,
+            'city' => (string) ($user['city'] ?? ''),
+            'profileCompleted' => ! empty($user['profile_setup_at']),
             'registerTime' => (string) $user['register_time'],
         ];
     }
@@ -278,7 +283,7 @@ class UserAuthService
         ]);
     }
 
-    private function decryptSafe(string $ciphertext): string
+    public function decryptSafe(string $ciphertext): string
     {
         if ($ciphertext === '') {
             return '';

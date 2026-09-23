@@ -31,6 +31,8 @@ const REAL_NAME_MAP = computed<Record<number, StatusItem>>(() => ({
   0: { text: t('common.no'), color: 'default' },
   1: { text: t('common.yes'), color: 'success' },
   2: { text: t('common.failed'), color: 'error' },
+  // App 资料向导第 2 步提交实名资料后置 3,待后台审核
+  3: { text: t('status.pending'), color: 'processing' },
 }));
 const SOURCE_TEXT = computed<Record<number, string>>(() => ({
   1: 'Android',
@@ -139,6 +141,7 @@ async function submitToggle(): Promise<void> {
             <a-select-option :value="0">{{ REAL_NAME_MAP[0].text }}</a-select-option>
             <a-select-option :value="1">{{ REAL_NAME_MAP[1].text }}</a-select-option>
             <a-select-option :value="2">{{ REAL_NAME_MAP[2].text }}</a-select-option>
+            <a-select-option :value="3">{{ REAL_NAME_MAP[3].text }}</a-select-option>
           </a-select>
         </a-form-item>
         <a-form-item :label="t('user.listPage.registerSource')">

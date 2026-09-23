@@ -549,6 +549,104 @@
     },
     "smsLogin": {
       "entry": "Sign in with verification code"
+    },
+    "profileSetup": {
+      "headerTitle": "Set Up Profile",
+      "progressLabel": "Profile set up",
+      "stepOf": "Step {{step}} of {{total}}",
+      "subtitle": "Help us personalize your travel experience by sharing a few details.",
+      "prompt": {
+        "title": "Set Up Profile Now?",
+        "message": "Add your information once to make your future bookings faster and easier.",
+        "later": "Later",
+        "setUpNow": "Set Up Now"
+      },
+      "step1": {
+        "title": "Complete Your Profile"
+      },
+      "uploadPhoto": "Upload Profile Photo",
+      "fullName": "Full Name",
+      "fullNamePlaceholder": "John Doe",
+      "dob": "Date of Birth",
+      "gender": "Gender",
+      "genders": {
+        "male": "Male",
+        "female": "Female",
+        "other": "Other"
+      },
+      "city": "Current City",
+      "cityPlaceholder": "Select your city",
+      "cities": {
+        "yangon": "Yangon, Myanmar",
+        "mandalay": "Mandalay, Myanmar",
+        "naypyitaw": "Nay Pyi Taw, Myanmar",
+        "bagan": "Bagan, Myanmar",
+        "taunggyi": "Taunggyi, Myanmar",
+        "mawlamyine": "Mawlamyine, Myanmar",
+        "pathein": "Pathein, Myanmar",
+        "myitkyina": "Myitkyina, Myanmar",
+        "sittwe": "Sittwe, Myanmar"
+      },
+      "address": "Home Address",
+      "addressPlaceholder": "Street name, Building, Unit number...",
+      "continue": "Continue",
+      "changeLater": "You can change these details later in your ",
+      "profileSettings": "Profile Settings",
+      "uploading": "Photo is still uploading, please wait",
+      "picker": {
+        "camera": "Take Photo",
+        "library": "Choose from Library",
+        "denied": "Permission denied. Please allow access in your device settings."
+      },
+      "step2": {
+        "title": "Identity Verification",
+        "nationality": "Nationality",
+        "name": "Name",
+        "namePlaceholder": "enter your name",
+        "nrcNumber": "NRC Number",
+        "nrcState": "State / Region Code",
+        "nrcImage": "NRC Image",
+        "front": "Front",
+        "back": "Back",
+        "passportNumber": "Passport Number",
+        "passportPlaceholder": "enter your passport number",
+        "passportImage": "Passport Image",
+        "photoPage": "Photo Page",
+        "selfieTitle": "Selfie Verification",
+        "selfieAction": "Take or Upload Selfie",
+        "selfieHint": "Must match your ID photo",
+        "consent": "By submitting, you agree to our processing of your personal data for identity verification purposes.",
+        "submit": "Submit Verification",
+        "submitted": "Submitted. We will review your documents shortly."
+      },
+      "tips": {
+        "title": "Verification Tips",
+        "clear": "Ensure the image is clear and text is readable.",
+        "edges": "All four edges of the document must be visible in the frame.",
+        "lighting": "Use good natural lighting and avoid camera flash or glare."
+      },
+      "countries": {
+        "mm": "Myanmar",
+        "th": "Thailand",
+        "cn": "China",
+        "in": "India",
+        "sg": "Singapore",
+        "my": "Malaysia",
+        "jp": "Japan",
+        "kr": "South Korea",
+        "us": "United States",
+        "gb": "United Kingdom"
+      },
+      "errors": {
+        "fullName": "Please enter your full name",
+        "dob": "Please enter a valid date of birth (mm/dd/yyyy)",
+        "gender": "Please select your gender",
+        "name": "Please enter the name on your ID",
+        "nrc": "Please enter a valid NRC: township code and 6-digit number",
+        "passport": "Please enter your passport number",
+        "idImage": "Please upload your ID document photos",
+        "selfie": "Please upload a selfie"
+      }
     }
   },
   "more": {
@@ -929,7 +1027,6 @@
       "highDemand": "HIGH DEMAND",
       "citizenOff": "{{percent}}% off for citizens",
       "bestSeller": "BEST SELLER",
-      "demoNotice": "Sample data from the design (backend not connected)",
       "chips": {
         "rating4": "Rating 4+",
         "freeCancellation": "Free Cancellation",
@@ -945,9 +1042,7 @@
         "rating": "Top Guest Ratings"
       },
       "demo": {
-        "summerPromo": "SUMMER PROMO",
         "longStayOff": "5% off for 7Nights",
-        "longStayNotSupported": "Long Stay Not Supported",
         "heritageBagan": {
           "name": "The Heritage Bagan Hotel",
           "address": "Nyaung-U, Old Bagan"
@@ -1185,7 +1280,28 @@
         }
       },
       "totalPrice": "Total Price",
-      "continue": "Continue"
+      "continue": "Continue",
+      "roomDetail": {
+        "startsAt": "STARTS AT",
+        "amenities": "Room Amenities",
+        "amenityList": {
+          "highSpeedWifi": "High-speed WiFi",
+          "climateControl": "Climate Control",
+          "miniBar": "Mini Bar",
+          "smartTv": "Smart TV",
+          "ensuiteBathroom": "Ensuite Bathroom",
+          "coffeeMachine": "Nespresso Machine"
+        },
+        "breakfastTitle": "Breakfast Included",
+        "breakfastDesc": "Enjoy a complimentary international buffet breakfast served in our heritage dining hall from 6:30 AM to 10:00 AM.",
+        "priceSummary": "Price Summary",
+        "pricePerNight": "Price per Night",
+        "taxAndFees": "Tax & Service Fees (15%)",
+        "nights": "Nights",
+        "bookThisRoom": "Book This Room",
+        "freeCancelNote": "Free cancellation until 48h before check-in",
+        "reserveNow": "Reserve now"
+      }
     },
     "filter": {
       "title": "Filter By",
@@ -1612,31 +1728,8 @@
       "reviews": {
         "outOfTen": "/10",
         "replyFrom": "Reply from the property",
-        "helpful": "Helpful ({{count}})",
-        "report": "Report",
-        "items": {
-          "elena": {
-            "author": "Elena Rodriguez",
-            "meta": "August 14, 2024 • Solo traveler",
-            "title": "Unforgettable Sunrise Views",
-            "body": "Staying here was the highlight of my Myanmar trip. The rooftop pool offers a direct line of sight to the ancient stupas during sunrise that is honestly breathtaking. The staff greeted me by name every morning and the breakfast spread was exceptionally high-quality.",
-            "reply": "Dear Elena, thank you so much for your kind words! We are thrilled that you enjoyed the sunrise views and our breakfast spread. We look forward to welcoming you back soon."
-          },
-          "marco": {
-            "author": "Marco Bianchi",
-            "meta": "July 2, 2024 • Couple",
-            "title": "Quiet rooms, warm service",
-            "body": "The room was spacious and very quiet at night. Reception helped us arrange a balloon tour at short notice and even packed us an early breakfast box.",
-            "reply": ""
-          },
-          "aye": {
-            "author": "Aye Chan",
-            "meta": "June 20, 2024 • Family",
-            "title": "Great for families",
-            "body": "Our kids loved the pool and the staff brought an extra bed without us asking twice. The location makes it easy to reach the temples early in the morning.",
-            "reply": ""
-          }
-        }
+        "helpful": "Helpful",
+        "report": "Report"
       }
     },
     "cart": {

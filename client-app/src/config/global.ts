@@ -18,6 +18,11 @@ export const STORAGE_KEYS = {
   REMEMBER_MOBILE: 'mtrip:remember-mobile',
   /** 关怀模式酒店搜索页的「最近搜索」(最多 3 条目的地,设计稿 Search 15 那一段) */
   HOTEL_RECENT: 'mtrip:hotel-recent',
+  /**
+   * 「Set Up Profile Now?」弹窗点过 Later 的用户 id 列表(JSON 数组)。
+   * 按用户记、跨退出登录保留:同一台设备换号登录,新号仍会被提示一次。
+   */
+  PROFILE_PROMPT_LATER: 'mtrip:profile-prompt-later',
 } as const;
 
 /** App 版本号(与 app.json / package.json 的 version 保持一致,展示在「更多」页底部) */

@@ -46,6 +46,11 @@ export type RootStackParamList = {
    * 五页共用同一个商品 id;`checkIn/checkOut` 一路透传到订房向导,免得选完房日期跳回默认值。
    */
   HotelDetailLite: { id: number; checkIn?: string; checkOut?: string };
+  /**
+   * 正常模式房型详情(Figma Rooms Details `281:1041`),酒店详情 Rooms 页签真实房型卡的 See Details 进来。
+   * 参数与关怀模式同形:商品 id + 房型 id,日期透传给订房向导。
+   */
+  RoomDetail: { goodsId: number; skuId: number; checkIn?: string; checkOut?: string };
   /** 房型详情(Rooms Details `2352:6030`) */
   RoomDetailLite: { goodsId: number; skuId: number; checkIn?: string; checkOut?: string };
   /** 酒店信息页(View Hotel Detail `2352:8182`) */
@@ -292,6 +297,10 @@ export type RootStackParamList = {
    * `verifyToken` 由验证码页透传;站点没配短信渠道时为空(后端此时也不强制)。
    */
   ReferralCode: { draft: SignupDraft; verifyToken?: string };
+  /** 资料向导第 1 步 Complete Your Profile(Figma 2485:8211),入口是注册/登录后的 Set Up Profile 弹窗 */
+  ProfileSetup: undefined;
+  /** 资料向导第 2 步 Identity Verification(Figma 2485:8355) */
+  IdentityVerify: undefined;
   /** 忘记密码第一步:输入手机号发码(设计稿未画,见页面头部注释) */
   ForgotPassword: undefined;
   /** 忘记密码第二步:凭 verifyToken 设置新密码(设计稿未画,见页面头部注释) */

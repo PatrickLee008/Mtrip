@@ -25,6 +25,7 @@ services:
       - ../backend/services/user-service/app:/opt/www/app
       - ../backend/services/user-service/config:/opt/www/config
       - ./logs/user-service:/opt/www/runtime/logs
+      - ./uploads:/opt/www/uploads
       - *shared-src
 
   goods-service:

@@ -2,7 +2,7 @@
  * 用户接口(user-service /api/v1/app/auth|user/*)
  */
 
-import { get, post, postEncrypted, type RequestOptions } from '@/api/request';
+import { get, post, postEncrypted, postForm, type RequestOptions } from '@/api/request';
 import type { PageData, PageParams } from '@/api/types';
 import type { AuthResult, FavoriteItem, TravelerItem, UserProfile } from '@/types/models';
 
@@ -105,6 +105,73 @@ export function fetchMe(): Promise<UserProfile> {
 
 export function updateProfile(params: { nickname?: string; avatar?: string }): Promise<UserProfile> {
   return post<UserProfile>('/api/v1/app/user/update', params);
+}
+
+/* ---- 资料向导(Set Up Profile,Figma Onboarding 2485:8211 / 2485:8355) ---- */
+
+/** 向导回填:本人明文资料(姓名 / 住址不脱敏,只给本人) */
+export interface ProfileSetupDetail {
+  avatar: string;
+  fullName: string;
+  birthday: string | null;
+  gender: number;
+  city: string;
+  homeAddress: string;
+  nationality: string;
+  realNameStatus: number;
+  profileCompleted: boolean;
+}
+
+export function fetchProfileSetup(): Promise<ProfileSetupDetail> {
+  return get<ProfileSetupDetail>('/api/v1/app/user/profile-setup/detail');
+}
+
+/** 第 1 步 Complete Your Profile;成功后后端记 profile_setup_at,返回最新资料 */
+export function saveProfileSetup(params: {
+  avatar?: string;
+  fullName: string;
+  /** yyyy-mm-dd */
+  birthday: string;
+  gender: number;
+  city?: string;
+  homeAddress?: string;
+}): Promise<UserProfile> {
+  return post<UserProfile>('/api/v1/app/user/profile-setup/profile', params);
+}
+
+/** 第 2 步 Identity Verification;提交后 realNameStatus=3 审核中 */
+export function submitIdentity(params: {
+  /** ISO 3166-1 alpha-2 */
+  nationality: string;
+  name: string;
+  /** 缅甸国籍为 NRC(如 `12/OoKaMa(N)123456`),其余国籍为护照号 */
+  idNumber: string;
+  idCardFront: string;
+  /** 护照只有资料页,可空;NRC 必填 */
+  idCardBack?: string;
+  selfieImage: string;
+}): Promise<UserProfile> {
+  return post<UserProfile>('/api/v1/app/user/profile-setup/identity', params);
+}
+
+export type UserUploadScene = 'avatar' | 'id_front' | 'id_back' | 'selfie';
+
+/** 本地选好的图片(expo-image-picker 结果);web 端带 File,原生端只有 uri */
+export interface LocalImage {
+  uri: string;
+  name: string;
+  mimeType: string;
+  file?: Blob;
+}
+
+/** 图片上传,返回 `/uploads/user/{id}/...` 相对地址(展示时用 resolveMediaUri 拼域名) */
+export function uploadUserImage(scene: UserUploadScene, image: LocalImage): Promise<{ url: string }> {
+  const body = new FormData();
+  body.append('scene', scene);
+  if (image.file) body.append('file', image.file, image.name);
+  // RN 的 FormData 认 { uri, name, type } 形态的文件描述,类型声明里没有,只能断言
+  else body.append('file', { uri: image.uri, name: image.name, type: image.mimeType } as unknown as Blob);
+  return postForm<{ url: string }>('/api/v1/app/user/upload', body);
 }
 
 export function changePassword(params: {

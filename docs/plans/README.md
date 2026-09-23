@@ -1,5 +1,13 @@
 # Mtrip 开发工作计划总览
 
+2026-09-23更新：admin-web **实名审核页**落地(终端用户管理 → 实名审核,样式参照商户验证页),审核 App 资料向导第 2 步提交的证件照与自拍;迁移 `V20260923110000`。详见 [HANDOFF](./HANDOFF.md)。
+
+2026-09-23更新：client-app **注册后「Set Up Profile」弹窗 + 资料向导两步**落地并接后端(user-service 新增 4 个接口、迁移 `V20260923100000`、`real_name_status` 新增 3=审核中)。后台实名审核入口待做。详见[模块10](./10-移动端App框架.md)与 [HANDOFF](./HANDOFF.md)。
+
+2026-09-23更新：client-app **关怀模式页面补请求**:More 页获焦刷新资料、评价页接真实评价分页、信息页评价摘要取 `reviewSummary`。详见[模块10](./10-移动端App框架.md)。
+
+2026-09-23更新：client-app **正常模式房型详情页**落地(Figma `281:1041`):新增 `RoomDetail` 路由,酒店详情 Rooms 页签真实房型的 See Details 不再 comingSoon;Book This Room / Reserve now 走购物车进订房向导,加购参数与房型卡 Choose 共用。typecheck 通过,未做 Web/真机对图。详见[模块10](./10-移动端App框架.md)。
+
 2026-09-21更新：物业资料审核流程完成可发现性与状态整改。管理后台在“商户管理”下新增独立“物业资料审核”页面，保留“商品审核 → 物业资料审核”为兼容跳转；查看权限 `merchant:property:content-list` 与审批权限 `merchant:property:content-audit` 分离并保持站点隔离。商户端 All Properties 与酒店资料页区分待完善、审核中、审核未通过和未发布，已有批准版本在新版本待审或驳回时继续生效；最后一份物业 KYC 通过后后台明确提示下一步完善物业资料。迁移 `V20260921130000__add-property-profile-review-menu.sql` 已应用，账本 27/27；两个 Web 构建、PHP lint、物业资料权限/站点/生命周期回归、物业 KYC 回归和全栈健康检查通过。未修改 merchant-app 与 client-app。详见[整改审计](./audits/2026-09-21-property-profile-review-remediation.md)。
 
 2026-09-21更新：商户端「Dashboard & Earnings」(`/earnings`)按 Figma `fsK2rrl2sadcowrxspvGV8` SECTION `1306:18423`「Business Dashboard & Settlement」整页重写，与稿面侧边栏口径一致——只重写 `/earnings` 一页，`/dashboard`、路由、网关、菜单种子与权限键零改动。前端 `views/earnings/**` 整目录重写(页头周期选择 + 四张概览卡 + 每日营收柱 + Earnings Breakdown + 2×2 图表网格 + 近期预订结算表 + 导出弹窗)，图表手写 SVG/DOM 不引 echarts；后端 `order-service Merchant/StatsController::dashboard` 补真实入住率、周环比、到达/离店人数与单量、同步失败数、入住率趋势、房型占比与近期预订，`finance-service Merchant/EarningsController::overview` 补佣金率与结算币种。入住率口径为逐物业「日库存优先、缺失回退基础库存 + 在住间夜」；`merchant_store` 无 currency 列(币种在 `merchant_account` / `hotel_room_type`)，避免 1054 返工。新增 `merchant-web/scripts/check-earnings-figma.mjs`(SSR 真实渲染，240/240)与 `scripts/test-dashboard-earnings.sh`(隔离库集成回归，47/47)；`merchant-web npm run build` 与改动 PHP lint 通过，order-service/order-service-app/finance-service 已热重启并用真实 HTTP 复核两个接口返回新结构。⚠ 踩坑留痕：容器虽挂载本地源码，但 Hyperf/Swoole 长驻 worker 改 PHP 方法体**必须热重启**才生效，只跑 CLI 集成测试会全绿却仍返回旧结构，前端会因缺字段白屏；前端已同步加响应兜底。未做 ADR、Excel/PDF 导出与登录态视觉走查。详见[M5 方案第 11 节](./实现方案-Merchant-M5-经营看板与收益结算.md)。

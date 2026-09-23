@@ -240,6 +240,17 @@ export default function HotelDetailScreen() {
             onChangeQuantity={cartSetQuantity}
             quantities={cartQuantities}
             rooms={detail?.skus}
+            onSeeDetails={
+              detail
+                ? (room) =>
+                    navigation.navigate('RoomDetail', {
+                      goodsId: detail.id,
+                      skuId: room.id,
+                      checkIn: route.params?.checkIn,
+                      checkOut: route.params?.checkOut,
+                    })
+                : undefined
+            }
           />
         );
       case 'amenities':

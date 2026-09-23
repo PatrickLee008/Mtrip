@@ -23,7 +23,14 @@
       "bundler": "metro"
     },
     "plugins": [
-      "expo-localization"
+      "expo-localization",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow M-Trip to access your photos to upload your profile photo and ID documents.",
+          "cameraPermission": "Allow M-Trip to use your camera to take your profile photo, ID document and selfie."
+        }
+      ]
     ]
   }
 }

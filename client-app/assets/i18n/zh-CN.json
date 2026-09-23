@@ -549,6 +549,104 @@
     },
     "smsLogin": {
       "entry": "使用验证码登录"
+    },
+    "profileSetup": {
+      "headerTitle": "完善资料",
+      "progressLabel": "资料设置",
+      "stepOf": "第 {{step}} 步,共 {{total}} 步",
+      "subtitle": "分享一些基本信息,帮助我们为你提供更贴心的旅行体验。",
+      "prompt": {
+        "title": "现在完善资料?",
+        "message": "一次填写个人信息,以后预订更快捷、更省心。",
+        "later": "稍后",
+        "setUpNow": "立即设置"
+      },
+      "step1": {
+        "title": "完善个人资料"
+      },
+      "uploadPhoto": "上传头像",
+      "fullName": "姓名",
+      "fullNamePlaceholder": "请输入姓名",
+      "dob": "出生日期",
+      "gender": "性别",
+      "genders": {
+        "male": "男",
+        "female": "女",
+        "other": "其他"
+      },
+      "city": "常住城市",
+      "cityPlaceholder": "请选择城市",
+      "cities": {
+        "yangon": "仰光,缅甸",
+        "mandalay": "曼德勒,缅甸",
+        "naypyitaw": "内比都,缅甸",
+        "bagan": "蒲甘,缅甸",
+        "taunggyi": "东枝,缅甸",
+        "mawlamyine": "毛淡棉,缅甸",
+        "pathein": "勃生,缅甸",
+        "myitkyina": "密支那,缅甸",
+        "sittwe": "实兑,缅甸"
+      },
+      "address": "家庭住址",
+      "addressPlaceholder": "街道、楼栋、门牌号……",
+      "continue": "继续",
+      "changeLater": "之后可随时修改,入口在",
+      "profileSettings": "个人资料设置",
+      "uploading": "照片正在上传,请稍候",
+      "picker": {
+        "camera": "拍照",
+        "library": "从相册选择",
+        "denied": "没有权限,请在系统设置中允许访问。"
+      },
+      "step2": {
+        "title": "身份验证",
+        "nationality": "国籍",
+        "name": "姓名",
+        "namePlaceholder": "请输入证件上的姓名",
+        "nrcNumber": "NRC 号码",
+        "nrcState": "省 / 邦代码",
+        "nrcImage": "NRC 证件照",
+        "front": "正面",
+        "back": "背面",
+        "passportNumber": "护照号码",
+        "passportPlaceholder": "请输入护照号码",
+        "passportImage": "护照照片",
+        "photoPage": "资料页",
+        "selfieTitle": "自拍验证",
+        "selfieAction": "拍摄或上传自拍",
+        "selfieHint": "须与证件照为同一人",
+        "consent": "提交即表示你同意我们为身份验证目的处理你的个人数据。",
+        "submit": "提交验证",
+        "submitted": "已提交,我们会尽快审核你的资料。"
+      },
+      "tips": {
+        "title": "验证小贴士",
+        "clear": "确保照片清晰、文字可辨认。",
+        "edges": "证件四个边角都要完整拍进画面。",
+        "lighting": "在自然光下拍摄,避免闪光灯和反光。"
+      },
+      "countries": {
+        "mm": "缅甸",
+        "th": "泰国",
+        "cn": "中国",
+        "in": "印度",
+        "sg": "新加坡",
+        "my": "马来西亚",
+        "jp": "日本",
+        "kr": "韩国",
+        "us": "美国",
+        "gb": "英国"
+      },
+      "errors": {
+        "fullName": "请填写姓名",
+        "dob": "请填写正确的出生日期(月/日/年)",
+        "gender": "请选择性别",
+        "name": "请填写证件上的姓名",
+        "nrc": "请填写正确的 NRC:镇区代码和 6 位号码",
+        "passport": "请填写护照号码",
+        "idImage": "请上传证件照片",
+        "selfie": "请上传自拍"
+      }
     }
   },
   "more": {
@@ -929,7 +1027,6 @@
       "highDemand": "热订中",
       "citizenOff": "公民价省 {{percent}}%",
       "bestSeller": "热销",
-      "demoNotice": "当前为设计稿演示数据(未连接后端)",
       "chips": {
         "rating4": "评分 4 分以上",
         "freeCancellation": "免费取消",
@@ -945,9 +1042,7 @@
         "rating": "评价最高"
       },
       "demo": {
-        "summerPromo": "夏日促销",
         "longStayOff": "住 7 晚立减 5%",
-        "longStayNotSupported": "不支持长住优惠",
         "heritageBagan": {
           "name": "蒲甘传承酒店",
           "address": "娘乌,老蒲甘"
@@ -1185,7 +1280,28 @@
         }
       },
       "totalPrice": "合计",
-      "continue": "继续"
+      "continue": "继续",
+      "roomDetail": {
+        "startsAt": "起价",
+        "amenities": "客房设施",
+        "amenityList": {
+          "highSpeedWifi": "高速 WiFi",
+          "climateControl": "温度调节",
+          "miniBar": "迷你吧",
+          "smartTv": "智能电视",
+          "ensuiteBathroom": "独立卫浴",
+          "coffeeMachine": "胶囊咖啡机"
+        },
+        "breakfastTitle": "含早餐",
+        "breakfastDesc": "每天 6:30 至 10:00 在酒店传统餐厅享用免费国际自助早餐。",
+        "priceSummary": "价格明细",
+        "pricePerNight": "每晚价格",
+        "taxAndFees": "税费及服务费(15%)",
+        "nights": "晚数",
+        "bookThisRoom": "预订此房型",
+        "freeCancelNote": "入住前 48 小时可免费取消",
+        "reserveNow": "立即预订"
+      }
     },
     "filter": {
       "title": "筛选",
@@ -1612,31 +1728,8 @@
       "reviews": {
         "outOfTen": "/10",
         "replyFrom": "酒店回复",
-        "helpful": "有用({{count}})",
-        "report": "举报",
-        "items": {
-          "elena": {
-            "author": "Elena Rodriguez",
-            "meta": "2024 年 8 月 14 日 • 独自出行",
-            "title": "难忘的日出景色",
-            "body": "这是我缅甸之行最难忘的一站。顶层泳池正对着古老的佛塔群,日出时的景色让人屏息。工作人员每天早上都能叫出我的名字,早餐的品质也非常高。",
-            "reply": "亲爱的 Elena,非常感谢您的评价!很高兴您喜欢这里的日出景色与早餐,期待很快再次见到您。"
-          },
-          "marco": {
-            "author": "Marco Bianchi",
-            "meta": "2024 年 7 月 2 日 • 情侣出行",
-            "title": "房间安静,服务贴心",
-            "body": "房间宽敞,夜里很安静。前台临时帮我们安排了热气球行程,还准备了早餐打包盒。",
-            "reply": ""
-          },
-          "aye": {
-            "author": "Aye Chan",
-            "meta": "2024 年 6 月 20 日 • 家庭出行",
-            "title": "很适合带孩子",
-            "body": "孩子很喜欢这里的泳池,我们只说了一次就加好了床。位置也方便,一早就能去看佛塔。",
-            "reply": ""
-          }
-        }
+        "helpful": "有用",
+        "report": "举报"
       }
     },
     "cart": {

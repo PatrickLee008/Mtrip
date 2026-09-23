@@ -79,6 +79,18 @@ export default function HotelInfoLiteScreen() {
   if (loading) return <LoadingView />;
   if (error || !detail) return <ErrorView message={error} onRetry={() => void load()} />;
 
+  /**
+   * 评价摘要的分数与条数:与完整模式 `HotelDetailScreen` 同口径 —— 取 `reviewSummary`
+   * (`rating` 1-5,×2 换算成 10 分制),字段缺失才回落设计稿数值。维度条后端没有数据,仍是设计稿值。
+   */
+  const reviewRating = detail.reviewSummary?.rating;
+  const reviewCount = detail.reviewSummary?.count;
+  const reviewScore =
+    typeof reviewRating === 'number' && Number.isFinite(reviewRating)
+      ? (reviewRating * 2).toFixed(1)
+      : String(DETAIL_REVIEW_SUMMARY.score);
+  const reviewTotal = typeof reviewCount === 'number' ? reviewCount : DETAIL_REVIEW_SUMMARY.total;
+
   const cover = detail.images?.[0] ? { uri: detail.images[0] } : TEMP_HOTEL_COVERS[0];
 
   return (
@@ -223,10 +235,10 @@ export default function HotelInfoLiteScreen() {
             <Text style={liteShared.sectionTitle}>{t('hotels.detail.tabs.reviews')}</Text>
 
             <View style={liteShared.row}>
-              <Text style={styles.score}>{DETAIL_REVIEW_SUMMARY.score}</Text>
+              <Text style={styles.score}>{reviewScore}</Text>
               <Text style={liteShared.body}>
                 {t('hotels.detail.reviews.basedOn', {
-                  reviews: DETAIL_REVIEW_SUMMARY.total.toLocaleString(i18n.language),
+                  reviews: reviewTotal.toLocaleString(i18n.language),
                 })}
               </Text>
             </View>

@@ -161,6 +161,16 @@ export function post<T>(
 }
 
 /**
+ * multipart 上传(图片等)。签名只覆盖 method/path/timestamp/nonce,不含 body,故与普通 POST 同一套拦截器即可
+ */
+export function postForm<T>(url: string, data: FormData, options?: RequestOptions): Promise<T> {
+  return request<T>(
+    { method: 'POST', url, data, headers: { 'Content-Type': 'multipart/form-data' } },
+    options,
+  );
+}
+
+/**
  * 加密 POST:登录/注册等敏感接口使用,body 加密为 {payload} + X-Encrypted: 1
  * 未配置客户端密钥时回退明文(需后端 MTRIP_PAYLOAD_ENCRYPT=false 配合)
  */

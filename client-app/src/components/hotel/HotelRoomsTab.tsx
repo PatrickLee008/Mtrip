@@ -13,12 +13,14 @@
  * 底栏显示合计与已选件数,由「Continue」统一进订房流程 —— 所以本页签不再隐藏底栏,
  * 卡片按钮也不再直接跳转。选中态与间数由页面持有(`roomCartStore`),本组件只做展示与回调。
  *
- * 其余交互(收藏、See Details、360°/全景、面积单位切换)仍是 comingSoon。
+ * 真实房型的 See Details 进正常模式房型详情页(`RoomDetail`,Figma 281:1041);
+ * 其余交互(演示房型的 See Details、收藏、360°/全景、面积单位切换)仍是 comingSoon。
  */
 
 import React from 'react';
 import { Pressable, StyleSheet, Text, View, type ImageSourcePropType } from 'react-native';
 import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 
 import { TEMP_ROOM_COVERS } from '@/assets/tempImages';
 import { EmptyView } from '@/components/common/StateViews';
@@ -57,6 +59,8 @@ interface Props {
   quantities: Record<string, number>;
   /** 真实商品详情下发的房型;不传时仍显示设计稿演示房型 */
   rooms?: GoodsSku[];
+  /** 真实房型的 See Details;演示房型没有详情数据,仍走 comingSoon */
+  onSeeDetails?: (room: GoodsSku) => void;
 }
 
 const FALLBACK_COVERS = [TEMP_ROOM_COVERS.standard, TEMP_ROOM_COVERS.deluxe, TEMP_ROOM_COVERS.family];
@@ -70,6 +74,35 @@ function mediaSource(uri: string | undefined, fallback: ImageSourcePropType): Im
 /** 购物车卡片那排属性;走函数而不是对象字面量,icon 才能自然推成 HomeIconName */
 function attr(key: string, icon: HomeIconName, label: string) {
   return { key, icon, label };
+}
+
+/** 真实房型的封面:接口图优先,没有就按卡片序号轮流用设计稿临时图(房型详情页也按同一序号取,两处封面一致) */
+export function realRoomCover(room: GoodsSku, index: number): ImageSourcePropType {
+  const images = Array.isArray(room.images) ? room.images : [];
+  return mediaSource(images[0], FALLBACK_COVERS[index % FALLBACK_COVERS.length]);
+}
+
+/**
+ * 真实房型加购所需的全部参数(`onChooseRoom` 的入参)。房型卡的 Choose 与房型详情页的
+ * Book This Room / Reserve now 共用这一份,购物车里同一房型的名称/封面/属性不会因入口不同而走样。
+ */
+export function realRoomCartEntry(room: GoodsSku, index: number, t: TFunction) {
+  return {
+    roomKey: `room-${room.id}`,
+    price: Number(room.base_price),
+    sku: room,
+    extra: {
+      name: room.room_name ?? `#${room.id}`,
+      cover: realRoomCover(room, index),
+      attrs: [
+        attr('guests', 'guests', t('hotels.detail.rooms.guests', { guests: room.max_guests ?? 2 })),
+        attr('bed', 'bedSize', room.bed_type || t('hotels.detail.rooms.beds.king')),
+        ...(room.breakfast
+          ? [attr('breakfast', 'breakfast', t('hotels.detail.rooms.facilities.breakfast'))]
+          : []),
+      ],
+    },
+  };
 }
 
 function facilityIcon(label: string) {
@@ -86,6 +119,7 @@ export default function HotelRoomsTab({
   onChangeQuantity,
   quantities,
   rooms,
+  onSeeDetails,
 }: Props) {
   const { t } = useTranslation();
   const currency = useSiteStore((s) => s.currency);
@@ -115,7 +149,6 @@ export default function HotelRoomsTab({
       ) : (
         <View style={styles.list}>
           {realMode ? rooms.map((room, index) => {
-            const fallback = FALLBACK_COVERS[index % FALLBACK_COVERS.length];
             const images = Array.isArray(room.images) ? room.images : [];
             const facilities = (Array.isArray(room.facilities) && room.facilities.length > 0
               ? room.facilities
@@ -124,7 +157,7 @@ export default function HotelRoomsTab({
               <HotelRoomCard
                 key={room.id}
                 gradientKey={`room-${room.id}`}
-                cover={mediaSource(images[0], fallback)}
+                cover={realRoomCover(room, index)}
                 photoCount={t('hotels.detail.photoCount', { index: Math.min(1, images.length || 1), total: Math.max(1, images.length || 1) })}
                 name={room.room_name ?? `#${room.id}`}
                 leftLabel={room.base_stock > 0 ? t('hotels.detail.rooms.left', { rooms: room.base_stock }) : null}
@@ -149,22 +182,13 @@ export default function HotelRoomsTab({
                 bestsellerLabel={index === 0 ? t('hotels.detail.rooms.bestseller') : null}
                 favorite={false}
                 viewer={images.length > 1}
-                onPress={onComingSoon}
+                onPress={onSeeDetails ? () => onSeeDetails(room) : onComingSoon}
                 onToggleFavorite={onComingSoon}
                 onChangeQuantity={(quantity) => onChangeQuantity(`room-${room.id}`, quantity)}
-                onSelect={() =>
-                  onChooseRoom(`room-${room.id}`, Number(room.base_price), room, {
-                    name: room.room_name ?? `#${room.id}`,
-                    cover: mediaSource(images[0], fallback),
-                    attrs: [
-                      attr('guests', 'guests', t('hotels.detail.rooms.guests', { guests: room.max_guests ?? 2 })),
-                      attr('bed', 'bedSize', room.bed_type || t('hotels.detail.rooms.beds.king')),
-                      ...(room.breakfast
-                        ? [attr('breakfast', 'breakfast', t('hotels.detail.rooms.facilities.breakfast'))]
-                        : []),
-                    ],
-                  })
-                }
+                onSelect={() => {
+                  const entry = realRoomCartEntry(room, index, t);
+                  onChooseRoom(entry.roomKey, entry.price, entry.sku, entry.extra);
+                }}
                 onOpenViewer={onComingSoon}
               />
             );

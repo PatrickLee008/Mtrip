@@ -271,7 +271,7 @@ const CARD_MARKERS = [
   ['回复块左框宽 4', 'borderLeftWidth: 4'],
   ['已核实物业徽章', 'verifiedBadge'],
   ['头像取不到时的占位人形', 'name="person"'],
-  ['分数换算 10 分制', '* 2'],
+  ['分数换算 10 分制(取 reviewFormat 的 toTenPointScore)', 'toTenPointScore'],
   ['除以 10 称号', 'outOfTen'],
   ['图墙横滑', 'horizontal'],
   ['头像/图片地址解析', 'resolveMediaUri'],
@@ -279,6 +279,15 @@ const CARD_MARKERS = [
 for (const [label, marker] of CARD_MARKERS) {
   check(`评价卡源码含稿面结构:${label}`, cardSource !== null && cardSource.includes(marker), marker);
 }
+/* 昵称/日期/分数口径已抽到 reviewFormat.ts(关怀模式评价页共用),×2 换算在那里 */
+const formatSource = (() => {
+  try {
+    return fs.readFileSync(at('client-app/src/components/hotel/reviewFormat.ts'), 'utf8');
+  } catch {
+    return null;
+  }
+})();
+check('reviewFormat 按 ×2 换算 10 分制', formatSource !== null && formatSource.includes('* 2'));
 
 /** 本页非目标:Helpful / Report 底行(1133:2998 三张卡都没有,只有关怀模式那张有) */
 const cardCode = stripComments(cardSource || '');

@@ -25,6 +25,98 @@ M8 促销活动那次提交(`e12e3f2`)把一个全新文件当成旧快照编号
 **未做**:实际登录 `mtrip-ops` 面板点击验证(本地无该服务运行环境);服务器 crontab 若也裸跑
 `auto-deploy.sh` 需人工检查是否要一并加 `--apply-db`(不在本次改动范围,已提醒用户自查)。
 
+### ★ 2026-09-23 管理后台「实名审核」页(审核 App 资料向导第 2 步)
+
+终端用户管理下新增 **实名审核**(菜单 1015,`/user/real-name` → `views/user/real-name/index.vue`),版式照商户验证页
+(`views/merchant/verify`):页头 eyebrow/标题/副标题 + 导出 CSV、三张状态卡片(待审核 / 已通过 / 已驳回,切换写 `?tab=`)、
+SearchFilterBar(昵称或用户 ID + 国籍)、表格、760 宽详情抽屉(实名信息 / 证件材料三图可放大 / 个人资料 / 账户信息 /
+最终决定 / 时间线,通过 / 驳回固定在抽屉底部)、驳回弹窗(6 个预设原因 + 补充说明,拼成一句话回显给用户)。
+样式类从商户验证页原样搬入本页 scoped 样式,未抽公共组件(商户页 2000 行,不动它)。
+
+- **后端**:`AdminRealNameController`,`/api/v1/admin/user/real-name/queues|list|detail|approve|reject`;
+  站点隔离走 `applySiteScope` / `assertSiteScope`;通过/驳回用 `WHERE real_name_status=3` 条件更新防并发(已处理返回 40901)。
+  列表证件号脱敏,详情给审核员明文姓名与证件号(需与证件照比对),手机号仅超管明文。
+- **权限键三处对齐**:`user:realname:list`(页面)/ `user:realname:approve` / `user:realname:reject`
+  ↔ `02-menu.sql` 1015 / 101501 / 101502 ↔ 前端 `v-perm`。迁移只给超管角色授权,其他角色需在角色管理里勾。
+- **迁移** `V20260923110000__add-user-real-name-review.sql`:`user_info` 加 `real_name_audit_by / real_name_audit_at / real_name_reject_reason`
+  + `idx_real_name_status`,并插菜单。App 端驳回后重交会清空上一轮审核留痕(`ProfileSetupService::submitIdentity`)。
+- 验收:容器内 `php -l`、admin-web build 通过;经网关实测 队列计数 / 列表 / 详情 / 驳回(缺原因 40001)/ 驳回后再通过被拒 /
+  App 重交清留痕 / 通过 / 重复通过 40901 / 已认证用户再提交被拒;账本 30/30。⚠️ 未做浏览器对图(本机无浏览器)。
+  开发库测试用户 id 29 当前停在「待审核」,可直接打开页面看效果。
+
+**下一步**:App 端尚未展示驳回原因与审核中状态(`profile.realNameStatus` 已有,驳回原因需在 `/user/me` 补字段);审核结果暂未推送站内通知。
+
+### ★ 2026-09-23 注册后「Set Up Profile」弹窗 + 资料向导两步(Figma Onboarding `2516:14427` / `2485:8211` / `2485:8355`)
+
+注册成功后弹「Set Up Profile Now?」,Set Up Now 进两步向导:第 1 步 Complete Your Profile(头像/姓名/生日/性别/常住城市/家庭住址),
+第 2 步 Identity Verification(国籍/证件姓名/NRC 号/NRC 正反面/自拍 + Verification Tips 卡)。前后端均已接通。
+
+- **弹窗时机**:`userStore.register` 成功必弹;`login` / `loginBySms` 成功且 `profile.profileCompleted === false`
+  且本机没对该号点过 Later 才弹(Later 记 `STORAGE_KEYS.PROFILE_PROMPT_LATER`,按用户 id,跨退出保留)。
+  弹窗 `components/user/ProfileSetupPrompt.tsx` 挂在 `NavigationContainer` 内、栈外,经新增的 `navigation/navigationRef.ts` 跳页。
+- **页面**:`screens/user/ProfileSetupScreen.tsx`(路由 `ProfileSetup`)、`IdentityVerifyScreen.tsx`(路由 `IdentityVerify`),
+  共用壳 `components/user/ProfileSetupShell.tsx`(复用 `MorePageLayout` 顶栏 + 进度区 + 内容卡,另含 `OptionSheet` / `SetupPrimaryButton`)。
+  关怀模式无单独设计稿,两种模式共用。第 2 步提交后把第 1、2 步一起出栈回到进入前的页面。
+- **取舍**:生日用 mm/dd/yyyy 掩码输入(不引日期控件);城市给缅甸 9 个主要城市固定清单(落库英文名);
+  NRC 镇区代码做成输入框(不硬编码三百多个镇区),提交拼成 `12/OoKaMa(N)123456`;国籍非缅甸时换成护照号 + 仅资料页一张图。
+- **新依赖**:`expo-image-picker ~15.1.0`(`app.json` 已加相机/相册权限文案);`utils/imagePicker.ts` 原生端先弹「拍照/相册」,web 直接选文件。
+- **图标**:`HomeIcon` 新增 `calendarFilled / imageAdd / cameraSmall / cameraOutline / faceSmile / infoOutline / checkSmall / chevronStroke`
+  (path 取自设计稿 SVG);`personQuestion` / `renameA` 复用已有。
+- **后端(user-service)**:新增 `ProfileSetupController` + `ProfileSetupService`,路由
+  `GET /app/user/profile-setup/detail`、`POST /app/user/profile-setup/profile`、`POST /app/user/profile-setup/identity`、`POST /app/user/upload`(multipart,scene=avatar|id_front|id_back|selfie)。
+  图片按内容嗅探 MIME(仅 JPEG/PNG/WebP,≤10MB)落 `uploads/user/{id}/`,提交时校验 URL 必须是本人目录;
+  姓名/证件号/住址 AES 加密。`profile()` 增 `gender/birthday/city/profileCompleted`。user-service 新增 `config/autoload/storage.php`,
+  **5 个 compose 文件给 user-service(主池 + APP 孪生 + S7)补挂 `./uploads` 卷**。
+- **迁移** `V20260923100000__add-user-profile-setup-kyc.sql`:`user_info` 加 `gender/birthday/city/home_address/profile_setup_at/nationality/id_card_front/id_card_back/selfie_image/real_name_submit_at`;
+  `real_name_status` 新增 **3=审核中**(第 2 步提交后置 3,已认证或审核中拒绝重复提交,失败可重交)。admin-web 用户列表 `REAL_NAME_MAP` 同步补 3。
+- 验收:容器内 `php -l` 通过;经网关 8081 端到端实测注册 → 4 种上传(静态回源 200)→ 第 1 步(坏生日 / 他人图片被拒)→ 第 2 步(缺背面被拒、提交后状态 3、重复提交 40901),
+  落库字段与加密核对无误;client-app typecheck、web 导出、admin-web build 通过。迁移账本 29/29(顺带补执行了此前挂着的 `V20260921140000`)。
+  ⚠️ 本机无浏览器,**未做 Web/真机对图**;`scripts/check.ps1` 仍因本机未装 php 停在第 1 步。缅文待母语复核。
+
+**下一步**:① ~~管理后台实名审核入口~~(已完成,见上一节);
+② 证件照走公开 `/uploads` 静态目录(随机文件名,不可枚举,与商户 KYC 同口径),若需更严的访问控制要改成鉴权下载;
+③ 真机验证相机/相册权限与上传;④「Profile Settings」目前只是文案,账户页尚无再次编辑入口。
+
+### ★ 2026-09-23 关怀模式页面补请求(逐页对照完整模式排查)
+
+对照每个 Lite 页与完整模式同位页的接口调用,查出 3 处缺口,已全部补齐:
+
+| 页面 | 缺什么 | 处理 |
+|---|---|---|
+| `MoreLiteScreen`(更多) | 完整版 `MineScreen` 获焦调 `refreshProfile`(`/user/me`),Lite 一次都不调,余额/积分/会员等级会停在登录时的快照 | 补同样的 `useFocusEffect` |
+| `HotelReviewsLiteScreen`(评价页) | 评论列表是 i18n 里写死的 3 条,总分/条数是设计稿值;完整版走 `/app/hotels/reviews` 分页 + `reviewSummary` | 改为真实分页(刷新/翻页/失败重放,逻辑同完整版),总分 `reviewSummary.rating×2`、条数取 `total`,<8 分不贴 Excellent;删 `hotels.lite.reviews.items.*`,`helpful` 去掉假计数 |
+| `HotelInfoLiteScreen`(信息页评价摘要) | 已请求详情却仍显示设计稿分数/条数 | 改取 `reviewSummary`,口径同 `HotelDetailScreen` |
+
+昵称兜底/日期/10 分制换算从 `HotelReviewCard` 抽到 `components/hotel/reviewFormat.ts` 两种模式共用
+(`check-hotel-reviews-page.cjs` 的 ×2 断言相应改为查 reviewFormat,167/167)。
+**核过无缺口**:HomeLite(稿面刻意不出推荐位,完整版 `fetchHome` 只喂推荐位)、HotelsLite(两边都不请求)、
+结果/详情/房型详情/政策/实景预览(与完整版同接口)、MyPick / 订房向导 / 成功页(共用 Hook)。
+维度条与 AI Summary 两种模式都仍是设计稿值(后端无数据)。typecheck 与 9 个 check 脚本全绿;⚠️ 未起后端做真机/Web 验证。
+
+### ★ 2026-09-23 正常模式房型详情页(Figma `281:1041`)
+
+酒店详情 Rooms 页签的「See Details」此前一直是 comingSoon —— 之前做好的房型详情只有关怀模式的
+`RoomDetailLite`(`2352:6030`),正常模式从没有过。本轮新增 `screens/hotel/RoomDetailScreen.tsx` + 路由 `RoomDetail`
+(参数与 Lite 同形 `goodsId/skuId/checkIn/checkOut`),真实房型卡的 See Details 进来;**演示房型(无 propertyId)仍 comingSoon**。
+
+- 版式:大图(圆点 / 360° / 全景 / 张数)→ 信息卡(STARTS AT)→ Room Amenities 两列网格 → 早餐卡(仅含早房型)→
+  Price Summary;顶栏(返回/通知/分享)与吸底栏(Total Price + Reserve now)同酒店详情页规格。
+- **订房走购物车**:Book This Room / Reserve now 都是「本房型入车(已在车里不动间数)→ `HotelBooking`」,
+  与 Rooms 页签 Continue 同一入口;车里已有别的房型会一并结算。加购参数抽成 `HotelRoomsTab` 导出的
+  `realRoomCartEntry` / `realRoomCover`,房型卡 Choose 与本页共用,车里同一房型的名称/封面/属性一致。
+- 设施:接口 `facilities` 自由文本按关键词配图标;没给回落设计稿六项。新增 4 枚图标
+  `miniBar / smartTv / bathroom / coffeeMachine`(path 取自设计稿 SVG)。税费行同 Lite 取占位 `TAX_AMOUNT = 0`。
+- i18n 新增 `hotels.detail.roomDetail.*`(三份同结构,缅文待母语复核)。
+- 验收:`client-app` typecheck 零报错。⚠️ 本机后端未起(网关 8081 无响应),**未做 Web/真机对图**。
+
+**下一步**:起栈后从有真实房型的酒店进 Rooms → See Details 对图;确认 Reserve now 进向导后车内房型正确。
+
+**同日追加 · 搜索结果页去掉演示兜底**:`HotelResultsScreen` 已接真实数据,无结果不再回落设计稿四张演示卡
+(连同「演示数据」提示条、演示卡本地收藏),改为 `EmptyView`,请求失败显示 `ErrorView`。
+`demoResults.ts` 删掉 `queryDemoResults`/`DEMO_PROMO`,保留给酒店页用户指引用;
+i18n 删 `hotels.results.demoNotice`、`demo.summerPromo`、`demo.longStayNotSupported`(已无引用)。
+关怀模式结果页本来就没有演示兜底,未动。typecheck 与 9 个 check 脚本全绿。
+
 ### ★ 2026-09-22 支付失败 → 结果页失败态,并对**已有订单**重新发起支付
 
 **修的缺陷(用户报)**:① 支付失败后仍停在向导第 4 步,只弹一个失败弹窗;

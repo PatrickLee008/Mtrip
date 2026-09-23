@@ -35,8 +35,19 @@ export interface UserProfile {
   memberLevelName: string;
   balance: string;
   points: number;
+  /** 实名状态:0未认证 1已认证 2认证失败 3审核中 */
   realNameStatus: number;
   registerTime: string | null;
+  /** 性别:0未填 1男 2女 3其他 */
+  gender?: number;
+  /** yyyy-mm-dd */
+  birthday?: string | null;
+  city?: string;
+  /**
+   * 是否已完成资料向导第 1 步(Set Up Profile)。false 时注册/登录后弹「Set Up Profile Now?」。
+   * 可选:老版本本地缓存里没有这个字段,按 undefined 处理(不弹,等 refreshProfile 拿到真值)
+   */
+  profileCompleted?: boolean;
 }
 
 /** 登录/注册返回 */

@@ -1,8 +1,8 @@
 /**
  * 酒店搜索结果的演示数据 —— **直接照搬 Figma `Long Stay Search Results` 1695:6325 的四张卡**
  *
- * 与 myPickSections.ts 同一套约定:接口有数据就用接口,**接口为空或没连通时**用设计稿数据把页面
- * 渲染成设计稿的样子;示例卡 id 取负数,避免与真实商品 id 冲突(点卡片不跳详情、点心不发请求)。
+ * 搜索结果页已接真实数据、**不再回落这些演示卡**(无结果显示空态)。现仅供酒店页用户指引
+ * (`components/hotel/guide/guideSteps.tsx`)渲染示意卡片;示例卡 id 取负数,避免与真实商品 id 冲突。
  * 名称/地址/促销文案走 i18n(`hotels.results.demo.*`),封面走 `assets/tempImages.ts`。
  *
  * 设计稿原值(未做任何折算):
@@ -22,8 +22,7 @@
 import type { ImageSourcePropType } from 'react-native';
 
 import { TEMP_HOTEL_COVERS } from '@/assets/tempImages';
-import type { GoodsSortBy } from '@/api/goods';
-import type { CardBadge, CardPromo } from '@/components/hotel/HotelResultCard';
+import type { CardBadge } from '@/components/hotel/HotelResultCard';
 import type { GoodsItem } from '@/types/models';
 
 /** 演示卡的 i18n / 封面键,顺序即设计稿顺序 */
@@ -118,81 +117,3 @@ export const DEMO_BADGE: Record<DemoKey, { textKey: string; tone: CardBadge['ton
   thiripyitsaya: { textKey: 'hotels.results.bestSeller', tone: 'soft' },
   baganLodge: null,
 };
-
-/** 设计稿里每张卡的促销小行(文案键 + 划线原价) */
-export const DEMO_PROMO: Record<
-  DemoKey,
-  { strike?: number[]; tags?: { textKey: string; tone: NonNullable<CardPromo['tags']>[number]['tone'] }[] } | null
-> = {
-  heritageBagan: {
-    strike: [195_000],
-    tags: [{ textKey: 'hotels.results.demo.longStayOff', tone: 'primary' }],
-  },
-  aureumPalace: {
-    strike: [195_000, 185_000],
-    tags: [
-      { textKey: 'hotels.results.demo.summerPromo', tone: 'hot' },
-      { textKey: 'hotels.results.demo.longStayOff', tone: 'primary' },
-    ],
-  },
-  thiripyitsaya: {
-    tags: [{ textKey: 'hotels.results.demo.longStayNotSupported', tone: 'orange' }],
-  },
-  baganLodge: null,
-};
-
-/** 演示卡的设施标记,让 chips 在演示态下也能真的筛出东西 */
-const DEMO_TAGS: Record<DemoKey, { breakfast: boolean; freeCancel: boolean; wifi: boolean }> = {
-  heritageBagan: { breakfast: true, freeCancel: true, wifi: true },
-  aureumPalace: { breakfast: true, freeCancel: false, wifi: true },
-  thiripyitsaya: { breakfast: false, freeCancel: true, wifi: true },
-  baganLodge: { breakfast: false, freeCancel: false, wifi: false },
-};
-
-interface DemoQuery {
-  /** 已选中的 chips(与页面的 ChipKey 同名) */
-  chips: string[];
-  /** 关键词:比照后端对 goods_name / address 的 LIKE */
-  keyword: string;
-  sortBy: GoodsSortBy;
-  /** 名称/地址是按 i18n 渲染的,关键词匹配得由页面把译文喂进来 */
-  textOf: (key: DemoKey) => string;
-}
-
-/** 按当前筛选与排序过一遍演示数据(纯前端,行为对齐后端 applyFilters/applySort) */
-export function queryDemoResults({ chips, keyword, sortBy, textOf }: DemoQuery): GoodsItem[] {
-  const kw = keyword.trim().toLowerCase();
-  const list = DEMO_RESULTS.filter((g) => {
-    const tags = DEMO_TAGS[DEMO_KEY_BY_ID[g.id]];
-    /* 设计稿评分是 10 分制,「Rating 4+」这里按同一口径比 4 */
-    if (chips.includes('rating4') && (g.rating ?? 0) < 4) return false;
-    if (chips.includes('freeCancellation') && !tags.freeCancel) return false;
-    if (chips.includes('breakfast') && !tags.breakfast) return false;
-    if (chips.includes('freeWifi') && !tags.wifi) return false;
-    if (kw && !textOf(DEMO_KEY_BY_ID[g.id]).toLowerCase().includes(kw)) return false;
-    return true;
-  });
-
-  const sorted = [...list];
-  switch (sortBy) {
-    case 'price_asc':
-      sorted.sort((a, b) => a.minPrice - b.minPrice);
-      break;
-    case 'price_desc':
-      sorted.sort((a, b) => b.minPrice - a.minPrice);
-      break;
-    case 'star':
-      sorted.sort((a, b) => b.star_level - a.star_level);
-      break;
-    case 'rating':
-      sorted.sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0));
-      break;
-    case 'sales':
-      sorted.sort((a, b) => b.sales_count - a.sales_count);
-      break;
-    default:
-      /* default / new / distance:保持设计稿的排列顺序 */
-      break;
-  }
-  return sorted;
-}
