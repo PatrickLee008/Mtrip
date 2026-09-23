@@ -13,8 +13,12 @@ const FRONTEND_TARGETS = ['admin-web', 'merchant-web', 'supplier-web', 'client-a
 
 const BASE_COMMANDS = {
   // 全自动:git fetch + ff-only 快进 + 按变更精准构建/重启(无变更则直接早退)
-  'deploy-auto': (config) => ({ command: 'bash', args: ['scripts/auto-deploy.sh'], cwd: config.projectRoot, timeout: DEPLOY_TIMEOUT }),
-  'deploy-dry-run': (config) => ({ command: 'bash', args: ['scripts/auto-deploy.sh', '--dry-run'], cwd: config.projectRoot, timeout: DEPLOY_TIMEOUT }),
+  // --apply-db(而非 --prod!):只打开"发布代码前先执行 database/migrations/ 待执行版本"这一步,
+  // 不透传给 mtrip.sh 的 MODE_FLAG —— mtrip.sh --prod 会跳过 docker-compose.override.yml,
+  // 即不再挂载本地源码,restart 类改动会静默失效(需改走 build)。这里刻意保留默认 dev compose,
+  // 只借用 auto-deploy.sh 的 --apply-db 开关让 DB 迁移同样自动执行。
+  'deploy-auto': (config) => ({ command: 'bash', args: ['scripts/auto-deploy.sh', '--apply-db'], cwd: config.projectRoot, timeout: DEPLOY_TIMEOUT }),
+  'deploy-dry-run': (config) => ({ command: 'bash', args: ['scripts/auto-deploy.sh', '--dry-run', '--apply-db'], cwd: config.projectRoot, timeout: DEPLOY_TIMEOUT }),
   'mtrip-health': (config) => ({ command: 'bash', args: ['mtrip.sh', 'health'], cwd: config.deployDir }),
   'db-backup': (config) => ({ command: 'bash', args: ['scripts/db-backup.sh'], cwd: config.projectRoot, timeout: DEPLOY_TIMEOUT }),
   'git-fetch': (config) => ({ command: 'git', args: ['fetch', '--prune', 'origin'], cwd: config.projectRoot, timeout: 120000 }),

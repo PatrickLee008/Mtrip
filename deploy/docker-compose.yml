@@ -193,8 +193,6 @@ services:
       - ../database/merchant/39-mch-5019-site-fix.sql:/docker-entrypoint-initdb.d/99l-mch-5019-site-fix.sql:ro
       # Consumer App C-M6/C-M6.1:券适用房型+叠加规则、促销码绑定券模板、促销码兑换记录
       - ../database/marketing/08-consumer-coupon-promo.sql:/docker-entrypoint-initdb.d/99m-consumer-coupon-promo.sql:ro
-      # Merchant M8:商家促销形态/券码/长住规则列 + 平台活动出资与条款 + 活动参与表 + 曝光按日聚合表
-      - ../database/marketing/09-merchant-promotion-rules.sql:/docker-entrypoint-initdb.d/99m1-merchant-promotion-rules.sql:ro
       # Consumer App 短信验证码:SMSPoh Verify API V3 的渠道密钥/参数列 + 短信日志场景列
       - ../database/system/11-sms-smspoh.sql:/docker-entrypoint-initdb.d/99n-sms-smspoh.sql:ro
       # 全局版本迁移最后执行并登记账本；目录内文件无需再逐条挂载 compose

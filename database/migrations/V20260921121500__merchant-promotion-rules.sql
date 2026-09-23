@@ -21,7 +21,6 @@ SET NAMES utf8mb4;
 --   4) 新表 `marketing_promotion_impression`:曝光埋点,**按日聚合**(不做行级流水,
 --      避免 C 端每次列表渲染写一行)。转化率 = 领券量 / 曝光量。
 --
--- 库:mtrip_business
 -- 幂等:全部先查 information_schema,已存在则跳过;可重复执行。
 -- ============================================================
 USE `mtrip_business`;

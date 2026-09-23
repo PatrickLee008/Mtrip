@@ -92,12 +92,13 @@ pid 与日志都在 `data/`(该目录 `.gitignore` 为 `*`),不会进 Git。
 
 ### 1. 自动部署
 
-对应 `scripts/auto-deploy.sh`(无参数):**拉取当前分支 → 比对变更 → 只构建/重启受影响的项目**。
+对应 `scripts/auto-deploy.sh --apply-db`:**拉取当前分支 → 数据库迁移 → 比对变更 → 只构建/重启受影响的项目**。
 
 - ff-only 策略:工作区必须干净;分叉或已是最新则直接早退,绝不覆盖本地改动。
+- `database/migrations/` 待执行版本会在任何代码发布前自动执行并记账;迁移失败直接中止本次发布。
 - 后端按「是否波及 `Controller/App` 或共享代码」决定要不要同步重启 APP 孪生池。
-- `database/*.sql` 变更只告警不执行;`.env` / compose 变更需人工 `mtrip.sh build`。
-- 页面提供 **预检 dry-run** 与 **执行自动部署** 两个按钮,建议先看 dry-run 决策再执行。
+- 用的是 `--apply-db` 而非 `--prod`——不会把 `mtrip.sh` 切到 `--prod` 模式(那会跳过 `docker-compose.override.yml` 的本地源码挂载,导致 restart 类改动静默不生效);`.env` / compose 变更仍需人工 `mtrip.sh build`。
+- 页面提供 **预检 dry-run** 与 **执行自动部署** 两个按钮,建议先看 dry-run 决策(含待执行迁移列表)再执行。
 
 工作区不干净时页面会提前给出横幅警告(`deploy/web` 下的发布产物已被脚本排除,不计入)。
 

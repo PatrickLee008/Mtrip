@@ -268,15 +268,17 @@ export function renderActions({ config, result, services, selectedService, selec
     <section class="deploy-grid">
       <article class="panel deploy-card primary">
         <div class="deploy-head"><h2>自动部署</h2><span class="badge warn">高风险</span></div>
-        <p>执行 <code>scripts/auto-deploy.sh</code>(无参数):<strong>拉取当前分支 → 比对变更 → 只构建/重启受影响的项目</strong>。</p>
+        <p>执行 <code>scripts/auto-deploy.sh --apply-db</code>:<strong>拉取当前分支 → 数据库迁移 → 比对变更 → 只构建/重启受影响的项目</strong>。</p>
         <ul class="deploy-notes">
           <li>ff-only 策略:工作区必须干净,分叉或落后为 0 时直接早退,绝不覆盖本地。</li>
+          <li><code>database/migrations/</code> 待执行版本会在任何代码发布前自动执行并记账;迁移失败直接中止,不会继续发布。</li>
           <li>前端有变更才 build,后端按「是否波及 <code>Controller/App</code> 或共享代码」决定是否同步重启 APP 孪生。</li>
-          <li><code>database/*.sql</code> 变更只告警不执行;<code>.env</code>/compose 变更需人工 <code>mtrip.sh build</code>。</li>
+          <li>用的是 <code>--apply-db</code> 而非 <code>--prod</code>:不会切到 <code>mtrip.sh --prod</code>(那会跳过本地源码挂载,导致 restart 类改动不生效)。</li>
+          <li><code>.env</code>/compose 变更仍需人工 <code>mtrip.sh build</code>。</li>
         </ul>
         <div class="deploy-actions">
           <form method="post" action="/actions/deploy-dry-run">${csrfField(user)}<button class="secondary" type="submit" ${disabled ? 'disabled' : ''}>预检 dry-run</button></form>
-          <form method="post" action="/actions/deploy-auto" onsubmit="return confirm('将执行真实自动部署:拉取代码并重启/重建受影响的服务与前端。确认继续?')">${csrfField(user)}<button type="submit" ${disabled ? 'disabled' : ''}>执行自动部署</button></form>
+          <form method="post" action="/actions/deploy-auto" onsubmit="return confirm('将执行真实自动部署:先执行数据库迁移,再拉取代码并重启/重建受影响的服务与前端。确认继续?')">${csrfField(user)}<button type="submit" ${disabled ? 'disabled' : ''}>执行自动部署</button></form>
         </div>
         <p class="small-text">先跑一次 dry-run 看决策,确认无误再执行。构建耗时上限 15 分钟。</p>
       </article>
