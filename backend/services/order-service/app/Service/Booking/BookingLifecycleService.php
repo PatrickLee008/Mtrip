@@ -253,7 +253,9 @@ class BookingLifecycleService
      */
     public function cancel(int $orderId, int $operatorId, string $operatorName, string $reason, int $operatorType = BookingConst::OPERATOR_MERCHANT): array
     {
-        $order = Db::transaction(function () use ($orderId, $operatorId, $operatorName, $reason, $operatorType) {
+        $closedSiblings = [];
+        $order = Db::transaction(function () use ($orderId, $operatorId, $operatorName, $reason, $operatorType, &$closedSiblings) {
+            $trip = $this->lockTripFor($orderId);
             $order = $this->lockOrder($orderId);
             if ((int) $order['booking_status'] === BookingConst::STATUS_CANCELLED) {
                 return $order; // 幂等:已取消直接返回
@@ -275,10 +277,72 @@ class BookingLifecycleService
                 'reason' => (string) $order['cancel_reason'],
                 'paid' => $paid,
             ]);
+            if (! $paid) {
+                $closedSiblings = $this->closePendingTrip($trip, $order, '同行程预订已取消,整单关闭', $operatorType, $operatorId, $operatorName);
+            }
             return $order;
         });
         $this->notifyQuietly($order, '预订已取消', "预订「{$order['goods_name']}」(订单 {$order['order_no']})已取消,原因:{$order['cancel_reason']}。");
+        foreach ($closedSiblings as $sibling) {
+            $this->notifyQuietly($sibling, '预订已取消', "预订「{$sibling['goods_name']}」(订单 {$sibling['order_no']})已取消,原因:{$sibling['cancel_reason']}。");
+        }
         return $order;
+    }
+
+    /**
+     * 锁定预订所属的 Trip 行(独立单返回 null;须在事务内、**先于**锁 order_main 调用)。
+     * 加锁顺序 order_trip → order_main 与 TripController::pay 一致,避免取消/超时与整单支付交叉死锁。
+     * trip_id 下单后不再变更,所以先无锁读出再加锁是安全的。
+     */
+    public function lockTripFor(int $orderId): ?array
+    {
+        $tripId = (int) Db::table('order_main')->where('id', $orderId)->value('trip_id');
+        if ($tripId <= 0) {
+            return null;
+        }
+        $trip = Db::table('order_trip')->where('id', $tripId)->whereNull('deleted_at')->lockForUpdate()->first();
+        return $trip ? (array) $trip : null;
+    }
+
+    /**
+     * Trip 内一笔**待支付**预订被取消/超时后关闭整单(须在事务内,且已用 lockTripFor 锁住 Trip)。
+     * 券按整单净额分摊到各预订,少一笔整单就付不了(TripController::pay 要求全部待支付),
+     * 所以同 Trip 其余待支付预订一并取消并释放锁定库存,Trip 置 2 已取消。
+     * 已支付的 Trip 不处理 —— 支付后各预订独立取消(PRD 模块 1.1)。返回被连带取消的预订,供调用方通知。
+     */
+    public function closePendingTrip(?array $trip, array $order, string $reason, int $operatorType, int $operatorId, string $operatorName): array
+    {
+        if ($trip === null || (int) $trip['pay_status'] !== 0) {
+            return [];
+        }
+        $siblings = Db::table('order_main')->where('trip_id', (int) $trip['id'])->where('id', '<>', (int) $order['id'])
+            ->whereNull('deleted_at')->orderBy('id')->lockForUpdate()->get()
+            ->map(static fn ($row) => (array) $row)->all();
+        $closed = [];
+        foreach ($siblings as $sibling) {
+            if ((int) $sibling['booking_status'] !== BookingConst::STATUS_PENDING_PAYMENT
+                || (int) $sibling['payment_status'] !== BookingConst::PAY_PENDING) {
+                continue;
+            }
+            $this->transition($sibling, [
+                'booking_status' => BookingConst::STATUS_CANCELLED,
+                'order_status' => 4,
+                'cancel_reason' => $reason,
+                'cancel_time' => date('Y-m-d H:i:s'),
+            ]);
+            $this->stockService->release($sibling);
+            $sibling['booking_status'] = BookingConst::STATUS_CANCELLED;
+            $sibling['cancel_reason'] = $reason;
+            $this->events->log($sibling, 'cancelled', $operatorType, $operatorId, $operatorName, 1, [
+                'reason' => $reason,
+                'paid' => false,
+                'tripNo' => (string) $trip['trip_no'],
+                'triggerOrderNo' => (string) $order['order_no'],
+            ]);
+            $closed[] = $sibling;
+        }
+        Db::table('order_trip')->where('id', (int) $trip['id'])->update(['pay_status' => 2]);
+        return $closed;
     }
 
     /**

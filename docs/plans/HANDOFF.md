@@ -1,5 +1,37 @@
 # 会话交接文档(HANDOFF)
 
+### ★ 2026-09-24 订单优惠券规则快照(`order_main.coupon_snapshot`)
+
+**问题**:订单只存 `coupon_id` + 抵扣额,结算时 `SettlementService::couponFunding` 实时读券模板的出资方/共担比例 —— 后台改了券,已下订单的分账跟着变。
+**改动**:
+- 迁移 `V20260924041000__add-order-coupon-snapshot.sql`:`order_main.coupon_snapshot JSON NULL`(无券为 NULL,存量订单保持 NULL)。
+- `PricingService::resolveCoupon` 第三个返回值为快照 JSON(券名/类型/面额/门槛/封顶/适用物业与房型/出资方与共担比例/整单抵扣额 `checkoutDiscount`/时间);单单与 Trip 下单都落库,Trip 各预订存同一份整单快照(各自分摊额仍在 `alloc_coupon_discount`)。
+- `SettlementService::couponFunding` 优先读快照,快照为空(存量单)回退读模板,口径与改动前一致。
+- C 端订单详情 `unset` 掉 `coupon_snapshot`(含出资方等内部商务信息)。
+**验证**:端到端 —— 下单时把模板 17 临时改成共担 50/50,下单后改回平台出资再支付,分录仍按快照记 `funding_source=4`、mtrip/merchant 各 3,000;C 端详情不含快照;Trip 无券下单快照为 NULL 正常。
+**补测(新造券 `test/adhoc/c-coupon-snapshot-test.sql`,记号 `[Snap Test]`,只发用户 28,可重复导入)**:① Trip 2 预订 + 共担 60/30/10 券,下单后把模板改成平台 100% 再支付 —— 两笔预订分摊额 4,000 / 5,900,分录仍按快照三方拆分(2,400/1,200/400、3,540/1,770/590);② Trip + 商户出资券 → merchant_pays 10,000;③ 单单 + 合作方出资指定房型券 → partner_pays 5,000,快照含 propertyIds [3] / roomTypeIds [4];④ 该券用在房型 3 → 40901「该券不适用于本房型」。测试后模板已恢复原值。
+**本地执行迁移**:`db-migrate.sh` 仍被 CRLF 校验和问题挡住(见上条),本次同样按脚本控制 SQL 手工登记;账本 32 = 文件 32。
+
+### ★ 2026-09-24 优惠券重复使用漏洞修复(支付时先锁券再扣款)
+
+**缺陷**:下单不占券,同一张券可挂在多笔待支付单上;先付的核销后,后付的核销段静默跳过、仍按抵扣价成交。
+**修法**:`PricingService::lockCouponForPay()` 在扣款**之前**行锁领券记录,不可用即 40901 整单回滚;支付成功后 `consumeCoupon()` 核销。`OrderController::pay` / `TripController::pay` 共用。
+**不做释放/返还**:PRD 全文无相关规则,模块 6.1 券状态 `Available → Used` 单向、付款前可换券 —— 取消/退款不返还券。依据与验证细节见 `docs/plans/差距分析-多房间预订-PRDv1.0.1.md` 第七节 F。
+**验证**:端到端(网关 8081,site 7 用户 28,mock 支付)同券两单/两 Trip 均为先付成功、后付被拒且无流水;余额支付被拒余额不变;无券单回归正常。开发库遗留测试单 31/33/34 与已核销券 50/51。
+
+**优惠券四部分现状**:① 匹配与试算 —— 单房型完成,Trip 缺 `trip/quote`、资格条件(晚数/提前天数/最少间数/酒店数)与按资格分摊;② 金额与快照 —— 金额已落库,券规则快照已补(见本文件顶部 coupon_snapshot 一条),仍无前后端金额确认;③④ 核销/释放/返还 —— 核销完成(本次补上并发漏洞),释放/返还按 PRD 不做。
+
+### ★ 2026-09-24 多酒店 Trip:取消/超时连带关闭整单 + 禁止单付 Trip 内预订
+
+对照 PRD §1.1 走读 order / payment 服务,新发现 5 条,详见 `docs/plans/差距分析-多房间预订-PRDv1.0.1.md` 第七节。本次修了 A、B:
+- **A 缺陷**:超时扫单与取消只改 `order_main`,`order_trip.pay_status` 永远停在 0,Trip 里一笔没了整单就再也付不了。
+  新增 `BookingLifecycleService::lockTripFor()` + `closePendingTrip()`:待支付 Trip 内一笔被取消/超时 → 同 Trip 其余待支付预订一并取消、释放库存、记时间线、发通知,Trip 置 2。
+  取消(C/商户/后台共用 `cancel`)与 `BookingExpiryService::expireOne` 共用;**加锁顺序 order_trip → order_main**,与 `TripController::pay` 一致。
+- **B 缺陷**:`order/pay` 不看 `trip_id`,可单付 Trip 内一笔(吃分摊券额 + 核销整单券)。现直接拒绝;C 端 `OrderDetailScreen` 按 `trip_id` 改走 `trip/pay`。
+- **验证**:order-service 镜像内 `php -l` 三文件通过、client `tsc` 通过;**本机无 PHP,`scripts/check.ps1` 第一步起不来;全栈未启动,未跑端到端**。
+
+**下一步**:第七节 C(Trip 钱包支付补 `finance_flow` 收入流水 + 各预订统一用 Trip 流水号)改动小可先做;D(payment-service 真实支付单)与原 P1「部分失败」绑做;E(逐预订确认通知)。
+
 ### ★ 2026-09-23 auto-deploy.sh 发布阻断修复 + mtrip-ops 自动部署接入 DB 迁移
 
 **修的缺陷(生产 cron 报错)**:`auto-deploy.sh` 拦下 `database/marketing/09-merchant-promotion-rules.sql`——

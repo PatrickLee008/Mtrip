@@ -130,10 +130,10 @@ class OrderController extends AbstractController
             // 长住优惠:仅酒店,按住宿夜数命中最高梯度,对原总价打折
             $longstay = $orderType === 1 ? $this->pricingService->longstayDiscount($siteId, count($dates), $totalAmount) : 0.0;
             // 优惠券(可选):校验归属/状态/有效期/适用范围/门槛,计算抵扣(不在此消耗,支付时消耗)
-            [$couponRefId, $couponDiscount] = $couponId > 0
+            [$couponRefId, $couponDiscount, $couponSnapshot] = $couponId > 0
                 ? $this->pricingService->resolveCoupon($siteId, $userId, $couponId, $orderType,
                     $propertyId, $roomTypeId, $goodsId, $skuId, round($totalAmount - $longstay, 2))
-                : [0, 0.0];
+                : [0, 0.0, null];
             $payAmount = max(0.0, round($totalAmount - $longstay - $couponDiscount, 2));
             $unitPrice = round($totalAmount / max(1, count($dates)) / $quantity, 2);
             $bookingFields = $this->bookingLifecycle->buildCreateFields($orderType, $propertyId, $roomTypeId, $remark);
@@ -160,6 +160,7 @@ class OrderController extends AbstractController
                 'longstay_discount' => $longstay,
                 'coupon_id' => $couponRefId,
                 'coupon_discount' => $couponDiscount,
+                'coupon_snapshot' => $couponSnapshot,
                 'alloc_coupon_discount' => $couponDiscount,
                 'pay_amount' => $payAmount,
                 'order_status' => 0,
@@ -232,6 +233,13 @@ class OrderController extends AbstractController
             throw new BusinessException(ErrorCode::NOT_FOUND, '订单不存在');
         }
         $snapshot = (array) $snapshot;
+        /**
+         * Trip 内的预订只能经 `trip/pay` 整单支付:单付一笔会按已分摊券额的价格付款、把整单券核销掉,
+         * 且 Trip 其余预订从此无法整单支付。trip_id 下单后不变,快照判断即可。
+         */
+        if ((int) ($snapshot['trip_id'] ?? 0) > 0) {
+            throw new BusinessException(ErrorCode::DATA_CONFLICT, '该预订属于多预订行程,请整单支付');
+        }
         $result = Db::transaction(function () use ($orderId, $payMethod, $snapshot) {
             MerchantAccessGuard::lockBookable([$snapshot], (int) $snapshot['site_id']);
             if ((int) $snapshot['order_type'] === 1) {
@@ -253,6 +261,8 @@ class OrderController extends AbstractController
             if ((int) $order['order_status'] !== 0) {
                 throw new BusinessException(ErrorCode::DATA_CONFLICT, '订单不是待支付状态');
             }
+            // 先锁券再扣款:券已被别的订单用掉就在这里拒绝,不产生任何扣款
+            $couponRec = $this->pricingService->lockCouponForPay((int) $order['coupon_id']);
             $verifyCode = OrderNoGenerator::verifyCode();
             $payAmount = round((float) $order['pay_amount'], 2);
             $tradeNo = ($payMethod === 3 ? 'WALLET' : 'MOCK') . OrderNoGenerator::flowNo();
@@ -293,22 +303,8 @@ class OrderController extends AbstractController
                 Db::table('goods_info')->where('id', (int) $order['goods_id'])
                     ->increment('sales_count', (int) $order['quantity']);
             }
-            // 支付成功消耗优惠券:领券记录置已用 + 模板已用数+1(仅当仍未使用)
-            if ((int) $order['coupon_id'] > 0) {
-                $rec = Db::table('marketing_coupon_receive')
-                    ->where('id', (int) $order['coupon_id'])
-                    ->where('status', 0)
-                    ->lockForUpdate()
-                    ->first(['id', 'coupon_id']);
-                if ($rec) {
-                    Db::table('marketing_coupon_receive')->where('id', $rec->id)->update([
-                        'status' => 1,
-                        'order_id' => $orderId,
-                        'used_time' => date('Y-m-d H:i:s'),
-                    ]);
-                    Db::table('marketing_coupon')->where('id', $rec->coupon_id)->increment('used_count');
-                }
-            }
+            // 支付成功核销优惠券(已在扣款前锁定并确认可用)
+            $this->pricingService->consumeCoupon($couponRec, $orderId);
             // 推荐返利不在支付时发放:改为入住核销时由 BookingLifecycleService::checkIn 发放(PRD 模块14)
             // 结算分录:按优惠券出资方生成按订单分账(PRD 模块8),回填订单佣金/商户实收
             $this->settlementService->recordBooking($order);
@@ -370,7 +366,7 @@ class OrderController extends AbstractController
         if (! in_array((int) $order['order_status'], [1, 2], true)) {
             $order['verify_code'] = '';
         }
-        unset($order['platform_commission'], $order['merchant_receivable'], $order['supplier_cost'], $order['deleted_at']);
+        unset($order['platform_commission'], $order['merchant_receivable'], $order['supplier_cost'], $order['coupon_snapshot'], $order['deleted_at']);
         /**
          * 已取消/退款中/已退款的单,补一段 `cancelInfo` 给 C 端取消详情页
          * (Figma `1685:3429`「Booking Cancelled by Merchant」要区分是谁取消的):
@@ -412,7 +408,8 @@ class OrderController extends AbstractController
                 $reason,
                 \App\Constants\BookingConst::OPERATOR_GUEST,
             );
-            return Result::success(null, '订单已取消');
+            // 待支付的 Trip 预订取消会连带关闭整单(BookingLifecycleService::closePendingTrip)
+            return Result::success(null, (int) ($order['trip_id'] ?? 0) > 0 ? '行程已取消,同行程的待支付预订已一并取消' : '订单已取消');
         }
         Db::transaction(function () use ($orderId) {
             $order = $this->lockOwnOrder($orderId);

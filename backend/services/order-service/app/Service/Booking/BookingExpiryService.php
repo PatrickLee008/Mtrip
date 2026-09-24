@@ -25,6 +25,10 @@ class BookingExpiryService
     #[Inject]
     protected BookingNotificationService $notify;
 
+    /** Trip 整单关闭(与取消共用同一实现) */
+    #[Inject]
+    protected BookingLifecycleService $lifecycle;
+
     /** 定时任务入口:批量处理到期预订(单批上限 200,超出下轮继续) */
     public function expireDue(): void
     {
@@ -51,7 +55,9 @@ class BookingExpiryService
     /** 单笔过期处理(幂等:状态复检,重复调用无副作用) */
     public function expireOne(int $orderId): bool
     {
-        $order = Db::transaction(function () use ($orderId) {
+        $closedSiblings = [];
+        $order = Db::transaction(function () use ($orderId, &$closedSiblings) {
+            $trip = $this->lifecycle->lockTripFor($orderId);
             $order = Db::table('order_main')->where('id', $orderId)->whereNull('deleted_at')->lockForUpdate()->first();
             if (! $order) {
                 return null;
@@ -76,13 +82,16 @@ class BookingExpiryService
             $this->events->log($order, 'payment_expired', BookingConst::OPERATOR_SYSTEM, 0, '', 1, [
                 'expiredAt' => date('Y-m-d H:i:s'),
             ], 'payment');
+            $closedSiblings = $this->lifecycle->closePendingTrip($trip, $order, '支付超时,系统自动取消', BookingConst::OPERATOR_SYSTEM, 0, '');
             return $order;
         });
 
         if ($order !== null) {
-            try {
-                $this->notify->push($order, '预订支付超时已取消', "预订「{$order['goods_name']}」(订单 {$order['order_no']})住客未在时限内支付,已自动取消并释放库存。");
-            } catch (\Throwable) {
+            foreach ([$order, ...$closedSiblings] as $expired) {
+                try {
+                    $this->notify->push($expired, '预订支付超时已取消', "预订「{$expired['goods_name']}」(订单 {$expired['order_no']})住客未在时限内支付,已自动取消并释放库存。");
+                } catch (\Throwable) {
+                }
             }
             return true;
         }

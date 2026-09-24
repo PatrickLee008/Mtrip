@@ -108,6 +108,7 @@ class TripController extends AbstractController
             // 2) 整单券校验(按整单净额)与占比分摊
             $couponRefId = 0;
             $couponDiscount = 0.0;
+            $couponSnapshot = null;
             if ($couponId > 0) {
                 /**
                  * 适用范围要按**本 Trip 实际覆盖的物业/房型**校验:整车同一家酒店时
@@ -118,7 +119,7 @@ class TripController extends AbstractController
                  */
                 $propertyIds = array_values(array_unique(array_map('intval', array_column($legs, 'propertyId'))));
                 $roomTypeIds = array_values(array_unique(array_map('intval', array_column($legs, 'roomTypeId'))));
-                [$couponRefId, $couponDiscount] = $this->pricingService->resolveCoupon(
+                [$couponRefId, $couponDiscount, $couponSnapshot] = $this->pricingService->resolveCoupon(
                     $siteId,
                     $userId,
                     $couponId,
@@ -178,6 +179,8 @@ class TripController extends AbstractController
                     'coupon_id' => $couponRefId,
                     'coupon_discount' => $alloc,
                     'alloc_coupon_discount' => $alloc,
+                    // 整单券规则快照,各预订同一份;结算按它算出资方分摊
+                    'coupon_snapshot' => $couponSnapshot,
                     'pay_amount' => $payAmount,
                     'order_status' => 0,
                     'use_date' => $leg['useDate'],
@@ -263,6 +266,8 @@ class TripController extends AbstractController
              * 不是逐个预订各扣一次(那样会把同一笔钱拆成多条流水,且中途余额不足只成功一半)。
              * 余额不足由 `WalletService::debit` 抛错,整个事务回滚。
              */
+            // 先锁整单券再扣款:券已被别的订单用掉就在这里拒绝,不产生任何扣款
+            $couponRec = $this->pricingService->lockCouponForPay((int) $trip['coupon_id']);
             $tripPayAmount = round((float) $trip['pay_amount'], 2);
             if ($payMethod === 3 && $tripPayAmount > 0) {
                 $this->walletService->debit(
@@ -293,17 +298,8 @@ class TripController extends AbstractController
                 $codes[] = ['orderNo' => $b['order_no'], 'verifyCode' => $verifyCode];
             }
 
-            // 整单券消耗一次
-            if ((int) $trip['coupon_id'] > 0) {
-                $rec = Db::table('marketing_coupon_receive')->where('id', (int) $trip['coupon_id'])
-                    ->where('status', 0)->lockForUpdate()->first(['id', 'coupon_id']);
-                if ($rec) {
-                    Db::table('marketing_coupon_receive')->where('id', $rec->id)->update([
-                        'status' => 1, 'order_id' => $tripId, 'used_time' => date('Y-m-d H:i:s'),
-                    ]);
-                    Db::table('marketing_coupon')->where('id', $rec->coupon_id)->increment('used_count');
-                }
-            }
+            // 整单券核销一次(已在扣款前锁定并确认可用)
+            $this->pricingService->consumeCoupon($couponRec, $tripId);
             // 推荐返利不在支付时发放:Trip 下各酒店订单各自入住核销时由 BookingLifecycleService::checkIn 发放(PRD 模块14)
             return ['siteId' => (int) $trip['site_id'], 'userId' => (int) $trip['user_id'], 'tripNo' => (string) $trip['trip_no'], 'codes' => $codes, 'orders' => array_map(static fn ($x) => (array) $x, $bookings->all())];
         });

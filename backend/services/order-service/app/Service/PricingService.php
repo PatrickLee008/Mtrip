@@ -31,9 +31,46 @@ class PricingService
     }
 
     /**
+     * 支付时锁定订单所用的券(须在事务内、**扣款之前**调用):券只有 Available → Used 单向流转(PRD 模块 6.1),
+     * 下单时不占券,同一张券可能挂在多笔待支付订单上。先付的那笔核销后,后付的必须拒绝支付 ——
+     * 否则会按已抵扣的价格成交却不再核销,等于一张券用了两次。
+     * 券已不可用时抛错整单回滚;无券(receiveId=0)返回 null。
+     */
+    public function lockCouponForPay(int $receiveId): ?object
+    {
+        if ($receiveId <= 0) {
+            return null;
+        }
+        $rec = Db::table('marketing_coupon_receive')
+            ->where('id', $receiveId)
+            ->where('status', 0)
+            ->whereNull('deleted_at')
+            ->lockForUpdate()
+            ->first(['id', 'coupon_id']);
+        if (! $rec) {
+            throw new BusinessException(ErrorCode::DATA_CONFLICT, '该订单使用的优惠券已被其他订单使用或已失效,请取消后重新下单');
+        }
+        return $rec;
+    }
+
+    /** 核销已由 lockCouponForPay 锁定的券:领券记录置已用 + 模板已用数+1。orderId 为订单ID(Trip 为 tripId) */
+    public function consumeCoupon(?object $rec, int $orderId): void
+    {
+        if ($rec === null) {
+            return;
+        }
+        Db::table('marketing_coupon_receive')->where('id', $rec->id)->update([
+            'status' => 1,
+            'order_id' => $orderId,
+            'used_time' => date('Y-m-d H:i:s'),
+        ]);
+        Db::table('marketing_coupon')->where('id', $rec->coupon_id)->increment('used_count');
+    }
+
+    /**
      * 校验优惠券并计算抵扣(须在事务内调用,行锁领券记录防并发)。
      * 券在此不消耗,支付成功时才置已用。多酒店 Trip 传 propertyId=0(不支持指定物业券)。
-     * @return array{0:int,1:float} [领券记录ID, 抵扣金额]
+     * @return array{0:int,1:float,2:string} [领券记录ID, 抵扣金额, 券规则快照 JSON]
      */
     public function resolveCoupon(
         int $siteId,
@@ -110,7 +147,35 @@ class PricingService
             $discount = $val;
         }
         $discount = max(0.0, min($discount, $base));
-        return [$receiveId, round($discount, 2)];
+        return [$receiveId, round($discount, 2), $this->couponSnapshot($coupon, $rec, round($discount, 2))];
+    }
+
+    /**
+     * 券规则快照(下单时落 order_main.coupon_snapshot):冻结计价与出资方规则,
+     * 结算/对账/客服只读快照,后台之后改券模板不影响已下订单。
+     */
+    private function couponSnapshot(array $coupon, array $rec, float $discount): string
+    {
+        $decode = static fn ($v) => is_string($v) ? (json_decode($v, true) ?: []) : (array) ($v ?? []);
+        $source = (int) ($coupon['funding_source'] ?? 1);
+        return json_encode([
+            'receiveId' => (int) $rec['id'],
+            'couponId' => (int) $coupon['id'],
+            'couponName' => (string) ($coupon['coupon_name'] ?? ''),
+            'couponType' => (int) $coupon['coupon_type'],
+            'promotionKind' => (int) ($coupon['promotion_kind'] ?? 0),
+            'discountValue' => (float) $coupon['discount_value'],
+            'minAmount' => (float) $coupon['min_amount'],
+            'maxDiscount' => (float) $coupon['max_discount'],
+            'goodsScope' => (int) $coupon['goods_scope'],
+            'propertyIds' => array_map('intval', $decode($coupon['property_ids'] ?? null)),
+            'roomTypeIds' => array_map('intval', $decode($coupon['room_type_ids'] ?? null)),
+            'fundingSource' => $source > 0 ? $source : 1,
+            'fundingRules' => $decode($coupon['funding_rules'] ?? null),
+            // 整单抵扣额;Trip 各预订的分摊额在 order_main.alloc_coupon_discount
+            'checkoutDiscount' => $discount,
+            'snapshotAt' => date('Y-m-d H:i:s'),
+        ], JSON_UNESCAPED_UNICODE);
     }
 
     /** 住客名单归一化:最多 qty 条,每条取 firstName/lastName/phone/email 并限长 */

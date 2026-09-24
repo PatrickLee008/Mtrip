@@ -11,6 +11,7 @@ import { useTranslation } from 'react-i18next';
 
 import { applyRefund, cancelOrder, fetchOrderDetail, fetchVerifyCode } from '@/api/order';
 import { payOrder } from '@/api/pay';
+import { apiTripPay } from '@/api/trip';
 import PriceText from '@/components/business/PriceText';
 import VerifyCodeView from '@/components/business/VerifyCodeView';
 import CustomButton from '@/components/common/CustomButton';
@@ -95,15 +96,21 @@ export default function OrderDetailScreen() {
 
   const comingSoon = () => showToast(t('home.comingSoon'));
 
-  /** 余额支付:前置比一次余额(后端同样会拦),成功后刷新本地余额 */
+  /**
+   * 余额支付:前置比一次余额(后端同样会拦),成功后刷新本地余额。
+   * Trip 内的预订后端只收整单支付(`trip/pay`),这里的 `pay_amount` 只是其中一笔,
+   * 拿它比余额不准,所以 Trip 单跳过前置比较、交给后端按整单金额判断。
+   */
   const payByBalance = async () => {
     if (acting) return;
-    if (balance < Number(order.pay_amount)) {
+    const tripId = Number(order.trip_id) || 0;
+    if (tripId === 0 && balance < Number(order.pay_amount)) {
       showToast(t('order.balanceInsufficient'));
       return;
     }
     await act(async () => {
-      await payOrder(orderId);
+      if (tripId > 0) await apiTripPay({ tripId, payMethod: 3 });
+      else await payOrder(orderId);
       void refreshProfile().catch(() => undefined);
     });
   };
