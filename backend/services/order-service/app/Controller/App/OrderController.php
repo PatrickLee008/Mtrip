@@ -132,9 +132,17 @@ class OrderController extends AbstractController
             // 优惠券(可选):校验归属/状态/有效期/适用范围/门槛,计算抵扣(不在此消耗,支付时消耗)
             [$couponRefId, $couponDiscount, $couponSnapshot] = $couponId > 0
                 ? $this->pricingService->resolveCoupon($siteId, $userId, $couponId, $orderType,
-                    $propertyId, $roomTypeId, $goodsId, $skuId, round($totalAmount - $longstay, 2))
+                    $propertyId, $roomTypeId, $goodsId, $skuId, round($totalAmount - $longstay, 2),
+                    true, $quantity, $useDate, $orderType === 1 ? $endDate : null)
                 : [0, 0.0, null];
             $payAmount = max(0.0, round($totalAmount - $longstay - $couponDiscount, 2));
+            // 金额确认:与用户看到的应付不一致就不建单(抛错回滚已锁库存),返回最新明细
+            $this->pricingService->assertExpectedPay($this->input('expectedPayAmount'), [
+                'original' => round($totalAmount, 2),
+                'longstayDiscount' => round($longstay, 2),
+                'couponDiscount' => round($couponDiscount, 2),
+                'payAmount' => $payAmount,
+            ]);
             $unitPrice = round($totalAmount / max(1, count($dates)) / $quantity, 2);
             $bookingFields = $this->bookingLifecycle->buildCreateFields($orderType, $propertyId, $roomTypeId, $remark);
             $orderId = (int) Db::table('order_main')->insertGetId([

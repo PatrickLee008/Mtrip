@@ -10,7 +10,7 @@
  */
 
 import { get, post } from '@/api/request';
-import type { PageData, PageParams } from '@/api/types';
+import { API_CODE, type PageData, type PageParams } from '@/api/types';
 
 export interface TripCreateItem {
   propertyId: number;
@@ -43,12 +43,62 @@ export interface TripCreateResult {
   bookings: TripBooking[];
 }
 
-/** 创建 Trip(15 分钟内需支付);`items` 每项都要带入离日期与联系人 */
+/**
+ * 创建 Trip(10 分钟内需支付);`items` 每项都要带入离日期与联系人。
+ * `expectedPayAmount` = 用户看到的应付(金额确认),与服务端计价不一致时不建单并抛
+ * `API_CODE.PRICE_CHANGED`(不自动 Toast,调用方弹确认框)。
+ */
 export function apiTripCreate(params: {
   items: TripCreateItem[];
   couponId?: number;
+  expectedPayAmount?: number;
 }): Promise<TripCreateResult> {
-  return post<TripCreateResult>('/api/v1/app/order/trip/create', params);
+  return post<TripCreateResult>('/api/v1/app/order/trip/create', params, {
+    silentCodes: [API_CODE.PRICE_CHANGED],
+  });
+}
+
+/** 试算入参:与 `TripCreateItem` 相同,但此时还没有联系人 */
+export type TripQuoteItem = Omit<TripCreateItem, 'contactName' | 'contactPhone' | 'remark'>;
+
+/** 试算结果的一行(与 `items` 下标一一对应) */
+export interface TripQuoteLine {
+  propertyId: number;
+  roomTypeId: number;
+  quantity: number;
+  nights: number;
+  original: number;
+  longstayDiscount: number;
+  /** 整单券按净额占比分摊到本行的金额 */
+  couponDiscount: number;
+  payAmount: number;
+}
+
+export interface TripQuoteResult {
+  /** 日历价合计(已按公民价/各晚价格算) */
+  original: number;
+  longstayDiscount: number;
+  /** 实际生效的领券记录 id;券不可用时为 0 */
+  couponId: number;
+  couponDiscount: number;
+  /** 券不可用的原因(与下单时会报的错一致);可用为 null */
+  couponError: string | null;
+  payAmount: number;
+  items: TripQuoteLine[];
+}
+
+/**
+ * 只读试算(`trip/quote`):与 `trip/create` 同一套取价/长住/券/分摊代码,不占库存、不建单。
+ * 复核页与支付页的金额一律以它为准 —— 前端不自己算钱。售罄/库存不足会直接报错。
+ *
+ * **静默**:改日期/间数/换券都会重算,报错若自动 Toast 会连弹;失败时调用方退回预估值,
+ * 真正的错误留给提交时的 `trip/create` 报出来(两者同一套校验)。
+ */
+export function apiTripQuote(params: {
+  items: TripQuoteItem[];
+  couponId?: number;
+}): Promise<TripQuoteResult> {
+  return post<TripQuoteResult>('/api/v1/app/order/trip/quote', params, { silent: true });
 }
 
 /** 支付整个 Trip;返回各预订的核销码 */

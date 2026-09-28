@@ -7,6 +7,7 @@ namespace App\Service;
 use Hyperf\DbConnection\Db;
 use Mtrip\Shared\Constants\ErrorCode;
 use Mtrip\Shared\Exception\BusinessException;
+use Mtrip\Shared\Support\CouponEligibility;
 
 /**
  * 下单定价:长住优惠 / 优惠券校验与抵扣 / 住客名单归一化。
@@ -31,6 +32,24 @@ class PricingService
     }
 
     /**
+     * 下单金额确认:客户端带了 expectedPayAmount(用户在页面上看到的应付)就与服务端实际计价比对,
+     * 差额超过 0.01 抛 PRICE_CHANGED(须在下单事务内、建单前调用,抛错即回滚已锁库存)。
+     * data 携带最新明细,客户端展示给用户确认后带新金额重提。未带(旧客户端)不校验。
+     * @param array{original:float,longstayDiscount:float,couponDiscount:float,payAmount:float} $detail
+     */
+    public function assertExpectedPay(mixed $expected, array $detail): void
+    {
+        if ($expected === null || $expected === '' || ! is_numeric($expected)) {
+            return;
+        }
+        $expected = round((float) $expected, 2);
+        if (abs($expected - (float) $detail['payAmount']) <= 0.01) {
+            return;
+        }
+        throw new BusinessException(ErrorCode::PRICE_CHANGED, null, $detail + ['expectedPayAmount' => $expected]);
+    }
+
+    /**
      * 支付时锁定订单所用的券(须在事务内、**扣款之前**调用):券只有 Available → Used 单向流转(PRD 模块 6.1),
      * 下单时不占券,同一张券可能挂在多笔待支付订单上。先付的那笔核销后,后付的必须拒绝支付 ——
      * 否则会按已抵扣的价格成交却不再核销,等于一张券用了两次。
@@ -46,9 +65,13 @@ class PricingService
             ->where('status', 0)
             ->whereNull('deleted_at')
             ->lockForUpdate()
-            ->first(['id', 'coupon_id']);
+            ->first(['id', 'coupon_id', 'valid_end']);
         if (! $rec) {
             throw new BusinessException(ErrorCode::DATA_CONFLICT, '该订单使用的优惠券已被其他订单使用或已失效,请取消后重新下单');
+        }
+        // 下单后到支付前(≤10 分钟)券刚好过期:与下单时 resolveCoupon 的有效期口径一致,拒绝支付
+        if ($rec->valid_end && date('Y-m-d H:i:s') > (string) $rec->valid_end) {
+            throw new BusinessException(ErrorCode::DATA_CONFLICT, '该订单使用的优惠券已过期,请取消后重新下单');
         }
         return $rec;
     }
@@ -68,8 +91,8 @@ class PricingService
     }
 
     /**
-     * 校验优惠券并计算抵扣(须在事务内调用,行锁领券记录防并发)。
-     * 券在此不消耗,支付成功时才置已用。多酒店 Trip 传 propertyId=0(不支持指定物业券)。
+     * 单项订单的券校验与抵扣(单房型 / 门票下单):包成一行交给 resolveCouponForLegs,口径与 Trip 一致。
+     * $quantity / $useDate / $endDate 用于间数、长住晚数、提前预订、入住日期段等条件;缺省时这些日期类条件不判。
      * @return array{0:int,1:float,2:string} [领券记录ID, 抵扣金额, 券规则快照 JSON]
      */
     public function resolveCoupon(
@@ -81,16 +104,46 @@ class PricingService
         int $roomTypeId,
         int $goodsId,
         int $skuId,
-        float $base
-    ): array
+        float $base,
+        bool $lock = true,
+        int $quantity = 1,
+        ?string $useDate = null,
+        ?string $endDate = null
+    ): array {
+        $nights = $useDate !== null && $endDate !== null
+            ? max(1, (int) round((strtotime($endDate) - strtotime($useDate)) / 86400))
+            : null;
+        [$id, $discount, $snapshot] = $this->resolveCouponForLegs($siteId, $userId, $receiveId, $orderType, [[
+            'propertyId' => $propertyId,
+            'roomTypeId' => $roomTypeId,
+            'goodsId' => $goodsId,
+            'skuId' => $skuId,
+            'quantity' => $quantity,
+            'nights' => $nights,
+            'checkIn' => $useDate,
+            'checkOut' => $endDate,
+            'amount' => $base,
+        ]], $lock);
+        return [$id, $discount, $snapshot];
+    }
+
+    /**
+     * 校验优惠券并按行计算抵扣与分摊(须在事务内调用,行锁领券记录防并发;试算传 $lock=false)。
+     * 资格判定、抵扣额与分摊全部交给 shared 的 CouponEligibility(PRD §17.5/§17.6,与选券列表同一实现):
+     * 不合格的房型/酒店拿不到抵扣,整单条件(最少间数/酒店数/门槛)不满足则整张券不可用并报原因。
+     * 券在此不消耗,支付成功时才置已用。
+     * @param array $legs 每行 {propertyId, roomTypeId, goodsId?, skuId?, quantity, nights, checkIn, checkOut, amount(净额)}
+     * @return array{0:int,1:float,2:string,3:float[]} [领券记录ID, 抵扣金额, 券规则快照 JSON, 各行分摊额]
+     */
+    public function resolveCouponForLegs(int $siteId, int $userId, int $receiveId, int $orderType, array $legs, bool $lock = true): array
     {
-        $rec = Db::table('marketing_coupon_receive')
+        $query = Db::table('marketing_coupon_receive')
             ->where('id', $receiveId)
             ->where('user_id', $userId)
             ->where('site_id', $siteId)
-            ->whereNull('deleted_at')
-            ->lockForUpdate()
-            ->first();
+            ->whereNull('deleted_at');
+        // 试算(trip/quote)不加锁:只读校验,不在事务内
+        $rec = ($lock ? $query->lockForUpdate() : $query)->first();
         if (! $rec) {
             throw new BusinessException(ErrorCode::NOT_FOUND, '优惠券不存在');
         }
@@ -107,47 +160,31 @@ class PricingService
             throw new BusinessException(ErrorCode::NOT_FOUND, '优惠券模板不存在');
         }
         $coupon = (array) $coupon;
-        // 适用范围:0全部 1酒店 2门票 3指定商品
-        $scope = (int) $coupon['goods_scope'];
-        if ($scope === 1 && $orderType !== 1) {
-            throw new BusinessException(ErrorCode::DATA_CONFLICT, '该券仅限酒店订单');
+
+        $result = CouponEligibility::evaluate($coupon, $legs, $orderType, date('Y-m-d'));
+        if (! $result['eligible']) {
+            throw new BusinessException(ErrorCode::DATA_CONFLICT, $this->couponReasonMessage((string) $result['reason'], $orderType));
         }
-        if ($scope === 2 && $orderType !== 2) {
-            throw new BusinessException(ErrorCode::DATA_CONFLICT, '该券仅限门票订单');
-        }
-        if ($scope === 3) {
-            $field = $orderType === 1 ? 'property_ids' : 'goods_ids';
-            $targetId = $orderType === 1 ? $propertyId : $goodsId;
-            $ids = is_string($coupon[$field] ?? null) ? (json_decode($coupon[$field], true) ?: []) : (array) ($coupon[$field] ?? []);
-            if (! in_array($targetId, array_map('intval', $ids), true)) {
-                throw new BusinessException(ErrorCode::DATA_CONFLICT, $orderType === 1 ? '该券不适用于本物业' : '该券不适用于本商品');
-            }
-        }
-        $itemField = $orderType === 1 ? 'room_type_ids' : 'sku_ids';
-        $itemId = $orderType === 1 ? $roomTypeId : $skuId;
-        $itemIds = is_string($coupon[$itemField] ?? null) ? (json_decode($coupon[$itemField], true) ?: []) : (array) ($coupon[$itemField] ?? []);
-        if ($itemIds !== [] && ! in_array($itemId, array_map('intval', $itemIds), true)) {
-            throw new BusinessException(ErrorCode::DATA_CONFLICT, '该券不适用于本房型/票种');
-        }
-        // 门槛
-        $min = (float) $coupon['min_amount'];
-        if ($min > 0 && $base < $min) {
-            throw new BusinessException(ErrorCode::DATA_CONFLICT, '未满使用门槛');
-        }
-        // 抵扣:1满减/3无门槛=直减金额;2折扣券=discount_value 为折扣率(8.50=8.5折,用户付85%),max_discount 封顶
-        $type = (int) $coupon['coupon_type'];
-        $val = (float) $coupon['discount_value'];
-        $maxD = (float) $coupon['max_discount'];
-        if ($type === 2) {
-            $discount = round($base * (1 - $val / 10), 2);
-            if ($maxD > 0 && $discount > $maxD) {
-                $discount = $maxD;
-            }
-        } else {
-            $discount = $val;
-        }
-        $discount = max(0.0, min($discount, $base));
-        return [$receiveId, round($discount, 2), $this->couponSnapshot($coupon, $rec, round($discount, 2))];
+        return [
+            $receiveId,
+            $result['discount'],
+            $this->couponSnapshot($coupon, $rec, $result['discount']),
+            $result['allocations'],
+        ];
+    }
+
+    /** 券不可用原因 → 下单时的报错文案(试算把它原样作为 couponError 返回给 App) */
+    private function couponReasonMessage(string $reason, int $orderType): string
+    {
+        return match ($reason) {
+            CouponEligibility::REASON_SCOPE => $orderType === 1 ? '该券不适用于所选酒店或房型' : '该券不适用于本商品或票种',
+            CouponEligibility::REASON_NIGHTS => '入住晚数不符合该券要求',
+            CouponEligibility::REASON_ADVANCE => '未满足该券要求的提前预订天数',
+            CouponEligibility::REASON_STAY_DATE => '入住日期不在该券的适用期内',
+            CouponEligibility::REASON_MIN_ROOMS => '未达到该券要求的最少间数',
+            CouponEligibility::REASON_MIN_HOTELS => '未达到该券要求的最少酒店数',
+            default => '未满使用门槛',
+        };
     }
 
     /**
@@ -170,6 +207,14 @@ class PricingService
             'goodsScope' => (int) $coupon['goods_scope'],
             'propertyIds' => array_map('intval', $decode($coupon['property_ids'] ?? null)),
             'roomTypeIds' => array_map('intval', $decode($coupon['room_type_ids'] ?? null)),
+            // 资格条件(PRD §17.5):客服/对账可据此解释「为什么这单能用 / 分到哪些房」
+            'minNights' => (int) ($coupon['min_nights'] ?? 0),
+            'maxNights' => (int) ($coupon['max_nights'] ?? 0),
+            'bookAdvanceDays' => (int) ($coupon['book_advance_days'] ?? 0),
+            'minRoomCount' => (int) ($coupon['min_room_count'] ?? 0),
+            'minHotelCount' => (int) ($coupon['min_hotel_count'] ?? 0),
+            'stayStart' => $coupon['stay_start'] ?? null,
+            'stayEnd' => $coupon['stay_end'] ?? null,
             'fundingSource' => $source > 0 ? $source : 1,
             'fundingRules' => $decode($coupon['funding_rules'] ?? null),
             // 整单抵扣额;Trip 各预订的分摊额在 order_main.alloc_coupon_discount

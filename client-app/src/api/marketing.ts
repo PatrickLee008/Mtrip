@@ -86,6 +86,28 @@ export interface BestCouponParams {
   goodsId?: number;
   skuId?: number;
   amount: number;
+  /**
+   * 整单上下文(多房间 / 单房型带日期):按行判定资格与分摊,与下单同一实现(shared CouponEligibility)。
+   * 传了就以它为准;不传退回 propertyId/roomTypeId/amount 的单项判定(且不判日期类条件)。
+   */
+  items?: CouponMatchItem[];
+}
+
+/** 选券上下文的一行:amount 为该行净额(长住后、券前),有试算就用试算值 */
+export interface CouponMatchItem {
+  propertyId: number;
+  roomTypeId: number;
+  quantity: number;
+  nights: number;
+  checkIn: string;
+  checkOut: string;
+  amount: number;
+}
+
+/** GET 查询串里放对象数组容易被序列化坏,items 统一以 JSON 字符串传(后端两种都认) */
+function couponQuery(params: BestCouponParams): Record<string, unknown> {
+  const { items, ...rest } = params;
+  return items && items.length > 0 ? { ...rest, items: JSON.stringify(items) } : { ...rest };
 }
 
 export interface BestCoupon {
@@ -97,7 +119,7 @@ export interface BestCoupon {
 
 /** 无可用券时后端返回 null */
 export function fetchBestCoupon(params: BestCouponParams): Promise<BestCoupon | null> {
-  return get<BestCoupon | null>('/api/v1/app/marketing/coupon/best-match', { ...params });
+  return get<BestCoupon | null>('/api/v1/app/marketing/coupon/best-match', couponQuery(params));
 }
 
 export interface CouponMatchList {
@@ -113,7 +135,7 @@ export interface CouponMatchList {
  * 前端不要自己算,否则复核页显示的优惠会与实际扣款对不上。
  */
 export function fetchCouponMatchList(params: BestCouponParams): Promise<CouponMatchList> {
-  return get<CouponMatchList>('/api/v1/app/marketing/coupon/match-list', { ...params });
+  return get<CouponMatchList>('/api/v1/app/marketing/coupon/match-list', couponQuery(params));
 }
 
 /* ---- 曝光上报(M8 促销效果分析) ---- */

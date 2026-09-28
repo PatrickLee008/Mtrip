@@ -49,6 +49,11 @@ interface Props {
    * 不传就按 `stay` 那一间算 —— Stay 明细页 / 关怀模式 / 演示模式走这条路,数值与从前一致。
    */
   roomTotal?: number;
+  /**
+   * 长住优惠(多房间由 `trip/quote` 试算给出;PRD 302-309 价格明细要单列一行)。
+   * 不传或为 0 不渲染该行,合计也不扣。
+   */
+  longstayDiscount?: number;
   /** 顶部酒店卡的名称(新稿把房型卡换成了酒店卡);缺省则不渲染该卡 */
   hotelName?: string;
 }
@@ -60,6 +65,7 @@ export default function ReviewBody({
   onEditRooms,
   hotelName,
   roomTotal,
+  longstayDiscount = 0,
 }: Props) {
   /** 购物车里有房型才走「酒店卡 + Selected Rooms」的新版式 */
   const hasCart = (cartRooms?.length ?? 0) > 0;
@@ -104,14 +110,23 @@ export default function ReviewBody({
           label: t('hotels.booking.review.roomPrice', { nights: nightsText }),
           value: formatAmount(roomPrice, currency),
         },
+        ...(longstayDiscount > 0
+          ? [
+              {
+                key: 'longstay',
+                label: t('hotels.booking.review.longStayDiscount'),
+                value: `-${formatAmount(longstayDiscount, currency)}`,
+              },
+            ]
+          : []),
       ];
 
   /**
    * 券**不在这一步**(用户 2026-09-22 定的,与稿面 371:1887 一致):
    * 价格明细只列原价/房费/税费,选券挪到第 4 步的 COUPONS 卡。
-   * 所以这里的合计就是明细合计,不再扣券。
+   * 所以这里的合计就是明细合计(房费 − 长住优惠),不再扣券。
    */
-  const payable = stayTotal;
+  const payable = Math.max(0, stayTotal - longstayDiscount);
 
   return (
     <View style={styles.root}>

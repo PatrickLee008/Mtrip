@@ -138,7 +138,12 @@
         "void": "Voided",
         "min_amount": "Spend too low",
         "scope": "Not applicable",
-        "offline": "Ended"
+        "offline": "Ended",
+        "nights": "Stay length not eligible",
+        "advance": "Book further ahead",
+        "stay_date": "Stay dates not eligible",
+        "min_rooms": "Not enough rooms",
+        "min_hotels": "Not enough hotels"
       }
     },
     "items": {
@@ -1417,6 +1422,10 @@
         "priceBreakdown": "Price Breakdown",
         "originalPrice": "Original Price ({{nights}})",
         "roomPrice": "Room Price ({{nights}})",
+        "longStayDiscount": "Long Stay Discount",
+        "priceChangedTitle": "Price Updated",
+        "priceChangedMessage": "The price changed from {{oldAmount}} to {{newAmount}}. Continue with the new price?",
+        "priceChangedConfirm": "Continue",
         "taxes": "Service Charge & Taxes ({{percent}}%)",
         "totalAmount": "TOTAL AMOUNT",
         "earnPoints": "Earn {{points}} Points",

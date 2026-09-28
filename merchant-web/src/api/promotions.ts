@@ -88,6 +88,11 @@ export interface MerchantPromotion {
   min_nights: number;
   max_nights: number;
   book_advance_days: number;
+  /* PRD §17.5 资格条件(0 / null = 不限) */
+  min_room_count?: number;
+  min_hotel_count?: number;
+  stay_start?: string | null;
+  stay_end?: string | null;
   valid_type: number;
   valid_start: string | null;
   valid_end: string | null;
@@ -179,6 +184,11 @@ export interface PromotionPayload {
   minNights?: number;
   maxNights?: number;
   bookAdvanceDays?: number;
+  minRoomCount?: number;
+  minHotelCount?: number;
+  /** YYYY-MM-DD;空串 = 不限 */
+  stayStart?: string;
+  stayEnd?: string;
   validType: number;
   validStart?: string;
   validEnd?: string;

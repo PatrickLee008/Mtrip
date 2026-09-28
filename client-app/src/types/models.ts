@@ -312,7 +312,13 @@ export type CouponReason =
   | 'void'
   | 'min_amount'
   | 'scope'
-  | 'offline';
+  | 'offline'
+  /* PRD §17.5 资格条件(shared CouponEligibility::REASON_*) */
+  | 'nights'
+  | 'advance'
+  | 'stay_date'
+  | 'min_rooms'
+  | 'min_hotels';
 
 /**
  * 统一优惠券视图:领券中心 / 活动详情 / 券详情 / 我的券 / 结账共用同一套字段。

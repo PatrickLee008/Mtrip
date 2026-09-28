@@ -1,5 +1,62 @@
 # 会话交接文档(HANDOFF)
 
+### ★ 2026-09-28 优惠券资格条件与按资格分摊(PRD §17.5 / §17.6)+ 支付时券过期校验
+
+**唯一实现**:`backend/shared/src/Support/CouponEligibility.php`(纯逻辑,无 DB)—— 下单计价(order-service `PricingService`)与结账选券列表(marketing-service `CouponView`)都调它,不再各写一份。
+**口径**(PRD 字面落地,改动须同步此处):
+- 行级(不满足 → 该行不参与、分不到抵扣):适用范围(指定物业/房型)、长住晚数 min/max_nights、提前预订 book_advance_days、入住日期段 stay_start~stay_end(每晚都须在区间内);日期类仅酒店。
+- 整单(不满足 → 整张券不可用):最少间数 min_room_count(按**合格行**间数)、最少酒店数 min_hotel_count(按**整单**物业数)、门槛 min_amount(按**合格金额**)。
+- 抵扣:折扣券按合格金额算并受 max_discount 封顶;满减/无门槛为面额;不超过合格金额。分摊:合格行按净额占比,末个合格行吸收余数。
+- 行缺日期/晚数时跳过日期类条件(仅展示侧可能出现,下单总会带全)。
+原因码新增 `nights / advance / stay_date / min_rooms / min_hotels`(App 三语已补),下单报错文案见 `PricingService::couponReasonMessage`。
+**改动**:
+- 迁移 `V20260928034000__add-coupon-eligibility-conditions.sql`:`marketing_coupon` 加 `min_room_count / min_hotel_count / stay_start / stay_end`;min/max_nights、book_advance_days 本次起真正生效。
+- order-service:`resolveCouponForLegs()`(新,Trip 逐行)+ `resolveCoupon()` 改为单行包装(新增可选 quantity/useDate/endDate);`TripController::priceTrip` 用返回的分摊,删除旧 `allocate()`(原来全部行平摊);快照补条件字段。
+- `lockCouponForPay()` 补券有效期校验(下单后到支付前刚好过期 → 拒绝支付)。
+- marketing-service:`CouponView` 用共享实现(删掉自带的 matchScope/discount);`/coupon/match-list`、`/best-match` 支持 `items`(JSON 字符串或数组,整单行)按整车判定;券输出带条件字段。
+- 后台与商户端表单:共享 `CouponEligibility::conditionColumns()` 校验;admin-web 券弹窗新增「使用条件」区(门票券隐藏);merchant-web 促销抽屉新增提前天数/最少间数/最少酒店数/适用入住日期(长住晚数仍按 kind=4 规则)。
+- client-app:`fetchCouponMatchList` 带整车 `items`(行净额取试算值),券一开始即按整车判对;`CouponReason` 与三语文案补 5 个码。
+**验证**:shared 单测 112/112(新增 13 条,PRD 例子逐条成用例);旧集成测 `m12-coupon-scope.php` 在隔离库 `mtrip_m12_s1_test`(按 `scripts/test-m12.ps1` 做法克隆空表)全过;
+API 端到端(`test/adhoc/c-coupon-eligibility-test.sql`,记号 `[Elig Test]`)六张券各测拒绝/通过,trip/quote 与 match-list 判定一致,真实 trip/create 仅合格行落分摊;
+后台券新增/详情/校验(40001)端到端通过;支付时券过期被拒。admin-web build、merchant-web vue-tsc、client-app tsc 通过,五个静态检查全绿。
+**未验证**:商户端促销保存接口未端到端(商户 JWT 需真实 2FA 会话,未伪造);三个前端界面均未实机点验。
+
+### ★ 2026-09-28 单房型订房也接上试算(复用 `trip/quote`,零后端改动)
+
+**依据**:一项的 `trip/quote` 与 `order/create` 计价完全一致 —— 实测三种情形逐项相等(临时长住档 ≥3 晚 95 折,已删):
+房型 4 两间三晚 + 共担 9 折券 → 177,000 / 长住 8,850 / 券 16,815 / 应付 151,335;房型 3 无券 → 40,000;房型 4 + 指定房型券 → 券 5,000 / 应付 54,000。测试单均在支付前取消,券未消耗。
+**前端**:`useBookingWizard` 新增 `quoteItems`(多房间 = 整车 `tripBaseItems`;单房型 = 与 `createOrder` 同参的一项;演示模式为空),`useTripQuote` 不再限于 cartMode。
+房费 / 长住 / 券门槛基数 / 券额 / 应付 / 余额校验在单房型下也以试算为准;新增 `reviewRoomTotal`(单房型试算到了才覆盖 ReviewBody 的房费)。关怀模式只读 `payableTotal`,自动生效。
+效果:单房型提交带的 `expectedPayAmount` 也是服务端口径,「价格已变动」确认框只在真实变价时出现(之前按底价预估,几乎每单都会弹)。
+`tsc` 通过;五个订房相关静态检查全绿;**App 界面未实机点验**。
+
+### ★ 2026-09-28 下单金额确认(`expectedPayAmount` / 错误码 40921 PRICE_CHANGED)
+
+**后端**:`order/create` 与 `trip/create` 新增可选入参 `expectedPayAmount`(用户看到的应付)。
+`PricingService::assertExpectedPay()` 在下单事务内、建单前比对服务端计价,差 > 0.01 抛 `ErrorCode::PRICE_CHANGED = 40921`(HTTP 409),**抛错即回滚已锁库存、不建单**;
+`data` 带最新明细 `{original, longstayDiscount, couponDiscount, payAmount, expectedPayAmount}`。未传不校验(旧客户端兼容)。
+shared 包:`BusinessException` 新增可选第三参 `$data` + `getData()`,`AppExceptionHandler` 原样放进响应 `data`(向后兼容,现有调用不受影响)。
+**前端**:`ApiError` 新增 `data`;`API_CODE.PRICE_CHANGED` + `PriceChangeDetail` 类型;`createOrder` / `apiTripCreate` 带 `expectedPayAmount` 且对 40921 不自动 Toast。
+`useBookingWizard.submit(confirmedAmount?)` 提交页面显示的 `payableTotal`;收到 40921 存 `priceChange`,完整模式与关怀模式都弹 `AlertDialog`(plain)「价格已由 X 变为 Y,是否按新价格继续?」,
+确认 → 按服务端金额重提(钱包支付先比余额,不够就提示不建单),取消 → 留在当前步。三语新增 `hotels.booking.review.priceChanged{Title,Message,Confirm}`。
+**验证**:API 端到端 —— trip/create 带错金额 → 40921 + 明细,前后 Trip/订单数与锁定库存不变;带 quote 金额 → 成功;不带 → 成功;order/create 同样,拿返回 payAmount 重提成功;测试单已取消、库存回 0。
+shared 单测 99/99(容器内跑,需挂整个 backend 目录);前端 `tsc` 通过;五个订房相关静态检查全绿。**App 界面未实机点验**。
+
+### ★ 2026-09-28 Trip 只读试算 `POST /api/v1/app/order/trip/quote`
+
+**后端**:`TripController::priceTrip()` 抽出计价(逐项日历价 + 长住 → 整单券校验 → 按净额占比分摊),`create` 与 `quote` 共用,保证试算 = 实际下单。
+- `OrderStockService::lock()` 加 `$dryRun`:不加 `FOR UPDATE`、不补建日历(缺日历时用与补建相同的 `defaultRow()` 计价)、不占库存;售罄/库存不足照常报错。
+- `PricingService::resolveCoupon()` 加 `$lock`(试算不锁领券记录)。
+- `quote` 不要求联系人;券不适用返回 `couponError`(下单则照常抛错)。返回 `original / longstayDiscount / couponId / couponDiscount / couponError / payAmount / items[]`。
+**前端**:`api/trip.ts` 新增 `apiTripQuote`(静默,不自动 Toast);`useBookingWizard` 多房间模式按 `[tripBaseItems, 券]` 重算,房费/券额/应付/余额校验改吃试算值,失败退回预估;试算与 `trip/create` 共用 `tripBaseItems`。券对整车不适用时自动去券 + 提示原因 + 置 `couponTouched` 防自动最优券震荡。`ReviewBody` 新增 `longstayDiscount`(明细一行,合计扣除),三语新增 `hotels.booking.review.longStayDiscount`。
+**验证**:API 端到端 —— 临时加 site 7 长住档(≥3 晚 95 折,已删)+ 共担券,quote 与随后同入参 create 逐项一致(原价 118,000 / 长住 2,950 / 券 11,505 分摊 5,605+5,900 / 应付 103,545);quote 前后该日期段日历行数 0→0(未补建、未占库存);不适用券 → `couponError`;create 缺联系人仍 40001。前端 `tsc` 通过;`check-booking-steps-34`(更新了一条过时断言:合计 = 房费 − 长住,仍不扣券)/ `check-booking-detail-page` / `check-payment-failure-flow` 全绿。**App 界面未实机点验**。
+**同日追加 —— 购物车页接试算 + 抽共用 hook**:新增 `screens/hotel/useTripQuote.ts`(`useTripQuote` + `cartTripItems`),向导与购物车页共用。
+结果按入参打标签:`itemsQuote`(房型/日期一致即有效 → 原价、长住、券门槛基数)与 `quote`(连券也一致 → 券额、应付、余额校验);
+**顺带修了上一版的过期金额问题**:改间数/日期后新结果回来前,旧试算不再冒充当前金额(余额校验会读到它)。
+`RoomCartScreen` 整车都是真实房型且已登录、日期选全时,房费小计取试算原价并新增「长住优惠」行,合计扣除;否则保持预估。不带券(券在第 4 步)。
+`tsc` 通过,四个相关静态检查脚本全绿;**界面未实机点验**。
+**未做**:单房型链路无试算;多房间时若路由不带 roomTypeId,`couponEnabled`(依赖 `realMode`)仍关闭选券 —— 既有行为,未改。
+
 ### ★ 2026-09-24 订单优惠券规则快照(`order_main.coupon_snapshot`)
 
 **问题**:订单只存 `coupon_id` + 抵扣额,结算时 `SettlementService::couponFunding` 实时读券模板的出资方/共担比例 —— 后台改了券,已下订单的分账跟着变。
@@ -19,7 +76,7 @@
 **不做释放/返还**:PRD 全文无相关规则,模块 6.1 券状态 `Available → Used` 单向、付款前可换券 —— 取消/退款不返还券。依据与验证细节见 `docs/plans/差距分析-多房间预订-PRDv1.0.1.md` 第七节 F。
 **验证**:端到端(网关 8081,site 7 用户 28,mock 支付)同券两单/两 Trip 均为先付成功、后付被拒且无流水;余额支付被拒余额不变;无券单回归正常。开发库遗留测试单 31/33/34 与已核销券 50/51。
 
-**优惠券四部分现状**:① 匹配与试算 —— 单房型完成,Trip 缺 `trip/quote`、资格条件(晚数/提前天数/最少间数/酒店数)与按资格分摊;② 金额与快照 —— 金额已落库,券规则快照已补(见本文件顶部 coupon_snapshot 一条),仍无前后端金额确认;③④ 核销/释放/返还 —— 核销完成(本次补上并发漏洞),释放/返还按 PRD 不做。
+**优惠券四部分现状**:① 匹配与试算 —— 单房型完成,Trip 缺 `trip/quote`、资格条件(晚数/提前天数/最少间数/酒店数)与按资格分摊;② 金额与快照 —— 金额已落库,券规则快照已补,金额确认已补(见本文件顶部 2026-09-28 条);③④ 核销/释放/返还 —— 核销完成(本次补上并发漏洞),释放/返还按 PRD 不做。
 
 ### ★ 2026-09-24 多酒店 Trip:取消/超时连带关闭整单 + 禁止单付 Trip 内预订
 

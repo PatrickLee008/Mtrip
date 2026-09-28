@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Service;
 
 use Hyperf\DbConnection\Db;
+use Mtrip\Shared\Support\CouponEligibility;
 
 /**
  * 统一优惠券字段口径(C-M6)
@@ -45,6 +46,12 @@ class CouponView
     public const REASON_VOID = 'void';                   // 已作废
     public const REASON_MIN_AMOUNT = 'min_amount';       // 未达使用门槛
     public const REASON_SCOPE = 'scope';                 // 适用范围不符(品类/酒店/房型)
+    /* PRD §17.5 资格条件(值与 shared CouponEligibility::REASON_* 一致) */
+    public const REASON_NIGHTS = CouponEligibility::REASON_NIGHTS;         // 入住晚数不符(长住)
+    public const REASON_ADVANCE = CouponEligibility::REASON_ADVANCE;       // 未满提前预订天数(早鸟)
+    public const REASON_STAY_DATE = CouponEligibility::REASON_STAY_DATE;   // 入住日期不在适用期
+    public const REASON_MIN_ROOMS = CouponEligibility::REASON_MIN_ROOMS;   // 未达最少间数
+    public const REASON_MIN_HOTELS = CouponEligibility::REASON_MIN_HOTELS; // 未达最少酒店数
     public const REASON_OFFLINE = 'offline';             // 活动已停发/结束
 
     /** 券模板需要的列(领券中心 / 活动详情 / 券详情) */
@@ -52,6 +59,7 @@ class CouponView
         'id', 'coupon_name', 'coupon_type', 'discount_value', 'min_amount', 'max_discount',
         'goods_scope', 'goods_ids', 'property_ids', 'sku_ids', 'room_type_ids', 'total_count', 'received_count', 'per_user_limit',
         'valid_type', 'valid_start', 'valid_end', 'valid_days', 'stackable', 'status', 'remark',
+        'min_nights', 'max_nights', 'book_advance_days', 'min_room_count', 'min_hotel_count', 'stay_start', 'stay_end',
     ];
 
     /** 领券记录 + 模板的联表列(我的优惠券 / 结账) */
@@ -61,6 +69,7 @@ class CouponView
         'c.id', 'c.coupon_name', 'c.coupon_type', 'c.discount_value', 'c.min_amount',
         'c.max_discount', 'c.goods_scope', 'c.goods_ids', 'c.property_ids', 'c.sku_ids', 'c.room_type_ids', 'c.stackable',
         'c.status as template_status', 'c.remark',
+        'c.min_nights', 'c.max_nights', 'c.book_advance_days', 'c.min_room_count', 'c.min_hotel_count', 'c.stay_start', 'c.stay_end',
     ];
 
     /**
@@ -100,8 +109,10 @@ class CouponView
      * 领券记录视图(我的优惠券 / 结账)
      *
      * @param array      $row `marketing_coupon_receive` join `marketing_coupon`(RECEIVE_COLUMNS)
-     * @param array|null $ctx 下单上下文 ['orderType'=>int,'goodsId'=>int,'skuId'=>int,'amount'=>float];
-     *                        传了才会判定门槛/范围并算抵扣额
+     * @param array|null $ctx 下单上下文;传了才会判定资格并算抵扣额。两种形状:
+     *   - 整单:['orderType'=>1,'items'=>[{propertyId,roomTypeId,quantity,nights,checkIn,checkOut,amount},...]]
+     *     (多房间/多酒店,按行判定与分摊,与 order-service 下单同一实现 CouponEligibility)
+     *   - 单项(旧):['orderType','propertyId','roomTypeId','goodsId','skuId','amount'] —— 视为一行,缺日期则不判日期类条件
      */
     public function receive(array $row, ?array $ctx = null, ?int $now = null): array
     {
@@ -133,21 +144,15 @@ class CouponView
             $view['unusableReason'] = null;
         }
 
-        // 有下单上下文时再叠一层「这单能不能用」的判定
+        // 有下单上下文时再叠一层「这单能不能用」的判定(PRD §17.5/§17.6,与下单同一实现)
         $view['discount'] = 0.0;
         if ($ctx !== null && $view['unusableReason'] === null) {
-            $scopeOk = $this->matchScope($row, (int) ($ctx['orderType'] ?? 1),
-                (int) ($ctx['propertyId'] ?? 0), (int) ($ctx['roomTypeId'] ?? 0),
-                (int) ($ctx['goodsId'] ?? 0), (int) ($ctx['skuId'] ?? 0));
-            $amount = round((float) ($ctx['amount'] ?? 0), 2);
-            if (! $scopeOk) {
+            $result = CouponEligibility::evaluate($row, $this->legsOf($ctx), (int) ($ctx['orderType'] ?? 1), date('Y-m-d', $now));
+            if (! $result['eligible']) {
                 $view['status'] = self::STATUS_UNUSABLE;
-                $view['unusableReason'] = self::REASON_SCOPE;
-            } elseif ((float) $row['min_amount'] > 0 && $amount < (float) $row['min_amount']) {
-                $view['status'] = self::STATUS_UNUSABLE;
-                $view['unusableReason'] = self::REASON_MIN_AMOUNT;
+                $view['unusableReason'] = $result['reason'];
             } else {
-                $view['discount'] = $this->discount($row, $amount);
+                $view['discount'] = $result['discount'];
             }
         }
         return $view;
@@ -224,44 +229,20 @@ class CouponView
         return $list[0];
     }
 
-    /**
-     * 该券对给定金额的抵扣额(已确认范围与门槛通过)。
-     * 规则与 order-service 的 resolveCoupon 保持一致:折扣券按 10 分制,封顶后不超过订单金额。
-     */
-    public function discount(array $coupon, float $base): float
+    /** 下单上下文 → CouponEligibility 的行:优先整单 items,否则把单项字段当成一行 */
+    private function legsOf(array $ctx): array
     {
-        $type = (int) $coupon['coupon_type'];
-        $val = (float) $coupon['discount_value'];
-        $maxD = (float) $coupon['max_discount'];
-        if ($type === 2) {
-            $amount = round($base * (1 - $val / 10), 2);
-            if ($maxD > 0 && $amount > $maxD) {
-                $amount = $maxD;
-            }
-        } else {
-            $amount = $val;
+        $items = $ctx['items'] ?? null;
+        if (is_array($items) && $items !== []) {
+            return array_values(array_map(static fn ($item) => (array) $item + ['amount' => 0.0], $items));
         }
-        return max(0.0, min(round($amount, 2), $base));
-    }
-
-    /** 适用范围判定:品类 → 指定酒店 → 指定房型 */
-    public function matchScope(array $coupon, int $orderType, int $propertyId, int $roomTypeId, int $goodsId, int $skuId = 0): bool
-    {
-        $scope = (int) $coupon['goods_scope'];
-        if (($scope === 1 && $orderType !== 1) || ($scope === 2 && $orderType !== 2)) {
-            return false;
-        }
-        if ($scope === 3) {
-            $ids = $this->idList($coupon[$orderType === 1 ? 'property_ids' : 'goods_ids'] ?? null);
-            if (! in_array($orderType === 1 ? $propertyId : $goodsId, $ids, true)) {
-                return false;
-            }
-        }
-        $itemIds = $this->idList($coupon[$orderType === 1 ? 'room_type_ids' : 'sku_ids'] ?? null);
-        if ($itemIds !== [] && ! in_array($orderType === 1 ? $roomTypeId : $skuId, $itemIds, true)) {
-            return false;
-        }
-        return true;
+        return [[
+            'propertyId' => (int) ($ctx['propertyId'] ?? 0),
+            'roomTypeId' => (int) ($ctx['roomTypeId'] ?? 0),
+            'goodsId' => (int) ($ctx['goodsId'] ?? 0),
+            'skuId' => (int) ($ctx['skuId'] ?? 0),
+            'amount' => round((float) ($ctx['amount'] ?? 0), 2),
+        ]];
     }
 
     /** 领取侧的拦截原因(null = 可领) */
@@ -308,6 +289,14 @@ class CouponView
             'valid_start' => $row['valid_start'] ?? null,
             'valid_end' => $row['valid_end'] ?? null,
             'remark' => (string) ($row['remark'] ?? ''),
+            // PRD §17.5 资格条件(App 券详情展示「使用条件」用;0 / null = 不限)
+            'min_nights' => (int) ($row['min_nights'] ?? 0),
+            'max_nights' => (int) ($row['max_nights'] ?? 0),
+            'book_advance_days' => (int) ($row['book_advance_days'] ?? 0),
+            'min_room_count' => (int) ($row['min_room_count'] ?? 0),
+            'min_hotel_count' => (int) ($row['min_hotel_count'] ?? 0),
+            'stay_start' => $row['stay_start'] ?? null,
+            'stay_end' => $row['stay_end'] ?? null,
         ];
     }
 

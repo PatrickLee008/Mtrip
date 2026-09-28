@@ -3,7 +3,7 @@
  */
 
 import { get, post } from '@/api/request';
-import type { PageData, PageParams } from '@/api/types';
+import { API_CODE, type PageData, type PageParams } from '@/api/types';
 import type { OrderDetail, OrderItemData, VerifyCodeData } from '@/types/models';
 
 export interface OrderTraveler {
@@ -32,6 +32,11 @@ export interface CreateOrderParams {
   /** 1=按缅甸公民价 */
   isCitizen?: number;
   couponId?: number;
+  /**
+   * 用户在页面上看到的应付(金额确认)。与服务端计价差超过 0.01 时不建单,
+   * 抛 `API_CODE.PRICE_CHANGED`,`error.data` 为 `PriceChangeDetail`。不传不校验。
+   */
+  expectedPayAmount?: number;
   /** 入住人,后端 PricingService::normalizeGuests 只取 firstName/lastName/phone/email 四个字段 */
   travelers?: OrderTraveler[];
   [key: string]: unknown;
@@ -48,8 +53,9 @@ export interface CreateOrderResult {
   };
 }
 
+/** PRICE_CHANGED 不自动 Toast:调用方要弹「价格已变动」确认框 */
 export function createOrder(params: CreateOrderParams): Promise<CreateOrderResult> {
-  return post('/api/v1/app/order/create', params);
+  return post('/api/v1/app/order/create', params, { silentCodes: [API_CODE.PRICE_CHANGED] });
 }
 
 /** 支付统一在 `@/api/pay`(唯一一份 payOrder,当前只走余额),这里转出方便订单相关的集中引入 */

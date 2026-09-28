@@ -10,6 +10,7 @@ use Mtrip\Shared\Annotation\Permission;
 use Mtrip\Shared\Constants\ErrorCode;
 use Mtrip\Shared\Context\MerchantContext;
 use Mtrip\Shared\Exception\BusinessException;
+use Mtrip\Shared\Support\CouponEligibility;
 use Mtrip\Shared\Support\Result;
 
 /**
@@ -340,6 +341,10 @@ class PromotionController extends AbstractController
             'min_nights' => $coupon['min_nights'],
             'max_nights' => $coupon['max_nights'],
             'book_advance_days' => $coupon['book_advance_days'],
+            'min_room_count' => $coupon['min_room_count'] ?? 0,
+            'min_hotel_count' => $coupon['min_hotel_count'] ?? 0,
+            'stay_start' => $coupon['stay_start'] ?? null,
+            'stay_end' => $coupon['stay_end'] ?? null,
             'valid_type' => $coupon['valid_type'],
             'valid_start' => $coupon['valid_start'],
             'valid_end' => $coupon['valid_end'],
@@ -569,6 +574,7 @@ class PromotionController extends AbstractController
             'c.funding_source', 'c.funding_rules', 'c.goods_scope', 'c.goods_ids', 'c.property_ids',
             'c.sku_ids', 'c.room_type_ids', 'c.total_count', 'c.received_count', 'c.used_count',
             'c.per_user_limit', 'c.min_nights', 'c.max_nights', 'c.book_advance_days',
+            'c.min_room_count', 'c.min_hotel_count', 'c.stay_start', 'c.stay_end',
             'c.valid_type', 'c.valid_start', 'c.valid_end', 'c.valid_days', 'c.status',
             'c.remark', 'c.staff_note', 'c.created_at', 'c.updated_at', 'm.merchant_name',
         ];
@@ -676,16 +682,31 @@ class PromotionController extends AbstractController
             'room_type_ids' => $roomTypeIds === [] ? null : json_encode($roomTypeIds, JSON_UNESCAPED_UNICODE),
             'total_count' => max(0, $this->intInput('totalCount')),
             'per_user_limit' => max(1, $this->intInput('perUserLimit', 1)),
+            // 长住晚数按促销形态单独校验(仅 kind=4);其余资格条件走下面 shared 校验,与后台同一口径
             'min_nights' => $minNights,
             'max_nights' => $maxNights,
-            'book_advance_days' => max(0, $this->intInput('bookAdvanceDays')),
             'valid_type' => $validType,
             'valid_start' => $validType === 1 ? $validStart : null,
             'valid_end' => $validType === 1 && ! $noExpiry ? $validEnd : null,
             'valid_days' => $validType === 2 ? $validDays : 0,
             'remark' => mb_substr($this->strInput('remark'), 0, 500),
             'staff_note' => mb_substr($this->strInput('staffNote'), 0, 500),
-        ];
+        ] + $this->conditionColumns();
+    }
+
+    /**
+     * PRD §17.5 资格条件:提前预订天数 / 最少间数 / 最少酒店数 / 入住日期段(shared CouponEligibility 校验,与后台共用)。
+     * 晚数不在此取(上面按促销形态处理;数组并集左侧优先,这里的 min/max_nights 不会覆盖)。
+     */
+    private function conditionColumns(): array
+    {
+        return CouponEligibility::conditionColumns([
+            'bookAdvanceDays' => $this->input('bookAdvanceDays'),
+            'minRoomCount' => $this->input('minRoomCount'),
+            'minHotelCount' => $this->input('minHotelCount'),
+            'stayStart' => $this->input('stayStart'),
+            'stayEnd' => $this->input('stayEnd'),
+        ]);
     }
 
     /**

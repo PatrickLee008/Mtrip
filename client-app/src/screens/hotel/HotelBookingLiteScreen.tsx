@@ -45,6 +45,7 @@ import { PAGE_PADDING, colors, radius } from '@/config/theme';
 import { fonts } from '@/config/typography';
 import type { RootStackParamList } from '@/navigation/types';
 import { useBookingWizard } from '@/screens/hotel/useBookingWizard';
+import { formatMoney } from '@/utils/format';
 
 export default function HotelBookingLiteScreen() {
   const route = useRoute<RouteProp<RootStackParamList, 'HotelBookingLite'>>();
@@ -75,6 +76,9 @@ export default function HotelBookingLiteScreen() {
     payResult,
     setPayResult,
     failReason,
+    priceChange,
+    confirmPriceChange,
+    cancelPriceChange,
     goSuccess,
     loginPrompt,
     setLoginPrompt,
@@ -263,6 +267,26 @@ export default function HotelBookingLiteScreen() {
         secondaryLabel={t('hotels.booking.lite.cancel')}
         onSecondary={() => setLoginPrompt(false)}
         onClose={() => setLoginPrompt(false)}
+      />
+
+      {/* 金额确认:提交时后端计价与页面显示不一致(PRICE_CHANGED),未建单;确认后按新金额重提 */}
+      <AlertDialog
+        visible={priceChange !== null}
+        tone="plain"
+        title={t('hotels.booking.review.priceChangedTitle')}
+        desc={
+          priceChange
+            ? t('hotels.booking.review.priceChangedMessage', {
+                oldAmount: formatMoney(priceChange.expectedPayAmount, currency),
+                newAmount: formatMoney(priceChange.payAmount, currency),
+              })
+            : null
+        }
+        primaryLabel={t('hotels.booking.review.priceChangedConfirm')}
+        onPrimary={confirmPriceChange}
+        secondaryLabel={t('common.cancel')}
+        onSecondary={cancelPriceChange}
+        onClose={cancelPriceChange}
       />
 
       <AlertDialog

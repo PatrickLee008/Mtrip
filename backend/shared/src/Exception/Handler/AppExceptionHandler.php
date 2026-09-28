@@ -32,7 +32,7 @@ class AppExceptionHandler extends ExceptionHandler
 
         if ($throwable instanceof BusinessException) {
             $code = $throwable->getCode();
-            $body = Result::error($code, $throwable->getMessage());
+            $body = Result::error($code, $throwable->getMessage(), $throwable->getData());
         } elseif ($throwable instanceof ValidationException) {
             $code = ErrorCode::PARAM_VALIDATE_FAIL;
             $body = Result::error($code, $throwable->validator->errors()->first());

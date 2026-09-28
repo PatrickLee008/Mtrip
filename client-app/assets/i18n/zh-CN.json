@@ -138,7 +138,12 @@
         "void": "已作废",
         "min_amount": "未达门槛",
         "scope": "不适用",
-        "offline": "已结束"
+        "offline": "已结束",
+        "nights": "入住晚数不符",
+        "advance": "未满提前预订天数",
+        "stay_date": "入住日期不适用",
+        "min_rooms": "未达最少间数",
+        "min_hotels": "未达最少酒店数"
       }
     },
     "items": {
@@ -1417,6 +1422,10 @@
         "priceBreakdown": "价格明细",
         "originalPrice": "原价({{nights}})",
         "roomPrice": "房费({{nights}})",
+        "longStayDiscount": "长住优惠",
+        "priceChangedTitle": "价格已更新",
+        "priceChangedMessage": "价格已由 {{oldAmount}} 变为 {{newAmount}},是否按新价格继续?",
+        "priceChangedConfirm": "继续",
         "taxes": "服务费与税费({{percent}}%)",
         "totalAmount": "应付总额",
         "earnPoints": "可得 {{points}} 积分",

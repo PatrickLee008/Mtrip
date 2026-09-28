@@ -74,7 +74,9 @@ check('四个源文件都在', [screen, wizard, review, payment].every((x) => x 
   const body = strip(review);
   check('ReviewBody 不再接收 coupon prop', !/coupon\?:/u.test(body));
   check('ReviewBody 不再引用任何券文案', !/hotels\.booking\.coupon/u.test(body));
-  check('ReviewBody 合计就是明细合计(不再扣券)', /const payable = stayTotal;/u.test(body));
+  /* 2026-09-28 起明细多一行长住优惠(trip/quote 试算),合计 = 房费 − 长住;仍然不扣券 */
+  check('ReviewBody 合计就是明细合计(不再扣券)',
+    /const payable = Math\.max\(0, stayTotal - longstayDiscount\);/u.test(body) && !/const payable[^;]*coupon/iu.test(body));
   check('ReviewCouponState 已删除(无人引用的死类型)', !/ReviewCouponState/u.test(review));
 
   const s = strip(screen);

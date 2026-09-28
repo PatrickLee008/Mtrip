@@ -33,6 +33,14 @@ export type CouponPayload = {
   validDays?: number;
   remark?: string;
   siteId?: number;
+  /** PRD §17.5 资格条件(仅酒店;0 / 空 = 不限),后端 shared CouponEligibility::conditionColumns 校验 */
+  minNights?: number;
+  maxNights?: number;
+  bookAdvanceDays?: number;
+  minRoomCount?: number;
+  minHotelCount?: number;
+  stayStart?: string;
+  stayEnd?: string;
 };
 
 export function apiCouponAdd(data: CouponPayload): Promise<{ id: number }> {

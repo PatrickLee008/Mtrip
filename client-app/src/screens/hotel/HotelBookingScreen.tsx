@@ -66,8 +66,6 @@ export default function HotelBookingScreen() {
     current,
     multi,
     loadingGoods,
-    cartMode,
-    roomsTotal,
     roomCount,
     request,
     setRequest,
@@ -82,11 +80,16 @@ export default function HotelBookingScreen() {
     setExpanded,
     walletBalance,
     payableTotal,
+    longstayDiscount,
+    reviewRoomTotal,
     tripTotal,
     submitting,
     payResult,
     setPayResult,
     failReason,
+    priceChange,
+    confirmPriceChange,
+    cancelPriceChange,
     goSuccess,
     couponEnabled,
     couponList,
@@ -127,8 +130,10 @@ export default function HotelBookingScreen() {
               /* 新稿:顶部酒店卡 + Selected Rooms,Edit Rooms 回购物车页 */
               cartRooms={cartRooms}
               hotelName={cartHotelName}
-              /* 多房间:房费明细与合计按整车算,不能只算路由带进来的那一间 */
-              roomTotal={cartMode ? roomsTotal : undefined}
+              /* 房费以试算为准:多房间按整车,单房型试算到了才覆盖(否则按这一段住宿预估) */
+              roomTotal={reviewRoomTotal}
+              /* 长住优惠来自 trip/quote 试算(与下单同口径),单房型链路为 0 不显示 */
+              longstayDiscount={longstayDiscount}
               onEditRooms={() => navigation.navigate('RoomCart')}
               onComingSoon={comingSoon}
               /* 券挪到第 4 步的 COUPONS 卡(稿面 516:2381),复核步不再出现券行 */
@@ -319,6 +324,26 @@ export default function HotelBookingScreen() {
           setCouponTouched(true);
           setCouponId(receiveId);
         }}
+      />
+
+      {/* 金额确认:提交时后端计价与页面显示不一致(PRICE_CHANGED),未建单;确认后按新金额重提 */}
+      <AlertDialog
+        visible={priceChange !== null}
+        tone="plain"
+        title={t('hotels.booking.review.priceChangedTitle')}
+        desc={
+          priceChange
+            ? t('hotels.booking.review.priceChangedMessage', {
+                oldAmount: formatMoney(priceChange.expectedPayAmount, currency),
+                newAmount: formatMoney(priceChange.payAmount, currency),
+              })
+            : null
+        }
+        primaryLabel={t('hotels.booking.review.priceChangedConfirm')}
+        onPrimary={confirmPriceChange}
+        secondaryLabel={t('common.cancel')}
+        onSecondary={cancelPriceChange}
+        onClose={cancelPriceChange}
       />
 
       <AlertDialog

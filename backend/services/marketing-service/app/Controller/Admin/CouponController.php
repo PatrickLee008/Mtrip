@@ -11,6 +11,7 @@ use Mtrip\Shared\Annotation\Permission;
 use Mtrip\Shared\Constants\ErrorCode;
 use Mtrip\Shared\Context\AdminContext;
 use Mtrip\Shared\Exception\BusinessException;
+use Mtrip\Shared\Support\CouponEligibility;
 use Mtrip\Shared\Support\Result;
 
 /**
@@ -227,7 +228,17 @@ class CouponController extends AbstractController
             'valid_end' => $validType === 1 ? $validEnd : null,
             'valid_days' => $validType === 2 ? $validDays : 0,
             'remark' => mb_substr($this->strInput('remark'), 0, 500),
-        ];
+        ] + $this->conditionColumns();
+    }
+
+    /** PRD §17.5 资格条件(长住晚数 / 提前预订 / 最少间数 / 最少酒店数 / 入住日期段),与商户端共用 shared 校验 */
+    private function conditionColumns(): array
+    {
+        $in = [];
+        foreach (['minNights', 'maxNights', 'bookAdvanceDays', 'minRoomCount', 'minHotelCount', 'stayStart', 'stayEnd'] as $key) {
+            $in[$key] = $this->input($key);
+        }
+        return CouponEligibility::conditionColumns($in);
     }
 
     private function validateScopeIds(int $siteId, array $propertyIds, array $roomTypeIds, array $goodsIds, array $skuIds): void

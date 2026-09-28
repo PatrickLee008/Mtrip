@@ -25,6 +25,18 @@ export interface PageParams {
 }
 
 /** 后端错误码(shared ErrorCode 子集,前端需感知的) */
+/**
+ * 下单金额确认失败(`API_CODE.PRICE_CHANGED`)时 `ApiError.data` 的形状:服务端最新明细 +
+ * 客户端提交的 expectedPayAmount。`order/create` 与 `trip/create` 同形。
+ */
+export interface PriceChangeDetail {
+  original: number;
+  longstayDiscount: number;
+  couponDiscount: number;
+  payAmount: number;
+  expectedPayAmount: number;
+}
+
 export const API_CODE = {
   SUCCESS: 0,
   PARAM_ERROR: 40001,
@@ -36,6 +48,8 @@ export const API_CODE = {
   /* 促销码兑换(C-M6):后端把「不存在/过期/兑完/重复/资格不符」拆成了独立码,
      App 据此给出不同文案,不能只靠 40401/40901 两个码 */
   PROMO_CODE_NOT_FOUND: 40411,
+  /* 下单金额确认:expectedPayAmount 与服务端计价不一致,未建单;error.data 带最新明细 */
+  PRICE_CHANGED: 40921,
   PROMO_CODE_EXPIRED: 40911,
   PROMO_CODE_EXHAUSTED: 40912,
   PROMO_CODE_DUPLICATED: 40913,
