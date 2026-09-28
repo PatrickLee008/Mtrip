@@ -1457,6 +1457,9 @@
       "payment": {
         "summaryRange": "{{checkIn}} - {{checkOut}} ({{nights}})",
         "roomLine": "{{rooms}} x {{room}}, {{guests}} Guests",
+        "roomLineMulti": "{{rooms}} rooms: {{list}}, {{guests}} Guests",
+        "roomItem": "{{room}} ×{{count}}",
+        "roomListSep": ", ",
         "viewDetails": "View Details",
         "payByOther": "Pay by other",
         "share": "Share",

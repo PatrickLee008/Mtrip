@@ -1457,6 +1457,9 @@
       "payment": {
         "summaryRange": "{{checkIn}} - {{checkOut}}({{nights}})",
         "roomLine": "{{rooms}} 间 {{room}},{{guests}} 人入住",
+        "roomLineMulti": "{{rooms}} 间:{{list}},{{guests}} 人入住",
+        "roomItem": "{{room}} ×{{count}}",
+        "roomListSep": "、",
         "viewDetails": "查看详情",
         "payByOther": "由他人代付",
         "share": "分享",

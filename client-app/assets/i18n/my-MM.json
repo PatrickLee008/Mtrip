@@ -1457,6 +1457,9 @@
       "payment": {
         "summaryRange": "{{checkIn}} - {{checkOut}} ({{nights}})",
         "roomLine": "{{room}} {{rooms}} ခန်း၊ ဧည့်သည် {{guests}} ဦး",
+        "roomLineMulti": "အခန်း {{rooms}} ခန်း: {{list}}၊ ဧည့်သည် {{guests}} ဦး",
+        "roomItem": "{{room}} ×{{count}}",
+        "roomListSep": "၊ ",
         "viewDetails": "အသေးစိတ် ကြည့်ရန်",
         "payByOther": "အခြားသူမှ ပေးချေရန်",
         "share": "မျှဝေရန်",

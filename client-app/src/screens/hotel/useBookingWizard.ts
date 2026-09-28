@@ -807,12 +807,24 @@ export function useBookingWizard({
       checkOut: formatDayMonth(stay.checkOut, i18n.language),
       nights: nightsLabel(t, nightsBetween(stay.checkIn, stay.checkOut)),
     }),
-    roomLabel: t('hotels.booking.payment.roomLine', {
-      /* 多房间模式下「间数」是整车的总间数,不是这一段住宿里那个计数器 */
-      rooms: cartMode ? roomCount : stay.rooms,
-      room: roomNameOf(stay),
-      guests: stay.adults + stay.childCount,
-    }),
+    /**
+     * 多房间:间数是整车总间数;车里不止一种房型时逐个列出「房型 ×间数」,
+     * 不能只写路由带进来的那一种(之前「3 间 标准间」实际是标准间 1 + 豪华客房 2)。
+     */
+    roomLabel:
+      cartMode && tripRooms.length > 1
+        ? t('hotels.booking.payment.roomLineMulti', {
+            rooms: roomCount,
+            list: tripRooms
+              .map((room) => t('hotels.booking.payment.roomItem', { room: room.name, count: room.quantity }))
+              .join(t('hotels.booking.payment.roomListSep')),
+            guests: stay.adults + stay.childCount,
+          })
+        : t('hotels.booking.payment.roomLine', {
+            rooms: cartMode ? roomCount : stay.rooms,
+            room: cartMode ? (tripRooms[0]?.name ?? roomNameOf(stay)) : roomNameOf(stay),
+            guests: stay.adults + stay.childCount,
+          }),
     pointsLabel: t('hotels.booking.review.earnPoints', {
       points: stay.points.toLocaleString(i18n.language),
     }),

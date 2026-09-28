@@ -1,5 +1,13 @@
 # 会话交接文档(HANDOFF)
 
+### ★ 2026-09-28 Chrome 实测发现的三处前端问题修复
+
+1. **酒店详情页底栏合计**仍按底价 × 间数 × 晚数预估 → 改用 `useTripQuote`(与购物车页同口径:日历价 − 长住优惠,不含券),未登录/日期不全/含演示房型时退回预估。`HotelDetailScreen`。
+2. **完整模式复核页取消政策**写死「入住前 48 小时可免费取消;{入住日−2天} 之后不予退款」—— 与后端口径不符,当天入住时截止日还落在过去。
+   新增 `bookingFormat.cancellationPolicyText()`(完整模式 `ReviewBody` 与关怀模式共用):真实商品按房型退改规则出文案,无规则/rule_type 1 → 免费取消、2 → 阶梯、3 → 不可退,与 `OrderController::computeRefund` 一致;演示数据仍用设计稿文案。关怀模式无规则时原先也回落到那句写死文案,一并修正。`ReviewBody` 新增 `refundRules` 入参。
+3. **支付页摘要卡**多房型时写成「3 间 标准间」→ 逐个列出「3 间:标准间 ×1、豪华客房 ×2,2 人入住」(新增 `hotels.booking.payment.roomLineMulti / roomItem / roomListSep` 三语);单房型时房型名取车里那一种而非路由那一种。
+**验证**:Chrome(CDP)实测完整模式三处均生效(临时长住档已删);`tsc` 通过,七个相关静态检查全绿。摘要卡房型多时单行省略,完整内容见「查看详情」。
+
 ### ★ 2026-09-28 优惠券资格条件与按资格分摊(PRD §17.5 / §17.6)+ 支付时券过期校验
 
 **唯一实现**:`backend/shared/src/Support/CouponEligibility.php`(纯逻辑,无 DB)—— 下单计价(order-service `PricingService`)与结账选券列表(marketing-service `CouponView`)都调它,不再各写一份。

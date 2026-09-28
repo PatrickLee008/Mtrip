@@ -112,3 +112,28 @@ export function freeCancelDeadline(checkIn: string): string {
   const day = `${d.getDate()}`.padStart(2, '0');
   return `${d.getFullYear()}-${m}-${day}`;
 }
+
+/**
+ * 结账页「取消政策」文案(完整模式复核页与关怀模式确认页共用)。
+ *
+ * 真实商品按房型的退改规则出文案,口径与后端 `OrderController::computeRefund` 一致:
+ *   没配规则 / rule_type 1 → 免费取消(全额退回 mTrip 钱包);2 → 阶梯退款;3 → 不可退。
+ * 以前完整模式一律显示「入住前 48 小时可免费取消;{入住日 − 2 天} 之后不予退款」——
+ * 既不是后端的实际口径,当天/次日入住时截止日还会落在过去。
+ * 演示数据(没有后端规则)仍用设计稿文案。
+ */
+export function cancellationPolicyText(
+  t: TFunction,
+  lang: string,
+  opts: { demo: boolean; checkIn: string; rules: Array<{ rule_type: number }> },
+): string {
+  if (opts.demo) {
+    return t('hotels.booking.review.cancellationDesc', {
+      date: formatMonthDayYear(freeCancelDeadline(opts.checkIn), lang),
+    });
+  }
+  const type = opts.rules[0]?.rule_type ?? 1;
+  if (type === 3) return t('hotels.lite.policy.nonRefundable');
+  if (type === 2) return t('hotels.lite.policy.tieredRefund');
+  return t('hotels.lite.policy.freeCancel');
+}

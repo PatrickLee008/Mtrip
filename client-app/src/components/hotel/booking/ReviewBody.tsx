@@ -23,9 +23,8 @@ import {
 } from '@/components/hotel/booking/ReviewCards';
 import SelectedRoomsCard from '@/components/hotel/booking/SelectedRoomsCard';
 import {
-  formatMonthDayYear,
+  cancellationPolicyText,
   formatWeekdayDate,
-  freeCancelDeadline,
   nightsBetween,
   nightsLowerLabel,
 } from '@/components/hotel/booking/bookingFormat';
@@ -54,6 +53,8 @@ interface Props {
    * 不传或为 0 不渲染该行,合计也不扣。
    */
   longstayDiscount?: number;
+  /** 当前房型的退改规则(`useBookingWizard().refundRules`);演示数据不传 */
+  refundRules?: Array<{ rule_type: number }>;
   /** 顶部酒店卡的名称(新稿把房型卡换成了酒店卡);缺省则不渲染该卡 */
   hotelName?: string;
 }
@@ -66,6 +67,7 @@ export default function ReviewBody({
   hotelName,
   roomTotal,
   longstayDiscount = 0,
+  refundRules = [],
 }: Props) {
   /** 购物车里有房型才走「酒店卡 + Selected Rooms」的新版式 */
   const hasCart = (cartRooms?.length ?? 0) > 0;
@@ -210,8 +212,10 @@ export default function ReviewBody({
       <View style={styles.policies}>
         <CancellationCard
           title={t('hotels.booking.review.cancellationPolicy')}
-          desc={t('hotels.booking.review.cancellationDesc', {
-            date: formatMonthDayYear(freeCancelDeadline(stay.checkIn), i18n.language),
+          desc={cancellationPolicyText(t, i18n.language, {
+            demo: Boolean(stay.demo),
+            checkIn: stay.checkIn,
+            rules: refundRules,
           })}
         />
         {/**
