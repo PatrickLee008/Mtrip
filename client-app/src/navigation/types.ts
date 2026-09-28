@@ -5,6 +5,7 @@
 import type { NavigatorScreenParams } from '@react-navigation/native';
 
 import type { SmsScene } from '@/api/user';
+import type { HotelFilterValue } from '@/components/hotel/HotelFilterSheet';
 import type { DetailTabKey } from '@/screens/hotel/detailDemo';
 import type { TravelerItem } from '@/types/models';
 
@@ -88,6 +89,8 @@ export type RootStackParamList = {
     flexDays?: number;
     /** 是否按缅甸公民价展示 */
     citizen?: boolean;
+    /** 搜索页筛选面板里已选的条件(点 Show Results 直接跳结果页) */
+    filter?: HotelFilterValue;
   };
   /**
    * 酒店详情页(Figma 94:438),搜索结果卡的落地页。

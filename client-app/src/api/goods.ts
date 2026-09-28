@@ -57,8 +57,47 @@ export function fetchGoodsDetail(id: number): Promise<GoodsDetail> {
   return get('/api/v1/app/goods/detail', { id });
 }
 
-export function fetchHotelList(params: Omit<GoodsListParams, 'goodsType'>): Promise<PageData<GoodsItem>> {
+/** 酒店列表独有的筛选参数(HotelController::list);多值一律逗号拼接 */
+export interface HotelListParams extends Omit<GoodsListParams, 'goodsType'> {
+  /** 1=价格区间按公民价比较 */
+  citizen?: number;
+  /** 星级任一命中,如 "4,5" */
+  starLevels?: string;
+  /** 住宿类型任一命中(hotel/homesApts/hostels/hourly) */
+  propertyTypes?: string;
+  /** 床型任一命中(归一化键,如 king) */
+  bedTypes?: string;
+  /** 房间设施/景观须全部具备 */
+  roomFeatures?: string;
+  /** 城市键任一命中 */
+  cities?: string;
+}
+
+export function fetchHotelList(params: HotelListParams): Promise<PageData<GoodsItem>> {
   return get('/api/v1/app/hotels/list', { ...params });
+}
+
+export interface HotelFacetOption {
+  key: string;
+  label: string;
+  count: number;
+}
+
+/** 筛选面板的选项与计数(只按目的地/关键词圈定,不叠加其它筛选) */
+export interface HotelFacets {
+  total: number;
+  /** 键:breakfast / freeCancel / star:N / score:N / type:X */
+  counts: Record<string, number>;
+  amenities: HotelFacetOption[];
+  beds: HotelFacetOption[];
+  features: HotelFacetOption[];
+  cities: HotelFacetOption[];
+}
+
+export function fetchHotelFacets(
+  params: Pick<HotelListParams, 'countryCode' | 'cityKey' | 'keyword'>,
+): Promise<HotelFacets> {
+  return get('/api/v1/app/hotels/filters', { ...params });
 }
 
 export function fetchHotelDetail(propertyId: number): Promise<GoodsDetail> {

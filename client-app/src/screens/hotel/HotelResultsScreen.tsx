@@ -23,7 +23,9 @@
  *
  * 未实现的能力(设计稿有、当前没有对应依赖或接口),一律走 comingSoon:
  *   入住人选择、View map(未引入地图)。
- * 顶部栏筛选按钮复用 `HotelFilterSheet`;列表接口没有价格/设施区间参数,面板结果同样只留在状态里。
+ * 顶部栏筛选按钮复用 `HotelFilterSheet`:面板结果经 filterToParams 并入查询,与 chips 取交集
+ *   (同一维度两边都选时取更严的一侧,如评分取较高下限、设施两边都要具备)。
+ * 从酒店搜索页的筛选面板点 Show Results 进来时,params.filter 带着已选条件。
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -54,6 +56,7 @@ import DatePickerSheet, {
 import HotelFilterSheet, {
   DEFAULT_HOTEL_FILTER,
   HotelFilterValue,
+  filterToParams,
 } from '@/components/hotel/HotelFilterSheet';
 import HotelGuideOverlay from '@/components/hotel/guide/HotelGuideOverlay';
 import HotelResultCard from '@/components/hotel/HotelResultCard';
@@ -77,8 +80,8 @@ const PAGE_SIZE = 10;
 type ChipKey = 'rating4' | 'freeCancellation' | 'breakfast' | 'freeWifi';
 const CHIPS: ChipKey[] = ['rating4', 'freeCancellation', 'breakfast', 'freeWifi'];
 
-/** Free Wifi 对应 goods_info.facilities 里的标签值(后端按 JSON_CONTAINS 精确匹配) */
-const WIFI_AMENITY = 'Wifi';
+/** Free Wifi 对应的设施归一化键(后端把「Free WiFi」「wifi」都归到 wifi) */
+const WIFI_AMENITY = 'wifi';
 
 export default function HotelResultsScreen() {
   const { t, i18n } = useTranslation();
@@ -112,7 +115,7 @@ export default function HotelResultsScreen() {
   const [dateOpen, setDateOpen] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
   const [guideOpen, setGuideOpen] = useState(false);
-  const [filter, setFilter] = useState<HotelFilterValue>(DEFAULT_HOTEL_FILTER);
+  const [filter, setFilter] = useState<HotelFilterValue>(params.filter ?? DEFAULT_HOTEL_FILTER);
 
   /* ---- 列表 ---- */
   const [items, setItems] = useState<GoodsItem[]>([]);
@@ -130,19 +133,32 @@ export default function HotelResultsScreen() {
 
   const comingSoon = () => showToast(t('home.comingSoon'));
 
-  const query = useMemo(
+  /** 列表范围(筛选面板的计数与实时结果数也按它圈定) */
+  const scope = useMemo(
     () => ({
       countryCode: params?.countryCode,
       cityKey: params?.cityKey,
       keyword: applied.keyword || undefined,
-      sortBy,
-      reviewScore: chips.includes('rating4') ? 4 : undefined,
-      freeCancel: chips.includes('freeCancellation') ? 1 : undefined,
-      breakfast: chips.includes('breakfast') ? 1 : undefined,
-      amenities: chips.includes('freeWifi') ? WIFI_AMENITY : undefined,
+      citizen: applied.citizen ? 1 : undefined,
     }),
-    [applied.keyword, chips, sortBy, params?.countryCode, params?.cityKey],
+    [applied.keyword, applied.citizen, params?.countryCode, params?.cityKey],
   );
+
+  const query = useMemo(() => {
+    const panel = filterToParams(filter);
+    const amenities = [panel.amenities, chips.includes('freeWifi') ? WIFI_AMENITY : undefined]
+      .filter(Boolean)
+      .join(',');
+    return {
+      ...scope,
+      ...panel,
+      sortBy,
+      reviewScore: Math.max(panel.reviewScore ?? 0, chips.includes('rating4') ? 4 : 0) || undefined,
+      freeCancel: chips.includes('freeCancellation') ? 1 : panel.freeCancel,
+      breakfast: chips.includes('breakfast') ? 1 : panel.breakfast,
+      amenities: amenities || undefined,
+    };
+  }, [scope, filter, chips, sortBy]);
 
   const load = useCallback(
     async (page: number, mode: 'init' | 'refresh' | 'more') => {
@@ -485,6 +501,7 @@ export default function HotelResultsScreen() {
       <HotelFilterSheet
         visible={filterOpen}
         value={filter}
+        scope={scope}
         onClose={() => setFilterOpen(false)}
         onApply={(next) => {
           setFilter(next);

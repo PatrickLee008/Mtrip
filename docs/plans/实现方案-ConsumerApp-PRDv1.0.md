@@ -133,7 +133,7 @@ finance 结算/提现                           推荐返利 / 通知 / 风控�
 | 1 预订生命周期 / 9 确认取消退款 / 11 平台费透明 | ✅ | M0/M1(order 下单-支付-取消-退款钱包-便民费) |
 | 1.1 多酒店 Trip(A2) | ✅ | M4(TripController 单支付拆多单+券占比分摊) |
 | 2.1 长住 Long-Stay | ✅ | M1(取价)+ admin 梯度配置 |
-| 3 列表/筛选/排序 | ✅ | C 端价格/星级/设施/含早/免费取消/评分筛选 + 低价/高价/星级/好评/距离排序;`/app/goods/filters` 可配置项 + admin 筛选排序配置(goods_filter_config/goods_sort_config) |
+| 3 列表/筛选/排序 | ✅ | C 端价格/星级/设施/含早/免费取消/评分筛选 + 低价/高价/星级/好评/距离排序;`/app/goods/filters` 可配置项 + admin 筛选排序配置(goods_filter_config/goods_sort_config)。**2026-09-28** 酒店列表 `/app/hotels/list` 补星级多选/住宿类型/床型/房间特色/城市/公民价区间,新增 `/app/hotels/filters` 真实计数,App 筛选面板接入(此前只留前端状态);到店付款、卧室数、区镇无数据模型未做,见 HANDOFF 同日条目 |
 | 4 详情/选房 + 双价 + 评价 | ✅ | M0 双价 / M1-b 评价 + admin 审核 |
 | 4.1 与酒店聊天 / 13 客服 | ✅ | M3-e + admin 客服工作台 |
 | 5 住客信息 / 7 常旅客·收藏 | ✅ | M1 多住客 / M1-b 常旅客 / M2-a 收藏 |

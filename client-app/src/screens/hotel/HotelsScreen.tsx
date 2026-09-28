@@ -19,8 +19,8 @@
  * 未实现的能力(设计稿有、当前没有对应依赖或接口),一律走 comingSoon:
  *   目的地定位、入住人选择
  * Search 提交后跳搜索结果页 HotelResults(设计稿 1695:6325),带上关键词/日期/公民身份。
- * 顶部栏筛选按钮拉起 HotelFilterSheet(408:1824);列表接口没有价格/设施筛选参数,
- * 选择结果目前只存在本页状态里,不参与 Search 请求。
+ * 顶部栏筛选按钮拉起 HotelFilterSheet(408:1824);点 Show Results 即带着当前搜索卡条件
+ * 与所选筛选跳结果页,之后点 Search 也会带上同一份筛选。
  */
 
 import React, { useState } from 'react';
@@ -89,7 +89,7 @@ export default function HotelsScreen() {
   };
 
   /** 跳搜索结果页(设计稿 1695:6325),把当前搜索卡的条件一起带过去 */
-  const search = () => {
+  const search = (next: HotelFilterValue = filter) => {
     const kw = keyword.trim();
     navigation.navigate('HotelResults', {
       ...(kw ? { keyword: kw } : {}),
@@ -97,6 +97,7 @@ export default function HotelsScreen() {
       checkOut: range.checkOut,
       flexDays: range.flexDays,
       citizen,
+      filter: next,
     });
   };
 
@@ -125,7 +126,7 @@ export default function HotelsScreen() {
                   placeholder={t('hotels.searchPlaceholder')}
                   placeholderTextColor={colors.textSoft}
                   returnKeyType="search"
-                  onSubmitEditing={search}
+                  onSubmitEditing={() => search()}
                 />
                 <Pressable onPress={comingSoon} hitSlop={8}>
                   <HomeIcon name="locationFilled" size={20} color={colors.primary} />
@@ -182,7 +183,7 @@ export default function HotelsScreen() {
 
               <Pressable
                 style={({ pressed }) => [styles.cta, pressed && styles.pressed]}
-                onPress={search}
+                onPress={() => search()}
               >
                 <Text style={styles.ctaText}>{t('hotels.search')}</Text>
               </Pressable>
@@ -275,10 +276,12 @@ export default function HotelsScreen() {
       <HotelFilterSheet
         visible={filterOpen}
         value={filter}
+        scope={{ keyword: keyword.trim() || undefined, citizen: citizen ? 1 : undefined }}
         onClose={() => setFilterOpen(false)}
         onApply={(next) => {
           setFilter(next);
           setFilterOpen(false);
+          search(next);
         }}
         onComingSoon={comingSoon}
       />

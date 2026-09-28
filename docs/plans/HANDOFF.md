@@ -1,5 +1,25 @@
 # 会话交接文档(HANDOFF)
 
+### ★ 2026-09-28 酒店筛选接后端(QA 表 `result_consumer_app.xlsx` CA_TC_003~016)
+
+**根因**:`HotelFilterSheet` 的选择只存在页面状态里、从不进请求;右侧计数与 CTA 总数是设计稿静态值;「最近筛选」是写死的一行;结果页 Free Wifi chip 发 `amenities=Wifi`,而库里是 `Free WiFi`,精确匹配永远落空。
+
+**后端**(goods-service `App\HotelController`,shared 未改):
+- `list` 新增参数:`starLevels` / `propertyTypes` / `bedTypes` / `cities`(组内任一命中)、`roomFeatures` / `amenities`(须全部具备)、`citizen=1`(价格区间按公民价比较)。组间取交集。
+- 新增 `GET /api/v1/app/hotels/filters`(已登记路由,网关 `hotels` 前缀已通):只按目的地/关键词圈定,返回 `counts`(`breakfast` / `freeCancel` / `star:N` / `score:N` / `type:X`)与 `amenities` / `beds` / `features` / `cities` 四组 `{key,label,count}`。
+- 设施/床型/房间特色取自 `merchant_store.facilities + amenities(enabled)`、`hotel_room_type.bed_type + bedding[].type`、`hotel_room_type.facilities + room_view`,按**归一化键**匹配(小写、去非字母数字、去前缀 free:`Free WiFi` / `wifi` / `Wifi` → `wifi`);纯数字旧床型编码(1/2)忽略。
+- 住宿类型:物业只有 `hotel` 一种业态,选民宿/青旅/钟点房如实返回 0 条。
+
+**前端**(client-app):
+- `HotelFilterSheet` 重写选项体系:选项键 `breakfast / freeCancel / star:N / score:N / type:X / amenity:K / bed:K / feature:K / city:K`,导出 `filterToParams()`;新增分组 Star Rating、Guest Review Score(档位互斥,/10 制换算 /5)、Amenities、Bed Type、Room Features & View、Location(后四组数据驱动,无数据不渲染);Popular 与分组共用键;计数来自 `/filters`,CTA 结果数防抖 300ms 实查;「最近筛选」存 AsyncStorage `hotel.recentFilters`(最多 5 条)。默认价格改为不限(0~1,000,000,停在两端不带参数)。去掉 Show more 与设计稿的「2/3 bedrooms」。
+- `HotelsScreen` 点 Show Results 直接带 `filter` 跳结果页;`HotelResults` 面板参数与 chips 合并(同维度取更严);`HotelResultsLite` 同样接入,并补了条件变更时作废在途请求。i18n 三语新增 8 键。
+
+**验证**:容器内 `php -l` 通过、shared 单测 112/112、`client-app typecheck` 通过;curl 逐参数验证;Chrome(CDP,站点只有 1 家可售酒店)实测:价格 ≥20,000 → 0、10,000~20,000 → 1,青旅 → 0,King/Minibar/Free WiFi/仰光 → 1,评分 8+ → 0,免费取消 → 0,应用后结果页「找到 0 家住宿」且请求带全参数,重置恢复 1 家,最近筛选正确回显,Free Wifi chip 现在命中。**`scripts/check.ps1` 本机跑不了**(本机 PHP 不在 PATH,第一步 400 个文件全部「找不到 php」)。
+
+**未做(无数据模型,需产品拍板)**:CA_TC_010 到店付款(C 端只有余额支付)、CA_TC_014 卧室数(房型表无卧室数字段)、CA_TC_013 按区/镇筛选(物业只有 `city_key`,已提供按城市筛)。Lite 模式未在浏览器实测(同一组件,已过类型检查)。
+
+**下一步**:QA 表其余失败项 —— 钱包付款不扣余额(038)、不能选下月日期(043/079)、加购价未计入总价(034)、可超库存选房(067)、Special Request 未保存(082)。
+
 ### ★ 2026-09-28 Chrome 实测发现的三处前端问题修复
 
 1. **酒店详情页底栏合计**仍按底价 × 间数 × 晚数预估 → 改用 `useTripQuote`(与购物车页同口径:日历价 − 长住优惠,不含券),未登录/日期不全/含演示房型时退回预估。`HotelDetailScreen`。

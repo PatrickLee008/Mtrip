@@ -41,6 +41,7 @@ Router::addGroup('/api/v1/app/goods', static function () {
 
 Router::addGroup('/api/v1/app/hotels', static function () {
     Router::get('/list', [HotelController::class, 'list']);
+    Router::get('/filters', [HotelController::class, 'filters']);
     Router::get('/detail', [HotelController::class, 'detail']);
     Router::get('/calendar', [HotelController::class, 'calendar']);
     Router::get('/reviews', [HotelController::class, 'reviews']);

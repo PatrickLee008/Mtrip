@@ -1334,7 +1334,15 @@
         "homesApts": "民宿与公寓",
         "hostels": "青年旅舍",
         "hourly": "钟点房"
-      }
+      },
+      "starRating": "星级",
+      "reviewScore": "住客评分",
+      "scoreAtLeast": "评分 {{score}}+",
+      "starsLabel": "{{stars}} 星",
+      "amenities": "设施与服务",
+      "bedType": "床型",
+      "roomFeatures": "房间特色与景观",
+      "location": "位置"
     },
     "booking": {
       "steps": {

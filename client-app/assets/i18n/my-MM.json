@@ -1334,7 +1334,15 @@
         "homesApts": "အိမ်နှင့်တိုက်ခန်း",
         "hostels": "ဟော်စတယ်",
         "hourly": "နာရီအလိုက်အခန်း"
-      }
+      },
+      "starRating": "Star Rating",
+      "reviewScore": "Guest Review Score",
+      "scoreAtLeast": "Rating {{score}}+",
+      "starsLabel": "{{stars}} stars",
+      "amenities": "Amenities & Facilities",
+      "bedType": "Bed Type",
+      "roomFeatures": "Room Features & View",
+      "location": "Location"
     },
     "booking": {
       "steps": {
