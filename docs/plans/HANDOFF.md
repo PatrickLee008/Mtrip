@@ -175,14 +175,28 @@ TCP 能建连但服务器从不返回 `220` 问候语，`SmtpClient::expect()` �
 
 **处置**：渠道 #1（site 0）由 `587/tls` 改为 `465/ssl`，其余字段未动（`smtp_port`/`encryption`
 均非加密列，不触碰用户名密码）；随后按应用真实调用链（查 `sys_email_channel` where `status=1`
-→ `CryptoHelper::decrypt` → `SmtpClient::send`）实发复验 `OK accepted`（0.30s），测试邮件已投递
-`229041307@qq.com`。
+→ `CryptoHelper::decrypt` → `SmtpClient::send`）实发复验，得到 `250 Mail OK queued`。
+⚠️ **更正**：当时据此写成「测试邮件已投递 `229041307@qq.com`」，**该说法不成立** —— 收件人始终未收到，
+真因见下方 2026-09-29 复核。
+
+**2026-09-29 复核（发送侧正常，收件侧被过滤）**：用 163 IMAP（`imap.163.com:993`，同一套凭据）取证：
+① **自收自发到 `13768615461@163.com` 20 秒内进收件箱**，走的正是同一条 `SmtpClient` 代码路径 ——
+说明 SMTP 中继与我们的报文格式本身没问题；② 163「已发送」里有全部发往 `229041307@qq.com` 的记录
+（9/24 两封 + 9/29 探针），均带 `X-CM-TRANSID`；③ 抓原始报文可见 163 已自动补 `Date` / `Message-Id` /
+`X-Originating-IP`，**不存在缺头导致的格式缺陷**；④ 收件箱对 `postmaster` / `mailer-daemon` /
+`Undelivered` / `failure` 四类退信**命中 0 条**（跨 5 天，窗口足够），163 垃圾箱也是 0 封。
+→ 163 侧确已正常发出且 QQ **未退信**，邮件是在 **QQ 侧被过滤或静默丢弃**，而不是没发出去。发送方是
+163 免费个人邮箱 + 家宽出口 IP（`X-Originating-IP: 117.182.106.155`），正是 QQ 反垃圾最敏感的组合。
+另已补发一封**纯 ASCII、交易通知样式**的探针（`mTrip account notification (ref MT-20260929-145736)`，
+无中文）用于排除编码因素，**该封是否送达待用户确认**。
 
 **结论 / 遗留**：① 163 邮箱只能用 **25 / 465 / 994**，后台 `smtpPort` 默认 `587` 是通用 SMTP 默认值，
-**不适用于 163**，后续接入 163 的站点别再踩；② 邮件渠道**没有后台自测发送入口**
+**不适用于 163**，后续接入 163 的站点别再踩；② **要真正投递到 QQ / Gmail 等外部邮箱，必须换事务性
+邮件服务（SendGrid / SES / 阿里云邮件推送等）+ 自有域名配 SPF/DKIM/DMARC**，个人 163 邮箱不适合
+当应用发件人 —— 这是本次唯一未解决的问题；③ 邮件渠道**没有后台自测发送入口**
 （`EmailController` 只有渠道 CRUD + 投递日志），每次验证都得进容器手工跑脚本，建议后续补
 `POST /sys/email/channel/test-send` + 前端按钮（须三处对齐 `config:email:*` 权限键）；
-③ Google/SMS 真实提供商仍未联调，`audits/2026-09-15-merchant-onboarding-stage5.md` 里
+④ Google/SMS 真实提供商仍未联调，`audits/2026-09-15-merchant-onboarding-stage5.md` 里
 「未确认可用 SMTP 凭证」的结论现在**只对 SMS 成立**。
 
 ### ★ 2026-09-23 商户移动端 merchant-app 入驻流程按 Figma SECTION `2685:22241` 收敛（静态界面）
