@@ -78,8 +78,11 @@ export default function HotelResultsLiteScreen() {
       cityKey: params.cityKey,
       keyword: params.keyword || undefined,
       citizen: params.citizen ? 1 : undefined,
+      checkIn: params.checkIn,
+      checkOut: params.checkOut,
+      flexDays: params.flexDays || undefined,
     }),
-    [params.countryCode, params.cityKey, params.keyword, params.citizen],
+    [params.countryCode, params.cityKey, params.keyword, params.citizen, params.checkIn, params.checkOut, params.flexDays],
   );
   const query = useMemo(() => ({ ...scope, ...filterToParams(filter) }), [scope, filter]);
 
@@ -235,8 +238,8 @@ export default function HotelResultsLiteScreen() {
                 onPress={(goods) =>
                   navigation.navigate('HotelDetailLite', {
                     id: goods.id,
-                    checkIn: params.checkIn,
-                    checkOut: params.checkOut,
+                    checkIn: goods.availableCheckIn ?? params.checkIn,
+                    checkOut: goods.availableCheckOut ?? params.checkOut,
                   })
                 }
                 onToggleFavorite={toggleFavorite}

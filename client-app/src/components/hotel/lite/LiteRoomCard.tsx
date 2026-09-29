@@ -33,6 +33,7 @@ import { fonts } from '@/config/typography';
 import { useSiteStore } from '@/store/siteStore';
 import type { GoodsSku } from '@/types/models';
 import { formatMoney } from '@/utils/format';
+import { useCommonStore } from '@/store/commonStore';
 import { resolveMediaUri } from '@/utils/media';
 
 /** 设计稿缩略图边长 */
@@ -72,6 +73,9 @@ export default function LiteRoomCard({
   onChoose,
 }: Props) {
   const { t } = useTranslation();
+  const showToast = useCommonStore((s) => s.showToast);
+  const atMax = sku.available !== undefined && quantity >= sku.available;
+  const soldOut = sku.available === 0;
   const currency = useSiteStore((s) => s.currency);
 
   /**
@@ -162,9 +166,14 @@ export default function LiteRoomCard({
               <HomeIcon name="minus" width={16} height={3} color={colors.heading} />
             </Pressable>
             <Text style={styles.stepValue}>{quantity}</Text>
+            {/* 所选日期内最多可订 sku.available 间,到顶只提示不加(同完整模式 RoomStepper) */}
             <Pressable
-              style={({ pressed }) => [styles.stepBtn, pressed && styles.pressed]}
-              onPress={() => onChangeQuantity(sku, quantity + 1)}
+              style={({ pressed }) => [styles.stepBtn, atMax && styles.disabled, pressed && styles.pressed]}
+              onPress={() =>
+                atMax
+                  ? showToast(t('hotels.detail.rooms.left', { rooms: sku.available }))
+                  : onChangeQuantity(sku, quantity + 1)
+              }
               hitSlop={4}
             >
               <HomeIcon name="plus" size={16} color={colors.heading} />
@@ -172,10 +181,13 @@ export default function LiteRoomCard({
           </View>
         ) : (
           <Pressable
-            style={({ pressed }) => [styles.chooseBtn, pressed && styles.pressed]}
+            style={({ pressed }) => [styles.chooseBtn, soldOut && styles.disabled, pressed && styles.pressed]}
             onPress={() => onChoose(sku)}
+            disabled={soldOut}
           >
-            <Text style={styles.chooseText}>{t('hotels.lite.choose')}</Text>
+            <Text style={styles.chooseText}>
+              {soldOut ? t('hotels.detail.rooms.soldOut') : t('hotels.lite.choose')}
+            </Text>
           </Pressable>
         )}
       </View>
@@ -208,6 +220,7 @@ const styles = StyleSheet.create({
     ...shadows.subtle,
   },
   pressed: { opacity: 0.85 },
+  disabled: { opacity: 0.4 },
 
   top: { flexDirection: 'row', alignItems: 'flex-start' },
 

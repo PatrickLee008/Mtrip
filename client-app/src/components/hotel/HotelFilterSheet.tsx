@@ -17,7 +17,7 @@
  *   CTA      主色、圆角 8、px16/py8,Inter 600/14 白字
  *
  * 与后端的关系:选项键(见 HotelFilterValue)经 filterToParams 转成 `/app/hotels/list` 的查询参数;
- * 右侧计数来自 `/app/hotels/filters`(按目的地/关键词圈定、不叠加其它条件),
+ * 右侧计数来自 `/app/hotels/filters`(按目的地/关键词/日期圈定、不叠加其它条件),
  * CTA 里的总数是用当前草稿实查一次列表(pageSize=1)得到的真实结果数。
  * 设计稿的「2/3 bedrooms」没有卧室数数据可依,暂不提供;计价口径下拉没有第二组选项,走 onComingSoon。
  */
@@ -73,7 +73,10 @@ export const DEFAULT_HOTEL_FILTER: HotelFilterValue = {
 };
 
 /** 列表接口的圈定范围(面板据此取计数与实时结果数) */
-export type HotelFilterScope = Pick<HotelListParams, 'countryCode' | 'cityKey' | 'keyword' | 'citizen'>;
+export type HotelFilterScope = Pick<
+  HotelListParams,
+  'countryCode' | 'cityKey' | 'keyword' | 'citizen' | 'checkIn' | 'checkOut' | 'flexDays'
+>;
 
 const valuesOf = (checked: string[], group: string) =>
   checked.filter((k) => k.startsWith(`${group}:`)).map((k) => k.slice(group.length + 1));
@@ -193,7 +196,14 @@ export default function HotelFilterSheet({
   useEffect(() => {
     if (!visible) return;
     let alive = true;
-    fetchHotelFacets({ countryCode: scope?.countryCode, cityKey: scope?.cityKey, keyword: scope?.keyword })
+    fetchHotelFacets({
+      countryCode: scope?.countryCode,
+      cityKey: scope?.cityKey,
+      keyword: scope?.keyword,
+      checkIn: scope?.checkIn,
+      checkOut: scope?.checkOut,
+      flexDays: scope?.flexDays,
+    })
       .then((data) => {
         if (alive) setFacets(data);
       })

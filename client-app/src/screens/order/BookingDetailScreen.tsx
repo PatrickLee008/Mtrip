@@ -357,6 +357,14 @@ export default function BookingDetailScreen() {
               label={t('order.bookingDetail.guestsRooms')}
               value={guestRoomLabel}
             />
+            {/* 下单时填的特殊要求:此前只有商户端看得到,住客自己无处查看(QA CA_TC_082) */}
+            {order.special_requests?.trim() ? (
+              <GridRow
+                icon="edit"
+                label={t('hotels.booking.dates.specialRequests')}
+                value={order.special_requests.trim()}
+              />
+            ) : null}
             <View style={styles.gridDivider} />
             <View style={styles.totalRow}>
               <Text style={styles.totalLabel}>{t('order.bookingDetail.totalAmount')}</Text>
@@ -541,7 +549,7 @@ function GridRow({
   label,
   value,
 }: {
-  icon: 'calendar2' | 'travelers';
+  icon: 'calendar2' | 'travelers' | 'edit';
   label: string;
   value: string;
 }) {

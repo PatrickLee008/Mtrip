@@ -16,7 +16,9 @@
  * 数据:`/api/v1/app/hotels/list`。chips 与排序都落到真实查询参数上——
  *   Rating 4+ → reviewScore=4、Free Cancellation → freeCancel=1、Breakfast → breakfast=1、
  *   Free Wifi → amenities=Wifi(按物业 facilities 的 JSON 值匹配),Sort by → sortBy 白名单。
- *   搜索卡里改目的地/日期/公民身份后要点 Search 才生效(设计稿有 CTA);chips 与排序即时生效。
+ *   搜索卡里改目的地/公民身份后要点 Search 才生效(设计稿有 CTA);日期在选择器里点 Confirm 即生效,
+ *   chips 与排序即时生效。日期连同弹性天数进查询,只列这段日期有房的酒店;
+ *   弹性日期命中的实际日期与所选不同时,卡片上提示并以它进详情页。
  *
  * 无结果时显示 `EmptyView`,请求失败显示可重试的 `ErrorView`(已接真实数据,不再回落设计稿演示卡)。
  *   点卡片带物业 id 进入酒店详情并渲染接口房型。
@@ -60,7 +62,7 @@ import HotelFilterSheet, {
 } from '@/components/hotel/HotelFilterSheet';
 import HotelGuideOverlay from '@/components/hotel/guide/HotelGuideOverlay';
 import HotelResultCard from '@/components/hotel/HotelResultCard';
-import SortSheet, { type SortAnchor } from '@/components/hotel/SortSheet';
+import SortSheet, { sortLabelKey, type SortAnchor } from '@/components/hotel/SortSheet';
 import { PAGE_PADDING, colors, radius, shadows } from '@/config/theme';
 import { fonts } from '@/config/typography';
 import type { RootStackParamList } from '@/navigation/types';
@@ -101,10 +103,11 @@ export default function HotelResultsScreen() {
   const [citizen, setCitizen] = useState(Boolean(params.citizen));
 
   /** 已提交的查询条件(chips 与排序即时改这里) */
-  const [applied, setApplied] = useState({
+  const [applied, setApplied] = useState(() => ({
     keyword: params.keyword ?? '',
     citizen: Boolean(params.citizen),
-  });
+    range,
+  }));
   const [chips, setChips] = useState<ChipKey[]>([]);
   const [sortBy, setSortBy] = useState<GoodsSortBy>('default');
 
@@ -140,8 +143,11 @@ export default function HotelResultsScreen() {
       cityKey: params?.cityKey,
       keyword: applied.keyword || undefined,
       citizen: applied.citizen ? 1 : undefined,
+      checkIn: applied.range.checkIn,
+      checkOut: applied.range.checkOut,
+      flexDays: applied.range.flexDays || undefined,
     }),
-    [applied.keyword, applied.citizen, params?.countryCode, params?.cityKey],
+    [applied, params?.countryCode, params?.cityKey],
   );
 
   const query = useMemo(() => {
@@ -245,7 +251,7 @@ export default function HotelResultsScreen() {
   const toggleChip = (key: ChipKey) =>
     setChips((prev) => (prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]));
 
-  const submit = () => setApplied({ keyword: keyword.trim(), citizen });
+  const submit = () => setApplied({ keyword: keyword.trim(), citizen, range });
 
   /* 设计稿的日期形如 Wed, Jun 3;跟随当前语言 */
   const formatDay = (key: string) => {
@@ -255,6 +261,17 @@ export default function HotelResultsScreen() {
       month: 'short',
       day: 'numeric',
     });
+  };
+
+  /** 弹性日期命中的日期与所选不同时,卡片上提示「可订 10月18日 – 10月20日」 */
+  const availableLabel = (g: GoodsItem) => {
+    const { availableCheckIn: from, availableCheckOut: to } = g;
+    if (!from || !to || (from === applied.range.checkIn && to === applied.range.checkOut)) return undefined;
+    const short = (key: string) => {
+      const [y, m, d] = key.split('-').map(Number);
+      return new Date(y, m - 1, d).toLocaleDateString(i18n.language, { month: 'short', day: 'numeric' });
+    };
+    return t('hotels.results.availableDates', { from: short(from), to: short(to) });
   };
 
   const data = loading ? [] : items;
@@ -337,14 +354,23 @@ export default function HotelResultsScreen() {
           contentContainerStyle={styles.chipRow}
           style={styles.chipScroll}
         >
+          {/* 非默认排序时 chip 高亮并显示排序名,再点面板里同一项即恢复默认 */}
           <Pressable
             ref={sortChipRef}
-            style={({ pressed }) => [styles.chip, styles.chipPlain, pressed && styles.pressed]}
+            style={({ pressed }) => [
+              styles.chip,
+              sortBy === 'default' ? styles.chipPlain : styles.chipActive,
+              pressed && styles.pressed,
+            ]}
             onPress={openSort}
           >
             {/* 设计稿是 fluent:arrow-sort-down-lines-16-filled,项目图标表里暂用同体系的 filter 字形 */}
-            <HomeIcon name="filter" size={16} color={colors.textSoft} />
-            <Text style={styles.chipText}>{t('hotels.results.sortBy')}</Text>
+            <HomeIcon name="filter" size={16} color={sortBy === 'default' ? colors.textSoft : '#FFFFFF'} />
+            <Text style={[styles.chipText, sortBy !== 'default' && styles.chipTextActive]}>
+              {sortBy === 'default'
+                ? t('hotels.results.sortBy')
+                : t(`hotels.results.sort.${sortLabelKey(sortBy)}`)}
+            </Text>
           </Pressable>
 
           {CHIPS.map((key) => {
@@ -404,12 +430,13 @@ export default function HotelResultsScreen() {
               coverSource={tempCoverFor(index)}
               favorite={favorites.includes(item.id)}
               citizen={applied.citizen}
-              /* 带上已选日期,一路透传到订房向导 —— 否则选完房日期会跳回默认值 */
+              availableLabel={availableLabel(item)}
+              /* 带上日期一路透传到订房向导 —— 否则选完房日期会跳回默认值;弹性日期取实际可订那段 */
               onPress={(g) =>
                 navigation.navigate('HotelDetail', {
                   propertyId: g.id,
-                  checkIn: range.checkIn,
-                  checkOut: range.checkOut,
+                  checkIn: g.availableCheckIn ?? applied.range.checkIn,
+                  checkOut: g.availableCheckOut ?? applied.range.checkOut,
                 })
               }
               onToggleFavorite={toggleFavorite}
@@ -494,6 +521,7 @@ export default function HotelResultsScreen() {
         onClose={() => setDateOpen(false)}
         onConfirm={(next) => {
           setRange(next);
+          setApplied((a) => ({ ...a, range: next }));
           setDateOpen(false);
         }}
       />

@@ -83,6 +83,9 @@ export interface GoodsItem {
    */
   rating?: number;
   reviewCount?: number;
+  /** 酒店列表带日期搜索时:实际可订的入住/离店日(弹性日期下可能与所选不同) */
+  availableCheckIn?: string;
+  availableCheckOut?: string;
 }
 
 /**
@@ -144,6 +147,8 @@ export interface GoodsSku {
   status: number;
   sort: number;
   /* 房型字段 */
+  /** 详情带日期查询时才有:所选日期内每晚余量的最小值,即最多可订间数 */
+  available?: number;
   room_name?: string;
   bed_type?: string;
   area?: string;
@@ -237,6 +242,8 @@ export interface OrderDetail extends OrderItemData {
   verify_code: string;
   cancel_reason: string;
   remark: string;
+  /** 下单时第 1 步填的特殊要求(商户端预订详情同一字段);没填为空串 */
+  special_requests?: string;
   /**
    * 仅已取消/退款中/已退款的单会带:谁取消的 + 退款单号与金额。
    * `operatorType` 取自 `order_booking_event` 最后一条 `cancelled` 事件

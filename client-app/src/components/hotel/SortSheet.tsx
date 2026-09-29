@@ -16,6 +16,8 @@
  *     文字沿用设计稿的 --text-2。
  *   - Nearest Distance 对应后端 `sortBy=distance`,但要带 lat/lng,client-app 尚未接定位,
  *     没有坐标时后端会静默回退成综合排序 —— 故该项点击走 onUnavailable,不改排序。
+ *   - 再点一次已选中的项 = 取消该排序,回到 mTrip Recommended(默认);
+ *     结果页的 Sort by chip 同时显示当前排序名,两处都能看出/恢复默认(QA CA_TC_056)。
  */
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
@@ -46,7 +48,8 @@ export const SORT_OPTIONS: GoodsSortBy[] = [
   'rating',
 ];
 
-/** i18n 键用驼峰,避免键名里带下划线 */
+/** i18n 键用驼峰,避免键名里带下划线;完整键为 `hotels.results.sort.${sortLabelKey(key)}` */
+export const sortLabelKey = (key: GoodsSortBy) => I18N_KEY[key];
 const I18N_KEY: Record<string, string> = {
   default: 'recommended',
   price_asc: 'priceAsc',
@@ -135,7 +138,10 @@ export default function SortSheet({
             <Pressable
               key={key}
               style={({ pressed }) => [styles.row, pressed && styles.pressed]}
-              onPress={() => (key === 'distance' ? onUnavailable() : onSelect(key))}
+              onPress={() => {
+                if (key === 'distance') onUnavailable();
+                else onSelect(active && key !== 'default' ? 'default' : key);
+              }}
             >
               <HomeIcon
                 name={active ? 'checkboxIndeterminate' : 'checkbox'}

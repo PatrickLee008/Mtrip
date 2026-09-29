@@ -1064,7 +1064,8 @@
           "name": "Bagan Lodge",
           "address": "New Bagan"
         }
-      }
+      },
+      "availableDates": "Available {{from}} – {{to}}"
     },
     "detail": {
       "tabs": {
@@ -1144,7 +1145,8 @@
         "perNight": "/ night",
         "bestseller": "Bestseller",
         "breakfast": "Breakfast",
-        "choose": "Choose"
+        "choose": "Choose",
+        "soldOut": "Sold Out"
       },
       "amenityGroups": {
         "essentials": "Essentials",

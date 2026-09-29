@@ -71,6 +71,11 @@ export interface HotelListParams extends Omit<GoodsListParams, 'goodsType'> {
   roomFeatures?: string;
   /** 城市键任一命中 */
   cities?: string;
+  /** YYYY-MM-DD;入住/离店都带时只返回这段日期有房的物业 */
+  checkIn?: string;
+  checkOut?: string;
+  /** 弹性天数 0~7:整段前后平移这么多天内有房也算,命中日期见 availableCheckIn/Out */
+  flexDays?: number;
 }
 
 export function fetchHotelList(params: HotelListParams): Promise<PageData<GoodsItem>> {
@@ -95,13 +100,17 @@ export interface HotelFacets {
 }
 
 export function fetchHotelFacets(
-  params: Pick<HotelListParams, 'countryCode' | 'cityKey' | 'keyword'>,
+  params: Pick<HotelListParams, 'countryCode' | 'cityKey' | 'keyword' | 'checkIn' | 'checkOut' | 'flexDays'>,
 ): Promise<HotelFacets> {
   return get('/api/v1/app/hotels/filters', { ...params });
 }
 
-export function fetchHotelDetail(propertyId: number): Promise<GoodsDetail> {
-  return get('/api/v1/app/hotels/detail', { propertyId });
+/** 带入住/离店日期时,每个房型额外下发 `available`(这段日期最多还能订几间) */
+export function fetchHotelDetail(
+  propertyId: number,
+  dates?: { checkIn?: string; checkOut?: string },
+): Promise<GoodsDetail> {
+  return get('/api/v1/app/hotels/detail', { propertyId, ...dates });
 }
 
 /**

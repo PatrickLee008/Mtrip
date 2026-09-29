@@ -1064,7 +1064,8 @@
           "name": "Bagan Lodge",
           "address": "ပုဂံသစ်"
         }
-      }
+      },
+      "availableDates": "Available {{from}} – {{to}}"
     },
     "detail": {
       "tabs": {
@@ -1144,7 +1145,8 @@
         "perNight": "/ တစ်ည",
         "bestseller": "အရောင်းရဆုံး",
         "breakfast": "မနက်စာ",
-        "choose": "ရွေးရန်"
+        "choose": "ရွေးရန်",
+        "soldOut": "Sold Out"
       },
       "amenityGroups": {
         "essentials": "မရှိမဖြစ်",

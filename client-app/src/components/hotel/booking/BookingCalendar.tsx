@@ -9,14 +9,17 @@
  *
  * 与设计稿的取舍:
  *   - 设计稿是「Mini Calendar Mockup」(只画了四周),这里按真实月份铺满整月,同 `DatePickerSheet`。
+ *   - 设计稿月份只是一行文字;这里在两侧加翻月箭头(同 `DatePickerSheet` 的 caretLeftSlim),
+ *     否则只能在入住月内选日期,跨月入住/离店无从下手。不能翻到当月之前。
  *   - 首尾格下方那枚 4px 白点(1675:6172)落在白卡上不可见,未实现(同日期选择器的处理)。
  *   - 7 列等宽用像素算,不用百分比 —— RN 的 flexWrap + gap 不会自动扣列间距,会挤到第二行。
  */
 
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { useTranslation } from 'react-i18next';
 
+import HomeIcon from '@/components/home/HomeIcon';
 import { bookingShared } from '@/components/hotel/booking/bookingShared';
 import { PAGE_PADDING, colors } from '@/config/theme';
 import { fonts } from '@/config/typography';
@@ -57,11 +60,19 @@ export default function BookingCalendar({ checkIn, checkOut, onPickDate, lite = 
       ((width - PAGE_PADDING * 2 - (CARD_PADDING + CARD_BORDER) * 2 - GRID_GAP * 6) / 7) * 100,
     ) / 100;
 
-  /** 以入住月为准展示 */
-  const cursor = useMemo(() => {
-    const [y, m] = checkIn.split('-').map(Number);
-    return new Date(y || new Date().getFullYear(), (m || 1) - 1, 1);
+  /** 当前展示的月份(1 号);入住日变了就跟到入住月 */
+  const [cursor, setCursor] = useState(() => monthOf(checkIn));
+  useEffect(() => {
+    setCursor(monthOf(checkIn));
   }, [checkIn]);
+
+  const now = new Date();
+  const atCurrentMonth =
+    cursor.getFullYear() === now.getFullYear() && cursor.getMonth() === now.getMonth();
+  const shiftMonth = (step: number) => {
+    if (step < 0 && atCurrentMonth) return;
+    setCursor((c) => new Date(c.getFullYear(), c.getMonth() + step, 1));
+  };
 
   const weekdays = useMemo(
     () =>
@@ -94,7 +105,24 @@ export default function BookingCalendar({ checkIn, checkOut, onPickDate, lite = 
         <Text style={[styles.headTitle, lite && styles.headTitleLite]}>
           {t('hotels.booking.dates.selectedDates')}
         </Text>
-        <Text style={[styles.headMonth, lite && styles.headMonthLite]}>{monthLabel}</Text>
+        <View style={styles.monthNav}>
+          <Pressable
+            style={({ pressed }) => [styles.monthBtn, atCurrentMonth && styles.monthBtnDisabled, pressed && styles.pressed]}
+            onPress={() => shiftMonth(-1)}
+            disabled={atCurrentMonth}
+            hitSlop={12}
+          >
+            <HomeIcon name="caretLeftSlim" size={lite ? 16 : 12} color={colors.heading} />
+          </Pressable>
+          <Text style={[styles.headMonth, lite && styles.headMonthLite]}>{monthLabel}</Text>
+          <Pressable
+            style={({ pressed }) => [styles.monthBtn, styles.flip, pressed && styles.pressed]}
+            onPress={() => shiftMonth(1)}
+            hitSlop={12}
+          >
+            <HomeIcon name="caretLeftSlim" size={lite ? 16 : 12} color={colors.heading} />
+          </Pressable>
+        </View>
       </View>
 
       <View style={styles.grid}>
@@ -154,6 +182,12 @@ const styles = StyleSheet.create({
   head: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   headTitle: { fontFamily: fonts.interSemi, fontSize: 20, lineHeight: 32, color: colors.heading },
   headMonth: { fontFamily: fonts.interMedium, fontSize: 20, lineHeight: 32, color: colors.heading },
+  monthNav: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  monthBtn: { padding: 4 },
+  monthBtnDisabled: { opacity: 0.3 },
+  /** caretLeftSlim 旋转 180° 当右箭头 */
+  flip: { transform: [{ rotate: '180deg' }] },
+  pressed: { opacity: 0.85 },
 
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: GRID_GAP },
   weekCell: { alignItems: 'center', paddingVertical: 8 },
@@ -186,3 +220,9 @@ const styles = StyleSheet.create({
   dayCellLite: { paddingVertical: 16 },
   dayTextLite: { fontSize: 22, lineHeight: 28 },
 });
+
+/** 日期键所在月的 1 号;空值退回本月 */
+function monthOf(key: string): Date {
+  const [y, m] = key.split('-').map(Number);
+  return y && m ? new Date(y, m - 1, 1) : new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+}

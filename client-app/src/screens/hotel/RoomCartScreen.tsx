@@ -217,6 +217,7 @@ export default function RoomCartScreen() {
                     {/* 加减器 2659:12366 —— 与房型卡共用同一个组件 */}
                     <RoomStepper
                       quantity={item.quantity}
+                      max={item.sku?.available}
                       onIncrease={() => setQuantity(item.roomKey, item.quantity + 1)}
                       onDecrease={() => decrease(item.roomKey, item.quantity)}
                     />

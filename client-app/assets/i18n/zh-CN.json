@@ -1064,7 +1064,8 @@
           "name": "蒲甘小屋酒店",
           "address": "新蒲甘"
         }
-      }
+      },
+      "availableDates": "可订 {{from}} – {{to}}"
     },
     "detail": {
       "tabs": {
@@ -1144,7 +1145,8 @@
         "perNight": "/ 晚",
         "bestseller": "热销",
         "breakfast": "含早餐",
-        "choose": "选择"
+        "choose": "选择",
+        "soldOut": "已售罄"
       },
       "amenityGroups": {
         "essentials": "基础设施",

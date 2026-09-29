@@ -80,6 +80,8 @@ interface Props {
   promo?: CardPromo;
   /** 右下角徽章;不传时按 is_recommend / is_hot 推导 */
   badge?: CardBadge | null;
+  /** 弹性日期搜索时实际可订的日期提示(与所选日期不同才传) */
+  availableLabel?: string;
   onPress: (goods: GoodsItem) => void;
   onToggleFavorite: (goods: GoodsItem) => void;
 }
@@ -92,6 +94,7 @@ export default function HotelResultCard({
   ratingTier,
   promo,
   badge,
+  availableLabel,
   onPress,
   onToggleFavorite,
 }: Props) {
@@ -223,6 +226,15 @@ export default function HotelResultCard({
             <HomeIcon name="location" size={16} color={colors.textSoft} />
             <Text style={styles.address} numberOfLines={1}>
               {goods.address}
+            </Text>
+          </View>
+        ) : null}
+
+        {availableLabel ? (
+          <View style={styles.addressRow}>
+            <HomeIcon name="calendar" size={16} color={colors.primary} />
+            <Text style={styles.available} numberOfLines={1}>
+              {availableLabel}
             </Text>
           </View>
         ) : null}
@@ -361,6 +373,13 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 24,
     color: colors.textSoft,
+  },
+  available: {
+    flex: 1,
+    fontFamily: fonts.interSemi,
+    fontSize: 12,
+    lineHeight: 24,
+    color: colors.primary,
   },
 
   priceRow: {

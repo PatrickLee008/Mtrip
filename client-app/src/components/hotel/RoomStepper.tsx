@@ -11,22 +11,36 @@
  *
  * 减到 0 的处理**交给调用方**:房型卡是直接移出(变回 Choose),
  * 购物车页要先弹确认框(设计稿 Alert Overlay `2659:12483`),两者不能写死在这里。
+ *
+ * `max` = 所选日期内该房型最多可订间数(详情接口 `available`)。到上限时「+」置灰,
+ * 再点只提示「仅剩 N 间」、不回调 —— 两处共用这一份,上限不会一处有一处没有(QA CA_TC_067/070)。
  */
 
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useTranslation } from 'react-i18next';
 
 import { colors, radius } from '@/config/theme';
 import { fonts } from '@/config/typography';
+import { useCommonStore } from '@/store/commonStore';
 
 interface Props {
   quantity: number;
+  /** 最多可订间数;不传则不设上限(没有日期或演示房型) */
+  max?: number;
   onIncrease: () => void;
   /** 点「−」,含 quantity 为 1 的那一下(是移出还是弹确认,由调用方决定) */
   onDecrease: () => void;
 }
 
-export default function RoomStepper({ quantity, onIncrease, onDecrease }: Props) {
+export default function RoomStepper({ quantity, max, onIncrease, onDecrease }: Props) {
+  const { t } = useTranslation();
+  const showToast = useCommonStore((s) => s.showToast);
+  const atMax = max !== undefined && quantity >= max;
+  const increase = () => {
+    if (atMax) showToast(t('hotels.detail.rooms.left', { rooms: max }));
+    else onIncrease();
+  };
   return (
     <View style={styles.stepper}>
       <Pressable
@@ -40,8 +54,8 @@ export default function RoomStepper({ quantity, onIncrease, onDecrease }: Props)
         <Text style={styles.stepValue}>{quantity}</Text>
       </View>
       <Pressable
-        style={({ pressed }) => [styles.stepBtn, pressed && styles.pressed]}
-        onPress={onIncrease}
+        style={({ pressed }) => [styles.stepBtn, atMax && styles.stepBtnDisabled, pressed && styles.pressed]}
+        onPress={increase}
         hitSlop={4}
       >
         <Text style={styles.stepSign}>+</Text>
@@ -52,6 +66,7 @@ export default function RoomStepper({ quantity, onIncrease, onDecrease }: Props)
 
 const styles = StyleSheet.create({
   pressed: { opacity: 0.85 },
+  stepBtnDisabled: { opacity: 0.4 },
 
   stepper: {
     flexDirection: 'row',

@@ -136,6 +136,7 @@ export default function HotelBookingScreen() {
               /* 长住优惠来自 trip/quote 试算(与下单同口径),单房型链路为 0 不显示 */
               longstayDiscount={longstayDiscount}
               refundRules={refundRules}
+              specialRequest={request}
               onEditRooms={() => navigation.navigate('RoomCart')}
               onComingSoon={comingSoon}
               /* 券挪到第 4 步的 COUPONS 卡(稿面 516:2381),复核步不再出现券行 */

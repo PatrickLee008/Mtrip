@@ -113,6 +113,9 @@ function facilityIcon(label: string) {
   return ROOM_FACILITY_ICONS.wifi;
 }
 
+
+/** 余量不超过这个数才在卡片上提示「仅剩 N 间」 */
+const FEW_ROOMS_LEFT = 5;
 export default function HotelRoomsTab({
   onComingSoon,
   onChooseRoom,
@@ -160,7 +163,12 @@ export default function HotelRoomsTab({
                 cover={realRoomCover(room, index)}
                 photoCount={t('hotels.detail.photoCount', { index: Math.min(1, images.length || 1), total: Math.max(1, images.length || 1) })}
                 name={room.room_name ?? `#${room.id}`}
-                leftLabel={room.base_stock > 0 ? t('hotels.detail.rooms.left', { rooms: room.base_stock }) : null}
+                /* 只在真有余量且所剩不多时提示(原先显示的是物理总房量 base_stock,并非剩余) */
+                leftLabel={
+                  room.available !== undefined && room.available > 0 && room.available <= FEW_ROOMS_LEFT
+                    ? t('hotels.detail.rooms.left', { rooms: room.available })
+                    : null
+                }
                 seeDetailsLabel={t('hotels.detail.rooms.seeDetails')}
                 guestsLabel={t('hotels.detail.rooms.guests', { guests: room.max_guests ?? 2 })}
                 bedLabel={room.bed_type || t('hotels.detail.rooms.beds.king')}
@@ -178,6 +186,8 @@ export default function HotelRoomsTab({
                 price={formatMoney(room.base_price, currency)}
                 perNightLabel={t('hotels.detail.rooms.perNight')}
                 selectLabel={t('hotels.detail.rooms.choose')}
+                maxQuantity={room.available}
+                soldOutLabel={t('hotels.detail.rooms.soldOut')}
                 quantity={quantities[`room-${room.id}`] ?? 0}
                 bestsellerLabel={index === 0 ? t('hotels.detail.rooms.bestseller') : null}
                 favorite={false}

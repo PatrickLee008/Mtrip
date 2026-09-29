@@ -90,18 +90,21 @@ export default function HotelDetailScreen() {
   const [loading, setLoading] = useState(Boolean(propertyId));
   const [error, setError] = useState('');
 
+  const detailCheckIn = route.params?.checkIn;
+  const detailCheckOut = route.params?.checkOut;
   const loadDetail = useCallback(async () => {
     if (!propertyId) return;
     setLoading(true);
     try {
-      setDetail(await fetchHotelDetail(propertyId));
+      /* 带上日期:房型下发 available,加减器据此封顶(QA CA_TC_067) */
+      setDetail(await fetchHotelDetail(propertyId, { checkIn: detailCheckIn, checkOut: detailCheckOut }));
       setError('');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Error');
     } finally {
       setLoading(false);
     }
-  }, [propertyId]);
+  }, [propertyId, detailCheckIn, detailCheckOut]);
 
   useEffect(() => {
     void loadDetail();

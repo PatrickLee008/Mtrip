@@ -130,6 +130,7 @@ final class HotelController extends AbstractController
         if ($keyword !== '') {
             $rows = array_values(array_filter($rows, static fn (array $row): bool => str_contains(mb_strtolower($row['property_name'] . ' ' . $row['address']), $keyword)));
         }
+        $rows = $this->availableRows($siteId, $rows);
         $ids = array_column($rows, 'property_id');
         if ($ids === []) return [];
 
@@ -166,6 +167,102 @@ final class HotelController extends AbstractController
         }
         unset($row);
         return $rows;
+    }
+
+    /**
+     * 详情带了 checkIn/checkOut 时,每个房型补 `available`:这段日期最多还能订几间(客户端加减器的上限)。
+     * 不带日期则不补该字段;内部配额字段(base_stock/launch_stock)不下发。
+     */
+    private function withAvailability(int $siteId, int $propertyId, array $rooms): array
+    {
+        $checkIn = $this->strInput('checkIn');
+        $checkOut = $this->strInput('checkOut');
+        $valid = self::isDate($checkIn) && self::isDate($checkOut) && $checkOut > $checkIn;
+        $nights = $valid ? (int) round((strtotime($checkOut) - strtotime($checkIn)) / 86400) : 0;
+        $stocks = $valid && $nights <= 90 ? self::stockMap($siteId, [$propertyId], $checkIn, self::shiftDate($checkOut, -1)) : null;
+        return array_map(static function (array $room) use ($stocks, $checkIn, $nights): array {
+            if ($stocks !== null) $room['available'] = self::minAvailable($room, $stocks, $checkIn, $nights);
+            unset($room['base_stock'], $room['launch_stock']);
+            return $room;
+        }, $rooms);
+    }
+
+    /**
+     * 带了 checkIn/checkOut 时只留有房的物业:任一在售房型在每一晚都有余量即可订。
+     * 余量口径同 calendar():有日库存行取 total-sold-locked(关房为 0),没有则取房型默认配额。
+     * flexDays(0~7)按 0,-1,+1,-2,+2… 的顺序找第一个可订窗口(入住日不早于今天),
+     * 命中的日期写进 availableCheckIn/availableCheckOut,客户端据此提示并带进详情页。
+     */
+    private function availableRows(int $siteId, array $rows): array
+    {
+        $checkIn = $this->strInput('checkIn');
+        $checkOut = $this->strInput('checkOut');
+        if ($rows === [] || ! self::isDate($checkIn) || ! self::isDate($checkOut) || $checkOut <= $checkIn) return $rows;
+        $nights = (int) round((strtotime($checkOut) - strtotime($checkIn)) / 86400);
+        if ($nights > 90) throw new BusinessException(ErrorCode::PARAM_ERROR, '入住晚数不能超过 90');
+        $flex = min(7, max(0, $this->intInput('flexDays')));
+        $today = date('Y-m-d');
+        $offsets = [0];
+        for ($i = 1; $i <= $flex; ++$i) array_push($offsets, -$i, $i);
+        $offsets = array_values(array_filter($offsets, static fn (int $o): bool => self::shiftDate($checkIn, $o) >= $today));
+        if ($offsets === []) return [];
+
+        $ids = array_column($rows, 'property_id');
+        $rooms = Db::table('hotel_room_type')->where('site_id', $siteId)->whereIn('property_id', $ids)
+            ->where('status', 1)->where('publish_status', 2)->where('approved_version', '>', 0)->whereNull('deleted_at')
+            ->get(['id', 'property_id', 'base_stock', 'launch_stock'])->map(static fn ($r) => (array) $r)->all();
+        $stocks = self::stockMap($siteId, $ids, self::shiftDate($checkIn, min($offsets)), self::shiftDate($checkOut, max($offsets) - 1));
+        $byProperty = [];
+        foreach ($rooms as $room) $byProperty[(int) $room['property_id']][] = $room;
+
+        $result = [];
+        foreach ($rows as $row) {
+            foreach ($offsets as $offset) {
+                $start = self::shiftDate($checkIn, $offset);
+                foreach ($byProperty[(int) $row['property_id']] ?? [] as $room) {
+                    if (self::minAvailable($room, $stocks, $start, $nights) < 1) continue;
+                    $result[] = $row + ['availableCheckIn' => $start, 'availableCheckOut' => self::shiftDate($start, $nights)];
+                    continue 3;
+                }
+            }
+        }
+        return $result;
+    }
+
+    /** [房型 id][日期] => 当日可售余量(关房为 0);没有日库存行的日期不在表里,由调用方回落默认配额 */
+    private static function stockMap(int $siteId, array $propertyIds, string $from, string $to): array
+    {
+        $stocks = [];
+        Db::table('goods_daily_stock')->where('site_id', $siteId)->whereIn('property_id', $propertyIds)->where('sku_type', 1)
+            ->whereBetween('stock_date', [$from, $to])->whereNull('deleted_at')
+            ->get(['sku_id', 'stock_date', 'stock_total', 'stock_sold', 'stock_locked', 'is_closed'])
+            ->each(static function ($s) use (&$stocks): void {
+                $stocks[(int) $s->sku_id][(string) $s->stock_date] = (int) $s->is_closed === 1 ? 0
+                    : max(0, (int) $s->stock_total - (int) $s->stock_sold - (int) $s->stock_locked);
+            });
+        return $stocks;
+    }
+
+    /** 房型在 start 起连续 nights 晚里每晚余量的最小值 = 这段日期最多能订几间 */
+    private static function minAvailable(array $room, array $stocks, string $start, int $nights): int
+    {
+        $default = RoomDefaults::stock($room);
+        $min = PHP_INT_MAX;
+        for ($n = 0; $n < $nights; ++$n) {
+            $min = min($min, $stocks[(int) $room['id']][self::shiftDate($start, $n)] ?? $default);
+        }
+        return $min === PHP_INT_MAX ? 0 : $min;
+    }
+
+    private static function isDate(string $value): bool
+    {
+        $time = strtotime($value);
+        return $time !== false && date('Y-m-d', $time) === $value;
+    }
+
+    private static function shiftDate(string $date, int $days): string
+    {
+        return date('Y-m-d', (int) strtotime(sprintf('%s %+d day', $date, $days)));
     }
 
     /**
@@ -212,6 +309,7 @@ final class HotelController extends AbstractController
                 'max_adults', 'max_children', 'max_guests', 'floor_name', 'room_view', 'smoking', 'breakfast', 'meal_plan',
                 'cancellation_policy', 'currency', 'checkin_notes', 'base_price', 'weekend_price', 'extra_bed_price',
                 'images', 'image_gallery', 'video_url', 'facilities', 'panorama', 'vr_tour', 'floor_plan', 'sort',
+                'base_stock', 'launch_stock',
             ])->map(function ($row): array {
                 $room = (array) $row;
                 $room = \App\Service\RoomContentService::unpack($room);
@@ -221,6 +319,7 @@ final class HotelController extends AbstractController
                 $room['room_type_id'] = (int) $room['id'];
                 return $room;
             })->all();
+        $rooms = $this->withAvailability($siteId, $propertyId, $rooms);
         $roomIds = array_column($rooms, 'id');
         $rules = $roomIds === [] ? [] : Db::table('goods_refund_rule')->where('site_id', $siteId)
             ->where('property_id', $propertyId)->where('sku_type', 1)->whereIn('sku_id', $roomIds)

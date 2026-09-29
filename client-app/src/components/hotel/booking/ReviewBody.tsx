@@ -57,6 +57,8 @@ interface Props {
   refundRules?: Array<{ rule_type: number }>;
   /** 顶部酒店卡的名称(新稿把房型卡换成了酒店卡);缺省则不渲染该卡 */
   hotelName?: string;
+  /** 第 1 步填的特殊要求;非空时在入住信息里多一行,下单前让用户确认(QA CA_TC_082) */
+  specialRequest?: string;
 }
 
 export default function ReviewBody({
@@ -68,6 +70,7 @@ export default function ReviewBody({
   roomTotal,
   longstayDiscount = 0,
   refundRules = [],
+  specialRequest = '',
 }: Props) {
   /** 购物车里有房型才走「酒店卡 + Selected Rooms」的新版式 */
   const hasCart = (cartRooms?.length ?? 0) > 0;
@@ -188,6 +191,18 @@ export default function ReviewBody({
                 : stay.rooms,
             }),
           },
+          ...(specialRequest.trim()
+            ? [
+                {
+                  key: 'request',
+                  icon: 'edit' as const,
+                  iconWidth: 18,
+                  iconHeight: 18,
+                  label: t('hotels.booking.dates.specialRequests'),
+                  value: specialRequest.trim(),
+                },
+              ]
+            : []),
         ]}
       />
 

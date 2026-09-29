@@ -70,14 +70,14 @@ export default function HotelDetailLiteScreen() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      setDetail(await fetchHotelDetail(params.id));
+      setDetail(await fetchHotelDetail(params.id, { checkIn: params.checkIn, checkOut: params.checkOut }));
       setError('');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Error');
     } finally {
       setLoading(false);
     }
-  }, [params.id]);
+  }, [params.id, params.checkIn, params.checkOut]);
 
   useEffect(() => {
     void load();
