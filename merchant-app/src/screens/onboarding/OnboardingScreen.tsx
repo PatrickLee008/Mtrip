@@ -70,7 +70,7 @@ export default function OnboardingScreen() {
         </ScrollView>
 
         <View style={[styles.footer, { paddingBottom: 40 + insets.bottom }]}> 
-          <PrimaryButton label={t('onboarding.register')} onPress={() => navigation.navigate('Register')} />
+          <PrimaryButton label={t('onboarding.register')} onPress={() => navigation.navigate('RegisterContact')} />
           <Pressable
             style={({ pressed }) => [styles.loginLink, pressed && styles.pressed]}
             onPress={() => navigation.navigate('Login')}

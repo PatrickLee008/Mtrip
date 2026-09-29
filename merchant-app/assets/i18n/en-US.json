@@ -1,8 +1,7 @@
 {
   "common": {
     "success": "Success",
-    "networkError": "Network error, please try again",
-    "comingSoon": "Coming soon"
+    "networkError": "Network error, please try again"
   },
   "onboarding": {
     "title": "Become Our Partner",
@@ -46,10 +45,22 @@
     "back": "Back",
     "step": "Step {{current}}/{{total}}",
     "next": "Next",
+    "contactInfo": {
+      "title": "Contact Info",
+      "subtitle": "Start by providing your contact information.",
+      "mobile": "Mobile Number",
+      "email": "Email",
+      "emailPlaceholder": "contact@property.com",
+      "required": "Enter your mobile number and email"
+    },
     "companyInfo": {
       "title": "Company Info",
       "subtitle": "Start by providing your company information.",
       "businessCount": "Number of Business",
+      "businessCountOption": {
+        "one": "{{count}} Business",
+        "many": "{{count}} Businesses"
+      },
       "companyName": "Company / Group Name",
       "companyNamePlaceholder": "e.g., Grand Royal Group"
     },
@@ -59,6 +70,13 @@
       "cardTitle": "Business {{index}} Details",
       "businessType": "Business Type",
       "selectType": "Select Type",
+      "businessTypeOptions": {
+        "hotel": "Hotel",
+        "car_rental": "Car Rental",
+        "restaurant": "Restaurant",
+        "airline": "Airline",
+        "attraction": "Attraction"
+      },
       "contactPerson": "Contact Person",
       "contactPlaceholder": "Owner or Manager Name",
       "mobile": "Mobile Number",
@@ -70,7 +88,11 @@
       "termsAnd": " and ",
       "privacy": "Privacy Policy",
       "termsAfter": " of mTrip Merchant.",
-      "submit": "Submit"
+      "submit": "Submit",
+      "submitting": "Submitting...",
+      "submitFailed": "Registration submission failed",
+      "required": "Complete the contact person, mobile, email and company name",
+      "sessionExpired": "Your registration session expired, please verify the OTP again"
     }
   }
 }

@@ -36,7 +36,15 @@
 - [x] 文件存储配置 CRUD(S3/R2/本地,AES 加密+脱敏)+ 文件库管理
 - [x] 支付渠道配置 CRUD(Stripe/PayPal,批量复制到其他站点)
 - [x] 短信渠道 + 模板管理 + 发送日志(手机号解密后脱敏回显)
+- [x] 邮件 SMTP 渠道 + 投递日志(用户名/密码 AES 加密、返回脱敏)
 - [x] 地图服务配置 CRUD(Google Maps,按站点 upsert)
+
+> **163 邮箱端口约束(2026-09-24 实测)**：`smtp.163.com` **不提供 587 端口** —— TCP 可建连但服务器
+> 从不返回 `220` 问候语，`SmtpClient::expect()` 的 `fgets` 读不到任何行，直到 `timeout`(默认 15s)
+> 抛 `SMTP response timeout`。163 可用端口是 **25 / 465(SSL) / 994(SSL)**，推荐 **465 + `ssl`**。
+> 后台表单 `smtpPort` 默认 `587` 只是通用 SMTP 默认值，**不适用于 163**，配 163 站点时须显式改。
+> 另：`EmailController` 只有渠道 CRUD + 投递日志，**没有后台自测发送入口**，验证需在容器内手工
+> 走「读 `sys_email_channel`(status=1) → `CryptoHelper::decrypt` → `SmtpClient::send`」。
 
 ### 模块12~14 客户端鉴权
 - [x] 客户端密钥管理:CRUD、生成 ClientId/Secret、重置密钥、绑定权限模板、启停、调用统计(明文 Secret 仅创建/重置返回一次)

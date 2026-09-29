@@ -1,6 +1,7 @@
 export type RootStackParamList = {
   Onboarding: undefined;
   Login: undefined;
+  RegisterContact: undefined;
   Register: undefined;
   RegisterBusinessDetails: undefined;
   RegisterVerification: undefined;

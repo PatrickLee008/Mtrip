@@ -159,6 +159,84 @@ shared 单测 99/99(容器内跑,需挂整个 backend 目录);前端 `tsc` 通�
 
 **下一步**:第七节 C(Trip 钱包支付补 `finance_flow` 收入流水 + 各预订统一用 Trip 流水号)改动小可先做;D(payment-service 真实支付单)与原 P1「部分失败」绑做;E(逐预订确认通知)。
 
+### ★ 2026-09-24 邮件 SMTP 渠道连通性实测（仅运行时配置，无代码改动）
+
+**问题**：后台新增的 Email SMTP Channel 实发失败，`SmtpClient` 恒返 `SMTP response timeout`。
+
+**根因**：渠道按后台表单默认值配成 `smtp.163.com:587/tls`，而 **163 邮箱不提供 587 端口** —— 该端口
+TCP 能建连但服务器从不返回 `220` 问候语，`SmtpClient::expect()` 里的 `fgets` 读不到任何行，一直等到
+`timeout`(默认 15s) 抛错。**不是凭据问题**：渠道内 AES 加密的用户名/密码解密正常
+（`13768615461@163.com`，授权码 16 位）。
+
+**验证**：同一套凭据换端口逐一实测 —— `465/ssl` accepted、`994/ssl` accepted、`25/tls` accepted；
+`587` 在任何加密口径下都超时。另用裸 socket 核对：`25/465/994` 均立即返回
+`220 163.com Anti-spam GT for Coremail System` 且在 EHLO 里通告 `AUTH LOGIN PLAIN XOAUTH2` /
+`STARTTLS`，`587` 只有连接、没有 banner。
+
+**处置**：渠道 #1（site 0）由 `587/tls` 改为 `465/ssl`，其余字段未动（`smtp_port`/`encryption`
+均非加密列，不触碰用户名密码）；随后按应用真实调用链（查 `sys_email_channel` where `status=1`
+→ `CryptoHelper::decrypt` → `SmtpClient::send`）实发复验 `OK accepted`（0.30s），测试邮件已投递
+`229041307@qq.com`。
+
+**结论 / 遗留**：① 163 邮箱只能用 **25 / 465 / 994**，后台 `smtpPort` 默认 `587` 是通用 SMTP 默认值，
+**不适用于 163**，后续接入 163 的站点别再踩；② 邮件渠道**没有后台自测发送入口**
+（`EmailController` 只有渠道 CRUD + 投递日志），每次验证都得进容器手工跑脚本，建议后续补
+`POST /sys/email/channel/test-send` + 前端按钮（须三处对齐 `config:email:*` 权限键）；
+③ Google/SMS 真实提供商仍未联调，`audits/2026-09-15-merchant-onboarding-stage5.md` 里
+「未确认可用 SMTP 凭证」的结论现在**只对 SMS 成立**。
+
+### ★ 2026-09-23 商户移动端 merchant-app 入驻流程按 Figma SECTION `2685:22241` 收敛（静态界面）
+
+**范围**：对照 Figma `mTrip_Merchant` SECTION `2685:22241`「Register & New Acc Login Flow」的 22 屏逐屏核对 `merchant-app` 现状，只补齐/对齐界面与导航顺序，**不新增业务逻辑**；用户确认按「补齐缺口 + 对齐已有屏」+「按 Figma 改 5 步」+「Business Type 加回静态占位」执行。
+
+**代码（全部在 `merchant-app/`，未动后端与其他端）**：
+
+- 新增 `src/screens/auth/RegisterContactScreen.tsx`（Step 1/5 Contact Info，Figma `2331:21717` / 组件 `2326:21552`）：`+95` 手机号 + 邮箱两个浮动标签字段，校验后写注册草稿再进渠道选择。
+- 注册导航改为稿面 5 步：`Onboarding → RegisterContact(1/5) → RegisterVerification(2/5) → RegisterOtp(3/5) → Register(4/5 Company Info) → RegisterBusinessDetails(5/5) → RegistrationReview`；进度条统一 `current/total`（20/40/60/80/100%），修正原先 Company Info `1/4`、Business Details `2/4` 与 Verify/OTP `3/4`、`4/4` 的口径。`navigation/types.ts` + `navigation/index.tsx` 增 `RegisterContact`，`OnboardingScreen` 的 Register Now 改指向它。
+- 新增共用件 `src/components/onboarding/RegistrationForm.tsx`（`RegistrationScaffold` / `FloatingField` / `FieldInput` / `SelectField` / `PhoneField`），三个注册步骤页共用；`RegisterScreen`、`RegisterBusinessDetailsScreen` 删除各自重复的页面壳与图标，字段高度统一为稿面的 54、浮动标签 12px（Business Details 原为 40/10px）。合计 -530 / +379 行。
+- Business Details 按稿**加回 `Business Type *`**（Select Type 占位，点击只 toast），并移除稿面没有的「I agree to Terms & Conditions and Privacy Policy」勾选行——条款改由 KYC 阶段弹窗承担。
+- KYC 文档页（`839:6160` / `839:6192`）对齐：标题改 Outfit Bold 24、补「Upload required documents for **all 1 properties** to proceed.」段、告警盒换稿面文案、文档卡改「编号徽章 + Business N Documents + PDF/JPG/PNG」卡头与「圆形图标 + REQUIRED 红标 + 上传按钮 / 已传绿底 + 文件名 + 勾选徽章 + Replace」虚线行。
+- `MerchantFlowComponents.tsx` 新增 `SignatureCard` / `TermsModal` / `SignatureModal`：KYC 页底部 E-Signature 卡未签为白卡 + `Sign Now`、签后转绿 + `Signed`；`Sign Now → Terms & Conditions（logo + 两节条款 + Accept & Continue / Cancel）→ E-Signature（230 高虚线签名框 + Clear / Confirm Signature）`，`Submit to Admin` 增加 `signed` 门禁。签名框按要求**只还原视觉，未实现手写绘制**。
+- Enter Code 页帮助行按稿改为「刷新图标 + 4:58」与下划线 `Resend Code?`。
+- i18n 三语言补 `register.contactInfo.*` 与 `register.businessDetails.{submitting,submitFailed,required,sessionExpired}`。
+- **唯一功能位移**：`apiApplicationSave` / `apiApplicationSubmit` 从 OTP 页移到最后一屏 Business Details 的 Submit —— 重排后 OTP 阶段还没有公司信息，留在原处会提交空公司名；OTP 页只保留验证并保存 registration token。
+
+**已知偏差 / 静态兜底**：① 后端是申请级统一 KYC 清单、无业务分组，故文档卡固定渲染 1 张（稿面为 Business 1 / Business 2 两张）；② `+95` 国家码按稿为静态，未做区号选择；③ 无注册 token 时 KYC 页渲染 `FIGMA_SAMPLE_DOCUMENTS` 样张三份材料做静态走查，常量已标注接 API 后删除。
+
+**验证**：`cd merchant-app && npx tsc --noEmit` 通过；`npx expo export -p web` 通过且 `dist` 已删除。另用一次性 CDP 脚本（Chrome `--headless=new` + `Emulation.setDeviceMetricsOverride` 390×844 @2x，macOS 上 `--window-size` 会被夹到 500 宽，不可直接用）对 5 个注册步骤页 + KYC 文档页 + Terms 弹窗 + E-Signature 弹窗 + 签后绿卡共 9 个状态逐屏截图核对；脚本与截图放在 `/tmp`，**未入库**。
+
+**下一步**：① KYC 文档卡是否恢复按业务分组，取决于后端统一清单是否再引入属性维度；② 若产品确认需要手写签名，再引入绘制并接后端签署存证；③ M9-M12 Access Code、首次扫码 Authenticator 绑定、2FA 校验/退出与端侧生物识别仍未真实联动（沿用 2026-09-10 结论）。
+
+**走查修复**：用户走查连报三处，均已修。
+
+① `Verify Account`（Step 2/5）与 `Enter Code`（Step 3/5）顶部盾牌圆形图标贴左未居中。根因：`IconBubble` 是 `WhiteStepScaffold` 内容列（`whiteContent`，默认 `alignItems: stretch`）的直接子元素，而 Figma 这两页的内容列 `EL-cace00dd` 是 `alignItems: center`；标题组件自带居中所以只有图标偏。修复：`MerchantFlowComponents` 的 `iconBubble` 加 `alignSelf: 'center'`（`IconBubble` 全仓仅这两处调用且都是 hero 图标，一处修复两页生效）；**没有**改 `WhiteStepScaffold` —— KYC 文档页用的是 `EL-8c95bf53`（`alignItems: stretch`），全局居中会把它带偏。
+
+② `Verify Account` 渠道卡片的圆形图标框**选中/未选中配色不切换**。根因：`Option` 把图标底色写死按渠道类型区分（`icon === 'mail'` → teal light、SMS 恒白底），与 `selected` 无关，所以点选只换了卡片底色和描边。按 Figma 组件 `344:827`（选中）/ `344:856`（未选中）改为按 `selected` 取：**选中**卡片 teal light + Info Blue 2px 描边 / 图标底白 / 图标主色；**未选中**卡片白 + Slate 200 2px 描边 / 图标底 teal light / 图标 Slate 900（`optionIconSelected` / `optionIconIdle`，并给 `SimpleIcon` 传色）；删掉按渠道写死的 `optionIconMail`。
+
+③ 该页**默认渠道应为 SMS**，原为 Email。根因：`useState<RegistrationChannel>('email')` + 拉到渠道后无条件 `setMethod(next[0])`，站点返回顺序 email 在前即默认 Email。改为初始 `'sms'`，并在拿到站点启用渠道后 `setMethod((current) => (next.includes(current) ? current : next[0] ?? current))` —— SMS 可用则保持 SMS，站点未启用短信才回退到后端第一个可用渠道（不写死必然 SMS，避免选到不可用渠道）。
+
+复验：`tsc --noEmit` + `expo export -p web` 通过（`dist` 已清理）；CDP 390×844 截图确认图标居中、默认 SMS 选中 + Email 未选中（两卡配色相反）、点 Email 后配色对调。
+
+④ 用户报「点 Send OTP 返回**参数 phone 不能为空**」。这是 **App 与后端的真实契约不一致**，不是新引入的问题：
+
+- **后端契约**（`backend/services/merchant-service/app/Controller/App/Merchant/RegistrationController.php`）：`sendOtp` = `phone` + `email` + `otpChannel`；`verifyOtp` 再要 `otpCode`。手机号与邮箱**都必须传**——`MerchantRegistrationOtpService::send/verify` 会 `validateContacts()` 并用两者哈希做「联系方式与验证码请求一致」校验，所以只传渠道和收件方（连 email 渠道）都会在 `requireStr('phone')` 处直接失败。
+- **App 侧**（`src/api/merchant.ts`）：原为 `apiRegistrationOtpSend(channel, recipient)` → body `{channel, recipient}`。已改为 `apiRegistrationOtpSend(phone, email, otpChannel)` / `apiRegistrationOtpVerify(phone, email, otpChannel, otpCode)`；`src/api/types.ts` 的 `RegistrationOtpResult` 补 `testMode`、`RegistrationVerifyResult` 补 `applicationId`（后端实际返回）。Step 3 用草稿里的 `business.contactPhone` / `business.contactEmail` 一起提交。
+- **按用户要求加静态原型开关**（原话「可以先跳过真实校验，我需要静态可操作」）：`src/config/env.ts` 新增 `ONBOARDING_PROTOTYPE`，由 `EXPO_PUBLIC_ONBOARDING_PROTOTYPE` 控制、默认 `true`（`.env` 与 `.env.example` 各加一行）。打开时注册 5 步与 KYC 页不调后端：Verify Account 不请求 `/register/config`、渠道列表为空时按稿面同时展示 SMS 与 Email、Send OTP 用本地联系方式（缺失则用稿面示例值）直接进 Step 3；Enter Code 任意 6 位即通过；Business Details Submit 校验必填后直接进审核页；审核页（注册/KYC 两态）按已通过渲染保证按钮可点；KYC 文档行点击即本地标记已上传、Submit to Admin 直接进 KYC 审核页。
+- **刻意不做「失败即降级」**：开关关掉（`EXPO_PUBLIC_ONBOARDING_PROTOTYPE=false`）就是 100% 真实链路，没有静默回退，避免联调期把接口错误吞掉。**联调前必须把它置 false**。
+- 复验：`tsc --noEmit` + `expo export -p web` 通过（`dist` 已清理）；CDP 390×844 **从引导首屏真点一遍**直到 KYC 审核页全链路通过（含 Send OTP 成功进入 Enter Code、Submit to Admin 容器 opacity=1 可点）。
+
+⑤ 用户报 `Enter Code` 的 OTP 占位符 `- - - - - -` 贴左未居中。**根因是 RNW 的坑，不是缺样式**：`textAlign` 原先写在 **prop** 上，而 `react-native-web/dist/exports/TextInput/index.js` 的 `forwardPropsList` 里没有 `textAlign`，`pickProps()` 会把它过滤掉、永远到不了 DOM；RN 原生 `TextInput.d.ts` 又把 `textAlign` 列为合法 prop，所以 `tsc` 不报错 —— **原生端生效、Web 端静默失效**。修复：把 `textAlign: 'center'` 移入 `styles.otpInput`（style 两端都生效），并把 `paddingHorizontal: 18` 拆成 `paddingRight: 18` + `paddingLeft: 26`，多出的 8px 抵消 `letterSpacing: 8` 尾部字距造成的约 4px 左偏。`TwoFaVerifyScreen` 与注册 OTP 共用 `OtpInput`，一处修复两页生效。复验：CDP 实测 `getComputedStyle(input).textAlign === 'center'`、输入框中心 195 = 390/2，截图确认占位符与已输入数字都居中。**通用坑**：RNW 下 `<TextInput>`/`<Text>` 的居中、阴影、字体等必须走 style，走 prop 会被静默丢弃。
+
+⑥ 用户报「Number of Business 点击弹 Coming Soon，取消掉」。按确认方案把**三个下拉都做成可用选择**（未臆造选项）：
+
+- 新增通用底部面板 `SelectSheet`（`MerchantFlowComponents.tsx`），三个下拉共用：标题 + 当前项打勾 + Cancel + 超长滚动。
+- 新增 `src/config/onboardingOptions.ts`。**Business Type 必须与后端枚举一致**：`MerchantAppOnboardingService::BUSINESS_TYPES = ['hotel','car_rental','restaurant','airline','attraction']`（**5 个**）；merchant-web 语言包里有第 6 个 `other`，后端不接受，照抄会被 `application/save` 以「businessType 不受支持」拒绝。**City 取自仓库既有种子** `database/merchant/14-merchant-ranking.sql` 的 `ranking_destination`（8 条目的地），后端 `city` 本身是自由文本无字典表。
+- `registrationStore` 加 `businessCount` + `business.businessType`；Number of Business 的选择决定 Step 5 渲染几张业务卡片，与后端 `num_businesses = count(businesses)` 口径一致。第 1 张卡绑注册草稿，第 2..N 张静态阶段只在本页本地状态，提交时一起拼进 `businesses[]`（后端 `save` 本就按数组逐条落库）；Submit 现在校验每一张卡的必填项，真实链路 payload 补上 `businessType`。
+- i18n：**复数按仓库既有写法**——本项目 `compatibilityJSON: 'v3'`，用 `one`/`many` 嵌套键手工挑（与 client-app `roomsValue` 同处理），**不要**用 i18next 的 `_one`/`_other` 后缀（第一版误用，界面直接显示原始 key）。`common.comingSoon` 已无引用，三语言一并删除。
+- 复验：`tsc --noEmit` + `expo export -p web` 通过（`dist` 已清理）；CDP 390×844 实测 Number of Business → 选 `3 Businesses` → Step 5 出现 Business 1/2/3 三张卡，Business Type 列出后端 5 个枚举并选中 `Hotel`，City 选中 `Mandalay` 回显正常。
+
+⑦ 用户报「Company Info 的 Next 按钮背景色不对（填完公司名仍发淡）」。根因是 **2026-09-08 留下的 hack**：该页脚按钮无条件叠加 `opacity: 0.4`（`styles.nextDisabledLook`）。澄清一下 Figma：那个 0.4 **不是无条件样式**——页脚按钮组件 `EL-690831d9` 自身 `opacity: 0.4`，而 Company Info / Business Details / Verification contact 三个画板的字段都还是 placeholder（未填）态，所以稿面呈现的是「未填完的淡色」。已删除该无条件覆盖，使这一屏与同流程的 Contact Info `Next`、Business Details `Submit` 一致（实色 `#0D9488`），必填校验继续走原 toast。复验：CDP 实测 `rgb(13,148,136)` + `opacity: 1`，空表单与填完两态一致。**若日后要还原稿面「未填完淡色」**，正确做法是按校验结果驱动 `PrimaryButton` 的 `disabled`（内置 `disabled: { opacity: 0.4 }`），而不是硬编码透明度；但那要 Contact Info 一起改才不至于两屏不一致，本轮未做。
+
 ### ★ 2026-09-23 auto-deploy.sh 发布阻断修复 + mtrip-ops 自动部署接入 DB 迁移
 
 **修的缺陷(生产 cron 报错)**:`auto-deploy.sh` 拦下 `database/marketing/09-merchant-promotion-rules.sql`——

@@ -69,8 +69,9 @@ export interface MenusResult {
 
 export type RegistrationChannel = 'email' | 'sms';
 export interface RegistrationChannelOption { channel: RegistrationChannel; label: string; }
-export interface RegistrationOtpResult { expiresIn: number; resendAfter: number; pinLength: number; recipient: string; channel: RegistrationChannel; }
-export interface RegistrationVerifyResult { registrationToken: string; expiresIn: number; }
+/** 后端 `register/otp-send` 返回:手机号与邮箱都必传,recipient 为后端脱敏后的实际收件方。 */
+export interface RegistrationOtpResult { expiresIn: number; resendAfter: number; pinLength: number; recipient: string; channel: RegistrationChannel; testMode: boolean; }
+export interface RegistrationVerifyResult { registrationToken: string; applicationId: number; expiresIn: number; }
 export interface ApplicationStatus { applicationId: number; appNo: string; stage: number; status: string; canUploadKyc: boolean; canSubmitKyc: boolean; rejectReasonCode: number; rejectNote: string; }
 export interface KycDocument { id: number; docType: string; name: string; required: boolean; fileUrl: string; fileSize: string; }
 export interface KycRequirements { applicationId: number; stage: number; documents: KycDocument[]; }

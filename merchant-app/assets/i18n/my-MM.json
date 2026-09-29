@@ -1,8 +1,7 @@
 {
   "common": {
     "success": "အောင်မြင်ပါသည်",
-    "networkError": "ကွန်ရက်အမှား ဖြစ်နေပါသည်",
-    "comingSoon": "မကြာမီ ရရှိနိုင်ပါမည်"
+    "networkError": "ကွန်ရက်အမှား ဖြစ်နေပါသည်"
   },
   "onboarding": {
     "title": "ကျွန်ုပ်တို့၏ ပါတနာ ဖြစ်လာပါ",
@@ -46,10 +45,22 @@
     "back": "နောက်သို့",
     "step": "အဆင့် {{current}}/{{total}}",
     "next": "နောက်တစ်ဆင့်",
+    "contactInfo": {
+      "title": "ဆက်သွယ်ရန် အချက်အလက်",
+      "subtitle": "သင့်ဆက်သွယ်ရန် အချက်အလက်များကို အရင်ဖြည့်ပါ။",
+      "mobile": "မိုဘိုင်းနံပါတ်",
+      "email": "အီးမေးလ်",
+      "emailPlaceholder": "contact@property.com",
+      "required": "မိုဘိုင်းနံပါတ်နှင့် အီးမေးလ် ဖြည့်ပါ"
+    },
     "companyInfo": {
       "title": "ကုမ္ပဏီ အချက်အလက်",
       "subtitle": "သင့်ကုမ္ပဏီ အချက်အလက်များဖြင့် စတင်ပါ။",
       "businessCount": "လုပ်ငန်း အရေအတွက်",
+      "businessCountOption": {
+        "one": "လုပ်ငန်း {{count}} ခု",
+        "many": "လုပ်ငန်း {{count}} ခု"
+      },
       "companyName": "ကုမ္ပဏီ / အုပ်စု အမည်",
       "companyNamePlaceholder": "ဥပမာ Grand Royal Group"
     },
@@ -59,6 +70,13 @@
       "cardTitle": "လုပ်ငန်း {{index}} အသေးစိတ်",
       "businessType": "လုပ်ငန်းအမျိုးအစား",
       "selectType": "အမျိုးအစား ရွေးပါ",
+      "businessTypeOptions": {
+        "hotel": "ဟိုတယ်",
+        "car_rental": "ကားငှားရမ်းခြင်း",
+        "restaurant": "စားသောက်ဆိုင်",
+        "airline": "လေကြောင်းလိုင်း",
+        "attraction": "ခရီးသွားနေရာ"
+      },
       "contactPerson": "ဆက်သွယ်ရန်သူ",
       "contactPlaceholder": "ပိုင်ရှင် သို့မဟုတ် မန်နေဂျာအမည်",
       "mobile": "ဖုန်းနံပါတ်",
@@ -70,7 +88,11 @@
       "termsAnd": " နှင့် ",
       "privacy": "ကိုယ်ရေးအချက်အလက် မူဝါဒ",
       "termsAfter": " ကို သဘောတူပါသည်။",
-      "submit": "တင်သွင်းရန်"
+      "submit": "တင်သွင်းရန်",
+      "submitting": "တင်သွင်းနေသည်...",
+      "submitFailed": "မှတ်ပုံတင်တင်သွင်းမှု မအောင်မြင်ပါ",
+      "required": "ဆက်သွယ်ရန်ပုဂ္ဂိုလ်၊ မိုဘိုင်း၊ အီးမေးလ်နှင့် ကုမ္ပဏီအမည် ဖြည့်ပါ",
+      "sessionExpired": "မှတ်ပုံတင် session သက်တမ်းကုန်ပါပြီ၊ OTP ပြန်စစ်ပါ"
     }
   }
 }

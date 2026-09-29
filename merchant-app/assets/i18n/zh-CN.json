@@ -1,8 +1,7 @@
 {
   "common": {
     "success": "操作成功",
-    "networkError": "网络异常，请稍后重试",
-    "comingSoon": "即将开放"
+    "networkError": "网络异常，请稍后重试"
   },
   "onboarding": {
     "title": "成为我们的合作伙伴",
@@ -46,10 +45,22 @@
     "back": "返回",
     "step": "第 {{current}}/{{total}} 步",
     "next": "下一步",
+    "contactInfo": {
+      "title": "联系人信息",
+      "subtitle": "请先填写您的联系方式。",
+      "mobile": "手机号",
+      "email": "邮箱",
+      "emailPlaceholder": "contact@property.com",
+      "required": "请填写手机号和邮箱"
+    },
     "companyInfo": {
       "title": "公司信息",
       "subtitle": "请先填写您的公司信息。",
       "businessCount": "业务数量",
+      "businessCountOption": {
+        "one": "{{count}} 个业务主体",
+        "many": "{{count}} 个业务主体"
+      },
       "companyName": "公司 / 集团名称",
       "companyNamePlaceholder": "例如：Grand Royal Group"
     },
@@ -59,6 +70,13 @@
       "cardTitle": "业务 {{index}} 详情",
       "businessType": "业务类型",
       "selectType": "请选择类型",
+      "businessTypeOptions": {
+        "hotel": "酒店",
+        "car_rental": "租车",
+        "restaurant": "餐厅",
+        "airline": "航空公司",
+        "attraction": "景点"
+      },
       "contactPerson": "联系人",
       "contactPlaceholder": "业主或经理姓名",
       "mobile": "手机号码",
@@ -70,7 +88,11 @@
       "termsAnd": " 和 ",
       "privacy": "隐私政策",
       "termsAfter": "。",
-      "submit": "提交"
+      "submit": "提交",
+      "submitting": "提交中...",
+      "submitFailed": "注册提交失败",
+      "required": "请补全联系人、手机号、邮箱和公司名称",
+      "sessionExpired": "注册会话已过期，请重新验证 OTP"
     }
   }
 }
