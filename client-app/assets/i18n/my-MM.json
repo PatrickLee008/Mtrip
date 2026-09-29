@@ -765,7 +765,13 @@
       "expireDatePlaceholder": "သက်တမ်းကုန်ဆုံးရက် ရွေးပါ",
       "setDefault": "မူလ ခရီးသွားအဖြစ် သတ်မှတ်ရန်",
       "nameRequired": "အမည်နှင့် မျိုးနွယ်အမည် နှစ်ခုလုံး ဖြည့်ပါ။",
-      "idNoRequired": "မှတ်ပုံတင် နံပါတ် ဖြည့်ပါ။"
+      "idNoRequired": "မှတ်ပုံတင် နံပါတ် ဖြည့်ပါ။",
+      "idNoPlaceholderNrc": "e.g. 12/OoKaMa(N)123456",
+      "idNoPlaceholderPassport": "e.g. MA1234567",
+      "idNoPlaceholderOther": "Enter the ID number",
+      "idNoInvalidNrc": "Invalid NRC format. Example: 12/OoKaMa(N)123456",
+      "idNoInvalidPassport": "Invalid passport number. Use 6-9 letters and digits.",
+      "idNoInvalidOther": "Invalid ID number. Use 4-30 letters, digits, \"-\" or \"/\"."
     },
     "editEmail": {
       "title": "အီးမေးလ်ပြင်ရန်",
@@ -1419,7 +1425,10 @@
         "secureTitle": "လုံခြုံသော ဘွတ်ကင်",
         "secureDesc": "သင့်အချက်အလက်များကို စာဝှက်ထားပြီး ဘွတ်ကင်အတွက်သာ အသုံးပြုပါသည်။ ကျွန်ုပ်တို့ မည်သည့်အခါမျှ မရောင်းချပါ။",
         "nameRequired": "ပင်မ ဧည့်သည်၏ အမည်ကို ဖြည့်စွက်ပါ။",
-        "phoneRequired": "ဆက်သွယ်ရန် ဖုန်းနံပါတ် ဖြည့်ပါ။"
+        "phoneRequired": "ဆက်သွယ်ရန် ဖုန်းနံပါတ် ဖြည့်ပါ။",
+        "phoneInvalid": "Please enter a valid mobile number.",
+        "emailRequired": "Please fill in the email address.",
+        "emailInvalid": "Please enter a valid email address."
       },
       "review": {
         "preferred": "အထူးရွေးချယ်",

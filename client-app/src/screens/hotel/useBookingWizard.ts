@@ -52,6 +52,7 @@ import { useSiteStore } from '@/store/siteStore';
 import { useUserStore } from '@/store/userStore';
 import type { CouponView, RefundRule } from '@/types/models';
 import { formatMoney } from '@/utils/format';
+import { isContactMobile, isEmail } from '@/utils/validate';
 
 /** 设计稿写死「还能再加 2 位同行人」 */
 export const ADDITIONAL_QUOTA = 2;
@@ -82,6 +83,11 @@ interface Options {
    * 不关掉的话会在关怀模式下悄悄按车里的内容下单。
    */
   useCart?: boolean;
+  /**
+   * 邮箱是否选填。完整模式表单把邮箱标了必填(确认函发往该邮箱);
+   * 关怀模式新稿把邮箱收成可展开的选填项,传 true。填了的话两边都校验格式。
+   */
+  emailOptional?: boolean;
 }
 
 /**
@@ -127,6 +133,7 @@ export function useBookingWizard({
   enableMultiStay = true,
   steps,
   confirmLogin = false,
+  emailOptional = false,
   useCart = true,
 }: Options) {
   const { t, i18n } = useTranslation();
@@ -592,7 +599,8 @@ export function useBookingWizard({
       return;
     }
     const contactName = `${form.firstName.trim()} ${form.lastName.trim()}`.trim();
-    const contactPhone = form.phone.trim();
+    /* 用户可能按占位符「9 123 4567」带空格输入,入库前去掉 */
+    const contactPhone = form.phone.replace(/[\s-]/g, '');
     if (!contactPhone) {
       showToast(t('hotels.booking.guests.phoneRequired'));
       return;
@@ -751,15 +759,30 @@ export function useBookingWizard({
       showToast(t('hotels.booking.dates.checkOutRequired'));
       return;
     }
+    /**
+     * 旅客信息:名、姓、手机、邮箱在表单上都标了 *,这里逐项拦(QA CA_TC_084 —— 原先只要名/姓填一个、
+     * 且只在真实模式查手机是否为空,不填手机和邮箱也能继续)。手机与注册页同一套宽校验
+     * (多国号码),邮箱在关怀模式是选填,填了才校验格式。
+     */
     if (step === 'guests') {
-      if (!form.firstName.trim() && !form.lastName.trim()) {
+      if (!form.firstName.trim() || !form.lastName.trim()) {
         showToast(t('hotels.booking.guests.nameRequired'));
         return;
       }
-      /* 手机号按设计稿是选填,但后端 create 的 contactPhone 必填 —— 真实模式在这一步就拦下,
-         不拖到支付步才报错 */
-      if (!current.demo && !form.phone.trim()) {
+      if (!form.phone.trim()) {
         showToast(t('hotels.booking.guests.phoneRequired'));
+        return;
+      }
+      if (!isContactMobile(form.phone)) {
+        showToast(t('hotels.booking.guests.phoneInvalid'));
+        return;
+      }
+      if (!emailOptional && !form.email.trim()) {
+        showToast(t('hotels.booking.guests.emailRequired'));
+        return;
+      }
+      if (form.email.trim() && !isEmail(form.email)) {
+        showToast(t('hotels.booking.guests.emailInvalid'));
         return;
       }
     }

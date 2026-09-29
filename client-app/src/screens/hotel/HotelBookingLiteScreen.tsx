@@ -102,6 +102,8 @@ export default function HotelBookingLiteScreen() {
     enableMultiStay: false,
     steps: ['guests', 'payment'],
     confirmLogin: true,
+    /* 新稿邮箱是可展开的选填项,填了才校验格式 */
+    emailOptional: true,
     /* 关怀模式只订一间:车里可能还留着完整模式挑的房,不能拿来替它下单 */
     useCart: false,
   });

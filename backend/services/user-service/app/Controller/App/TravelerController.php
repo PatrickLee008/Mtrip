@@ -66,6 +66,11 @@ class TravelerController extends AbstractController
         $id = $this->requireId();
         $this->ownTraveler($id);
         $data = $this->collect(true);
+        /* 换了证件类型却没重填证件号:旧号码会挂在新类型下,拒绝 */
+        $oldType = (int) Db::table('user_traveler')->where('id', $id)->value('id_type');
+        if (! isset($data['id_no']) && $oldType !== $data['id_type']) {
+            throw new BusinessException(ErrorCode::PARAM_ERROR, '更换证件类型时请重新填写证件号码');
+        }
         Db::transaction(function () use ($id, $data) {
             if ($data['is_default'] === 1) {
                 $this->clearDefault();
@@ -105,11 +110,30 @@ class TravelerController extends AbstractController
             'id_expire_date' => ($d = $this->strInput('idExpireDate')) !== '' ? $d : null,
             'is_default' => $this->intInput('isDefault', 0) === 1 ? 1 : 0,
         ];
-        $idNo = $isUpdate ? $this->strInput('idNo') : $this->requireStr('idNo');
+        $idNo = (string) preg_replace('/\s+/', '', $isUpdate ? $this->strInput('idNo') : $this->requireStr('idNo'));
         if ($idNo !== '') {
+            if (! self::validIdNo($idType, $idNo)) {
+                throw new BusinessException(ErrorCode::PARAM_ERROR, '证件号码格式不正确');
+            }
+            if ($idType === 2) $idNo = strtoupper($idNo);
             $data['id_no'] = CryptoHelper::encrypt($idNo, $this->aesKey());
         }
         return $data;
+    }
+
+    /**
+     * 证件号格式(与 client-app `utils/validate.ts::isTravelerIdNo` 同一套规则,改一处须同改):
+     * 1 NRC   州号 1~14 / 镇区代码 3~12 字母 (N|E|P|T|Y|S) 6 位数字,如 12/OoKaMa(N)123456
+     * 2 护照  6~9 位字母数字且至少 1 位数字
+     * 3 其他  4~30 位字母数字及 - /
+     */
+    private static function validIdNo(int $idType, string $idNo): bool
+    {
+        return (bool) preg_match(match ($idType) {
+            1 => '#^(1[0-4]|[1-9])/[A-Za-z]{3,12}\((N|E|P|T|Y|S)\)\d{6}$#i',
+            2 => '#^(?=.*\d)[A-Za-z0-9]{6,9}$#',
+            default => '#^[A-Za-z0-9\-/]{4,30}$#',
+        }, $idNo);
     }
 
     /** 取本人常旅客,不存在/非本人抛404 */

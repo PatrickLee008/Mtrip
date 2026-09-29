@@ -16,7 +16,10 @@
  *   - 「证件到期日」是后端有、设计稿没有的字段,复用设计稿的出生日期滚轮浮层(1675:7673)。
  *
  * 编辑态的证件号:列表接口返回的是**脱敏值**,回填不了原文,故编辑时该栏留空即保持原值
- * (后端 `collect(true)` 已配合放宽为选填)。
+ * (后端 `collect(true)` 已配合放宽为选填)。但**改了证件类型就必须重填**,否则旧号码挂在新类型下。
+ *
+ * 证件号按类型校验格式(`isTravelerIdNo`,与后端 `TravelerController::validIdNo` 同规则,QA CA_TC_092/093),
+ * 占位符随类型给示例;提交前去掉空格,护照转大写。
  */
 
 import React, { useEffect, useState } from 'react';
@@ -38,6 +41,10 @@ import { fonts } from '@/config/typography';
 import type { RootStackParamList } from '@/navigation/types';
 import { useCommonStore } from '@/store/commonStore';
 import { useUserStore } from '@/store/userStore';
+import { isTravelerIdNo } from '@/utils/validate';
+
+/** 证件类型 → 占位符示例 / 格式错误提示的 i18n 键后缀 */
+const ID_TYPE_KEY: Record<number, string> = { 1: 'Nrc', 2: 'Passport', 3: 'Other' };
 
 export default function AddGuestScreen() {
   const { t, i18n } = useTranslation();
@@ -62,6 +69,9 @@ export default function AddGuestScreen() {
   const [dateOpen, setDateOpen] = useState(false);
   const [saving, setSaving] = useState(false);
 
+  /** 新增必填;编辑时留空保持原值,但换了证件类型就得重填 */
+  const idNoRequired = !id || idType !== editing?.id_type;
+
   /* 这两个页面都要登录才有数据,未登录直接引导去登录 */
   useEffect(() => {
     if (!isLogin) {
@@ -75,8 +85,12 @@ export default function AddGuestScreen() {
       showToast(t('more.travelers.nameRequired'));
       return;
     }
-    if (!id && !idNo.trim()) {
+    if (idNoRequired && !idNo.trim()) {
       showToast(t('more.travelers.idNoRequired'));
+      return;
+    }
+    if (idNo.trim() && !isTravelerIdNo(idType, idNo)) {
+      showToast(t(`more.travelers.idNoInvalid${ID_TYPE_KEY[idType] ?? 'Other'}`));
       return;
     }
     const payload: TravelerPayload = {
@@ -88,7 +102,10 @@ export default function AddGuestScreen() {
       isDefault: isDefault ? 1 : 0,
     };
     /* 编辑时留空 = 保持原值,别把空串传上去覆盖掉 */
-    if (idNo.trim()) payload.idNo = idNo.trim();
+    if (idNo.trim()) {
+      const compact = idNo.replace(/\s/g, '');
+      payload.idNo = idType === 2 ? compact.toUpperCase() : compact;
+    }
 
     setSaving(true);
     try {
@@ -175,13 +192,17 @@ export default function AddGuestScreen() {
         <View style={styles.field}>
           <FormInput
             label={t('more.travelers.idNo')}
-            required={!id}
+            required={idNoRequired}
             value={idNo}
             onChangeText={setIdNo}
-            placeholder={id ? t('more.travelers.idNoKeep') : t('more.travelers.idNoPlaceholder')}
+            placeholder={
+              idNoRequired
+                ? t(`more.travelers.idNoPlaceholder${ID_TYPE_KEY[idType] ?? 'Other'}`)
+                : t('more.travelers.idNoKeep')
+            }
             autoCapitalize="characters"
           />
-          {id ? (
+          {!idNoRequired ? (
             <View style={styles.hintRow}>
               <HomeIcon name="infoSmall" size={13.333} color={colors.label} />
               <Text style={styles.hint}>

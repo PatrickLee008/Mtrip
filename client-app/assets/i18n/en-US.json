@@ -765,7 +765,13 @@
       "expireDatePlaceholder": "Select expiry date",
       "setDefault": "Set as default traveler",
       "nameRequired": "Please fill in both first and last name.",
-      "idNoRequired": "Please fill in the ID number."
+      "idNoRequired": "Please fill in the ID number.",
+      "idNoPlaceholderNrc": "e.g. 12/OoKaMa(N)123456",
+      "idNoPlaceholderPassport": "e.g. MA1234567",
+      "idNoPlaceholderOther": "Enter the ID number",
+      "idNoInvalidNrc": "Invalid NRC format. Example: 12/OoKaMa(N)123456",
+      "idNoInvalidPassport": "Invalid passport number. Use 6-9 letters and digits.",
+      "idNoInvalidOther": "Invalid ID number. Use 4-30 letters, digits, \"-\" or \"/\"."
     },
     "editEmail": {
       "title": "Edit Email",
@@ -1419,7 +1425,10 @@
         "secureTitle": "Secure Booking",
         "secureDesc": "Your data is encrypted and used only for booking purposes. We never sell your personal information.",
         "nameRequired": "Please fill in the lead guest's name.",
-        "phoneRequired": "Please enter a contact phone number."
+        "phoneRequired": "Please enter a contact phone number.",
+        "phoneInvalid": "Please enter a valid mobile number.",
+        "emailRequired": "Please fill in the email address.",
+        "emailInvalid": "Please enter a valid email address."
       },
       "review": {
         "preferred": "Preferred",

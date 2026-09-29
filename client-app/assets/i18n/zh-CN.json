@@ -765,7 +765,13 @@
       "expireDatePlaceholder": "请选择到期日",
       "setDefault": "设为默认旅客",
       "nameRequired": "请填写姓与名。",
-      "idNoRequired": "请填写证件号码。"
+      "idNoRequired": "请填写证件号码。",
+      "idNoPlaceholderNrc": "例如 12/OoKaMa(N)123456",
+      "idNoPlaceholderPassport": "例如 MA1234567",
+      "idNoPlaceholderOther": "请输入证件号码",
+      "idNoInvalidNrc": "NRC 格式不正确,示例:12/OoKaMa(N)123456",
+      "idNoInvalidPassport": "护照号格式不正确,应为 6-9 位字母和数字。",
+      "idNoInvalidOther": "证件号格式不正确,应为 4-30 位字母、数字、「-」或「/」。"
     },
     "editEmail": {
       "title": "换绑邮箱",
@@ -1419,7 +1425,10 @@
         "secureTitle": "安全预订",
         "secureDesc": "您的数据经过加密,仅用于本次预订,我们绝不出售您的个人信息。",
         "nameRequired": "请先填写主要入住人的姓名。",
-        "phoneRequired": "请填写联系手机号。"
+        "phoneRequired": "请填写联系手机号。",
+        "phoneInvalid": "手机号格式不正确。",
+        "emailRequired": "请填写电子邮箱。",
+        "emailInvalid": "电子邮箱格式不正确。"
       },
       "review": {
         "preferred": "优选",
