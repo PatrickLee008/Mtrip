@@ -68,13 +68,19 @@
         "many": "{{count}} 个业务主体"
       },
       "companyName": "公司 / 集团名称",
-      "companyNamePlaceholder": "例如：Grand Royal Group"
+      "companyNamePlaceholder": "例如：Grand Royal Group",
+      "regNumber": "公司注册号",
+      "country": "注册国家",
+      "address": "公司地址",
+      "required": "请填写公司名称、注册号、国家和地址"
     },
     "businessDetails": {
       "title": "业务详情",
       "subtitle": "请填写每个注册业务的详细信息。",
       "cardTitle": "业务 {{index}} 详情",
       "businessType": "业务类型",
+      "businessName": "业务名称",
+      "address": "物业地址",
       "selectType": "请选择类型",
       "businessTypeOptions": {
         "hotel": "酒店",
@@ -95,6 +101,8 @@
       "privacy": "隐私政策",
       "termsAfter": "。",
       "submit": "提交",
+      "saveDraft": "保存草稿",
+      "draftSaved": "草稿已保存",
       "submitting": "提交中...",
       "submitFailed": "注册提交失败",
       "required": "请补全联系人、手机号、邮箱和公司名称",

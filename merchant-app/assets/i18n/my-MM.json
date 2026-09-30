@@ -68,13 +68,19 @@
         "many": "လုပ်ငန်း {{count}} ခု"
       },
       "companyName": "ကုမ္ပဏီ / အုပ်စု အမည်",
-      "companyNamePlaceholder": "ဥပမာ Grand Royal Group"
+      "companyNamePlaceholder": "ဥပမာ Grand Royal Group",
+      "regNumber": "ကုမ္ပဏီ မှတ်ပုံတင်နံပါတ်",
+      "country": "မှတ်ပုံတင်နိုင်ငံ",
+      "address": "ကုမ္ပဏီ လိပ်စာ",
+      "required": "ကုမ္ပဏီအမည်၊ မှတ်ပုံတင်နံပါတ်၊ နိုင်ငံနှင့် လိပ်စာကို ဖြည့်ပါ"
     },
     "businessDetails": {
       "title": "လုပ်ငန်း အသေးစိတ်",
       "subtitle": "သင့်လုပ်ငန်းတစ်ခုစီ၏ အသေးစိတ်အချက်အလက်များကို ဖြည့်ပါ။",
       "cardTitle": "လုပ်ငန်း {{index}} အသေးစိတ်",
       "businessType": "လုပ်ငန်းအမျိုးအစား",
+      "businessName": "လုပ်ငန်းအမည်",
+      "address": "အိမ်ခြံမြေ လိပ်စာ",
       "selectType": "အမျိုးအစား ရွေးပါ",
       "businessTypeOptions": {
         "hotel": "ဟိုတယ်",
@@ -95,6 +101,8 @@
       "privacy": "ကိုယ်ရေးအချက်အလက် မူဝါဒ",
       "termsAfter": " ကို သဘောတူပါသည်။",
       "submit": "တင်သွင်းရန်",
+      "saveDraft": "မူကြမ်း သိမ်းရန်",
+      "draftSaved": "မူကြမ်း သိမ်းပြီးပါပြီ",
       "submitting": "တင်သွင်းနေသည်...",
       "submitFailed": "မှတ်ပုံတင်တင်သွင်းမှု မအောင်မြင်ပါ",
       "required": "ဆက်သွယ်ရန်ပုဂ္ဂိုလ်၊ မိုဘိုင်း၊ အီးမေးလ်နှင့် ကုမ္ပဏီအမည် ဖြည့်ပါ",

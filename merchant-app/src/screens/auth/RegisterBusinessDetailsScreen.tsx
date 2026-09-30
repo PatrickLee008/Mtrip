@@ -1,13 +1,13 @@
 /**
  * 商户注册 Step 5:Business Details(Figma `839:6159` / 组件 `364:3082`)。
  * 卡片张数由 Step 4 的「Number of Business」决定;第一张卡直接绑注册草稿(提交时用得到),
- * 第 2..N 张静态阶段只保留在本页本地状态。Business Type / Headquarters City 都是本地可用的下拉。
+ * 多张业务卡保存在申请草稿中。Business Type / Headquarters City 都是本地可用的下拉。
  * 提交动作:本页是注册流程最后一屏,草稿保存与正式提交都在这里发起。
  * 规范:忽略设计稿中的 iPhone 状态栏,只使用系统透明状态栏和 SafeAreaView。
  */
 
-import React, { useEffect, useState } from 'react';
-import { Platform, StyleSheet, Text, type ViewStyle, View } from 'react-native';
+import React, { useState } from 'react';
+import { Platform, Pressable, StyleSheet, Text, type ViewStyle, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
 
@@ -27,6 +27,7 @@ import { colors } from '@/config/theme';
 import { fonts } from '@/config/typography';
 import { useCommonStore } from '@/store/commonStore';
 import { useRegistrationStore, type RegistrationBusiness } from '@/store/registrationStore';
+import { isE164Mobile, normalizeMyanmarMobile } from '@/utils/validate';
 
 const cardShadow = Platform.select({
   web: { boxShadow: '0px 4px 4px rgba(0, 0, 0, 0.08)' } as unknown as ViewStyle,
@@ -38,8 +39,6 @@ const cardShadow = Platform.select({
     elevation: 2,
   } as ViewStyle,
 });
-
-const EMPTY_BUSINESS: RegistrationBusiness = { businessType: '', city: '', contactName: '', contactPhone: '', contactEmail: '' };
 
 type PickerKind = 'type' | 'city';
 
@@ -73,6 +72,10 @@ function BusinessCard({
         />
       </FloatingField>
 
+      <FloatingField label={t('register.businessDetails.businessName')} required>
+        <FieldInput value={value.businessName} onChangeText={(businessName) => onChange({ businessName })} />
+      </FloatingField>
+
       <FloatingField label={t('register.businessDetails.contactPerson')} required>
         <FieldInput
           value={value.contactName}
@@ -83,7 +86,7 @@ function BusinessCard({
       </FloatingField>
 
       <FloatingField label={t('register.businessDetails.mobile')} required>
-        <PhoneField value={value.contactPhone} onChangeText={(next) => onChange({ contactPhone: next.replace(/\s/g, '') })} />
+        <PhoneField value={value.contactPhone.replace(/^\+95/, '')} onChangeText={(next) => onChange({ contactPhone: normalizeMyanmarMobile(next) })} />
       </FloatingField>
 
       <FloatingField label={t('register.businessDetails.email')} required>
@@ -104,6 +107,9 @@ function BusinessCard({
           onPress={() => onOpenPicker('city')}
         />
       </FloatingField>
+      {value.businessType === 'hotel' ? <FloatingField label={t('register.businessDetails.address')} required>
+        <FieldInput value={value.address} onChangeText={(address) => onChange({ address })} />
+      </FloatingField> : null}
     </View>
   );
 }
@@ -115,38 +121,24 @@ export default function RegisterBusinessDetailsScreen() {
   const registration = useRegistrationStore();
   const [submitting, setSubmitting] = useState(false);
   const [picker, setPicker] = useState<{ kind: PickerKind; index: number } | null>(null);
-  /** 第 2..N 张业务卡片:静态阶段只存在本页,提交时随草稿一起拼进 businesses[]。 */
-  const [extraBusinesses, setExtraBusinesses] = useState<RegistrationBusiness[]>([]);
-
-  const count = Math.max(1, registration.businessCount);
-  useEffect(() => {
-    setExtraBusinesses((prev) => Array.from({ length: count - 1 }, (_, i) => prev[i] ?? { ...EMPTY_BUSINESS }));
-  }, [count]);
-
-  const first = registration.business;
-  const cards: RegistrationBusiness[] = [first, ...extraBusinesses];
-  const patchCard = (index: number, patch: Partial<RegistrationBusiness>) => {
-    if (index === 0) {
-      registration.setBusiness(patch);
-      return;
-    }
-    setExtraBusinesses((prev) => prev.map((item, i) => (i === index - 1 ? { ...item, ...patch } : item)));
-  };
+  const cards = registration.businesses;
+  const patchCard = (index: number, patch: Partial<RegistrationBusiness>) => registration.setBusiness(index, patch);
 
   const typeOptions: SelectOption[] = ONBOARDING_BUSINESS_TYPES.map((type) => ({ value: type, label: t(`register.businessDetails.businessTypeOptions.${type}`) }));
   const cityOptions: SelectOption[] = ONBOARDING_CITIES.map((city) => ({ value: city, label: city }));
   const pickerValue = picker ? (picker.kind === 'city' ? cards[picker.index]?.city : cards[picker.index]?.businessType) : undefined;
 
-  const submit = async () => {
+  const save = async (submit: boolean) => {
     const { companyName, registrationToken } = registration;
-    const complete = cards.every((card) => card.businessType && card.contactName.trim() && card.contactPhone && card.contactEmail && card.city);
-    if (!companyName.trim() || !complete) {
+    const complete = cards.every((card) => card.businessName.trim() && card.businessType && card.contactName.trim()
+      && isE164Mobile(card.contactPhone) && /^\S+@\S+\.\S+$/.test(card.contactEmail) && card.city
+      && (card.businessType !== 'hotel' || (card.countryCode && card.cityKey && card.address.trim())));
+    if (submit && (!companyName.trim() || !complete)) {
       showToast(t('register.businessDetails.required'));
       return;
     }
     if (ONBOARDING_PROTOTYPE) {
-      // 静态原型:不保存/提交申请,校验通过即进入审核结果页。
-      navigation.navigate('RegistrationReview');
+      if (submit) navigation.navigate('RegistrationReview');
       return;
     }
     if (!registrationToken) {
@@ -156,19 +148,21 @@ export default function RegisterBusinessDetailsScreen() {
     setSubmitting(true);
     try {
       const draft = await apiApplicationSave(registrationToken, {
+        applicationId: registration.applicationId,
         companyName,
-        businesses: cards.map((card, index) => ({
-          businessName: index === 0 ? companyName : `${companyName} ${index + 1}`,
-          businessType: card.businessType,
-          city: card.city,
-          contactName: card.contactName,
-          contactPhone: card.contactPhone,
-          contactEmail: card.contactEmail,
-        })),
+        regNumber: registration.regNumber,
+        country: registration.country,
+        address: registration.address,
+        currentStep: 4,
+        removeBusinessIds: registration.removedBusinessIds,
+        businesses: cards.map((card) => ({ ...card, contactPhone: isE164Mobile(card.contactPhone) ? card.contactPhone : '' })),
       });
-      const submitted = await apiApplicationSubmit(registrationToken, draft.applicationId);
-      registration.setApplication(submitted);
-      navigation.navigate('RegistrationReview');
+      registration.setApplicationDetail(draft);
+      if (submit) {
+        const submitted = await apiApplicationSubmit(registrationToken, draft.applicationId);
+        registration.setApplication(submitted);
+        navigation.navigate('RegistrationReview');
+      } else showToast(t('register.businessDetails.draftSaved'));
     } catch (error) {
       showToast(error instanceof Error ? error.message : t('register.businessDetails.submitFailed'));
     } finally {
@@ -188,7 +182,7 @@ export default function RegisterBusinessDetailsScreen() {
         <PrimaryButton
           label={submitting ? t('register.businessDetails.submitting') : t('register.businessDetails.submit')}
           disabled={submitting}
-          onPress={() => void submit()}
+          onPress={() => void save(true)}
           textStyle={styles.largeButton}
         />
       }
@@ -203,12 +197,18 @@ export default function RegisterBusinessDetailsScreen() {
         />
       ))}
 
+      {!ONBOARDING_PROTOTYPE ? <Pressable disabled={submitting} onPress={() => void save(false)}>
+        <Text style={styles.saveDraft}>{t('register.businessDetails.saveDraft')}</Text>
+      </Pressable> : null}
+
       <SelectSheet
         visible={picker !== null}
         title={picker?.kind === 'city' ? t('register.businessDetails.city') : t('register.businessDetails.businessType')}
         options={picker?.kind === 'city' ? cityOptions : typeOptions}
         value={pickerValue}
-        onSelect={(next) => { if (picker) patchCard(picker.index, picker.kind === 'city' ? { city: next } : { businessType: next }); }}
+        onSelect={(next) => { if (picker) patchCard(picker.index, picker.kind === 'city'
+          ? { city: next, cityKey: next.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') }
+          : { businessType: next }); }}
         onClose={() => setPicker(null)}
       />
     </RegistrationScaffold>
@@ -238,4 +238,5 @@ const styles = StyleSheet.create({
   indexText: { fontFamily: fonts.interSemi, fontSize: 16, lineHeight: 24, color: colors.surface, textAlign: 'center' },
   cardTitle: { fontFamily: fonts.interSemi, fontSize: 16, lineHeight: 24, color: colors.slate900 },
   largeButton: { fontSize: 18, lineHeight: 27 },
+  saveDraft: { fontFamily: fonts.interSemi, fontSize: 15, color: colors.primary, textAlign: 'center', padding: 12 },
 });

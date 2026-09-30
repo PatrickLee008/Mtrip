@@ -1,6 +1,6 @@
 # 会话交接文档(HANDOFF)
 
-### ★ 2026-09-30 Merchant App 真实入驻第一批（T0-T3）
+### ★ 2026-09-30 Merchant App 真实入驻（T0-T7）
 
 **范围**：只接注册前半段，不提前扩展完整申请/KYC/激活。`merchant-app` 的 `/api/v1/app/*` 已统一使用现有客户端 HMAC 签名；`ONBOARDING_PROTOTYPE` 默认关闭且只有显式 `true` 才走静态样张。注册联系方式与业务联系人拆开，缅甸手机号归一化 E.164，首期 UI 仅允许邮箱 OTP，并按服务端返回实现倒计时、重发和 `testMode` 固定码 `000000` 提示。App 没有测试模式开关；实际开关仍是非生产 `APP_ENV` + `MTRIP_MERCHANT_AUTH_TEST_ALLOWED=true` + 超管“系统配置 → 全局参数 → 安全配置”。
 
@@ -8,7 +8,9 @@ registration token、申请 ID、站点和注册联系方式已持久化到原�
 
 验证：`merchant-app` typecheck 与 Web export 通过；改动 PHP 在 `mtrip-merchant-service-1` 内 lint 通过；`scripts/test-merchant-onboarding-registration.sh` 隔离回归通过，覆盖运行时开/关、`000000`、生产硬锁、单次验证码、关闭后测试 token 失效和后台代录回归。没有发送真实邮件，没有切换运行时测试开关。本机忽略的 `merchant-app/.env` 仍显式开启原型模式，且 App Client ID/Secret 均为空；真实签名网关联调须先配置有效客户端并把原型值改为 `false`，不可把静态原型与后端测试模式混为一谈。
 
-**后续顺序**：T4 完整申请 DTO/多首批物业/补正草稿 → T5 三状态审核状态机 → T6 动态 KYC/协议/签名 → T7 邮箱激活/Authenticator/登录恢复。详细验收项见 `docs/plans/17-商户移动端merchant-app.md`。
+**本轮进展**：T0-T3 已本地提交 `44c36a9`。T4-T7 App 代码接入了多业务可恢复草稿/补正重交、registration/KYC/account 状态与动作、分范围 KYC 上传、动态协议阅读与手写 PNG 签名、邮箱激活/登录/恢复及 Authenticator。静态原型入口与后台辅助入驻未移除，`test_confirmed` 明确区别于商户签名。typecheck、Web 导出、注册/KYC/认证三套隔离回归通过。**测试状态**：本机忽略的 `.env` 已关闭静态原型，主开发库认证测试模式已关闭；网关 `/auth/config`、`/register/config` 均返回 `testMode:false`。旧 Expo 进程已重启，新进程在 Chrome iPhone 16 视口下通过注册必填、邮箱选择及登录/激活/恢复入口的 UI 走查。App Client ID/Secret 仍为空；MySQL 迁移账本 28/33，待执行 `V20260921121500` 低于已应用版本，标准栈启动被健康检查阻断。未发送真实邮件或执行申请写入/真机验收。详细验收项见 `docs/plans/17-商户移动端merchant-app.md`。
+
+**真实邮箱测试追加**：用户指定 `229041307@qq.com`，授权独立号码 `+959000093001`。站点 1 `testMode:false` 下发送 OTP 成功，用户实际收到并提供验证码；校验生成 `APP-2026-79FE9BEADA`（申请 ID 7）。本地网关实测两家同名酒店草稿 ID 7/8、重复保存/恢复、后台要求补正、原申请修改重交、基础注册批准，状态推进到 `approved/draft/not_created`；KYC 动态清单与当前协议可读取，缺签署时提交返回 40901。没有证件上传、协议签署、最终审批、账号激活。当前容器 `MTRIP_CLIENT_SIGN=false`，所以本地 API 可用不代表签名鉴权已验收；Merchant App 登录态 UI、原生 SecureStore 重启与真机手写仍待验收。前段“未发送真实邮件或执行申请写入”为追加测试前的历史状态；MySQL 迁移账本问题未解决。
 
 ### ★ 2026-09-29 表单校验(QA 表 CA_TC_084 / 092 / 093)
 

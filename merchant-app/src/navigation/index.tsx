@@ -6,6 +6,7 @@ import type { RootStackParamList } from '@/navigation/types';
 import LoginScreen from '@/screens/auth/LoginScreen';
 import RegisterScreen from '@/screens/auth/RegisterScreen';
 import RegisterBusinessDetailsScreen from '@/screens/auth/RegisterBusinessDetailsScreen';
+import MerchantAccountScreen from '@/screens/auth/MerchantAccountScreen';
 import RegisterContactScreen from '@/screens/auth/RegisterContactScreen';
 import {
   BiometricOptInScreen,
@@ -57,6 +58,7 @@ export default function AppNavigator() {
         <Stack.Screen name="KycDocuments" component={KycDocumentsScreen} />
         <Stack.Screen name="KycReview" component={KycReviewScreen} />
         <Stack.Screen name="MerchantLogin" component={MerchantLoginScreen} />
+        <Stack.Screen name="MerchantAccount" component={MerchantAccountScreen} />
         <Stack.Screen name="QrLogin" component={QrLoginScreen} />
         <Stack.Screen name="TwoFaSetup" component={TwoFaSetupScreen} />
         <Stack.Screen name="TwoFaVerify" component={TwoFaVerifyScreen} />

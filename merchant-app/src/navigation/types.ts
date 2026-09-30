@@ -10,6 +10,7 @@ export type RootStackParamList = {
   KycDocuments: undefined;
   KycReview: undefined;
   MerchantLogin: undefined;
+  MerchantAccount: { mode: 'activation' | 'login' | 'recovery' };
   QrLogin: undefined;
   TwoFaSetup: undefined;
   TwoFaVerify: undefined;

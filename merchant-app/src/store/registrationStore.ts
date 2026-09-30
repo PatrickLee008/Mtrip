@@ -2,20 +2,30 @@ import { create } from 'zustand';
 
 import { apiApplicationDetail } from '@/api/merchant';
 import { ApiError } from '@/api/request';
-import { API_CODE, type ApplicationStatus, type RegistrationChannel, type RegistrationOtpResult, type RegistrationVerifyResult } from '@/api/types';
+import { API_CODE, type ApplicationDetail, type ApplicationStatus, type RegistrationChannel, type RegistrationOtpResult, type RegistrationVerifyResult } from '@/api/types';
 import { useCommonStore } from '@/store/commonStore';
 import { readOnboardingSession, removeOnboardingSession, writeOnboardingSession } from '@/utils/onboardingSession';
+import { genNonce } from '@/utils/sign';
 
 /** 单个业务主体的草稿字段,与后端 `application/save` 的 businesses[] 入参一一对应。 */
 export interface RegistrationBusiness {
+  applicationBusinessId: number;
+  clientRef: string;
+  businessName: string;
   businessType: string;
+  countryCode: string;
   city: string;
+  cityKey: string;
+  address: string;
   contactName: string;
   contactPhone: string;
   contactEmail: string;
 }
 
-const EMPTY_BUSINESS: RegistrationBusiness = { businessType: '', city: '', contactName: '', contactPhone: '', contactEmail: '' };
+const emptyBusiness = (): RegistrationBusiness => ({
+  applicationBusinessId: 0, clientRef: genNonce(), businessName: '', businessType: '',
+  countryCode: 'MM', city: '', cityKey: '', address: '', contactName: '', contactPhone: '', contactEmail: '',
+});
 
 interface RegistrationState {
   registrationPhone: string;
@@ -31,25 +41,48 @@ interface RegistrationState {
   applicationId: number;
   status: ApplicationStatus | null;
   companyName: string;
+  regNumber: string;
+  country: string;
+  address: string;
   /** Step 4 Company Info 选择的业务主体数量,决定 Step 5 渲染几张业务卡片,对应后端 `num_businesses`。 */
   businessCount: number;
-  business: RegistrationBusiness;
+  businesses: RegistrationBusiness[];
+  removedBusinessIds: number[];
   hydrate: () => Promise<void>;
   setContacts: (phone: string, email: string) => void;
   beginOtp: (result: RegistrationOtpResult) => void;
   verified: (result: RegistrationVerifyResult, siteId: number) => Promise<void>;
   setApplication: (status: ApplicationStatus) => void;
+  setApplicationDetail: (detail: ApplicationDetail) => void;
   clear: () => void;
-  setCompanyName: (companyName: string) => void;
+  setCompany: (patch: Partial<Pick<RegistrationState, 'companyName' | 'regNumber' | 'country' | 'address'>>) => void;
   setBusinessCount: (businessCount: number) => void;
-  setBusiness: (patch: Partial<RegistrationBusiness>) => void;
+  setBusiness: (index: number, patch: Partial<RegistrationBusiness>) => void;
 }
 
 const INITIAL_STATE = {
   registrationPhone: '', registrationEmail: '', channel: null, recipient: '', pinLength: 6,
   testMode: false, otpExpiresAt: 0, resendAvailableAt: 0, registrationToken: '', tokenExpiresAt: 0,
-  applicationId: 0, status: null, companyName: '', businessCount: 1, business: { ...EMPTY_BUSINESS },
-} satisfies Omit<RegistrationState, 'hydrate' | 'setContacts' | 'beginOtp' | 'verified' | 'setApplication' | 'clear' | 'setCompanyName' | 'setBusinessCount' | 'setBusiness'>;
+  applicationId: 0, status: null, companyName: '', regNumber: '', country: 'Myanmar', address: '',
+  businessCount: 1, businesses: [emptyBusiness()], removedBusinessIds: [],
+} satisfies Omit<RegistrationState, 'hydrate' | 'setContacts' | 'beginOtp' | 'verified' | 'setApplication' | 'setApplicationDetail' | 'clear' | 'setCompany' | 'setBusinessCount' | 'setBusiness'>;
+
+function detailState(detail: ApplicationDetail) {
+  return {
+    status: detail,
+    companyName: detail.application.companyName,
+    regNumber: detail.application.regNumber,
+    country: detail.application.country,
+    address: detail.application.address,
+    businessCount: Math.max(1, detail.businesses.length),
+    businesses: detail.businesses.length ? detail.businesses.map((business) => ({ ...business,
+      clientRef: business.clientRef || genNonce(),
+      countryCode: business.countryCode || 'MM',
+      cityKey: business.cityKey || business.city.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''),
+    })) : [emptyBusiness()],
+    removedBusinessIds: [],
+  };
+}
 
 export const useRegistrationStore = create<RegistrationState>((set) => ({
   ...INITIAL_STATE,
@@ -71,19 +104,7 @@ export const useRegistrationStore = create<RegistrationState>((set) => ({
     if (!active) return;
     try {
       const detail = await apiApplicationDetail(session.registrationToken, session.applicationId);
-      const first = detail.businesses[0];
-      set({
-        status: detail,
-        companyName: detail.application.companyName,
-        businessCount: Math.max(1, detail.businesses.length),
-        business: first ? {
-          businessType: first.businessType,
-          city: first.city,
-          contactName: first.contactName,
-          contactPhone: first.contactPhone,
-          contactEmail: first.contactEmail,
-        } : { ...EMPTY_BUSINESS },
-      });
+      set(detailState(detail));
     } catch (error) {
       if (!(error instanceof ApiError)
         || (error.code !== API_CODE.UNAUTHORIZED && error.code !== API_CODE.TOKEN_EXPIRED)) return;
@@ -118,11 +139,22 @@ export const useRegistrationStore = create<RegistrationState>((set) => ({
     });
   },
   setApplication: (status) => set({ applicationId: status.applicationId, status }),
+  setApplicationDetail: (detail) => set(detailState(detail)),
   clear: () => {
     void removeOnboardingSession();
-    set({ ...INITIAL_STATE, business: { ...EMPTY_BUSINESS } });
+    set({ ...INITIAL_STATE, businesses: [emptyBusiness()] });
   },
-  setCompanyName: (companyName) => set({ companyName }),
-  setBusinessCount: (businessCount) => set({ businessCount }),
-  setBusiness: (patch) => set((state) => ({ business: { ...state.business, ...patch } })),
+  setCompany: (patch) => set(patch),
+  setBusinessCount: (businessCount) => set((state) => {
+    const count = Math.max(1, Math.min(5, businessCount));
+    const removed = state.businesses.slice(count).map((business) => business.applicationBusinessId).filter((id) => id > 0);
+    return {
+      businessCount: count,
+      businesses: Array.from({ length: count }, (_, index) => state.businesses[index] ?? emptyBusiness()),
+      removedBusinessIds: [...state.removedBusinessIds, ...removed],
+    };
+  }),
+  setBusiness: (index, patch) => set((state) => ({
+    businesses: state.businesses.map((business, position) => position === index ? { ...business, ...patch } : business),
+  })),
 }));

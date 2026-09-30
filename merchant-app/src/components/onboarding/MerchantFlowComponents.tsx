@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Animated,
   Easing,
@@ -432,7 +432,7 @@ export function SelectSheet({
 }
 
 /** KYC 文档页底部的 E-Signature 卡片(Figma `EL-2a59a7a1`):未签是白卡 + Sign Now,已签转绿并显示 Signed。 */
-export function SignatureCard({ signed, onSign }: { signed: boolean; onSign: () => void }) {
+export function SignatureCard({ signed, label, onSign }: { signed: boolean; label?: string; onSign: () => void }) {
   return (
     <View style={[styles.signatureCard, signed && styles.signatureCardSigned]}>
       <View style={styles.signatureRow}>
@@ -446,7 +446,7 @@ export function SignatureCard({ signed, onSign }: { signed: boolean; onSign: () 
           style={({ pressed }) => [styles.signatureAction, signed && styles.signatureActionSigned, pressed && !signed && styles.pressed]}
         >
           <Text style={[styles.signatureActionText, signed && styles.signatureActionTextSigned]}>
-            {signed ? 'Signed' : 'Sign Now'}
+            {label ?? (signed ? 'Signed' : 'Sign Now')}
           </Text>
         </Pressable>
       </View>
@@ -457,44 +457,58 @@ export function SignatureCard({ signed, onSign }: { signed: boolean; onSign: () 
 /** KYC 提交前的 Terms & Conditions 弹窗(Figma `2339:25459` 覆盖层)。 */
 export function TermsModal({
   visible,
+  title,
+  content,
   onAccept,
   onCancel,
 }: {
   visible: boolean;
+  title?: string;
+  content?: string;
   onAccept: () => void;
   onCancel: () => void;
 }) {
+  const [contentHeight, setContentHeight] = useState(0);
+  const [viewportHeight, setViewportHeight] = useState(0);
+  const [reachedEnd, setReachedEnd] = useState(false);
+  useEffect(() => { if (visible) setReachedEnd(false); }, [visible, content]);
+  const readComplete = !content || reachedEnd || (contentHeight > 0 && viewportHeight > 0 && contentHeight <= viewportHeight);
   return (
     <Modal transparent visible={visible} animationType="fade" onRequestClose={onCancel}>
       <View style={styles.termsBackdrop}>
-        <ScrollView contentContainerStyle={styles.termsScroll} showsVerticalScrollIndicator={false}>
+        <ScrollView contentContainerStyle={styles.termsScroll} showsVerticalScrollIndicator={false}
+          onLayout={(event) => setViewportHeight(event.nativeEvent.layout.height)}
+          onContentSizeChange={(_, height) => setContentHeight(height)}
+          onScroll={(event) => {
+            const { contentOffset, layoutMeasurement, contentSize } = event.nativeEvent;
+            if (contentOffset.y + layoutMeasurement.height >= contentSize.height - 12) setReachedEnd(true);
+          }} scrollEventThrottle={16}>
           <View style={[styles.termsCard, modalShadow]}>
             <Image source={require('../../../assets/images/onboarding/logo.png')} style={styles.termsLogo} resizeMode="contain" />
             <View style={styles.modalCopyBlock}>
-              <Text style={styles.sheetTitle}>Terms & Conditions</Text>
-              <Text style={styles.sheetMeta}>Last updated: September 10, 2026</Text>
-              <Text style={styles.sheetBody}>
+              <Text style={styles.sheetTitle}>{title || 'Terms & Conditions'}</Text>
+              {content ? <Text style={styles.sheetBody}>{content}</Text> : <Text style={styles.sheetBody}>
                 Please read these terms carefully before using MTrip. By continuing, you agree to the conditions below.
-              </Text>
+              </Text>}
             </View>
 
-            <View style={styles.termsSection}>
+            {!content ? <View style={styles.termsSection}>
               <Text style={styles.termsHeading}>1. Using MTrip</Text>
               <Text style={styles.termsBody}>
                 MTrip helps you plan and manage travel services. You must provide accurate account information and use the app only for lawful, personal purposes.
               </Text>
-            </View>
+            </View> : null}
 
-            <View style={styles.termsSection}>
+            {!content ? <View style={styles.termsSection}>
               <Text style={styles.termsHeading}>2. Privacy and security</Text>
               <Text style={styles.termsBody}>
                 We protect your personal information in line with our Privacy Policy. Keep your sign-in details secure and notify us promptly of unauthorized activity.
               </Text>
-            </View>
+            </View> : null}
 
             <View style={styles.sheetActions}>
-              <Pressable onPress={onAccept} style={({ pressed }) => [styles.sheetPrimary, pressed && styles.pressed]}>
-                <Text style={styles.sheetPrimaryText}>Accept & Continue</Text>
+              <Pressable disabled={!readComplete} onPress={onAccept} style={({ pressed }) => [styles.sheetPrimary, !readComplete && { opacity: 0.4 }, pressed && styles.pressed]}>
+                <Text style={styles.sheetPrimaryText}>{readComplete ? 'Read & Continue' : 'Scroll to Read All Terms'}</Text>
               </Pressable>
               <Pressable onPress={onCancel} style={({ pressed }) => [styles.sheetGhost, pressed && styles.pressed]}>
                 <Text style={styles.sheetGhostText}>Cancel</Text>
@@ -507,16 +521,24 @@ export function TermsModal({
   );
 }
 
-/** E-Signature 弹窗(Figma `2339:25843` 覆盖层)。静态阶段只还原视觉,不实现手写绘制。 */
+/** E-Signature 弹窗:绘制后导出 PNG Base64,供条款签署接口保存。 */
 export function SignatureModal({
   visible,
   onConfirm,
   onCancel,
 }: {
   visible: boolean;
-  onConfirm: () => void;
+  onConfirm: (signature: string) => void;
   onCancel: () => void;
 }) {
+  const [paths, setPaths] = useState<string[]>([]);
+  const [padSize, setPadSize] = useState({ width: 300, height: 200 });
+  const svgRef = useRef<React.ElementRef<typeof Svg>>(null);
+  const point = (x: number, y: number) => `${Math.max(0, Math.round(x * 300 / padSize.width))} ${Math.max(0, Math.round(y * 200 / padSize.height))}`;
+  const confirm = () => {
+    if (!paths.length) return;
+    svgRef.current?.toDataURL((base64) => { if (base64) onConfirm(`data:image/png;base64,${base64}`); }, { width: 600, height: 400 });
+  };
   return (
     <Modal transparent visible={visible} animationType="fade" onRequestClose={onCancel}>
       <View style={styles.termsBackdrop}>
@@ -532,9 +554,13 @@ export function SignatureModal({
 
             <View style={styles.signatureField}>
               <Text style={styles.signatureFieldLabel}>Your signature</Text>
-              <View style={styles.signaturePad}>
-                <Text style={styles.signaturePadHint}>Draw your signature here</Text>
-                <View style={styles.signatureBaseline} />
+              <View style={styles.signaturePad} onLayout={(event) => setPadSize(event.nativeEvent.layout)} onStartShouldSetResponder={() => true} onMoveShouldSetResponder={() => true}
+                onResponderGrant={(event) => { const { locationX, locationY } = event.nativeEvent; setPaths((current) => [...current, `M ${point(locationX, locationY)}`]); }}
+                onResponderMove={(event) => { const { locationX, locationY } = event.nativeEvent; setPaths((current) => current.map((path, index) => index === current.length - 1 ? `${path} L ${point(locationX, locationY)}` : path)); }}>
+                {paths.length === 0 ? <Text style={styles.signaturePadHint}>Draw your signature here</Text> : null}
+                <Svg ref={svgRef} width="100%" height="100%" viewBox="0 0 300 200" pointerEvents="none">
+                  {paths.map((path, index) => <Path key={index} d={path} stroke={colors.slate900} strokeWidth={2.5} fill="none" strokeLinecap="round" strokeLinejoin="round" />)}
+                </Svg>
               </View>
               <Text style={styles.sheetMeta}>Keep your signature inside the box.</Text>
             </View>
@@ -542,10 +568,10 @@ export function SignatureModal({
             <View style={styles.sheetDivider} />
 
             <View style={styles.sheetActions}>
-              <Pressable onPress={onCancel} style={({ pressed }) => [styles.sheetGhost, pressed && styles.pressed]}>
+              <Pressable onPress={() => setPaths([])} style={({ pressed }) => [styles.sheetGhost, pressed && styles.pressed]}>
                 <Text style={styles.sheetGhostText}>Clear</Text>
               </Pressable>
-              <Pressable onPress={onConfirm} style={({ pressed }) => [styles.sheetPrimary, pressed && styles.pressed]}>
+              <Pressable disabled={!paths.length} onPress={confirm} style={({ pressed }) => [styles.sheetPrimary, !paths.length && { opacity: 0.4 }, pressed && styles.pressed]}>
                 <Text style={styles.sheetPrimaryText}>Confirm Signature</Text>
               </Pressable>
             </View>

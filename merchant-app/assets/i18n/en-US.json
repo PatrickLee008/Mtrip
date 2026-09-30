@@ -68,13 +68,19 @@
         "many": "{{count}} Businesses"
       },
       "companyName": "Company / Group Name",
-      "companyNamePlaceholder": "e.g., Grand Royal Group"
+      "companyNamePlaceholder": "e.g., Grand Royal Group",
+      "regNumber": "Registration Number",
+      "country": "Registration Country",
+      "address": "Company Address",
+      "required": "Complete the company name, registration number, country and address"
     },
     "businessDetails": {
       "title": "Business Details",
       "subtitle": "Provide details for each of your businesses.",
       "cardTitle": "Business {{index}} Details",
       "businessType": "Business Type",
+      "businessName": "Business Name",
+      "address": "Property Address",
       "selectType": "Select Type",
       "businessTypeOptions": {
         "hotel": "Hotel",
@@ -95,6 +101,8 @@
       "privacy": "Privacy Policy",
       "termsAfter": " of mTrip Merchant.",
       "submit": "Submit",
+      "saveDraft": "Save Draft",
+      "draftSaved": "Draft saved",
       "submitting": "Submitting...",
       "submitFailed": "Registration submission failed",
       "required": "Complete the contact person, mobile, email and company name",

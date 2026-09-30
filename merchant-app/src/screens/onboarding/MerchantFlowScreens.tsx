@@ -29,8 +29,8 @@ import { fonts } from '@/config/typography';
 import { useCommonStore } from '@/store/commonStore';
 import { useMerchantStore } from '@/store/merchantStore';
 import { useRegistrationStore } from '@/store/registrationStore';
-import { apiApplicationStatus, apiKycRequirements, apiKycSubmit, apiKycUpload, apiRegistrationChannels, apiRegistrationOtpSend, apiRegistrationOtpVerify } from '@/api/merchant';
-import type { KycDocument } from '@/api/types';
+import { apiAgreement, apiAgreementRead, apiAgreementSign, apiApplicationStatus, apiKycRequirements, apiKycSubmit, apiKycUpload, apiRegistrationChannels, apiRegistrationOtpSend, apiRegistrationOtpVerify } from '@/api/merchant';
+import type { AgreementDetail, KycDocument, KycRequirements } from '@/api/types';
 
 const OTP_LENGTH = 6;
 
@@ -151,15 +151,13 @@ export function RegisterOtpScreen() {
 }
 function ReviewScreen({ kyc = false }: { kyc?: boolean }) {
   const navigation = useNavigation();
-  const registration = !kyc;
   const state = useRegistrationStore();
-  const [status, setStatus] = useState(state.status);
+  const status = state.status;
   const refresh = async () => {
     if (!state.registrationToken || !state.applicationId) return;
     try {
       const next = await apiApplicationStatus(state.registrationToken, state.applicationId);
       state.setApplication(next);
-      setStatus(next);
     } catch {
       // The request interceptor already presents a transport or business error.
     }
@@ -169,26 +167,43 @@ function ReviewScreen({ kyc = false }: { kyc?: boolean }) {
     const timer = setInterval(() => void refresh(), 20000);
     return () => clearInterval(timer);
   }, [state.applicationId, state.registrationToken]);
-  const canUpload = status?.registrationStatus === 'approved' && ['draft', 'resubmit_required'].includes(status.merchantKycStatus);
-  const approved = status?.accountStatus === 'pending_activation' || status?.accountStatus === 'active';
-  // 静态原型没有真实申请单可查,直接按「已通过」渲染,保证能继续点进 KYC 与下一步。
-  const success = ONBOARDING_PROTOTYPE ? true : (registration ? canUpload : approved);
-  const title = registration
-    ? (canUpload ? 'KYC Documents Requested' : 'Your Registration Under Review')
-    : (approved ? 'Your Application Approved By Admin' : 'Your KYC Is Under Review');
-  const cardTitle = registration ? (canUpload ? 'Next Step: KYC Upload' : 'Registration Review in Progress') : (approved ? 'System Notice' : 'KYC Review in Progress');
-  const cardBody = registration
-    ? (canUpload ? 'Our team has requested your KYC documents. Upload the unified checklist to continue.' : 'We will notify you after an administrator reviews your registration.')
-    : (approved ? (status?.testMode ? 'Test mode is active. Retrieve the activation credentials from the administrator test panel; no email was sent.' : 'Your Merchant Access Code has been sent to your registered email. Use it to activate your account.') : 'We will notify you as soon as your documents have been approved.');
+  const needsCorrection = status?.registrationStatus === 'resubmit_required';
+  const canUpload = status?.registrationStatus === 'approved'
+    && (['draft', 'resubmit_required'].includes(status.merchantKycStatus)
+      || status.initialProperties.some((property) => ['draft', 'resubmit_required'].includes(property.kycStatus)));
+  const pendingActivation = status?.accountStatus === 'pending_activation';
+  const active = status?.accountStatus === 'active';
+  const accountUnavailable = status?.accountStatus === 'suspended' || status?.accountStatus === 'disabled';
+  const rejectedProperty = status?.initialProperties.find((property) => property.kycStatus === 'rejected');
+  const rejected = status?.registrationStatus === 'rejected' || status?.merchantKycStatus === 'rejected' || !!rejectedProperty;
+  const success = ONBOARDING_PROTOTYPE || needsCorrection || canUpload || pendingActivation || active || rejected || accountUnavailable;
+  const title = needsCorrection ? 'Registration Changes Requested'
+    : rejected ? 'Application Rejected'
+      : accountUnavailable ? 'Account Unavailable'
+      : canUpload ? 'KYC Documents Requested'
+        : pendingActivation ? 'Your Application Was Approved'
+          : active ? 'Account Activated'
+            : status?.registrationStatus === 'approved' ? 'KYC Review in Progress' : 'Your Registration Under Review';
+  const cardBody = needsCorrection ? status?.reviewReason || 'Update your registration and submit it again.'
+    : rejected ? status?.reviewReason || status?.merchantKyc?.reviewReason || rejectedProperty?.reviewReason || 'Contact support for details.'
+      : accountUnavailable ? 'Contact support before trying to sign in.'
+      : canUpload ? 'Upload the requested merchant and property documents and complete the agreement.'
+        : pendingActivation ? (status?.testMode ? 'Retrieve your activation credentials from the administrator test panel; no email was sent.' : 'Use the credentials sent to your registered email to activate your account.')
+          : active ? 'Sign in to continue to your dashboard.'
+            : 'The administrator is reviewing your application. This page refreshes automatically.';
+  const action = () => {
+    if (ONBOARDING_PROTOTYPE) navigation.navigate(kyc ? 'MerchantLogin' : 'KycDocuments');
+    else if (needsCorrection) navigation.navigate('Register');
+    else if (canUpload) navigation.navigate('KycDocuments');
+    else navigation.navigate('MerchantAccount', { mode: pendingActivation ? 'activation' : 'login' });
+  };
   return <ResultStatusScreen
     status={success ? 'success' : 'loading'} title={title}
-    subtitle={success ? 'Your application status has been updated.' : 'Our team will contact you within 1-3 business days.'}
-    cardTitle={cardTitle} cardBody={cardBody} cardIcon={registration ? 'file' : 'info'}
-    buttonLabel={registration ? 'Proceed to KYC Upload' : 'Login to dashboard'} buttonDisabled={!success}
-    onButtonPress={() => navigation.navigate(registration ? 'KycDocuments' : 'MerchantLogin')}
-    notificationTitle={success ? registration ? 'KYC Request' : 'KYC Verify' : undefined}
-    notificationHeading={success ? registration ? 'Documents Requested' : 'KYC Documents Confirmed!' : undefined}
-    notificationBody={success ? cardBody : undefined}
+    subtitle={status?.appNo ? `Application ${status.appNo}` : 'Application status'}
+    cardTitle={title} cardBody={cardBody} cardIcon={kyc ? 'file' : 'info'}
+    buttonLabel={rejected ? 'Application Rejected' : accountUnavailable ? 'Account Unavailable' : needsCorrection ? 'Edit Registration' : canUpload ? 'Proceed to KYC Upload' : pendingActivation ? 'Activate Account' : 'Login to Dashboard'}
+    buttonDisabled={!success || rejected || accountUnavailable}
+    onButtonPress={action}
   />;
 }
 
@@ -200,22 +215,23 @@ export function KycReviewScreen() { return <ReviewScreen kyc />; }
  * 让界面在没有注册 token 时也能走查。接入真实清单后可删除这段常量。
  */
 const FIGMA_SAMPLE_DOCUMENTS: KycDocument[] = [
-  { id: -1, docType: 'business_registration', name: 'Business Registration', required: true, fileUrl: '', fileSize: '' },
-  { id: -2, docType: 'hotel_operating_license', name: 'Hotel Operating License', required: true, fileUrl: '', fileSize: '' },
-  { id: -3, docType: 'owner_id_passport', name: 'Owner ID / Passport', required: true, fileUrl: '', fileSize: '' },
+  { id: -1, docType: 'business_registration', name: 'Business Registration', required: true, status: 'missing', hasFile: false, fileName: '', fileSize: '', documentVersion: 0, rejectReason: '' },
+  { id: -2, docType: 'hotel_operating_license', name: 'Hotel Operating License', required: true, status: 'missing', hasFile: false, fileName: '', fileSize: '', documentVersion: 0, rejectReason: '' },
+  { id: -3, docType: 'owner_id_passport', name: 'Owner ID / Passport', required: true, status: 'missing', hasFile: false, fileName: '', fileSize: '', documentVersion: 0, rejectReason: '' },
 ];
 
-function DocumentRow({ document, uploading, onPress }: { document: KycDocument; uploading: boolean; onPress: () => void }) {
-  const uploaded = Boolean(document.fileUrl);
+function DocumentRow({ document, uploading, editable, onPress }: { document: KycDocument; uploading: boolean; editable: boolean; onPress: () => void }) {
+  const uploaded = document.hasFile;
   return (
-    <Pressable disabled={uploading} onPress={onPress} style={({ pressed }) => [styles.documentRow, uploaded && styles.documentUploaded, pressed && styles.pressed]}>
+    <Pressable disabled={uploading || !editable} onPress={onPress} style={({ pressed }) => [styles.documentRow, uploaded && styles.documentUploaded, pressed && styles.pressed]}>
       <View style={[styles.docIcon, uploaded && styles.docIconUploaded]}>
         <SimpleIcon name="file" size={20} color={uploaded ? colors.success : colors.primary} />
         {uploaded ? <View style={styles.docBadge}><CheckIcon size={10} /></View> : null}
       </View>
       <View style={styles.docCopy}>
         <Text style={styles.docTitle}>{document.name}</Text>
-        {uploaded ? <Text style={styles.fileName}>{document.fileUrl.split('/').pop() || 'Uploaded file'}</Text> : <View style={styles.requiredBadge}><Text style={styles.requiredText}>{document.required ? 'REQUIRED' : 'OPTIONAL'}</Text></View>}
+        {uploaded ? <Text style={styles.fileName}>{document.fileName || 'Uploaded file'}</Text> : <View style={styles.requiredBadge}><Text style={styles.requiredText}>{document.required ? 'REQUIRED' : 'OPTIONAL'}</Text></View>}
+        {document.rejectReason ? <Text style={styles.fileName}>{document.rejectReason}</Text> : null}
       </View>
       <View style={[styles.uploadAction, uploaded && styles.replaceAction]}>
         {uploading ? <Text style={styles.fileName}>...</Text> : <SimpleIcon name={uploaded ? 'refresh' : 'upload'} size={18} color={uploaded ? colors.slate900 : colors.primary} />}
@@ -228,53 +244,89 @@ export function KycDocumentsScreen() {
   const navigation = useNavigation();
   const showToast = useCommonStore((s) => s.showToast);
   const registration = useRegistrationStore();
-  const [documents, setDocuments] = useState<KycDocument[]>([]);
+  const [requirements, setRequirements] = useState<KycRequirements | null>(null);
+  const [prototypeDocuments, setPrototypeDocuments] = useState(FIGMA_SAMPLE_DOCUMENTS);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [uploading, setUploading] = useState<Record<string, boolean>>({});
   const [termsVisible, setTermsVisible] = useState(false);
   const [signatureVisible, setSignatureVisible] = useState(false);
-  const [signed, setSigned] = useState(false);
+  const [prototypeSigned, setPrototypeSigned] = useState(false);
+  const [agreement, setAgreement] = useState<AgreementDetail | null>(null);
+  const [readReceipt, setReadReceipt] = useState('');
+  const [signerName, setSignerName] = useState(registration.businesses[0]?.contactName ?? '');
   const loadRequirements = async () => {
     if (ONBOARDING_PROTOTYPE || !registration.registrationToken || !registration.applicationId) { setLoading(false); return; }
     setLoading(true);
     try {
       const response = await apiKycRequirements(registration.registrationToken, registration.applicationId);
-      setDocuments(response.documents);
+      setRequirements(response);
     } catch {
-      setDocuments([]);
+      setRequirements(null);
     } finally {
       setLoading(false);
     }
   };
   useEffect(() => { void loadRequirements(); }, [registration.applicationId, registration.registrationToken]);
-  const chooseFile = async (document: KycDocument) => {
+  const chooseFile = async (scopeType: 'merchant' | 'property', businessId: number, document: KycDocument) => {
     if (ONBOARDING_PROTOTYPE) {
-      // 静态原型:不打开文件选择器、不真实上传,直接把该行置为已上传,方便验证「全部必需资料 + 已签名」才放开提交。
-      setDocuments((items) => (items.length > 0 ? items : FIGMA_SAMPLE_DOCUMENTS).map((item) => item.docType === document.docType ? { ...item, fileUrl: `prototype://${document.docType}.pdf`, fileSize: '1.2 MB' } : item));
+      setPrototypeDocuments((items) => items.map((item) => item.docType === document.docType ? { ...item, status: 'pending_review', hasFile: true, fileName: `${document.docType}.pdf` } : item));
       showToast('Prototype: file marked as uploaded');
       return;
     }
     const result = await DocumentPicker.getDocumentAsync({ type: ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'], copyToCacheDirectory: true, multiple: false });
     if (result.canceled || !result.assets[0] || !registration.registrationToken || !registration.applicationId) return;
     const file = result.assets[0];
-    setUploading((value) => ({ ...value, [document.docType]: true }));
+    const key = `${scopeType}:${businessId}:${document.docType}`;
+    setUploading((value) => ({ ...value, [key]: true }));
     try {
-      const uploaded = await apiKycUpload(registration.registrationToken, registration.applicationId, document.docType, file);
-      setDocuments((items) => items.map((item) => item.docType === document.docType ? { ...item, fileUrl: uploaded.fileUrl, fileSize: uploaded.fileSize } : item));
+      await apiKycUpload(registration.registrationToken, registration.applicationId, scopeType, businessId, document.docType, file);
+      await loadRequirements();
       showToast('File uploaded successfully');
     } catch (error) {
       showToast(error instanceof Error ? error.message : 'File upload failed');
     } finally {
-      setUploading((value) => ({ ...value, [document.docType]: false }));
+      setUploading((value) => ({ ...value, [key]: false }));
     }
+  };
+  const openTerms = async () => {
+    if (ONBOARDING_PROTOTYPE) { setTermsVisible(true); return; }
+    if (!registration.registrationToken || !registration.applicationId) return;
+    try {
+      const current = await apiAgreement(registration.registrationToken, registration.applicationId);
+      setAgreement(current);
+      setTermsVisible(true);
+    } catch (error) { showToast(error instanceof Error ? error.message : 'Agreement unavailable'); }
+  };
+  const confirmRead = async () => {
+    if (ONBOARDING_PROTOTYPE) { setTermsVisible(false); setSignatureVisible(true); return; }
+    if (!agreement || !registration.registrationToken || !registration.applicationId) return;
+    try {
+      const result = await apiAgreementRead(registration.registrationToken, registration.applicationId, agreement.agreementId, agreement.version);
+      setReadReceipt(result.readReceipt);
+      setTermsVisible(false);
+      setSignatureVisible(true);
+    } catch (error) { showToast(error instanceof Error ? error.message : 'Agreement confirmation failed'); }
+  };
+  const confirmSignature = async (signature: string) => {
+    if (ONBOARDING_PROTOTYPE) { setPrototypeSigned(true); setSignatureVisible(false); return; }
+    if (!agreement || !readReceipt || !signerName.trim() || !registration.registrationToken || !registration.applicationId) {
+      showToast('Enter the signer name before signing'); return;
+    }
+    try {
+      await apiAgreementSign(registration.registrationToken, registration.applicationId, agreement.agreementId, agreement.version, readReceipt, signerName.trim(), signature);
+      setSignatureVisible(false);
+      await loadRequirements();
+    } catch (error) { showToast(error instanceof Error ? error.message : 'Signature failed'); }
   };
   const submit = async () => {
     if (ONBOARDING_PROTOTYPE) { navigation.navigate('KycReview'); return; }
     if (!registration.registrationToken || !registration.applicationId) return;
     setSubmitting(true);
     try {
-      const status = await apiKycSubmit(registration.registrationToken, registration.applicationId);
+      const result = await apiKycSubmit(registration.registrationToken, registration.applicationId);
+      setRequirements(result.status);
+      const status = await apiApplicationStatus(registration.registrationToken, registration.applicationId);
       registration.setApplication(status);
       navigation.navigate('KycReview');
     } catch (error) {
@@ -283,26 +335,37 @@ export function KycDocumentsScreen() {
       setSubmitting(false);
     }
   };
-  // Figma 的 KYC 页先接受 Terms & Conditions,再签名,最后才允许 Submit to Admin。
-  const shownDocuments = documents.length > 0 ? documents : FIGMA_SAMPLE_DOCUMENTS;
-  const allRequiredUploaded = shownDocuments.filter((document) => document.required).every((document) => Boolean(document.fileUrl));
+  const scopes = ONBOARDING_PROTOTYPE
+    ? [{ scopeType: 'merchant' as const, businessId: 0, name: 'Business 1 Documents', editable: true, documents: prototypeDocuments }]
+    : requirements ? [
+      { scopeType: 'merchant' as const, businessId: 0, name: 'Merchant Documents', editable: ['draft', 'resubmit_required'].includes(requirements.merchantKyc.status), documents: requirements.merchantKyc.documents },
+      ...requirements.initialProperties.map((property) => ({ scopeType: 'property' as const, businessId: property.applicationBusinessId, name: property.businessName, editable: ['draft', 'resubmit_required'].includes(property.kycStatus), documents: property.documents })),
+    ] : [];
+  const editableScopes = scopes.filter((scope) => scope.editable);
+  const allRequiredUploaded = editableScopes.length > 0 && editableScopes.every((scope) => scope.documents.filter((document) => document.required).every((document) => document.hasFile && ['approved', 'pending_review'].includes(document.status)));
+  const signed = ONBOARDING_PROTOTYPE ? prototypeSigned : requirements?.agreement.satisfied === true;
   return <WhiteStepScaffold current={1} total={1} progress={1} onBack={() => navigation.goBack()} scroll footer={<PrimaryButton label={submitting ? 'Submitting...' : 'Submit to Admin'} disabled={loading || submitting || !allRequiredUploaded || !signed} onPress={submit} textStyle={styles.largeButton} />}>
     <Text style={styles.pageTitle}>KYC Documents</Text>
     <View style={styles.sectionHeader}>
-      <Text style={styles.sectionHeaderText}>Upload required documents for <Text style={styles.sectionHeaderStrong}>all 1 properties</Text> to proceed.</Text>
+      <Text style={styles.sectionHeaderText}>Upload required documents for <Text style={styles.sectionHeaderStrong}>all {requirements?.initialProperties.length ?? 1} properties</Text> to proceed.</Text>
       <View style={styles.alert}><SimpleIcon name="info" size={20} color={colors.warning} /><Text style={styles.alertText}>Our admin team must review and approve these documents before you receive dashboard access.</Text></View>
     </View>
-    <View style={styles.documents}>
+    {loading ? <Text style={styles.mutedText}>Loading document requirements...</Text> : scopes.map((scope, index) => <View key={`${scope.scopeType}:${scope.businessId}`} style={styles.documents}>
       <View style={styles.documentsHeader}>
-        <View style={styles.numberBadge}><Text style={styles.numberText}>1</Text></View>
-        <Text style={styles.documentsTitle}>Business 1 Documents</Text>
+        <View style={styles.numberBadge}><Text style={styles.numberText}>{index + 1}</Text></View>
+        <Text style={styles.documentsTitle}>{scope.name}</Text>
         <Text style={styles.fileType}>PDF/JPG/PNG</Text>
       </View>
-      {loading ? <Text style={styles.mutedText}>Loading document requirements...</Text> : shownDocuments.map((document) => <DocumentRow key={document.docType} document={document} uploading={uploading[document.docType] === true} onPress={() => void chooseFile(document)} />)}
-    </View>
-    <SignatureCard signed={signed} onSign={() => setTermsVisible(true)} />
-    <TermsModal visible={termsVisible} onAccept={() => { setTermsVisible(false); setSignatureVisible(true); }} onCancel={() => setTermsVisible(false)} />
-    <SignatureModal visible={signatureVisible} onConfirm={() => { setSignatureVisible(false); setSigned(true); showToast('Signature confirmed'); }} onCancel={() => setSignatureVisible(false)} />
+      {scope.documents.map((document) => <DocumentRow key={document.docType} document={document}
+        uploading={uploading[`${scope.scopeType}:${scope.businessId}:${document.docType}`] === true}
+        editable={scope.editable && (document.status !== 'approved' || ONBOARDING_PROTOTYPE)}
+        onPress={() => void chooseFile(scope.scopeType, scope.businessId, document)} />)}
+    </View>)}
+    {requirements?.agreement.status === 'test_confirmed' ? <Text style={styles.mutedText}>Agreement confirmed by an administrator for testing; this is not a merchant signature.</Text> : null}
+    <TextInput value={signerName} onChangeText={setSignerName} placeholder="Signer full name" style={styles.accessInput} />
+    <SignatureCard signed={signed} label={requirements?.agreement.status === 'test_confirmed' ? 'Test Confirmed' : undefined} onSign={() => void openTerms()} />
+    <TermsModal visible={termsVisible} title={agreement?.title} content={agreement?.content} onAccept={() => void confirmRead()} onCancel={() => setTermsVisible(false)} />
+    <SignatureModal visible={signatureVisible} onConfirm={(signature) => void confirmSignature(signature)} onCancel={() => setSignatureVisible(false)} />
   </WhiteStepScaffold>;
 }
 
