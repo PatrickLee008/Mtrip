@@ -1,5 +1,15 @@
 # 会话交接文档(HANDOFF)
 
+### ★ 2026-09-30 Merchant App 真实入驻第一批（T0-T3）
+
+**范围**：只接注册前半段，不提前扩展完整申请/KYC/激活。`merchant-app` 的 `/api/v1/app/*` 已统一使用现有客户端 HMAC 签名；`ONBOARDING_PROTOTYPE` 默认关闭且只有显式 `true` 才走静态样张。注册联系方式与业务联系人拆开，缅甸手机号归一化 E.164，首期 UI 仅允许邮箱 OTP，并按服务端返回实现倒计时、重发和 `testMode` 固定码 `000000` 提示。App 没有测试模式开关；实际开关仍是非生产 `APP_ENV` + `MTRIP_MERCHANT_AUTH_TEST_ALLOWED=true` + 超管“系统配置 → 全局参数 → 安全配置”。
+
+registration token、申请 ID、站点和注册联系方式已持久化到原生 SecureStore（Web 使用既有存储），启动后调用 `/application/detail` 恢复草稿/状态；临时网络失败保留会话，只有明确 `40101/40102` 才清 token。后端 `register/config` 和申请 status/detail 增加只读 `testMode`。后台辅助入驻原入口保留不变。
+
+验证：`merchant-app` typecheck 与 Web export 通过；改动 PHP 在 `mtrip-merchant-service-1` 内 lint 通过；`scripts/test-merchant-onboarding-registration.sh` 隔离回归通过，覆盖运行时开/关、`000000`、生产硬锁、单次验证码、关闭后测试 token 失效和后台代录回归。没有发送真实邮件，没有切换运行时测试开关。本机忽略的 `merchant-app/.env` 仍显式开启原型模式，且 App Client ID/Secret 均为空；真实签名网关联调须先配置有效客户端并把原型值改为 `false`，不可把静态原型与后端测试模式混为一谈。
+
+**后续顺序**：T4 完整申请 DTO/多首批物业/补正草稿 → T5 三状态审核状态机 → T6 动态 KYC/协议/签名 → T7 邮箱激活/Authenticator/登录恢复。详细验收项见 `docs/plans/17-商户移动端merchant-app.md`。
+
 ### ★ 2026-09-29 表单校验(QA 表 CA_TC_084 / 092 / 093)
 
 - **084 旅客信息不填手机和邮箱也能继续**:原先 `useBookingWizard.goNext` 只在名/姓**都**空时拦、手机只在真实模式查非空、邮箱完全不查。现在名、姓逐项必填;手机必填且按注册页同款宽校验(`isContactMobile` = 去空格/横线后 `isMobile`,多国号码 6-15 位),提交时也去掉空格;邮箱在完整模式必填、填了就校验格式。关怀模式新稿邮箱是可展开的选填项,`useBookingWizard` 新增 `emailOptional` 选项由 `HotelBookingLiteScreen` 传 true。

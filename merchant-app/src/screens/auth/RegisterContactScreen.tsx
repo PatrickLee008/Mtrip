@@ -17,24 +17,26 @@ import {
 } from '@/components/onboarding/RegistrationForm';
 import { useCommonStore } from '@/store/commonStore';
 import { useRegistrationStore } from '@/store/registrationStore';
+import { isE164Mobile, normalizeMyanmarMobile } from '@/utils/validate';
 
 export default function RegisterContactScreen() {
   const navigation = useNavigation();
   const { t } = useTranslation();
   const showToast = useCommonStore((state) => state.showToast);
-  const business = useRegistrationStore((state) => state.business);
-  const setBusiness = useRegistrationStore((state) => state.setBusiness);
-  const [mobile, setMobile] = useState(business.contactPhone);
-  const [email, setEmail] = useState(business.contactEmail);
+  const registrationPhone = useRegistrationStore((state) => state.registrationPhone);
+  const registrationEmail = useRegistrationStore((state) => state.registrationEmail);
+  const setContacts = useRegistrationStore((state) => state.setContacts);
+  const [mobile, setMobile] = useState(registrationPhone.replace(/^\+95/, ''));
+  const [email, setEmail] = useState(registrationEmail);
 
   const next = () => {
-    const phone = mobile.replace(/\s/g, '');
+    const phone = normalizeMyanmarMobile(mobile);
     const mail = email.trim().toLowerCase();
-    if (!phone || !mail) {
+    if (!isE164Mobile(phone) || !mail || !/^\S+@\S+\.\S+$/.test(mail)) {
       showToast(t('register.contactInfo.required'));
       return;
     }
-    setBusiness({ contactPhone: phone, contactEmail: mail });
+    setContacts(phone, mail);
     navigation.navigate('RegisterVerification');
   };
 

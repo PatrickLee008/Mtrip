@@ -6,6 +6,33 @@
 
 按 `PRD/mTrip_Merchant App PRD_v1.0.docx` 和 Figma `mTrip_Merchant` 原型落地商户移动端：先完成全部设计页面，再按页面业务与 PRD 逐步接入 `/api/v1/merchant/*`、商品/订单/营销/财务等商户口径 API。
 
+## 2026-09-30 真实入驻接入第一批（T0-T3）
+
+本批把注册前半段从静态样张切到真实 `/api/v1/app/merchant/*` 契约，范围止于“联系方式 → 邮箱 OTP → 获得 registration token → 重启恢复申请”。后台辅助入驻继续保留；完整申请字段、多首批物业、KYC/协议和账号激活留在后续批次。
+
+- `src/api/request.ts` 对全部 `/api/v1/app/*` 请求统一附加 `X-Client-Id/X-Timestamp/X-Nonce/X-Sign`，签名路径不含 query；只有部署提供 `EXPO_PUBLIC_CLIENT_ID/CLIENT_SECRET` 时才签名。
+- `EXPO_PUBLIC_ONBOARDING_PROTOTYPE` 改为仅显式 `true` 才启用，代码与 `.env.example` 默认均为 `false`。静态原型模式与服务端认证测试模式严格分离：前者完全不请求后端，仅用于视觉走查；后者始终走真实接口、创建真实申请数据，只跳过邮件/短信外部投递。
+- 注册联系方式独立于首家业务联系人保存；缅甸本地手机号在发送前归一化为 E.164。第一阶段只展示并提交 `otpChannel=email`，短信入口暂不暴露。
+- `register/config` 与申请状态新增只读 `testMode`。App 不提供开关；服务端开启后，发码响应驱动固定码 `000000` 提示，关闭后不再显示且既有测试 OTP/token 仍由后端失效。
+- OTP 页使用服务端 `expiresIn/resendAfter/pinLength/recipient/testMode`，实现真实倒计时和重新发送，不做接口失败后的静默原型降级。
+- registration token、申请 ID、站点及注册联系方式在原生端写入 SecureStore，Web 回退既有存储；启动时校验站点和 24 小时期限，再调用 `/application/detail` 恢复草稿与审核状态。网络暂时失败保留会话，服务端明确返回 `40101/40102` 才清理无效 token。
+- 当前本机被忽略的 `merchant-app/.env` 仍显式开启原型模式，且 `EXPO_PUBLIC_CLIENT_ID/CLIENT_SECRET` 为空；真实联调前须配置有效 App 客户端并将原型值改为 `false`。本批不擅自覆盖个人环境文件或创建共享客户端凭据。
+
+### 分批开发任务清单
+
+| 任务 | 状态 | 交付与验收标准 |
+|---|---|---|
+| T0 契约与模式边界 | [x] | 统一当前状态类型；真实链路默认开启；文档明确静态原型、服务端测试模式和生产模式的边界。 |
+| T1 App 客户端签名 | [x] | `/api/v1/app/*` 统一按后端原文签名；保留 `/api/v1/merchant/*` 既有行为；缺客户端配置时不伪造签名。 |
+| T2 邮箱 OTP | [x] | 手机号与邮箱都提交，手机为 E.164；UI 仅邮箱；倒计时/重发/单次校验生效；测试模式使用服务端返回的 `testMode` 与 `000000`。 |
+| T3 会话恢复 | [x] | 安全保存 token/申请 ID/站点/联系方式；重启调用 detail 恢复；跨站、过期、服务端失效与临时断网行为明确。 |
+| T4 完整注册草稿与多首批物业 | [ ] | 补齐 `clientRef/countryCode/cityKey/address`、业务联系人 E.164、多业务逐项 ID 映射和可恢复草稿；支持补正后以原申请重交。 |
+| T5 三状态审核状态机 | [ ] | 分别处理 registration/KYC/account 状态、驳回原因和可执行动作；移除现存旧 stage/原型假设。 |
+| T6 动态 KYC 与协议签署 | [ ] | 接动态范围清单、上传/替换、完整阅读回执、真实签名数据及分范围补正；禁止把测试确认为真实签名。 |
+| T7 最终批准与账号激活 | [ ] | 接邮箱激活 OTP、访问码/临时密码、Authenticator、登录与恢复；测试模式只跳过外部投递，生产环境不可使用固定码。 |
+
+验证结果：`npm run typecheck --prefix merchant-app`、`npm run build:web --prefix merchant-app`、两处 PHP 容器语法检查和 `bash scripts/test-merchant-onboarding-registration.sh` 均通过；隔离回归覆盖测试模式开/关透出、固定码、生产硬锁、单次使用及后台辅助入驻。本机客户端凭据未配置，因此尚未完成 Merchant App 到签名网关的实机联调；也未发送真实邮件、启用运行时测试模式或执行真机/UI 验收。
+
 ## 后端联动（2026-09-09，进行中）
 
 - 新增公开移动端注册 OTP 接口：`GET /api/v1/app/merchant/register/config`、`POST /register/otp-send`、`POST /register/otp-verify`；站点从 `X-Site-Id` 强制取得。
@@ -58,7 +85,7 @@
 | 0 | 独立工程骨架 | [x] | 新增 `merchant-app/`，复用 client-app 技术栈、别名、i18n、请求层、store、Toast、web 样式补丁。 |
 | 1 | 引导首屏 | [x] | 完成 Figma `839:5721`：主色顶部、logo、三条卖点、底部 Register / Log In。 |
 | 2 | 登录与 2FA 骨架 | [~] | 已接 `/merchant/auth/login`、`/auth/2fa/setup`、`/auth/2fa/verify` 的数据流；视觉未按后续 Figma 逐屏精修。 |
-| 3 | 注册 / OTP / KYC 页面 | [x] | 按 SECTION `2685:22241` 收敛为 Figma 的 5 步注册（Contact Info → Verify Account → Enter Code → Company Info → Business Details），KYC 文档页补齐 E-Signature 卡与 Terms & Conditions / E-Signature 弹窗；上传/提交已接 M5-M8 API。 |
+| 3 | 注册 / OTP / KYC 页面 | [~] | Figma 5 步页面已完成；T0-T3 已接真实签名、邮箱 OTP、服务端测试模式与会话恢复。完整注册 DTO、多物业、状态机、动态 KYC/协议与激活仍按 T4-T7 实施。 |
 | 4 | Dashboard 与业务 Tab | [ ] | 按 PRD 模块搭建 Dashboard、Booking、Availability、Rooms、More 等导航。 |
 | 5 | 业务功能接 API | [ ] | 在页面全部完成后按模块接入 merchant/goods/order/finance/marketing API。 |
 
@@ -154,10 +181,9 @@
 
 ## 下一步
 
-1. 在浏览器或真机完整走查入驻原型：安全区、键盘、长文案、文件状态和 2 秒扫码动效。
-2. 梳理现有后端是否已有移动端入驻 API；缺口单独列接口清单，不在原型阶段硬接。
-3. 业务首页完成前，先保持 Dashboard 占位，避免提前臆造 PRD 未落图的业务交互。
-4. KYC 文档卡是否需要恢复按业务分组展示，取决于后端统一清单是否再引入属性维度；决定前保持单卡。
-5. E-Signature 目前是静态签名框，若产品确认需要手写签名，再引入绘制库或 `react-native-svg` 手势绘制并接后端签署存证。
-6. **联调真实入驻 API 前把 `EXPO_PUBLIC_ONBOARDING_PROTOTYPE` 置为 `false`**：原型开关打开时真实链路完全不走，`apiRegistrationOtpSend/Verify`、`apiApplicationSave/Submit`、`apiKycUpload/Submit` 都只是保留未被执行的代码路径；另有 `MerchantAuthTestMode`（后台运行时开关）可在非生产环境用固定测试验证码联调。
-7. `ONBOARDING_CITIES` 目前是内置的静态目的地列表（来自 `ranking_destination` 种子），后端 `city` 是自由文本；站点字典/目的地接口具备后应改为远程获取。`Business Type` 选项若后端枚举变更（`MerchantAppOnboardingService::BUSINESS_TYPES`），三处（本项目选项、merchant-web 语言包、admin-web 面板）需一起核对。
+1. 实施 T4：按 `/application/save|detail` 当前契约补齐所有申请和业务字段、稳定 `clientRef`、多业务 ID 映射、业务手机号 E.164 与草稿恢复；用两家同名酒店验证不串数据。
+2. 实施 T5：以 `registrationStatus/merchantKycStatus/accountStatus/initialProperties` 驱动页面与补正入口，删除旧 `stage` 和静态批准假设。
+3. 实施 T6：接入动态 KYC、文件替换、协议阅读回执和真实签名存证；先确认 Figma 单卡与后端商户/物业分范围清单的展示方案。
+4. 实施 T7：接邮箱激活、Authenticator、登录和恢复；真实 SMTP 送达与真机安全存储另列环境验收，不以代码存在代替送达成功。
+5. 完成 T4-T7 后做真实客户端凭据下的签名网关联调、测试模式 `false → true → false`、App 重启恢复、弱网/过期和真机 UI 验收。
+6. 业务首页完成前保持 Dashboard 占位；`ONBOARDING_CITIES` 仍是种子静态列表，站点目的地字典具备后再改为远程获取。

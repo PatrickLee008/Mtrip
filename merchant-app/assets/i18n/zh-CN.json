@@ -53,6 +53,12 @@
       "emailPlaceholder": "contact@property.com",
       "required": "请填写手机号和邮箱"
     },
+    "otp": {
+      "testMode": "商户认证测试模式已开启，本次不会发送邮件，请使用验证码 000000。",
+      "ready": "可重新发送",
+      "resend": "重新发送验证码",
+      "resending": "发送中..."
+    },
     "companyInfo": {
       "title": "公司信息",
       "subtitle": "请先填写您的公司信息。",

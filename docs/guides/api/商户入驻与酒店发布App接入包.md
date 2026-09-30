@@ -1,5 +1,7 @@
 # 商户入驻与酒店发布 App 接入包
 
+2026-09-30 Merchant App 接入进度：注册前半段 T0-T3 已落地，包括 `/api/v1/app/*` 客户端签名、邮箱 OTP、服务端认证测试模式提示、倒计时/重发以及 registration token 安全持久化和申请恢复。完整申请字段与多首批物业、三状态页面、动态 KYC/协议和激活仍待 T4-T7，不能把当前进度视为整条入驻链路已完成。静态原型只在 `EXPO_PUBLIC_ONBOARDING_PROTOTYPE=true` 时启用，默认关闭；它不请求后端，与会真实写入申请数据的服务端测试模式不是同一功能。
+
 2026-09-15 后台代办补充：后台已支持新流程商户/首批物业 KYC 代传和统一提交。开发环境超管可记录协议测试确认，协议响应新增 `status=test_confirmed` 和 `satisfied`；App 对测试记录应明确展示为测试确认，不能当作真实商户签名。生产环境不接受测试确认。后台入口、请求字段和权限见[代办说明](../../plans/audits/2026-09-15-admin-assisted-onboarding-kyc.md)，本次未修改 App 代码。
 
 > 版本：v1.0（商户入驻审批整改阶段 7，2026-09-15）  
@@ -9,7 +11,7 @@
 
 | 客户端 | 能力 | 当前后端状态 | App 工作状态 |
 |---|---|---|---|
-| Merchant App | 注册 OTP、草稿、多首批物业、条款签署、KYC、状态查询 | `/api/v1/app/merchant/*` 已实现 | 待 App 接入 |
+| Merchant App | 注册 OTP、草稿、多首批物业、条款签署、KYC、状态查询 | `/api/v1/app/merchant/*` 已实现 | T0-T3 已接：签名、邮箱 OTP、会话恢复；T4-T6 待接 |
 | Merchant App | 账号激活、邮箱/短信/访问码/Google 登录、恢复 | `/api/v1/app/merchant/*` 已实现；真实 Google、SMTP、SMS 配置待联调 | 待 App 接入 |
 | Merchant App | 物业 KYC、资料、房型、房量、发布 | 业务接口已在 `/api/v1/merchant/*` 实现，当前供 merchant-web 使用 | 待后续 App 阶段增加移动端路由适配后接入 |
 | 用户 App | 酒店搜索、详情、房型日历、评价、收藏 | `/api/v1/app/*` 已实现 | 待 App 接入/复核 |
@@ -67,7 +69,7 @@ clientId + UPPERCASE(method) + pathWithoutQuery + timestamp + nonce
 
 | 顺序 | 方法与路径 | 关键请求 | 成功后保存 |
 |---|---|---|---|
-| 1 | `GET /api/v1/app/merchant/register/config` | 无业务参数 | 可用 OTP 渠道 |
+| 1 | `GET /api/v1/app/merchant/register/config` | 无业务参数 | `channels,testMode`；首期 App 只使用 email |
 | 2 | `POST /api/v1/app/merchant/register/otp-send` | `phone,email,otpChannel` | 冷却倒计时 |
 | 3 | `POST /api/v1/app/merchant/register/otp-verify` | `phone,email,otpChannel,otpCode` | `registrationToken,applicationId` |
 | 4 | `POST /api/v1/app/merchant/application/save` | `registrationToken` 与 `application` 对象 | 每条业务的 `applicationBusinessId` |
@@ -328,7 +330,7 @@ App 必须使用服务端列表顺序，不能用是否存在 `ranking_id` 二�
 
 Merchant App：
 
-- 接入注册 Token 的安全存储、草稿恢复、多 `applicationBusinessId` 映射和分范围补正。
+- 已完成注册 Token 的安全存储与基础草稿恢复；待补多 `applicationBusinessId` 映射、完整字段和分范围补正。
 - 实现动态 KYC 模板、文件替换、条款完整滚动、签名画布及签署摘要确认。
 - 接入激活、多方式登录、OTP 冷却/重放错误和账号恢复；补真实 Google、SMTP、SMS 测试。
 - 增加 `/api/v1/app/merchant/properties|rooms|availability` 薄路由后，再实现物业/房型/发布页面；每个写请求发送 `X-Mtrip-Property-Id`。

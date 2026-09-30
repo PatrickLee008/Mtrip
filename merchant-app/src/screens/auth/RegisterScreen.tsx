@@ -20,7 +20,8 @@ export default function RegisterScreen() {
   const navigation = useNavigation();
   const { t } = useTranslation();
   const showToast = useCommonStore((state) => state.showToast);
-  const [companyName, setCompanyName] = useState('');
+  const draftCompany = useRegistrationStore((state) => state.companyName);
+  const [companyName, setCompanyName] = useState(draftCompany);
   const setDraftCompany = useRegistrationStore((state) => state.setCompanyName);
   const businessCount = useRegistrationStore((state) => state.businessCount);
   const setBusinessCount = useRegistrationStore((state) => state.setBusinessCount);

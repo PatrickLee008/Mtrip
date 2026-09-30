@@ -1,5 +1,5 @@
 import { get, post, postEncrypted, postForm } from '@/api/request';
-import type { ApplicationStatus, ChallengeResult, KycRequirements, LoginResult, MenusResult, MerchantProfile, RegistrationChannel, RegistrationChannelOption, RegistrationOtpResult, RegistrationVerifyResult, TwoFaSetupResult } from '@/api/types';
+import type { ApplicationDetail, ApplicationStatus, ChallengeResult, KycRequirements, LoginResult, MenusResult, MerchantProfile, RegistrationChannel, RegistrationConfig, RegistrationOtpResult, RegistrationVerifyResult, TwoFaSetupResult } from '@/api/types';
 
 export function apiLogin(username: string, password: string): Promise<ChallengeResult> {
   return postEncrypted('/auth/login', { username, password });
@@ -27,9 +27,10 @@ export function apiMenus(): Promise<MenusResult> {
 
 // Merchant onboarding is intentionally outside the authenticated merchant-web prefix.
 // 注意:OTP 两个接口的手机号与邮箱**都必传**(后端按两者哈希做联系方式一致性校验),渠道由 `otpChannel` 指定。
-export const apiRegistrationChannels = () => get<{ channels: RegistrationChannelOption[] }>('/api/v1/app/merchant/register/config');
+export const apiRegistrationChannels = () => get<RegistrationConfig>('/api/v1/app/merchant/register/config');
 export const apiRegistrationOtpSend = (phone: string, email: string, otpChannel: RegistrationChannel) => post<RegistrationOtpResult>('/api/v1/app/merchant/register/otp-send', { phone, email, otpChannel });
 export const apiRegistrationOtpVerify = (phone: string, email: string, otpChannel: RegistrationChannel, otpCode: string) => post<RegistrationVerifyResult>('/api/v1/app/merchant/register/otp-verify', { phone, email, otpChannel, otpCode });
+export const apiApplicationDetail = (registrationToken: string, applicationId: number) => get<ApplicationDetail>('/api/v1/app/merchant/application/detail', { registrationToken, applicationId });
 export const apiApplicationStatus = (registrationToken: string, applicationId: number) => get<ApplicationStatus>('/api/v1/app/merchant/application/status', { registrationToken, applicationId });
 export const apiKycRequirements = (registrationToken: string, applicationId: number) => get<KycRequirements>('/api/v1/app/merchant/application/kyc-requirements', { registrationToken, applicationId });
 export const apiApplicationSave = (registrationToken: string, application: Record<string, unknown>) => post<ApplicationStatus>('/api/v1/app/merchant/application/save', { registrationToken, application });

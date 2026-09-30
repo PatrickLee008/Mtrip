@@ -53,6 +53,12 @@
       "emailPlaceholder": "contact@property.com",
       "required": "Enter your mobile number and email"
     },
+    "otp": {
+      "testMode": "Test mode is active. No email was sent. Use verification code 000000.",
+      "ready": "Ready",
+      "resend": "Resend Code?",
+      "resending": "Sending..."
+    },
     "companyInfo": {
       "title": "Company Info",
       "subtitle": "Start by providing your company information.",

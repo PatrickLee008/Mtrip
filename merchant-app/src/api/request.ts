@@ -54,7 +54,8 @@ instance.interceptors.request.use((config) => {
   config.headers['X-Lang'] = hooks.getLang();
 
   const path = (config.url ?? '').split('?')[0];
-  if (CLIENT_ID && CLIENT_SECRET && path.startsWith(MERCHANT_API_PREFIX)) {
+  const requiresClientSignature = path.startsWith('/api/v1/app/') || path.startsWith(MERCHANT_API_PREFIX);
+  if (CLIENT_ID && CLIENT_SECRET && requiresClientSignature) {
     const nonce = genNonce();
     const method = (config.method ?? 'get').toUpperCase();
     config.headers['X-Client-Id'] = CLIENT_ID;

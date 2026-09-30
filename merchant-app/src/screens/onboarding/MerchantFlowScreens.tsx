@@ -5,6 +5,7 @@ import { Image, Pressable, StyleSheet, Text, TextInput, View } from 'react-nativ
 import { StatusBar } from 'expo-status-bar';
 import * as DocumentPicker from 'expo-document-picker';
 import { useNavigation } from '@react-navigation/native';
+import { useTranslation } from 'react-i18next';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import PrimaryButton from '@/components/common/PrimaryButton';
@@ -29,7 +30,7 @@ import { useCommonStore } from '@/store/commonStore';
 import { useMerchantStore } from '@/store/merchantStore';
 import { useRegistrationStore } from '@/store/registrationStore';
 import { apiApplicationStatus, apiKycRequirements, apiKycSubmit, apiKycUpload, apiRegistrationChannels, apiRegistrationOtpSend, apiRegistrationOtpVerify } from '@/api/merchant';
-import type { KycDocument, RegistrationChannel } from '@/api/types';
+import type { KycDocument } from '@/api/types';
 
 const OTP_LENGTH = 6;
 
@@ -57,50 +58,95 @@ function Option({ selected, icon, label, value, onPress }: { selected: boolean; 
 
 export function RegisterVerificationScreen() {
   const navigation = useNavigation();
-  const showToast = useCommonStore((s) => s.showToast); const business = useRegistrationStore((s) => s.business); const beginOtp = useRegistrationStore((s) => s.beginOtp);
-  // 默认渠道是 SMS;站点未启用 SMS 时才回退到后端返回的第一个可用渠道。
-  const [channels, setChannels] = useState<RegistrationChannel[]>([]); const [method, setMethod] = useState<RegistrationChannel>('sms'); const [sending, setSending] = useState(false);
-  useEffect(() => { if (ONBOARDING_PROTOTYPE) return; apiRegistrationChannels().then((data) => { const next = data.channels.map((item) => item.channel); setChannels(next); setMethod((current) => (next.includes(current) ? current : next[0] ?? current)); }).catch(() => undefined); }, []);
-  // 静态原型不清求 `/register/config`,渠道列表为空时按稿面同时展示 SMS 与 Email。
-  const visibleChannels = channels.length > 0 ? channels : ONBOARDING_PROTOTYPE ? (['sms', 'email'] as RegistrationChannel[]) : channels;
-  const recipient = method === 'email' ? business.contactEmail : business.contactPhone;
+  const showToast = useCommonStore((s) => s.showToast);
+  const registration = useRegistrationStore();
+  const [emailAvailable, setEmailAvailable] = useState(ONBOARDING_PROTOTYPE);
+  const [configFailed, setConfigFailed] = useState(false);
+  const [sending, setSending] = useState(false);
+  useEffect(() => {
+    if (ONBOARDING_PROTOTYPE) return;
+    apiRegistrationChannels()
+      .then((data) => setEmailAvailable(data.channels.some((item) => item.channel === 'email')))
+      .catch(() => setConfigFailed(true));
+  }, []);
   const send = async () => {
     if (ONBOARDING_PROTOTYPE) {
-      // 静态原型:不发送真实验证码,用本地草稿里的联系方式(没有就用稿面示例值)直接进入 Step 3。
-      beginOtp(method, recipient || (method === 'email' ? 'contact@property.com' : '9 123 456 789'), 6);
+      registration.beginOtp({ channel: 'email', recipient: registration.registrationEmail || 'contact@property.com', pinLength: 6, expiresIn: 300, resendAfter: 60, testMode: true });
       navigation.navigate('RegisterOtp');
       return;
     }
-    if (!recipient) { showToast(`Enter a ${method === 'email' ? 'business email' : 'mobile number'} first`); return; }
+    if (!registration.registrationEmail) { showToast('Enter a business email first'); return; }
     setSending(true);
-    try { const result = await apiRegistrationOtpSend(business.contactPhone, business.contactEmail, method); beginOtp(method, recipient, result.pinLength); navigation.navigate('RegisterOtp'); } catch { } finally { setSending(false); }
+    try {
+      const result = await apiRegistrationOtpSend(registration.registrationPhone, registration.registrationEmail, 'email');
+      registration.beginOtp(result);
+      navigation.navigate('RegisterOtp');
+    } catch {
+      // The request interceptor presents the server error.
+    } finally {
+      setSending(false);
+    }
   };
-  return <WhiteStepScaffold current={2} total={5} progress={0.4} onBack={() => navigation.goBack()} footer={<PrimaryButton label={sending ? 'Sending...' : 'Send OTP'} disabled={sending || visibleChannels.length === 0} onPress={send} textStyle={styles.largeButton} />}>
+  return <WhiteStepScaffold current={2} total={5} progress={0.4} onBack={() => navigation.goBack()} footer={<PrimaryButton label={sending ? 'Sending...' : 'Send OTP'} disabled={sending || !emailAvailable} onPress={send} textStyle={styles.largeButton} />}>
     <AnimatedPopIcon><IconBubble size={80} icon={<SimpleIcon name="shield" size={34} />} /></AnimatedPopIcon>
-    <Heading centered title="Verify Account" subtitle="Where should we send your OTP verification code?" />
-    <View style={styles.options}>{visibleChannels.includes('sms') ? <Option selected={method === 'sms'} icon="sms" label="SMS" value={business.contactPhone || 'No business phone entered'} onPress={() => setMethod('sms')} /> : null}{visibleChannels.includes('email') ? <Option selected={method === 'email'} icon="mail" label="Email" value={business.contactEmail || 'No business email entered'} onPress={() => setMethod('email')} /> : null}</View>
+    <Heading centered title="Verify Account" subtitle="We will send the verification code to your business email." />
+    <View style={styles.options}>{emailAvailable ? <Option selected icon="mail" label="Email" value={registration.registrationEmail || 'No business email entered'} onPress={() => undefined} /> : <Text style={styles.mutedText}>{configFailed ? 'Could not load verification options. Check the error and reopen this step.' : 'Email verification is not configured for this site.'}</Text>}</View>
   </WhiteStepScaffold>;
 }
 
 export function RegisterOtpScreen() {
   const navigation = useNavigation();
-  const [code, setCode] = useState(''); const showToast = useCommonStore((s) => s.showToast); const state = useRegistrationStore(); const [saving, setSaving] = useState(false);
+  const { t } = useTranslation();
+  const siteId = useCommonStore((s) => s.siteId);
+  const [code, setCode] = useState('');
+  const showToast = useCommonStore((s) => s.showToast);
+  const state = useRegistrationStore();
+  const [saving, setSaving] = useState(false);
+  const [resending, setResending] = useState(false);
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+  const resendRemaining = Math.max(0, Math.ceil((state.resendAvailableAt - now) / 1000));
   // Step 3 只负责校验 OTP 并保存 registration token;草稿保存与正式提交移到 Step 5 Business Details。
   const verify = async () => {
     if (ONBOARDING_PROTOTYPE) {
       // 静态原型:任意 6 位都视为通过,不取真实 registration token。
-      state.verified('');
       navigation.navigate('Register');
       return;
     }
     if (!state.channel) return;
     setSaving(true);
-    try { const verified = await apiRegistrationOtpVerify(state.business.contactPhone, state.business.contactEmail, state.channel, code); state.verified(verified.registrationToken); navigation.navigate('Register'); } catch (error) { showToast(error instanceof Error ? error.message : 'Verification failed'); } finally { setSaving(false); }
+    try {
+      const verified = await apiRegistrationOtpVerify(state.registrationPhone, state.registrationEmail, state.channel, code);
+      await state.verified(verified, siteId);
+      navigation.navigate('Register');
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Verification failed');
+    } finally {
+      setSaving(false);
+    }
+  };
+  const resend = async () => {
+    if (ONBOARDING_PROTOTYPE || resendRemaining > 0 || resending) return;
+    setResending(true);
+    try {
+      const result = await apiRegistrationOtpSend(state.registrationPhone, state.registrationEmail, 'email');
+      state.beginOtp(result);
+      setCode('');
+      setNow(Date.now());
+    } catch {
+      // The request interceptor presents the server error.
+    } finally {
+      setResending(false);
+    }
   };
   return <WhiteStepScaffold current={3} total={5} progress={0.6} onBack={() => navigation.goBack()} footer={<PrimaryButton label={saving ? 'Verifying...' : 'Verify & Continue'} disabled={saving || code.length !== state.pinLength} onPress={verify} textStyle={styles.largeButton} />}>
     <AnimatedPopIcon><IconBubble size={80} icon={<SimpleIcon name="shield" size={34} />} /></AnimatedPopIcon>
     <Heading centered title="Enter Code" subtitle={`Enter the ${state.pinLength}-digit OTP sent to ${state.recipient}`} />
-    <View style={styles.otpGroup}><OtpInput value={code} onChange={setCode} /><View style={styles.otpHelp}><View style={styles.otpTimer}><SimpleIcon name="refresh" size={14} color={colors.slate900} /><Text style={styles.otpTimerText}>4:58</Text></View><Text style={styles.resendLink}>Resend Code?</Text></View></View>
+    {state.testMode ? <View style={styles.testModeAlert}><SimpleIcon name="info" size={18} color={colors.warning} /><Text style={styles.testModeText}>{t('register.otp.testMode')}</Text></View> : null}
+    <View style={styles.otpGroup}><OtpInput value={code} onChange={setCode} /><View style={styles.otpHelp}><View style={styles.otpTimer}><SimpleIcon name="refresh" size={14} color={colors.slate900} /><Text style={styles.otpTimerText}>{resendRemaining > 0 ? `${resendRemaining}s` : t('register.otp.ready')}</Text></View><Pressable disabled={resendRemaining > 0 || resending} onPress={() => void resend()}><Text style={[styles.resendLink, (resendRemaining > 0 || resending) && styles.resendDisabled]}>{resending ? t('register.otp.resending') : t('register.otp.resend')}</Text></Pressable></View></View>
   </WhiteStepScaffold>;
 }
 function ReviewScreen({ kyc = false }: { kyc?: boolean }) {
@@ -123,8 +169,8 @@ function ReviewScreen({ kyc = false }: { kyc?: boolean }) {
     const timer = setInterval(() => void refresh(), 20000);
     return () => clearInterval(timer);
   }, [state.applicationId, state.registrationToken]);
-  const canUpload = status?.canUploadKyc === true;
-  const approved = status?.status === 'approved';
+  const canUpload = status?.registrationStatus === 'approved' && ['draft', 'resubmit_required'].includes(status.merchantKycStatus);
+  const approved = status?.accountStatus === 'pending_activation' || status?.accountStatus === 'active';
   // 静态原型没有真实申请单可查,直接按「已通过」渲染,保证能继续点进 KYC 与下一步。
   const success = ONBOARDING_PROTOTYPE ? true : (registration ? canUpload : approved);
   const title = registration
@@ -133,7 +179,7 @@ function ReviewScreen({ kyc = false }: { kyc?: boolean }) {
   const cardTitle = registration ? (canUpload ? 'Next Step: KYC Upload' : 'Registration Review in Progress') : (approved ? 'System Notice' : 'KYC Review in Progress');
   const cardBody = registration
     ? (canUpload ? 'Our team has requested your KYC documents. Upload the unified checklist to continue.' : 'We will notify you after an administrator reviews your registration.')
-    : (approved ? 'Your Merchant Access Code has been sent to your registered mobile number or email. Use it to continue with 2-Step Verification.' : 'We will notify you as soon as your documents have been approved.');
+    : (approved ? (status?.testMode ? 'Test mode is active. Retrieve the activation credentials from the administrator test panel; no email was sent.' : 'Your Merchant Access Code has been sent to your registered email. Use it to activate your account.') : 'We will notify you as soon as your documents have been approved.');
   return <ResultStatusScreen
     status={success ? 'success' : 'loading'} title={title}
     subtitle={success ? 'Your application status has been updated.' : 'Our team will contact you within 1-3 business days.'}
@@ -309,6 +355,7 @@ const styles = StyleSheet.create({
   heading: { width: '100%', gap: 8 }, center: { alignItems: 'center' }, centerText: { textAlign: 'center' }, headingTitle: { fontFamily: fonts.interBold, fontSize: 24, lineHeight: 36, color: colors.slate900 }, headingSub: { fontFamily: fonts.inter, fontSize: 16, lineHeight: 24, color: colors.slate900, opacity: 0.8 }, largeButton: { fontSize: 18, lineHeight: 27 }, pressed: { opacity: 0.76 },
   options: { width: '100%', gap: 12 }, option: { minHeight: 80, flexDirection: 'row', alignItems: 'center', gap: 24, padding: 14, borderWidth: 2, borderColor: '#E2E8F0', borderRadius: 8 }, optionSelected: { borderColor: colors.info, backgroundColor: colors.primaryLight }, optionIcon: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' }, optionIconSelected: { backgroundColor: colors.surface }, optionIconIdle: { backgroundColor: colors.primaryLight }, optionCopy: { flex: 1, gap: 4 }, optionLabel: { fontFamily: fonts.interSemi, fontSize: 14, lineHeight: 20, color: colors.slate900 }, optionValue: { fontFamily: fonts.inter, fontSize: 14, lineHeight: 20, color: colors.slate900, opacity: 0.8 }, checkCircle: { width: 24, height: 24, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primary },
   otpGroup: { width: '100%', gap: 16 }, otpBox: { width: '100%', minHeight: 64, borderWidth: 1, borderColor: colors.slate900, borderRadius: 12 }, otpInput: { minHeight: 62, paddingRight: 18, paddingLeft: 26, textAlign: 'center', fontFamily: fonts.interBold, fontSize: 20, letterSpacing: 8, color: colors.primary }, otpHelp: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }, otpTimer: { flexDirection: 'row', alignItems: 'center', gap: 4 }, otpTimerText: { fontFamily: fonts.interSemi, fontSize: 12, lineHeight: 18, color: colors.slate900 }, resendLink: { fontFamily: fonts.inter, fontSize: 12, lineHeight: 18, color: colors.slate900, textDecorationLine: 'underline' }, mutedText: { fontFamily: fonts.inter, fontSize: 14, lineHeight: 21, color: colors.slate900, opacity: 0.8 }, tealText: { fontFamily: fonts.interSemi, fontSize: 14, lineHeight: 21, color: colors.primary },
+  resendDisabled: { opacity: 0.4 }, testModeAlert: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, padding: 12, borderWidth: 1, borderColor: colors.warning, borderRadius: 10, backgroundColor: 'rgba(254,243,199,0.45)' }, testModeText: { flex: 1, fontFamily: fonts.interMedium, fontSize: 13, lineHeight: 19, color: colors.warning },
   pageTitle: { fontFamily: fonts.outfitBold, fontSize: 24, lineHeight: 36, color: colors.slate900 },
   sectionHeader: { width: '100%', gap: 24 }, sectionHeaderText: { fontFamily: fonts.inter, fontSize: 16, lineHeight: 24, color: colors.slate900, opacity: 0.8 }, sectionHeaderStrong: { fontFamily: fonts.interBold },
   alert: { flexDirection: 'row', gap: 12, alignItems: 'flex-start', padding: 16, borderWidth: 1, borderColor: colors.warning, borderRadius: 12, backgroundColor: 'rgba(254,243,199,0.4)' }, alertText: { flex: 1, fontFamily: fonts.inter, fontSize: 14, lineHeight: 21, color: colors.warning, opacity: 0.8 }, documents: { width: '100%', gap: 24, padding: 16, borderWidth: 0.5, borderColor: colors.slate900, borderRadius: 16 }, documentsHeader: { flexDirection: 'row', alignItems: 'center', gap: 8 }, numberBadge: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primary }, numberText: { fontFamily: fonts.interSemi, fontSize: 16, color: colors.surface }, documentsTitle: { flex: 1, fontFamily: fonts.interSemi, fontSize: 16, color: colors.slate900 }, fileType: { fontFamily: fonts.outfit, fontSize: 12, color: colors.slate900, opacity: 0.6 }, documentRow: { flexDirection: 'row', alignItems: 'center', gap: 16, padding: 16, borderWidth: 1, borderStyle: 'dashed', borderColor: '#E2E8F0', borderRadius: 12, backgroundColor: colors.canvas }, documentUploaded: { borderStyle: 'solid', borderColor: colors.success, backgroundColor: colors.successLight }, docIcon: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.canvas }, docIconUploaded: { borderRadius: 7, backgroundColor: colors.successLight }, docBadge: { position: 'absolute', right: -3, top: -3, width: 14, height: 14, borderRadius: 7, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.success, borderWidth: 1.7, borderColor: colors.successLight }, docCopy: { flex: 1, gap: 4 }, docTitle: { fontFamily: fonts.interSemi, fontSize: 14, color: colors.slate900 }, requiredBadge: { alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 4, backgroundColor: '#FEE2E2' }, requiredText: { fontFamily: fonts.interBold, fontSize: 10, letterSpacing: 0.5, color: '#DC2626' }, fileName: { fontFamily: fonts.inter, fontSize: 12, color: colors.slate900, opacity: 0.8 }, uploadAction: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }, replaceAction: { width: 34, height: 34, borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 4, backgroundColor: colors.surface },

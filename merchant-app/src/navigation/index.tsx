@@ -22,15 +22,28 @@ import {
 import DashboardScreen from '@/screens/dashboard/DashboardScreen';
 import OnboardingScreen from '@/screens/onboarding/OnboardingScreen';
 import { useMerchantStore } from '@/store/merchantStore';
+import { useRegistrationStore } from '@/store/registrationStore';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
 export default function AppNavigator() {
   const isLogin = useMerchantStore((s) => s.isLogin);
+  const registrationToken = useRegistrationStore((s) => s.registrationToken);
+  const registrationPhone = useRegistrationStore((s) => s.registrationPhone);
+  const registrationStatus = useRegistrationStore((s) => s.status?.registrationStatus);
+  const initialRoute = isLogin
+    ? 'Dashboard'
+    : registrationStatus && registrationStatus !== 'draft' && registrationStatus !== 'resubmit_required'
+      ? 'RegistrationReview'
+      : registrationToken
+        ? 'Register'
+        : registrationPhone
+          ? 'RegisterContact'
+          : 'Onboarding';
   return (
     <NavigationContainer>
       <Stack.Navigator
-        initialRouteName={isLogin ? 'Dashboard' : 'Onboarding'}
+        initialRouteName={initialRoute}
         screenOptions={{ headerShown: false }}
       >
         <Stack.Screen name="Onboarding" component={OnboardingScreen} />
