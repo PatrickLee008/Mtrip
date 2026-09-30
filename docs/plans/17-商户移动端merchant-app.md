@@ -18,6 +18,8 @@ T0-T3 已在本地提交 `44c36a9`；本批继续实现 T4-T7 的 App 代码，�
 
 申请 ID 7 使用标记为 QA 的两家同名酒店，草稿业务 ID 分别为 7/8；重复保存、重新读取及补正更新均保持 ID、`clientRef`、城市独立。提交后后台原有“入驻申请”列表真实显示该申请；后台要求补正后，详情返回原因及 `resubmit_required/canEdit=true`，原申请修改并重交回到 `submitted`。后台批准基础注册后状态为 `registrationStatus=approved/merchantKycStatus=draft/accountStatus=not_created`，两家酒店各有独立必需文件清单，商户级清单及协议版本可读取；缺少签署与文件时 KYC 提交返回 40901。没有上传证件、代签协议、完成最终审批或激活账号。QQ 邮箱本次**实际收到**验证码，不能把 SMTP 接收成功与送达混为一谈；先前该地址未收到历史探针的记录仍是独立事件。MySQL 迁移账本倒序问题仍使全栈健康检查失败，真机上传/手写、App 登录态逐页与签名网关仍待验收。
 
+后续 KYC 文件测试：用户指定本机一张带公章的营业执照扫描件，重新通过真实邮箱 OTP 恢复申请 ID 7（测试模式仍关闭）。仅向商户级 `business_reg` 上传该 978,418 字节 JPEG，返回文件 ID 67、版本 1；清单回读为 `pending_review/hasFile=true`，两个物业范围及其他商户文件均未变化。运行中网关对 `/uploads/kyc/` 静态路径返回 404。**该真实执照主体与虚构 QA 申请公司名不一致，仅作上传技术验证，不能据此审核通过或复用到身份证、银行证明、酒店许可等类型。**未提交 KYC、签署协议、执行最终审批或激活；App 页面选择文件与真机上传仍由用户自行验收。
+
 - `src/api/request.ts` 对全部 `/api/v1/app/*` 请求统一附加 `X-Client-Id/X-Timestamp/X-Nonce/X-Sign`，签名路径不含 query；只有部署提供 `EXPO_PUBLIC_CLIENT_ID/CLIENT_SECRET` 时才签名。
 - `EXPO_PUBLIC_ONBOARDING_PROTOTYPE` 改为仅显式 `true` 才启用，代码与 `.env.example` 默认均为 `false`。静态原型模式与服务端认证测试模式严格分离：前者完全不请求后端，仅用于视觉走查；后者始终走真实接口、创建真实申请数据，只跳过邮件/短信外部投递。
 - 注册联系方式独立于首家业务联系人保存；缅甸本地手机号在发送前归一化为 E.164。第一阶段只展示并提交 `otpChannel=email`，短信入口暂不暴露。
