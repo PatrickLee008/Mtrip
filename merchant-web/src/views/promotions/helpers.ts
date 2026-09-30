@@ -201,6 +201,11 @@ export interface PromotionForm {
   minNights: number;
   maxNights: number;
   bookAdvanceDays: number;
+  /* PRD §17.5 资格条件:0 / 空 = 不限 */
+  minRoomCount: number;
+  minHotelCount: number;
+  stayStart: string;
+  stayEnd: string;
   noExpiry: boolean;
   validStart: string;
   validEnd: string;
@@ -229,6 +234,10 @@ export function defaultForm(kind: number = PROMOTION_KIND.percentage): Promotion
     minNights: kind === PROMOTION_KIND.longStay ? 3 : 0,
     maxNights: 0,
     bookAdvanceDays: 0,
+    minRoomCount: 0,
+    minHotelCount: 0,
+    stayStart: '',
+    stayEnd: '',
     noExpiry: false,
     validStart: '',
     validEnd: '',
@@ -259,6 +268,10 @@ export function formFromDetail(row: MerchantPromotion): PromotionForm {
   form.minNights = Number(row.min_nights || 0);
   form.maxNights = Number(row.max_nights || 0);
   form.bookAdvanceDays = Number(row.book_advance_days || 0);
+  form.minRoomCount = Number(row.min_room_count || 0);
+  form.minHotelCount = Number(row.min_hotel_count || 0);
+  form.stayStart = String(row.stay_start || '');
+  form.stayEnd = String(row.stay_end || '');
   form.noExpiry = !row.valid_end;
   form.validStart = String(row.valid_start || '');
   form.validEnd = String(row.valid_end || '');
@@ -291,6 +304,10 @@ export function formToPayload(form: PromotionForm): PromotionPayload {
     minNights: form.promotionKind === PROMOTION_KIND.longStay ? Number(form.minNights || 0) : 0,
     maxNights: form.promotionKind === PROMOTION_KIND.longStay ? Number(form.maxNights || 0) : 0,
     bookAdvanceDays: Math.max(0, Number(form.bookAdvanceDays || 0)),
+    minRoomCount: Math.max(0, Number(form.minRoomCount || 0)),
+    minHotelCount: Math.max(0, Number(form.minHotelCount || 0)),
+    stayStart: form.stayStart || '',
+    stayEnd: form.stayEnd || '',
     validType: 1,
     validStart: form.validStart || undefined,
     // 「No expiry date」勾选 → 不传结束时间(后端落 NULL = 不过期)
@@ -316,6 +333,7 @@ export function validateForm(form: PromotionForm): string {
     return 'promotions.validation.discountRange';
   }
   if (form.promotionKind === PROMOTION_KIND.longStay && Number(form.minNights) < 2) return 'promotions.validation.minNights';
+  if (form.stayStart !== '' && form.stayEnd !== '' && form.stayStart > form.stayEnd) return 'promotions.validation.stayRange';
   if (form.validStart === '') return 'promotions.validation.start';
   if (!form.noExpiry && form.validEnd === '') return 'promotions.validation.end';
   return '';

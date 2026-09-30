@@ -1,6 +1,6 @@
 # 差距分析:C 端多房间预订 vs Consumer App PRD v1.0.1
 
-状态:**差异 9(My Pick 按 Trip 归并)已落地,其余 8 条仍待办** | 日期:2026-09-22
+状态:**差异 9(My Pick 按 Trip 归并)已落地,其余 8 条仍待办;第七节 2026-09-24 追加 5 条(A/B 已修,C/D/E 待办)** | 日期:2026-09-22(09-24 追加)
 依据:`docs/reference/ConsumerApp_PRD_v1.0.1_提取文本.txt`(**英文原文**,行号即该文件行号)+ Figma `3003:8863`
 
 多房间预订这条链路在 2026-09-21 已经从 UI 接到后端(`trip/create` + `trip/pay`),Rooms 页签的加减器与预订结果页也按 Figma 重做过。本文是收尾时对照 PRD v1.0.1 的逐条核对结果:**9 处实质差异 + 5 个需要产品拍板的问题**(其中差异 9 与问题 5 已于 2026-09-22 落地/拍板)。
@@ -62,8 +62,8 @@
 | 1 | §17.4(1275-1298):加减器初始值 = 搜索页房间数 | `store/roomCartStore.ts:105` 固定 `quantity: 1`。**更根上**:`screens/hotel/HotelsScreen.tsx:157-168` 与 `screens/hotel/HotelResultsScreen.tsx:324-330` 的 Guests & Rooms 都是写死 `{adults: 2, rooms: 1}` + `onPress={comingSoon}`;`HotelResults` / `HotelDetail` 路由(`navigation/types.ts`)只透传 checkIn/checkOut/flexDays/citizen,不带 rooms/adults/children | PRD 唯一的硬规则**无源可同步**:搜 3 间也永远从 1 间起 |
 | 2 | §1.1(96):Trip = 多酒店 / 多住宿段 | 后端 `TripController::create:69` 本就支持 1-10 项跨物业、每项自带 `useDate/endDate`;卡点在 `roomCartStore.ts:95`(换物业即清空车)与 `useBookingWizard.ts:420-422`(`addSecondStay` 仅演示模式) | §1.1 的**主场景没有 UI**;我们做的是「同一家酒店多房型」 |
 | 3 | §1.1(106、148-154):一单失败只退那一单,其余保持确认,置 Booking Failed | `TripController.php:234` 单个 `Db::transaction` 全成全败;`Constants/BookingConst.php` 止于 `STATUS_NO_SHOW = 6`、`order_main.order_status` 只有 0~7、`order_trip.pay_status` 只有 0/1/2 → **没有任何字段能表达「部分成功」** | 与 PRD 硬规则相反(仓库自己也记为「结构化占位」,见 `实现方案-ConsumerApp-PRDv1.0.md:155`) |
-| 4 | §17.5 / §17.6(1300-1370):券按资格条件判定,**只对合格房分摊** | `PricingService.php:96-103` 只校验范围 + `min_amount` + `max_discount`,且**全有或全无**(不符合直接抛错);`TripController::allocate():418` 按**全部**预订净额平摊。`marketing_coupon.min_nights` / `max_nights` / `book_advance_days` 三个字段**商户端能配、能显示**(`Merchant/PromotionController.php:342,571,681`)但**下单时无人校验**(`PricingService` 与 `CouponView` 的 `REASON_*` 里都没有) | 不合格的房也吃到折扣;最少间数 / 最少酒店数 / 提前天数三类券做不出来 |
-| 5 | 302-309:明细须显示 Original / Long Stay Discount / Coupon / Final | `useBookingWizard.ts:319-325` 的 `cartTotal` / `roomsTotal` 用 `sku.base_price × 晚数 × 间数` —— **不减长住折扣、不取 `goods_daily_stock` 日历价、不走公民价**;`ReviewBody.tsx` 真实模式只有房费 + 券两行 | 显示金额可能高于实扣;`useBookingWizard.ts:607` 的 `walletBalance < payableTotal` 会**误拦付得起的用户** |
+| 4 ✅**已修(2026-09-28)** | §17.5 / §17.6(1300-1370):券按资格条件判定,**只对合格房分摊** | `PricingService.php:96-103` 只校验范围 + `min_amount` + `max_discount`,且**全有或全无**(不符合直接抛错);`TripController::allocate():418` 按**全部**预订净额平摊。`marketing_coupon.min_nights` / `max_nights` / `book_advance_days` 三个字段**商户端能配、能显示**(`Merchant/PromotionController.php:342,571,681`)但**下单时无人校验**(`PricingService` 与 `CouponView` 的 `REASON_*` 里都没有) | 不合格的房也吃到折扣;最少间数 / 最少酒店数 / 提前天数三类券做不出来 |
+| 5 🟡**多房间已修(2026-09-28)** | 302-309:明细须显示 Original / Long Stay Discount / Coupon / Final | `useBookingWizard.ts:319-325` 的 `cartTotal` / `roomsTotal` 用 `sku.base_price × 晚数 × 间数` —— **不减长住折扣、不取 `goods_daily_stock` 日历价、不走公民价**;`ReviewBody.tsx` 真实模式只有房费 + 券两行 | 显示金额可能高于实扣;`useBookingWizard.ts:607` 的 `walletBalance < payableTotal` 会**误拦付得起的用户** |
 | 6 | §5(401):按 room occupancy 填多位入住人 | `useBookingWizard.ts` 组 `tripItems` 时**一个 `travelers` 都不提交**(单单路径提交 1 个);而后端 `TripController::prepareItem` 已经在调 `normalizeGuests($item['travelers'], $quantity)` | 多房间订单的住客信息全空,后端白等 |
 | 7 | 1384:支付后 10 秒内 PDF voucher,短信 + 邮件 + App | 无 PDF / 邮件 / 短信;Download Voucher、Save E-receipt 仍是 comingSoon | 唯一的凭证硬指标未达成(⚠️ 注意 PRD **没要求二维码**,所以结果页去掉 QR 不算差异) |
 | 8 | — | `TripController.php:212` 文案「请在15分钟内完成支付」,实际 `BookingConst::PAYMENT_WINDOW_MINUTES = 10` 驱动 `payment_expires_at`(单单路径 `OrderController.php:213` 已是 10 分钟) | 用户按 15 分钟算,第 11 分钟单子已被扫掉 |
@@ -101,6 +101,7 @@
 
 **P0(不动表)**
 - §17.4 房间数同步:补 `GuestRoomSheet`(见第四节做法)+ 路由透传 rooms/adults/children + `toggle` 收可选初始间数(**要按 `sku.base_stock` 夹一下**,否则搜 4 间遇到只剩 2 间的房型会在结算时才报「库存不足」)。
+- ✅ **已于 2026-09-28 落地(多房间向导)**:`trip/quote` 与 `trip/create` 共用 `TripController::priceTrip()`(`OrderStockService::lock` 加 `$dryRun`、`resolveCoupon` 加 `$lock`);券不适用时返回 `couponError` 而非报错。向导多房间模式的房费 / 长住优惠 / 券额 / 应付 / 余额校验改吃试算值,复核页明细加「长住优惠」行。购物车页 `RoomCartScreen` 已于同日接上(共用 `useTripQuote`)。单房型链路也于同日接上(一项的 `trip/quote` 与 `order/create` 计价一致,实测三种券型逐项相等)。原计划:
 - 新增 `POST /app/order/trip/quote` 只读试算:给 `OrderStockService::lock` 加 `$dryRun`(同一套取价代码,不写库)、`PricingService::resolveCoupon` 加 `$lock=false`,返回逐项与合计的 original / longstayDiscount / couponDiscount / payAmount;复核页与购物车页据此显示 PRD 要求的四行,`payableTotal` 改吃试算值。**前端不自己算钱**,与 `useBookingWizard.ts:13` 的既有约定一致。
 - 差异 8 的 10 分钟文案(一行)。
 - ~~差异 9 My Pick 按 Trip 归并~~ **✅ 已于 2026-09-22 落地**(Figma `3003:8863` 下的三种卡形态):
@@ -124,3 +125,31 @@
 - 按房间数填多位入住人(差异 6 的一行版可以先做:trip 各项带上 Lead Guest,后端已经在等)。
 
 **依赖关系**:P1 的券展示与 P2 的逐项金额都要吃 P0 的 `trip/quote`;P1 的部分失败只依赖第四节的决定,可独立开工。
+
+---
+
+## 七、2026-09-24 追加核对:order / payment 服务侧(PRD §1.1)
+
+对照 PRD §1.1 走读 order-service 与 payment-service 时新发现的 5 条(不与上面 9 条重复)。
+
+| # | 问题 | 现状锚点 | 状态 |
+|---|---|---|---|
+| A | **Trip 状态无人维护**:超时扫单、C 端/商户/后台取消只改 `order_main`,`order_trip.pay_status` 永远停在 0;Trip 里任一笔被取消/超时后,`trip/pay` 被「Trip包含非待支付预订」拦死 | `BookingExpiryService::expireOne`、`BookingLifecycleService::cancel` | ✅ **已修(2026-09-24)** |
+| B | **可单付 Trip 内一笔**:`order/pay` 不看 `trip_id`,按已分摊券额的价格付款并核销整单券 —— 只订一家也拿到「最少 2 家酒店」类折扣,其余预订从此无法整单支付 | `OrderController::pay` | ✅ **已修(2026-09-24)** |
+| C | **一笔支付对不上一个流水号 + 钱包支付漏收入流水**:`order_trip.pay_trade_no` 一个号,各预订 `markPaid` 时又各生成一个 `MOCK…` 号(`TripController.php:290` 写死 MOCK 前缀,钱包支付也是);Trip 钱包支付只写 `user_balance_log`,**不写 `finance_flow` 收入流水**(单单链路 `OrderController::pay` 有写),日后退款只有退款流水没有收入流水 | `TripController::pay` | 待办 |
+| D | **payment-service 仍是空壳**:Stripe/PayPal 渠道全部抛「尚未启用」、回调只落日志、没有支付单表 —— PRD 流程图的「Single Payment(PAY000001)→ Split Payment Internally」没有载体,现在真动钱的只有钱包 | `payment-service/app/Payment/*Channel.php`、`CallbackController` | 待办(与 P1「部分失败」绑做:先收钱→逐单确认→失败者单退,需要真实支付单作锚) |
+| E | **通知粒度**:PRD「支付确认发一次、每家预订确认各发一条」;现在只发一条「行程下 N 个预订已全部确认」 | `TripController::pay` 末尾 `pushOrder` | 待办 |
+| F | **同一张券可用两次**:下单不占券(状态保持可用),同券可挂在多笔待支付单上;先付的核销后,后付的在核销处 `if ($rec)` 静默跳过,**仍按已抵扣价格成交** | `OrderController::pay`、`TripController::pay` 的核销段 | ✅ **已修(2026-09-24)** |
+
+**F 的修法与 PRD 依据**:PRD 没有任何券「释放 / 返还」规则(Consumer/Merchant PRD、管理后台设计、技术方案全文检索均无);
+模块 6.1 流程图券状态只有 `Available → Used` 单向,且「付款前可换券/去券」—— 付款才是占券点,取消/退款**不返还券**,
+退款按折后额计算(§1.1 line 125)。所以不做下单锁券 + 释放,而是**支付时先锁券再扣款**:
+`PricingService::lockCouponForPay()` 在扣款前行锁领券记录,已不可用即抛 40901「该订单使用的优惠券已被其他订单使用或已失效,请取消后重新下单」整单回滚;
+`consumeCoupon()` 在支付成功后核销。单单与 Trip 共用。
+端到端已验(site 7 用户 28,mock 支付):同券两单 → 先付成功、后付 40901 且未产生流水;余额支付被拒时余额不变;无券单照常支付;同券两个 Trip → 同样后付被拒。
+测试遗留:用户 28 的已付测试单 31 / 33 / 34(Trip 10)与已核销的领券记录 50 / 51 留在开发库,需要干净数据可重跑 `test/adhoc/c-coupon-demo.sql`。
+
+**A / B 的修法**:
+- 新增 `BookingLifecycleService::lockTripFor()`(事务内**先**锁 `order_trip` 再锁 `order_main`,与 `TripController::pay` 加锁顺序一致,防交叉死锁)与 `closePendingTrip()`:Trip 内一笔**待支付**预订被取消/超时 → 同 Trip 其余待支付预订一并取消、释放锁定库存、逐笔记时间线与通知,`order_trip.pay_status = 2`。理由:券按整单净额分摊,少一笔整单就付不了。**已支付**的 Trip 不受影响(支付后各预订独立取消,PRD §1.1)。取消(C 端/商户/后台三处都走 `BookingLifecycleService::cancel`)与超时扫单共用这一实现。
+- `OrderController::pay` 对 `trip_id > 0` 直接拒绝(「该预订属于多预订行程,请整单支付」);C 端 `OrderDetailScreen` 的余额支付按 `trip_id` 分流到 `trip/pay`(与 `BookingDetailScreen` / `useBookingResult` 同口径),Trip 单跳过前置余额比较(单笔 `pay_amount` 不是整单金额)。
+- ⚠️ 仅做了 `php -l`(order-service 镜像内)与 client `tsc`,**未起全栈跑端到端**。

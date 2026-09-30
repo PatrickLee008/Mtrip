@@ -92,45 +92,16 @@ class TripController extends AbstractController
                 }
             }
             unset($item);
-            // 1) 逐项锁库存 + 计长住,得到各项净额
-            $legs = [];
-            $tripTotal = 0.0;
-            foreach ($prepared as $p) {
-                [$original, $changes] = $this->stockService->lock(
-                    $siteId, $p['propertyId'], 0, 1, $p['roomTypeId'], $p['room'], $p['dates'], $p['quantity'], $p['isCitizen']
-                );
-                $longstay = $this->pricingService->longstayDiscount($siteId, count($p['dates']), $original);
-                $net = round($original - $longstay, 2);
-                $tripTotal = round($tripTotal + $net, 2);
-                $legs[] = $p + ['original' => $original, 'longstay' => $longstay, 'net' => $net, 'changes' => $changes];
-            }
-
-            // 2) 整单券校验(按整单净额)与占比分摊
-            $couponRefId = 0;
-            $couponDiscount = 0.0;
-            if ($couponId > 0) {
-                /**
-                 * 适用范围要按**本 Trip 实际覆盖的物业/房型**校验:整车同一家酒店时
-                 * (App 的房型购物车正是这种)把该物业/房型传下去,跨物业/跨房型才传 0。
-                 * 一律传 0 会把「指定物业/指定房型」的券全判成不适用 —— 而 App 那一侧是按
-                 * `/coupon/match-list`(带 propertyId/roomTypeId)算出可用并自动应用的,
-                 * 两边口径不一致会让整单在这里直接失败。
-                 */
-                $propertyIds = array_values(array_unique(array_map('intval', array_column($legs, 'propertyId'))));
-                $roomTypeIds = array_values(array_unique(array_map('intval', array_column($legs, 'roomTypeId'))));
-                [$couponRefId, $couponDiscount] = $this->pricingService->resolveCoupon(
-                    $siteId,
-                    $userId,
-                    $couponId,
-                    1,
-                    count($propertyIds) === 1 ? $propertyIds[0] : 0,
-                    count($roomTypeIds) === 1 ? $roomTypeIds[0] : 0,
-                    0,
-                    0,
-                    $tripTotal
-                );
-            }
-            $allocs = $this->allocate($couponDiscount, array_column($legs, 'net'), $tripTotal);
+            // 1)+2) 逐项锁库存计价 + 整单券校验与占比分摊(与 trip/quote 同一实现)
+            ['legs' => $legs, 'tripTotal' => $tripTotal, 'couponRefId' => $couponRefId, 'couponDiscount' => $couponDiscount,
+                'couponSnapshot' => $couponSnapshot, 'allocs' => $allocs] = $this->priceTrip($siteId, $userId, $prepared, $couponId, false);
+            // 金额确认:与用户看到的应付(trip/quote 给的 payAmount)不一致就不建单,抛错回滚已锁库存
+            $this->pricingService->assertExpectedPay($this->input('expectedPayAmount'), [
+                'original' => round(array_sum(array_column($legs, 'original')), 2),
+                'longstayDiscount' => round(array_sum(array_column($legs, 'longstay')), 2),
+                'couponDiscount' => $couponDiscount,
+                'payAmount' => max(0.0, round($tripTotal - $couponDiscount, 2)),
+            ]);
 
             // 3) 建 Trip 主单
             $tripId = (int) Db::table('order_trip')->insertGetId([
@@ -178,6 +149,8 @@ class TripController extends AbstractController
                     'coupon_id' => $couponRefId,
                     'coupon_discount' => $alloc,
                     'alloc_coupon_discount' => $alloc,
+                    // 整单券规则快照,各预订同一份;结算按它算出资方分摊
+                    'coupon_snapshot' => $couponSnapshot,
                     'pay_amount' => $payAmount,
                     'order_status' => 0,
                     'use_date' => $leg['useDate'],
@@ -263,6 +236,8 @@ class TripController extends AbstractController
              * 不是逐个预订各扣一次(那样会把同一笔钱拆成多条流水,且中途余额不足只成功一半)。
              * 余额不足由 `WalletService::debit` 抛错,整个事务回滚。
              */
+            // 先锁整单券再扣款:券已被别的订单用掉就在这里拒绝,不产生任何扣款
+            $couponRec = $this->pricingService->lockCouponForPay((int) $trip['coupon_id']);
             $tripPayAmount = round((float) $trip['pay_amount'], 2);
             if ($payMethod === 3 && $tripPayAmount > 0) {
                 $this->walletService->debit(
@@ -293,17 +268,8 @@ class TripController extends AbstractController
                 $codes[] = ['orderNo' => $b['order_no'], 'verifyCode' => $verifyCode];
             }
 
-            // 整单券消耗一次
-            if ((int) $trip['coupon_id'] > 0) {
-                $rec = Db::table('marketing_coupon_receive')->where('id', (int) $trip['coupon_id'])
-                    ->where('status', 0)->lockForUpdate()->first(['id', 'coupon_id']);
-                if ($rec) {
-                    Db::table('marketing_coupon_receive')->where('id', $rec->id)->update([
-                        'status' => 1, 'order_id' => $tripId, 'used_time' => date('Y-m-d H:i:s'),
-                    ]);
-                    Db::table('marketing_coupon')->where('id', $rec->coupon_id)->increment('used_count');
-                }
-            }
+            // 整单券核销一次(已在扣款前锁定并确认可用)
+            $this->pricingService->consumeCoupon($couponRec, $tripId);
             // 推荐返利不在支付时发放:Trip 下各酒店订单各自入住核销时由 BookingLifecycleService::checkIn 发放(PRD 模块14)
             return ['siteId' => (int) $trip['site_id'], 'userId' => (int) $trip['user_id'], 'tripNo' => (string) $trip['trip_no'], 'codes' => $codes, 'orders' => array_map(static fn ($x) => (array) $x, $bookings->all())];
         });
@@ -324,6 +290,121 @@ class TripController extends AbstractController
         }
 
         return Result::success(['codes' => $snap['codes']], '支付成功,行程内各预订已确认');
+    }
+
+    /**
+     * 只读试算(复核页 / 购物车页的价格明细,PRD 302-309:Original / Long Stay Discount / Coupon / Final):
+     * 与 trip/create 同一套取价、长住、券与分摊代码(priceTrip dryRun),不加锁、不占库存、不建单。
+     * 入参同 trip/create,但不要求联系人;券不可用时不报错,couponDiscount=0 并给出 couponError。
+     * 售罄/库存不足/房型停售等仍直接报错(下单也会失败,应尽早告诉用户)。
+     */
+    public function quote(): array
+    {
+        $siteId = $this->requireSiteId();
+        $userId = UserContext::userId();
+        $items = $this->input('items');
+        if (! is_array($items) || count($items) < 1 || count($items) > 10) {
+            throw new BusinessException(ErrorCode::PARAM_ERROR, 'Trip 须包含 1-10 个酒店预订');
+        }
+        $prepared = [];
+        foreach ($items as $idx => $item) {
+            $prepared[] = $this->prepareItem($siteId, (array) $item, $idx, true);
+        }
+        $priced = $this->priceTrip($siteId, $userId, $prepared, $this->intInput('couponId', 0), true);
+
+        $lines = [];
+        $original = 0.0;
+        $longstay = 0.0;
+        foreach ($priced['legs'] as $i => $leg) {
+            $alloc = $priced['allocs'][$i];
+            $original = round($original + $leg['original'], 2);
+            $longstay = round($longstay + $leg['longstay'], 2);
+            $lines[] = [
+                'propertyId' => $leg['propertyId'],
+                'roomTypeId' => $leg['roomTypeId'],
+                'quantity' => $leg['quantity'],
+                'nights' => count($leg['dates']),
+                'original' => $leg['original'],
+                'longstayDiscount' => $leg['longstay'],
+                'couponDiscount' => $alloc,
+                'payAmount' => max(0.0, round($leg['net'] - $alloc, 2)),
+            ];
+        }
+        return Result::success([
+            'original' => $original,
+            'longstayDiscount' => $longstay,
+            'couponId' => $priced['couponRefId'],
+            'couponDiscount' => $priced['couponDiscount'],
+            'couponError' => $priced['couponError'],
+            'payAmount' => max(0.0, round($priced['tripTotal'] - $priced['couponDiscount'], 2)),
+            'items' => $lines,
+        ]);
+    }
+
+    /**
+     * Trip 计价(create 与 quote 共用,保证试算金额 = 实际下单金额):
+     * 逐项取日历价(dryRun 不加锁不占库存)+ 长住优惠 → 整单净额 → 整单券校验 → 按净额占比分摊。
+     * dryRun 时券不可用不抛错,记入 couponError;实际下单时照常抛错。
+     */
+    private function priceTrip(int $siteId, int $userId, array $prepared, int $couponId, bool $dryRun): array
+    {
+        $legs = [];
+        $tripTotal = 0.0;
+        foreach ($prepared as $p) {
+            [$original, $changes] = $this->stockService->lock(
+                $siteId, $p['propertyId'], 0, 1, $p['roomTypeId'], $p['room'], $p['dates'], $p['quantity'], $p['isCitizen'], $dryRun
+            );
+            $longstay = $this->pricingService->longstayDiscount($siteId, count($p['dates']), $original);
+            $net = round($original - $longstay, 2);
+            $tripTotal = round($tripTotal + $net, 2);
+            $legs[] = $p + ['original' => $original, 'longstay' => $longstay, 'net' => $net, 'changes' => $changes];
+        }
+
+        $couponRefId = 0;
+        $couponDiscount = 0.0;
+        $couponSnapshot = null;
+        $couponError = null;
+        $allocs = array_fill(0, count($legs), 0.0);
+        if ($couponId > 0) {
+            /**
+             * 资格与分摊逐行判定(PRD §17.5/§17.6,shared CouponEligibility):
+             * 指定酒店/房型、长住晚数、提前预订、入住日期段不满足的行拿不到抵扣;
+             * 最少间数/酒店数、门槛(按合格金额)不满足则整张券不可用。分摊只在合格行之间按净额占比。
+             */
+            $couponLegs = array_map(static fn (array $leg) => [
+                'propertyId' => $leg['propertyId'],
+                'roomTypeId' => $leg['roomTypeId'],
+                'quantity' => $leg['quantity'],
+                'nights' => count($leg['dates']),
+                'checkIn' => $leg['useDate'],
+                'checkOut' => $leg['endDate'],
+                'amount' => $leg['net'],
+            ], $legs);
+            try {
+                [$couponRefId, $couponDiscount, $couponSnapshot, $allocs] = $this->pricingService->resolveCouponForLegs(
+                    $siteId,
+                    $userId,
+                    $couponId,
+                    1,
+                    $couponLegs,
+                    ! $dryRun
+                );
+            } catch (BusinessException $e) {
+                if (! $dryRun) {
+                    throw $e;
+                }
+                $couponError = $e->getMessage();
+            }
+        }
+        return [
+            'legs' => $legs,
+            'tripTotal' => $tripTotal,
+            'couponRefId' => $couponRefId,
+            'couponDiscount' => $couponDiscount,
+            'couponSnapshot' => $couponSnapshot,
+            'couponError' => $couponError,
+            'allocs' => $allocs,
+        ];
     }
 
     /** Trip 详情:主单 + 各预订(按入住日排序,展示各自状态) */
@@ -363,8 +444,8 @@ class TripController extends AbstractController
         return Result::page($list, $total, $page, $pageSize);
     }
 
-    /** 校验并取数单个行程项(无副作用) */
-    private function prepareItem(int $siteId, array $item, int $idx): array
+    /** 校验并取数单个行程项(无副作用);$forQuote=true 为试算,不要求联系人 */
+    private function prepareItem(int $siteId, array $item, int $idx, bool $forQuote = false): array
     {
         $propertyId = (int) ($item['propertyId'] ?? 0);
         $roomTypeId = (int) ($item['roomTypeId'] ?? 0);
@@ -379,7 +460,7 @@ class TripController extends AbstractController
         $endDate = trim((string) ($item['endDate'] ?? ''));
         $contactName = trim((string) ($item['contactName'] ?? ''));
         $contactPhone = trim((string) ($item['contactPhone'] ?? ''));
-        if ($useDate === '' || $endDate === '' || $contactName === '' || $contactPhone === '') {
+        if ($useDate === '' || $endDate === '' || (! $forQuote && ($contactName === '' || $contactPhone === ''))) {
             throw new BusinessException(ErrorCode::PARAM_ERROR, "第" . ($idx + 1) . "项缺少入离店日期或联系人");
         }
 
@@ -417,27 +498,6 @@ class TripController extends AbstractController
     {
         $images = is_string($value) ? (json_decode($value, true) ?: []) : (array) $value;
         return is_string($images[0] ?? null) ? $images[0] : '';
-    }
-
-    /** 券按各项净额占比分摊,末项吸收四舍五入余数,保证合计=券额 */
-    private function allocate(float $discount, array $nets, float $total): array
-    {
-        $n = count($nets);
-        $allocs = [];
-        if ($discount <= 0 || $total <= 0) {
-            return array_fill(0, $n, 0.0);
-        }
-        $acc = 0.0;
-        foreach ($nets as $i => $net) {
-            if ($i < $n - 1) {
-                $a = round($discount * $net / $total, 2);
-                $acc = round($acc + $a, 2);
-            } else {
-                $a = round($discount - $acc, 2);
-            }
-            $allocs[$i] = max(0.0, $a);
-        }
-        return $allocs;
     }
 
     private function aesKey(): string

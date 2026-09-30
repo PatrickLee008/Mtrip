@@ -29,6 +29,7 @@ import { useTranslation } from 'react-i18next';
 import type { HotelReview } from '@/api/goods';
 import HomeIcon from '@/components/home/HomeIcon';
 import { detailShared } from '@/components/hotel/detailShared';
+import { formatReviewDate, reviewNickname, toTenPointScore } from '@/components/hotel/reviewFormat';
 import { colors, shadows } from '@/config/theme';
 import { fonts } from '@/config/typography';
 import { resolveMediaUri } from '@/utils/media';
@@ -40,48 +41,16 @@ const PHOTO_WIDTH = 192;
 const PHOTO_HEIGHT = 128;
 const PHOTO_RADIUS = 32;
 
-/**
- * 后端 `HotelController::reviews` 在 `nickname` 为空时会填这个中文字面量。
- * 它是服务端的兜底值、不是用户昵称,直接显示会让英文/缅文界面冒出一句中文,
- * 所以客户端把它当成「没有昵称」,换成 i18n 文案。
- */
-const BACKEND_ANON_NICKNAME = '匿名用户';
-
 interface Props {
   review: HotelReview;
   /** 商家回复的抬头,稿面是物业名(「Heritage Bagan Hotel」);拿不到时用通用文案 */
   propertyName?: string;
 }
 
-/** 后端 `created_at` 是 `YYYY-MM-DD HH:mm:ss`,Hermes 对带空格的写法不保证能解析 */
-function parseCreatedAt(value: string): Date | null {
-  if (!value) return null;
-  const normalized = value.includes('T') ? value : value.replace(' ', 'T');
-  const date = new Date(normalized);
-  return Number.isNaN(date.getTime()) ? null : date;
-}
-
-/** 稿面「August 14, 2024」;解析不出来返回空串,由调用方决定整行不渲染 */
-function formatReviewDate(value: string, locale: string): string {
-  const date = parseCreatedAt(value);
-  if (!date) return '';
-  return date.toLocaleDateString(locale, { month: 'long', day: 'numeric', year: 'numeric' });
-}
-
-/** 1-5 分制 → 稿面的 10 分制;脏值按 0 处理,不产生 NaN */
-function toTenPointScore(rating: number): string {
-  const value = Number(rating);
-  return (Number.isFinite(value) && value > 0 ? value * 2 : 0).toFixed(1);
-}
-
 export default function HotelReviewCard({ review, propertyName }: Props) {
   const { t, i18n } = useTranslation();
 
-  const rawNickname = typeof review.nickname === 'string' ? review.nickname.trim() : '';
-  const nickname =
-    rawNickname === '' || rawNickname === BACKEND_ANON_NICKNAME
-      ? t('hotels.reviewsPage.anonymous')
-      : rawNickname;
+  const nickname = reviewNickname(review, t);
 
   const meta = formatReviewDate(review.created_at, i18n.language);
 

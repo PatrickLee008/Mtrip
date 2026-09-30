@@ -20,6 +20,8 @@ export class ApiError extends Error {
   constructor(
     public code: number,
     message: string,
+    /** 失败响应里的 data(多数为 null;如 PRICE_CHANGED 携带最新金额明细) */
+    public data: unknown = null,
   ) {
     super(message);
     this.name = 'ApiError';
@@ -133,7 +135,7 @@ export async function request<T>(config: AxiosRequestConfig, options?: RequestOp
     if (!options?.silent && !options?.silentCodes?.includes(body.code)) {
       hooks.onToast(body.message);
     }
-    throw new ApiError(body.code, body.message);
+    throw new ApiError(body.code, body.message, body.data);
   } catch (error) {
     if (error instanceof ApiError) throw error;
     const axiosError = error as AxiosError;
@@ -158,6 +160,16 @@ export function post<T>(
   options?: RequestOptions,
 ): Promise<T> {
   return request<T>({ method: 'POST', url, data }, options);
+}
+
+/**
+ * multipart 上传(图片等)。签名只覆盖 method/path/timestamp/nonce,不含 body,故与普通 POST 同一套拦截器即可
+ */
+export function postForm<T>(url: string, data: FormData, options?: RequestOptions): Promise<T> {
+  return request<T>(
+    { method: 'POST', url, data, headers: { 'Content-Type': 'multipart/form-data' } },
+    options,
+  );
 }
 
 /**

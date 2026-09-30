@@ -13,14 +13,14 @@
  *   折扣卡   --tab 底,1px --secondary 描边,圆角 32,padding 24,gap 16;四行整体 50% 透明
  *   广告位   320:180 比例,白底,1px --secondary 描边,圆角 32
  *
- * 入住/离店拉起 DatePickerSheet(695:1428),选中的区间只回填到本页搜索卡:
- * 列表接口没有日期参数,不参与 Search 请求。
+ * 入住/离店拉起 DatePickerSheet(695:1428),选中的区间与弹性天数随 Search 带到结果页,
+ * 结果页据此只列有房的酒店。
  *
  * 未实现的能力(设计稿有、当前没有对应依赖或接口),一律走 comingSoon:
  *   目的地定位、入住人选择
- * Search 提交后跳搜索结果页 HotelResults(设计稿 1695:6325),带上关键词/日期/公民身份。
- * 顶部栏筛选按钮拉起 HotelFilterSheet(408:1824);列表接口没有价格/设施筛选参数,
- * 选择结果目前只存在本页状态里,不参与 Search 请求。
+ * Search 提交后以结果页 HotelResults(设计稿 1695:6325)替换本页,带上关键词/日期/公民身份(返回直接回首页)。
+ * 顶部栏筛选按钮拉起 HotelFilterSheet(408:1824);点 Show Results 即带着当前搜索卡条件
+ * 与所选筛选跳结果页,之后点 Search 也会带上同一份筛选。
  */
 
 import React, { useState } from 'react';
@@ -28,6 +28,7 @@ import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTranslation } from 'react-i18next';
 
 import HomeIcon from '@/components/home/HomeIcon';
@@ -44,6 +45,7 @@ import HotelGuideOverlay from '@/components/hotel/guide/HotelGuideOverlay';
 import { GOODS_TYPE } from '@/config/global';
 import { PAGE_PADDING, colors, radius } from '@/config/theme';
 import { fonts } from '@/config/typography';
+import type { RootStackParamList } from '@/navigation/types';
 import { useCommonStore } from '@/store/commonStore';
 
 const HERO = require('../../../assets/images/hotels/hero.png');
@@ -65,7 +67,7 @@ const DEFAULT_NIGHTS = 2;
 
 export default function HotelsScreen() {
   const { t, i18n } = useTranslation();
-  const navigation = useNavigation();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const showToast = useCommonStore((s) => s.showToast);
 
   const [keyword, setKeyword] = useState('');
@@ -88,15 +90,21 @@ export default function HotelsScreen() {
     });
   };
 
-  /** 跳搜索结果页(设计稿 1695:6325),把当前搜索卡的条件一起带过去 */
-  const search = () => {
+  /**
+   * 跳搜索结果页(设计稿 1695:6325),把当前搜索卡的条件一起带过去。
+   * 用 replace 而不是 navigate:结果页标题、大图、搜索卡都与本页相同且可继续改条件,
+   * 本页若留在栈里,结果页点返回会落回这页,看起来像返回键没反应(QA CA_TC_026);
+   * 替换后结果页返回直接回首页。
+   */
+  const search = (next: HotelFilterValue = filter) => {
     const kw = keyword.trim();
-    navigation.navigate('HotelResults', {
+    navigation.replace('HotelResults', {
       ...(kw ? { keyword: kw } : {}),
       checkIn: range.checkIn,
       checkOut: range.checkOut,
       flexDays: range.flexDays,
       citizen,
+      filter: next,
     });
   };
 
@@ -125,7 +133,7 @@ export default function HotelsScreen() {
                   placeholder={t('hotels.searchPlaceholder')}
                   placeholderTextColor={colors.textSoft}
                   returnKeyType="search"
-                  onSubmitEditing={search}
+                  onSubmitEditing={() => search()}
                 />
                 <Pressable onPress={comingSoon} hitSlop={8}>
                   <HomeIcon name="locationFilled" size={20} color={colors.primary} />
@@ -182,7 +190,7 @@ export default function HotelsScreen() {
 
               <Pressable
                 style={({ pressed }) => [styles.cta, pressed && styles.pressed]}
-                onPress={search}
+                onPress={() => search()}
               >
                 <Text style={styles.ctaText}>{t('hotels.search')}</Text>
               </Pressable>
@@ -261,7 +269,7 @@ export default function HotelsScreen() {
 
       <HotelGuideOverlay visible={guideOpen} onClose={() => setGuideOpen(false)} />
 
-      {/* 日期选择器:选中的区间目前只回填到搜索卡,列表接口没有日期参数 */}
+      {/* 日期选择器:选中的区间回填搜索卡,Search 时带到结果页 */}
       <DatePickerSheet
         visible={dateOpen}
         value={range}
@@ -275,10 +283,18 @@ export default function HotelsScreen() {
       <HotelFilterSheet
         visible={filterOpen}
         value={filter}
+        scope={{
+          keyword: keyword.trim() || undefined,
+          citizen: citizen ? 1 : undefined,
+          checkIn: range.checkIn,
+          checkOut: range.checkOut,
+          flexDays: range.flexDays || undefined,
+        }}
         onClose={() => setFilterOpen(false)}
         onApply={(next) => {
           setFilter(next);
           setFilterOpen(false);
+          search(next);
         }}
         onComingSoon={comingSoon}
       />

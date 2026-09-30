@@ -251,6 +251,8 @@ services:
       HTTP_PORT: "9502"
     ports:
       - "9502:9502"
+    volumes:
+      - ./uploads:/opt/www/uploads
 
   goods-service:
     <<: *hyperf-common

@@ -24,7 +24,9 @@ import { useTranslation } from 'react-i18next';
 import { fetchHotelDetail } from '@/api/goods';
 import { fetchCouponMatchList, type BestCoupon } from '@/api/marketing';
 import { createOrder, payOrder } from '@/api/order';
+import { ApiError } from '@/api/request';
 import { apiTripCreate, apiTripPay } from '@/api/trip';
+import { API_CODE, type PriceChangeDetail } from '@/api/types';
 import { fetchTravelerList } from '@/api/user';
 import {
   formatDayMonth,
@@ -43,12 +45,14 @@ import {
   type LeadGuestForm,
   type PaymentMethodKey,
 } from '@/screens/hotel/bookingDemo';
+import { cartTripItems, useTripQuote } from '@/screens/hotel/useTripQuote';
 import { useCommonStore } from '@/store/commonStore';
 import { useRoomCartStore } from '@/store/roomCartStore';
 import { useSiteStore } from '@/store/siteStore';
 import { useUserStore } from '@/store/userStore';
 import type { CouponView, RefundRule } from '@/types/models';
 import { formatMoney } from '@/utils/format';
+import { isContactMobile, isEmail } from '@/utils/validate';
 
 /** 设计稿写死「还能再加 2 位同行人」 */
 export const ADDITIONAL_QUOTA = 2;
@@ -79,6 +83,11 @@ interface Options {
    * 不关掉的话会在关怀模式下悄悄按车里的内容下单。
    */
   useCart?: boolean;
+  /**
+   * 邮箱是否选填。完整模式表单把邮箱标了必填(确认函发往该邮箱);
+   * 关怀模式新稿把邮箱收成可展开的选填项,传 true。填了的话两边都校验格式。
+   */
+  emailOptional?: boolean;
 }
 
 /**
@@ -124,6 +133,7 @@ export function useBookingWizard({
   enableMultiStay = true,
   steps,
   confirmLogin = false,
+  emailOptional = false,
   useCart = true,
 }: Options) {
   const { t, i18n } = useTranslation();
@@ -312,6 +322,17 @@ export function useBookingWizard({
   /** 多房间模式:金额与间数一律以车为准,不再是路由带进来的那一个 `roomTypeId` */
   const cartMode = tripRooms.length > 0;
   /**
+   * 车里各房型对应的 Trip 行(不含联系人)。`trip/quote` 试算与 `submit` 的 `trip/create`
+   * **共用这一份**,保证试算的就是将要提交的内容。
+   */
+  const tripBaseItems = useMemo(
+    () =>
+      cartMode
+        ? cartTripItems(cartPropertyId as number, tripRooms, current.checkIn, current.checkOut)
+        : [],
+    [cartMode, tripRooms, cartPropertyId, current.checkIn, current.checkOut],
+  );
+  /**
    * 车内房费合计 = Σ 单价 × 间数 × 晚数,与详情页底栏、购物车页的合计**同一公式**。
    * 半选日期(`checkOut` 为空)时按 1 晚,跟 `roomCartStore.nightsBetween` 的兜底一致。
    *
@@ -323,8 +344,6 @@ export function useBookingWizard({
     const nights = Math.max(1, nightsBetween(current.checkIn, current.checkOut));
     return tripRooms.reduce((sum, room) => sum + room.price * room.quantity * nights, 0);
   }, [cartMode, tripRooms, current.checkIn, current.checkOut]);
-  /** 向导各处要用的房费与间数口径:多房间看车,单房型看当前住宿 */
-  const roomsTotal = cartMode ? cartTotal : current.total;
   const roomCount = cartMode
     ? tripRooms.reduce((sum, room) => sum + room.quantity, 0)
     : current.rooms;
@@ -347,9 +366,82 @@ export function useBookingWizard({
   const [couponLoading, setCouponLoading] = useState(false);
   const [couponOpen, setCouponOpen] = useState(false);
 
+  /**
+   * 试算入参:多房间 = 整车(与 `trip/create` 同一份);单房型 = 一项(与 `createOrder` 同参:
+   * 物业 / 房型 / 间数 / 日期)。单房型也走 `trip/quote` —— 一项的 Trip 与 `order/create`
+   * 计价完全一致(同一套日历价 / 长住 / 券,且券按该物业与房型校验,2026-09-28 实测三种券型逐项相等)。
+   * 演示模式(没有真实房型)不试算。
+   */
+  const quoteItems = useMemo(
+    () =>
+      cartMode
+        ? tripBaseItems
+        : realMode && current.propertyId && current.roomTypeId
+          ? [
+              {
+                propertyId: current.propertyId,
+                roomTypeId: current.roomTypeId,
+                quantity: current.rooms,
+                useDate: current.checkIn,
+                endDate: current.checkOut,
+              },
+            ]
+          : [],
+    [cartMode, tripBaseItems, realMode, current.propertyId, current.roomTypeId, current.rooms, current.checkIn, current.checkOut],
+  );
+  /**
+   * 试算(`trip/quote`,与下单同一套后端计价),见 `useTripQuote`:
+   *   `cartQuote` 房型/日期一致即有效 —— 原价、长住优惠、券门槛基数用它;
+   *   `tripQuote` 连券也一致才有效 —— 券额、应付、余额校验用它。
+   * 为空(未登录 / 演示 / 日期没选全 / 请求中 / 失败)时退回预估值(多房间 `cartTotal`,单房型 `current.total`)。
+   * 传原始 `couponId`(而不是 appliedCoupon):券不适用时正好由试算的 couponError 报出来。
+   */
+  const { itemsQuote: cartQuote, quote: tripQuote } = useTripQuote(
+    quoteItems,
+    couponId,
+    isLogin && Boolean(current.checkIn && current.checkOut),
+  );
+  /** 向导各处要用的房费口径:试算有值取日历价合计;否则多房间看车、单房型看当前住宿的预估 */
+  const roomsTotal = cartQuote?.original ?? (cartMode ? cartTotal : current.total);
+  /** 复核页房费/合计的覆盖值:多房间恒传整车;单房型只在试算到了才传,否则 ReviewBody 按这一段住宿自己算 */
+  const reviewRoomTotal = cartMode || cartQuote ? roomsTotal : undefined;
+
   const couponEnabled = realMode && isLogin && !multi;
-  /* 试算基数:多房间要按整车净额算,否则券的抵扣额会按单间去匹配门槛,与后端整单口径对不上 */
-  const couponBase = cartMode ? cartTotal : current.roomPrice;
+  /**
+   * 试算基数:多房间要按整车净额算,否则券的抵扣额会按单间去匹配门槛,与后端整单口径对不上。
+   * 试算回来后取「日历价合计 − 长住优惠」,与后端 resolveCoupon 的门槛基数一致;
+   * 这个值与选哪张券无关,所以券列表 ↔ 试算只会互相触发一轮,不会来回震荡。
+   */
+  const couponBase = cartQuote
+    ? cartQuote.original - cartQuote.longstayDiscount
+    : cartMode
+      ? cartTotal
+      : current.roomPrice;
+
+  /**
+   * 选券列表的整单上下文(PRD §17.5):按行带间数 / 晚数 / 入离日期 / 该行净额,后端用与下单同一实现
+   * 判定资格(指定房型、最少间数、长住、早鸟、入住日期段),券一开始就判对,不再「先显示可用、试算后撤回」。
+   * 行净额有试算取试算(原价 − 长住),否则按底价预估;这个值与选哪张券无关,不会引起券列表 ↔ 试算来回触发。
+   * 日期没选全时不带(后端退回单项判定)。
+   */
+  const couponItems = useMemo(() => {
+    if (!current.checkIn || !current.checkOut) return [];
+    return quoteItems.map((item, i) => {
+      const nights = Math.max(1, nightsBetween(item.useDate, item.endDate));
+      const line = cartQuote?.items[i];
+      const estimate = cartMode ? (tripRooms[i]?.price ?? 0) * item.quantity * nights : current.total;
+      return {
+        propertyId: item.propertyId,
+        roomTypeId: item.roomTypeId,
+        quantity: item.quantity,
+        nights,
+        checkIn: item.useDate,
+        checkOut: item.endDate,
+        amount: line ? line.original - line.longstayDiscount : estimate,
+      };
+    });
+  }, [quoteItems, cartQuote, cartMode, tripRooms, current.checkIn, current.checkOut, current.total]);
+  const couponItemsKey = JSON.stringify(couponItems);
 
   useEffect(() => {
     if (!couponEnabled || !propertyId || !roomTypeId || couponBase <= 0) {
@@ -359,7 +451,13 @@ export function useBookingWizard({
     }
     let alive = true;
     setCouponLoading(true);
-    void fetchCouponMatchList({ orderType: 1, propertyId, roomTypeId, amount: couponBase })
+    void fetchCouponMatchList({
+      orderType: 1,
+      propertyId,
+      roomTypeId,
+      amount: couponBase,
+      items: couponItems.length > 0 ? couponItems : undefined,
+    })
       .then((data) => {
         if (!alive) return;
         setCouponList(data.list);
@@ -384,18 +482,39 @@ export function useBookingWizard({
     return () => {
       alive = false;
     };
-  }, [couponEnabled, propertyId, roomTypeId, couponBase, couponTouched]);
+    // couponItemsKey 是 couponItems 的内容序列化
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [couponEnabled, propertyId, roomTypeId, couponBase, couponTouched, couponItemsKey]);
 
   /** 真正生效的券:选中的那张必须仍在可用列表里,否则当作没有券 */
   const appliedCoupon = useMemo(() => {
     if (couponId <= 0) return null;
     const found = couponList.find((c) => c.receive_id === couponId);
     if (!found || found.unusableReason !== null) return null;
-    return { receiveId: found.receive_id, name: found.coupon_name, discount: found.discount ?? 0 };
-  }, [couponId, couponList]);
+    /* 抵扣额以试算为准(多房间时 match-list 只带了一个房型,算出来的是单房型口径) */
+    const discount =
+      tripQuote && tripQuote.couponId === found.receive_id
+        ? tripQuote.couponDiscount
+        : (found.discount ?? 0);
+    return { receiveId: found.receive_id, name: found.coupon_name, discount };
+  }, [couponId, couponList, tripQuote]);
 
   const hasUsableCoupon = couponList.some((c) => c.unusableReason === null);
   const couponDiscount = appliedCoupon?.discount ?? 0;
+
+  /**
+   * 券对整车不适用(例如指定房型券,而车里还有别的房型)时,试算给 `couponError` 而不是报错:
+   * 把券去掉并提示原因,同时置 `couponTouched`,免得「自动最优券」又把它套回来来回震荡。
+   */
+  useEffect(() => {
+    if (couponId > 0 && tripQuote?.couponError) {
+      setCouponTouched(true);
+      setCouponId(0);
+      showToast(tripQuote.couponError);
+    }
+    // 只在新试算结果到达时判断一次
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tripQuote]);
 
   /** 步骤序列:调用方给了 `steps` 就用它;否则多住宿才插入 trip */
   const sequence = useMemo<BookingStepKey[]>(
@@ -445,7 +564,13 @@ export function useBookingWizard({
    * `roomsTotal` 在多房间模式下是**整车**合计 —— 这里若还按单间算,余额校验会放过余额不足的账号,
    * 到 `trip/pay` 才被后端打回,用户看到的也会是比实扣少的数字。
    */
-  const payableTotal = multi ? tripTotal : Math.max(0, roomsTotal - couponDiscount);
+  /** 长住优惠(复核页价格明细一行);只有试算给得出,没试算(演示/未登录)时为 0 */
+  const longstayDiscount = cartQuote?.longstayDiscount ?? 0;
+  const payableTotal = multi
+    ? tripTotal
+    : tripQuote
+      ? tripQuote.payAmount
+      : Math.max(0, roomsTotal - longstayDiscount - couponDiscount);
 
   /**
    * 真实下单:`create` 建单 → `pay` 支付。
@@ -457,14 +582,25 @@ export function useBookingWizard({
    * **不拿账号手机号兜底**:`/app/user/me` 与登录返回的 `mobile` 都经过 `MaskHelper` 脱敏
    * (形如 `09****1234`),提交上去就是一条联系不上的假号码。
    */
-  const submit = async () => {
+  /**
+   * 金额确认(PRICE_CHANGED):后端按提交时的 expectedPayAmount 比对实际计价,不一致就不建单并返回
+   * 最新明细。这里存下来弹「价格已变动」确认框,用户确认后按**服务端金额**重提;取消则留在当前步。
+   */
+  const [priceChange, setPriceChange] = useState<PriceChangeDetail | null>(null);
+
+  /**
+   * @param confirmedAmount 用户在「价格已变动」框里确认过的新金额;首次提交不传,取页面显示的 `payableTotal`。
+   *   无论哪种,提交的都是**用户看到并同意的那个数**,后端不一致就再拦一次。
+   */
+  const submit = async (confirmedAmount?: number) => {
     /* 多房间模式下房型来自购物车,路由不一定带 roomTypeId,所以只在单房型链路上拦 */
     if (!cartMode && (!current.propertyId || !current.roomTypeId)) {
       comingSoon();
       return;
     }
     const contactName = `${form.firstName.trim()} ${form.lastName.trim()}`.trim();
-    const contactPhone = form.phone.trim();
+    /* 用户可能按占位符「9 123 4567」带空格输入,入库前去掉 */
+    const contactPhone = form.phone.replace(/[\s-]/g, '');
     if (!contactPhone) {
       showToast(t('hotels.booking.guests.phoneRequired'));
       return;
@@ -472,6 +608,7 @@ export function useBookingWizard({
     setSubmitting(true);
     /* 上一次失败的原因不能留到这一次(本来一直没清,失败弹窗会显示过期信息) */
     setFailReason('');
+    const expectedPayAmount = Math.round((confirmedAmount ?? payableTotal) * 100) / 100;
     try {
       /**
        * 多房间预订走 Trip:购物车里有房型(且拿得到真实房型 id)时,
@@ -484,12 +621,8 @@ export function useBookingWizard({
        * 现在:建单失败 → 留在第 4 步弹窗(无单可重付,重建是对的);
        *      支付失败 → 带着单号进结果页的失败态,在那里对**同一张单**重新发起支付。
        */
-      const tripItems = tripRooms.map((room) => ({
-        propertyId: cartPropertyId as number,
-        roomTypeId: room.sku!.id,
-        quantity: room.quantity,
-        useDate: current.checkIn,
-        endDate: current.checkOut,
+      const tripItems = tripBaseItems.map((item) => ({
+        ...item,
         contactName,
         contactPhone,
         remark: request.trim() || undefined,
@@ -499,6 +632,7 @@ export function useBookingWizard({
         const trip = await apiTripCreate({
           items: tripItems,
           couponId: appliedCoupon?.receiveId,
+          expectedPayAmount,
         });
         /* 单已落库:房型转存为快照并清空购物车,免得留在车里诱发重复下单 */
         checkoutCart();
@@ -546,6 +680,7 @@ export function useBookingWizard({
         /* 复核页应用的券。后端 create 会用同一张券再算一次并以它为准,
            所以这里提交的是领券记录 id,不是前端算好的金额 */
         couponId: appliedCoupon?.receiveId,
+        expectedPayAmount,
         travelers: [
           {
             firstName: form.firstName.trim(),
@@ -584,12 +719,30 @@ export function useBookingWizard({
        * 此时数据库里没有任何单,没得读也没得重付 —— 留在第 4 步弹稿面那个失败弹窗,
        * 用户改完(换券 / 改日期 / 减房)再点 Pay Now,这种情况下重新建单才是对的。
        */
+      /* 价格变了:没建单,弹确认框而不是失败弹窗 */
+      if (e instanceof ApiError && e.code === API_CODE.PRICE_CHANGED && e.data) {
+        setPriceChange(e.data as PriceChangeDetail);
+        return;
+      }
       setFailReason(e instanceof Error ? e.message : '');
       setPayResult('error');
     } finally {
       setSubmitting(false);
     }
   };
+
+  /** 「价格已变动」确认:按服务端最新金额重提。新金额超过钱包余额时先拦下,免得建出一张付不了的单 */
+  const confirmPriceChange = () => {
+    if (!priceChange) return;
+    const next = priceChange.payAmount;
+    setPriceChange(null);
+    if (method === 'wallet' && walletBalance < next) {
+      showToast(t('order.balanceInsufficient'));
+      return;
+    }
+    void submit(next);
+  };
+  const cancelPriceChange = () => setPriceChange(null);
 
   const goNext = () => {
     if (submitting || loadingGoods) return;
@@ -606,15 +759,30 @@ export function useBookingWizard({
       showToast(t('hotels.booking.dates.checkOutRequired'));
       return;
     }
+    /**
+     * 旅客信息:名、姓、手机、邮箱在表单上都标了 *,这里逐项拦(QA CA_TC_084 —— 原先只要名/姓填一个、
+     * 且只在真实模式查手机是否为空,不填手机和邮箱也能继续)。手机与注册页同一套宽校验
+     * (多国号码),邮箱在关怀模式是选填,填了才校验格式。
+     */
     if (step === 'guests') {
-      if (!form.firstName.trim() && !form.lastName.trim()) {
+      if (!form.firstName.trim() || !form.lastName.trim()) {
         showToast(t('hotels.booking.guests.nameRequired'));
         return;
       }
-      /* 手机号按设计稿是选填,但后端 create 的 contactPhone 必填 —— 真实模式在这一步就拦下,
-         不拖到支付步才报错 */
-      if (!current.demo && !form.phone.trim()) {
+      if (!form.phone.trim()) {
         showToast(t('hotels.booking.guests.phoneRequired'));
+        return;
+      }
+      if (!isContactMobile(form.phone)) {
+        showToast(t('hotels.booking.guests.phoneInvalid'));
+        return;
+      }
+      if (!emailOptional && !form.email.trim()) {
+        showToast(t('hotels.booking.guests.emailRequired'));
+        return;
+      }
+      if (form.email.trim() && !isEmail(form.email)) {
+        showToast(t('hotels.booking.guests.emailInvalid'));
         return;
       }
     }
@@ -662,12 +830,24 @@ export function useBookingWizard({
       checkOut: formatDayMonth(stay.checkOut, i18n.language),
       nights: nightsLabel(t, nightsBetween(stay.checkIn, stay.checkOut)),
     }),
-    roomLabel: t('hotels.booking.payment.roomLine', {
-      /* 多房间模式下「间数」是整车的总间数,不是这一段住宿里那个计数器 */
-      rooms: cartMode ? roomCount : stay.rooms,
-      room: roomNameOf(stay),
-      guests: stay.adults + stay.childCount,
-    }),
+    /**
+     * 多房间:间数是整车总间数;车里不止一种房型时逐个列出「房型 ×间数」,
+     * 不能只写路由带进来的那一种(之前「3 间 标准间」实际是标准间 1 + 豪华客房 2)。
+     */
+    roomLabel:
+      cartMode && tripRooms.length > 1
+        ? t('hotels.booking.payment.roomLineMulti', {
+            rooms: roomCount,
+            list: tripRooms
+              .map((room) => t('hotels.booking.payment.roomItem', { room: room.name, count: room.quantity }))
+              .join(t('hotels.booking.payment.roomListSep')),
+            guests: stay.adults + stay.childCount,
+          })
+        : t('hotels.booking.payment.roomLine', {
+            rooms: cartMode ? roomCount : stay.rooms,
+            room: cartMode ? (tripRooms[0]?.name ?? roomNameOf(stay)) : roomNameOf(stay),
+            guests: stay.adults + stay.childCount,
+          }),
     pointsLabel: t('hotels.booking.review.earnPoints', {
       points: stay.points.toLocaleString(i18n.language),
     }),
@@ -771,6 +951,11 @@ export function useBookingWizard({
     setExpanded,
     walletBalance,
     payableTotal,
+    longstayDiscount,
+    reviewRoomTotal,
+    priceChange,
+    confirmPriceChange,
+    cancelPriceChange,
     tripTotal,
     submitting,
     payResult,

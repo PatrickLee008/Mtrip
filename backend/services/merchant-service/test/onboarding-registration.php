@@ -5,6 +5,7 @@ declare(strict_types=1);
 require __DIR__ . '/M12Bootstrap.php';
 
 use App\Controller\Admin\OnboardingController;
+use App\Controller\App\Merchant\RegistrationController;
 use App\Service\MerchantAppOnboardingService;
 use App\Service\MerchantRegistrationOtpService;
 use Hyperf\DbConnection\Db;
@@ -47,6 +48,7 @@ $otp = $container->get(MerchantRegistrationOtpService::class);
 setMerchantAuthTestMode($config, false, false, 'test');
 $onboarding = $container->get(MerchantAppOnboardingService::class);
 $admin = $container->get(OnboardingController::class);
+$registration = $container->get(RegistrationController::class);
 $redis = $container->get(Redis::class);
 $applicationIds = [];
 $phones = ['+95911122001', '+95911122002'];
@@ -205,6 +207,11 @@ try {
         'public OTP API cannot request the admin confirmation channel');
 
     setMerchantAuthTestMode($config, true, true, 'staging');
+    Hyperf\Context\RequestContext::set((new Hyperf\HttpMessage\Server\Request('GET', '/api/v1/app/merchant/register/config'))->withHeader('X-Site-Id', '991'));
+    check($registration->config()['data']['testMode'] === true,
+        'registration config exposes active authentication test mode');
+    check($onboarding->status(991, $second['registrationToken'], $secondId)['testMode'] === true,
+        'merchant app status exposes active authentication test mode');
     check(count($otp->availableChannels(991)) === 2, 'test registration exposes email and SMS without provider configuration');
     foreach (['email', 'sms'] as $index => $channel) {
         $phone = '+9591112200' . ($index + 4);
@@ -226,6 +233,10 @@ try {
         setMerchantAuthTestMode($config, true, true);
     }
     setMerchantAuthTestMode($config, true, false);
+    check($registration->config()['data']['testMode'] === false,
+        'registration config hides authentication test mode after it is disabled');
+    check($onboarding->status(991, $second['registrationToken'], $secondId)['testMode'] === false,
+        'merchant app status hides authentication test mode after it is disabled');
 } finally {
     foreach ($emails as $index => $email) {
         [, $emailHash] = otpHashes($phones[$index], $email);

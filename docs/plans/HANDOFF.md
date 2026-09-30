@@ -1,5 +1,270 @@
 # 会话交接文档(HANDOFF)
 
+### ★ 2026-09-30 Merchant App 真实入驻（T0-T7）
+
+**范围**：只接注册前半段，不提前扩展完整申请/KYC/激活。`merchant-app` 的 `/api/v1/app/*` 已统一使用现有客户端 HMAC 签名；`ONBOARDING_PROTOTYPE` 默认关闭且只有显式 `true` 才走静态样张。注册联系方式与业务联系人拆开，缅甸手机号归一化 E.164，首期 UI 仅允许邮箱 OTP，并按服务端返回实现倒计时、重发和 `testMode` 固定码 `000000` 提示。App 没有测试模式开关；实际开关仍是非生产 `APP_ENV` + `MTRIP_MERCHANT_AUTH_TEST_ALLOWED=true` + 超管“系统配置 → 全局参数 → 安全配置”。
+
+registration token、申请 ID、站点和注册联系方式已持久化到原生 SecureStore（Web 使用既有存储），启动后调用 `/application/detail` 恢复草稿/状态；临时网络失败保留会话，只有明确 `40101/40102` 才清 token。后端 `register/config` 和申请 status/detail 增加只读 `testMode`。后台辅助入驻原入口保留不变。
+
+验证：`merchant-app` typecheck 与 Web export 通过；改动 PHP 在 `mtrip-merchant-service-1` 内 lint 通过；`scripts/test-merchant-onboarding-registration.sh` 隔离回归通过，覆盖运行时开/关、`000000`、生产硬锁、单次验证码、关闭后测试 token 失效和后台代录回归。没有发送真实邮件，没有切换运行时测试开关。本机忽略的 `merchant-app/.env` 仍显式开启原型模式，且 App Client ID/Secret 均为空；真实签名网关联调须先配置有效客户端并把原型值改为 `false`，不可把静态原型与后端测试模式混为一谈。
+
+**本轮进展**：T0-T3 已本地提交 `44c36a9`。T4-T7 App 代码接入了多业务可恢复草稿/补正重交、registration/KYC/account 状态与动作、分范围 KYC 上传、动态协议阅读与手写 PNG 签名、邮箱激活/登录/恢复及 Authenticator。静态原型入口与后台辅助入驻未移除，`test_confirmed` 明确区别于商户签名。typecheck、Web 导出、注册/KYC/认证三套隔离回归通过。**测试状态**：本机忽略的 `.env` 已关闭静态原型，主开发库认证测试模式已关闭；网关 `/auth/config`、`/register/config` 均返回 `testMode:false`。旧 Expo 进程已重启，新进程在 Chrome iPhone 16 视口下通过注册必填、邮箱选择及登录/激活/恢复入口的 UI 走查。App Client ID/Secret 仍为空；MySQL 迁移账本 28/33，待执行 `V20260921121500` 低于已应用版本，标准栈启动被健康检查阻断。未发送真实邮件或执行申请写入/真机验收。详细验收项见 `docs/plans/17-商户移动端merchant-app.md`。
+
+**真实邮箱测试追加**：用户指定 `229041307@qq.com`，授权独立号码 `+959000093001`。站点 1 `testMode:false` 下发送 OTP 成功，用户实际收到并提供验证码；校验生成 `APP-2026-79FE9BEADA`（申请 ID 7）。本地网关实测两家同名酒店草稿 ID 7/8、重复保存/恢复、后台要求补正、原申请修改重交、基础注册批准，状态推进到 `approved/draft/not_created`；KYC 动态清单与当前协议可读取，缺签署时提交返回 40901。没有证件上传、协议签署、最终审批、账号激活。当前容器 `MTRIP_CLIENT_SIGN=false`，所以本地 API 可用不代表签名鉴权已验收；Merchant App 登录态 UI、原生 SecureStore 重启与真机手写仍待验收。前段“未发送真实邮件或执行申请写入”为追加测试前的历史状态；MySQL 迁移账本问题未解决。
+
+**KYC 文件测试追加**：T4-T7 已本地提交 `b16c272`。用户指定一张真实营业执照扫描件；再次通过邮箱 OTP 恢复申请 ID 7，只上传到商户级 `business_reg`，文件 ID 67、版本 1，回读 `pending_review/hasFile=true`；物业范围未改，网关 `/uploads/kyc/` 静态访问返回 404。执照主体与 QA 虚构公司不符，**仅用于文件上传技术测试，不得审核通过**，也不应复用到其他证件类型。未执行 KYC 提交、协议签名、最终审批或激活；前段“没有证件上传”是追加测试前状态。后续人工验收由用户自行完成。
+
+### ★ 2026-09-29 表单校验(QA 表 CA_TC_084 / 092 / 093)
+
+- **084 旅客信息不填手机和邮箱也能继续**:原先 `useBookingWizard.goNext` 只在名/姓**都**空时拦、手机只在真实模式查非空、邮箱完全不查。现在名、姓逐项必填;手机必填且按注册页同款宽校验(`isContactMobile` = 去空格/横线后 `isMobile`,多国号码 6-15 位),提交时也去掉空格;邮箱在完整模式必填、填了就校验格式。关怀模式新稿邮箱是可展开的选填项,`useBookingWizard` 新增 `emailOptional` 选项由 `HotelBookingLiteScreen` 传 true。
+- **092 / 093 证件号可填任意内容**:新增 / 编辑常旅客共用 `AddGuestScreen`。新增 `utils/validate.ts::isTravelerIdNo`,后端 `TravelerController::validIdNo` **同一套规则(改一处须同改)**:NRC `州号1~14/镇区3~12字母(N|E|P|T|Y|S)6位数字`(与实名认证页拼出的 `12/OoKaMa(N)123456` 一致,大小写不敏感),护照 6~9 位字母数字且含数字(存为大写),其他 4~30 位字母数字及 `-` `/`;空格一律去掉。占位符随证件类型给示例;编辑时**换了证件类型必须重填证件号**(前后端都拦,后端报「更换证件类型时请重新填写证件号码」)。
+
+**验证**:容器内 `php -l` 通过、13 条正则用例全过,`client-app typecheck` 通过。Chrome(测试账号 +95 977700123):第 2 步依次全空 / 只填名 / 缺手机 / 手机 `12ab` / 缺邮箱 / 邮箱 `qa@@x` 均停在第 2 步并给对应提示,全部正确后进第 3 步;新增旅客护照 `ABC` / `ABCDEFGH` / `MA-12345` 被拒、`ma 1234567` 存为 `MA1**4567`;编辑切 NRC 后留空、`MA1234567`、州号 15、类型 X、5 位编号均被拒,`12/OoKaMa(N)123456` 保存成功。curl 直调后端:非法证件号 40001、换类型不带证件号 40001、同类型留空正常更新。测试账号下保留了常旅客「Aung Kyaw」。
+
+**另**:本轮开始时整个开发栈已停止(容器 4 小时前正常退出),用 `./mtrip.sh start` 重新拉起,health 全过。
+
+### ★ 2026-09-29 订房与金额(QA 表 CA_TC_038 / 042 / 067 / 070 / 082;034 加购计价按用户要求本轮不做)
+
+- **067 / 070 可选超过剩余房量**:`/app/hotels/detail` 带 `checkIn`/`checkOut` 时每个房型下发 `available` = 这段日期每晚余量的最小值(口径同列表可订判断,抽出 `stockMap` / `minAvailable` 两个私有方法共用;`base_stock` / `launch_stock` 不再下发)。`RoomStepper` 新增 `max`:到顶「+」置灰,再点提示「仅剩 N 间」不回调;Rooms 页签与 RoomCart 页共用,关怀模式 `LiteRoomCard` 同样处理;`available=0` 显示「已售罄」不可选。房型卡「仅剩 N 间」原先显示的是物理房量 `base_stock`,改为真实余量且 ≤5 才显示。详情页(完整/关怀)请求带上路由里的日期。
+- **082 特殊要求找不到**:后端本就落 `order_main.special_requests`(商户端预订详情可见),只是住客侧看不到。复核页 `ReviewBody` 新增 `specialRequest` 行,`BookingDetailScreen` 住宿网格新增一行(`OrderDetail.special_requests`)。通用订单详情页原本就以「备注」显示。多酒店 `TripDetailScreen` 未加。
+- **038 钱包未扣款**:当前代码不复现。实测新注册账号(见下)余额 100,000 → 下 1 晚 19,500 钱包支付 → `user_info.balance` 80,500、`user_balance_log` 一条 -19,500、订单 `pay_method=3`,「更多」页余额同步为 80,500。注意:**未登录**时支付页显示的是设计稿演示余额 250,000,点支付会跳登录、不会建单 —— QA 若看到 250,000 就是没登录。
+- **042 没有多间房选择**:09-21 多房间预订已上线(Rooms 页签与我的房间页均有加减器),QA 测的是 09-17 版本,请回归。
+
+**测试账号(本地开发库,保留复用)**:+95 977700123 / Test@12345,`user_info.id=32`,站点 7。注册时站点有全局短信渠道(`sys_sms_channel` id=2)会强制 OTP,当时临时置 status=2,注册完已恢复为 1。账号下保留 1 张已支付订单(0007202609291789688489)。
+
+**发现未处理**:① 支付页「可得 5% 返现 MMK 12,500」是 `BOOKING_DEMO` 写死的设计稿值,系统没有返现功能,对真实用户是误导性承诺,建议隐藏或接真实规则;② Trip 支付时各预订的 `pay_trade_no` 仍写 `MOCK…`(即使 `pay_method=3`),与第七节 C「统一用 Trip 流水号」同一件事。
+
+**验证**:容器内 `php -l`、`client-app typecheck` 通过。curl:10/5-10/7 标准间 39、豪华 20;9/29 豪华 19。Chrome:临时造 10/12 标准间剩 2、10/14 豪华关房(已删),10/12-15 标准间加到 2 即止、提示「仅剩 2 间」、合计 117,000,豪华显示「已售罄」,我的房间页同样封顶;下单全链路见 038。
+
+### ★ 2026-09-29 导航与跳转(QA 表 CA_TC_026 / 027 / 056 / 077)
+
+- **026 结果页返回回不到首页**:结果页与酒店搜索页标题、大图、搜索卡都一样,从结果页返回其实落回了搜索页,看起来像没反应。`HotelsScreen` 跳结果页(Search 与筛选面板 Show Results 两处)改 `navigation.replace`,结果页返回直接回首页;结果页本身有完整搜索卡,不需要搜索页留在栈里。关怀模式结果页标题不同(Choose a Hotel),未改。
+- **056 排序无法恢复默认**:「mTrip Recommended」本就是默认,但 chip 不显示当前排序、再点已选项也不会取消。现在非默认排序时 Sort by chip 高亮并显示排序名;面板里再点一次已选中的项即回到默认(`SortSheet` 导出 `sortLabelKey`)。
+- **027 / 077 打开的总是排第一的酒店**:**当前代码已不复现,未改代码**。QA 测的是 09-17 版本,那时结果页在无真实数据时回落设计稿演示卡,演示卡跳详情**不带 propertyId**,所有卡都进同一家静态演示酒店;此后结果页只渲染真实数据。临时复制出第二家酒店实测(已删除):点第二家进的是第二家,选房 → 我的房间 → 返回回到同一家的房型页。请 QA 在新版本回归。
+
+**验证**:`client-app typecheck` 通过。Chrome 实测:首页 → 酒店 → 搜索 → 返回 = 首页;搜索页筛选 → 查看结果 → 返回 = 首页;结果 → 详情 → 返回 = 结果页;排序选「价格最低」→ chip 显示并高亮,请求 `sortBy=price_asc`,再点一次 → chip 恢复「排序」、请求 `sortBy=default`。
+
+### ★ 2026-09-29 酒店搜索日期生效 + 订房日历可跨月(QA 表 CA_TC_021~025 / 043 / 079)
+
+**根因**:① 日期选择器的「精确日期 / ±1/2/3/7 天」只回传给页面展示,`/app/hotels/list` 根本不收日期,选什么结果都一样;② 订房第 1 步的 `BookingCalendar` 只渲染入住日所在月、没有翻月入口,下个月的日期点不到。
+
+**后端**(goods-service `App\HotelController::availableRows`,list 与 filters 共用):带 `checkIn`/`checkOut` 时只留有房物业 —— 任一在售房型每晚余量 ≥1 即可订;余量口径同 `calendar()`(有日库存行取 total−sold−locked、关房为 0,无行取 `RoomDefaults::stock`)。`flexDays`(0~7)按 0,−1,+1,−2,+2… 找第一个可订窗口(入住日不早于今天),命中日期以 `availableCheckIn` / `availableCheckOut` 下发。晚数 >90 报参数错误。**未考虑** `min_stay` / `closed_to_arrival` / `closed_to_departure`(下单侧是否校验这几项另行确认)。
+
+**前端**:结果页日期在选择器点确认即生效(连同弹性天数进查询,筛选面板计数也按日期圈定);弹性命中日期与所选不同时,卡片显示「可订 10月18日 – 10月20日」并以该日期进详情页。Lite 结果页同样带日期并以实际可订日期进详情(卡片未加提示)。`BookingCalendar` 标题右侧加翻月箭头(不能早于当月,入住日变动时跟到入住月)。i18n 三语新增 `hotels.results.availableDates`。
+
+**验证**:容器内 `php -l` 通过、`client-app typecheck` 通过。临时把站点 7 唯一酒店 10/20 两个房型关房(测完已删):curl 精确 10/19–21 → 0、±1 → 可订 10/18–20、10/18–23 ±2 → 0、±3 → 10/15–20。Chrome 实测:搜索页翻到 10 月选 19–21 精确 → 0 家;结果页改 ±1/±2/±3/±7 → 1 家并提示可订 10/18–20,切回精确 → 0;点卡片进详情选房,订房第 1 步日期为 10/18–20;日历选 10/30 → 翻到 11 月选 11/2 → 3 晚 MMK 58,500,继续进入第 2 步。
+
+**下一步**:QA 表其余失败项 —— 钱包付款不扣余额(038)、加购价未计入总价(034)、可超库存选房(067)、Special Request 未保存(082)、导航返回问题(026/027/077/056)。
+
+### ★ 2026-09-28 酒店筛选接后端(QA 表 `result_consumer_app.xlsx` CA_TC_003~016)
+
+**根因**:`HotelFilterSheet` 的选择只存在页面状态里、从不进请求;右侧计数与 CTA 总数是设计稿静态值;「最近筛选」是写死的一行;结果页 Free Wifi chip 发 `amenities=Wifi`,而库里是 `Free WiFi`,精确匹配永远落空。
+
+**后端**(goods-service `App\HotelController`,shared 未改):
+- `list` 新增参数:`starLevels` / `propertyTypes` / `bedTypes` / `cities`(组内任一命中)、`roomFeatures` / `amenities`(须全部具备)、`citizen=1`(价格区间按公民价比较)。组间取交集。
+- 新增 `GET /api/v1/app/hotels/filters`(已登记路由,网关 `hotels` 前缀已通):只按目的地/关键词圈定,返回 `counts`(`breakfast` / `freeCancel` / `star:N` / `score:N` / `type:X`)与 `amenities` / `beds` / `features` / `cities` 四组 `{key,label,count}`。
+- 设施/床型/房间特色取自 `merchant_store.facilities + amenities(enabled)`、`hotel_room_type.bed_type + bedding[].type`、`hotel_room_type.facilities + room_view`,按**归一化键**匹配(小写、去非字母数字、去前缀 free:`Free WiFi` / `wifi` / `Wifi` → `wifi`);纯数字旧床型编码(1/2)忽略。
+- 住宿类型:物业只有 `hotel` 一种业态,选民宿/青旅/钟点房如实返回 0 条。
+
+**前端**(client-app):
+- `HotelFilterSheet` 重写选项体系:选项键 `breakfast / freeCancel / star:N / score:N / type:X / amenity:K / bed:K / feature:K / city:K`,导出 `filterToParams()`;新增分组 Star Rating、Guest Review Score(档位互斥,/10 制换算 /5)、Amenities、Bed Type、Room Features & View、Location(后四组数据驱动,无数据不渲染);Popular 与分组共用键;计数来自 `/filters`,CTA 结果数防抖 300ms 实查;「最近筛选」存 AsyncStorage `hotel.recentFilters`(最多 5 条)。默认价格改为不限(0~1,000,000,停在两端不带参数)。去掉 Show more 与设计稿的「2/3 bedrooms」。
+- `HotelsScreen` 点 Show Results 直接带 `filter` 跳结果页;`HotelResults` 面板参数与 chips 合并(同维度取更严);`HotelResultsLite` 同样接入,并补了条件变更时作废在途请求。i18n 三语新增 8 键。
+
+**验证**:容器内 `php -l` 通过、shared 单测 112/112、`client-app typecheck` 通过;curl 逐参数验证;Chrome(CDP,站点只有 1 家可售酒店)实测:价格 ≥20,000 → 0、10,000~20,000 → 1,青旅 → 0,King/Minibar/Free WiFi/仰光 → 1,评分 8+ → 0,免费取消 → 0,应用后结果页「找到 0 家住宿」且请求带全参数,重置恢复 1 家,最近筛选正确回显,Free Wifi chip 现在命中。**`scripts/check.ps1` 本机跑不了**(本机 PHP 不在 PATH,第一步 400 个文件全部「找不到 php」)。
+
+**未做(无数据模型,需产品拍板)**:CA_TC_010 到店付款(C 端只有余额支付)、CA_TC_014 卧室数(房型表无卧室数字段)、CA_TC_013 按区/镇筛选(物业只有 `city_key`,已提供按城市筛)。Lite 模式未在浏览器实测(同一组件,已过类型检查)。
+
+**下一步**:QA 表其余失败项 —— 钱包付款不扣余额(038)、不能选下月日期(043/079)、加购价未计入总价(034)、可超库存选房(067)、Special Request 未保存(082)。
+
+### ★ 2026-09-28 Chrome 实测发现的三处前端问题修复
+
+1. **酒店详情页底栏合计**仍按底价 × 间数 × 晚数预估 → 改用 `useTripQuote`(与购物车页同口径:日历价 − 长住优惠,不含券),未登录/日期不全/含演示房型时退回预估。`HotelDetailScreen`。
+2. **完整模式复核页取消政策**写死「入住前 48 小时可免费取消;{入住日−2天} 之后不予退款」—— 与后端口径不符,当天入住时截止日还落在过去。
+   新增 `bookingFormat.cancellationPolicyText()`(完整模式 `ReviewBody` 与关怀模式共用):真实商品按房型退改规则出文案,无规则/rule_type 1 → 免费取消、2 → 阶梯、3 → 不可退,与 `OrderController::computeRefund` 一致;演示数据仍用设计稿文案。关怀模式无规则时原先也回落到那句写死文案,一并修正。`ReviewBody` 新增 `refundRules` 入参。
+3. **支付页摘要卡**多房型时写成「3 间 标准间」→ 逐个列出「3 间:标准间 ×1、豪华客房 ×2,2 人入住」(新增 `hotels.booking.payment.roomLineMulti / roomItem / roomListSep` 三语);单房型时房型名取车里那一种而非路由那一种。
+**验证**:Chrome(CDP)实测完整模式三处均生效(临时长住档已删);`tsc` 通过,七个相关静态检查全绿。摘要卡房型多时单行省略,完整内容见「查看详情」。
+
+### ★ 2026-09-28 优惠券资格条件与按资格分摊(PRD §17.5 / §17.6)+ 支付时券过期校验
+
+**唯一实现**:`backend/shared/src/Support/CouponEligibility.php`(纯逻辑,无 DB)—— 下单计价(order-service `PricingService`)与结账选券列表(marketing-service `CouponView`)都调它,不再各写一份。
+**口径**(PRD 字面落地,改动须同步此处):
+- 行级(不满足 → 该行不参与、分不到抵扣):适用范围(指定物业/房型)、长住晚数 min/max_nights、提前预订 book_advance_days、入住日期段 stay_start~stay_end(每晚都须在区间内);日期类仅酒店。
+- 整单(不满足 → 整张券不可用):最少间数 min_room_count(按**合格行**间数)、最少酒店数 min_hotel_count(按**整单**物业数)、门槛 min_amount(按**合格金额**)。
+- 抵扣:折扣券按合格金额算并受 max_discount 封顶;满减/无门槛为面额;不超过合格金额。分摊:合格行按净额占比,末个合格行吸收余数。
+- 行缺日期/晚数时跳过日期类条件(仅展示侧可能出现,下单总会带全)。
+原因码新增 `nights / advance / stay_date / min_rooms / min_hotels`(App 三语已补),下单报错文案见 `PricingService::couponReasonMessage`。
+**改动**:
+- 迁移 `V20260928034000__add-coupon-eligibility-conditions.sql`:`marketing_coupon` 加 `min_room_count / min_hotel_count / stay_start / stay_end`;min/max_nights、book_advance_days 本次起真正生效。
+- order-service:`resolveCouponForLegs()`(新,Trip 逐行)+ `resolveCoupon()` 改为单行包装(新增可选 quantity/useDate/endDate);`TripController::priceTrip` 用返回的分摊,删除旧 `allocate()`(原来全部行平摊);快照补条件字段。
+- `lockCouponForPay()` 补券有效期校验(下单后到支付前刚好过期 → 拒绝支付)。
+- marketing-service:`CouponView` 用共享实现(删掉自带的 matchScope/discount);`/coupon/match-list`、`/best-match` 支持 `items`(JSON 字符串或数组,整单行)按整车判定;券输出带条件字段。
+- 后台与商户端表单:共享 `CouponEligibility::conditionColumns()` 校验;admin-web 券弹窗新增「使用条件」区(门票券隐藏);merchant-web 促销抽屉新增提前天数/最少间数/最少酒店数/适用入住日期(长住晚数仍按 kind=4 规则)。
+- client-app:`fetchCouponMatchList` 带整车 `items`(行净额取试算值),券一开始即按整车判对;`CouponReason` 与三语文案补 5 个码。
+**验证**:shared 单测 112/112(新增 13 条,PRD 例子逐条成用例);旧集成测 `m12-coupon-scope.php` 在隔离库 `mtrip_m12_s1_test`(按 `scripts/test-m12.ps1` 做法克隆空表)全过;
+API 端到端(`test/adhoc/c-coupon-eligibility-test.sql`,记号 `[Elig Test]`)六张券各测拒绝/通过,trip/quote 与 match-list 判定一致,真实 trip/create 仅合格行落分摊;
+后台券新增/详情/校验(40001)端到端通过;支付时券过期被拒。admin-web build、merchant-web vue-tsc、client-app tsc 通过,五个静态检查全绿。
+**未验证**:商户端促销保存接口未端到端(商户 JWT 需真实 2FA 会话,未伪造);三个前端界面均未实机点验。
+
+### ★ 2026-09-28 单房型订房也接上试算(复用 `trip/quote`,零后端改动)
+
+**依据**:一项的 `trip/quote` 与 `order/create` 计价完全一致 —— 实测三种情形逐项相等(临时长住档 ≥3 晚 95 折,已删):
+房型 4 两间三晚 + 共担 9 折券 → 177,000 / 长住 8,850 / 券 16,815 / 应付 151,335;房型 3 无券 → 40,000;房型 4 + 指定房型券 → 券 5,000 / 应付 54,000。测试单均在支付前取消,券未消耗。
+**前端**:`useBookingWizard` 新增 `quoteItems`(多房间 = 整车 `tripBaseItems`;单房型 = 与 `createOrder` 同参的一项;演示模式为空),`useTripQuote` 不再限于 cartMode。
+房费 / 长住 / 券门槛基数 / 券额 / 应付 / 余额校验在单房型下也以试算为准;新增 `reviewRoomTotal`(单房型试算到了才覆盖 ReviewBody 的房费)。关怀模式只读 `payableTotal`,自动生效。
+效果:单房型提交带的 `expectedPayAmount` 也是服务端口径,「价格已变动」确认框只在真实变价时出现(之前按底价预估,几乎每单都会弹)。
+`tsc` 通过;五个订房相关静态检查全绿;**App 界面未实机点验**。
+
+### ★ 2026-09-28 下单金额确认(`expectedPayAmount` / 错误码 40921 PRICE_CHANGED)
+
+**后端**:`order/create` 与 `trip/create` 新增可选入参 `expectedPayAmount`(用户看到的应付)。
+`PricingService::assertExpectedPay()` 在下单事务内、建单前比对服务端计价,差 > 0.01 抛 `ErrorCode::PRICE_CHANGED = 40921`(HTTP 409),**抛错即回滚已锁库存、不建单**;
+`data` 带最新明细 `{original, longstayDiscount, couponDiscount, payAmount, expectedPayAmount}`。未传不校验(旧客户端兼容)。
+shared 包:`BusinessException` 新增可选第三参 `$data` + `getData()`,`AppExceptionHandler` 原样放进响应 `data`(向后兼容,现有调用不受影响)。
+**前端**:`ApiError` 新增 `data`;`API_CODE.PRICE_CHANGED` + `PriceChangeDetail` 类型;`createOrder` / `apiTripCreate` 带 `expectedPayAmount` 且对 40921 不自动 Toast。
+`useBookingWizard.submit(confirmedAmount?)` 提交页面显示的 `payableTotal`;收到 40921 存 `priceChange`,完整模式与关怀模式都弹 `AlertDialog`(plain)「价格已由 X 变为 Y,是否按新价格继续?」,
+确认 → 按服务端金额重提(钱包支付先比余额,不够就提示不建单),取消 → 留在当前步。三语新增 `hotels.booking.review.priceChanged{Title,Message,Confirm}`。
+**验证**:API 端到端 —— trip/create 带错金额 → 40921 + 明细,前后 Trip/订单数与锁定库存不变;带 quote 金额 → 成功;不带 → 成功;order/create 同样,拿返回 payAmount 重提成功;测试单已取消、库存回 0。
+shared 单测 99/99(容器内跑,需挂整个 backend 目录);前端 `tsc` 通过;五个订房相关静态检查全绿。**App 界面未实机点验**。
+
+### ★ 2026-09-28 Trip 只读试算 `POST /api/v1/app/order/trip/quote`
+
+**后端**:`TripController::priceTrip()` 抽出计价(逐项日历价 + 长住 → 整单券校验 → 按净额占比分摊),`create` 与 `quote` 共用,保证试算 = 实际下单。
+- `OrderStockService::lock()` 加 `$dryRun`:不加 `FOR UPDATE`、不补建日历(缺日历时用与补建相同的 `defaultRow()` 计价)、不占库存;售罄/库存不足照常报错。
+- `PricingService::resolveCoupon()` 加 `$lock`(试算不锁领券记录)。
+- `quote` 不要求联系人;券不适用返回 `couponError`(下单则照常抛错)。返回 `original / longstayDiscount / couponId / couponDiscount / couponError / payAmount / items[]`。
+**前端**:`api/trip.ts` 新增 `apiTripQuote`(静默,不自动 Toast);`useBookingWizard` 多房间模式按 `[tripBaseItems, 券]` 重算,房费/券额/应付/余额校验改吃试算值,失败退回预估;试算与 `trip/create` 共用 `tripBaseItems`。券对整车不适用时自动去券 + 提示原因 + 置 `couponTouched` 防自动最优券震荡。`ReviewBody` 新增 `longstayDiscount`(明细一行,合计扣除),三语新增 `hotels.booking.review.longStayDiscount`。
+**验证**:API 端到端 —— 临时加 site 7 长住档(≥3 晚 95 折,已删)+ 共担券,quote 与随后同入参 create 逐项一致(原价 118,000 / 长住 2,950 / 券 11,505 分摊 5,605+5,900 / 应付 103,545);quote 前后该日期段日历行数 0→0(未补建、未占库存);不适用券 → `couponError`;create 缺联系人仍 40001。前端 `tsc` 通过;`check-booking-steps-34`(更新了一条过时断言:合计 = 房费 − 长住,仍不扣券)/ `check-booking-detail-page` / `check-payment-failure-flow` 全绿。**App 界面未实机点验**。
+**同日追加 —— 购物车页接试算 + 抽共用 hook**:新增 `screens/hotel/useTripQuote.ts`(`useTripQuote` + `cartTripItems`),向导与购物车页共用。
+结果按入参打标签:`itemsQuote`(房型/日期一致即有效 → 原价、长住、券门槛基数)与 `quote`(连券也一致 → 券额、应付、余额校验);
+**顺带修了上一版的过期金额问题**:改间数/日期后新结果回来前,旧试算不再冒充当前金额(余额校验会读到它)。
+`RoomCartScreen` 整车都是真实房型且已登录、日期选全时,房费小计取试算原价并新增「长住优惠」行,合计扣除;否则保持预估。不带券(券在第 4 步)。
+`tsc` 通过,四个相关静态检查脚本全绿;**界面未实机点验**。
+**未做**:单房型链路无试算;多房间时若路由不带 roomTypeId,`couponEnabled`(依赖 `realMode`)仍关闭选券 —— 既有行为,未改。
+
+### ★ 2026-09-24 订单优惠券规则快照(`order_main.coupon_snapshot`)
+
+**问题**:订单只存 `coupon_id` + 抵扣额,结算时 `SettlementService::couponFunding` 实时读券模板的出资方/共担比例 —— 后台改了券,已下订单的分账跟着变。
+**改动**:
+- 迁移 `V20260924041000__add-order-coupon-snapshot.sql`:`order_main.coupon_snapshot JSON NULL`(无券为 NULL,存量订单保持 NULL)。
+- `PricingService::resolveCoupon` 第三个返回值为快照 JSON(券名/类型/面额/门槛/封顶/适用物业与房型/出资方与共担比例/整单抵扣额 `checkoutDiscount`/时间);单单与 Trip 下单都落库,Trip 各预订存同一份整单快照(各自分摊额仍在 `alloc_coupon_discount`)。
+- `SettlementService::couponFunding` 优先读快照,快照为空(存量单)回退读模板,口径与改动前一致。
+- C 端订单详情 `unset` 掉 `coupon_snapshot`(含出资方等内部商务信息)。
+**验证**:端到端 —— 下单时把模板 17 临时改成共担 50/50,下单后改回平台出资再支付,分录仍按快照记 `funding_source=4`、mtrip/merchant 各 3,000;C 端详情不含快照;Trip 无券下单快照为 NULL 正常。
+**补测(新造券 `test/adhoc/c-coupon-snapshot-test.sql`,记号 `[Snap Test]`,只发用户 28,可重复导入)**:① Trip 2 预订 + 共担 60/30/10 券,下单后把模板改成平台 100% 再支付 —— 两笔预订分摊额 4,000 / 5,900,分录仍按快照三方拆分(2,400/1,200/400、3,540/1,770/590);② Trip + 商户出资券 → merchant_pays 10,000;③ 单单 + 合作方出资指定房型券 → partner_pays 5,000,快照含 propertyIds [3] / roomTypeIds [4];④ 该券用在房型 3 → 40901「该券不适用于本房型」。测试后模板已恢复原值。
+**本地执行迁移**:`db-migrate.sh` 仍被 CRLF 校验和问题挡住(见上条),本次同样按脚本控制 SQL 手工登记;账本 32 = 文件 32。
+
+### ★ 2026-09-24 优惠券重复使用漏洞修复(支付时先锁券再扣款)
+
+**缺陷**:下单不占券,同一张券可挂在多笔待支付单上;先付的核销后,后付的核销段静默跳过、仍按抵扣价成交。
+**修法**:`PricingService::lockCouponForPay()` 在扣款**之前**行锁领券记录,不可用即 40901 整单回滚;支付成功后 `consumeCoupon()` 核销。`OrderController::pay` / `TripController::pay` 共用。
+**不做释放/返还**:PRD 全文无相关规则,模块 6.1 券状态 `Available → Used` 单向、付款前可换券 —— 取消/退款不返还券。依据与验证细节见 `docs/plans/差距分析-多房间预订-PRDv1.0.1.md` 第七节 F。
+**验证**:端到端(网关 8081,site 7 用户 28,mock 支付)同券两单/两 Trip 均为先付成功、后付被拒且无流水;余额支付被拒余额不变;无券单回归正常。开发库遗留测试单 31/33/34 与已核销券 50/51。
+
+**优惠券四部分现状**:① 匹配与试算 —— 单房型完成,Trip 缺 `trip/quote`、资格条件(晚数/提前天数/最少间数/酒店数)与按资格分摊;② 金额与快照 —— 金额已落库,券规则快照已补,金额确认已补(见本文件顶部 2026-09-28 条);③④ 核销/释放/返还 —— 核销完成(本次补上并发漏洞),释放/返还按 PRD 不做。
+
+### ★ 2026-09-24 多酒店 Trip:取消/超时连带关闭整单 + 禁止单付 Trip 内预订
+
+对照 PRD §1.1 走读 order / payment 服务,新发现 5 条,详见 `docs/plans/差距分析-多房间预订-PRDv1.0.1.md` 第七节。本次修了 A、B:
+- **A 缺陷**:超时扫单与取消只改 `order_main`,`order_trip.pay_status` 永远停在 0,Trip 里一笔没了整单就再也付不了。
+  新增 `BookingLifecycleService::lockTripFor()` + `closePendingTrip()`:待支付 Trip 内一笔被取消/超时 → 同 Trip 其余待支付预订一并取消、释放库存、记时间线、发通知,Trip 置 2。
+  取消(C/商户/后台共用 `cancel`)与 `BookingExpiryService::expireOne` 共用;**加锁顺序 order_trip → order_main**,与 `TripController::pay` 一致。
+- **B 缺陷**:`order/pay` 不看 `trip_id`,可单付 Trip 内一笔(吃分摊券额 + 核销整单券)。现直接拒绝;C 端 `OrderDetailScreen` 按 `trip_id` 改走 `trip/pay`。
+- **验证**:order-service 镜像内 `php -l` 三文件通过、client `tsc` 通过;**本机无 PHP,`scripts/check.ps1` 第一步起不来;全栈未启动,未跑端到端**。
+
+**下一步**:第七节 C(Trip 钱包支付补 `finance_flow` 收入流水 + 各预订统一用 Trip 流水号)改动小可先做;D(payment-service 真实支付单)与原 P1「部分失败」绑做;E(逐预订确认通知)。
+
+### ★ 2026-09-24 邮件 SMTP 渠道连通性实测（仅运行时配置，无代码改动）
+
+**问题**：后台新增的 Email SMTP Channel 实发失败，`SmtpClient` 恒返 `SMTP response timeout`。
+
+**根因**：渠道按后台表单默认值配成 `smtp.163.com:587/tls`，而 **163 邮箱不提供 587 端口** —— 该端口
+TCP 能建连但服务器从不返回 `220` 问候语，`SmtpClient::expect()` 里的 `fgets` 读不到任何行，一直等到
+`timeout`(默认 15s) 抛错。**不是凭据问题**：渠道内 AES 加密的用户名/密码解密正常
+（`13768615461@163.com`，授权码 16 位）。
+
+**验证**：同一套凭据换端口逐一实测 —— `465/ssl` accepted、`994/ssl` accepted、`25/tls` accepted；
+`587` 在任何加密口径下都超时。另用裸 socket 核对：`25/465/994` 均立即返回
+`220 163.com Anti-spam GT for Coremail System` 且在 EHLO 里通告 `AUTH LOGIN PLAIN XOAUTH2` /
+`STARTTLS`，`587` 只有连接、没有 banner。
+
+**处置**：渠道 #1（site 0）由 `587/tls` 改为 `465/ssl`，其余字段未动（`smtp_port`/`encryption`
+均非加密列，不触碰用户名密码）；随后按应用真实调用链（查 `sys_email_channel` where `status=1`
+→ `CryptoHelper::decrypt` → `SmtpClient::send`）实发复验，得到 `250 Mail OK queued`。
+⚠️ **更正**：当时据此写成「测试邮件已投递 `229041307@qq.com`」，**该说法不成立** —— 收件人始终未收到，
+真因见下方 2026-09-29 复核。
+
+**2026-09-29 复核（发送侧正常，收件侧被过滤）**：用 163 IMAP（`imap.163.com:993`，同一套凭据）取证：
+① **自收自发到 `13768615461@163.com` 20 秒内进收件箱**，走的正是同一条 `SmtpClient` 代码路径 ——
+说明 SMTP 中继与我们的报文格式本身没问题；② 163「已发送」里有全部发往 `229041307@qq.com` 的记录
+（9/24 两封 + 9/29 探针），均带 `X-CM-TRANSID`；③ 抓原始报文可见 163 已自动补 `Date` / `Message-Id` /
+`X-Originating-IP`，**不存在缺头导致的格式缺陷**；④ 收件箱对 `postmaster` / `mailer-daemon` /
+`Undelivered` / `failure` 四类退信**命中 0 条**（跨 5 天，窗口足够），163 垃圾箱也是 0 封。
+→ 163 侧确已正常发出且 QQ **未退信**，邮件是在 **QQ 侧被过滤或静默丢弃**，而不是没发出去。发送方是
+163 免费个人邮箱 + 家宽出口 IP（`X-Originating-IP: 117.182.106.155`），正是 QQ 反垃圾最敏感的组合。
+另已补发一封**纯 ASCII、交易通知样式**的探针（`mTrip account notification (ref MT-20260929-145736)`，
+无中文）用于排除编码因素，**该封是否送达待用户确认**。
+
+**结论 / 遗留**：① 163 邮箱只能用 **25 / 465 / 994**，后台 `smtpPort` 默认 `587` 是通用 SMTP 默认值，
+**不适用于 163**，后续接入 163 的站点别再踩；② **要真正投递到 QQ / Gmail 等外部邮箱，必须换事务性
+邮件服务（SendGrid / SES / 阿里云邮件推送等）+ 自有域名配 SPF/DKIM/DMARC**，个人 163 邮箱不适合
+当应用发件人 —— 这是本次唯一未解决的问题；③ 邮件渠道**没有后台自测发送入口**
+（`EmailController` 只有渠道 CRUD + 投递日志），每次验证都得进容器手工跑脚本，建议后续补
+`POST /sys/email/channel/test-send` + 前端按钮（须三处对齐 `config:email:*` 权限键）；
+④ Google/SMS 真实提供商仍未联调，`audits/2026-09-15-merchant-onboarding-stage5.md` 里
+「未确认可用 SMTP 凭证」的结论现在**只对 SMS 成立**。
+
+### ★ 2026-09-23 商户移动端 merchant-app 入驻流程按 Figma SECTION `2685:22241` 收敛（静态界面）
+
+**范围**：对照 Figma `mTrip_Merchant` SECTION `2685:22241`「Register & New Acc Login Flow」的 22 屏逐屏核对 `merchant-app` 现状，只补齐/对齐界面与导航顺序，**不新增业务逻辑**；用户确认按「补齐缺口 + 对齐已有屏」+「按 Figma 改 5 步」+「Business Type 加回静态占位」执行。
+
+**代码（全部在 `merchant-app/`，未动后端与其他端）**：
+
+- 新增 `src/screens/auth/RegisterContactScreen.tsx`（Step 1/5 Contact Info，Figma `2331:21717` / 组件 `2326:21552`）：`+95` 手机号 + 邮箱两个浮动标签字段，校验后写注册草稿再进渠道选择。
+- 注册导航改为稿面 5 步：`Onboarding → RegisterContact(1/5) → RegisterVerification(2/5) → RegisterOtp(3/5) → Register(4/5 Company Info) → RegisterBusinessDetails(5/5) → RegistrationReview`；进度条统一 `current/total`（20/40/60/80/100%），修正原先 Company Info `1/4`、Business Details `2/4` 与 Verify/OTP `3/4`、`4/4` 的口径。`navigation/types.ts` + `navigation/index.tsx` 增 `RegisterContact`，`OnboardingScreen` 的 Register Now 改指向它。
+- 新增共用件 `src/components/onboarding/RegistrationForm.tsx`（`RegistrationScaffold` / `FloatingField` / `FieldInput` / `SelectField` / `PhoneField`），三个注册步骤页共用；`RegisterScreen`、`RegisterBusinessDetailsScreen` 删除各自重复的页面壳与图标，字段高度统一为稿面的 54、浮动标签 12px（Business Details 原为 40/10px）。合计 -530 / +379 行。
+- Business Details 按稿**加回 `Business Type *`**（Select Type 占位，点击只 toast），并移除稿面没有的「I agree to Terms & Conditions and Privacy Policy」勾选行——条款改由 KYC 阶段弹窗承担。
+- KYC 文档页（`839:6160` / `839:6192`）对齐：标题改 Outfit Bold 24、补「Upload required documents for **all 1 properties** to proceed.」段、告警盒换稿面文案、文档卡改「编号徽章 + Business N Documents + PDF/JPG/PNG」卡头与「圆形图标 + REQUIRED 红标 + 上传按钮 / 已传绿底 + 文件名 + 勾选徽章 + Replace」虚线行。
+- `MerchantFlowComponents.tsx` 新增 `SignatureCard` / `TermsModal` / `SignatureModal`：KYC 页底部 E-Signature 卡未签为白卡 + `Sign Now`、签后转绿 + `Signed`；`Sign Now → Terms & Conditions（logo + 两节条款 + Accept & Continue / Cancel）→ E-Signature（230 高虚线签名框 + Clear / Confirm Signature）`，`Submit to Admin` 增加 `signed` 门禁。签名框按要求**只还原视觉，未实现手写绘制**。
+- Enter Code 页帮助行按稿改为「刷新图标 + 4:58」与下划线 `Resend Code?`。
+- i18n 三语言补 `register.contactInfo.*` 与 `register.businessDetails.{submitting,submitFailed,required,sessionExpired}`。
+- **唯一功能位移**：`apiApplicationSave` / `apiApplicationSubmit` 从 OTP 页移到最后一屏 Business Details 的 Submit —— 重排后 OTP 阶段还没有公司信息，留在原处会提交空公司名；OTP 页只保留验证并保存 registration token。
+
+**已知偏差 / 静态兜底**：① 后端是申请级统一 KYC 清单、无业务分组，故文档卡固定渲染 1 张（稿面为 Business 1 / Business 2 两张）；② `+95` 国家码按稿为静态，未做区号选择；③ 无注册 token 时 KYC 页渲染 `FIGMA_SAMPLE_DOCUMENTS` 样张三份材料做静态走查，常量已标注接 API 后删除。
+
+**验证**：`cd merchant-app && npx tsc --noEmit` 通过；`npx expo export -p web` 通过且 `dist` 已删除。另用一次性 CDP 脚本（Chrome `--headless=new` + `Emulation.setDeviceMetricsOverride` 390×844 @2x，macOS 上 `--window-size` 会被夹到 500 宽，不可直接用）对 5 个注册步骤页 + KYC 文档页 + Terms 弹窗 + E-Signature 弹窗 + 签后绿卡共 9 个状态逐屏截图核对；脚本与截图放在 `/tmp`，**未入库**。
+
+**下一步**：① KYC 文档卡是否恢复按业务分组，取决于后端统一清单是否再引入属性维度；② 若产品确认需要手写签名，再引入绘制并接后端签署存证；③ M9-M12 Access Code、首次扫码 Authenticator 绑定、2FA 校验/退出与端侧生物识别仍未真实联动（沿用 2026-09-10 结论）。
+
+**走查修复**：用户走查连报三处，均已修。
+
+① `Verify Account`（Step 2/5）与 `Enter Code`（Step 3/5）顶部盾牌圆形图标贴左未居中。根因：`IconBubble` 是 `WhiteStepScaffold` 内容列（`whiteContent`，默认 `alignItems: stretch`）的直接子元素，而 Figma 这两页的内容列 `EL-cace00dd` 是 `alignItems: center`；标题组件自带居中所以只有图标偏。修复：`MerchantFlowComponents` 的 `iconBubble` 加 `alignSelf: 'center'`（`IconBubble` 全仓仅这两处调用且都是 hero 图标，一处修复两页生效）；**没有**改 `WhiteStepScaffold` —— KYC 文档页用的是 `EL-8c95bf53`（`alignItems: stretch`），全局居中会把它带偏。
+
+② `Verify Account` 渠道卡片的圆形图标框**选中/未选中配色不切换**。根因：`Option` 把图标底色写死按渠道类型区分（`icon === 'mail'` → teal light、SMS 恒白底），与 `selected` 无关，所以点选只换了卡片底色和描边。按 Figma 组件 `344:827`（选中）/ `344:856`（未选中）改为按 `selected` 取：**选中**卡片 teal light + Info Blue 2px 描边 / 图标底白 / 图标主色；**未选中**卡片白 + Slate 200 2px 描边 / 图标底 teal light / 图标 Slate 900（`optionIconSelected` / `optionIconIdle`，并给 `SimpleIcon` 传色）；删掉按渠道写死的 `optionIconMail`。
+
+③ 该页**默认渠道应为 SMS**，原为 Email。根因：`useState<RegistrationChannel>('email')` + 拉到渠道后无条件 `setMethod(next[0])`，站点返回顺序 email 在前即默认 Email。改为初始 `'sms'`，并在拿到站点启用渠道后 `setMethod((current) => (next.includes(current) ? current : next[0] ?? current))` —— SMS 可用则保持 SMS，站点未启用短信才回退到后端第一个可用渠道（不写死必然 SMS，避免选到不可用渠道）。
+
+复验：`tsc --noEmit` + `expo export -p web` 通过（`dist` 已清理）；CDP 390×844 截图确认图标居中、默认 SMS 选中 + Email 未选中（两卡配色相反）、点 Email 后配色对调。
+
+④ 用户报「点 Send OTP 返回**参数 phone 不能为空**」。这是 **App 与后端的真实契约不一致**，不是新引入的问题：
+
+- **后端契约**（`backend/services/merchant-service/app/Controller/App/Merchant/RegistrationController.php`）：`sendOtp` = `phone` + `email` + `otpChannel`；`verifyOtp` 再要 `otpCode`。手机号与邮箱**都必须传**——`MerchantRegistrationOtpService::send/verify` 会 `validateContacts()` 并用两者哈希做「联系方式与验证码请求一致」校验，所以只传渠道和收件方（连 email 渠道）都会在 `requireStr('phone')` 处直接失败。
+- **App 侧**（`src/api/merchant.ts`）：原为 `apiRegistrationOtpSend(channel, recipient)` → body `{channel, recipient}`。已改为 `apiRegistrationOtpSend(phone, email, otpChannel)` / `apiRegistrationOtpVerify(phone, email, otpChannel, otpCode)`；`src/api/types.ts` 的 `RegistrationOtpResult` 补 `testMode`、`RegistrationVerifyResult` 补 `applicationId`（后端实际返回）。Step 3 用草稿里的 `business.contactPhone` / `business.contactEmail` 一起提交。
+- **按用户要求加静态原型开关**（原话「可以先跳过真实校验，我需要静态可操作」）：`src/config/env.ts` 新增 `ONBOARDING_PROTOTYPE`，由 `EXPO_PUBLIC_ONBOARDING_PROTOTYPE` 控制、默认 `true`（`.env` 与 `.env.example` 各加一行）。打开时注册 5 步与 KYC 页不调后端：Verify Account 不请求 `/register/config`、渠道列表为空时按稿面同时展示 SMS 与 Email、Send OTP 用本地联系方式（缺失则用稿面示例值）直接进 Step 3；Enter Code 任意 6 位即通过；Business Details Submit 校验必填后直接进审核页；审核页（注册/KYC 两态）按已通过渲染保证按钮可点；KYC 文档行点击即本地标记已上传、Submit to Admin 直接进 KYC 审核页。
+- **刻意不做「失败即降级」**：开关关掉（`EXPO_PUBLIC_ONBOARDING_PROTOTYPE=false`）就是 100% 真实链路，没有静默回退，避免联调期把接口错误吞掉。**联调前必须把它置 false**。
+- 复验：`tsc --noEmit` + `expo export -p web` 通过（`dist` 已清理）；CDP 390×844 **从引导首屏真点一遍**直到 KYC 审核页全链路通过（含 Send OTP 成功进入 Enter Code、Submit to Admin 容器 opacity=1 可点）。
+
+⑤ 用户报 `Enter Code` 的 OTP 占位符 `- - - - - -` 贴左未居中。**根因是 RNW 的坑，不是缺样式**：`textAlign` 原先写在 **prop** 上，而 `react-native-web/dist/exports/TextInput/index.js` 的 `forwardPropsList` 里没有 `textAlign`，`pickProps()` 会把它过滤掉、永远到不了 DOM；RN 原生 `TextInput.d.ts` 又把 `textAlign` 列为合法 prop，所以 `tsc` 不报错 —— **原生端生效、Web 端静默失效**。修复：把 `textAlign: 'center'` 移入 `styles.otpInput`（style 两端都生效），并把 `paddingHorizontal: 18` 拆成 `paddingRight: 18` + `paddingLeft: 26`，多出的 8px 抵消 `letterSpacing: 8` 尾部字距造成的约 4px 左偏。`TwoFaVerifyScreen` 与注册 OTP 共用 `OtpInput`，一处修复两页生效。复验：CDP 实测 `getComputedStyle(input).textAlign === 'center'`、输入框中心 195 = 390/2，截图确认占位符与已输入数字都居中。**通用坑**：RNW 下 `<TextInput>`/`<Text>` 的居中、阴影、字体等必须走 style，走 prop 会被静默丢弃。
+
+⑥ 用户报「Number of Business 点击弹 Coming Soon，取消掉」。按确认方案把**三个下拉都做成可用选择**（未臆造选项）：
+
+- 新增通用底部面板 `SelectSheet`（`MerchantFlowComponents.tsx`），三个下拉共用：标题 + 当前项打勾 + Cancel + 超长滚动。
+- 新增 `src/config/onboardingOptions.ts`。**Business Type 必须与后端枚举一致**：`MerchantAppOnboardingService::BUSINESS_TYPES = ['hotel','car_rental','restaurant','airline','attraction']`（**5 个**）；merchant-web 语言包里有第 6 个 `other`，后端不接受，照抄会被 `application/save` 以「businessType 不受支持」拒绝。**City 取自仓库既有种子** `database/merchant/14-merchant-ranking.sql` 的 `ranking_destination`（8 条目的地），后端 `city` 本身是自由文本无字典表。
+- `registrationStore` 加 `businessCount` + `business.businessType`；Number of Business 的选择决定 Step 5 渲染几张业务卡片，与后端 `num_businesses = count(businesses)` 口径一致。第 1 张卡绑注册草稿，第 2..N 张静态阶段只在本页本地状态，提交时一起拼进 `businesses[]`（后端 `save` 本就按数组逐条落库）；Submit 现在校验每一张卡的必填项，真实链路 payload 补上 `businessType`。
+- i18n：**复数按仓库既有写法**——本项目 `compatibilityJSON: 'v3'`，用 `one`/`many` 嵌套键手工挑（与 client-app `roomsValue` 同处理），**不要**用 i18next 的 `_one`/`_other` 后缀（第一版误用，界面直接显示原始 key）。`common.comingSoon` 已无引用，三语言一并删除。
+- 复验：`tsc --noEmit` + `expo export -p web` 通过（`dist` 已清理）；CDP 390×844 实测 Number of Business → 选 `3 Businesses` → Step 5 出现 Business 1/2/3 三张卡，Business Type 列出后端 5 个枚举并选中 `Hotel`，City 选中 `Mandalay` 回显正常。
+
+⑦ 用户报「Company Info 的 Next 按钮背景色不对（填完公司名仍发淡）」。根因是 **2026-09-08 留下的 hack**：该页脚按钮无条件叠加 `opacity: 0.4`（`styles.nextDisabledLook`）。澄清一下 Figma：那个 0.4 **不是无条件样式**——页脚按钮组件 `EL-690831d9` 自身 `opacity: 0.4`，而 Company Info / Business Details / Verification contact 三个画板的字段都还是 placeholder（未填）态，所以稿面呈现的是「未填完的淡色」。已删除该无条件覆盖，使这一屏与同流程的 Contact Info `Next`、Business Details `Submit` 一致（实色 `#0D9488`），必填校验继续走原 toast。复验：CDP 实测 `rgb(13,148,136)` + `opacity: 1`，空表单与填完两态一致。**若日后要还原稿面「未填完淡色」**，正确做法是按校验结果驱动 `PrimaryButton` 的 `disabled`（内置 `disabled: { opacity: 0.4 }`），而不是硬编码透明度；但那要 Contact Info 一起改才不至于两屏不一致，本轮未做。
+
 ### ★ 2026-09-23 auto-deploy.sh 发布阻断修复 + mtrip-ops 自动部署接入 DB 迁移
 
 **修的缺陷(生产 cron 报错)**:`auto-deploy.sh` 拦下 `database/marketing/09-merchant-promotion-rules.sql`——
@@ -24,6 +289,98 @@ M8 促销活动那次提交(`e12e3f2`)把一个全新文件当成旧快照编号
 表现为新增,不会被识别为「旧快照 rename 成迁移」。`mtrip-ops` 无测试覆盖,改动为纯参数级 diff。
 **未做**:实际登录 `mtrip-ops` 面板点击验证(本地无该服务运行环境);服务器 crontab 若也裸跑
 `auto-deploy.sh` 需人工检查是否要一并加 `--apply-db`(不在本次改动范围,已提醒用户自查)。
+
+### ★ 2026-09-23 管理后台「实名审核」页(审核 App 资料向导第 2 步)
+
+终端用户管理下新增 **实名审核**(菜单 1015,`/user/real-name` → `views/user/real-name/index.vue`),版式照商户验证页
+(`views/merchant/verify`):页头 eyebrow/标题/副标题 + 导出 CSV、三张状态卡片(待审核 / 已通过 / 已驳回,切换写 `?tab=`)、
+SearchFilterBar(昵称或用户 ID + 国籍)、表格、760 宽详情抽屉(实名信息 / 证件材料三图可放大 / 个人资料 / 账户信息 /
+最终决定 / 时间线,通过 / 驳回固定在抽屉底部)、驳回弹窗(6 个预设原因 + 补充说明,拼成一句话回显给用户)。
+样式类从商户验证页原样搬入本页 scoped 样式,未抽公共组件(商户页 2000 行,不动它)。
+
+- **后端**:`AdminRealNameController`,`/api/v1/admin/user/real-name/queues|list|detail|approve|reject`;
+  站点隔离走 `applySiteScope` / `assertSiteScope`;通过/驳回用 `WHERE real_name_status=3` 条件更新防并发(已处理返回 40901)。
+  列表证件号脱敏,详情给审核员明文姓名与证件号(需与证件照比对),手机号仅超管明文。
+- **权限键三处对齐**:`user:realname:list`(页面)/ `user:realname:approve` / `user:realname:reject`
+  ↔ `02-menu.sql` 1015 / 101501 / 101502 ↔ 前端 `v-perm`。迁移只给超管角色授权,其他角色需在角色管理里勾。
+- **迁移** `V20260923110000__add-user-real-name-review.sql`:`user_info` 加 `real_name_audit_by / real_name_audit_at / real_name_reject_reason`
+  + `idx_real_name_status`,并插菜单。App 端驳回后重交会清空上一轮审核留痕(`ProfileSetupService::submitIdentity`)。
+- 验收:容器内 `php -l`、admin-web build 通过;经网关实测 队列计数 / 列表 / 详情 / 驳回(缺原因 40001)/ 驳回后再通过被拒 /
+  App 重交清留痕 / 通过 / 重复通过 40901 / 已认证用户再提交被拒;账本 30/30。⚠️ 未做浏览器对图(本机无浏览器)。
+  开发库测试用户 id 29 当前停在「待审核」,可直接打开页面看效果。
+
+**下一步**:App 端尚未展示驳回原因与审核中状态(`profile.realNameStatus` 已有,驳回原因需在 `/user/me` 补字段);审核结果暂未推送站内通知。
+
+### ★ 2026-09-23 注册后「Set Up Profile」弹窗 + 资料向导两步(Figma Onboarding `2516:14427` / `2485:8211` / `2485:8355`)
+
+注册成功后弹「Set Up Profile Now?」,Set Up Now 进两步向导:第 1 步 Complete Your Profile(头像/姓名/生日/性别/常住城市/家庭住址),
+第 2 步 Identity Verification(国籍/证件姓名/NRC 号/NRC 正反面/自拍 + Verification Tips 卡)。前后端均已接通。
+
+- **弹窗时机**:`userStore.register` 成功必弹;`login` / `loginBySms` 成功且 `profile.profileCompleted === false`
+  且本机没对该号点过 Later 才弹(Later 记 `STORAGE_KEYS.PROFILE_PROMPT_LATER`,按用户 id,跨退出保留)。
+  弹窗 `components/user/ProfileSetupPrompt.tsx` 挂在 `NavigationContainer` 内、栈外,经新增的 `navigation/navigationRef.ts` 跳页。
+- **页面**:`screens/user/ProfileSetupScreen.tsx`(路由 `ProfileSetup`)、`IdentityVerifyScreen.tsx`(路由 `IdentityVerify`),
+  共用壳 `components/user/ProfileSetupShell.tsx`(复用 `MorePageLayout` 顶栏 + 进度区 + 内容卡,另含 `OptionSheet` / `SetupPrimaryButton`)。
+  关怀模式无单独设计稿,两种模式共用。第 2 步提交后把第 1、2 步一起出栈回到进入前的页面。
+- **取舍**:生日用 mm/dd/yyyy 掩码输入(不引日期控件);城市给缅甸 9 个主要城市固定清单(落库英文名);
+  NRC 镇区代码做成输入框(不硬编码三百多个镇区),提交拼成 `12/OoKaMa(N)123456`;国籍非缅甸时换成护照号 + 仅资料页一张图。
+- **新依赖**:`expo-image-picker ~15.1.0`(`app.json` 已加相机/相册权限文案);`utils/imagePicker.ts` 原生端先弹「拍照/相册」,web 直接选文件。
+- **图标**:`HomeIcon` 新增 `calendarFilled / imageAdd / cameraSmall / cameraOutline / faceSmile / infoOutline / checkSmall / chevronStroke`
+  (path 取自设计稿 SVG);`personQuestion` / `renameA` 复用已有。
+- **后端(user-service)**:新增 `ProfileSetupController` + `ProfileSetupService`,路由
+  `GET /app/user/profile-setup/detail`、`POST /app/user/profile-setup/profile`、`POST /app/user/profile-setup/identity`、`POST /app/user/upload`(multipart,scene=avatar|id_front|id_back|selfie)。
+  图片按内容嗅探 MIME(仅 JPEG/PNG/WebP,≤10MB)落 `uploads/user/{id}/`,提交时校验 URL 必须是本人目录;
+  姓名/证件号/住址 AES 加密。`profile()` 增 `gender/birthday/city/profileCompleted`。user-service 新增 `config/autoload/storage.php`,
+  **5 个 compose 文件给 user-service(主池 + APP 孪生 + S7)补挂 `./uploads` 卷**。
+- **迁移** `V20260923100000__add-user-profile-setup-kyc.sql`:`user_info` 加 `gender/birthday/city/home_address/profile_setup_at/nationality/id_card_front/id_card_back/selfie_image/real_name_submit_at`;
+  `real_name_status` 新增 **3=审核中**(第 2 步提交后置 3,已认证或审核中拒绝重复提交,失败可重交)。admin-web 用户列表 `REAL_NAME_MAP` 同步补 3。
+- 验收:容器内 `php -l` 通过;经网关 8081 端到端实测注册 → 4 种上传(静态回源 200)→ 第 1 步(坏生日 / 他人图片被拒)→ 第 2 步(缺背面被拒、提交后状态 3、重复提交 40901),
+  落库字段与加密核对无误;client-app typecheck、web 导出、admin-web build 通过。迁移账本 29/29(顺带补执行了此前挂着的 `V20260921140000`)。
+  ⚠️ 本机无浏览器,**未做 Web/真机对图**;`scripts/check.ps1` 仍因本机未装 php 停在第 1 步。缅文待母语复核。
+
+**下一步**:① ~~管理后台实名审核入口~~(已完成,见上一节);
+② 证件照走公开 `/uploads` 静态目录(随机文件名,不可枚举,与商户 KYC 同口径),若需更严的访问控制要改成鉴权下载;
+③ 真机验证相机/相册权限与上传;④「Profile Settings」目前只是文案,账户页尚无再次编辑入口。
+
+### ★ 2026-09-23 关怀模式页面补请求(逐页对照完整模式排查)
+
+对照每个 Lite 页与完整模式同位页的接口调用,查出 3 处缺口,已全部补齐:
+
+| 页面 | 缺什么 | 处理 |
+|---|---|---|
+| `MoreLiteScreen`(更多) | 完整版 `MineScreen` 获焦调 `refreshProfile`(`/user/me`),Lite 一次都不调,余额/积分/会员等级会停在登录时的快照 | 补同样的 `useFocusEffect` |
+| `HotelReviewsLiteScreen`(评价页) | 评论列表是 i18n 里写死的 3 条,总分/条数是设计稿值;完整版走 `/app/hotels/reviews` 分页 + `reviewSummary` | 改为真实分页(刷新/翻页/失败重放,逻辑同完整版),总分 `reviewSummary.rating×2`、条数取 `total`,<8 分不贴 Excellent;删 `hotels.lite.reviews.items.*`,`helpful` 去掉假计数 |
+| `HotelInfoLiteScreen`(信息页评价摘要) | 已请求详情却仍显示设计稿分数/条数 | 改取 `reviewSummary`,口径同 `HotelDetailScreen` |
+
+昵称兜底/日期/10 分制换算从 `HotelReviewCard` 抽到 `components/hotel/reviewFormat.ts` 两种模式共用
+(`check-hotel-reviews-page.cjs` 的 ×2 断言相应改为查 reviewFormat,167/167)。
+**核过无缺口**:HomeLite(稿面刻意不出推荐位,完整版 `fetchHome` 只喂推荐位)、HotelsLite(两边都不请求)、
+结果/详情/房型详情/政策/实景预览(与完整版同接口)、MyPick / 订房向导 / 成功页(共用 Hook)。
+维度条与 AI Summary 两种模式都仍是设计稿值(后端无数据)。typecheck 与 9 个 check 脚本全绿;⚠️ 未起后端做真机/Web 验证。
+
+### ★ 2026-09-23 正常模式房型详情页(Figma `281:1041`)
+
+酒店详情 Rooms 页签的「See Details」此前一直是 comingSoon —— 之前做好的房型详情只有关怀模式的
+`RoomDetailLite`(`2352:6030`),正常模式从没有过。本轮新增 `screens/hotel/RoomDetailScreen.tsx` + 路由 `RoomDetail`
+(参数与 Lite 同形 `goodsId/skuId/checkIn/checkOut`),真实房型卡的 See Details 进来;**演示房型(无 propertyId)仍 comingSoon**。
+
+- 版式:大图(圆点 / 360° / 全景 / 张数)→ 信息卡(STARTS AT)→ Room Amenities 两列网格 → 早餐卡(仅含早房型)→
+  Price Summary;顶栏(返回/通知/分享)与吸底栏(Total Price + Reserve now)同酒店详情页规格。
+- **订房走购物车**:Book This Room / Reserve now 都是「本房型入车(已在车里不动间数)→ `HotelBooking`」,
+  与 Rooms 页签 Continue 同一入口;车里已有别的房型会一并结算。加购参数抽成 `HotelRoomsTab` 导出的
+  `realRoomCartEntry` / `realRoomCover`,房型卡 Choose 与本页共用,车里同一房型的名称/封面/属性一致。
+- 设施:接口 `facilities` 自由文本按关键词配图标;没给回落设计稿六项。新增 4 枚图标
+  `miniBar / smartTv / bathroom / coffeeMachine`(path 取自设计稿 SVG)。税费行同 Lite 取占位 `TAX_AMOUNT = 0`。
+- i18n 新增 `hotels.detail.roomDetail.*`(三份同结构,缅文待母语复核)。
+- 验收:`client-app` typecheck 零报错。⚠️ 本机后端未起(网关 8081 无响应),**未做 Web/真机对图**。
+
+**下一步**:起栈后从有真实房型的酒店进 Rooms → See Details 对图;确认 Reserve now 进向导后车内房型正确。
+
+**同日追加 · 搜索结果页去掉演示兜底**:`HotelResultsScreen` 已接真实数据,无结果不再回落设计稿四张演示卡
+(连同「演示数据」提示条、演示卡本地收藏),改为 `EmptyView`,请求失败显示 `ErrorView`。
+`demoResults.ts` 删掉 `queryDemoResults`/`DEMO_PROMO`,保留给酒店页用户指引用;
+i18n 删 `hotels.results.demoNotice`、`demo.summerPromo`、`demo.longStayNotSupported`(已无引用)。
+关怀模式结果页本来就没有演示兜底,未动。typecheck 与 9 个 check 脚本全绿。
 
 ### ★ 2026-09-22 支付失败 → 结果页失败态,并对**已有订单**重新发起支付
 

@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 
 import { apiAppAccessCodeVerify, apiAppPairingExchange, apiAppTwoFaSetupInfo, apiAppTwoFaVerify, apiLogin, apiLogout, apiMe, apiTwoFaSetup, apiTwoFaVerify } from '@/api/merchant';
-import type { ChallengeResult, MerchantProfile, TwoFaSetupResult } from '@/api/types';
+import type { ChallengeResult, LoginResult, MerchantProfile, TwoFaSetupResult } from '@/api/types';
 import { STORAGE_KEYS } from '@/config/global';
 import { storage } from '@/utils/storage';
 
@@ -19,6 +19,7 @@ interface MerchantState {
   beginAppPairing: (pairingCode: string) => Promise<ChallengeResult>;
   loadAppTwoFaSetup: () => Promise<TwoFaSetupResult | null>;
   verifyAppTwoFa: (twoFaCode: string) => Promise<void>;
+  acceptSession: (result: LoginResult) => Promise<void>;
   refreshProfile: () => Promise<void>;
   logout: () => Promise<void>;
   clearLocal: () => void;
@@ -71,6 +72,11 @@ export const useMerchantStore = create<MerchantState>((set, get) => ({
     const challengeToken = get().challenge?.challengeToken;
     if (!challengeToken) throw new Error('Missing challenge token');
     const result = await apiAppTwoFaVerify(challengeToken, twoFaCode);
+    await storage.setString(STORAGE_KEYS.TOKEN, result.token);
+    await storage.setObject(STORAGE_KEYS.PROFILE, result.admin);
+    set({ token: result.token, profile: result.admin, isLogin: true, challenge: null, setup: null });
+  },
+  async acceptSession(result) {
     await storage.setString(STORAGE_KEYS.TOKEN, result.token);
     await storage.setObject(STORAGE_KEYS.PROFILE, result.admin);
     set({ token: result.token, profile: result.admin, isLogin: true, challenge: null, setup: null });

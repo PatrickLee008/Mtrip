@@ -53,6 +53,8 @@ const { t } = useI18n();
 const form = reactive<PromotionForm>(defaultForm());
 /** 日期区间选择器的桥接值(表单里存字符串,选择器要 dayjs) */
 const dateRange = ref<[Dayjs, Dayjs] | null>(null);
+/** 适用入住日期(PRD §17.5 Specific Stay Date);空 = 不限 */
+const stayRange = ref<[Dayjs, Dayjs] | null>(null);
 
 const editing = computed(() => props.detail !== null && Number(props.detail.id) > 0);
 const title = computed(() => (editing.value ? t('promotions.drawer.editTitle') : t('promotions.drawer.title')));
@@ -74,6 +76,7 @@ function reset(): void {
   const next = props.detail ? formFromDetail(props.detail) : defaultForm(props.kind);
   Object.assign(form, next);
   dateRange.value = next.validStart && next.validEnd ? [dayjs(next.validStart), dayjs(next.validEnd)] : null;
+  stayRange.value = next.stayStart && next.stayEnd ? [dayjs(next.stayStart), dayjs(next.stayEnd)] : null;
   if (form.validStart === '' && form.validEnd === '') {
     // 稿面默认给一段已填好的有效期窗口(30 天)
     const start = dayjs();
@@ -92,6 +95,11 @@ watch(() => props.open, (open) => {
 watch(dateRange, (range) => {
   form.validStart = range && range[0] ? range[0].format('YYYY-MM-DD') : '';
   form.validEnd = range && range[1] ? range[1].format('YYYY-MM-DD') : '';
+});
+
+watch(stayRange, (range) => {
+  form.stayStart = range && range[0] ? range[0].format('YYYY-MM-DD') : '';
+  form.stayEnd = range && range[1] ? range[1].format('YYYY-MM-DD') : '';
 });
 
 /** 物业变化时清掉不再属于所选物业的房型,避免提交出越界房型被后端拒绝 */
@@ -268,6 +276,28 @@ function close(): void {
             :placeholder="form.propertyIds.length === 0 ? t('promotions.drawer.roomTypesDisabled') : t('promotions.drawer.roomTypesAll')"
             :options="roomOptions.map((item) => ({ value: item.id, label: item.room_name }))"
           />
+        </section>
+
+        <!-- PRD §17.5 使用条件(0 / 空 = 不限;判定口径见 shared CouponEligibility,与平台后台一致) -->
+        <section class="form-field">
+          <span class="field-label">{{ t('promotions.drawer.conditions') }}</span>
+          <div class="inline-row">
+            <div class="mini-field">
+              <span class="mini-label">{{ t('promotions.drawer.bookAdvanceDays') }}</span>
+              <a-input-number v-model:value="form.bookAdvanceDays" class="full" :min="0" :max="365" :precision="0" />
+            </div>
+            <div class="mini-field">
+              <span class="mini-label">{{ t('promotions.drawer.minRoomCount') }}</span>
+              <a-input-number v-model:value="form.minRoomCount" class="full" :min="0" :max="100" :precision="0" />
+            </div>
+            <div class="mini-field">
+              <span class="mini-label">{{ t('promotions.drawer.minHotelCount') }}</span>
+              <a-input-number v-model:value="form.minHotelCount" class="full" :min="0" :max="10" :precision="0" />
+            </div>
+          </div>
+          <span class="mini-label">{{ t('promotions.drawer.stayRange') }}</span>
+          <a-range-picker v-model:value="stayRange" class="full" />
+          <span class="mini-label">{{ t('promotions.drawer.conditionsTip') }}</span>
         </section>
 
         <!-- 稿面:Usage Limit + Limit total number of uses(功能需求的「兑换上限」即此) -->

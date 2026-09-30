@@ -1,7 +1,8 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Animated,
   Easing,
+  Image,
   Modal,
   Platform,
   Pressable,
@@ -101,7 +102,7 @@ export function CheckIcon({ color = colors.surface, size = 18 }: { color?: strin
   );
 }
 
-export function SimpleIcon({ name, color = colors.primary, size = 24 }: { name: 'shield' | 'phone' | 'sms' | 'mail' | 'file' | 'upload' | 'info' | 'lock' | 'qr' | 'copy' | 'refresh' | 'fingerprint' | 'bolt' | 'user'; color?: string; size?: number }) {
+export function SimpleIcon({ name, color = colors.primary, size = 24 }: { name: 'shield' | 'phone' | 'sms' | 'mail' | 'file' | 'upload' | 'info' | 'lock' | 'qr' | 'copy' | 'refresh' | 'fingerprint' | 'bolt' | 'user' | 'signature'; color?: string; size?: number }) {
   const stroke = color;
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
@@ -119,6 +120,7 @@ export function SimpleIcon({ name, color = colors.primary, size = 24 }: { name: 
       {name === 'fingerprint' ? <><Path d="M7.5 12.5C7.5 9.8 9.5 8 12 8C14.5 8 16.5 9.8 16.5 12.5" stroke={stroke} strokeWidth={1.6} strokeLinecap="round" /><Path d="M5.8 9.7C6.9 7.4 9.2 6 12 6C14.8 6 17.1 7.4 18.2 9.7" stroke={stroke} strokeWidth={1.6} strokeLinecap="round" /><Path d="M9.2 14C9.2 12.2 10.2 10.8 12 10.8C13.8 10.8 14.8 12.2 14.8 14C14.8 16.2 13.6 17.5 12.6 19" stroke={stroke} strokeWidth={1.6} strokeLinecap="round" /><Path d="M9.2 18.4C9.8 17.4 10.4 16.2 10.4 14.4" stroke={stroke} strokeWidth={1.6} strokeLinecap="round" /></> : null}
       {name === 'bolt' ? <Path d="M13 2.8L5.8 13H11L10 21.2L18.2 10H12.8L13 2.8Z" fill={stroke} /> : null}
       {name === 'user' ? <><Circle cx={11} cy={9} r={4} stroke={stroke} strokeWidth={1.8} /><Path d="M4.8 20C5.6 16.8 8 15 11 15C12.8 15 14.4 15.6 15.5 16.8" stroke={stroke} strokeWidth={1.8} strokeLinecap="round" /><Path d="M15.2 18.1L17.2 20.1L21 16.3" stroke={stroke} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" /></> : null}
+      {name === 'signature' ? <><Path d="M3 16.5C4.6 16.5 5.6 15 6.4 12.7C7.2 10.4 8 6 9.2 6C10.4 6 10.4 8.2 9.6 11C8.8 13.8 7.6 16.5 6 16.5C8.5 16.5 11 14.6 13 12.2" stroke={stroke} strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round" /><Path d="M13.5 17.6H21" stroke={stroke} strokeWidth={1.7} strokeLinecap="round" /></> : null}
     </Svg>
   );
 }
@@ -372,6 +374,214 @@ export function SetupCompleteModal({ visible, onDashboard }: { visible: boolean;
   );
 }
 
+export interface SelectOption {
+  value: string;
+  label: string;
+}
+
+/**
+ * 通用底部选择面板:替代「点击只弹 Coming Soon」的下拉,让静态界面本地可选。
+ * 选项由调用方给(值 + 展示文案),选中项右侧打勾。
+ */
+export function SelectSheet({
+  visible,
+  title,
+  options,
+  value,
+  onSelect,
+  onClose,
+  cancelLabel = 'Cancel',
+}: {
+  visible: boolean;
+  title: string;
+  options: SelectOption[];
+  value?: string;
+  onSelect: (value: string) => void;
+  onClose: () => void;
+  cancelLabel?: string;
+}) {
+  return (
+    <Modal transparent visible={visible} animationType="fade" onRequestClose={onClose}>
+      <Pressable style={styles.sheetBackdrop} onPress={onClose}>
+        <Pressable style={styles.selectSheet} onPress={() => undefined}>
+          <View style={styles.selectSheetHeader}>
+            <Text style={styles.selectSheetTitle}>{title}</Text>
+            <Pressable onPress={onClose} hitSlop={8} style={({ pressed }) => [styles.selectSheetCancel, pressed && styles.pressed]}>
+              <Text style={styles.selectSheetCancelText}>{cancelLabel}</Text>
+            </Pressable>
+          </View>
+          <ScrollView style={styles.selectSheetList} showsVerticalScrollIndicator={false}>
+            {options.map((option) => {
+              const active = option.value === value;
+              return (
+                <Pressable
+                  key={option.value}
+                  onPress={() => { onSelect(option.value); onClose(); }}
+                  style={({ pressed }) => [styles.selectOptionRow, active && styles.selectOptionRowActive, pressed && styles.pressed]}
+                >
+                  <Text style={[styles.selectOptionLabel, active && styles.selectOptionLabelActive]}>{option.label}</Text>
+                  {active ? <CheckIcon color={colors.primary} size={18} /> : null}
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
+/** KYC 文档页底部的 E-Signature 卡片(Figma `EL-2a59a7a1`):未签是白卡 + Sign Now,已签转绿并显示 Signed。 */
+export function SignatureCard({ signed, label, onSign }: { signed: boolean; label?: string; onSign: () => void }) {
+  return (
+    <View style={[styles.signatureCard, signed && styles.signatureCardSigned]}>
+      <View style={styles.signatureRow}>
+        <View style={styles.signatureLabelGroup}>
+          <SimpleIcon name="signature" size={24} color={colors.slate900} />
+          <Text style={styles.signatureLabel}>E-Signature</Text>
+        </View>
+        <Pressable
+          onPress={onSign}
+          disabled={signed}
+          style={({ pressed }) => [styles.signatureAction, signed && styles.signatureActionSigned, pressed && !signed && styles.pressed]}
+        >
+          <Text style={[styles.signatureActionText, signed && styles.signatureActionTextSigned]}>
+            {label ?? (signed ? 'Signed' : 'Sign Now')}
+          </Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
+/** KYC 提交前的 Terms & Conditions 弹窗(Figma `2339:25459` 覆盖层)。 */
+export function TermsModal({
+  visible,
+  title,
+  content,
+  onAccept,
+  onCancel,
+}: {
+  visible: boolean;
+  title?: string;
+  content?: string;
+  onAccept: () => void;
+  onCancel: () => void;
+}) {
+  const [contentHeight, setContentHeight] = useState(0);
+  const [viewportHeight, setViewportHeight] = useState(0);
+  const [reachedEnd, setReachedEnd] = useState(false);
+  useEffect(() => { if (visible) setReachedEnd(false); }, [visible, content]);
+  const readComplete = !content || reachedEnd || (contentHeight > 0 && viewportHeight > 0 && contentHeight <= viewportHeight);
+  return (
+    <Modal transparent visible={visible} animationType="fade" onRequestClose={onCancel}>
+      <View style={styles.termsBackdrop}>
+        <ScrollView contentContainerStyle={styles.termsScroll} showsVerticalScrollIndicator={false}
+          onLayout={(event) => setViewportHeight(event.nativeEvent.layout.height)}
+          onContentSizeChange={(_, height) => setContentHeight(height)}
+          onScroll={(event) => {
+            const { contentOffset, layoutMeasurement, contentSize } = event.nativeEvent;
+            if (contentOffset.y + layoutMeasurement.height >= contentSize.height - 12) setReachedEnd(true);
+          }} scrollEventThrottle={16}>
+          <View style={[styles.termsCard, modalShadow]}>
+            <Image source={require('../../../assets/images/onboarding/logo.png')} style={styles.termsLogo} resizeMode="contain" />
+            <View style={styles.modalCopyBlock}>
+              <Text style={styles.sheetTitle}>{title || 'Terms & Conditions'}</Text>
+              {content ? <Text style={styles.sheetBody}>{content}</Text> : <Text style={styles.sheetBody}>
+                Please read these terms carefully before using MTrip. By continuing, you agree to the conditions below.
+              </Text>}
+            </View>
+
+            {!content ? <View style={styles.termsSection}>
+              <Text style={styles.termsHeading}>1. Using MTrip</Text>
+              <Text style={styles.termsBody}>
+                MTrip helps you plan and manage travel services. You must provide accurate account information and use the app only for lawful, personal purposes.
+              </Text>
+            </View> : null}
+
+            {!content ? <View style={styles.termsSection}>
+              <Text style={styles.termsHeading}>2. Privacy and security</Text>
+              <Text style={styles.termsBody}>
+                We protect your personal information in line with our Privacy Policy. Keep your sign-in details secure and notify us promptly of unauthorized activity.
+              </Text>
+            </View> : null}
+
+            <View style={styles.sheetActions}>
+              <Pressable disabled={!readComplete} onPress={onAccept} style={({ pressed }) => [styles.sheetPrimary, !readComplete && { opacity: 0.4 }, pressed && styles.pressed]}>
+                <Text style={styles.sheetPrimaryText}>{readComplete ? 'Read & Continue' : 'Scroll to Read All Terms'}</Text>
+              </Pressable>
+              <Pressable onPress={onCancel} style={({ pressed }) => [styles.sheetGhost, pressed && styles.pressed]}>
+                <Text style={styles.sheetGhostText}>Cancel</Text>
+              </Pressable>
+            </View>
+          </View>
+        </ScrollView>
+      </View>
+    </Modal>
+  );
+}
+
+/** E-Signature 弹窗:绘制后导出 PNG Base64,供条款签署接口保存。 */
+export function SignatureModal({
+  visible,
+  onConfirm,
+  onCancel,
+}: {
+  visible: boolean;
+  onConfirm: (signature: string) => void;
+  onCancel: () => void;
+}) {
+  const [paths, setPaths] = useState<string[]>([]);
+  const [padSize, setPadSize] = useState({ width: 300, height: 200 });
+  const svgRef = useRef<React.ElementRef<typeof Svg>>(null);
+  const point = (x: number, y: number) => `${Math.max(0, Math.round(x * 300 / padSize.width))} ${Math.max(0, Math.round(y * 200 / padSize.height))}`;
+  const confirm = () => {
+    if (!paths.length) return;
+    svgRef.current?.toDataURL((base64) => { if (base64) onConfirm(`data:image/png;base64,${base64}`); }, { width: 600, height: 400 });
+  };
+  return (
+    <Modal transparent visible={visible} animationType="fade" onRequestClose={onCancel}>
+      <View style={styles.termsBackdrop}>
+        <ScrollView contentContainerStyle={styles.termsScroll} showsVerticalScrollIndicator={false}>
+          <View style={[styles.signatureModalCard, modalShadow]}>
+            <View style={styles.modalCopyBlock}>
+              <Text style={styles.sheetTitle}>E-Signature</Text>
+              <Text style={styles.sheetMeta}>Terms accepted · Final step</Text>
+              <Text style={styles.sheetBody}>
+                Draw your signature in the box below. Use your finger or stylus, then confirm to continue.
+              </Text>
+            </View>
+
+            <View style={styles.signatureField}>
+              <Text style={styles.signatureFieldLabel}>Your signature</Text>
+              <View style={styles.signaturePad} onLayout={(event) => setPadSize(event.nativeEvent.layout)} onStartShouldSetResponder={() => true} onMoveShouldSetResponder={() => true}
+                onResponderGrant={(event) => { const { locationX, locationY } = event.nativeEvent; setPaths((current) => [...current, `M ${point(locationX, locationY)}`]); }}
+                onResponderMove={(event) => { const { locationX, locationY } = event.nativeEvent; setPaths((current) => current.map((path, index) => index === current.length - 1 ? `${path} L ${point(locationX, locationY)}` : path)); }}>
+                {paths.length === 0 ? <Text style={styles.signaturePadHint}>Draw your signature here</Text> : null}
+                <Svg ref={svgRef} width="100%" height="100%" viewBox="0 0 300 200" pointerEvents="none">
+                  {paths.map((path, index) => <Path key={index} d={path} stroke={colors.slate900} strokeWidth={2.5} fill="none" strokeLinecap="round" strokeLinejoin="round" />)}
+                </Svg>
+              </View>
+              <Text style={styles.sheetMeta}>Keep your signature inside the box.</Text>
+            </View>
+
+            <View style={styles.sheetDivider} />
+
+            <View style={styles.sheetActions}>
+              <Pressable onPress={() => setPaths([])} style={({ pressed }) => [styles.sheetGhost, pressed && styles.pressed]}>
+                <Text style={styles.sheetGhostText}>Clear</Text>
+              </Pressable>
+              <Pressable disabled={!paths.length} onPress={confirm} style={({ pressed }) => [styles.sheetPrimary, !paths.length && { opacity: 0.4 }, pressed && styles.pressed]}>
+                <Text style={styles.sheetPrimaryText}>Confirm Signature</Text>
+              </Pressable>
+            </View>
+          </View>
+        </ScrollView>
+      </View>
+    </Modal>
+  );
+}
+
 const styles = StyleSheet.create({
   flex: { flex: 1 },
   whiteRoot: { flex: 1, backgroundColor: colors.surface },
@@ -388,7 +598,7 @@ const styles = StyleSheet.create({
   progressFill: { height: '100%', borderRadius: 999, backgroundColor: colors.primary },
   footer: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: PAGE_PADDING, paddingTop: 25, backgroundColor: colors.surface, borderTopWidth: 1, borderTopColor: '#E0F2FE' },
   pressed: { opacity: 0.75 },
-  iconBubble: { backgroundColor: colors.primaryLight, alignItems: 'center', justifyContent: 'center' },
+  iconBubble: { alignSelf: 'center', backgroundColor: colors.primaryLight, alignItems: 'center', justifyContent: 'center' },
   otpBox: { width: '100%', minHeight: 64, borderWidth: 1, borderColor: colors.slate900, borderRadius: 12, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24, paddingVertical: 17 },
   otpText: { fontFamily: fonts.interBold, fontSize: 20, lineHeight: 28, color: colors.primary, letterSpacing: 6, textAlign: 'center' },
   resultRoot: { flex: 1, backgroundColor: colors.primary },
@@ -435,4 +645,47 @@ const styles = StyleSheet.create({
   completeModal: { width: '100%', maxWidth: 448, borderRadius: 24, backgroundColor: colors.surface, overflow: 'hidden' },
   completeTop: { alignItems: 'center', gap: 16, padding: 16 },
   largeButtonText: { fontSize: 18, lineHeight: 27 },
+  signatureCard: { width: '100%', padding: 16, gap: 24, borderWidth: 0.5, borderColor: colors.slate900, borderRadius: 16, backgroundColor: colors.surface, ...cardShadow },
+  signatureCardSigned: { borderWidth: 1, borderColor: colors.success, backgroundColor: colors.successLight },
+  signatureRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  signatureLabelGroup: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  signatureLabel: { fontFamily: fonts.interSemi, fontSize: 16, lineHeight: 24, color: colors.slate900 },
+  signatureAction: { minHeight: 28, paddingHorizontal: 8, paddingVertical: 4, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.primary, borderRadius: 8 },
+  signatureActionSigned: { backgroundColor: colors.surface, borderColor: '#E2E8F0' },
+  signatureActionText: { fontFamily: fonts.outfit, fontSize: 12, lineHeight: 18, color: colors.primary },
+  signatureActionTextSigned: { color: '#64748B' },
+  sheetBackdrop: { flex: 1, backgroundColor: 'rgba(30, 41, 59, 0.8)', justifyContent: 'flex-end' },
+  selectSheet: { width: '100%', maxHeight: '72%', paddingTop: 20, paddingBottom: 24, borderTopLeftRadius: 24, borderTopRightRadius: 24, backgroundColor: colors.surface },
+  selectSheetHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: PAGE_PADDING, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: colors.canvas },
+  selectSheetTitle: { flex: 1, minWidth: 0, fontFamily: fonts.outfitSemi, fontSize: 16, lineHeight: 24, color: colors.slate900 },
+  selectSheetCancel: { paddingHorizontal: 4, paddingVertical: 4 },
+  selectSheetCancelText: { fontFamily: fonts.interSemi, fontSize: 14, lineHeight: 21, color: colors.primary },
+  selectSheetList: { paddingHorizontal: PAGE_PADDING, paddingTop: 8 },
+  selectOptionRow: { minHeight: 52, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, paddingHorizontal: 16, borderRadius: 12 },
+  selectOptionRowActive: { backgroundColor: colors.primaryLight },
+  selectOptionLabel: { flex: 1, minWidth: 0, fontFamily: fonts.inter, fontSize: 16, lineHeight: 24, color: colors.slate900 },
+  selectOptionLabelActive: { fontFamily: fonts.interSemi, color: colors.primary },
+  termsBackdrop: { flex: 1, backgroundColor: 'rgba(30, 41, 59, 0.8)', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 16 },
+  termsScroll: { flexGrow: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 24 },
+  termsCard: { width: '100%', maxWidth: 358, paddingHorizontal: 16, paddingVertical: 28, gap: 16, borderRadius: 24, backgroundColor: colors.surface },
+  termsLogo: { width: 108.73, height: 80, alignSelf: 'center' },
+  modalCopyBlock: { width: '100%', gap: 8 },
+  sheetTitle: { fontFamily: fonts.interBold, fontSize: 20, lineHeight: 30, color: colors.slate900 },
+  sheetMeta: { fontFamily: fonts.inter, fontSize: 12, lineHeight: 16.8, color: '#94A3B8' },
+  sheetBody: { fontFamily: fonts.inter, fontSize: 13, lineHeight: 19.5, color: '#64748B' },
+  termsSection: { width: '100%', padding: 16, gap: 8, borderWidth: 1, borderColor: '#DDE7E6', borderRadius: 16, backgroundColor: colors.surface },
+  termsHeading: { fontFamily: fonts.interSemi, fontSize: 15, lineHeight: 21, color: colors.slate900 },
+  termsBody: { fontFamily: fonts.inter, fontSize: 13, lineHeight: 20.15, color: '#64748B' },
+  sheetActions: { width: '100%', gap: 8, paddingTop: 12 },
+  sheetPrimary: { width: '100%', minHeight: 48, alignItems: 'center', justifyContent: 'center', borderRadius: 12, backgroundColor: colors.primary },
+  sheetPrimaryText: { fontFamily: fonts.interSemi, fontSize: 15, lineHeight: 21, color: colors.surface },
+  sheetGhost: { width: '100%', minHeight: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 12 },
+  sheetGhostText: { fontFamily: fonts.interSemi, fontSize: 15, lineHeight: 21, color: colors.primary },
+  sheetDivider: { width: '100%', height: 1, backgroundColor: '#DDE7E6' },
+  signatureModalCard: { width: '100%', maxWidth: 358, paddingHorizontal: 16, paddingVertical: 28, gap: 16, borderRadius: 24, backgroundColor: colors.surface },
+  signatureField: { width: '100%', gap: 8 },
+  signatureFieldLabel: { fontFamily: fonts.interSemi, fontSize: 15, lineHeight: 21, color: colors.slate900 },
+  signaturePad: { width: '100%', height: 230, padding: 16, alignItems: 'center', justifyContent: 'space-between', borderWidth: 1, borderStyle: 'dashed', borderColor: colors.primary, borderRadius: 16, backgroundColor: colors.surface },
+  signaturePadHint: { fontFamily: fonts.inter, fontSize: 13, lineHeight: 19.5, color: '#94A3B8', textAlign: 'center' },
+  signatureBaseline: { width: 278, maxWidth: '100%', height: 1, backgroundColor: '#CBD5E1' },
 });

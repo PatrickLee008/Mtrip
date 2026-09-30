@@ -8,6 +8,7 @@ declare(strict_types=1);
  * - 管理端 /api/v1/admin/user/*:AdminAuthMiddleware + OperationLogMiddleware
  */
 
+use App\Controller\Admin\AdminRealNameController;
 use App\Controller\Admin\AdminChatController;
 use App\Controller\Admin\AdminFeedbackController;
 use App\Controller\Admin\AdminRiskController;
@@ -18,6 +19,7 @@ use App\Controller\App\AuthController;
 use App\Controller\App\ChatController;
 use App\Controller\App\FavoriteController;
 use App\Controller\App\NotifyController;
+use App\Controller\App\ProfileSetupController;
 use App\Controller\App\ReferralController;
 use App\Controller\App\TravelerController;
 use App\Controller\App\UserController;
@@ -50,6 +52,12 @@ Router::addGroup('/api/v1/app', static function () {
     Router::get('/user/points-logs', [UserController::class, 'pointsLogs']);
     Router::post('/user/feedback/add', [UserController::class, 'addFeedback']);
     Router::get('/user/feedback/list', [UserController::class, 'feedbackList']);
+
+    // 资料向导(Set Up Profile):回填 / 第1步个人资料 / 第2步实名资料 / 图片上传
+    Router::get('/user/profile-setup/detail', [ProfileSetupController::class, 'detail']);
+    Router::post('/user/profile-setup/profile', [ProfileSetupController::class, 'saveProfile']);
+    Router::post('/user/profile-setup/identity', [ProfileSetupController::class, 'submitIdentity']);
+    Router::post('/user/upload', [ProfileSetupController::class, 'upload']);
 
     // 常旅客(Frequent Traveler)
     Router::get('/user/traveler/list', [TravelerController::class, 'list']);
@@ -104,6 +112,12 @@ Router::addGroup('/api/v1/admin/user', static function () {
     Router::get('/customer360', [AdminUserController::class, 'customer360']);
     Router::post('/blacklist', [AdminUserController::class, 'blacklist']);
     Router::post('/unblacklist', [AdminUserController::class, 'unblacklist']);
+    // 实名审核(App 资料向导第 2 步提交的实名资料)
+    Router::get('/real-name/queues', [AdminRealNameController::class, 'queues']);
+    Router::get('/real-name/list', [AdminRealNameController::class, 'index']);
+    Router::get('/real-name/detail', [AdminRealNameController::class, 'detail']);
+    Router::post('/real-name/approve', [AdminRealNameController::class, 'approve']);
+    Router::post('/real-name/reject', [AdminRealNameController::class, 'reject']);
 }, [
     'middleware' => [AdminAuthMiddleware::class, OperationLogMiddleware::class],
 ]);

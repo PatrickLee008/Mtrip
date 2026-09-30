@@ -26,7 +26,7 @@ class SettlementService
         $commission = round($orderAmount * $this->commissionRate($siteId), 2);
 
         // 出资方拆分:默认平台承担
-        [$fundingSource, $rules] = $this->couponFunding((int) $order['coupon_id']);
+        [$fundingSource, $rules] = $this->couponFunding((int) $order['coupon_id'], $order['coupon_snapshot'] ?? null);
         $mtrip = 0.0;
         $merchant = 0.0;
         $partner = 0.0;
@@ -76,11 +76,19 @@ class SettlementService
         ]);
     }
 
-    /** 取优惠券出资方与共担比例(领券记录ID→模板) */
-    private function couponFunding(int $receiveId): array
+    /**
+     * 取优惠券出资方与共担比例:优先读下单时的规则快照(order_main.coupon_snapshot),
+     * 后台之后改券模板不影响已下订单;快照为空的存量订单回退读券模板(领券记录ID→模板)。
+     */
+    private function couponFunding(int $receiveId, mixed $snapshot = null): array
     {
         if ($receiveId <= 0) {
             return [1, []];
+        }
+        $snap = is_string($snapshot) ? json_decode($snapshot, true) : null;
+        if (is_array($snap) && isset($snap['fundingSource'])) {
+            $source = (int) $snap['fundingSource'];
+            return [$source > 0 ? $source : 1, is_array($snap['fundingRules'] ?? null) ? $snap['fundingRules'] : []];
         }
         $row = Db::table('marketing_coupon_receive as r')
             ->join('marketing_coupon as c', 'c.id', '=', 'r.coupon_id')

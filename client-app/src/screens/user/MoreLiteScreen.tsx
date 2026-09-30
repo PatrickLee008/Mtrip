@@ -24,11 +24,11 @@
  * About、FAQ、Rate this app。
  */
 
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
-import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTranslation } from 'react-i18next';
 
@@ -57,6 +57,7 @@ export default function MoreLiteScreen() {
   const isLogin = useUserStore((s) => s.isLogin);
   const profile = useUserStore((s) => s.profile);
   const logout = useUserStore((s) => s.logout);
+  const refreshProfile = useUserStore((s) => s.refreshProfile);
   const lang = useCommonStore((s) => s.lang);
   const setLang = useCommonStore((s) => s.setLang);
   const liteMode = useCommonStore((s) => s.liteMode);
@@ -65,6 +66,13 @@ export default function MoreLiteScreen() {
   const currency = useSiteStore((s) => s.currency);
 
   const [langOpen, setLangOpen] = useState(false);
+
+  // 获焦刷新资料(余额/积分/会员等级变动),与完整模式 MineScreen 同一处理
+  useFocusEffect(
+    useCallback(() => {
+      refreshProfile().catch(() => undefined);
+    }, [refreshProfile]),
+  );
 
   const comingSoon = () => showToast(t('home.comingSoon'));
   const requireLogin = () => navigation.navigate('Login');

@@ -39,6 +39,7 @@ Router::addGroup('/api/v1/app/order', static function () {
     Router::get('/verify-code', [OrderController::class, 'verifyCode']);
 
     // 多酒店 Trip(单结账多预订,PRD 模块1.1)
+    Router::post('/trip/quote', [TripController::class, 'quote']);  // 只读试算(不占库存、不建单)
     Router::post('/trip/create', [TripController::class, 'create']);
     Router::post('/trip/pay', [TripController::class, 'pay']);
     Router::get('/trip/detail', [TripController::class, 'detail']);

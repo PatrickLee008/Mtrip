@@ -12,6 +12,7 @@ import { useTranslation } from 'react-i18next';
 
 import PrimaryButton from '@/components/common/PrimaryButton';
 import FeatureIcon, { type FeatureIconName } from '@/components/onboarding/FeatureIcon';
+import { ONBOARDING_PROTOTYPE } from '@/config/env';
 import { colors, PAGE_PADDING, shadows, spacing } from '@/config/theme';
 import { fonts, text } from '@/config/typography';
 
@@ -70,10 +71,10 @@ export default function OnboardingScreen() {
         </ScrollView>
 
         <View style={[styles.footer, { paddingBottom: 40 + insets.bottom }]}> 
-          <PrimaryButton label={t('onboarding.register')} onPress={() => navigation.navigate('Register')} />
+          <PrimaryButton label={t('onboarding.register')} onPress={() => navigation.navigate('RegisterContact')} />
           <Pressable
             style={({ pressed }) => [styles.loginLink, pressed && styles.pressed]}
-            onPress={() => navigation.navigate('Login')}
+            onPress={() => ONBOARDING_PROTOTYPE ? navigation.navigate('Login') : navigation.navigate('MerchantAccount', { mode: 'login' })}
             hitSlop={8}
           >
             <Text style={styles.loginText}>

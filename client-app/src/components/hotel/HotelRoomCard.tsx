@@ -65,6 +65,10 @@ interface Props {
   perNightLabel?: string | null;
   /** 未选态的按钮文案(Choose);已选态是加减器,没有文案 */
   selectLabel: string;
+  /** 所选日期内最多可订间数;0 = 售罄(按钮置灰不可选),不传则不设上限 */
+  maxQuantity?: number;
+  /** 售罄时按钮上的文案 */
+  soldOutLabel?: string;
   /** 购物车里这个房型的间数,0 = 未选(卡片本身无状态,由调用方给) */
   quantity: number;
   bestsellerLabel?: string | null;
@@ -98,6 +102,8 @@ export default function HotelRoomCard({
   price,
   perNightLabel,
   selectLabel,
+  maxQuantity,
+  soldOutLabel,
   quantity,
   bestsellerLabel,
   favorite,
@@ -110,6 +116,7 @@ export default function HotelRoomCard({
 }: Props) {
   /** 渐变 id 要跟着卡片走,同屏三张卡共用一个 id 在 web 上会互相顶掉 */
   const gradientId = `roomCardTop-${gradientKey}`;
+  const soldOut = maxQuantity === 0;
 
   return (
     <View style={styles.card}>
@@ -257,15 +264,17 @@ export default function HotelRoomCard({
           {quantity > 0 ? (
             <RoomStepper
               quantity={quantity}
+              max={maxQuantity}
               onIncrease={() => onChangeQuantity(quantity + 1)}
               onDecrease={() => onChangeQuantity(quantity - 1)}
             />
           ) : (
             <Pressable
-              style={({ pressed }) => [styles.selectBtn, pressed && styles.pressed]}
+              style={({ pressed }) => [styles.selectBtn, soldOut && styles.selectBtnDisabled, pressed && styles.pressed]}
               onPress={onSelect}
+              disabled={soldOut}
             >
-              <Text style={styles.selectText}>{selectLabel}</Text>
+              <Text style={styles.selectText}>{soldOut ? (soldOutLabel ?? selectLabel) : selectLabel}</Text>
             </Pressable>
           )}
         </View>
@@ -438,6 +447,7 @@ const styles = StyleSheet.create({
     color: colors.textSoft,
   },
 
+  selectBtnDisabled: { opacity: 0.4 },
   selectBtn: {
     alignItems: 'center',
     justifyContent: 'center',

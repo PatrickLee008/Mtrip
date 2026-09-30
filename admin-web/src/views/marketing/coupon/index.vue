@@ -118,6 +118,13 @@ const form = reactive({
   validDays: 30,
   remark: '',
   siteId: 0,
+  /* PRD §17.5 资格条件,0 / 空 = 不限(仅酒店生效) */
+  minNights: 0,
+  maxNights: 0,
+  bookAdvanceDays: 0,
+  minRoomCount: 0,
+  minHotelCount: 0,
+  stayRange: [] as string[],
 });
 
 function openCreate(): void {
@@ -137,6 +144,12 @@ function openCreate(): void {
     validDays: 30,
     remark: '',
     siteId: userStore.profile?.siteId || 0,
+    minNights: 0,
+    maxNights: 0,
+    bookAdvanceDays: 0,
+    minRoomCount: 0,
+    minHotelCount: 0,
+    stayRange: [],
   });
   formOpen.value = true;
 }
@@ -161,6 +174,12 @@ function openEdit(row: TableRow): void {
     validDays: row.valid_days || 30,
     remark: row.remark || '',
     siteId: row.site_id,
+    minNights: Number(row.min_nights || 0),
+    maxNights: Number(row.max_nights || 0),
+    bookAdvanceDays: Number(row.book_advance_days || 0),
+    minRoomCount: Number(row.min_room_count || 0),
+    minHotelCount: Number(row.min_hotel_count || 0),
+    stayRange: row.stay_start && row.stay_end ? [row.stay_start, row.stay_end] : [],
   });
   if (form.goodsScope === 3) {
     propertyOptions.value = form.propertyIds.map((id) => ({ label: `#${id}`, value: id }));
@@ -220,6 +239,18 @@ async function submitForm(): Promise<void> {
       validEnd: form.validType === 1 ? form.validRange[1] : undefined,
       validDays: form.validType === 2 ? form.validDays : undefined,
       remark: form.remark.trim(),
+      /* 资格条件:仅门票券(goodsScope=2)不适用,一律清零 */
+      ...(form.goodsScope === 2
+        ? { minNights: 0, maxNights: 0, bookAdvanceDays: 0, minRoomCount: 0, minHotelCount: 0, stayStart: '', stayEnd: '' }
+        : {
+            minNights: form.minNights,
+            maxNights: form.maxNights,
+            bookAdvanceDays: form.bookAdvanceDays,
+            minRoomCount: form.minRoomCount,
+            minHotelCount: form.minHotelCount,
+            stayStart: form.stayRange[0] || '',
+            stayEnd: form.stayRange[1] || '',
+          }),
     };
     if (editingId.value === 0) {
       await apiCouponAdd({ ...payload, siteId: isSuper ? form.siteId : undefined });
@@ -649,6 +680,29 @@ watch(() => form.siteId, (siteId, previous) => {
               :loading="ticketLoading"
             />
           </a-form-item>
+        </template>
+        <!-- PRD §17.5 资格条件(仅酒店;0 / 空 = 不限),判定口径见 shared CouponEligibility -->
+        <template v-if="form.goodsScope !== 2">
+          <a-divider orientation="left">{{ t('marketing.coupon.conditions') }}</a-divider>
+          <a-form-item :label="t('marketing.coupon.nightsRange')">
+            <a-input-number v-model:value="form.minNights" :min="0" :max="365" :precision="0" style="width: 120px" />
+            <span style="margin: 0 8px">~</span>
+            <a-input-number v-model:value="form.maxNights" :min="0" :max="365" :precision="0" style="width: 120px" />
+            <span style="margin-left: 8px; color: rgba(0, 0, 0, 0.45)">{{ t('marketing.coupon.nightsUnit') }}</span>
+          </a-form-item>
+          <a-form-item :label="t('marketing.coupon.bookAdvanceDays')">
+            <a-input-number v-model:value="form.bookAdvanceDays" :min="0" :max="365" :precision="0" style="width: 120px" />
+          </a-form-item>
+          <a-form-item :label="t('marketing.coupon.minRoomCount')">
+            <a-input-number v-model:value="form.minRoomCount" :min="0" :max="100" :precision="0" style="width: 120px" />
+          </a-form-item>
+          <a-form-item :label="t('marketing.coupon.minHotelCount')">
+            <a-input-number v-model:value="form.minHotelCount" :min="0" :max="10" :precision="0" style="width: 120px" />
+          </a-form-item>
+          <a-form-item :label="t('marketing.coupon.stayRange')">
+            <a-range-picker v-model:value="form.stayRange" value-format="YYYY-MM-DD" style="width: 100%" />
+          </a-form-item>
+          <div style="margin: -8px 0 16px; color: rgba(0, 0, 0, 0.45)">{{ t('marketing.coupon.conditionsTip') }}</div>
         </template>
         <a-form-item :label="t('marketing.coupon.totalCount')" required>
           <a-input-number v-model:value="form.totalCount" :min="0" :precision="0" style="width: 180px" />

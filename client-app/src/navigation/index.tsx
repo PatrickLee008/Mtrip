@@ -20,7 +20,9 @@ import { useTranslation } from 'react-i18next';
 
 import TabBarIcon from '@/components/common/TabBarIcon';
 import LiteTabBar from '@/components/lite/LiteTabBar';
+import ProfileSetupPrompt from '@/components/user/ProfileSetupPrompt';
 import { colors } from '@/config/theme';
+import { navigationRef } from '@/navigation/navigationRef';
 import type { MainTabParamList, RootStackParamList } from '@/navigation/types';
 import GoodsDetailScreen from '@/screens/goods/GoodsDetailScreen';
 import GoodsListScreen from '@/screens/goods/GoodsListScreen';
@@ -42,6 +44,7 @@ import HotelResultsLiteScreen from '@/screens/hotel/HotelResultsLiteScreen';
 import HotelReviewsLiteScreen from '@/screens/hotel/HotelReviewsLiteScreen';
 import PropertyPreviewLiteScreen from '@/screens/hotel/PropertyPreviewLiteScreen';
 import RoomDetailLiteScreen from '@/screens/hotel/RoomDetailLiteScreen';
+import RoomDetailScreen from '@/screens/hotel/RoomDetailScreen';
 import HotelsLiteScreen from '@/screens/hotel/HotelsLiteScreen';
 import HotelsScreen from '@/screens/hotel/HotelsScreen';
 import InsuranceScreen from '@/screens/hotel/InsuranceScreen';
@@ -68,9 +71,11 @@ import CouponDetailScreen from '@/screens/promotions/CouponDetailScreen';
 import PromotionsScreen from '@/screens/promotions/PromotionsScreen';
 import SiteSelectScreen from '@/screens/site/SiteSelectScreen';
 import ForgotPasswordScreen from '@/screens/user/ForgotPasswordScreen';
+import IdentityVerifyScreen from '@/screens/user/IdentityVerifyScreen';
 import LoginScreen from '@/screens/user/LoginScreen';
 import MineScreen from '@/screens/user/MineScreen';
 import MoreLiteScreen from '@/screens/user/MoreLiteScreen';
+import ProfileSetupScreen from '@/screens/user/ProfileSetupScreen';
 import ReferralCodeScreen from '@/screens/user/ReferralCodeScreen';
 import RegisterScreen from '@/screens/user/RegisterScreen';
 import ResetPasswordScreen from '@/screens/user/ResetPasswordScreen';
@@ -166,7 +171,7 @@ function MainTabs() {
 export default function AppNavigator() {
   const { t } = useTranslation();
   return (
-    <NavigationContainer>
+    <NavigationContainer ref={navigationRef}>
       <Stack.Navigator screenOptions={{ headerTitleAlign: 'center', headerTintColor: colors.text }}>
         <Stack.Screen name="MainTabs" component={MainTabs} options={{ headerShown: false }} />
         <Stack.Screen
@@ -231,6 +236,12 @@ export default function AppNavigator() {
         <Stack.Screen
           name="HotelDetail"
           component={HotelDetailScreen}
+          options={{ title: t('hotels.title'), headerShown: false }}
+        />
+        {/* 正常模式房型详情(Figma Rooms Details 281:1041)自带悬浮顶栏与吸底价格栏 */}
+        <Stack.Screen
+          name="RoomDetail"
+          component={RoomDetailScreen}
           options={{ title: t('hotels.title'), headerShown: false }}
         />
         {/* 房型购物车(Figma Room Cart 2659:11842)自带顶栏与吸底结算栏 */}
@@ -405,6 +416,17 @@ export default function AppNavigator() {
           component={ReferralCodeScreen}
           options={{ title: t('user.referral.title'), headerShown: false }}
         />
+        {/* 资料向导两步(Figma Onboarding Create account 3 / 4):自带 Set Up Profile 顶栏;关怀模式无单独设计稿,两种模式共用 */}
+        <Stack.Screen
+          name="ProfileSetup"
+          component={ProfileSetupScreen}
+          options={{ title: t('user.profileSetup.headerTitle'), headerShown: false }}
+        />
+        <Stack.Screen
+          name="IdentityVerify"
+          component={IdentityVerifyScreen}
+          options={{ title: t('user.profileSetup.headerTitle'), headerShown: false }}
+        />
         {/* 忘记密码两步(设计稿没有,复用同一套 AuthShell 外壳,故同样关掉 Stack 头) */}
         <Stack.Screen
           name="ForgotPassword"
@@ -417,6 +439,8 @@ export default function AppNavigator() {
           options={{ title: t('user.reset.title'), headerShown: false }}
         />
       </Stack.Navigator>
+      {/* 注册 / 登录后的「Set Up Profile Now?」弹窗:挂在栈外,盖在任何页面之上 */}
+      <ProfileSetupPrompt />
     </NavigationContainer>
   );
 }

@@ -35,8 +35,19 @@ export interface UserProfile {
   memberLevelName: string;
   balance: string;
   points: number;
+  /** 实名状态:0未认证 1已认证 2认证失败 3审核中 */
   realNameStatus: number;
   registerTime: string | null;
+  /** 性别:0未填 1男 2女 3其他 */
+  gender?: number;
+  /** yyyy-mm-dd */
+  birthday?: string | null;
+  city?: string;
+  /**
+   * 是否已完成资料向导第 1 步(Set Up Profile)。false 时注册/登录后弹「Set Up Profile Now?」。
+   * 可选:老版本本地缓存里没有这个字段,按 undefined 处理(不弹,等 refreshProfile 拿到真值)
+   */
+  profileCompleted?: boolean;
 }
 
 /** 登录/注册返回 */
@@ -72,6 +83,9 @@ export interface GoodsItem {
    */
   rating?: number;
   reviewCount?: number;
+  /** 酒店列表带日期搜索时:实际可订的入住/离店日(弹性日期下可能与所选不同) */
+  availableCheckIn?: string;
+  availableCheckOut?: string;
 }
 
 /**
@@ -133,6 +147,8 @@ export interface GoodsSku {
   status: number;
   sort: number;
   /* 房型字段 */
+  /** 详情带日期查询时才有:所选日期内每晚余量的最小值,即最多可订间数 */
+  available?: number;
   room_name?: string;
   bed_type?: string;
   area?: string;
@@ -226,6 +242,8 @@ export interface OrderDetail extends OrderItemData {
   verify_code: string;
   cancel_reason: string;
   remark: string;
+  /** 下单时第 1 步填的特殊要求(商户端预订详情同一字段);没填为空串 */
+  special_requests?: string;
   /**
    * 仅已取消/退款中/已退款的单会带:谁取消的 + 退款单号与金额。
    * `operatorType` 取自 `order_booking_event` 最后一条 `cancelled` 事件
@@ -301,7 +319,13 @@ export type CouponReason =
   | 'void'
   | 'min_amount'
   | 'scope'
-  | 'offline';
+  | 'offline'
+  /* PRD §17.5 资格条件(shared CouponEligibility::REASON_*) */
+  | 'nights'
+  | 'advance'
+  | 'stay_date'
+  | 'min_rooms'
+  | 'min_hotels';
 
 /**
  * 统一优惠券视图:领券中心 / 活动详情 / 券详情 / 我的券 / 结账共用同一套字段。

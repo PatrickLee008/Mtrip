@@ -72,6 +72,8 @@ services:
     environment:
       <<: *app-env
       HTTP_PORT: "9502"
+    volumes:
+      - ./uploads:/opt/www/uploads
 
   goods-service-app:
     <<: *app-common

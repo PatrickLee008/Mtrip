@@ -253,7 +253,8 @@ INSERT IGNORE INTO `sys_menu` (`id`,`parent_id`,`menu_name`,`menu_name_en`,`i18n
 (1011,1000,'黑名单','Blacklist','','user:list:list',2,'/user/blacklist','user/blacklist/index','',11),
 (1012,1000,'申诉处理','Appeals','','user:appeal:list',2,'/cops/appeal','cops/appeal/index','',12),
 (1013,1000,'会员等级','Member Levels','','user:level:list',2,'/user/level','user/level/index','',13),
-(1014,1000,'风控看板','Risk Control','','user:fraud:list',2,'/cops/fraud','cops/fraud/index','',14);
+(1014,1000,'风控看板','Risk Control','','user:fraud:list',2,'/cops/fraud','cops/fraud/index','',14),
+(1015,1000,'实名审核','Identity Verification','','user:realname:list',2,'/user/real-name','user/real-name/index','',15);
 INSERT IGNORE INTO `sys_menu` (`id`,`parent_id`,`menu_name`,`menu_name_en`,`perm_key`,`menu_type`,`sort`) VALUES
 (100101,1001,'冻结解冻','Freeze/Unfreeze','user:list:status',3,1),
 (100102,1001,'余额调整','Adjust Balance','user:list:adjust-balance',3,2),
@@ -262,7 +263,9 @@ INSERT IGNORE INTO `sys_menu` (`id`,`parent_id`,`menu_name`,`menu_name_en`,`perm
 (100801,1008,'处理反馈','Handle','user:feedback:handle',3,1),
 (101301,1013,'新增等级','Add Level','user:level:add',3,1),
 (101302,1013,'编辑等级','Edit Level','user:level:edit',3,2),
-(101201,1012,'处理申诉','Handle Appeal','user:appeal:handle',3,1);
+(101201,1012,'处理申诉','Handle Appeal','user:appeal:handle',3,1),
+(101501,1015,'通过实名','Approve','user:realname:approve',3,1),
+(101502,1015,'驳回实名','Reject','user:realname:reject',3,2);
 
 -- ================= 1100 帮助中心(全新)=================
 INSERT IGNORE INTO `sys_menu` (`id`,`parent_id`,`menu_name`,`menu_name_en`,`i18n_key`,`perm_key`,`menu_type`,`route_path`,`component`,`icon`,`sort`) VALUES

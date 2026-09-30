@@ -278,6 +278,7 @@ class MerchantAppOnboardingService
         ])->all();
         $status = [
             'applicationId' => (int) $app['id'], 'appNo' => (string) $app['app_no'], 'stage' => (int) $app['stage'],
+            'testMode' => MerchantAuthTestMode::enabled(),
             'registrationStatus' => match ($registration) { 0 => 'draft', 1 => 'submitted', 2 => 'under_review', 3 => 'approved', 4 => 'resubmit_required', 5 => 'rejected', default => 'unknown' },
             'merchantKycStatus' => match ($kyc) { 0 => 'locked', 1 => 'draft', 2 => 'submitted', 3 => 'under_review', 4 => 'resubmit_required', 5 => 'approved', 6 => 'rejected', default => 'unknown' },
             'accountStatus' => match ($account) { 0 => 'not_created', 1 => 'pending_activation', 2 => 'active', 3 => 'suspended', 4 => 'disabled', default => 'unknown' },

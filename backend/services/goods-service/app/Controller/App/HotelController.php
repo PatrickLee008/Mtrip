@@ -16,29 +16,45 @@ use Mtrip\Shared\Support\Result;
 /** Consumer hotel reads use Property and room type IDs only. */
 final class HotelController extends AbstractController
 {
+    /** 客户端筛选面板的住宿类型;物业表目前只有酒店一种业态,其余类型如实返回 0 条 */
+    private const PROPERTY_TYPES = ['hotel', 'homesApts', 'hostels', 'hourly'];
+
+    /** 住客评分档位(/10 制,与客户端评价页一致;库里 rating 是 /5 制) */
+    private const SCORE_LEVELS = [9, 8, 7, 6];
+
     public function list(): array
     {
         $siteId = $this->requireSiteId();
         [$page, $pageSize] = $this->pageParams();
-        $rows = MarketplaceReader::searchable($siteId, $this->strInput('countryCode'), $this->strInput('cityKey'));
-        $keyword = mb_strtolower($this->strInput('keyword'));
+        $citizen = $this->intInput('citizen') === 1;
         $star = $this->intInput('starLevel');
+        $stars = array_map('intval', $this->csvInput('starLevels'));
         $min = $this->floatInput('priceMin');
         $max = $this->floatInput('priceMax');
         $score = $this->floatInput('reviewScore');
-        $amenities = array_values(array_filter(array_map('trim', explode(',', $this->strInput('amenities')))));
+        $amenities = array_map([self::class, 'tag'], $this->csvInput('amenities'));
+        $features = array_map([self::class, 'tag'], $this->csvInput('roomFeatures'));
+        $beds = array_map([self::class, 'tag'], $this->csvInput('bedTypes'));
+        $types = $this->csvInput('propertyTypes');
+        $cities = array_map('mb_strtolower', $this->csvInput('cities'));
         $breakfast = $this->intInput('breakfast') === 1;
         $freeCancel = $this->intInput('freeCancel') === 1;
 
-        $rows = array_values(array_filter($rows, static function (array $row) use ($keyword, $star, $min, $max, $score, $amenities, $breakfast, $freeCancel): bool {
-            if ($keyword !== '' && ! str_contains(mb_strtolower($row['property_name'] . ' ' . $row['address']), $keyword)) return false;
+        /* 组内:星级/床型/类型/城市任一命中即可,设施与房间特色须全部具备;组间一律取交集 */
+        $rows = array_values(array_filter($this->searchRows($siteId), static function (array $row) use ($citizen, $star, $stars, $min, $max, $score, $amenities, $features, $beds, $types, $cities, $breakfast, $freeCancel): bool {
+            $price = (float) ($citizen ? $row['minPriceCitizen'] : $row['minPrice']);
             if ($star > 0 && (int) $row['star_level'] !== $star) return false;
-            if ($min > 0 && (float) $row['minPrice'] < $min) return false;
-            if ($max > 0 && (float) $row['minPrice'] > $max) return false;
+            if ($stars !== [] && ! in_array((int) $row['star_level'], $stars, true)) return false;
+            if ($min > 0 && $price < $min) return false;
+            if ($max > 0 && $price > $max) return false;
             if ($score > 0 && (float) $row['rating'] < $score) return false;
             if ($breakfast && ! $row['hasBreakfast']) return false;
             if ($freeCancel && ! $row['freeCancel']) return false;
-            foreach ($amenities as $amenity) if (! in_array($amenity, $row['facilities'], true)) return false;
+            if ($types !== [] && ! in_array($row['_tags']['type'], $types, true)) return false;
+            if ($cities !== [] && ! in_array($row['_tags']['city'], $cities, true)) return false;
+            if ($beds !== [] && array_intersect($beds, array_keys($row['_tags']['beds'])) === []) return false;
+            foreach ($amenities as $amenity) if (! isset($row['_tags']['amenities'][$amenity])) return false;
+            foreach ($features as $feature) if (! isset($row['_tags']['features'][$feature])) return false;
             return true;
         }));
 
@@ -59,8 +75,218 @@ final class HotelController extends AbstractController
             });
         }
         $total = count($rows);
-        $list = array_map([self::class, 'listAliases'], array_slice($rows, ($page - 1) * $pageSize, $pageSize));
+        $list = array_map(static function (array $row): array {
+            unset($row['_tags']);
+            return self::listAliases($row);
+        }, array_slice($rows, ($page - 1) * $pageSize, $pageSize));
         return Result::page($list, $total, $page, $pageSize);
+    }
+
+    /**
+     * 筛选面板的选项与计数:只按目的地/关键词圈定范围,不叠加其它筛选条件。
+     * counts 的键与客户端选项键一致(star:4 / score:9 / type:hotel / breakfast / freeCancel);
+     * 设施、床型、房间特色、城市的选项取自真实物业/房型数据,按命中物业数倒序。
+     */
+    public function filters(): array
+    {
+        $rows = $this->searchRows($this->requireSiteId());
+        $counts = ['breakfast' => 0, 'freeCancel' => 0];
+        foreach (range(1, 5) as $star) $counts['star:' . $star] = 0;
+        foreach (self::SCORE_LEVELS as $level) $counts['score:' . $level] = 0;
+        foreach (self::PROPERTY_TYPES as $type) $counts['type:' . $type] = 0;
+        $groups = ['amenities' => [], 'beds' => [], 'features' => [], 'cities' => []];
+        foreach ($rows as $row) {
+            if (isset($counts['star:' . $row['star_level']])) ++$counts['star:' . $row['star_level']];
+            foreach (self::SCORE_LEVELS as $level) if ((float) $row['rating'] * 2 >= $level) ++$counts['score:' . $level];
+            ++$counts['type:' . $row['_tags']['type']];
+            if ($row['hasBreakfast']) ++$counts['breakfast'];
+            if ($row['freeCancel']) ++$counts['freeCancel'];
+            $tags = $row['_tags'];
+            foreach (['amenities' => $tags['amenities'], 'beds' => $tags['beds'], 'features' => $tags['features'],
+                'cities' => $tags['city'] === '' ? [] : [$tags['city'] => ucwords($tags['city'])]] as $group => $items) {
+                foreach ($items as $key => $label) {
+                    $groups[$group][$key] ??= ['key' => $key, 'label' => $label, 'count' => 0];
+                    ++$groups[$group][$key]['count'];
+                }
+            }
+        }
+        foreach ($groups as $group => $items) {
+            $items = array_values($items);
+            usort($items, static fn ($a, $b) => ($b['count'] <=> $a['count']) ?: strcmp($a['label'], $b['label']));
+            $groups[$group] = $items;
+        }
+        return Result::success(['total' => count($rows), 'counts' => $counts] + $groups);
+    }
+
+    /**
+     * 目的地 + 关键词圈定的可售物业,每行附带 `_tags`(仅供筛选,出参前剥掉):
+     * type 住宿类型 / city 城市键 / amenities 物业设施 / beds 床型 / features 房间设施与景观,
+     * 后三者都是「归一化键 => 展示名」,归一化规则见 tag()。
+     */
+    private function searchRows(int $siteId): array
+    {
+        $rows = MarketplaceReader::searchable($siteId, $this->strInput('countryCode'), $this->strInput('cityKey'));
+        $keyword = mb_strtolower($this->strInput('keyword'));
+        if ($keyword !== '') {
+            $rows = array_values(array_filter($rows, static fn (array $row): bool => str_contains(mb_strtolower($row['property_name'] . ' ' . $row['address']), $keyword)));
+        }
+        $rows = $this->availableRows($siteId, $rows);
+        $ids = array_column($rows, 'property_id');
+        if ($ids === []) return [];
+
+        $amenities = Db::table('merchant_store')->where('site_id', $siteId)->whereIn('id', $ids)
+            ->pluck('amenities', 'id')->all();
+        $rooms = Db::table('hotel_room_type')->where('site_id', $siteId)->whereIn('property_id', $ids)
+            ->where('status', 1)->where('publish_status', 2)->where('approved_version', '>', 0)->whereNull('deleted_at')
+            ->get(['property_id', 'bed_type', 'bedding', 'room_view', 'facilities']);
+        $roomTags = [];
+        foreach ($rooms as $room) {
+            $pid = (int) $room->property_id;
+            $roomTags[$pid] ??= ['beds' => [], 'features' => []];
+            $beds = array_column($this->jsonList($room->bedding), 'type');
+            $beds[] = (string) $room->bed_type;
+            foreach ($beds as $bed) self::addTag($roomTags[$pid]['beds'], (string) $bed);
+            foreach ($this->jsonList($room->facilities) as $facility) if (is_string($facility)) self::addTag($roomTags[$pid]['features'], $facility);
+            self::addTag($roomTags[$pid]['features'], (string) $room->room_view);
+        }
+
+        foreach ($rows as &$row) {
+            $pid = (int) $row['property_id'];
+            $tags = [];
+            foreach ($row['facilities'] as $facility) if (is_string($facility)) self::addTag($tags, $facility);
+            foreach ($this->jsonList($amenities[$pid] ?? null) as $amenity) {
+                if (is_array($amenity) && ($amenity['enabled'] ?? true) && is_string($amenity['name'] ?? null)) self::addTag($tags, $amenity['name']);
+            }
+            $row['_tags'] = [
+                'type' => 'hotel',
+                'city' => mb_strtolower((string) $row['city_key']),
+                'amenities' => $tags,
+                'beds' => $roomTags[$pid]['beds'] ?? [],
+                'features' => $roomTags[$pid]['features'] ?? [],
+            ];
+        }
+        unset($row);
+        return $rows;
+    }
+
+    /**
+     * 详情带了 checkIn/checkOut 时,每个房型补 `available`:这段日期最多还能订几间(客户端加减器的上限)。
+     * 不带日期则不补该字段;内部配额字段(base_stock/launch_stock)不下发。
+     */
+    private function withAvailability(int $siteId, int $propertyId, array $rooms): array
+    {
+        $checkIn = $this->strInput('checkIn');
+        $checkOut = $this->strInput('checkOut');
+        $valid = self::isDate($checkIn) && self::isDate($checkOut) && $checkOut > $checkIn;
+        $nights = $valid ? (int) round((strtotime($checkOut) - strtotime($checkIn)) / 86400) : 0;
+        $stocks = $valid && $nights <= 90 ? self::stockMap($siteId, [$propertyId], $checkIn, self::shiftDate($checkOut, -1)) : null;
+        return array_map(static function (array $room) use ($stocks, $checkIn, $nights): array {
+            if ($stocks !== null) $room['available'] = self::minAvailable($room, $stocks, $checkIn, $nights);
+            unset($room['base_stock'], $room['launch_stock']);
+            return $room;
+        }, $rooms);
+    }
+
+    /**
+     * 带了 checkIn/checkOut 时只留有房的物业:任一在售房型在每一晚都有余量即可订。
+     * 余量口径同 calendar():有日库存行取 total-sold-locked(关房为 0),没有则取房型默认配额。
+     * flexDays(0~7)按 0,-1,+1,-2,+2… 的顺序找第一个可订窗口(入住日不早于今天),
+     * 命中的日期写进 availableCheckIn/availableCheckOut,客户端据此提示并带进详情页。
+     */
+    private function availableRows(int $siteId, array $rows): array
+    {
+        $checkIn = $this->strInput('checkIn');
+        $checkOut = $this->strInput('checkOut');
+        if ($rows === [] || ! self::isDate($checkIn) || ! self::isDate($checkOut) || $checkOut <= $checkIn) return $rows;
+        $nights = (int) round((strtotime($checkOut) - strtotime($checkIn)) / 86400);
+        if ($nights > 90) throw new BusinessException(ErrorCode::PARAM_ERROR, '入住晚数不能超过 90');
+        $flex = min(7, max(0, $this->intInput('flexDays')));
+        $today = date('Y-m-d');
+        $offsets = [0];
+        for ($i = 1; $i <= $flex; ++$i) array_push($offsets, -$i, $i);
+        $offsets = array_values(array_filter($offsets, static fn (int $o): bool => self::shiftDate($checkIn, $o) >= $today));
+        if ($offsets === []) return [];
+
+        $ids = array_column($rows, 'property_id');
+        $rooms = Db::table('hotel_room_type')->where('site_id', $siteId)->whereIn('property_id', $ids)
+            ->where('status', 1)->where('publish_status', 2)->where('approved_version', '>', 0)->whereNull('deleted_at')
+            ->get(['id', 'property_id', 'base_stock', 'launch_stock'])->map(static fn ($r) => (array) $r)->all();
+        $stocks = self::stockMap($siteId, $ids, self::shiftDate($checkIn, min($offsets)), self::shiftDate($checkOut, max($offsets) - 1));
+        $byProperty = [];
+        foreach ($rooms as $room) $byProperty[(int) $room['property_id']][] = $room;
+
+        $result = [];
+        foreach ($rows as $row) {
+            foreach ($offsets as $offset) {
+                $start = self::shiftDate($checkIn, $offset);
+                foreach ($byProperty[(int) $row['property_id']] ?? [] as $room) {
+                    if (self::minAvailable($room, $stocks, $start, $nights) < 1) continue;
+                    $result[] = $row + ['availableCheckIn' => $start, 'availableCheckOut' => self::shiftDate($start, $nights)];
+                    continue 3;
+                }
+            }
+        }
+        return $result;
+    }
+
+    /** [房型 id][日期] => 当日可售余量(关房为 0);没有日库存行的日期不在表里,由调用方回落默认配额 */
+    private static function stockMap(int $siteId, array $propertyIds, string $from, string $to): array
+    {
+        $stocks = [];
+        Db::table('goods_daily_stock')->where('site_id', $siteId)->whereIn('property_id', $propertyIds)->where('sku_type', 1)
+            ->whereBetween('stock_date', [$from, $to])->whereNull('deleted_at')
+            ->get(['sku_id', 'stock_date', 'stock_total', 'stock_sold', 'stock_locked', 'is_closed'])
+            ->each(static function ($s) use (&$stocks): void {
+                $stocks[(int) $s->sku_id][(string) $s->stock_date] = (int) $s->is_closed === 1 ? 0
+                    : max(0, (int) $s->stock_total - (int) $s->stock_sold - (int) $s->stock_locked);
+            });
+        return $stocks;
+    }
+
+    /** 房型在 start 起连续 nights 晚里每晚余量的最小值 = 这段日期最多能订几间 */
+    private static function minAvailable(array $room, array $stocks, string $start, int $nights): int
+    {
+        $default = RoomDefaults::stock($room);
+        $min = PHP_INT_MAX;
+        for ($n = 0; $n < $nights; ++$n) {
+            $min = min($min, $stocks[(int) $room['id']][self::shiftDate($start, $n)] ?? $default);
+        }
+        return $min === PHP_INT_MAX ? 0 : $min;
+    }
+
+    private static function isDate(string $value): bool
+    {
+        $time = strtotime($value);
+        return $time !== false && date('Y-m-d', $time) === $value;
+    }
+
+    private static function shiftDate(string $date, int $days): string
+    {
+        return date('Y-m-d', (int) strtotime(sprintf('%s %+d day', $date, $days)));
+    }
+
+    /**
+     * 归一化键:小写、去掉非字母数字、去掉前缀 free ——
+     * 物业设施里的「Free WiFi」、房型设施里的「wifi」、客户端 chip 的「Wifi」都落到 wifi。
+     */
+    private static function tag(string $label): string
+    {
+        $key = (string) preg_replace('/[^a-z0-9]/', '', mb_strtolower($label));
+        return (string) preg_replace('/^free(?=.)/', '', $key);
+    }
+
+    /** 纯数字的旧床型编码(1/2)没有语义,不当作选项 */
+    private static function addTag(array &$tags, string $label): void
+    {
+        $label = trim($label);
+        $key = self::tag($label);
+        if ($key === '' || ctype_digit($key) || isset($tags[$key])) return;
+        $tags[$key] = strlen($key) <= 2 ? strtoupper($label) : ucfirst(str_replace('_', ' ', $label));
+    }
+
+    private function csvInput(string $key): array
+    {
+        return array_values(array_filter(array_map('trim', explode(',', $this->strInput($key))), 'strlen'));
     }
 
     public function detail(): array
@@ -83,6 +309,7 @@ final class HotelController extends AbstractController
                 'max_adults', 'max_children', 'max_guests', 'floor_name', 'room_view', 'smoking', 'breakfast', 'meal_plan',
                 'cancellation_policy', 'currency', 'checkin_notes', 'base_price', 'weekend_price', 'extra_bed_price',
                 'images', 'image_gallery', 'video_url', 'facilities', 'panorama', 'vr_tour', 'floor_plan', 'sort',
+                'base_stock', 'launch_stock',
             ])->map(function ($row): array {
                 $room = (array) $row;
                 $room = \App\Service\RoomContentService::unpack($room);
@@ -92,6 +319,7 @@ final class HotelController extends AbstractController
                 $room['room_type_id'] = (int) $room['id'];
                 return $room;
             })->all();
+        $rooms = $this->withAvailability($siteId, $propertyId, $rooms);
         $roomIds = array_column($rooms, 'id');
         $rules = $roomIds === [] ? [] : Db::table('goods_refund_rule')->where('site_id', $siteId)
             ->where('property_id', $propertyId)->where('sku_type', 1)->whereIn('sku_id', $roomIds)

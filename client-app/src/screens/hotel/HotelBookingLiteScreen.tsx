@@ -35,7 +35,7 @@ import { LoadingView } from '@/components/common/StateViews';
 import HomeIcon from '@/components/home/HomeIcon';
 import DatePickerSheet from '@/components/hotel/DatePickerSheet';
 import AlertDialog from '@/components/hotel/booking/AlertDialog';
-import { formatMonthDayYear } from '@/components/hotel/booking/bookingFormat';
+import { cancellationPolicyText } from '@/components/hotel/booking/bookingFormat';
 import CouponPickerSheet from '@/components/hotel/booking/CouponPickerSheet';
 import LiteStepConfirm from '@/components/hotel/booking/lite/LiteStepConfirm';
 import LiteStepPay from '@/components/hotel/booking/lite/LiteStepPay';
@@ -45,6 +45,7 @@ import { PAGE_PADDING, colors, radius } from '@/config/theme';
 import { fonts } from '@/config/typography';
 import type { RootStackParamList } from '@/navigation/types';
 import { useBookingWizard } from '@/screens/hotel/useBookingWizard';
+import { formatMoney } from '@/utils/format';
 
 export default function HotelBookingLiteScreen() {
   const route = useRoute<RouteProp<RootStackParamList, 'HotelBookingLite'>>();
@@ -75,6 +76,9 @@ export default function HotelBookingLiteScreen() {
     payResult,
     setPayResult,
     failReason,
+    priceChange,
+    confirmPriceChange,
+    cancelPriceChange,
     goSuccess,
     loginPrompt,
     setLoginPrompt,
@@ -98,6 +102,8 @@ export default function HotelBookingLiteScreen() {
     enableMultiStay: false,
     steps: ['guests', 'payment'],
     confirmLogin: true,
+    /* 新稿邮箱是可展开的选填项,填了才校验格式 */
+    emailOptional: true,
     /* 关怀模式只订一间:车里可能还留着完整模式挑的房,不能拿来替它下单 */
     useCart: false,
   });
@@ -108,17 +114,11 @@ export default function HotelBookingLiteScreen() {
    * 退改说明:真实商品接 `refundRules`(rule_type 1 免费 / 2 阶梯 / 3 不可退,口径与
    * `HotelPolicyLiteScreen`、后端 `computeRefund` 的兜底一致);演示模式用设计稿文案。
    */
-  const cancellationDesc = (() => {
-    const rule = refundRules[0];
-    if (!rule) {
-      return t('hotels.booking.review.cancellationDesc', {
-        date: formatMonthDayYear(current.checkIn, i18n.language),
-      });
-    }
-    if (rule.rule_type === 3) return t('hotels.lite.policy.nonRefundable');
-    if (rule.rule_type === 2) return t('hotels.lite.policy.tieredRefund');
-    return t('hotels.lite.policy.freeCancel');
-  })();
+  const cancellationDesc = cancellationPolicyText(t, i18n.language, {
+    demo: Boolean(current.demo),
+    checkIn: current.checkIn,
+    rules: refundRules,
+  });
 
   return (
     <View style={liteBooking.root}>
@@ -263,6 +263,26 @@ export default function HotelBookingLiteScreen() {
         secondaryLabel={t('hotels.booking.lite.cancel')}
         onSecondary={() => setLoginPrompt(false)}
         onClose={() => setLoginPrompt(false)}
+      />
+
+      {/* 金额确认:提交时后端计价与页面显示不一致(PRICE_CHANGED),未建单;确认后按新金额重提 */}
+      <AlertDialog
+        visible={priceChange !== null}
+        tone="plain"
+        title={t('hotels.booking.review.priceChangedTitle')}
+        desc={
+          priceChange
+            ? t('hotels.booking.review.priceChangedMessage', {
+                oldAmount: formatMoney(priceChange.expectedPayAmount, currency),
+                newAmount: formatMoney(priceChange.payAmount, currency),
+              })
+            : null
+        }
+        primaryLabel={t('hotels.booking.review.priceChangedConfirm')}
+        onPrimary={confirmPriceChange}
+        secondaryLabel={t('common.cancel')}
+        onSecondary={cancelPriceChange}
+        onClose={cancelPriceChange}
       />
 
       <AlertDialog

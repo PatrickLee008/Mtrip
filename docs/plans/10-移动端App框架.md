@@ -1036,3 +1036,7 @@ Expo 51 / TypeScript / Zustand / React Navigation 6 / Axios / i18next + react-i1
 - 2026-09-22 订房向导第 3/4 步(Figma `228:5118` / `276:876`):Add More Stay 去掉重复加号;第 3 步按钮改 Continue 并移除券行;优惠券挪到第 4 步稿面本就有的 COUPONS 卡并接真选券;未开放的 6 个支付渠道默认折叠(有意偏离稿面);第 4 步按钮改 Pay Now。校验 `scripts/check-booking-steps-34.cjs` GREEN 37/37。
 
 - 2026-09-22 支付失败流程(缺陷修复):`submit()` 建单与支付拆成两段 catch;支付失败进预订结果页新增的 `failed` 态并对**已有订单**重付(取数抽在 `useBookingResult`,两种模式共用取数、版式各留各的);订单详情页待支付单 Modify → 立即支付;后端 `trip/detail` 补 `payment_expires_at`。校验 `scripts/check-payment-failure-flow.cjs` GREEN 62/62。
+
+- 2026-09-23 正常模式房型详情页(Figma `281:1041`):新增 `RoomDetailScreen` / 路由 `RoomDetail`,Rooms 页签真实房型的 See Details 接入(演示房型仍 comingSoon);Book This Room / Reserve now 本房型入车后进 `HotelBooking`;加购参数抽成 `HotelRoomsTab` 的 `realRoomCartEntry` 共用;新增 4 枚设施图标与 `hotels.detail.roomDetail.*`。typecheck 通过,⚠️ 未做 Web/真机对图。
+- 2026-09-23 注册后资料向导(Figma `2516:14427` / `2485:8211` / `2485:8355`):新增全局弹窗 `ProfileSetupPrompt`(注册必弹、登录按 `profileCompleted` + 本地 Later 记录)、路由 `ProfileSetup` / `IdentityVerify` 与共用壳 `ProfileSetupShell`;接 user-service `profile-setup/detail|profile|identity` 与 `/user/upload`;新增 `expo-image-picker` 与 `utils/imagePicker.ts`、`navigation/navigationRef.ts`、8 枚图标、`user.profileSetup.*` 三语。typecheck / web 导出通过,⚠️ 未做真机对图。
+- 2026-09-23 关怀模式补请求:`MoreLiteScreen` 获焦 `refreshProfile`;`HotelReviewsLiteScreen` 接 `/app/hotels/reviews` 分页 + `reviewSummary`(删 `hotels.lite.reviews.items.*`);`HotelInfoLiteScreen` 评价摘要取 `reviewSummary`;新增 `components/hotel/reviewFormat.ts` 共用评价口径。

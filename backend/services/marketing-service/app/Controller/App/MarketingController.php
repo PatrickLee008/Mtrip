@@ -316,6 +316,7 @@ class MarketingController extends AppAbstractController
             'goodsId' => $this->intInput('goodsId'),
             'skuId' => $this->intInput('skuId'),
             'amount' => round($this->floatInput('amount'), 2),
+            'items' => $this->couponItems(),
         ];
 
         $rows = Db::table('marketing_coupon_receive as r')
@@ -371,6 +372,7 @@ class MarketingController extends AppAbstractController
             'goodsId' => $this->intInput('goodsId'),
             'skuId' => $this->intInput('skuId'),
             'amount' => round($this->floatInput('amount'), 2),
+            'items' => $this->couponItems(),
         ];
         $now = date('Y-m-d H:i:s');
 
@@ -570,5 +572,39 @@ class MarketingController extends AppAbstractController
         if ($limit > 0 && (int) $promo['usage_count'] >= $limit) {
             throw new BusinessException(ErrorCode::PROMO_CODE_EXHAUSTED);
         }
+    }
+    /**
+     * 结账选券的整单上下文(可选):`items` 为 JSON 字符串(GET 查询串里放对象数组易被序列化坏)或数组。
+     * 每行 {propertyId, roomTypeId, quantity, nights, checkIn, checkOut, amount(该行净额)};最多 10 行,
+     * 非法字段按缺省处理(日期不合法视为未给,对应的日期类条件不判)。不传返回空数组 → 退回单项判定。
+     */
+    private function couponItems(): array
+    {
+        $raw = $this->input('items');
+        if (is_string($raw)) {
+            $raw = json_decode($raw, true);
+        }
+        if (! is_array($raw)) {
+            return [];
+        }
+        $date = static fn ($v) => is_string($v) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $v) ? $v : null;
+        $items = [];
+        foreach (array_slice(array_values($raw), 0, 10) as $item) {
+            if (! is_array($item)) {
+                continue;
+            }
+            $items[] = [
+                'propertyId' => (int) ($item['propertyId'] ?? 0),
+                'roomTypeId' => (int) ($item['roomTypeId'] ?? 0),
+                'goodsId' => (int) ($item['goodsId'] ?? 0),
+                'skuId' => (int) ($item['skuId'] ?? 0),
+                'quantity' => max(1, (int) ($item['quantity'] ?? 1)),
+                'nights' => isset($item['nights']) ? max(0, (int) $item['nights']) : null,
+                'checkIn' => $date($item['checkIn'] ?? null),
+                'checkOut' => $date($item['checkOut'] ?? null),
+                'amount' => round(max(0.0, (float) ($item['amount'] ?? 0)), 2),
+            ];
+        }
+        return $items;
     }
 }

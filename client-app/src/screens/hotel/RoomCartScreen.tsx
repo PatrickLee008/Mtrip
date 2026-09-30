@@ -22,9 +22,13 @@
  * 稿面那几行写死了 10% / 5% / 20% 与 Earn 1,250 Points,照抄会在结算页对不上账 ——
  * 所以这里按**费率常量**渲染且**为 0 时整行不显示**,默认全 0,合计 = 房费小计。
  * 后端出了字段(或站点配置下发费率)再把常量换成真实值即可,不改版式。
+ *
+ * 房费小计与长住优惠以 `trip/quote` 试算为准(与下单同一套后端计价:日历价 / 长住);
+ * 未登录、日期没选全、车里有演示房型或试算失败时退回「底价 × 间数 × 晚数」预估。
+ * 券不在这一页(结账第 4 步才选),所以试算不带券。
  */
 
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -38,8 +42,10 @@ import RoomStepper from '@/components/hotel/RoomStepper';
 import { colors, radius, shadows } from '@/config/theme';
 import { fonts } from '@/config/typography';
 import type { RootStackParamList } from '@/navigation/types';
+import { cartTripItems, useTripQuote } from '@/screens/hotel/useTripQuote';
 import { nightsBetween, useRoomCartStore } from '@/store/roomCartStore';
 import { useSiteStore } from '@/store/siteStore';
+import { useUserStore } from '@/store/userStore';
 import { formatMoney } from '@/utils/format';
 
 /**
@@ -61,13 +67,30 @@ export default function RoomCartScreen() {
   /** 待确认移除的房型(设计稿 Alert Overlay 2659:12483) */
   const [pendingRemove, setPendingRemove] = useState<string | null>(null);
 
+  const isLogin = useUserStore((s) => s.isLogin);
+
   const nights = nightsBetween(checkIn, checkOut);
   const roomCount = items.reduce((sum, item) => sum + item.quantity, 0);
-  const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity * nights, 0);
+  /**
+   * 试算只在**整车都是真实房型**时做:混着演示房型的车,试算只覆盖其中一部分,
+   * 拿它当合计反而不对 —— 那种情况整页保持预估。
+   */
+  const allReal = items.length > 0 && items.every((item) => item.sku);
+  const quoteItems = useMemo(
+    () =>
+      allReal && propertyId && checkIn && checkOut
+        ? cartTripItems(propertyId, items, checkIn, checkOut)
+        : [],
+    [allReal, propertyId, items, checkIn, checkOut],
+  );
+  const { quote } = useTripQuote(quoteItems, 0, isLogin && quoteItems.length > 0);
+  const estimate = items.reduce((sum, item) => sum + item.price * item.quantity * nights, 0);
+  const subtotal = quote?.original ?? estimate;
+  const longstayDiscount = quote?.longstayDiscount ?? 0;
   const tax = subtotal * RATES.tax;
   const service = subtotal * RATES.service;
   const memberDiscount = subtotal * RATES.memberDiscount;
-  const total = subtotal + tax + service - memberDiscount;
+  const total = subtotal + tax + service - memberDiscount - longstayDiscount;
 
   /** 减到 0 不直接删,先弹确认框(设计稿要求) */
   const decrease = (roomKey: string, quantity: number) => {
@@ -194,6 +217,7 @@ export default function RoomCartScreen() {
                     {/* 加减器 2659:12366 —— 与房型卡共用同一个组件 */}
                     <RoomStepper
                       quantity={item.quantity}
+                      max={item.sku?.available}
                       onIncrease={() => setQuantity(item.roomKey, item.quantity + 1)}
                       onDecrease={() => decrease(item.roomKey, item.quantity)}
                     />
@@ -236,6 +260,14 @@ export default function RoomCartScreen() {
                     {t('hotels.cart.service', { percent: Math.round(RATES.service * 100) })}
                   </Text>
                   <Text style={styles.rowValue}>{formatMoney(service, currency)}</Text>
+                </View>
+              ) : null}
+              {longstayDiscount > 0 ? (
+                <View style={styles.tableRow}>
+                  <Text style={styles.rowLabel}>{t('hotels.booking.review.longStayDiscount')}</Text>
+                  <Text style={[styles.rowValue, styles.rowValueAccent]}>
+                    -{formatMoney(longstayDiscount, currency)}
+                  </Text>
                 </View>
               ) : null}
               {memberDiscount > 0 ? (

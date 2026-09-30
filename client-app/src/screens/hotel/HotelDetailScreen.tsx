@@ -27,7 +27,7 @@
  * Property Preview / VR View / 3d View)不属于页签,本次未实现。
  */
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View, type ImageSourcePropType } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
@@ -52,8 +52,10 @@ import { fonts } from '@/config/typography';
 import type { RootStackParamList } from '@/navigation/types';
 import { DETAIL_DEMO, DETAIL_REVIEW_SUMMARY, DETAIL_TABS, type DetailTabKey } from '@/screens/hotel/detailDemo';
 import { useCommonStore } from '@/store/commonStore';
+import { cartTripItems, useTripQuote } from '@/screens/hotel/useTripQuote';
 import { nightsBetween, useRoomCartStore } from '@/store/roomCartStore';
 import { useSiteStore } from '@/store/siteStore';
+import { useUserStore } from '@/store/userStore';
 import type { GoodsDetail, GoodsSku } from '@/types/models';
 import { formatMoney } from '@/utils/format';
 import { resolveMediaUri } from '@/utils/media';
@@ -78,6 +80,7 @@ export default function HotelDetailScreen() {
    * 放在 `roomCartStore` 而不是本页 state —— 购物车页要读同一份,两份状态必然对不上。
    */
   const cartItems = useRoomCartStore((s) => s.items);
+  const isLogin = useUserStore((s) => s.isLogin);
   const cartToggle = useRoomCartStore((s) => s.toggle);
   /** 房型卡加减器:0 会被 store 当作移出(与购物车页同一个 action,行为不会走偏) */
   const cartSetQuantity = useRoomCartStore((s) => s.setQuantity);
@@ -87,18 +90,21 @@ export default function HotelDetailScreen() {
   const [loading, setLoading] = useState(Boolean(propertyId));
   const [error, setError] = useState('');
 
+  const detailCheckIn = route.params?.checkIn;
+  const detailCheckOut = route.params?.checkOut;
   const loadDetail = useCallback(async () => {
     if (!propertyId) return;
     setLoading(true);
     try {
-      setDetail(await fetchHotelDetail(propertyId));
+      /* 带上日期:房型下发 available,加减器据此封顶(QA CA_TC_067) */
+      setDetail(await fetchHotelDetail(propertyId, { checkIn: detailCheckIn, checkOut: detailCheckOut }));
       setError('');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Error');
     } finally {
       setLoading(false);
     }
-  }, [propertyId]);
+  }, [propertyId, detailCheckIn, detailCheckOut]);
 
   useEffect(() => {
     void loadDetail();
@@ -171,14 +177,26 @@ export default function HotelDetailScreen() {
   /** 角标与购物车页「Selected Rooms (n)」同口径:总间数(不是房型数) */
   const cartRoomCount = cartItems.reduce((sum, item) => sum + item.quantity, 0);
   /**
-   * 底栏合计与购物车页必须同口径 —— 都是 Σ 单价 × 间数 × 晚数。
-   * 设计稿画的是 1 晚,乘不乘看不出差别,但选了 2 晚就会两处对不上。
+   * 底栏合计与购物车页同口径:已登录、日期选全、车里都是真实房型时取 `trip/quote` 试算
+   * (日历价 − 长住优惠,不含券 —— 券在结账第 4 步才选),否则退回 Σ 单价 × 间数 × 晚数 的预估。
    */
   const cartNights = nightsBetween(route.params?.checkIn, route.params?.checkOut);
-  const cartTotal = cartItems.reduce(
+  const cartEstimate = cartItems.reduce(
     (sum, item) => sum + item.price * item.quantity * cartNights,
     0,
   );
+  const cartCheckIn = route.params?.checkIn;
+  const cartCheckOut = route.params?.checkOut;
+  const cartAllReal = cartItems.length > 0 && cartItems.every((item) => item.sku);
+  const cartQuoteItems = useMemo(
+    () =>
+      cartAllReal && propertyId && cartCheckIn && cartCheckOut
+        ? cartTripItems(propertyId, cartItems, cartCheckIn, cartCheckOut)
+        : [],
+    [cartAllReal, propertyId, cartItems, cartCheckIn, cartCheckOut],
+  );
+  const { quote: cartQuote } = useTripQuote(cartQuoteItems, 0, isLogin && cartQuoteItems.length > 0);
+  const cartTotal = cartQuote?.payAmount ?? cartEstimate;
 
   /**
    * Continue:整车进订房向导(与购物车页 Check Out 同一入口)。
@@ -240,6 +258,17 @@ export default function HotelDetailScreen() {
             onChangeQuantity={cartSetQuantity}
             quantities={cartQuantities}
             rooms={detail?.skus}
+            onSeeDetails={
+              detail
+                ? (room) =>
+                    navigation.navigate('RoomDetail', {
+                      goodsId: detail.id,
+                      skuId: room.id,
+                      checkIn: route.params?.checkIn,
+                      checkOut: route.params?.checkOut,
+                    })
+                : undefined
+            }
           />
         );
       case 'amenities':

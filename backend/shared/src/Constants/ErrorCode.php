@@ -65,6 +65,12 @@ class ErrorCode
     /** 不符合促销码兑换资格 (HTTP 409) */
     public const PROMO_CODE_INELIGIBLE = 40914;
 
+    /**
+     * 下单金额确认失败 (HTTP 409):客户端带来的 expectedPayAmount 与服务端实际计价不一致
+     * (日历价/库存价/券在用户看到之后变了)。未建单;`data` 携带最新明细,客户端提示用户确认后重提。
+     */
+    public const PRICE_CHANGED = 40921;
+
     /** 请求过于频繁(限流) (HTTP 429) */
     public const TOO_MANY_REQUESTS = 42901;
     /** 重复提交(并发锁/FormId 幂等拦截) (HTTP 429) */
@@ -111,6 +117,7 @@ class ErrorCode
         self::PROMO_CODE_EXHAUSTED => 409,
         self::PROMO_CODE_DUPLICATED => 409,
         self::PROMO_CODE_INELIGIBLE => 409,
+        self::PRICE_CHANGED => 409,
         self::TOO_MANY_REQUESTS => 429,
         self::REPEAT_SUBMIT => 429,
         self::SMS_SEND_TOO_FREQUENT => 429,
@@ -142,6 +149,7 @@ class ErrorCode
         self::PROMO_CODE_EXHAUSTED => '促销码已兑完',
         self::PROMO_CODE_DUPLICATED => '该促销码已兑换过',
         self::PROMO_CODE_INELIGIBLE => '不符合该促销码的兑换资格',
+        self::PRICE_CHANGED => '价格已变动,请确认最新金额后重新提交',
         self::TOO_MANY_REQUESTS => '请求过于频繁',
         self::REPEAT_SUBMIT => '请求正在处理中,请勿重复提交',
         self::SMS_SEND_TOO_FREQUENT => '验证码发送过于频繁,请稍后再试',

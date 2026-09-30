@@ -17,9 +17,7 @@
  * 筛选浮层**直接复用完整模式的 `HotelFilterSheet`(408:1824)** —— Lite 稿 `2485:7101`
  * 与它逐段同构(Filter By / Recent Filters / Budget 直方图 + 双滑块 / Popular Filters / Show Results),
  * 没有需要放大的差异,再抄一份只会多一处要同步维护的地方。
- * 同完整模式:`/app/hotels/list` 虽然收 `priceMin/priceMax/amenities` 等参数,但 Lite 版没有 chips 行,
- * 筛选浮层里的选择(设计稿的静态计数与直方图)**只留在前端状态里**,不参与请求
- * —— 与完整版的取舍逐条一致(完整版只有 chips/排序进请求)。
+ * 同完整模式:浮层里的选择经 filterToParams 并入 `/app/hotels/list` 的查询参数,计数与结果数取真实数据。
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -37,6 +35,7 @@ import HomeIcon from '@/components/home/HomeIcon';
 import HotelFilterSheet, {
   DEFAULT_HOTEL_FILTER,
   HotelFilterValue,
+  filterToParams,
 } from '@/components/hotel/HotelFilterSheet';
 import LiteHotelCard from '@/components/hotel/lite/LiteHotelCard';
 import { PAGE_PADDING, colors, radius } from '@/config/theme';
@@ -68,50 +67,67 @@ export default function HotelResultsLiteScreen() {
 
   const pageRef = useRef(1);
   const busyRef = useRef(false);
+  /** 条件变了就作废在途请求,否则旧结果会覆盖新结果(busyRef 也会挡住新请求) */
+  const loadVersion = useRef(0);
 
   const comingSoon = () => showToast(t('home.comingSoon'));
 
-  const query = useMemo(
+  const scope = useMemo(
     () => ({
       countryCode: params.countryCode,
       cityKey: params.cityKey,
       keyword: params.keyword || undefined,
+      citizen: params.citizen ? 1 : undefined,
+      checkIn: params.checkIn,
+      checkOut: params.checkOut,
+      flexDays: params.flexDays || undefined,
     }),
-    [params.countryCode, params.cityKey, params.keyword],
+    [params.countryCode, params.cityKey, params.keyword, params.citizen, params.checkIn, params.checkOut, params.flexDays],
   );
+  const query = useMemo(() => ({ ...scope, ...filterToParams(filter) }), [scope, filter]);
 
   const load = useCallback(
     async (page: number, mode: 'init' | 'refresh' | 'more') => {
       if (busyRef.current) return;
+      const version = loadVersion.current;
       busyRef.current = true;
       if (mode === 'init') setLoading(true);
       if (mode === 'refresh') setRefreshing(true);
       if (mode === 'more') setLoadingMore(true);
       try {
         const data = await fetchHotelList({ ...query, page, pageSize: PAGE_SIZE });
+        if (version !== loadVersion.current) return;
         pageRef.current = page;
         setItems((prev) => (page === 1 ? data.list : [...prev, ...data.list]));
         setTotal(data.total);
         setHasMore(page * data.pageSize < data.total);
         setError('');
       } catch (e) {
+        if (version !== loadVersion.current) return;
         if (page === 1) {
           setItems([]);
           setTotal(0);
         }
         setError(e instanceof Error ? e.message : 'Error');
       } finally {
-        busyRef.current = false;
-        setLoading(false);
-        setRefreshing(false);
-        setLoadingMore(false);
+        if (version === loadVersion.current) {
+          busyRef.current = false;
+          setLoading(false);
+          setRefreshing(false);
+          setLoadingMore(false);
+        }
       }
     },
     [query],
   );
 
   useEffect(() => {
+    loadVersion.current++;
+    busyRef.current = false;
     void load(1, 'init');
+    return () => {
+      loadVersion.current++;
+    };
   }, [load]);
 
   /* 收藏态:登录后拉一次,未登录时点心跳登录页(与完整模式同一套) */
@@ -222,8 +238,8 @@ export default function HotelResultsLiteScreen() {
                 onPress={(goods) =>
                   navigation.navigate('HotelDetailLite', {
                     id: goods.id,
-                    checkIn: params.checkIn,
-                    checkOut: params.checkOut,
+                    checkIn: goods.availableCheckIn ?? params.checkIn,
+                    checkOut: goods.availableCheckOut ?? params.checkOut,
                   })
                 }
                 onToggleFavorite={toggleFavorite}
@@ -236,6 +252,7 @@ export default function HotelResultsLiteScreen() {
       <HotelFilterSheet
         visible={filterOpen}
         value={filter}
+        scope={scope}
         onClose={() => setFilterOpen(false)}
         onApply={(value) => {
           setFilter(value);
