@@ -1,5 +1,18 @@
 # 会话交接文档(HANDOFF)
 
+### ★ 2026-09-30 merchant-app H5 纳入 auto-deploy
+
+**问题**:`scripts/auto-deploy.sh` 只认 admin/merchant/supplier-web 与 client-app,merchant-app 的改动在 cron 模式被当作无关文件忽略,`auto-deploy.sh merchant-app` 报未知目标;网关/compose 也没有它的静态站。
+
+**改动**:按 client-app 模式补为第五个静态站点 `merchant-h5`。
+- `auto-deploy.sh`:`FE_WEBS` 加 merchant-app;`web_dist_dir` → `merchant-h5`(与 merchant-web 的 `deploy/web/merchant/` 区分);`web_build_script` → `build:web`;变更检测 `merchant-app/*`;强制目标 `merchant-app|merchant-h5`。
+- `deploy/docker-compose.yml` 网关加 `${MERCHANT_APP_WEB_PORT:-8094}:8094` 与 `./web/merchant-h5` 只读挂载;`mtrip.conf` 新增 8094 server 块(与 8093 同构仅 root 不同);`.env.example` 补 `MERCHANT_APP_WEB_PORT`;`mtrip.sh` 状态输出补端口;`deploy/web/.gitignore` + `merchant-h5/blank.html` 占位。
+- 新增 `merchant-app/.env.production`:`EXPO_PUBLIC_API_BASE_URL=/`(语义是 origin,理由同 client-app)、`ONBOARDING_PROTOTYPE=false`。**`EXPO_PUBLIC_CLIENT_ID/SECRET` 刻意留空**:入驻/KYC 走 `/api/v1/app/merchant/*` 需 HMAC 签名,上线前须在 admin-web「客户端管理」为商户端建客户端并填入,否则 `MTRIP_CLIENT_SIGN=true` 下全部被拒。
+
+**验证**:`bash -n` 通过;dry-run 确认 `merchant-app` / `merchant-h5` 解析为前端构建、`mobile` 提示含 merchant-app;本机实跑 `auto-deploy.sh merchant-app` 成功(npm ci + expo export,产物 `API_BASE_URL="/"`,无 `api.mtrip.com` 回落);mtrip.conf 花括号平衡。**未验证**:`openresty -t` 与 8094 实访(需在部署机 `./mtrip.sh build` 让网关吃到新端口/挂载,仅 restart 不会生效)。
+
+**下一步**:① 为 merchant-app 建 app 客户端并填入 `.env.production`;② 部署机 `./mtrip.sh build` 后访问 `:8094`;③ 宝塔场景按 `deploy/README.md` 第 7 节为 merchant-h5 建站并加 `/api/`、`/uploads/` 反代。
+
 ### ★ 2026-09-30 Merchant App 真实入驻（T0-T7）
 
 **范围**：只接注册前半段，不提前扩展完整申请/KYC/激活。`merchant-app` 的 `/api/v1/app/*` 已统一使用现有客户端 HMAC 签名；`ONBOARDING_PROTOTYPE` 默认关闭且只有显式 `true` 才走静态样张。注册联系方式与业务联系人拆开，缅甸手机号归一化 E.164，首期 UI 仅允许邮箱 OTP，并按服务端返回实现倒计时、重发和 `testMode` 固定码 `000000` 提示。App 没有测试模式开关；实际开关仍是非生产 `APP_ENV` + `MTRIP_MERCHANT_AUTH_TEST_ALLOWED=true` + 超管“系统配置 → 全局参数 → 安全配置”。

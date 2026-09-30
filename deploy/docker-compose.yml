@@ -335,6 +335,8 @@ services:
       - "${SUPPLIER_WEB_PORT:-8092}:8092"
       # client = client-app 的 H5 网页版(Expo web export)
       - "${CLIENT_WEB_PORT:-8093}:8093"
+      # merchant-h5 = merchant-app 的 H5 网页版(Expo web export)
+      - "${MERCHANT_APP_WEB_PORT:-8094}:8094"
     volumes:
       - ./openresty/nginx.conf:/usr/local/openresty/nginx/conf/nginx.conf:ro
       - ./openresty/conf.d:/etc/nginx/conf.d:ro
@@ -345,6 +347,8 @@ services:
       - ./web/supplier:/usr/local/openresty/nginx/html/supplier:ro
       # client-app 的 Expo web export 产物(非 vite)
       - ./web/client:/usr/local/openresty/nginx/html/client:ro
+      # merchant-app 的 Expo web export 产物
+      - ./web/merchant-h5:/usr/local/openresty/nginx/html/merchant-h5:ro
     depends_on:
       - system-service
       - user-service

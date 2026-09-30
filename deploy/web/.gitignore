@@ -1,5 +1,5 @@
 # 前端构建产物落地目录(由 scripts/auto-deploy.sh 原子替换)
-# admin/merchant/supplier 是 vite build 产物,client 是 client-app 的 Expo web export 产物
+# admin/merchant/supplier 是 vite build 产物,client / merchant-h5 是 client-app / merchant-app 的 Expo web export 产物
 # 只保留占位 index.html,忽略真实构建产物(体积大、可重新生成)
 *
 !.gitignore
@@ -7,11 +7,14 @@
 !merchant/
 !supplier/
 !client/
+!merchant-h5/
 admin/*
 merchant/*
 supplier/*
 client/*
+merchant-h5/*
 !admin/blank.html
 !merchant/blank.html
 !supplier/blank.html
 !client/blank.html
+!merchant-h5/blank.html

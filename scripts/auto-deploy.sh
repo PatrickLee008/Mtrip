@@ -5,7 +5,8 @@
 # 设计目标(与 deploy/docker-compose.app-pool.yml 的双实例池配套):
 #   - 前端(admin/merchant/supplier)有变更 → npm run build → 原子替换 deploy/web/<web>/
 #   - 移动端 client-app 有变更 → npm run build:web(Expo web export)→ 原子替换 deploy/web/client/
-#       * 只发 【H5 网页版】。iOS/Android 的 EAS build 与商店提审【刻意不做】:
+#   - 商户移动端 merchant-app 有变更 → npm run build:web → 原子替换 deploy/web/merchant-h5/
+#       * 两个移动端都只发 【H5 网页版】。iOS/Android 的 EAS build 与商店提审【刻意不做】:
 #         提审是不可回退的对外动作,不适合放进 cron 自动流程,仍走人工。
 #   - 后端服务有变更 → 经 deploy/mtrip.sh 精准重启
 #       * 改动【全部落在 Controller/{Admin,Merchant,Supplier}】→ 只重启主池,APP 池零打断
@@ -26,6 +27,7 @@
 # 强制发布 target(跳过 fetch/merge/变更判断,也不要求工作区干净):
 #   admin-web|merchant-web|supplier-web  直接构建并发布静态文件
 #   client-app|client|h5                 直接构建并发布移动端 H5 到 deploy/web/client/
+#   merchant-app|merchant-h5             直接构建并发布商户移动端 H5 到 deploy/web/merchant-h5/
 #   system-service|user-service|...      直接重启对应后端主池服务
 #   system-service-app|user-service-app  直接重启 APP 孪生服务
 #   gateway|openresty                    直接重启网关
@@ -35,6 +37,7 @@
 # 示例:
 #   scripts/auto-deploy.sh admin-web
 #   scripts/auto-deploy.sh client-app
+#   scripts/auto-deploy.sh merchant-app
 #   scripts/auto-deploy.sh goods-service goods-service-app gateway
 #
 # cron 示例(每 5 分钟,避开整点):
@@ -95,23 +98,25 @@ LOCK_FILE="/tmp/mtrip-auto-deploy.lock"
 DEPLOY_STATE_FILE="${MTRIP_DEPLOY_STATE_FILE:-$REPO_ROOT/.git/mtrip-last-successful-deploy}"
 
 # 前端工程清单(含移动端 H5)。发布目录与构建脚本由下面两个映射函数给出。
-FE_WEBS="admin-web merchant-web supplier-web client-app"
+FE_WEBS="admin-web merchant-web supplier-web client-app merchant-app"
 
 # 工程名 -> deploy/web/ 下的发布目录名(网关挂载源,见 docker-compose.yml)
-# 三个管理端是 <名>-web 去掉后缀;client-app 的目录刻意叫 client(与网关 root 一致)
+# 三个管理端是 <名>-web 去掉后缀;client-app 的目录刻意叫 client(与网关 root 一致);
+# merchant-app 叫 merchant-h5,与 merchant-web 的 deploy/web/merchant/ 区分
 web_dist_dir() {
     case "$1" in
-        client-app) echo "client" ;;
-        *)          echo "${1%-web}" ;;
+        client-app)   echo "client" ;;
+        merchant-app) echo "merchant-h5" ;;
+        *)            echo "${1%-web}" ;;
     esac
 }
 
 # 工程名 -> package.json 里的构建脚本名
-# client-app 用 build:web(= expo export -p web),刻意不叫 build 以免与原生 EAS build 混淆
+# 两个 Expo 移动端用 build:web(= expo export -p web),刻意不叫 build 以免与原生 EAS build 混淆
 web_build_script() {
     case "$1" in
-        client-app) echo "build:web" ;;
-        *)          echo "build" ;;
+        client-app|merchant-app) echo "build:web" ;;
+        *)                       echo "build" ;;
     esac
 }
 # 同时服务管理端与 APP 端的共享服务(有 -app 孪生)
@@ -313,9 +318,10 @@ if [ -n "$FORCE_TARGETS" ]; then
                 APPLY_DB=1
                 ;;
             client-app|client|h5)    add client-app "$FE_BUILD" FE_BUILD; NOTE_MOBILE=1 ;;
+            merchant-app|merchant-h5) add merchant-app "$FE_BUILD" FE_BUILD; NOTE_MOBILE=1 ;;
             mobile|native)
                 warn "$target:iOS/Android 原生商店发版不在本脚本范围(需人工 EAS build + 提审)"
-                warn "  若你要发的是 H5 网页版,请用:scripts/auto-deploy.sh client-app"
+                warn "  若你要发的是 H5 网页版,请用:scripts/auto-deploy.sh client-app 或 merchant-app"
                 ;;
             backend/services/*)
                 s="${target#backend/services/}"
@@ -356,6 +362,7 @@ else
             supplier-web/*)  add supplier-web "$FE_BUILD" FE_BUILD ;;
             # H5 网页版自动构建发布;原生商店发版仍需人工(NOTE_MOBILE 只用于末尾提醒)
             client-app/*)    add client-app "$FE_BUILD" FE_BUILD; NOTE_MOBILE=1 ;;
+            merchant-app/*)  add merchant-app "$FE_BUILD" FE_BUILD; NOTE_MOBILE=1 ;;
 
             backend/shared/*)
                 # 影响所有业务服务 + 所有孪生
@@ -423,7 +430,7 @@ echo "  网关动作     :${GATEWAY_ACTION:- (无)}"
 [ "$SKIP_DB" -eq 1 ] && echo "  ${C_YELLOW}数据库迁移   :已用 --skip-db 显式跳过${C_OFF}"
 [ "$NEED_STACK_UP" -eq 1 ] && echo "  ${C_YELLOW}.env/compose 变更:需 ./mtrip.sh build 或 start 重建容器(本脚本不自动执行)${C_OFF}"
 [ -n "$DB_FILES" ] && echo "  DB 文件变更  :$DB_FILES"
-[ "$NOTE_MOBILE" -eq 1 ] && echo "  client-app:本次只发 H5 网页版(见上方前端构建);iOS/Android 商店发版仍需人工 EAS build + 提审"
+[ "$NOTE_MOBILE" -eq 1 ] && echo "  移动端(client-app/merchant-app):本次只发 H5 网页版(见上方前端构建);iOS/Android 商店发版仍需人工 EAS build + 提审"
 if [ -n "$SKIPPED_APP" ]; then
     warn "--no-app-sync:跳过 APP 孪生重启 [$SKIPPED_APP]"
     warn "  风险:APP 池仍跑旧代码;若本次共享代码/接口不兼容,/api/v1/app/* 可能报错。请尽快手动同步。"

@@ -139,6 +139,8 @@ MSYS_NO_PATHCONV=1 docker run --rm --entrypoint php \
 
 ## 当前状态(2026-07)
 
+merchant-app H5 纳入部署链路(2026-09-30):此前 `scripts/auto-deploy.sh` 完全不识别 merchant-app(不在前端清单、cron 变更检测会忽略 `merchant-app/*`、强制目标报未知)。现补为**第五个静态站点** `merchant-h5`(产物 `deploy/web/merchant-h5/`,网关直连端口 8094,构建 `npm run build:web`);强制目标 `merchant-app|merchant-h5`;新增 `merchant-app/.env.production`(`EXPO_PUBLIC_API_BASE_URL=/`、原型模式关闭)。**Client ID/Secret 留空待填**,开启 `MTRIP_CLIENT_SIGN` 后入驻接口会被拒。原生 EAS 发版仍走人工。
+
 表单校验(2026-09-29,QA 表 CA_TC_084/092/093):订房旅客信息页名、姓、手机(格式)、邮箱(完整模式必填 + 格式)逐项校验;常旅客证件号按 NRC / 护照 / 其他三类校验格式,前端 `isTravelerIdNo` 与后端 `TravelerController::validIdNo` 同规则,编辑时换证件类型须重填。
 
 订房数量与特殊要求(2026-09-29,QA 表 CA_TC_067/070/082;038/042 当前版本不复现):酒店详情带日期时房型下发 `available`,Rooms 页签与我的房间页加减器封顶、售罄不可选、「仅剩 N 间」改用真实余量;特殊要求在复核页与预订详情页显示。
