@@ -17,7 +17,7 @@ import {
 } from '@/components/onboarding/RegistrationForm';
 import { useCommonStore } from '@/store/commonStore';
 import { useRegistrationStore } from '@/store/registrationStore';
-import { isE164Mobile, normalizeMyanmarMobile } from '@/utils/validate';
+import { isE164Mobile, localPhoneNumber, normalizeMobile, phoneCountryCode, type PhoneCountryCode } from '@/utils/validate';
 
 export default function RegisterContactScreen() {
   const navigation = useNavigation();
@@ -26,11 +26,12 @@ export default function RegisterContactScreen() {
   const registrationPhone = useRegistrationStore((state) => state.registrationPhone);
   const registrationEmail = useRegistrationStore((state) => state.registrationEmail);
   const setContacts = useRegistrationStore((state) => state.setContacts);
-  const [mobile, setMobile] = useState(registrationPhone.replace(/^\+95/, ''));
+  const [countryCode, setCountryCode] = useState<PhoneCountryCode>(phoneCountryCode(registrationPhone));
+  const [mobile, setMobile] = useState(localPhoneNumber(registrationPhone, countryCode));
   const [email, setEmail] = useState(registrationEmail);
 
   const next = () => {
-    const phone = normalizeMyanmarMobile(mobile);
+    const phone = normalizeMobile(mobile, countryCode);
     const mail = email.trim().toLowerCase();
     if (!isE164Mobile(phone) || !mail || !/^\S+@\S+\.\S+$/.test(mail)) {
       showToast(t('register.contactInfo.required'));
@@ -58,7 +59,7 @@ export default function RegisterContactScreen() {
     >
       <View style={styles.form}>
         <FloatingField label={t('register.contactInfo.mobile')} required>
-          <PhoneField value={mobile} onChangeText={setMobile} />
+          <PhoneField value={mobile} onChangeText={setMobile} countryCode={countryCode} onCountryCodeChange={setCountryCode} />
         </FloatingField>
 
         <FloatingField label={t('register.contactInfo.email')} required>

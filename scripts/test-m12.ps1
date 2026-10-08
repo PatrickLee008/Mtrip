@@ -21,6 +21,9 @@ Assert-Exit 'S2 test schema migration'
 $s3Migration = (Get-Content (Join-Path $repo 'database/merchant/29-merchant-documents-notifications.sql') -Raw -Encoding utf8).Replace('mtrip_business', 'mtrip_m12_s1_test').Replace('mtrip_system', 'mtrip_m12_s1_test')
 $s3Migration | docker exec -i $mysqlContainer sh -c 'MYSQL_PWD=$MYSQL_ROOT_PASSWORD exec mysql -uroot --batch --default-character-set=utf8mb4'
 Assert-Exit 'S3 test schema migration'
+$notificationHideMigration = (Get-Content (Join-Path $repo 'database/migrations/V20261008120000__merchant-notification-hide.sql') -Raw -Encoding utf8).Replace('mtrip_business', 'mtrip_m12_s1_test')
+$notificationHideMigration | docker exec -i $mysqlContainer sh -c 'MYSQL_PWD=$MYSQL_ROOT_PASSWORD exec mysql -uroot --batch --default-character-set=utf8mb4'
+Assert-Exit 'notification hide test schema migration'
 $s4Migration = (Get-Content (Join-Path $repo 'database/merchant/30-merchant-account-security.sql') -Raw -Encoding utf8).Replace('mtrip_business', 'mtrip_m12_s1_test').Replace('mtrip_system', 'mtrip_m12_s1_test')
 $s4Migration | docker exec -i $mysqlContainer sh -c 'MYSQL_PWD=$MYSQL_ROOT_PASSWORD exec mysql -uroot --batch --default-character-set=utf8mb4'
 Assert-Exit 'S4 test schema migration'

@@ -49,6 +49,9 @@
       "title": "ဆက်သွယ်ရန် အချက်အလက်",
       "subtitle": "သင့်ဆက်သွယ်ရန် အချက်အလက်များကို အရင်ဖြည့်ပါ။",
       "mobile": "မိုဘိုင်းနံပါတ်",
+      "countryCode": "နိုင်ငံကုဒ်",
+      "countryMyanmar": "မြန်မာ (+95)",
+      "countryChina": "တရုတ် (+86)",
       "email": "အီးမေးလ်",
       "emailPlaceholder": "contact@property.com",
       "required": "မိုဘိုင်းနံပါတ်နှင့် အီးမေးလ် ဖြည့်ပါ"

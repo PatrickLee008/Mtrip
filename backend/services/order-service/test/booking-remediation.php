@@ -170,6 +170,9 @@ try {
         'use_date' => date('Y-m-d', strtotime('-1 day')),
     ]));
     contract(in_array('no-show', $pastNoShowActions, true), 'past local no-show deadline exposes action');
+    contract(! in_array('no-show', $lifecycle->availableActions(array_replace($order, [
+        'booking_status' => BookingConst::STATUS_CONFIRMED, 'use_date' => date('Y-m-d', strtotime('+1 day')),
+    ])), true), 'future local no-show deadline withholds action');
     $quote = $refund->quote($order);
     contract((float) $quote['refundable'] === 200.0, 'policy cap subtracts completed refunds', json_encode($quote));
     contract((float) $quote['remainingRefundable'] === 200.0, 'remaining refundable means remaining policy allowance', json_encode($quote));
@@ -218,6 +221,7 @@ try {
         'payment_status' => BookingConst::PAY_PENDING, 'booking_channel' => BookingConst::CHANNEL_WALKIN,
         'use_date' => date('Y-m-d'), 'end_date' => date('Y-m-d', strtotime('+1 day')),
         'contact_name' => 'Fixture', 'contact_phone' => '',
+        'payment_expires_at' => date('Y-m-d H:i:s', time() + 600),
     ]);
     $hotelPayOrder = (array) Db::table('order_main')->where('id', $hotelPayOrderId)->first();
     $hotelPayActions = $lifecycle->availableActions($hotelPayOrder);
@@ -271,6 +275,8 @@ try {
             'mch:order:detail',
             'mch:order:verify',
             'mch:order:mark-paid',
+            'mch:order:note',
+            'mch:order:message',
             'order:verify:list',
             'order:verify:revoke',
             'order:all:cancel',
@@ -283,6 +289,29 @@ try {
     $expectedPropertyIds = [$propertyId, $otherPropertyId];
     sort($expectedPropertyIds);
     contract($allPropertyIds === $expectedPropertyIds, 'all-properties booking list aggregates authorized properties', json_encode($allPropertyIds));
+    contract(! empty($allProperties['data']['list'][0]['currency']) && isset($allProperties['data']['list'][0]['availableActions']),
+        'list exposes authoritative currency and business actions');
+    $hotelDetail = invokeBookingController(BookingController::class, 'detail', ['id' => $hotelPayOrderId]);
+    contract(preg_match('/[+-][0-9]{2}:[0-9]{2}$/', (string) $hotelDetail['data']['payment']['paymentExpiresAt']) === 1,
+        'payment expiry exposes an offset-bearing timestamp');
+    $multi = invokeBookingController(BookingController::class, 'index', [
+        'bookingStatuses' => '2,5', 'paymentFilters' => 'paid,hotel', 'page' => 1, 'pageSize' => 1,
+    ]);
+    contract((int) $multi['data']['total'] === 3 && count($multi['data']['list']) === 1,
+        'multi-select OR within groups and AND across groups preserves pagination', json_encode($multi['data']));
+    $hotelFilter = invokeBookingController(BookingController::class, 'index', ['paymentFilters' => 'hotel']);
+    contract(array_column($hotelFilter['data']['list'], 'id') === [$hotelPayOrderId], 'hotel filter finds outstanding hotel collection only');
+    $unpaidFilter = invokeBookingController(BookingController::class, 'index', ['paymentFilters' => 'unpaid']);
+    contract((int) $unpaidFilter['data']['total'] === 0, 'unpaid filter does not mislabel Pay at Hotel');
+    $legacyFilter = invokeBookingController(BookingController::class, 'index', ['bookingStatus' => 2, 'paymentStatus' => 2]);
+    contract((int) $legacyFilter['data']['total'] === 2, 'legacy scalar filters remain compatible');
+    $invalidFilterRejected = false;
+    try {
+        invokeBookingController(BookingController::class, 'index', ['bookingStatuses' => '2,invalid']);
+    } catch (BusinessException $e) {
+        $invalidFilterRejected = $e->getCode() === ErrorCode::PARAM_ERROR;
+    }
+    contract($invalidFilterRejected, 'invalid multi-select values are rejected');
 
     MerchantContext::set($merchantContext + ['selected_property_id' => $propertyId]);
     $selectedProperty = invokeBookingController(BookingController::class, 'index', ['page' => 1, 'pageSize' => 100]);
@@ -295,6 +324,39 @@ try {
         $crossPropertyDetailRejected = $e->getCode() === ErrorCode::NOT_FOUND;
     }
     contract($crossPropertyDetailRejected, 'selected property cannot read another property booking detail');
+    invokeBookingController(BookingController::class, 'noteAdd', ['id' => $hotelPayOrderId, 'content' => 'First staff note']);
+    invokeBookingController(BookingController::class, 'noteAdd', ['id' => $hotelPayOrderId, 'content' => 'Second staff note']);
+    $notesDetail = invokeBookingController(BookingController::class, 'detail', ['id' => $hotelPayOrderId]);
+    contract(array_column($notesDetail['data']['notes'], 'content') === ['Second staff note', 'First staff note'],
+        'staff notes append rather than overwrite history');
+    $thread = invokeBookingController(BookingController::class, 'guestThread', ['id' => $hotelPayOrderId]);
+    $conversationId = (int) $thread['data']['conversationId'];
+    $messages = [];
+    for ($i = 0; $i < 201; $i++) {
+        $messages[] = ['site_id' => 991, 'conversation_id' => $conversationId, 'sender_type' => 1, 'content' => "History {$i}", 'msg_type' => 1];
+    }
+    Db::table('chat_message')->insert($messages);
+    invokeBookingController(BookingController::class, 'guestMessage', ['id' => $hotelPayOrderId, 'content' => 'Newest reply']);
+    $recentThread = invokeBookingController(BookingController::class, 'guestThread', ['id' => $hotelPayOrderId]);
+    contract(count($recentThread['data']['messages']) === 200 && end($recentThread['data']['messages'])['content'] === 'Newest reply',
+        'long guest thread includes newest sent reply in chronological order');
+    Db::table('chat_conversation')->where('id', $conversationId)->update(['status' => 1]);
+    $closedMessageRejected = false;
+    try {
+        invokeBookingController(BookingController::class, 'guestMessage', ['id' => $hotelPayOrderId, 'content' => 'Must not send']);
+    } catch (BusinessException $e) {
+        $closedMessageRejected = $e->getCode() === ErrorCode::DATA_CONFLICT;
+    }
+    contract($closedMessageRejected, 'closed guest conversation rejects messages');
+    Db::table('order_main')->where('id', $verifyOrderId)->update(['user_id' => 0]);
+    $noGuestRejected = false;
+    try {
+        invokeBookingController(BookingController::class, 'guestThread', ['id' => $verifyOrderId]);
+    } catch (BusinessException $e) {
+        $noGuestRejected = $e->getCode() === ErrorCode::DATA_CONFLICT;
+    }
+    contract($noGuestRejected, 'booking without guest account does not create a conversation');
+    Db::table('order_main')->where('id', $verifyOrderId)->update(['user_id' => 99101]);
 
     MerchantContext::set(array_replace($merchantContext, [
         'property_ids' => [$propertyId],
@@ -311,6 +373,19 @@ try {
         'property_ids' => [$propertyId],
         'selected_property_id' => $propertyId,
     ]));
+    $lifecycle->checkIn($hotelPayOrderId, 991001, 'Booking Fixture', 'B101');
+    $hotelIn = (array) Db::table('order_main')->where('id', $hotelPayOrderId)->first();
+    contract(! in_array('check-out', $lifecycle->availableActions($hotelIn), true), 'unpaid hotel checkout action is withheld');
+    $unpaidCheckoutRejected = false;
+    try {
+        $lifecycle->checkOut($hotelPayOrderId, 991001, 'Booking Fixture');
+    } catch (BusinessException $e) {
+        $unpaidCheckoutRejected = $e->getCode() === ErrorCode::DATA_CONFLICT;
+    }
+    contract($unpaidCheckoutRejected && (int) Db::table('order_main')->where('id', $hotelPayOrderId)->value('booking_status') === 3,
+        'direct unpaid hotel checkout is rejected without state change');
+    contract(! in_array('check-out', $lifecycle->availableActions(array_replace($hotelIn, ['payment_status' => BookingConst::PAY_FAILED])), true),
+        'failed hotel collection also withholds checkout');
     invokeBookingController(BookingController::class, 'markPaid', ['id' => $hotelPayOrderId]);
     $hotelPaid = (array) Db::table('order_main')->where('id', $hotelPayOrderId)->first();
     contract((int) $hotelPaid['payment_status'] === BookingConst::PAY_PAID && $hotelPaid['pay_time'] !== null,
@@ -323,6 +398,12 @@ try {
     contract(Db::table('order_booking_event')->where('order_id', $hotelPayOrderId)
         ->where('event_type', 'payment_collected_at_hotel')->count() === 1,
         'mark-paid is idempotent and writes one payment event');
+    contract(in_array('check-out', $lifecycle->availableActions($hotelPaid), true), 'paid hotel booking exposes checkout');
+    $lifecycle->checkOut($hotelPayOrderId, 991001, 'Booking Fixture');
+    $lifecycle->checkOut($hotelPayOrderId, 991001, 'Booking Fixture');
+    contract((int) Db::table('order_main')->where('id', $hotelPayOrderId)->value('booking_status') === 4
+        && Db::table('order_booking_event')->where('order_id', $hotelPayOrderId)->where('event_type', 'checked_out')->count() === 1,
+        'hotel checkout succeeds after collection and remains idempotent');
     $wrongMethodRejected = false;
     try {
         $lifecycle->markPaidAtHotel($verifyOrderId, 991001, 'Booking Fixture');
@@ -433,6 +514,10 @@ try {
         Db::table('merchant_notify')->whereIn('id', $notificationIds)->delete();
     }
     if ($orderIds !== []) {
+        $conversationIds = Db::table('chat_conversation')->whereIn('order_id', $orderIds)->pluck('id')->all();
+        Db::table('chat_message')->whereIn('conversation_id', $conversationIds)->delete();
+        Db::table('chat_conversation')->whereIn('id', $conversationIds)->delete();
+        Db::table('order_internal_note')->whereIn('order_id', $orderIds)->delete();
         Db::table('order_booking_event')->whereIn('order_id', $orderIds)->delete();
         Db::table('order_verify_log')->whereIn('order_id', $orderIds)->delete();
         Db::table('goods_stock_log')->whereIn('order_id', $orderIds)->delete();

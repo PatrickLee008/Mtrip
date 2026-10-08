@@ -22,13 +22,13 @@ mysql_exec() {
 cleanup() {
   printf 'DROP DATABASE IF EXISTS `%s`;\n' "$TEST_DB" | mysql_exec >/dev/null 2>&1 || true
 }
-trap cleanup EXIT
 
 if printf "SELECT SCHEMA_NAME FROM information_schema.SCHEMATA WHERE SCHEMA_NAME='%s';\n" "$TEST_DB" | mysql_exec | grep -q .; then
   echo "Refusing to replace existing $TEST_DB" >&2
   exit 1
 fi
 
+trap cleanup EXIT
 printf 'CREATE DATABASE %s CHARACTER SET utf8mb4 COLLATE utf8mb4_bin; GRANT ALL PRIVILEGES ON %s.* TO '\''mtrip'\''@'\''%%'\'';\n' "$TEST_DB" "$TEST_DB" | mysql_exec
 
 create_sql="$(cat <<SQL | mysql_exec

@@ -1,5 +1,49 @@
 # 会话交接文档(HANDOFF)
 
+### ★ 2026-10-08 Merchant App Bookings（B0–B7）
+
+正式列表/多选筛选与状态详情已接，首页 View All/卡片、通知订单 CTA 统一详情；共享物业选择，通知详情不继承首页物业，服务器强制授权范围。入住/退房/到店收款/取消/No-show 确认后调用既有接口，备注追加、授权电话、预订内消息可用。列表增加兼容的 `bookingStatuses`/`paymentFilters`（组内 OR、组间 AND）、币种/动作；付款截止为 ISO offset。未收款到店付退房后端拒绝/动作隐藏，影响 Web；取消不自动退款。会话返回最近 200 条按时间顺序展示，避免新回复不可见。
+
+App typecheck/Web export、`test:bookings`、订单/通知/物业隔离回归通过，H5 更新至 8083/8094，订单服务热重启。393×852 Chrome 入口/筛选多选通过；旧 Token 过期，未绕过认证，真实订单详情/写操作及真机仍待登录验收。未操作真实订单/备注/消息，未 Git 提交。详见模块 17 B0–B7。
+
+### ★ 2026-10-08 Merchant App H5 8083 持续入口
+
+`localhost:8083` 由 Docker gateway 转发到 merchant-h5 静态站点容器端口 `8094`，两个地址显示同一 `deploy/web/merchant-h5/` 产物。这样 Expo 开发终端结束后 8083 仍可访问；Metro 实时调试需另用空闲端口。
+
+### ★ 2026-10-08 Merchant App 通知页
+
+Figma `4203:33920` 通知页面接入首页铃铛：真实分页列表、All/Unread/Bookings 筛选、详情与已读、全部已读、清空确认，中英资源同步。订单 CTA 先解析合法目标再调用授权订单接口；支持通知 Reply 复用既有客人消息权限/API。新增 `/merchant/notifications/clear` 为当前账号隐藏已投递通知，不删除平台记录、不影响其他账号及未来通知；复用 `mch:notifications:read`。新增 `hidden_at` 迁移已应用，账本 34/34，M12 runner 补存量测试库升级。
+
+App typecheck/Web export、双语 346 键集、PHP lint、S3 隔离回归通过；无凭据网关清空探针返回 `40101`。S7 HTTP 新增清空/冒用/账号隔离断言未执行。浏览器工具报认证方式错误，真实会话视觉、订单 CTA/回复与真机尚未验收；未改用户通知状态或发客人消息，未 Git 提交。详见模块 17。
+
+### ★ 2026-10-08 Merchant App 退出登录
+
+Dashboard 底部“菜单”增加账号面板与退出二次确认，按首页 teal/白卡风格呈现；调用 App 专用 `/api/v1/app/merchant/auth/logout`，服务端递增 `auth_version`，因此同账号其他会话也失效。现有 store 即使请求失败也清理本地 JWT/资料及原生生物识别开关；成功清理后重置导航栈到 Onboarding。中英文文案已补。App typecheck、Web 导出、双语 311 个键集对齐和 `git diff --check` 通过。`:8083` 开发服务未运行，本轮未在用户真实会话中确认退出；原生端重启恢复仍待验收。
+
+### ★ 2026-10-08 Merchant App 登录后首页
+
+Figma `3744:25670` 的 Home 画板已落实到 `DashboardScreen`，登录成功后仍走原 Dashboard 路由。复用商户端现有已授权物业列表、经营统计和收益总览接口，不写死原型数据；具体物业使用 `X-Mtrip-Property-Id`，全部物业省略该头。近期预订可看最近 10 条，已确认预订的入住操作经过权限门禁、二次确认和服务端接口。中英文首页文案同步。其他底部业务页与快捷入口本轮只提示未开放，尚未接功能。App typecheck、Web export、两份语言资源 305 个键集对齐和差异检查均通过；真实登录态页面、真机与入住接口端到端尚待验收。
+
+同日接口故障复核：Chrome `localhost:8083` 的 `/api/v1/merchant/store/list` 及统计、收益请求被网关 CORS 预检拦截，原因是商户路由未允许 App 请求必带的 `X-Timestamp` 等头。仅补该路由的七个 App 请求头，`openresty -t`、热加载与预检响应通过；刷新原登录态后首页真实物业、指标、近期预订均可见，物业弹窗可用。无需改 `store/list` 控制器或 JWT；入住写操作未实测。
+
+### ★ 2026-10-02 Merchant App 中英语言选择
+
+启动入口比照 `client-app`：`merchant-app` 未存过语言时展示中英选择页（系统语言预选），选定后写独立存储，后续启动直接进入原有入驻/登录/工作台路由。仅开放 `zh-CN`/`en-US`，旧 `my-MM` 本地选择会重新询问；文件保留但不再注册为可选语言。原本直写的注册审核、KYC/协议 UI、激活/邮箱登录、二维码/Authenticator/生物识别等本地文案已迁入双语资源，城市值不翻译以免改变 API 参数。两份资源键集一致、调用键无缺失，App typecheck/Web export 通过；`127.0.0.1:8083` 英文与 `localhost:8083` 中文首次选择及刷新保持实测通过。动态服务端文案不由客户端硬译，真机/短屏待验。
+
+### ★ 2026-10-02 中国手机号入驻复验
+
+旧 Contact Info 固定 `+95`，使 `13768615461` 被送为 `+9513768615461`，命中 ID 8 已激活申请；同邮箱并非单独阻断原因。用户确认本次按 `+86` 绑定后，Contact Info 与 Business Details 均增加 `+95/+86` 选择及 E.164 归一化；只读状态页增加清理本机入驻会话后重走 Register Now 的入口，Company Info 不再尝试保存只读申请。使用真实邮箱 OTP 在 `:8083` 创建 ID 9 (`APP-2026-2CACFEA6F2`)，Company Info 保存后进入 Business Details，刷新后仍恢复同一可编辑草稿；联系人区号切换 UI 通过。草稿未正式提交，ID 8 未删除。typecheck/Web export/差异检查通过；`:8094` 与真机、签名鉴权未验。
+
+### ★ 2026-10-02 Register Now 已有申请分流
+
+Figma 桌面原型 `2685:22241` 的五步注册与审核中/成功状态页已复核。邮箱 OTP 成功后先读申请详情：`canEdit=true` 继续 Company Info；否则重置到注册状态页，基础注册已批准且 KYC 草稿可从 `Proceed to KYC Upload` 继续。相同手机号+邮箱始终找回原申请，不会另建草稿；原先一律进入 Company Info 导致已批准申请点击 Next 报 `当前注册状态不可修改`。隔离回归覆盖已提交/已批准申请重复 OTP 找回及批准后保存拒绝；App typecheck/Web export 通过。未触碰申请 ID 7、真实邮件或认证测试模式，真实 UI/签名网关待验。
+
+### ★ 2026-10-02 Merchant App 激活与 2FA 原型整改
+
+真实激活改为邮箱 OTP 后绑定并验证 Authenticator 才能完成，业务 JWT 统一 `amr=totp`；Web 邮箱/Google/SMS OTP 只换 2FA challenge，不再直接登录。App Access Code 与邮箱 OTP 登录都接 TOTP，原生相机可扫 Merchant Web 120 秒一次性配对码；原生 JWT 存 SecureStore，生物识别仅解锁本机现有会话。App 只开放邮箱 OTP，非生产固定 `000000` 测试模式保留且不绕过 TOTP；后端既有短信能力未改。旧纯 OTP 会话会要求重新登录，后台只读代登录逻辑未改。
+
+验证：`merchant-app` typecheck/Web export、`merchant-web` build、认证隔离回归及完整入驻到物业发布 E2E 通过；E2E 站点币种夹具已补齐。未对申请 ID 7、用户真实执照或运行时测试模式做变更。真机相机/生物识别、真实账号 UI、签名网关与邮件送达仍需人工验收；详见 `docs/plans/17-商户移动端merchant-app.md`。
+
 ### ★ 2026-09-30 merchant-app H5 纳入 auto-deploy
 
 **问题**:`scripts/auto-deploy.sh` 只认 admin/merchant/supplier-web 与 client-app,merchant-app 的改动在 cron 模式被当作无关文件忽略,`auto-deploy.sh merchant-app` 报未知目标;网关/compose 也没有它的静态站。

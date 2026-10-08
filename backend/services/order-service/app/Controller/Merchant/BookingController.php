@@ -85,9 +85,11 @@ class BookingController extends AbstractAdminController
                 $row = (array) $row;
                 $row['contact_phone'] = MaskHelper::mobile($this->decryptField((string) $row['contact_phone']));
                 $row['no_show_deadline'] = $this->lifecycle->noShowDeadlineIso($row);
+                $row['availableActions'] = $this->lifecycle->availableActions($row);
                 unset($row['deleted_at']);
                 return $row;
             })->all();
+        $list = $this->withCurrencies($list);
         return Result::page($list, $total, $page, $pageSize);
     }
 
@@ -100,6 +102,7 @@ class BookingController extends AbstractAdminController
         $order['guests'] = $this->decryptGuests((string) ($order['guests'] ?? ''));
         $order['no_show_deadline'] = $this->lifecycle->noShowDeadlineIso($order);
         unset($order['deleted_at']);
+        $order = $this->withCurrencies([$order])[0];
 
         $notes = Db::table('order_internal_note')->where('order_id', (int) $order['id'])
             ->whereNull('deleted_at')->orderByDesc('id')->get()
@@ -128,7 +131,8 @@ class BookingController extends AbstractAdminController
                 'payTradeNo' => $order['pay_trade_no'],
                 'payTime' => $order['pay_time'],
                 'paymentStatus' => (int) $order['payment_status'],
-                'paymentExpiresAt' => $order['payment_expires_at'],
+                'paymentExpiresAt' => $order['payment_expires_at'] !== null
+                    ? (new \DateTimeImmutable((string) $order['payment_expires_at']))->format(DATE_ATOM) : null,
                 'refunds' => $refunds,
             ],
             'stay' => [
@@ -285,7 +289,7 @@ class BookingController extends AbstractAdminController
         $order = $this->findScopedBooking($this->requireId());
         $conv = $this->guestConversation($order);
         $messages = Db::table('chat_message')->where('conversation_id', (int) $conv['id'])
-            ->orderBy('id')->limit(200)->get()
+            ->orderByDesc('id')->limit(200)->get()->reverse()->values()
             ->map(static fn ($row) => (array) $row)->all();
         return Result::success([
             'conversationId' => (int) $conv['id'],
@@ -477,12 +481,37 @@ class BookingController extends AbstractAdminController
         if (($roomTypeId = $this->intInput('roomTypeId')) > 0) {
             $query->where('room_type_id', $roomTypeId);
         }
+        $bookingStatuses = $this->filterValues('bookingStatuses', ['1', '2', '3', '4', '5', '6']);
         $bookingStatus = $this->input('bookingStatus');
-        if ($bookingStatus !== null && $bookingStatus !== '') {
+        if ($bookingStatuses !== []) {
+            $query->whereIn('booking_status', array_map('intval', $bookingStatuses));
+        } elseif ($bookingStatus !== null && $bookingStatus !== '') {
             $query->where('booking_status', (int) $bookingStatus);
         }
+        $paymentFilters = $this->filterValues('paymentFilters', ['paid', 'unpaid', 'refunded', 'hotel', 'partial', 'failed']);
         $paymentStatus = $this->input('paymentStatus');
-        if ($paymentStatus !== null && $paymentStatus !== '') {
+        if ($paymentFilters !== []) {
+            $query->where(function ($sub) use ($paymentFilters) {
+                foreach ($paymentFilters as $filter) {
+                    $sub->orWhere(function ($part) use ($filter) {
+                        if ($filter === 'hotel') {
+                            $part->where('pay_method', BookingConst::PAY_METHOD_PAY_AT_HOTEL)
+                                ->whereIn('payment_status', [BookingConst::PAY_PENDING, BookingConst::PAY_FAILED]);
+                        } elseif ($filter === 'unpaid') {
+                            $part->where('payment_status', BookingConst::PAY_PENDING)
+                                ->where('pay_method', '<>', BookingConst::PAY_METHOD_PAY_AT_HOTEL);
+                        } else {
+                            $status = ['paid' => BookingConst::PAY_PAID, 'refunded' => BookingConst::PAY_REFUNDED,
+                                'partial' => BookingConst::PAY_PARTIAL_REFUNDED, 'failed' => BookingConst::PAY_FAILED][$filter];
+                            $part->where('payment_status', $status);
+                            if ($filter === 'failed') {
+                                $part->where('pay_method', '<>', BookingConst::PAY_METHOD_PAY_AT_HOTEL);
+                            }
+                        }
+                    });
+                }
+            });
+        } elseif ($paymentStatus !== null && $paymentStatus !== '') {
             $query->where('payment_status', (int) $paymentStatus);
         }
         if (($channel = $this->strInput('channel')) !== '') {
@@ -494,6 +523,36 @@ class BookingController extends AbstractAdminController
         if (($to = $this->strInput('dateTo')) !== '') {
             $query->where('use_date', '<=', $to);
         }
+    }
+
+    /** Comma-separated multi-select filters keep legacy scalar parameters compatible. */
+    private function filterValues(string $key, array $allowed): array
+    {
+        $raw = $this->input($key);
+        if ($raw === null || $raw === '') {
+            return [];
+        }
+        $values = is_array($raw) ? $raw : explode(',', (string) $raw);
+        foreach ($values as $value) {
+            if (! is_scalar($value) || ! in_array((string) $value, $allowed, true)) {
+                throw new BusinessException(ErrorCode::PARAM_ERROR, "参数 {$key} 不合法");
+            }
+        }
+        return array_values(array_unique(array_map('strval', $values)));
+    }
+
+    private function withCurrencies(array $orders): array
+    {
+        if ($orders === []) {
+            return [];
+        }
+        $roomCurrencies = Db::table('hotel_room_type')->whereIn('id', array_column($orders, 'room_type_id'))->pluck('currency', 'id');
+        $siteCurrencies = Db::connection('system')->table('sys_site')->whereIn('id', array_column($orders, 'site_id'))->pluck('currency', 'id');
+        foreach ($orders as &$order) {
+            $order['currency'] = ($roomCurrencies[$order['room_type_id']] ?? '') ?: ($siteCurrencies[$order['site_id']] ?? '');
+        }
+        unset($order);
+        return $orders;
     }
 
     /** 电话搜索:范围缩窄后候选集解密匹配(上限 2000 行) */

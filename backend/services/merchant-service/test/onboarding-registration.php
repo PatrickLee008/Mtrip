@@ -64,6 +64,12 @@ try {
         ['site_id' => 0, 'scope_type' => 'property', 'name' => 'Registration Test Car KYC', 'business_type' => 'car_rental',
             'docs' => json_encode([['name' => 'Fleet Registration', 'doc_type' => 'vehicle_reg', 'required' => true]]), 'status' => 1, 'sort' => 1],
     ]);
+    $agreementContent = 'Registration recovery test agreement';
+    Db::table('merchant_onboarding_agreement')->insert([
+        'site_id' => 0, 'agreement_version' => 'registration-recovery-v1', 'title' => 'Registration Recovery Agreement',
+        'content' => $agreementContent, 'content_sha256' => hash('sha256', $agreementContent),
+        'status' => 1, 'effective_at' => '2026-09-15 00:00:00', 'created_by' => 92001,
+    ]);
     rejects(ErrorCode::PARAM_ERROR, fn () => $otp->verify(991, '', $emails[0], 'email', $code), 'registration phone required');
     rejects(ErrorCode::PARAM_ERROR, fn () => $otp->verify(991, $phones[0], 'bad-email', 'email', $code), 'registration email validated');
 
@@ -125,6 +131,11 @@ try {
     $submitted = $onboarding->submit(991, $token, $applicationId);
     check($submitted['registrationStatus'] === 'submitted', 'complete draft enters submitted registration state');
     check($onboarding->submit(991, $token, $applicationId)['registrationStatus'] === 'submitted', 'duplicate registration submit is idempotent');
+    seedEmailOtp($redis, 991, $phones[0], $emails[0], $code);
+    $submittedAgain = $otp->verify(991, $phones[0], $emails[0], 'email', $code);
+    check($submittedAgain['applicationId'] === $applicationId
+        && $onboarding->detail(991, $submittedAgain['registrationToken'], $applicationId)['canEdit'] === false,
+        'reverified submitted contacts return the existing read-only application');
 
     $merchantBefore = Db::table('merchant_info')->count();
     $adminBefore = Db::table('merchant_admin')->count();
@@ -147,6 +158,14 @@ try {
         && Db::table('merchant_admin')->count() === $adminBefore
         && Db::table('merchant_store')->count() === $storeBefore,
         'base approval creates no merchant account or property');
+    seedEmailOtp($redis, 991, $phones[0], $emails[0], $code);
+    $approvedAgain = $otp->verify(991, $phones[0], $emails[0], 'email', $code);
+    check($approvedAgain['applicationId'] === $applicationId
+        && $onboarding->detail(991, $approvedAgain['registrationToken'], $applicationId)['canEdit'] === false,
+        'reverified approved contacts return the existing application for KYC');
+    rejects(ErrorCode::DATA_CONFLICT, fn () => $onboarding->save(991, $approvedAgain['registrationToken'], [
+        'applicationId' => $applicationId, 'companyName' => 'Should Not Change',
+    ]), 'approved registration remains immutable after renewed OTP');
     rejects(ErrorCode::DATA_CONFLICT, fn () => onboardingRequest($admin, 'updateStage', ['id' => $applicationId, 'stage' => 3]), 'new workflow rejects legacy stage writes');
 
     seedEmailOtp($redis, 991, $phones[1], $emails[1], $code);

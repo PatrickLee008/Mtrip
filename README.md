@@ -1,5 +1,23 @@
 # Mtrip 海外旅游 SaaS 平台
 
+商户 App Bookings（2026-10-08）：搜索/多选筛选、状态详情、入住/退房/到店收款/取消/No-show、备注及住客联系接真实接口，首页与通知统一跳转。后端禁止未收款到店付退房，取消不自动退款；构建与隔离回归通过，H5 更新至 8083/8094。旧 Token 过期，登录态订单验收待重新登录，真机待验。详见[模块 17](docs/plans/17-商户移动端merchant-app.md)。
+
+商户 App 网页入口（2026-10-08）：`localhost:8083` 由 Docker 网关持续托管 `merchant-app` 的 H5 静态产物，`8094` 保持原入口；Expo 临时开发进程退出不再影响浏览器访问。
+
+商户 App 通知页（2026-10-08）：按 Figma `4203:33920` 接通真实通知列表、筛选、详情、已读、账号级清空和授权订单/客人回复入口；中英资源同步。迁移 34/34、App 构建与 S3 隔离回归通过，真实登录态视觉及 S7 HTTP 尚待验收。详见[模块 17](docs/plans/17-商户移动端merchant-app.md)。
+
+商户 App 退出登录（2026-10-08）：登录后首页底部“菜单”新增账号面板及二次确认退出入口，调用 App 专用注销接口、清除本地会话并返回引导页；该接口会使同账号其他会话失效。详见[模块 17](docs/plans/17-商户移动端merchant-app.md)。
+
+商户 App 首页 H5 接口修复（2026-10-08）：网关商户路由的 CORS 预检原先未允许 App 的 `X-Timestamp` 等请求头，导致 `:8083` 登录页的物业列表、经营统计和收益请求均被浏览器拦截；补齐所需白名单并热加载后，现有登录态首页真实数据与物业选择已验证。详见[模块 17](docs/plans/17-商户移动端merchant-app.md)。
+
+商户 App 登录后首页（2026-10-08）：按 Figma `3744:25670` 将 Dashboard 占位页改为物业切换、真实经营指标、近期预订及底部导航；数据复用已授权商户接口，入住操作复用既有权限与二次确认，中英资源同步。其他业务页尚未在商户 App 接通。详见[模块 17](docs/plans/17-商户移动端merchant-app.md)。
+
+商户 App 中英国际化（2026-10-02）：首次打开先选择中文或英文，设备语言仅作为默认选项；选择结果独立持久化，之后直接恢复原有流程。入驻、KYC、激活与 2FA 等本地文案已迁入双语资源，本地首次选择和刷新保持通过。服务端协议与审核等动态文案需服务端提供对应语言。详见[模块 17](docs/plans/17-商户移动端merchant-app.md)。
+
+商户 App 中国手机号入驻修复（2026-10-02）：Contact Info 与 Business Details 可选 `+86/+95`，避免固定 `+95` 把中国手机号误关联到已激活申请；只读申请可从状态页清除本机会话并重新注册。真实邮箱 OTP 在本地 Expo Web `:8083` 创建 ID 9 可编辑草稿，Company Info 保存与刷新恢复已通过；未提交审批，`:8094` H5/真机待验。详见[模块 17](docs/plans/17-商户移动端merchant-app.md)。
+
+商户 App Register Now 分流修复（2026-10-02）：邮箱 OTP 后依据既有申请的 `canEdit` 进入 Company Info 或审核状态页，避免已批准申请再次保存时报“当前注册状态不可修改”；审核中 KYC 入口禁用，批准且可上传时启用。已按 Figma `2685:22241` 的五步注册与审核状态页核对，App typecheck/Web export 及注册隔离回归通过；真实账号 UI 待验。详见[模块 17](docs/plans/17-商户移动端merchant-app.md)。
+
 Merchant M4 预订管理整改（2026-09-18）：按 Merchant PRD v1.0.3 模块 4 与 Figma 详情节点 `1289:24340`、列表节点 `1289:16725` 完成本轮代码整改和自动化回归。重点包含退款/库存与旧核销生命周期、预订通知物业范围、Pay at Hotel / Mark as Paid、Figma 列表/详情/操作态、All Properties 聚合，以及带 IANA 时区快照的 No-show 截止时间。迁移账本 21/21，专项与质量基线全绿；已补完 1440×900、1366×768、393×852 真实登录态视觉验收和 authenticated Mark as Paid 无副作用 HTTP 探测，并修复支付时间线翻译缺口。物业级 No-show 可配置模型仍待产品决策；Mark as Paid 登录态成功写入若需补验，须使用专用 Pay at Hotel 测试订单。详见[M4 实现方案](docs/plans/实现方案-Merchant-M4-酒店预订管理.md)。
 
 2026-09-17更新：新增**全局「强制短信验证」开关**(`sys_config` 的 `security`/`register_sms_required`,迁移 `V20260917040000`,账本 19→20)。动机:注册原本是「渠道启用即强制」,短信渠道一旦停用/软删/凭证失效,`enabled()` 变 false,注册就**静默降级成免验证码注册**且无任何告警(9/17 实测复现:渠道停用后不带 token 的 `register` 直接建号成功)。现在把「是否要求验证」与「渠道是否可用」解耦:`1=强制`(渠道不可用则拒绝注册)/`0=跟随渠道`(旧行为),**默认 1**。**该开关同日曾先做成站点级 `sys_site.sms_verify_required`(`V20260917032003`),当天即搬到全局并删除该列** —— 注册的站点来自客户端可控的 `X-Site-Id`,站点级挡不住「挑一个最宽松的站点」。开关在后台「系统配置 → 全局参数 → 安全配置」,开/关都弹二次确认并经 `OperationLogMiddleware` 留痕(只有新值)。新增错误码 `50022 SMS_REQUIRED_UNAVAILABLE` 与既有 50021 区分「能否降级」——App 遇 50021 照旧跳过验证码页,遇 50022 停在注册页报错(跳过去也会被 40111 打回)。真值表 13 项已逐格实测,含「换任意 `X-Site-Id` 均被 40111 拦」。详见[模块10](docs/plans/10-移动端App框架.md)。
@@ -134,6 +152,8 @@ MSYS_NO_PATHCONV=1 docker run --rm --entrypoint php \
 第 3、4 步本机直接 npm 跑。`admin-web/dist` 已在 .gitignore，构建产物不用清理。
 
 `merchant-app` 有改动时追加执行 `npm run typecheck --prefix merchant-app`；需要验证 H5 构建时执行 `npm run build:web --prefix merchant-app`。
+
+2026-10-02 商户入驻激活/2FA 整改：Merchant App 的首次激活走邮箱 OTP → Authenticator 绑定验证 → 可选本机生物识别；Access Code、邮箱 OTP 登录及 Web 的联系渠道 OTP 均须再过 TOTP 才能获得业务会话。App 支持扫 Merchant Web 一次性配对码；原生 JWT 存 SecureStore。App 只开放邮箱 OTP，非生产固定 `000000` 测试模式保留且不跳过 TOTP；后端既有短信能力未改。代码检查及隔离 E2E 通过，真机相机/生物识别和生产签名网关仍待验收，详见 `docs/plans/17-商户移动端merchant-app.md`。
 
 - 工作方式:每完成一项任务,同步更新 `docs/plans/` 对应模块文件、README 进度表和 HANDOFF.md;交付前本地跑一次 `scripts/check.ps1` 作为验收入口。
 

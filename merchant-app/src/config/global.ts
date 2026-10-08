@@ -10,6 +10,6 @@ export const STORAGE_KEYS = {
 export const APP_VERSION = '1.0.0';
 export const REQUEST_TIMEOUT = 15000;
 
-export const SUPPORTED_LANGS = ['en-US', 'my-MM', 'zh-CN'] as const;
+export const SUPPORTED_LANGS = ['en-US', 'zh-CN'] as const;
 export type Lang = (typeof SUPPORTED_LANGS)[number];
 export const FALLBACK_LANG: Lang = 'en-US';

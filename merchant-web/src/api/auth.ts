@@ -21,6 +21,7 @@ export interface AuthChallengeResult {
   recipient: string;
   expiresIn: number;
   resendAfter?: number;
+  requiresEnrollment?: boolean;
 }
 export interface ActivationProfile {
   accountId: number;
@@ -38,6 +39,7 @@ export interface RecoveryVerifyResult { recoveryToken: string; expiresIn: number
 export interface SetupResult { manualKey: string; otpauthUri: string }
 export function apiTwoFaSetup(challengeToken: string): Promise<SetupResult> { return post('/merchant/auth/2fa/setup', { challengeToken }); }
 export function apiTwoFaVerify(challengeToken: string, twoFaCode: string): Promise<LoginResult> { return post('/merchant/auth/2fa/verify', { challengeToken, twoFaCode }); }
+export function apiCreateAppPairing(challengeToken: string): Promise<{ pairingCode: string; expiresIn: number }> { return post('/merchant/auth/2fa/pairing/create', { challengeToken }); }
 export function apiSupportExchange(exchangeCode: string): Promise<LoginResult> { return post('/merchant/auth/impersonation/exchange', { exchangeCode }); }
 
 export interface LoginResult {
@@ -65,7 +67,7 @@ export function apiAuthConfig(): Promise<AuthConfig> { return get('/merchant/aut
 export function apiAuthChallenge(data: { method: LoginMethod; identifier?: string; googleIdToken?: string }): Promise<AuthChallengeResult> {
   return securePost('/merchant/auth/challenge', data);
 }
-export function apiAuthChallengeVerify(method: LoginMethod, challengeToken: string, otpCode: string): Promise<LoginResult> {
+export function apiAuthChallengeVerify(method: LoginMethod, challengeToken: string, otpCode: string): Promise<AuthChallengeResult> {
   return securePost('/merchant/auth/challenge/verify', { method, challengeToken, otpCode });
 }
 export function apiActivationStart(data: { accessCode?: string; username?: string; temporaryPassword?: string }): Promise<ActivationStartResult> {

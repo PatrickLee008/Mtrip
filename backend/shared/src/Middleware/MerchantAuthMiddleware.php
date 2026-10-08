@@ -52,7 +52,7 @@ class MerchantAuthMiddleware implements MiddlewareInterface
             $allowed = \Mtrip\Shared\Merchant\MerchantImpersonationGuard::allowed(strtoupper($request->getMethod()), $request->getUri()->getPath());
             \Mtrip\Shared\Merchant\MerchantImpersonationGuard::audit($support, $allowed ? 'request' : 'denied', $request->getMethod() . ' ' . $request->getUri()->getPath());
             if (! $allowed) throw new BusinessException(ErrorCode::FORBIDDEN, '代为登录为只读支持模式，禁止安全、财务及经营写操作');
-        } elseif (! in_array((string) ($claims['amr'] ?? ''), ['totp', 'email_otp', 'sms_otp', 'google_mtrip_otp', 'activation_email_otp', 'activation_sms_otp'], true)) {
+        } elseif (($claims['amr'] ?? '') !== 'totp') {
             throw new BusinessException(ErrorCode::UNAUTHORIZED);
         }
 

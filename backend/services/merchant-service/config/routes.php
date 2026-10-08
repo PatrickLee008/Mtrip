@@ -319,6 +319,7 @@ Router::addGroup('/api/v1/merchant', static function () {
     Router::get('/notifications/summary', [MerchantNotificationController::class, 'summary']);
     Router::get('/notifications/destination', [MerchantNotificationController::class, 'destination']);
     Router::post('/notifications/read', [MerchantNotificationController::class, 'read']);
+    Router::post('/notifications/clear', [MerchantNotificationController::class, 'clear']);
 }, [
     'middleware' => [MerchantAuthMiddleware::class, OperationLogMiddleware::class],
 ]);

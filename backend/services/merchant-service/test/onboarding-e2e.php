@@ -188,6 +188,9 @@ $redis = $container->get(Redis::class);
 [, $emailHash] = stage7SeedOtp($redis, $siteId, $phone, $email, $code);
 
 try {
+    Db::connection('system')->table('sys_site')->insert([
+        'id' => $siteId, 'site_name' => 'Stage 7 onboarding test', 'country_code' => 'MM', 'currency' => 'MMK',
+    ]);
     Db::table('merchant_kyc_template')->insert([
         ['site_id' => 0, 'scope_type' => 'merchant', 'name' => 'Stage 7 Merchant KYC', 'business_type' => 'unified',
             'docs' => json_encode([['name' => 'Business Registration', 'doc_type' => 'business_reg', 'required' => true]]), 'status' => 1, 'sort' => 1],

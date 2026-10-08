@@ -32,6 +32,10 @@ export default function RegisterScreen() {
     : t('register.companyInfo.businessCountOption.many', { count });
   const countOptions: SelectOption[] = ONBOARDING_BUSINESS_COUNTS.map((count) => ({ value: String(count), label: countLabel(count) }));
   const next = async () => {
+    if (!ONBOARDING_PROTOTYPE && registration.status && !registration.status.canEdit) {
+      navigation.reset({ index: 0, routes: [{ name: 'RegistrationReview' }] });
+      return;
+    }
     if (!registration.companyName.trim() || !registration.regNumber.trim() || !registration.country.trim() || !registration.address.trim()) {
       showToast(t('register.companyInfo.required'));
       return;

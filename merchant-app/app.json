@@ -23,7 +23,9 @@
       "bundler": "metro"
     },
     "plugins": [
-      "expo-localization"
+      "expo-localization",
+      ["expo-camera", { "cameraPermission": "Allow mTrip Merchant to scan a one-time Merchant Web login QR code." }],
+      ["expo-local-authentication", { "faceIDPermission": "Allow mTrip Merchant to unlock your merchant session with Face ID." }]
     ]
   }
 }

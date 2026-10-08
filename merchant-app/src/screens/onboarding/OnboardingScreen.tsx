@@ -74,7 +74,7 @@ export default function OnboardingScreen() {
           <PrimaryButton label={t('onboarding.register')} onPress={() => navigation.navigate('RegisterContact')} />
           <Pressable
             style={({ pressed }) => [styles.loginLink, pressed && styles.pressed]}
-            onPress={() => ONBOARDING_PROTOTYPE ? navigation.navigate('Login') : navigation.navigate('MerchantAccount', { mode: 'login' })}
+            onPress={() => ONBOARDING_PROTOTYPE ? navigation.navigate('Login') : navigation.navigate('MerchantLogin')}
             hitSlop={8}
           >
             <Text style={styles.loginText}>

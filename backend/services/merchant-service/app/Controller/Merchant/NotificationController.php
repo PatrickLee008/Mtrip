@@ -34,7 +34,7 @@ class NotificationController extends AbstractController
             ->where('n.send_at', '<=', gmdate('Y-m-d H:i:s'))
             ->leftJoin('merchant_notify_read as r', static function ($join) {
                 $join->on('r.notify_id', '=', 'n.id')->where('r.account_id', '=', MerchantContext::adminId());
-            });
+            })->whereNull('r.hidden_at');
     }
 
     public function index(): array
@@ -76,6 +76,23 @@ class NotificationController extends AbstractController
             $ids = (clone $q)->where('n.id', '>', $after)->whereNull('r.read_at')->orderBy('n.id')->limit(200)->pluck('n.id')->all();
             foreach ($ids as $id) Db::table('merchant_notify_read')->insertOrIgnore(['notify_id' => $id, 'account_id' => MerchantContext::adminId()]);
             if ($ids !== []) $after = (int) end($ids);
+        } while (count($ids) === 200);
+        return Result::success();
+    }
+
+    #[Permission('mch:notifications:read')]
+    public function clear(): array
+    {
+        $q = $this->query();
+        $after = 0;
+        $now = gmdate('Y-m-d H:i:s');
+        do {
+            $ids = (clone $q)->where('n.id', '>', $after)->orderBy('n.id')->limit(200)->pluck('n.id')->all();
+            if ($ids === []) break;
+            $rows = array_map(static fn ($id) => ['notify_id' => $id, 'account_id' => MerchantContext::adminId(), 'read_at' => $now, 'hidden_at' => $now], $ids);
+            Db::table('merchant_notify_read')->insertOrIgnore($rows);
+            Db::table('merchant_notify_read')->where('account_id', MerchantContext::adminId())->whereIn('notify_id', $ids)->update(['hidden_at' => $now]);
+            $after = (int) end($ids);
         } while (count($ids) === 200);
         return Result::success();
     }

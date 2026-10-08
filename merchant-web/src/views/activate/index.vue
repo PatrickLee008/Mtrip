@@ -216,7 +216,7 @@ onMounted(async () => {
         <span v-else class="unavailable">{{ t('login.googleUnavailable') }}</span>
       </div>
       <a-alert v-if="!profile?.methods.accessCode" type="warning" show-icon :message="t('activation.noAuthenticatorWarning')" />
-      <a-button class="primary-action finish" type="primary" size="large" block :loading="loading" @click="finishActivation">{{ t('activation.finish') }}</a-button>
+      <a-button class="primary-action finish" type="primary" size="large" block :loading="loading" :disabled="!profile?.methods.accessCode" @click="finishActivation">{{ t('activation.finish') }}</a-button>
     </div>
 
     <template #aside>

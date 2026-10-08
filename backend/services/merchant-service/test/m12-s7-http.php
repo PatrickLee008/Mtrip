@@ -166,6 +166,7 @@ $exchange = api('/api/v1/merchant/auth/impersonation/exchange', ['exchangeCode' 
 api('/api/v1/merchant/auth/impersonation/exchange', ['exchangeCode' => $support['exchangeCode']], '', 40101);
 api('/api/v1/merchant/stats/dashboard', null, $exchange['token']);
 api('/api/v1/merchant/notifications/read', ['id' => 1], $exchange['token'], 40301);
+api('/api/v1/merchant/notifications/clear', [], $exchange['token'], 40301);
 api('/api/v1/merchant/account/list', null, $exchange['token'], 40301);
 api('/api/v1/merchant/earnings/overview', null, $exchange['token'], 40301);
 api('/api/v1/admin/merchant/impersonate/end', ['sessionId' => $support['session_id']], $super);
@@ -182,6 +183,9 @@ $otherInbox = api('/api/v1/merchant/notifications/list', null, $two);
 check(!array_column($otherInbox['list'], 'is_read', 'id')[$sent['id']], 'second account keeps independent unread state');
 $destination = api('/api/v1/merchant/notifications/destination?id=' . $sent['id'], null, $one);
 check($destination['path'] === '/dashboard', 'controlled deep link resolves');
+api('/api/v1/merchant/notifications/clear', [], $one);
+check(!in_array($sent['id'], array_column(api('/api/v1/merchant/notifications/list', null, $one)['list'], 'id')), 'clear hides notice for current account');
+check(in_array($sent['id'], array_column(api('/api/v1/merchant/notifications/list', null, $two)['list'], 'id')), 'clear preserves notice for other account');
 api('/api/v1/admin/merchant/notification/send', array_replace($notice, ['requestId' => rid(), 'channels' => ['email']]), $ops, 40901);
 $scheduled = api('/api/v1/admin/merchant/notification/send', array_replace($notice, ['requestId' => rid(), 'sendType' => 2, 'sendAt' => gmdate('Y-m-d\TH:i:s\Z', time() + 15)]), $super);
 check(!in_array($scheduled['id'], array_column(api('/api/v1/merchant/notifications/list', null, $one)['list'], 'id')), 'scheduled notice not prematurely visible');

@@ -67,6 +67,121 @@ export interface MenusResult {
   businesses: MerchantBusiness[];
 }
 
+export interface DashboardProperty {
+  id: number;
+  store_name: string;
+  address: string;
+  status: number;
+  business_type: string;
+  is_main: number;
+}
+
+export interface DashboardBooking {
+  orderId: number;
+  orderNo: string;
+  guest: string;
+  propertyName: string;
+  roomType: string;
+  checkIn: string;
+  checkOut: string;
+  totalAmount: number;
+  paymentStatus: number;
+  bookingStatus: number;
+  orderStatus: number;
+}
+
+export interface DashboardStats {
+  kpi: {
+    todayArrivalGuestCount: number;
+    todayDepartureGuestCount: number;
+    occupancyRate: number | null;
+  };
+  recentBookings: DashboardBooking[];
+}
+
+export interface DashboardEarnings {
+  netSettlement: number;
+  currency: string;
+}
+
+export interface DashboardBookingDetail {
+  order: {
+    contact_name: string;
+    contact_phone: string;
+    assigned_room_no: string;
+    special_requests: string;
+  };
+}
+
+export interface NotificationItem {
+  id: number;
+  category: string;
+  title: string;
+  message: string;
+  deep_link_type: string;
+  deep_link_value: string;
+  send_at: string | null;
+  created_at: string;
+  is_read: boolean;
+}
+
+export interface NotificationSummary {
+  total: number;
+  unread: number;
+  categories: Record<string, number>;
+}
+
+export interface NotificationPage {
+  list: NotificationItem[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+export interface NotificationBookingDetail {
+  order: {
+    order_no: string;
+    contact_name: string;
+    contact_phone: string;
+    use_date: string;
+    end_date: string;
+    assigned_room_no: string;
+    special_requests: string;
+  };
+}
+
+export interface GuestThread {
+  guestName: string;
+  status: number;
+  messages: Array<{ id: number; sender_type: number; content: string; created_at: string }>;
+}
+
+export type BookingAction = 'check-in' | 'check-out' | 'mark-paid' | 'cancel' | 'no-show' | 'note';
+export type PaymentFilter = 'paid' | 'unpaid' | 'refunded' | 'hotel' | 'partial' | 'failed';
+export interface BookingOrder {
+  id: number; order_no: string; property_id: number; user_id: number;
+  contact_name: string; contact_phone: string; goods_name: string; sku_name: string;
+  use_date: string | null; end_date: string | null; quantity: number;
+  booking_status: number; payment_status: number; pay_method: number;
+  total_amount: string | number; pay_amount: string | number; currency: string;
+  no_show_deadline: string; availableActions?: string[];
+}
+export interface BookingPage { list: BookingOrder[]; total: number; page: number; pageSize: number; }
+export interface BookingDetail {
+  order: BookingOrder;
+  nights: number;
+  payment: {
+    totalAmount: string | number; discountAmount: string | number; payAmount: string | number;
+    payMethod: number; paymentStatus: number; paymentExpiresAt: string | null;
+  };
+  stay: {
+    useDate: string | null; endDate: string | null; nights: number; quantity: number;
+    specialRequests: string; roomNo: string; noShowDeadline: string;
+  };
+  notes: Array<{ id: number; content: string; author_name: string; created_at: string }>;
+  availableActions: string[];
+}
+
 export type RegistrationChannel = 'email' | 'sms';
 export interface RegistrationChannelOption { channel: RegistrationChannel; label: string; }
 export interface RegistrationConfig { channels: RegistrationChannelOption[]; testMode: boolean; }
@@ -176,5 +291,5 @@ export interface AuthOtpChallenge {
 export interface ActivationIdentity {
   activationToken: string;
   expiresIn: number;
-  profile: { username: string; email: string; otpVerified: boolean };
+  profile: { username: string; email: string; otpVerified: boolean; methods: { accessCode: boolean } };
 }

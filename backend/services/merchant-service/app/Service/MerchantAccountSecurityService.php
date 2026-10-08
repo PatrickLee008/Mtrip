@@ -58,6 +58,16 @@ class MerchantAccountSecurityService
         });
     }
 
+    /** A verified contact OTP may start, but never complete, a business login. */
+    public function beginAfterVerifiedContact(int $accountId): array
+    {
+        return Db::transaction(function () use ($accountId): array {
+            $account = $this->account($accountId);
+            $this->unlocked($account);
+            return $this->issueChallenge($account);
+        });
+    }
+
     public function setup(string $token): array
     {
         return Db::transaction(function () use ($token) {

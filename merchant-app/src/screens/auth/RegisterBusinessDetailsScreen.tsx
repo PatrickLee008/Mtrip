@@ -27,7 +27,7 @@ import { colors } from '@/config/theme';
 import { fonts } from '@/config/typography';
 import { useCommonStore } from '@/store/commonStore';
 import { useRegistrationStore, type RegistrationBusiness } from '@/store/registrationStore';
-import { isE164Mobile, normalizeMyanmarMobile } from '@/utils/validate';
+import { isE164Mobile, localPhoneNumber, normalizeMobile, phoneCountryCode } from '@/utils/validate';
 
 const cardShadow = Platform.select({
   web: { boxShadow: '0px 4px 4px rgba(0, 0, 0, 0.08)' } as unknown as ViewStyle,
@@ -54,6 +54,7 @@ function BusinessCard({
   onOpenPicker: (kind: PickerKind) => void;
 }) {
   const { t } = useTranslation();
+  const phoneCode = phoneCountryCode(value.contactPhone);
 
   return (
     <View style={styles.businessCard}>
@@ -86,14 +87,19 @@ function BusinessCard({
       </FloatingField>
 
       <FloatingField label={t('register.businessDetails.mobile')} required>
-        <PhoneField value={value.contactPhone.replace(/^\+95/, '')} onChangeText={(next) => onChange({ contactPhone: normalizeMyanmarMobile(next) })} />
+        <PhoneField
+          value={localPhoneNumber(value.contactPhone, phoneCode)}
+          onChangeText={(next) => onChange({ contactPhone: normalizeMobile(next, phoneCode) })}
+          countryCode={phoneCode}
+          onCountryCodeChange={(next) => onChange({ contactPhone: normalizeMobile(localPhoneNumber(value.contactPhone, phoneCode), next) })}
+        />
       </FloatingField>
 
       <FloatingField label={t('register.businessDetails.email')} required>
         <FieldInput
           value={value.contactEmail}
           onChangeText={(next) => onChange({ contactEmail: next.trim().toLowerCase() })}
-          placeholder="contact@property.com"
+          placeholder={t('register.contactInfo.emailPlaceholder')}
           keyboardType="email-address"
           autoCapitalize="none"
           autoCorrect={false}
@@ -102,7 +108,7 @@ function BusinessCard({
 
       <FloatingField label={t('register.businessDetails.city')} required>
         <SelectField
-          value={value.city}
+          value={value.city ? t(`register.businessDetails.cityOptions.${value.cityKey}`, { defaultValue: value.city }) : ''}
           placeholder={t('register.businessDetails.selectCity')}
           onPress={() => onOpenPicker('city')}
         />
@@ -125,7 +131,7 @@ export default function RegisterBusinessDetailsScreen() {
   const patchCard = (index: number, patch: Partial<RegistrationBusiness>) => registration.setBusiness(index, patch);
 
   const typeOptions: SelectOption[] = ONBOARDING_BUSINESS_TYPES.map((type) => ({ value: type, label: t(`register.businessDetails.businessTypeOptions.${type}`) }));
-  const cityOptions: SelectOption[] = ONBOARDING_CITIES.map((city) => ({ value: city, label: city }));
+  const cityOptions: SelectOption[] = ONBOARDING_CITIES.map((city) => ({ value: city, label: t(`register.businessDetails.cityOptions.${city.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}`) }));
   const pickerValue = picker ? (picker.kind === 'city' ? cards[picker.index]?.city : cards[picker.index]?.businessType) : undefined;
 
   const save = async (submit: boolean) => {

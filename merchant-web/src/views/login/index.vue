@@ -5,8 +5,8 @@ import { message } from 'ant-design-vue';
 import { KeyOutlined, LockOutlined, LoginOutlined, MailOutlined, MobileOutlined, SafetyCertificateOutlined, UserOutlined } from '@ant-design/icons-vue';
 import { useI18n } from 'vue-i18n';
 import {
-  apiAuthChallenge, apiAuthChallengeVerify, apiAuthConfig, apiTwoFaSetup, apiTwoFaVerify,
-  type AuthChallengeResult, type AuthConfig, type ChallengeResult, type LoginMethod, type SetupResult,
+  apiAuthChallenge, apiAuthChallengeVerify, apiAuthConfig, apiCreateAppPairing, apiTwoFaSetup, apiTwoFaVerify,
+  type AuthChallengeResult, type AuthConfig, type ChallengeResult, type LoginMethod, type LoginResult, type SetupResult,
 } from '@/api/auth';
 import GoogleIdentityButton from '@/components/GoogleIdentityButton.vue';
 import { useUserStore } from '@/stores/user';
@@ -24,6 +24,7 @@ const method = ref<LoginMethod>('access_code');
 const identifier = ref('');
 const challenge = ref<AuthChallengeResult | null>(null);
 const otp = ref('');
+const pairingCode = ref('');
 const loading = ref(false);
 const legacyOpen = ref(false);
 const legacyForm = ref({ username: '', password: '', remember: true });
@@ -46,14 +47,18 @@ function selectMethod(value: LoginMethod): void {
   identifier.value = '';
   challenge.value = null;
   otp.value = '';
+  setup.value = null;
+  pairingCode.value = '';
 }
 
 function resetChallenge(): void {
   challenge.value = null;
   otp.value = '';
+  setup.value = null;
+  pairingCode.value = '';
 }
 
-async function acceptSession(result: Awaited<ReturnType<typeof apiAuthChallengeVerify>>): Promise<void> {
+async function acceptSession(result: LoginResult): Promise<void> {
   userStore.acceptSession(result);
   message.success(t('login.success'));
   const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : '/';
@@ -73,6 +78,8 @@ async function startChallenge(googleIdToken = ''): Promise<void> {
       identifier: method.value === 'google' ? undefined : identifier.value.trim(),
       googleIdToken: method.value === 'google' ? googleIdToken : undefined,
     });
+    setup.value = challenge.value.requiresEnrollment ? await apiTwoFaSetup(challenge.value.challengeToken) : null;
+    pairingCode.value = '';
     otp.value = '';
   } finally {
     loading.value = false;
@@ -87,9 +94,25 @@ async function verifyChallenge(): Promise<void> {
   }
   loading.value = true;
   try {
-    await acceptSession(await apiAuthChallengeVerify(method.value, challenge.value.challengeToken, otp.value));
+    if (challenge.value.verification === 'totp') {
+      await acceptSession(await apiTwoFaVerify(challenge.value.challengeToken, otp.value));
+    } else {
+      challenge.value = await apiAuthChallengeVerify(method.value, challenge.value.challengeToken, otp.value);
+      setup.value = challenge.value.requiresEnrollment ? await apiTwoFaSetup(challenge.value.challengeToken) : null;
+      pairingCode.value = '';
+    }
   } finally {
     otp.value = '';
+    loading.value = false;
+  }
+}
+
+async function createPairing(): Promise<void> {
+  if (loading.value || challenge.value?.verification !== 'totp') return;
+  loading.value = true;
+  try {
+    pairingCode.value = (await apiCreateAppPairing(challenge.value.challengeToken)).pairingCode;
+  } finally {
     loading.value = false;
   }
 }
@@ -201,7 +224,11 @@ onMounted(async () => {
                 <div class="challenge-badge"><SafetyCertificateOutlined />{{ t(`login.verification.${challenge.verification}`) }}</div>
                 <p class="login-step-description">{{ challenge.recipient ? t('login.sentTo', { recipient: challenge.recipient }) : t('login.authenticatorPrompt') }}</p>
                 <a-form-item :label="t('login.otpCode')"><a-input v-model:value="otp" class="otp-input" size="large" :maxlength="6" inputmode="numeric" autocomplete="one-time-code" /></a-form-item>
-                <a-button class="login-submit" type="primary" size="large" block :loading="loading" @click="verifyChallenge"><SafetyCertificateOutlined />{{ t('login.verifyAndSignIn') }}</a-button>
+                <a-button class="login-submit" type="primary" size="large" block :loading="loading" @click="verifyChallenge"><SafetyCertificateOutlined />{{ t(challenge.verification === 'totp' ? 'login.verifyAndSignIn' : 'login.verifyAndContinue') }}</a-button>
+                <template v-if="challenge.verification === 'totp'">
+                  <a-button block :loading="loading" @click="createPairing">{{ t('login.pairApp') }}</a-button>
+                  <div v-if="pairingCode" class="app-pairing"><a-qrcode :value="pairingCode" :size="166" :bordered="false" /><p>{{ t('login.pairAppHint') }}</p></div>
+                </template>
                 <a-button class="login-back" type="link" block :disabled="loading" @click="resetChallenge">{{ t('security.back') }}</a-button>
               </a-form>
 
@@ -272,6 +299,7 @@ onMounted(async () => {
 .panel-eyebrow { color: #0d9488; font-size: 10px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; }
 .security-icon { display: flex; width: 106px; height: 106px; align-items: center; justify-content: center; border: 1px solid #cbdcf8; border-radius: 50%; background: #fff; color: var(--login-primary); font-size: 52px; box-shadow: 0 8px 24px rgba(36,99,235,.1); }
 .enrollment-qr { display: flex; width: 192px; height: 192px; align-items: center; justify-content: center; border: 1px solid #dbe4f0; border-radius: 8px; background: #fff; }
+.app-pairing { display: flex; align-items: center; flex-direction: column; gap: 10px; margin-top: 16px; padding: 16px; border: 1px solid #dbe4f0; border-radius: 8px; background: #fff; p { margin: 0; color: var(--login-muted); font-size: 12px; text-align: center; } }
 .manual-key { width: 100%; margin-top: 14px; color: var(--login-muted); font-size: 12px; text-align: left; code { display: block; margin-top: 4px; overflow-wrap: anywhere; color: var(--login-ink); } }
 .login-footer { display: flex; min-height: 64px; align-items: center; padding: 0 32px; border-top: 1px solid #dbe4f0; background: #eef4ff; strong { color: #52637a; font-size: 12px; } }
 @media (max-width: 760px) { .login-main { align-items: flex-start; padding: 22px 14px; } .login-card-header { padding: 20px; h1 { font-size: 25px; } } .login-card-body { grid-template-columns: 1fr; gap: 24px; padding: 24px 20px; } .method-grid { grid-template-columns: repeat(2, 1fr); } .login-security-panel { min-height: 300px; } .login-footer { min-height: 56px; justify-content: center; } }

@@ -149,8 +149,10 @@ try {
     $unread = s3Call($inbox, 'summary')['unread'];
     s3Call($inbox, 'read', ['id' => $receipt['id']]); s3Call($inbox, 'read', ['id' => $receipt['id']]);
     check(s3Call($inbox, 'summary')['unread'] === $unread-1, 'S3 read is idempotent per account');
+    s3Call($inbox, 'clear'); s3Call($inbox, 'clear');
+    check(s3Call($inbox, 'index')['total'] === 0 && s3Call($inbox, 'summary')['unread'] === 0, 'S3 clear hides existing inbox only for reader');
     MerchantContext::set(array_replace(MerchantContext::get(), ['admin_id' => 9302]));
-    check(s3Call($inbox, 'summary')['unread'] === $unread, 'S3 other account remains unread');
+    check(s3Call($inbox, 'summary')['unread'] === $unread, 'S3 other account remains unread after clear');
     MerchantContext::set(array_replace(MerchantContext::get(), ['merchant_id' => $foreign, 'site_id' => 992]));
     check(s3Call($inbox, 'index')['total'] === 0, 'S3 other merchant cannot read messages');
     s3Actor();

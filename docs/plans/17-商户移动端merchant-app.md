@@ -6,6 +6,76 @@
 
 按 `PRD/mTrip_Merchant App PRD_v1.0.docx` 和 Figma `mTrip_Merchant` 原型落地商户移动端：先完成全部设计页面，再按页面业务与 PRD 逐步接入 `/api/v1/merchant/*`、商品/订单/营销/财务等商户口径 API。
 
+## 2026-10-08 Bookings（B0–B7）
+
+用户确认真正多选、到店付款收款后才允许退房、取消与退款继续分开处理。8 个链接含通知 `4203:33920`、标题 `4022:4610`、连接线 `4040:32469/4022:4613`，实际页面组为列表 `4022:4609`、待付款 `4040:31912`、已付款 `4022:4612`、到店付款 `4040:32473`。
+
+| 任务 | 本轮结果 |
+|---|---|
+| B0 状态/契约 | 预订/付款双标签；方式 4 且付款 Pending/Failed 显示到店付，收款后显示 Paid，方式仍保留。部分退款/失败准确显示，取消不等于退款 |
+| B1 后端 | 列表支持 `bookingStatuses=2,3`、`paymentFilters=paid,hotel`，组内 OR、组间 AND，保留旧标量参数；返回动作及房型币种（空值回退站点）。详情截止为 ISO offset。未收款到店付退房接口拒绝/动作隐藏，也影响 Web |
+| B2 路由/物业 | Bookings/BookingDetail 路由；首页与列表共享会话内物业，具体物业发正数 Header，All Properties 省略；通知不继承首页选择，服务器仍强制授权范围 |
+| B3 列表 | 防抖搜索、真实分页/刷新、多选/清空/应用、加载/失败/空态、卡片/底部导航，不写死原型订单 |
+| B4 详情 | 统一状态、进度、住客/住宿/特殊请求/账单、倒计时/服务器刷新、取消/No-show/退房终态，无主导航 |
+| B5 操作/备注 | 入住选填房号、退房、线下收款、取消必填原因、No-show 确认；动作与权限取交集，防重复提交；备注追加保留历史 |
+| B6 入口/联系 | 首页 View All/卡片、通知 CTA 接详情；电话授权审计取号再开拨号器；预订内消息无用户/会话关闭不可发送。历史超过 200 条返回最近 200 条按时间顺序排列，避免新回复不可见，不扩展完整 Messages |
+| B7 验证/部署 | TypeScript/H5 export/中英状态时区权限单测/订单通知物业隔离回归通过；H5 发布 8083/8094，订单服务热重启。393×852 原生 Chrome 入口/筛选多选通过；真实订单详情/写操作及真机待有效会话 |
+
+测试：`npm run test:bookings --prefix merchant-app`、`npm run typecheck --prefix merchant-app`、`npm run build:web --prefix merchant-app`、`bash scripts/test-booking-remediation.sh`。隔离回归覆盖多选分页/旧参数/币种/时间、未收款退房拒绝和收款后幂等退房、备注追加、最新消息/关闭会话/无用户、No-show 截止/物业隔离，仅写独立测试库，不操作真实订单/备注/消息。未新增退款操作、认证/短信能力或 Git 提交。
+
+Chrome 旧会话刷新返回 `Token已过期`，现有请求层清理本地会话；已恢复引导入口等待用户重新登录，未绕过邮箱/TOTP。无权限状态/筛选视觉检查不等同于真实订单端到端验收。
+
+项目质量基线等价执行通过：本地只读 PHP 镜像全量后端 lint、shared 112 用例/1016 断言、admin-web build、client-app typecheck；另加 merchant-web build 通过。Web 构建的既有大 chunk 警告不影响成功状态，未发布其他端的构建产物。
+
+## 2026-10-08 通知页（Figma `4203:33920`）
+
+首页铃铛进入独立 Notifications 页，按原型呈现返回栏、All/Unread/Bookings 筛选、未读数、绿色未读卡和更多菜单，不带底部导航。列表/汇总使用真实商户通知接口，支持分页、刷新、详情、单条与全部已读。View Booking 先校验通知目标再读取已授权订单；支持类通知的 Reply 仅在合法订单链接且具备消息权限时开放，复用既有客人消息接口，不发送模拟消息。关闭详情后丢弃旧异步结果，重复点击不会重复扣减未读数，长正文可滚动。中英本地资源同步。
+
+Clear all 二次确认后调用新增 `POST /api/v1/merchant/notifications/clear`，使用既有 `mch:notifications:read` 权限。仅为当前账号记录 `hidden_at`，不删除平台通知、不影响其他账号或尚未投递的未来通知；列表、汇总及目标解析均排除已隐藏记录。迁移 `V20261008120000__merchant-notification-hide.sql` 已应用，本地迁移账本 34/34；M12 测试入口同步升级存量隔离库。
+
+验证：App typecheck/Web export、双语 346 键一致、PHP lint、S3 独立测试库回归通过（含重复清空、账号隔离、未来通知继续投递）；无凭据网关探针返回 `40101`，确认路由与鉴权已生效。S7 HTTP 回归新增断言但本轮未执行；浏览器验收工具报 `unsupported Codex auth method: apikey`，真实登录态视觉、订单详情/回复和原生端键盘体验仍待验收。本轮未清空用户真实通知、未向客人发送消息，未提交 Git。
+
+## 2026-10-08 登录后退出入口
+
+首页底部“菜单”打开沿用首页配色的账号面板，展示当前姓名/用户名及“退出登录”。二次确认说明服务端会使该账号其他会话失效；取消不做任何注销操作。确认后调用 App 专用 `/api/v1/app/merchant/auth/logout`，即使网络失败也按既有 store 逻辑清理本地 JWT/资料及原生生物识别开关，完成后重置导航栈至引导页，不能返回工作台。菜单中的其他业务功能仍未开放。中英文文案同步；typecheck、Web 导出、双语键集及差异格式检查通过。`:8083` 开发服务未运行，真实登录态点击退出与原生端重启恢复尚未验收。
+
+## 2026-10-08 登录后首页（Figma `3744:25670`）
+
+将原 Dashboard 占位页替换为原型中的物业切换、问候与日期、四项指标、快捷入口、近期预订和底部导航。物业列表取已授权 `/store/list` 中的酒店，选择具体物业时经营/收益/预订详情及入住请求均携带正数 `X-Mtrip-Property-Id`，选“全部物业”时省略请求头，由后端继续裁剪权限范围。今日到店/离店人数、近 7 日平均入住率和最多 10 条近期预订来自 `/stats/dashboard`；本月至今净结算额与币种来自 `/earnings/overview`。设计稿中的人名、酒店、金额和预订均不作为生产假数据。
+
+同日 H5 联调修复：`:8083` 跨源访问网关 `:8081` 时，浏览器预检报 `x-timestamp is not allowed by Access-Control-Allow-Headers`，致 `/store/list`、`/stats/dashboard`、`/earnings/overview` 三个正式 GET 均未发出。`deploy/openresty/conf.d/mtrip.conf` 的商户路由只补齐 App 已使用的 `X-Site-Id`、`X-Client-Type`、`X-Lang`、`X-Client-Id`、`X-Timestamp`、`X-Nonce`、`X-Sign`，不改鉴权。`openresty -t` 通过并热加载；预检从缺头 204 变为包含完整白名单的 204，现有登录态 Chrome 刷新后真实显示物业、四项指标和近期预订，物业选择弹窗有已授权物业。未执行入住写操作。
+
+近期预订卡按真实支付/入住状态显示；有 `mch:order:detail` 权限的账号可查看既有预订详情，有 `mch:order:check-in` 权限的账号可对已确认预订二次确认后调用既有入住接口。物业选择、下拉刷新和近期预订“查看全部（最近 10 条）”可用。设计稿底部其他业务页、通知及客服/评价快捷入口仍属后续模块，本次点击显示未开放提示，不虚构对应数据或路由。App 本地文案提供中英两套。验证与剩余风险见本轮交接记录。
+
+## 2026-10-02 商户 App 中英资源国际化
+
+对齐 `client-app` 首次进入的语言选择行为：启动时先恢复独立的 `mtrip:merchant:lang`，已有中英选择直接进入原有路由；未选过语言时按设备语言预选中文或英文并展示语言页，用户点击继续后持久化，以后启动不重复询问。旧 `my-MM` 资源文件保留，但本次仅开放 `zh-CN`/`en-US` 两种语言；旧本地缅甸语选择不会继续生效，会重新要求选择。语言选择不清理注册草稿、商户会话或站点状态。
+
+入驻五步、申请状态、KYC 文件与签署、邮箱激活/登录、二维码与 Authenticator 2FA、生物识别提示、工作台占位页的本地文案均改由中英资源提供；城市下拉只翻译显示名称，提交给后端的英文城市值不变。请求继续以选定语言发送 `X-Lang`。服务端返回的审核原因、协议正文和错误 `message` 属于动态内容，App 不臆造法律文本翻译，仍按服务端原文展示；如需全链路翻译，后端需提供对应语言内容。
+
+验证：`merchant-app` typecheck/Web export、两份语言资源键集比对和调用键检查通过。独立 `127.0.0.1:8083` 首次打开显示双语选择页，选择英文后进入英文引导页、刷新不重复弹；独立 `localhost:8083` 选择中文后进入中文工作台、刷新保持中文。未触发 OTP、申请提交或登录写操作；真机系统语言、短屏布局和服务端动态文案仍待设备验收。
+
+## 2026-10-02 中国手机号注册实测与恢复入口
+
+Contact Info 和 Business Details 的手机号字段现在可选 `+95`/`+86`，保存前按选中的区号归一化为 E.164。此前固定 `+95` 导致用户输入中国手机号 `13768615461` 时绑定成 `+9513768615461`，与已激活申请 `APP-2026-415AE25BBD`（ID 8）的双联系方式相同；邮箱 OTP 因而找回已批准申请，Company Info 无法保存，刷新后恢复到 Account Activated。邮箱本身不是阻止新注册的唯一条件。已批准等只读状态页新增“Register with Another Phone Number”，清除本机入驻会话后可从 Register Now 重来；Company Info 也在保存前拦截只读申请并返回状态页。
+
+在独立本地 Expo Web `:8083` 用用户指定的 `+8613768615461`、`229041307@qq.com` 和其提供的真实邮箱 OTP，走通 Register Now → Contact Info → Verify Account → Company Info → Business Details。新建草稿 `APP-2026-2CACFEA6F2`（ID 9，站点 1）保存 QA 公司信息后进入下一步；刷新后恢复同一可编辑草稿，再点 Next 仍成功。Business Details 联系人区号切到 `+86` 已在 UI 确认。ID 9 保持 `registration_status=0/current_step=3`，未填虚构业务资料、未正式提交审批；ID 8 和其商户实体未删除或改动。App typecheck、Web export、差异检查通过。此次只验证 `:8083` 开发页，本机 `:8094` H5 与真机未验收；本地网关签名关闭，签名鉴权亦未验证。
+
+## 2026-10-02 Register Now 真实申请状态分流
+
+重新核对 Figma 桌面文件 `2685:22241` 的注册入口、五步表单及 `839:5984`/`839:6075` 审核状态页：新草稿和要求补正的申请在邮箱 OTP 后继续 Company Info；同一手机号与邮箱找回已提交、审核中、已批准或驳回申请时，读取 `/application/detail` 的 `canEdit` 并进入申请状态页，不再误进不可编辑的 Company Info。审批中显示禁用的 `Proceed to KYC Upload`，基础注册批准且 KYC 可编辑时启用该入口，符合原型状态区分。详情加载失败时保留已消费的 OTP 会话供重试。相同联系方式不会创建第二份申请；需申请新主体时不能通过重填已批准申请实现。
+
+验证：App typecheck、Web export、注册隔离回归通过；回归新增已提交/已批准申请重新 OTP 找回以及批准后保存仍被拒的断言，隔离脚本也修正了“已有同名测试库时退出却触发清理”的风险。未发送真实邮件、未修改申请 ID 7 或运行时测试模式；真实账号逐屏、真机及签名网关仍待人工验收。
+
+## 2026-10-02 入驻后激活与 2FA 原型整改
+
+- Merchant App 真实模式现在串起邮箱激活 OTP → Authenticator 扫码/手动密钥绑定 → 6 位动态码验证 → 完成激活 → 可选生物识别；恢复身份验证器仍先验证邮箱 OTP。若先前已绑定但激活未完成，重新验证邮箱后可直接完成激活，不会卡在重复绑定页。
+- 登录保留 Access Code → Authenticator 主入口和邮箱 OTP → Authenticator 备用入口；未绑 Authenticator 的存量账号在邮箱校验后先走绑定页。Merchant Web 邮箱/Google/SMS OTP 校验后也只返回 2FA challenge，不再直接发业务 JWT。服务端只接受 `amr=totp` 的普通商户会话，旧的纯 OTP 会话须重新登录；管理员只读代登录仍走原有独立门禁。**本轮未新增短信 OTP 发送渠道或 App 短信入口**。
+- Merchant Web 在 TOTP 步骤可生成 120 秒一次性 App 配对二维码；原生 App 使用相机扫码兑换新的 2FA challenge，再输入 Authenticator 动态码。绑定二维码由后端 `otpauthUri` 生成，手动密钥可复制；扫码/Web 配对不代替 TOTP 校验。
+- 生物识别仅在原生设备具备硬件且已录入时允许启用；成功通过系统验证后保存开关，重启 App 时先解锁再恢复会话。原生业务 JWT 迁至 SecureStore，Web 沿用原存储；本地退出等待安全存储清理。生物识别只解锁本机已有会话，不能绕过服务端 2FA 或续签过期 JWT。
+- 服务端认证测试模式仍由非生产环境许可、后台安全配置共同控制；App 当前只开放邮箱 OTP，故其固定 `000000` 入口只出现在邮箱步骤，后端既有短信测试能力未改，Authenticator 动态码始终真实校验。静态原型模式与该测试模式独立，本次没有开启运行时测试模式或发送真实邮件。
+- 验证：`merchant-app` typecheck/Web export、`merchant-web` build、认证隔离回归及完整入驻到物业发布隔离 E2E 通过。E2E 首跑缺少站点币种夹具，补 `sys_site` 测试数据后全链路通过。尚需真机相机/Face ID/Touch ID、真实账号逐屏视觉、生产签名网关与邮件送达验收；既有申请 ID 7 和真实执照未被本轮测试修改。
+
 ## 2026-09-30 真实入驻接入（T0-T7）
 
 T0-T3 已在本地提交 `44c36a9`；本批继续实现 T4-T7 的 App 代码，后台辅助入驻继续保留。以下按时间记录环境验收，真机交互仍待完成。
@@ -84,7 +154,7 @@ T0-T3 已在本地提交 `44c36a9`；本批继续实现 T4-T7 的 App 代码，�
 
 - 技术栈：Expo 51 + React Native 0.74 + TypeScript + React Navigation + Zustand + axios + i18next，依赖版本对齐 `client-app`。
 - API：默认基地址 `EXPO_PUBLIC_API_BASE_URL`，商户端请求统一拼接 `/api/v1/merchant`；登录先拿 `challengeToken`，再走 `/auth/2fa/setup|verify` 取得商户 JWT。
-- 存储：AsyncStorage key 使用 `mtrip:merchant:*` 前缀，避免与 C 端 `client-app` 登录态串用。
+- 存储：注册会话沿用独立的 `mtrip:merchant:*` key；原生业务 JWT 用 SecureStore 保存，Web 回退既有存储，避免与 C 端 `client-app` 登录态串用。
 - 样式：不引入 Tailwind；Figma 导出只作为参考，页面转成 RN `StyleSheet`、复用 `src/config/theme.ts` 与 `src/config/typography.ts`。
 - 图片/图标：Figma 资产下载到 `merchant-app/assets/images/...`，不长期依赖 7 天临时 URL。
 

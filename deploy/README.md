@@ -23,7 +23,7 @@ cd deploy
 | --- | --- |
 | 网关(admin + app 接口统一入口) | http://localhost:8081 |
 | 各微服务直连(healthz 探活) | 9501~9508(system/user/goods/order/merchant/finance/marketing/payment) |
-| 前端静态站(见第 7 节) | admin 8090 / merchant 8091 / supplier 8092 / client(H5) 8093 / merchant-h5 8094 |
+| 前端静态站(见第 7 节) | admin 8090 / merchant 8091 / supplier 8092 / client(H5) 8093 / merchant-h5 8083、8094 |
 | MySQL | localhost:3307(root / 见 .env) |
 | Redis | localhost:6380 |
 
@@ -128,7 +128,7 @@ docker compose down -v   # 连数据卷一起删(数据库清空,重新初始化
 | merchant | `merchant-web/` | `npm run build`(vite) | `deploy/web/merchant/` | 8091 |
 | supplier | `supplier-web/` | `npm run build`(vite) | `deploy/web/supplier/` | 8092 |
 | **client(H5)** | `client-app/` | `npm run build:web`(**Expo web export**) | `deploy/web/client/` | 8093 |
-| **merchant-h5** | `merchant-app/` | `npm run build:web`(**Expo web export**) | `deploy/web/merchant-h5/` | 8094 |
+| **merchant-h5** | `merchant-app/` | `npm run build:web`(**Expo web export**) | `deploy/web/merchant-h5/` | 8083(兼容入口)、8094 |
 
 发布:`scripts/auto-deploy.sh client-app`(或 `merchant-app`、`admin-web` 等);cron 无参模式会按变更自动选。
 
@@ -136,8 +136,10 @@ docker compose down -v   # 连数据卷一起删(数据库清空,重新初始化
 
 ### 7.1 两种托管方式(可并存)
 
-**A. Docker 网关直连(开发/内网默认)** —— 上表的 8090~8094 由 gateway 容器监听,
+**A. Docker 网关直连(开发/内网默认)** —— 上表的静态端口由 gateway 容器监听,
 server 块见 `openresty/conf.d/mtrip.conf`,端口可在 `.env` 用 `ADMIN_WEB_PORT` 等改。
+merchant-h5 的 `8083` 与 `8094` 指向同一静态站点,避免 Expo 临时开发进程退出后浏览器地址失效；
+需要 Metro 实时调试时,另用未被占用的端口启动 Expo。
 各站点的 `/api/` 与 `/uploads/` 由该 server 块反代回网关 `:80`,免 CORS。
 
 **B. 宝塔面板建站(生产常用)** —— 站点监听 `:80`/`:443` 按域名分流,根目录直接指向

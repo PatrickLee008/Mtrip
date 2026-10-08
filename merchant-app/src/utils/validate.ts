@@ -6,10 +6,20 @@ export function isSixDigitCode(value: string): boolean {
   return /^\d{6}$/.test(value.trim());
 }
 
-export function normalizeMyanmarMobile(value: string): string {
+export type PhoneCountryCode = '95' | '86';
+
+export function phoneCountryCode(value: string): PhoneCountryCode {
+  return value.startsWith('+86') ? '86' : '95';
+}
+
+export function localPhoneNumber(value: string, countryCode: PhoneCountryCode): string {
+  return value.replace(new RegExp(`^\\+${countryCode}`), '');
+}
+
+export function normalizeMobile(value: string, countryCode: PhoneCountryCode): string {
   const digits = value.replace(/\D/g, '');
-  if (digits.startsWith('95')) return `+${digits}`;
-  return `+95${digits.replace(/^0+/, '')}`;
+  const national = value.trim().startsWith(`+${countryCode}`) ? digits.slice(countryCode.length) : digits.replace(/^0+/, '');
+  return `+${countryCode}${national}`;
 }
 
 export function isE164Mobile(value: string): boolean {

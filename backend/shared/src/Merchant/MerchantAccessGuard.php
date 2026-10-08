@@ -89,7 +89,7 @@ final class MerchantAccessGuard
                 throw new BusinessException(ErrorCode::UNAUTHORIZED, '账号授权范围已变更，请重新登录');
             }
         }
-        $strongMethods = ['totp', 'email_otp', 'sms_otp', 'google_mtrip_otp', 'activation_email_otp', 'activation_sms_otp'];
+        $strongMethods = ['totp'];
         if ((int) ($claims['auth_version'] ?? 0) !== (int) $account->auth_version
             || (! isset($claims['impersonation_session_id']) && ! in_array((string) ($claims['amr'] ?? ''), $strongMethods, true))) {
             throw new BusinessException(ErrorCode::UNAUTHORIZED, '账号认证已失效，请重新登录并完成2FA');

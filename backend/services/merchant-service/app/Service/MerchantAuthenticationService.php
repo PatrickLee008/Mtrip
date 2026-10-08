@@ -162,11 +162,14 @@ class MerchantAuthenticationService
             if (! $account['verified_email_at'] && ! $account['verified_mobile_at']) {
                 throw new BusinessException(ErrorCode::DATA_CONFLICT, '请先完成注册联系方式 OTP 验证');
             }
+            if ((int) $account['two_fa_status'] !== 1 || ! $account['two_fa_enrolled_at']) {
+                throw new BusinessException(ErrorCode::DATA_CONFLICT, '请先绑定并验证身份验证器');
+            }
             $now = gmdate('Y-m-d H:i:s');
             $method = $this->otpChannel((string) $challenge['method']);
             Db::table('merchant_admin')->where('id', $account['id'])->update([
                 'status' => 1, 'activated_at' => $now, 'last_login_at' => $now,
-                'last_login_method' => 'activation_' . $method . '_otp',
+                'last_login_method' => 'activation_' . $method . '_otp_totp',
                 'password' => password_hash(bin2hex(random_bytes(32)), PASSWORD_BCRYPT),
                 'auth_version' => (int) $account['auth_version'] + 1,
                 'pending_secret_enc' => (int) $account['two_fa_status'] === 1 ? $account['pending_secret_enc'] : '',
@@ -182,7 +185,7 @@ class MerchantAuthenticationService
             $active = $this->account((int) $account['id'], [1]);
             MerchantActivityService::account($active, 'account_activated', $ip);
             MerchantActivityService::account($active, 'login', $ip);
-            return ['account' => $active, 'amr' => 'activation_' . $method . '_otp'];
+            return ['account' => $active, 'amr' => 'totp'];
         });
         return $this->auth->issueSession($result['account'], [], $result['amr']);
     }
@@ -221,14 +224,11 @@ class MerchantAuthenticationService
         $challenge = $this->verifyOtp($token, $code, 'login', $ip);
         if ((int) $challenge['account_id'] <= 0) throw new BusinessException(ErrorCode::SMS_CODE_INVALID);
         $account = $this->account((int) $challenge['account_id'], [1], true);
-        $amr = str_starts_with((string) $challenge['method'], 'google:')
-            ? 'google_mtrip_otp' : $this->otpChannel((string) $challenge['method']) . '_otp';
         $now = gmdate('Y-m-d H:i:s');
         Db::table('merchant_auth_challenge')->where('id', $challenge['id'])->where('status', 'verified')
             ->update(['status' => 'consumed', 'consumed_at' => $now]);
-        Db::table('merchant_admin')->where('id', $account['id'])->update(['last_login_at' => $now, 'last_login_method' => $amr]);
-        MerchantActivityService::account($account, 'login', $ip);
-        return $this->auth->issueSession(array_replace($account, ['last_login_at' => $now, 'last_login_method' => $amr]), [], $amr);
+        $next = $this->security->beginAfterVerifiedContact((int) $account['id']);
+        return array_merge($next, ['method' => $method, 'verification' => 'totp', 'recipient' => '']);
     }
 
     public function recoveryChallenge(int $siteId, string $method, string $identifier, string $ip): array

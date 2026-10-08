@@ -69,6 +69,7 @@ CREATE TABLE IF NOT EXISTS merchant_notify_read (
  notify_id BIGINT UNSIGNED NOT NULL,
  account_id BIGINT UNSIGNED NOT NULL,
  read_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ hidden_at DATETIME NULL,
  PRIMARY KEY(notify_id,account_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 -- Preserve only the reader explicitly recorded by the legacy schema, never mark all accounts read.

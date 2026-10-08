@@ -23,7 +23,7 @@ interface RequestHooks {
   getToken: () => string;
   getSiteId: () => number;
   getLang: () => string;
-  onUnauthorized: () => void;
+  onUnauthorized: () => Promise<void> | void;
   onToast: (message: string) => void;
 }
 
@@ -76,7 +76,7 @@ export async function request<T>(config: AxiosRequestConfig): Promise<T> {
     const body = response.data;
     if (body.code === API_CODE.SUCCESS) return body.data;
     if (body.code === API_CODE.UNAUTHORIZED || body.code === API_CODE.TOKEN_EXPIRED) {
-      hooks.onUnauthorized();
+      await hooks.onUnauthorized();
     }
     logger.warn('api', finalConfig.url, body.code, body.message);
     hooks.onToast(body.message);
@@ -85,7 +85,7 @@ export async function request<T>(config: AxiosRequestConfig): Promise<T> {
     if (error instanceof ApiError) throw error;
     const result = (error as AxiosError<ApiResponse>)?.response?.data;
     if (result && typeof result.code === 'number') {
-      if (result.code === API_CODE.UNAUTHORIZED || result.code === API_CODE.TOKEN_EXPIRED) hooks.onUnauthorized();
+      if (result.code === API_CODE.UNAUTHORIZED || result.code === API_CODE.TOKEN_EXPIRED) await hooks.onUnauthorized();
       hooks.onToast(result.message);
       throw new ApiError(result.code, result.message);
     }

@@ -124,16 +124,25 @@ check((int) Db::table('merchant_auth_challenge')->where('token_hash', hash('sha2
     'wrong OTP attempt persists outside the failed request');
 $verified = $auth->verifyActivationOtp($emailOtp['challengeToken'], $auth->lastEmailCode, '127.0.0.1');
 check($verified['profile']['otpVerified'] && $verified['profile']['methods']['email'], 'activation OTP verifies and links the email method');
+rejects(ErrorCode::DATA_CONFLICT, fn () => $auth->finishActivation($verified['activationToken'], '127.0.0.1'),
+    'email OTP alone cannot activate an account without Authenticator');
 
 $setup = $auth->setupActivationTotp($verified['activationToken']);
 $totpSecret = $setup['manualKey'];
+rejects(ErrorCode::DATA_CONFLICT, fn () => $auth->finishActivation($verified['activationToken'], '127.0.0.1'),
+    'loading an Authenticator key is not proof of enrollment');
 $auth->verifyActivationTotp($verified['activationToken'], Totp::code($totpSecret, intdiv(time(), 30)), '127.0.0.1');
 $linked = $auth->linkGoogle($verified['activationToken'], 'google-owner-one', '127.0.0.1');
 check($linked['methods']['google'] && $linked['methods']['accessCode'], 'activation links Google and Authenticator methods');
-$activated = $auth->finishActivation($verified['activationToken'], '127.0.0.1');
+$retryOtp = $auth->sendActivationOtp($start['activationToken'], 'email', '127.0.0.1');
+$retryVerified = $auth->verifyActivationOtp($retryOtp['challengeToken'], $auth->lastEmailCode, '127.0.0.1');
+check($retryVerified['profile']['methods']['accessCode'], 'a repeated activation recognizes an enrolled Authenticator');
+$activated = $auth->finishActivation($retryVerified['activationToken'], '127.0.0.1');
 $activationClaims = stage5Claims($activated['token']);
 MerchantAccessGuard::assertSession($activationClaims);
-check($activationClaims['amr'] === 'activation_email_otp'
+rejects(ErrorCode::UNAUTHORIZED, fn () => MerchantAccessGuard::assertSession(array_replace($activationClaims, ['amr' => 'email_otp'])),
+    'legacy email-only business session is rejected');
+check($activationClaims['amr'] === 'totp'
     && (int) Db::table('merchant_admin')->where('id', $emailAccount['accountId'])->value('status') === 1
     && (int) Db::table('merchant_info')->where('id', $emailAccount['merchantId'])->value('status') === 3
     && (int) Db::table('merchant_application')->where('id', $emailAccount['applicationId'])->value('account_status') === 2,
@@ -150,24 +159,29 @@ $accessSession = $auth->verifyLogin('access_code', $accessLogin['challengeToken'
 check(stage5Claims($accessSession['token'])['amr'] === 'totp', 'access code plus Authenticator issues a TOTP session');
 
 $emailLogin = $auth->loginChallenge($siteOne, 'email', strtoupper($emailAccount['email']), '', '127.0.0.1');
-$emailSession = $auth->verifyLogin('email', $emailLogin['challengeToken'], $auth->lastEmailCode, '127.0.0.1');
-check(stage5Claims($emailSession['token'])['amr'] === 'email_otp', 'registered email plus email OTP signs in');
+$emailTwoFa = $auth->verifyLogin('email', $emailLogin['challengeToken'], $auth->lastEmailCode, '127.0.0.1');
+check($emailTwoFa['verification'] === 'totp' && ! isset($emailTwoFa['token']), 'email OTP alone cannot issue a business session');
+Db::table('merchant_admin')->where('id', $emailAccount['accountId'])->update(['last_accepted_totp_step' => -1]);
+$emailSession = $security->verify($emailTwoFa['challengeToken'], Totp::code($totpSecret, intdiv(time(), 30)), '127.0.0.1');
+check(stage5Claims($emailSession['token'])['amr'] === 'totp', 'email OTP followed by Authenticator signs in');
 rejects(ErrorCode::SMS_CODE_EXPIRED, fn () => $auth->verifyLogin('email', $emailLogin['challengeToken'], $auth->lastEmailCode, ''),
     'login OTP cannot be reused');
 
 $googleLogin = $auth->loginChallenge($siteOne, 'google', '', 'google-owner-one', '127.0.0.1');
-$googleSession = $auth->verifyLogin('google', $googleLogin['challengeToken'], $auth->lastEmailCode, '127.0.0.1');
-check(stage5Claims($googleSession['token'])['amr'] === 'google_mtrip_otp', 'linked Google identity still requires a separate mTrip OTP');
+$googleTwoFa = $auth->verifyLogin('google', $googleLogin['challengeToken'], $auth->lastEmailCode, '127.0.0.1');
+check($googleTwoFa['verification'] === 'totp' && ! isset($googleTwoFa['token']), 'linked Google identity also requires Authenticator');
 
 $smsAccount = stage5Pending($siteTwo, 'S0002', 'owner-two@example.test', '+95950000002');
 $smsStart = $auth->startActivation($siteTwo, '', 'stage5-s0002', $smsAccount['password'], '127.0.0.2');
 $smsOtp = $auth->sendActivationOtp($smsStart['activationToken'], 'sms', '127.0.0.2');
 $smsVerified = $auth->verifyActivationOtp($smsOtp['challengeToken'], $auth->smsCode, '127.0.0.2');
+$smsSetup = $auth->setupActivationTotp($smsVerified['activationToken']);
+$auth->verifyActivationTotp($smsVerified['activationToken'], Totp::code($smsSetup['manualKey'], intdiv(time(), 30)), '127.0.0.2');
 $smsActivated = $auth->finishActivation($smsVerified['activationToken'], '127.0.0.2');
-check(stage5Claims($smsActivated['token'])['amr'] === 'activation_sms_otp', 'SMS activation issues a strong activation session');
+check(stage5Claims($smsActivated['token'])['amr'] === 'totp', 'SMS activation requires Authenticator');
 $smsLogin = $auth->loginChallenge($siteTwo, 'sms', $smsAccount['mobile'], '', '127.0.0.2');
-$smsSession = $auth->verifyLogin('sms', $smsLogin['challengeToken'], $auth->smsCode, '127.0.0.2');
-check(stage5Claims($smsSession['token'])['amr'] === 'sms_otp', 'registered mobile plus SMS OTP signs in');
+$smsTwoFa = $auth->verifyLogin('sms', $smsLogin['challengeToken'], $auth->smsCode, '127.0.0.2');
+check($smsTwoFa['verification'] === 'totp' && ! isset($smsTwoFa['token']), 'SMS OTP alone cannot issue a business session');
 
 $unknown = $auth->loginChallenge($siteOne, 'email', 'missing@example.test', '', '127.0.0.3');
 check(strlen($unknown['challengeToken']) === 43 && $unknown['recipient'] === '***@***', 'unknown email receives a non-enumerating challenge response');
@@ -205,6 +219,8 @@ check($testOtp['testMode'] && Db::table('merchant_auth_challenge')->where('token
 rejects(ErrorCode::SMS_SEND_TOO_FREQUENT, fn () => $testAuth->sendActivationOtp($testStart['activationToken'], 'email', ''), 'test OTP retains resend cooldown');
 rejects(ErrorCode::SMS_CODE_INVALID, fn () => $testAuth->verifyActivationOtp($testOtp['challengeToken'], '111111', ''), 'test mode does not accept arbitrary OTP values');
 $testVerified = $testAuth->verifyActivationOtp($testOtp['challengeToken'], '000000', '');
+$testSetup = $testAuth->setupActivationTotp($testVerified['activationToken']);
+$testAuth->verifyActivationTotp($testVerified['activationToken'], Totp::code($testSetup['manualKey'], intdiv(time(), 30)), '');
 setMerchantAuthTestMode($config, true, false);
 rejects(ErrorCode::SMS_CODE_EXPIRED, fn () => $testAuth->finishActivation($testVerified['activationToken'], ''), 'disabling test mode invalidates an already verified test activation');
 setMerchantAuthTestMode($config, true, true);
@@ -213,12 +229,13 @@ check(! $testAuth->config()['testMode'], 'production ignores the test-mode flag'
 rejects(ErrorCode::SMS_CODE_EXPIRED, fn () => $testAuth->finishActivation($testVerified['activationToken'], ''), 'production cannot consume a test activation');
 $config->set('app_env', 'staging');
 $testSession = $testAuth->finishActivation($testVerified['activationToken'], '');
-check(stage5Claims($testSession['token'])['amr'] === 'activation_email_otp', '000000 completes the normal activation state transition');
+check(stage5Claims($testSession['token'])['amr'] === 'totp', '000000 verifies email but activation still requires Authenticator');
 $testLogin = $testAuth->loginChallenge($siteOne, 'email', $testAccount['email'], '', '');
 $config->set('app_env', 'production');
 rejects(ErrorCode::SMS_CODE_EXPIRED, fn () => $testAuth->verifyLogin('email', $testLogin['challengeToken'], '000000', ''), 'production rejects a pending test login OTP');
 $config->set('app_env', 'staging');
-check(isset($testAuth->verifyLogin('email', $testLogin['challengeToken'], '000000', '')['token']), 'verified registration email can log in with the test OTP');
+$testTwoFa = $testAuth->verifyLogin('email', $testLogin['challengeToken'], '000000', '');
+check($testTwoFa['verification'] === 'totp' && ! isset($testTwoFa['token']), 'test email OTP still requires Authenticator');
 rejects(ErrorCode::SMS_CODE_EXPIRED, fn () => $testAuth->verifyLogin('email', $testLogin['challengeToken'], '000000', ''), 'test login OTP cannot be replayed');
 $testUnknown = $testAuth->loginChallenge($siteOne, 'email', 'missing-test@example.test', '', '');
 rejects(ErrorCode::SMS_CODE_INVALID, fn () => $testAuth->verifyLogin('email', $testUnknown['challengeToken'], '000000', ''), 'test OTP cannot authenticate an unknown account');

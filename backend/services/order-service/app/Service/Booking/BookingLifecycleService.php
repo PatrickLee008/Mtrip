@@ -232,6 +232,9 @@ class BookingLifecycleService
             if ((int) $order['booking_status'] !== BookingConst::STATUS_CHECKED_IN) {
                 throw new BusinessException(ErrorCode::DATA_CONFLICT, '仅已入住预订可办理退房');
             }
+            if ($this->canMarkPaidAtHotel($order)) {
+                throw new BusinessException(ErrorCode::DATA_CONFLICT, '到店付款预订须先确认收款再办理退房');
+            }
             $this->transition($order, [
                 'booking_status' => BookingConst::STATUS_CHECKED_OUT,
                 'order_status' => 3,
@@ -429,9 +432,11 @@ class BookingLifecycleService
                 }
                 break;
             case BookingConst::STATUS_CHECKED_IN:
-                $actions = ['check-out', 'room', 'message'];
+                $actions = ['room', 'message'];
                 if ($this->canMarkPaidAtHotel($order)) {
                     $actions[] = 'mark-paid';
+                } else {
+                    $actions[] = 'check-out';
                 }
                 break;
             case BookingConst::STATUS_CHECKED_OUT:

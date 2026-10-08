@@ -3,6 +3,7 @@ import {
   Animated,
   Easing,
   Image,
+  Linking,
   Modal,
   Platform,
   Pressable,
@@ -15,6 +16,7 @@ import {
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import Svg, { Circle, G, Line, Path, Rect } from 'react-native-svg';
 
 import PrimaryButton from '@/components/common/PrimaryButton';
@@ -126,20 +128,21 @@ export function SimpleIcon({ name, color = colors.primary, size = 24 }: { name: 
 }
 
 export function StepHeader({ current, total, progress, onBack, skip }: { current: number; total: number; progress: number; onBack?: () => void; skip?: () => void }) {
+  const { t } = useTranslation();
   return (
     <View style={styles.stepNav}>
       <View style={styles.navRow}>
         {skip ? (
           <Pressable onPress={skip} style={({ pressed }) => [styles.skipButton, pressed && styles.pressed]}>
-            <Text style={styles.skipText}>Skip</Text>
+            <Text style={styles.skipText}>{t('flow.common.skip')}</Text>
           </Pressable>
         ) : (
           <Pressable onPress={onBack} style={({ pressed }) => [styles.backGroup, pressed && styles.pressed]} hitSlop={8}>
             <View style={styles.backCircle}><BackIcon /></View>
-            <Text style={styles.backLabel}>Back</Text>
+            <Text style={styles.backLabel}>{t('register.back')}</Text>
           </Pressable>
         )}
-        <Text style={styles.stepText}>{`Step ${current}/${total}`}</Text>
+        <Text style={styles.stepText}>{t('register.step', { current, total })}</Text>
       </View>
       <View style={styles.progressTrack}>
         <View style={[styles.progressFill, { width: `${Math.max(0, Math.min(1, progress)) * 100}%` }]} />
@@ -249,6 +252,8 @@ export function ResultStatusScreen({
   buttonLabel,
   buttonDisabled,
   onButtonPress,
+  secondaryLabel,
+  onSecondaryPress,
   notificationTitle,
   notificationHeading,
   notificationBody,
@@ -262,6 +267,8 @@ export function ResultStatusScreen({
   buttonLabel: string;
   buttonDisabled?: boolean;
   onButtonPress?: () => void;
+  secondaryLabel?: string;
+  onSecondaryPress?: () => void;
   notificationTitle?: string;
   notificationHeading?: string;
   notificationBody?: string;
@@ -305,6 +312,7 @@ export function ResultStatusScreen({
             textStyle={styles.resultButtonText}
             style={styles.resultButton}
           />
+          {secondaryLabel ? <Pressable onPress={onSecondaryPress} style={styles.resultSecondary}><Text style={styles.resultSecondaryText}>{secondaryLabel}</Text></Pressable> : null}
         </View>
       </View>
     </SafeAreaView>
@@ -312,6 +320,7 @@ export function ResultStatusScreen({
 }
 
 export function AppDownloadModal({ visible, onNext }: { visible: boolean; onNext: () => void }) {
+  const { t } = useTranslation();
   return (
     <Modal transparent visible={visible} animationType="fade">
       <View style={styles.modalBackdrop}>
@@ -322,19 +331,17 @@ export function AppDownloadModal({ visible, onNext }: { visible: boolean; onNext
               <View style={styles.phoneBadge}><SimpleIcon name="phone" size={20} color="#64748B" /></View>
             </View>
             <View style={styles.modalCopy}>
-              <Text style={styles.modalTitle}>Step 1: Get the Authenticator App</Text>
-              <Text style={styles.modalBody}>
-                To secure your account, you will need an authenticator app like Google Authenticator. Please download it on your phone before proceeding to the next step.
-              </Text>
+              <Text style={styles.modalTitle}>{t('flow.twoFa.downloadTitle')}</Text>
+              <Text style={styles.modalBody}>{t('flow.twoFa.downloadBody')}</Text>
             </View>
             <View style={styles.storeRow}>
-              <StoreBadge label="App Store" caption="DOWNLOAD ON THE" icon="apple" />
-              <StoreBadge label="Google Play" caption="GET IT ON" icon="play" />
+              <StoreBadge label="App Store" caption={t('flow.twoFa.appStoreCaption')} icon="apple" />
+              <StoreBadge label="Google Play" caption={t('flow.twoFa.playStoreCaption')} icon="play" />
             </View>
           </View>
           <View style={styles.modalFooter}>
             <Pressable onPress={onNext} style={({ pressed }) => [styles.outlineButton, pressed && styles.pressed]}>
-              <Text style={styles.outlineButtonText}>I already have the app - Next Step →</Text>
+              <Text style={styles.outlineButtonText}>{t('flow.twoFa.haveApp')}</Text>
             </Pressable>
           </View>
         </View>
@@ -345,28 +352,29 @@ export function AppDownloadModal({ visible, onNext }: { visible: boolean; onNext
 
 function StoreBadge({ label, caption, icon }: { label: string; caption: string; icon: 'apple' | 'play' }) {
   return (
-    <View style={styles.storeBadge}>
+    <Pressable onPress={() => void Linking.openURL(icon === 'apple' ? 'https://apps.apple.com/app/google-authenticator/id388497605' : 'https://play.google.com/store/apps/details?id=com.google.android.apps.authenticator2')} style={styles.storeBadge}>
       <Text style={styles.storeIcon}>{icon === 'apple' ? '●' : '▶'}</Text>
       <View>
         <Text style={styles.storeCaption}>{caption}</Text>
         <Text style={styles.storeLabel}>{label}</Text>
       </View>
-    </View>
+    </Pressable>
   );
 }
 
 export function SetupCompleteModal({ visible, onDashboard }: { visible: boolean; onDashboard: () => void }) {
+  const { t } = useTranslation();
   return (
     <Modal transparent visible={visible} animationType="fade">
       <View style={styles.modalBackdrop}>
         <View style={[styles.completeModal, modalShadow]}>
           <View style={styles.completeTop}>
             <SuccessAnimation />
-            <Text style={styles.modalTitle}>Setup Complete!</Text>
-            <Text style={styles.modalBody}>Your mTrip Merchant Dashboard is now fully secured with active multi-factor authentication.</Text>
+            <Text style={styles.modalTitle}>{t('flow.twoFa.completeTitle')}</Text>
+            <Text style={styles.modalBody}>{t('flow.twoFa.completeBody')}</Text>
           </View>
           <View style={styles.modalFooter}>
-            <PrimaryButton label="Go to Dashboard" onPress={onDashboard} textStyle={styles.largeButtonText} />
+            <PrimaryButton label={t('flow.twoFa.dashboard')} onPress={onDashboard} textStyle={styles.largeButtonText} />
           </View>
         </View>
       </View>
@@ -390,7 +398,7 @@ export function SelectSheet({
   value,
   onSelect,
   onClose,
-  cancelLabel = 'Cancel',
+  cancelLabel,
 }: {
   visible: boolean;
   title: string;
@@ -400,6 +408,7 @@ export function SelectSheet({
   onClose: () => void;
   cancelLabel?: string;
 }) {
+  const { t } = useTranslation();
   return (
     <Modal transparent visible={visible} animationType="fade" onRequestClose={onClose}>
       <Pressable style={styles.sheetBackdrop} onPress={onClose}>
@@ -407,7 +416,7 @@ export function SelectSheet({
           <View style={styles.selectSheetHeader}>
             <Text style={styles.selectSheetTitle}>{title}</Text>
             <Pressable onPress={onClose} hitSlop={8} style={({ pressed }) => [styles.selectSheetCancel, pressed && styles.pressed]}>
-              <Text style={styles.selectSheetCancelText}>{cancelLabel}</Text>
+              <Text style={styles.selectSheetCancelText}>{cancelLabel ?? t('flow.common.cancel')}</Text>
             </Pressable>
           </View>
           <ScrollView style={styles.selectSheetList} showsVerticalScrollIndicator={false}>
@@ -433,12 +442,13 @@ export function SelectSheet({
 
 /** KYC 文档页底部的 E-Signature 卡片(Figma `EL-2a59a7a1`):未签是白卡 + Sign Now,已签转绿并显示 Signed。 */
 export function SignatureCard({ signed, label, onSign }: { signed: boolean; label?: string; onSign: () => void }) {
+  const { t } = useTranslation();
   return (
     <View style={[styles.signatureCard, signed && styles.signatureCardSigned]}>
       <View style={styles.signatureRow}>
         <View style={styles.signatureLabelGroup}>
           <SimpleIcon name="signature" size={24} color={colors.slate900} />
-          <Text style={styles.signatureLabel}>E-Signature</Text>
+          <Text style={styles.signatureLabel}>{t('flow.kyc.signature')}</Text>
         </View>
         <Pressable
           onPress={onSign}
@@ -446,7 +456,7 @@ export function SignatureCard({ signed, label, onSign }: { signed: boolean; labe
           style={({ pressed }) => [styles.signatureAction, signed && styles.signatureActionSigned, pressed && !signed && styles.pressed]}
         >
           <Text style={[styles.signatureActionText, signed && styles.signatureActionTextSigned]}>
-            {label ?? (signed ? 'Signed' : 'Sign Now')}
+            {label ?? (signed ? t('flow.kyc.signed') : t('flow.kyc.signNow'))}
           </Text>
         </Pressable>
       </View>
@@ -468,6 +478,7 @@ export function TermsModal({
   onAccept: () => void;
   onCancel: () => void;
 }) {
+  const { t } = useTranslation();
   const [contentHeight, setContentHeight] = useState(0);
   const [viewportHeight, setViewportHeight] = useState(0);
   const [reachedEnd, setReachedEnd] = useState(false);
@@ -486,32 +497,28 @@ export function TermsModal({
           <View style={[styles.termsCard, modalShadow]}>
             <Image source={require('../../../assets/images/onboarding/logo.png')} style={styles.termsLogo} resizeMode="contain" />
             <View style={styles.modalCopyBlock}>
-              <Text style={styles.sheetTitle}>{title || 'Terms & Conditions'}</Text>
+              <Text style={styles.sheetTitle}>{title || t('flow.kyc.termsTitle')}</Text>
               {content ? <Text style={styles.sheetBody}>{content}</Text> : <Text style={styles.sheetBody}>
-                Please read these terms carefully before using MTrip. By continuing, you agree to the conditions below.
+                {t('flow.kyc.termsIntro')}
               </Text>}
             </View>
 
             {!content ? <View style={styles.termsSection}>
-              <Text style={styles.termsHeading}>1. Using MTrip</Text>
-              <Text style={styles.termsBody}>
-                MTrip helps you plan and manage travel services. You must provide accurate account information and use the app only for lawful, personal purposes.
-              </Text>
+              <Text style={styles.termsHeading}>{t('flow.kyc.termsUseTitle')}</Text>
+              <Text style={styles.termsBody}>{t('flow.kyc.termsUseBody')}</Text>
             </View> : null}
 
             {!content ? <View style={styles.termsSection}>
-              <Text style={styles.termsHeading}>2. Privacy and security</Text>
-              <Text style={styles.termsBody}>
-                We protect your personal information in line with our Privacy Policy. Keep your sign-in details secure and notify us promptly of unauthorized activity.
-              </Text>
+              <Text style={styles.termsHeading}>{t('flow.kyc.termsPrivacyTitle')}</Text>
+              <Text style={styles.termsBody}>{t('flow.kyc.termsPrivacyBody')}</Text>
             </View> : null}
 
             <View style={styles.sheetActions}>
               <Pressable disabled={!readComplete} onPress={onAccept} style={({ pressed }) => [styles.sheetPrimary, !readComplete && { opacity: 0.4 }, pressed && styles.pressed]}>
-                <Text style={styles.sheetPrimaryText}>{readComplete ? 'Read & Continue' : 'Scroll to Read All Terms'}</Text>
+                <Text style={styles.sheetPrimaryText}>{readComplete ? t('flow.kyc.readContinue') : t('flow.kyc.scrollTerms')}</Text>
               </Pressable>
               <Pressable onPress={onCancel} style={({ pressed }) => [styles.sheetGhost, pressed && styles.pressed]}>
-                <Text style={styles.sheetGhostText}>Cancel</Text>
+                <Text style={styles.sheetGhostText}>{t('flow.common.cancel')}</Text>
               </Pressable>
             </View>
           </View>
@@ -531,6 +538,7 @@ export function SignatureModal({
   onConfirm: (signature: string) => void;
   onCancel: () => void;
 }) {
+  const { t } = useTranslation();
   const [paths, setPaths] = useState<string[]>([]);
   const [padSize, setPadSize] = useState({ width: 300, height: 200 });
   const svgRef = useRef<React.ElementRef<typeof Svg>>(null);
@@ -545,34 +553,32 @@ export function SignatureModal({
         <ScrollView contentContainerStyle={styles.termsScroll} showsVerticalScrollIndicator={false}>
           <View style={[styles.signatureModalCard, modalShadow]}>
             <View style={styles.modalCopyBlock}>
-              <Text style={styles.sheetTitle}>E-Signature</Text>
-              <Text style={styles.sheetMeta}>Terms accepted · Final step</Text>
-              <Text style={styles.sheetBody}>
-                Draw your signature in the box below. Use your finger or stylus, then confirm to continue.
-              </Text>
+              <Text style={styles.sheetTitle}>{t('flow.kyc.signature')}</Text>
+              <Text style={styles.sheetMeta}>{t('flow.kyc.termsAccepted')}</Text>
+              <Text style={styles.sheetBody}>{t('flow.kyc.drawInstruction')}</Text>
             </View>
 
             <View style={styles.signatureField}>
-              <Text style={styles.signatureFieldLabel}>Your signature</Text>
+              <Text style={styles.signatureFieldLabel}>{t('flow.kyc.yourSignature')}</Text>
               <View style={styles.signaturePad} onLayout={(event) => setPadSize(event.nativeEvent.layout)} onStartShouldSetResponder={() => true} onMoveShouldSetResponder={() => true}
                 onResponderGrant={(event) => { const { locationX, locationY } = event.nativeEvent; setPaths((current) => [...current, `M ${point(locationX, locationY)}`]); }}
                 onResponderMove={(event) => { const { locationX, locationY } = event.nativeEvent; setPaths((current) => current.map((path, index) => index === current.length - 1 ? `${path} L ${point(locationX, locationY)}` : path)); }}>
-                {paths.length === 0 ? <Text style={styles.signaturePadHint}>Draw your signature here</Text> : null}
+                {paths.length === 0 ? <Text style={styles.signaturePadHint}>{t('flow.kyc.drawHere')}</Text> : null}
                 <Svg ref={svgRef} width="100%" height="100%" viewBox="0 0 300 200" pointerEvents="none">
                   {paths.map((path, index) => <Path key={index} d={path} stroke={colors.slate900} strokeWidth={2.5} fill="none" strokeLinecap="round" strokeLinejoin="round" />)}
                 </Svg>
               </View>
-              <Text style={styles.sheetMeta}>Keep your signature inside the box.</Text>
+              <Text style={styles.sheetMeta}>{t('flow.kyc.keepInside')}</Text>
             </View>
 
             <View style={styles.sheetDivider} />
 
             <View style={styles.sheetActions}>
               <Pressable onPress={() => setPaths([])} style={({ pressed }) => [styles.sheetGhost, pressed && styles.pressed]}>
-                <Text style={styles.sheetGhostText}>Clear</Text>
+                <Text style={styles.sheetGhostText}>{t('flow.kyc.clear')}</Text>
               </Pressable>
               <Pressable disabled={!paths.length} onPress={confirm} style={({ pressed }) => [styles.sheetPrimary, !paths.length && { opacity: 0.4 }, pressed && styles.pressed]}>
-                <Text style={styles.sheetPrimaryText}>Confirm Signature</Text>
+                <Text style={styles.sheetPrimaryText}>{t('flow.kyc.confirmSignature')}</Text>
               </Pressable>
             </View>
           </View>
@@ -614,6 +620,8 @@ const styles = StyleSheet.create({
   infoBody: { fontFamily: fonts.inter, fontSize: 14, lineHeight: 21, color: colors.slate900, opacity: 0.8 },
   resultButton: { flexDirection: 'row' },
   resultButtonText: { fontSize: 16, lineHeight: 24 },
+  resultSecondary: { alignItems: 'center', paddingTop: 16 },
+  resultSecondaryText: { fontFamily: fonts.interSemi, fontSize: 14, lineHeight: 21, color: colors.primary },
   spinnerOuter: { width: 80, height: 80, borderRadius: 67, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
   spinnerTrack: { position: 'absolute', width: 53, height: 53, borderRadius: 27, borderWidth: 5, borderColor: colors.primaryLight },
   spinnerArc: { width: 53, height: 53, borderRadius: 27, borderTopWidth: 5, borderRightWidth: 5, borderTopColor: colors.primary, borderRightColor: colors.primary, borderLeftColor: 'transparent', borderBottomColor: 'transparent' },

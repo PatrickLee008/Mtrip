@@ -2,13 +2,13 @@ import React, { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 
 import {
   apiActivationFinish, apiActivationOtpSend, apiActivationOtpVerify, apiActivationStart,
-  apiActivationTotpSetup, apiActivationTotpVerify, apiEmailLoginStart, apiEmailLoginVerify,
-  apiRecoveryStart, apiRecoveryTotpSetup, apiRecoveryTotpVerify, apiRecoveryVerify,
+  apiRecoveryStart, apiRecoveryVerify,
 } from '@/api/merchant';
-import type { AuthOtpChallenge, TwoFaSetupResult } from '@/api/types';
+import type { AuthOtpChallenge } from '@/api/types';
 import PrimaryButton from '@/components/common/PrimaryButton';
 import { colors, PAGE_PADDING, radius, spacing } from '@/config/theme';
 import { fonts } from '@/config/typography';
@@ -17,12 +17,13 @@ import { useMerchantStore } from '@/store/merchantStore';
 import { useRegistrationStore } from '@/store/registrationStore';
 
 type Mode = 'activation' | 'login' | 'recovery';
-type Step = 'identity' | 'otp' | 'totp';
+type Step = 'identity' | 'otp';
 
 export default function MerchantAccountScreen() {
+  const { t } = useTranslation();
   const navigation = useNavigation();
   const route = useRoute();
-  const initialMode = (route.params as { mode?: Mode } | undefined)?.mode ?? 'login';
+  const initialMode = (route.params as { mode?: Mode } | undefined)?.mode ?? 'activation';
   const [mode, setMode] = useState<Mode>(initialMode);
   const [step, setStep] = useState<Step>('identity');
   const [accessCode, setAccessCode] = useState('');
@@ -32,12 +33,12 @@ export default function MerchantAccountScreen() {
   const [code, setCode] = useState('');
   const [challenge, setChallenge] = useState<AuthOtpChallenge | null>(null);
   const [activationToken, setActivationToken] = useState('');
-  const [recoveryToken, setRecoveryToken] = useState('');
-  const [setup, setSetup] = useState<TwoFaSetupResult | null>(null);
   const [resendAt, setResendAt] = useState(0);
   const [now, setNow] = useState(Date.now());
   const [busy, setBusy] = useState(false);
   const showToast = useCommonStore((s) => s.showToast);
+  const beginEmailLogin = useMerchantStore((s) => s.beginEmailLogin);
+  const verifyEmailLogin = useMerchantStore((s) => s.verifyEmailLogin);
   const acceptSession = useMerchantStore((s) => s.acceptSession);
   const clearRegistration = useRegistrationStore((s) => s.clear);
 
@@ -47,10 +48,10 @@ export default function MerchantAccountScreen() {
   }, []);
   const remaining = Math.max(0, Math.ceil((resendAt - now) / 1000));
   const switchMode = (next: Mode) => {
-    setMode(next); setStep('identity'); setChallenge(null); setCode(''); setSetup(null);
-    setActivationToken(''); setRecoveryToken(''); setResendAt(0);
+    setMode(next); setStep('identity'); setChallenge(null); setCode('');
+    setActivationToken(''); setResendAt(0);
   };
-  const handleError = (error: unknown) => showToast(error instanceof Error ? error.message : 'Request failed');
+  const handleError = (error: unknown) => showToast(error instanceof Error ? error.message : t('flow.common.requestFailed'));
   const send = async (resend = false) => {
     if (busy || (resend && remaining > 0)) return;
     setBusy(true);
@@ -60,91 +61,68 @@ export default function MerchantAccountScreen() {
         let token = activationToken;
         if (!resend) {
           if (!accessCode.trim() && (!username.trim() || !temporaryPassword)) {
-            showToast('Enter an access code or username and temporary password'); return;
+            showToast(t('flow.account.identityRequired')); return;
           }
           const identity = await apiActivationStart(accessCode.trim(), username.trim(), temporaryPassword);
           token = identity.activationToken;
           setActivationToken(token);
         }
         next = await apiActivationOtpSend(token);
+      } else if (mode === 'recovery') {
+        if (!/^\S+@\S+\.\S+$/.test(email.trim())) { showToast(t('flow.account.emailRequired')); return; }
+        next = await apiRecoveryStart(email.trim().toLowerCase());
       } else {
-        if (!/^\S+@\S+\.\S+$/.test(email.trim())) { showToast('Enter your registered email'); return; }
-        next = mode === 'login' ? await apiEmailLoginStart(email.trim().toLowerCase()) : await apiRecoveryStart(email.trim().toLowerCase());
+        if (!/^\S+@\S+\.\S+$/.test(email.trim())) { showToast(t('flow.account.emailRequired')); return; }
+        next = await beginEmailLogin(email.trim().toLowerCase());
       }
       setChallenge(next); setCode(''); setResendAt(Date.now() + next.resendAfter * 1000); setStep('otp');
     } catch (error) { handleError(error); }
     finally { setBusy(false); }
   };
-  const loadSetup = async (token: string) => {
-    try {
-      const result = mode === 'activation' ? await apiActivationTotpSetup(token) : await apiRecoveryTotpSetup(token);
-      setSetup(result);
-    } catch (error) { handleError(error); }
-  };
   const verifyOtp = async () => {
     if (!challenge || !/^\d{6}$/.test(code) || busy) return;
     setBusy(true);
     try {
-      if (mode === 'login') {
-        const session = await apiEmailLoginVerify(challenge.challengeToken, code);
-        await acceptSession(session);
-        navigation.reset({ index: 0, routes: [{ name: 'Dashboard' }] });
-      } else if (mode === 'activation') {
+      if (mode === 'activation') {
         const result = await apiActivationOtpVerify(challenge.challengeToken, code);
-        setActivationToken(result.activationToken); setStep('totp'); setCode('');
-        await loadSetup(result.activationToken);
-      } else {
+        if (result.profile.methods.accessCode) {
+          await acceptSession(await apiActivationFinish(result.activationToken));
+          clearRegistration();
+          navigation.reset({ index: 0, routes: [{ name: 'BiometricOptIn' }] });
+        } else navigation.navigate('TwoFaSetup', { mode: 'activation', token: result.activationToken });
+      } else if (mode === 'recovery') {
         const result = await apiRecoveryVerify(challenge.challengeToken, code);
-        setRecoveryToken(result.recoveryToken); setStep('totp'); setCode('');
-        await loadSetup(result.recoveryToken);
+        navigation.navigate('TwoFaSetup', { mode: 'recovery', token: result.recoveryToken });
+      } else {
+        const next = await verifyEmailLogin(challenge.challengeToken, code);
+        navigation.navigate(next.requiresEnrollment ? 'TwoFaSetup' : 'TwoFaVerify', { mode: 'login' });
       }
     } catch (error) { handleError(error); }
     finally { setBusy(false); }
   };
-  const finish = async () => {
-    const token = mode === 'activation' ? activationToken : recoveryToken;
-    if (!token || !/^\d{6}$/.test(code) || busy) return;
-    setBusy(true);
-    try {
-      const session = mode === 'activation'
-        ? (await apiActivationTotpVerify(token, code), await apiActivationFinish(token))
-        : await apiRecoveryTotpVerify(token, code);
-      await acceptSession(session);
-      if (mode === 'activation') clearRegistration();
-      navigation.reset({ index: 0, routes: [{ name: 'Dashboard' }] });
-    } catch (error) { handleError(error); }
-    finally { setBusy(false); }
-  };
-
   return <SafeAreaView style={styles.root} edges={['top', 'bottom']}>
     <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-      <Pressable onPress={() => navigation.goBack()}><Text style={styles.back}>Back</Text></Pressable>
-      <Text style={styles.title}>{mode === 'activation' ? 'Activate Merchant Account' : mode === 'recovery' ? 'Recover Authenticator' : 'Merchant Email Login'}</Text>
+      <Pressable onPress={() => navigation.goBack()}><Text style={styles.back}>{t('register.back')}</Text></Pressable>
+      <Text style={styles.title}>{t(`flow.account.${mode}Title`)}</Text>
       <View style={styles.modeRow}>
-        {(['activation', 'login', 'recovery'] as Mode[]).map((item) => <Pressable key={item} onPress={() => switchMode(item)}><Text style={[styles.mode, item === mode && styles.modeActive]}>{item === 'activation' ? 'Activate' : item === 'login' ? 'Login' : 'Recover'}</Text></Pressable>)}
+        {(['activation', 'login', 'recovery'] as Mode[]).map((item) => <Pressable key={item} onPress={() => switchMode(item)}><Text style={[styles.mode, item === mode && styles.modeActive]}>{t(`flow.account.${item}Tab`)}</Text></Pressable>)}
       </View>
       {step === 'identity' ? <View style={styles.form}>
         {mode === 'activation' ? <>
-          <Text style={styles.hint}>Use the Merchant Access Code or your username and temporary password.</Text>
-          <TextInput style={styles.input} value={accessCode} onChangeText={setAccessCode} placeholder="Merchant Access Code" autoCapitalize="characters" />
-          <Text style={styles.hint}>Or use the temporary credentials</Text>
-          <TextInput style={styles.input} value={username} onChangeText={setUsername} placeholder="Username" autoCapitalize="none" />
-          <TextInput style={styles.input} value={temporaryPassword} onChangeText={setTemporaryPassword} placeholder="Temporary password" secureTextEntry />
-        </> : <TextInput style={styles.input} value={email} onChangeText={setEmail} placeholder="Registered email" keyboardType="email-address" autoCapitalize="none" />}
-        <PrimaryButton label={busy ? 'Sending...' : 'Send Email Code'} disabled={busy} onPress={() => void send()} />
+          <Text style={styles.hint}>{t('flow.account.identityHint')}</Text>
+          <TextInput style={styles.input} value={accessCode} onChangeText={setAccessCode} placeholder={t('flow.account.accessCode')} autoCapitalize="characters" />
+          <Text style={styles.hint}>{t('flow.account.temporaryHint')}</Text>
+          <TextInput style={styles.input} value={username} onChangeText={setUsername} placeholder={t('flow.account.username')} autoCapitalize="none" />
+          <TextInput style={styles.input} value={temporaryPassword} onChangeText={setTemporaryPassword} placeholder={t('flow.account.temporaryPassword')} secureTextEntry />
+        </> : <TextInput style={styles.input} value={email} onChangeText={setEmail} placeholder={t('flow.account.registeredEmail')} keyboardType="email-address" autoCapitalize="none" />}
+        <PrimaryButton label={busy ? t('flow.common.sending') : t('flow.account.sendEmailCode')} disabled={busy} onPress={() => void send()} />
       </View> : null}
       {step === 'otp' ? <View style={styles.form}>
-        <Text style={styles.hint}>Enter the code sent to {challenge?.recipient}.</Text>
-        {challenge?.testMode ? <Text style={styles.testMode}>Test mode: no email was sent. Use 000000.</Text> : null}
-        <TextInput style={styles.input} value={code} onChangeText={(value) => setCode(value.replace(/\D/g, '').slice(0, 6))} keyboardType="number-pad" placeholder="6-digit code" />
-        <PrimaryButton label={busy ? 'Verifying...' : 'Verify Email'} disabled={busy || code.length !== 6} onPress={() => void verifyOtp()} />
-        <Pressable disabled={busy || remaining > 0} onPress={() => void send(true)}><Text style={[styles.link, remaining > 0 && styles.disabled]}>{remaining > 0 ? `Resend in ${remaining}s` : 'Resend code'}</Text></Pressable>
-      </View> : null}
-      {step === 'totp' ? <View style={styles.form}>
-        <Text style={styles.hint}>Add this key to your Authenticator app, then enter its current 6-digit code.</Text>
-        {setup ? <Text selectable style={styles.secret}>{setup.manualKey}</Text> : <Pressable onPress={() => void loadSetup(mode === 'activation' ? activationToken : recoveryToken)}><Text style={styles.link}>Load setup key</Text></Pressable>}
-        <TextInput style={styles.input} value={code} onChangeText={(value) => setCode(value.replace(/\D/g, '').slice(0, 6))} keyboardType="number-pad" placeholder="Authenticator code" />
-        <PrimaryButton label={busy ? 'Finishing...' : mode === 'activation' ? 'Activate Account' : 'Recover Account'} disabled={busy || !setup || code.length !== 6} onPress={() => void finish()} />
+        <Text style={styles.hint}>{t('flow.account.codeSent', { recipient: challenge?.recipient })}</Text>
+        {challenge?.testMode ? <Text style={styles.testMode}>{t('flow.account.testMode')}</Text> : null}
+        <TextInput style={styles.input} value={code} onChangeText={(value) => setCode(value.replace(/\D/g, '').slice(0, 6))} keyboardType="number-pad" placeholder={t('flow.account.sixDigitCode')} />
+        <PrimaryButton label={busy ? t('flow.common.verifying') : t('flow.account.verifyEmail')} disabled={busy || code.length !== 6} onPress={() => void verifyOtp()} />
+        <Pressable disabled={busy || remaining > 0} onPress={() => void send(true)}><Text style={[styles.link, remaining > 0 && styles.disabled]}>{remaining > 0 ? t('flow.account.resendIn', { seconds: remaining }) : t('flow.account.resendCode')}</Text></Pressable>
       </View> : null}
     </ScrollView>
   </SafeAreaView>;
@@ -164,5 +142,4 @@ const styles = StyleSheet.create({
   testMode: { fontFamily: fonts.interSemi, color: colors.warning, fontSize: 14 },
   link: { fontFamily: fonts.interSemi, color: colors.primary, fontSize: 14, textAlign: 'center' },
   disabled: { opacity: 0.5 },
-  secret: { fontFamily: fonts.interSemi, color: colors.primary, fontSize: 18, letterSpacing: 1 },
 });

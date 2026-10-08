@@ -4,7 +4,7 @@
  * 规范:设计稿里的 iPhone 状态栏只作为画布说明,App 页面不手绘时间/电池/信号。
  */
 
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Pressable,
   ScrollView,
@@ -19,8 +19,10 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useTranslation } from 'react-i18next';
 import Svg, { Path } from 'react-native-svg';
 
+import { SelectSheet } from '@/components/onboarding/MerchantFlowComponents';
 import { colors, PAGE_PADDING } from '@/config/theme';
 import { fonts } from '@/config/typography';
+import type { PhoneCountryCode } from '@/utils/validate';
 
 export function BackIcon() {
   return (
@@ -162,30 +164,50 @@ export function SelectField({
   );
 }
 
-/** 手机号字段:Figma 用 +95 前置于同一描边框内。 */
+/** 手机号字段:保留 Figma 的前置区号布局,允许选择注册国家区号。 */
 export function PhoneField({
   value,
   onChangeText,
-  placeholder = '9 123 456 789',
+  countryCode,
+  onCountryCodeChange,
+  placeholder = countryCode === '86' ? '137 0000 0000' : '9 123 456 789',
 }: {
   value: string;
   onChangeText: (value: string) => void;
+  countryCode: PhoneCountryCode;
+  onCountryCodeChange: (value: PhoneCountryCode) => void;
   placeholder?: string;
 }) {
+  const { t } = useTranslation();
+  const [pickerOpen, setPickerOpen] = useState(false);
   return (
-    <View style={styles.phoneRow}>
-      <View style={styles.phoneCode}>
-        <Text style={styles.phoneCodeText}>+95</Text>
+    <>
+      <View style={styles.phoneRow}>
+        <Pressable accessibilityRole="button" style={styles.phoneCode} onPress={() => setPickerOpen(true)}>
+          <Text style={styles.phoneCodeText}>+{countryCode}</Text>
+          <ChevronDownIcon />
+        </Pressable>
+        <TextInput
+          style={styles.phoneInput}
+          value={value}
+          onChangeText={onChangeText}
+          placeholder={placeholder}
+          placeholderTextColor="rgba(30, 41, 59, 0.6)"
+          keyboardType="phone-pad"
+        />
       </View>
-      <TextInput
-        style={styles.phoneInput}
-        value={value}
-        onChangeText={onChangeText}
-        placeholder={placeholder}
-        placeholderTextColor="rgba(30, 41, 59, 0.6)"
-        keyboardType="phone-pad"
+      <SelectSheet
+        visible={pickerOpen}
+        title={t('register.contactInfo.countryCode')}
+        options={[
+          { value: '95', label: t('register.contactInfo.countryMyanmar') },
+          { value: '86', label: t('register.contactInfo.countryChina') },
+        ]}
+        value={countryCode}
+        onSelect={(next) => onCountryCodeChange(next as PhoneCountryCode)}
+        onClose={() => setPickerOpen(false)}
       />
-    </View>
+    </>
   );
 }
 
@@ -270,7 +292,7 @@ const styles = StyleSheet.create({
     color: colors.slate900,
   },
   phoneRow: { minHeight: 52, flexDirection: 'row', alignItems: 'stretch' },
-  phoneCode: { width: 54, alignItems: 'center', justifyContent: 'center', borderRightWidth: 1, borderRightColor: colors.surface },
+  phoneCode: { width: 74, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', borderRightWidth: 1, borderRightColor: colors.surface },
   phoneCodeText: { fontFamily: fonts.inter, fontSize: 16, lineHeight: 24, color: colors.slate900, opacity: 0.8 },
   phoneInput: {
     flex: 1,
