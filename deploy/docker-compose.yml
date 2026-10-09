@@ -337,8 +337,6 @@ services:
       - "${CLIENT_WEB_PORT:-8093}:8093"
       # merchant-h5 = merchant-app 的 H5 网页版(Expo web export)
       - "${MERCHANT_APP_WEB_PORT:-8094}:8094"
-      # 兼容原浏览器地址;由 gateway 持续托管同一 merchant-h5 静态站
-      - "${MERCHANT_APP_ALIAS_PORT:-8083}:8094"
     volumes:
       - ./openresty/nginx.conf:/usr/local/openresty/nginx/conf/nginx.conf:ro
       - ./openresty/conf.d:/etc/nginx/conf.d:ro

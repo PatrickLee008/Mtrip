@@ -10,9 +10,9 @@
 
 App typecheck/Web export、`test:bookings`、订单/通知/物业隔离回归通过，H5 更新至 8083/8094，订单服务热重启。393×852 Chrome 入口/筛选多选通过；旧 Token 过期，未绕过认证，真实订单详情/写操作及真机仍待登录验收。未操作真实订单/备注/消息，未 Git 提交。详见模块 17 B0–B7。
 
-### ★ 2026-10-08 Merchant App H5 8083 持续入口
+### ★ 2026-10-09 释放 Merchant App Metro 端口
 
-`localhost:8083` 由 Docker gateway 转发到 merchant-h5 静态站点容器端口 `8094`，两个地址显示同一 `deploy/web/merchant-h5/` 产物。这样 Expo 开发终端结束后 8083 仍可访问；Metro 实时调试需另用空闲端口。
+已移除 Docker gateway 对宿主机 `8083` 的 merchant-h5 静态映射。merchant-app H5 固定访问 `localhost:8094`；`localhost:8083` 留给 Expo Metro 开发服务。
 
 ### ★ 2026-10-08 Merchant App 通知页
 
