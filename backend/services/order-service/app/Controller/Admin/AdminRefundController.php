@@ -6,6 +6,7 @@ namespace App\Controller\Admin;
 
 use App\Service\Booking\BookingEventService;
 use App\Service\OrderStockService;
+use App\Service\PricingService;
 use App\Service\WalletService;
 use Hyperf\DbConnection\Db;
 use Hyperf\Di\Annotation\Inject;
@@ -26,6 +27,10 @@ class AdminRefundController extends AbstractAdminController
 {
     #[Inject]
     protected OrderStockService $stockService;
+
+    /** 取消/全额退款后返还优惠券 */
+    #[Inject]
+    protected PricingService $pricingService;
 
     #[Inject]
     protected WalletService $walletService;
@@ -189,6 +194,8 @@ class AdminRefundController extends AbstractAdminController
             // 全额退款回补库存(change_type=4);部分退款订单仍有效不回补
             if ($fullRefund) {
                 $this->stockService->refundRestore($order);
+                // 订单已关闭:返还优惠券(部分退款订单仍有效,券继续占用)
+                $this->pricingService->releaseCoupon($order);
             }
             // 退款入 mTrip 钱包:行锁用户余额 + 前后快照写流水(change_type=3 退款)
             if ($toWallet && $refundAmount > 0) {

@@ -1,5 +1,15 @@
 # 会话交接文档(HANDOFF)
 
+### ★ 2026-10-09 取消订单返还优惠券
+
+**规则**:PRD 只规定退款按优惠后金额计算(券抵扣部分不退现金),没写券本身是否返还;按产品要求改为**取消即返还**。
+- 新增 `PricingService::releaseCoupon(array $order)`(须在事务内):只认本单核销的领券记录(`order_main.coupon_id`,且记录 `order_id` = Trip ID 或独立单订单 ID、状态已使用);**同一张券还有未取消 / 未全额退款(order_status 非 4/6)的预订就不返还**,Trip 里最后一笔也取消了才还,避免券回到手里的同时其余预订继续享受折扣。返还后状态回未使用(已过有效期则置 2 已过期)、`order_id=0`、`used_time=NULL`,模板 `used_count` -1。幂等;部分退款不返还。
+- 调用点(已支付订单进入终态的全部三处):`BookingLifecycleService::cancel`(已支付预订被取消)、`BookingRefundService::apply`(商户全额退款)、`AdminRefundController::confirm`(用户申请退款经平台确认全额到账)。待支付取消 / 超时关单本就未核销券,无需处理。
+
+**验证**:新增 `scripts/test-coupon-release.sh` + `order-service/test/coupon-release.php`(隔离库,不碰开发库)8 项全过:已支付取消返还且 used_count -1、重复调用无副作用、Trip 两笔取消第一笔不还/第二笔才还、商户部分退款不还/全额退款还、平台确认全额退款还(过期券置已过期)。`booking-remediation.php` 回归 48 项全过。容器内 `php -l` 通过。**未做 App 端改动**:取消成功页 / 退款摘要还没有「优惠券已返还」提示。
+
+**环境备注**:本轮开始时 Docker Desktop 未运行、开发栈全停;另有新拉取的迁移 `V20261008120000` 未执行导致 MySQL unhealthy,已按账本手工补执行(迁移脚本因 CRLF 校验和噪音拒绝运行),账本 34/34。`scripts/test-booking-remediation.sh` 在 Git Bash 下有路径转换问题(`/tmp` 与 `/c/...` 二选一被改写),本轮只单跑了订单服务那部分。
+
 ### 2026-10-08 Merchant App 登录标签
 
 访问码浮动标签改用文字颜色 alpha，移除整体 opacity，白色背景不再透出输入框上边框。typecheck/Web export 与 393×852 Chrome 英文登录页视觉通过，H5 已发布；未修改认证流程或发起登录请求，原生真机未验。
