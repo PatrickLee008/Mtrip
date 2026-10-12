@@ -314,6 +314,7 @@ INSERT IGNORE INTO `sys_menu` (`id`,`parent_id`,`menu_name`,`menu_name_en`,`perm
 (130303,1303,'启用禁用','Enable/Disable','config:storage:status',3,3),
 (130304,1303,'删除存储/文件','Delete Storage/File','config:storage:delete',3,4),
 (130305,1303,'上传文件','Upload File','config:storage:upload',3,5),
+(130501,1305,'发送测试短信','Send Test SMS','config:sms:test',3,5),
 (131201,1312,'新增邮件渠道','Add Email Channel','config:email:add',3,1),
 (131202,1312,'编辑邮件渠道','Edit Email Channel','config:email:edit',3,2),
 (131203,1312,'启用禁用邮件渠道','Enable/Disable Email Channel','config:email:status',3,3),

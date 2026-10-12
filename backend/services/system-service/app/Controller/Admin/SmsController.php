@@ -8,8 +8,11 @@ use App\Controller\AbstractController;
 
 use App\Model\SysSmsChannel;
 use App\Model\SysSmsTemplate;
+use App\Service\SmsChannelTestService;
 use App\Support\SecretField;
 use Hyperf\DbConnection\Db;
+use Hyperf\Di\Annotation\Inject;
+use Hyperf\Redis\Redis;
 use Mtrip\Shared\Annotation\Permission;
 use Mtrip\Shared\Constants\ErrorCode;
 use Mtrip\Shared\Context\AdminContext;
@@ -25,6 +28,12 @@ use function Hyperf\Config\config;
  */
 class SmsController extends AbstractController
 {
+    #[Inject]
+    protected SmsChannelTestService $testSender;
+
+    #[Inject]
+    protected Redis $redis;
+
     /**
      * smspoh = SMSPoh Verify API V3(C端注册/验证码登录/重置密码的短信通道)
      * 它比另外两家多两段配置:第二段密钥 api_secret,以及 brand/pinLength/maxInvalidAttempts。
@@ -94,6 +103,45 @@ class SmsController extends AbstractController
         $channel->status = $channel->status === 1 ? 2 : 1;
         $channel->save();
         return Result::success(['status' => $channel->status], $channel->status === 1 ? '已启用' : '已禁用');
+    }
+
+    #[Permission('config:sms:test')]
+    public function testSend(): array
+    {
+        $channel = $this->findChannel($this->requireId());
+        $mobile = $this->requireStr('mobile');
+        if (preg_match('/^\+[1-9]\d{6,14}$/D', $mobile) !== 1) {
+            throw new BusinessException(ErrorCode::PARAM_ERROR, '请输入带国家码的手机号，如 +959xxxxxxxxx');
+        }
+        $content = $channel->provider_code === 'smspoh' ? '[渠道测试] SMSPoh 验证码' : $this->requireStr('content');
+        if (mb_strlen($content) > 1000) {
+            throw new BusinessException(ErrorCode::PARAM_ERROR, '测试短信内容不能超过 1000 个字符');
+        }
+        $cooldownKey = 'sms:admin-test:' . $channel->id . ':' . hash('sha256', $mobile);
+        if (! $this->redis->set($cooldownKey, '1', ['nx', 'ex' => 60])) {
+            throw new BusinessException(ErrorCode::DATA_CONFLICT, '同一渠道和号码请等待 60 秒后再测试');
+        }
+        $aesKey = (string) config('mtrip.aes_key');
+        $logId = Db::table('sys_sms_log')->insertGetId([
+            'site_id' => (int) $channel->site_id, 'channel_id' => (int) $channel->id,
+            'template_id' => 0, 'mobile' => CryptoHelper::encrypt($mobile, $aesKey),
+            'content' => $content, 'status' => 3,
+        ]);
+        try {
+            $result = $this->testSender->send($channel->toArray(), $aesKey, $mobile, $content);
+        } catch (BusinessException $e) {
+            Db::table('sys_sms_log')->where('id', $logId)->update(['status' => 2, 'fail_reason' => mb_substr($e->getMessage(), 0, 255)]);
+            throw $e;
+        } catch (\Throwable) {
+            $result = ['ok' => false, 'requestId' => '', 'message' => '短信测试发送异常'];
+        }
+        Db::table('sys_sms_log')->where('id', $logId)->update([
+            'status' => $result['ok'] ? 1 : 2, 'fail_reason' => mb_substr($result['message'], 0, 255),
+        ]);
+        if (! $result['ok']) {
+            throw new BusinessException(ErrorCode::SMS_CHANNEL_UNAVAILABLE, $result['message'] . '，请检查渠道配置和发送日志');
+        }
+        return Result::success(['requestId' => $result['requestId'], 'logId' => $logId], '短信服务商已受理，请在手机上确认实际送达');
     }
 
     // ---------- 模板 ----------

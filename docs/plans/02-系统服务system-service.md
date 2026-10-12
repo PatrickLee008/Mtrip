@@ -36,6 +36,7 @@
 - [x] 文件存储配置 CRUD(S3/R2/本地,AES 加密+脱敏)+ 文件库管理
 - [x] 支付渠道配置 CRUD(Stripe/PayPal,批量复制到其他站点)
 - [x] 短信渠道 + 模板管理 + 发送日志(手机号解密后脱敏回显)
+- [x] 后台短信渠道测试发送：SMSPoh OTP / Twilio / MessageBird，独立 `config:sms:test` 权限、站点隔离、60 秒冷却、加密发送日志（2026-10-12；真实送达待验）
 - [x] 邮件 SMTP 渠道 + 投递日志(用户名/密码 AES 加密、返回脱敏)
 - [x] 地图服务配置 CRUD(Google Maps,按站点 upsert)
 

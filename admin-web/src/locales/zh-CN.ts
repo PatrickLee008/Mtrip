@@ -973,7 +973,12 @@ export default {
         mobile: '手机号',
         content: '内容',
         send: '发送',
-        success: '已发送',
+        success: '短信服务商已受理，请在手机上确认实际送达',
+        defaultContent: '这是一条来自 mTrip 的测试短信。',
+        mobilePlaceholder: '如 +959xxxxxxxxx 或 +861xxxxxxxxxx',
+        invalidMobile: '请输入带国家码（+）的有效手机号',
+        tip: '使用渠道已保存的配置，禁用渠道也可测试。将发送真实短信，可能产生费用。同一渠道和号码请间隔 60 秒再测试。',
+        otpTip: 'SMSPoh 将按已保存的品牌与有效期发送服务商生成的验证码，不支持自定义内容。该验证码仅用于确认短信送达。',
         failed: '发送失败',
       },
       template: {

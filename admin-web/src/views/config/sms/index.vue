@@ -11,6 +11,7 @@ import {
   apiSmsChannelDelete,
   apiSmsChannelList,
   apiSmsChannelToggleStatus,
+  apiSmsChannelTestSend,
   apiSmsChannelUpdate,
   apiSmsLogList,
   apiSmsTemplateAdd,
@@ -159,6 +160,41 @@ async function removeChannel(row: TableRow): Promise<void> {
   await apiSmsChannelDelete(row.id);
   message.success(t('tip.deleteSuccess'));
   await channel.load();
+}
+
+const testModalOpen = ref(false);
+const testSending = ref(false);
+const testChannel = ref<TableRow>();
+const testForm = reactive({ mobile: '', content: '' });
+const testIsSmsPoh = computed(() => testChannel.value?.provider_code === 'smspoh');
+
+function openTest(row: TableRow): void {
+  testChannel.value = row;
+  Object.assign(testForm, { mobile: '', content: t('config.sms.testModal.defaultContent') });
+  testModalOpen.value = true;
+}
+
+async function sendTest(): Promise<void> {
+  if (testSending.value || !testChannel.value) return;
+  const mobile = testForm.mobile.trim();
+  if (!/^\+[1-9]\d{6,14}$/.test(mobile)) {
+    message.warning(t('config.sms.testModal.invalidMobile'));
+    return;
+  }
+  if (!testIsSmsPoh.value && !testForm.content.trim()) {
+    message.warning(t('common.pleaseInput'));
+    return;
+  }
+  testSending.value = true;
+  try {
+    await apiSmsChannelTestSend({ id: testChannel.value.id, mobile,
+      content: testIsSmsPoh.value ? undefined : testForm.content.trim() });
+    message.success(t('config.sms.testModal.success'));
+    testModalOpen.value = false;
+  } finally {
+    testSending.value = false;
+    void log.load();
+  }
 }
 
 // ---------- Tab2 模板 ----------
@@ -316,9 +352,7 @@ onMounted(() => {
               <template v-else-if="column.key === 'action_col'">
                 <a-space :size="0">
                   <a-button v-perm="'config:sms:edit'" type="link" size="small" @click="openChannelEdit(record)">{{ t('common.edit') }}</a-button>
-                  <a-tooltip :title="t('tip.comingSoon')">
-                    <a-button type="link" size="small" disabled>{{ t('config.sms.actions.test') }}</a-button>
-                  </a-tooltip>
+                  <a-button v-perm="'config:sms:test'" type="link" size="small" @click="openTest(record)">{{ t('config.sms.actions.test') }}</a-button>
                   <a-popconfirm
                     :title="record.status === 1 ? t('common.disable') : t('common.enable')"
                     @confirm="toggleChannel(record)"
@@ -442,6 +476,30 @@ onMounted(() => {
         </a-tab-pane>
       </a-tabs>
     </a-card>
+
+    <a-modal
+      v-model:open="testModalOpen"
+      :title="t('config.sms.testModal.title')"
+      :ok-text="t('config.sms.testModal.send')"
+      :confirm-loading="testSending"
+      :closable="!testSending"
+      :mask-closable="!testSending"
+      :keyboard="!testSending"
+      :cancel-button-props="{ disabled: testSending }"
+      @ok="sendTest"
+    >
+      <a-alert :message="t('config.sms.testModal.tip')" type="warning" show-icon style="margin-bottom: 16px" />
+      <a-form :label-col="{ style: { width: '100px' } }">
+        <a-form-item :label="t('config.sms.channelName')">{{ testChannel?.provider_name }}</a-form-item>
+        <a-form-item :label="t('config.sms.testModal.mobile')" required>
+          <a-input v-model:value="testForm.mobile" :placeholder="t('config.sms.testModal.mobilePlaceholder')" :maxlength="16" :disabled="testSending" />
+        </a-form-item>
+        <a-form-item v-if="!testIsSmsPoh" :label="t('config.sms.testModal.content')" required>
+          <a-textarea v-model:value="testForm.content" :rows="3" :maxlength="1000" show-count :disabled="testSending" />
+        </a-form-item>
+        <a-alert v-else :message="t('config.sms.testModal.otpTip')" type="info" show-icon />
+      </a-form>
+    </a-modal>
 
     <!-- 新增/编辑渠道 -->
     <a-modal

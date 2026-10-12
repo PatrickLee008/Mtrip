@@ -137,6 +137,7 @@ Router::addGroup('/api/v1/admin', static function () {
     Router::post('/sys/sms/channel/update', [SmsController::class, 'updateChannel']);
     Router::post('/sys/sms/channel/delete', [SmsController::class, 'deleteChannel']);
     Router::post('/sys/sms/channel/toggle-status', [SmsController::class, 'toggleChannelStatus']);
+    Router::post('/sys/sms/channel/test-send', [SmsController::class, 'testSend']);
     Router::get('/sys/sms/template/list', [SmsController::class, 'templates']);
     Router::post('/sys/sms/template/add', [SmsController::class, 'createTemplate']);
     Router::post('/sys/sms/template/update', [SmsController::class, 'updateTemplate']);

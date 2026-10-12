@@ -1,5 +1,11 @@
 # 会话交接文档(HANDOFF)
 
+### 2026-10-12 后台短信渠道发送测试
+
+`POST /api/v1/admin/sys/sms/channel/test-send` 接选中渠道已保存配置；SMSPoh 发 Verify OTP，Twilio（api_key=Auth Token、account_sid=Account SID、sign_name=发送号码/签名）与 MessageBird 发输入文本。手机号须完整 E.164，不猜国家码；仅具 `config:sms:test` 权限的管理员可用，非超管仅本站点渠道，禁用渠道也可测试而不切换业务启用状态。同渠道同号 Redis NX 60 秒冷却，手机号加密，日志先发送中再成功/失败；成功仅代表服务商受理，验证码不生成登录/注册票据。
+
+shared 118 用例/1061 断言、控制器 2 用例/20 断言、403 个 PHP 语法检查、admin-web build、client-app typecheck 通过；Chrome 原生界面在 8090 现有超管会话验证启用按钮、弹窗布局与非法手机号拦截。后续用户授权两次真实发码（日志 8/9）均已受理；首次号码缺手机前缀 `9`，用户更正后已再发一次，手机送达待用户确认。Twilio/MessageBird 与普通管理员真实会话未联调。测试接口不依赖后台模板，SMSPoh Verify API 的 template 参数可选；当前测试日志未保存返回的 requestId，服务商对账排查仍需补齐。权限迁移 `V20261012090000` 已应用、账本 35/35；初次缺 `USE` 导致首条 INSERT 前失败，已核验菜单无写入后仅清本轮失败行并重跑。system-service 已重启，admin 静态站已发布；本次 Git 提交仅包含短信测试功能，原有 Merchant App 改动保留。
+
 ### 2026-10-08 Merchant App 登录标签
 
 访问码浮动标签改用文字颜色 alpha，移除整体 opacity，白色背景不再透出输入框上边框。typecheck/Web export 与 393×852 Chrome 英文登录页视觉通过，H5 已发布；未修改认证流程或发起登录请求，原生真机未验。

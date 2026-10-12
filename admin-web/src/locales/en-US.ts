@@ -985,7 +985,12 @@ export default {
         mobile: 'Mobile',
         content: 'Content',
         send: 'Send',
-        success: 'Sent',
+        success: 'Provider accepted the request. Please check your phone for delivery.',
+        defaultContent: 'This is a test SMS from mTrip.',
+        mobilePlaceholder: 'e.g. +959xxxxxxxxx or +861xxxxxxxxxx',
+        invalidMobile: 'Enter a valid phone number including the country code (+).',
+        tip: 'Uses the saved channel configuration, including disabled channels. A real SMS may incur charges. Wait 60 seconds before testing the same number again.',
+        otpTip: 'SMSPoh sends a provider-generated verification code using the saved brand and expiry settings. Custom content is unavailable. This code is only for delivery testing.',
         failed: 'Failed',
       },
       template: {

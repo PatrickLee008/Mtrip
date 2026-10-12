@@ -65,6 +65,8 @@ export const apiSmsChannelUpdate = (data: Params) => post<null>('/admin/sys/sms/
 export const apiSmsChannelDelete = (id: number) => post<null>('/admin/sys/sms/channel/delete', { id });
 export const apiSmsChannelToggleStatus = (id: number) =>
   post<{ status: number }>('/admin/sys/sms/channel/toggle-status', { id });
+export const apiSmsChannelTestSend = (data: { id: number; mobile: string; content?: string }) =>
+  post<{ requestId: string; logId: number }>('/admin/sys/sms/channel/test-send', data);
 export const apiSmsTemplateList = (params: Params) => get<PageData<Row>>('/admin/sys/sms/template/list', params);
 export const apiSmsTemplateAdd = (data: Params) => post<{ id: number }>('/admin/sys/sms/template/add', data);
 export const apiSmsTemplateUpdate = (data: Params) => post<null>('/admin/sys/sms/template/update', data);
