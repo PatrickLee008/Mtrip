@@ -3,6 +3,27 @@
 ### 2026-10-12 Merchant App 手机号/邮箱格式提示
 
 Contact Info 下一步细分未填/格式错误；+86/+95 手机号按本地移动号码长度/前缀验证，归一化不再丢弃字母等非法字符。统一邮箱格式检查用于注册/业务联系人/邮箱登录恢复；业务错误指出序号，非法格式不保存/提交/发码，空草稿仍可保存。现有 Toast 双语提示，不改布局及后端。test:validation、typecheck/Web export、Bookings 回归通过，8094 已发布；模拟 API 无真实发码/申请写入，浏览器视觉及真机未验。
+
+### ★ 2026-10-12 多房间第 2 步:钱包移到核对确认页,余额够则两步直接支付(Figma `2659:13152`)
+
+**行为**:钱包卡(「使用钱包」开关)从第 3 步挪到第 2 步价格明细下方。开着钱包且余额 ≥ 应付 → 序列只有 `['details','review']`,进度「第 2 步 / 共 2 步」,吸底按钮 Pay Now,点了直接 `trip/create` + `trip/pay`(钱包);
+余额不足或关掉开关 → 仍三步,第 2 步按钮 Continue,钱包卡下给「余额不足」红字,第 3 步不再有钱包卡,只剩折叠的其他渠道(均即将开放)。
+**价格明细**(稿面 3465:9673):全额覆盖时追加自动应用的券行与主色「钱包抵扣 -X」行,合计胶囊换成「已使用钱包」,合计 = 还需另付的部分(全额覆盖即 MMK 0)。
+**限制**:后端没有「钱包付一部分 + 其他渠道」的组合支付,所以只认全额覆盖,不做稿面那种部分抵扣;两步流程跳过了第 3 步的选券卡,券固定为自动最优券,用户无法更换(稿面第 2 步也没有选券入口)。
+**实现**:新组件 `WalletCard`(从 `BookingStepPayment` 抽出,含开关与余额不足红字);`BookingStepPayment` 的 `walletToggle` 改为 `hideWallet`;`ReviewBody` 新增 `couponLine / walletCredit / walletSlot`;`PriceBreakdownCard` 新增行 `accent` 与 `pointsAccent`;
+`useBookingWizard` 新增 `walletCovers` 与 `isPayStep`(付款步 = 序列最后一步,Pay Now / 付款校验 / 提交都按它判断),应付金额计算挪到序列之前;建单快照记 `walletCovers`,扣款后序列不跳;进复核步也刷新一次余额。三语新增 `hotels.booking.review.walletCredit`。
+`check-booking-steps-34` 的「Pay Now」断言由写死 `step === 'payment'` 改为 `isPayStep`。
+**验证**:Chrome 实测 —— 余额 40,500 时第 2 步 / 共 3 步 + 红字、第 3 步无钱包卡;余额调到 500,000 后第 2 步 / 共 2 步、钱包抵扣 -98,000、合计 MMK 0、立即支付,下单成功(行程 23,钱包支付 98,000,2 笔预订),弹窗背后仍为 2/2;余额已恢复 40,500。`tsc` 通过,六个订房静态检查全绿。
+
+### ★ 2026-10-12 多房间下单流程四步收成三步(Figma `2659:12508` Booking Flow Multi Room)
+
+**范围**:仅多房间(购物车,`cartMode`)链路;单房型仍是 dates → guests → review → payment 四步,关怀模式有自己的 `steps` 不受影响。本次做了第 1 步与第 3 步,第 2 步(核对确认 `2659:13152`)沿用现有复核页未改。
+**第 1 步 · 日期与住客信息**(`2659:12801`,新步骤键 `details`,新组件 `BookingStepDetails`):摘要卡(入住时长 / 人数间数,只读 —— 日期与间数来自购物车,向导里不再放日历与人数加减器)→ 主要入住人 → 特殊要求 → 增值服务;稿面无顶部返回栏,退出走吸底 Back。
+为复用拆出 `LeadGuestSection`(主要入住人标题 + 表单卡)与 `StayExtras`(`AddOnsSection` / `SpecialRequestsSection`),`BookingStepGuests` / `BookingStepDates` 改为调用它们,渲染不变。
+**第 3 步 · 支付**(`2659:13293`,钱包卡 `3465:9556`):`StaySummaryCard` 新增 `payWithin`(「支付剩余时间 00:10:00」+ 前后分隔线,取 `config/global.PAYMENT_WINDOW_MINUTES`,与后端 `BookingConst` 一致;建单时才真正开始计时,此处为静态时限)与 `pointsAccent`(「已使用钱包」主色胶囊,开钱包才显示);
+`BookingStepPayment` 新增 `walletToggle`:钱包卡底部「使用钱包」开关即支付方式(关 = 未选,点立即支付提示请选择),不再单列钱包行;其余渠道仍折叠在「更多支付方式(即将开放)」里,展开后按稿面分「常用支付方式 / 其他支付方式」两组。
+**其他**:`useBookingWizard` 序列 `cartMode` 时为 `['details','review','payment']`,序列变化时当前步不在其中则落到第一步;建单清车后靠 `priceSnapshot` 保持三步;`details` 套用住客校验;`BookingProgress` 新增 `total`(取序列长度)。三语新增 `hotels.booking.steps.details`、`payment.useWallet / payWithin / walletApplied`。
+**验证**:Chrome 实测完整模式三步走通;开关切换徽标显隐、关开关点支付提示、折叠区展开分组均正常;`tsc` 通过,六个订房静态检查全绿。开关「开」的样式按惯例做成圆点在右(稿面只有一个静态态)。
 ### ★ 2026-10-12 酒店详情页签:房型移到第一位
 
 完整模式 `DETAIL_TABS`(`screens/hotel/detailDemo.ts`)顺序改为 房型 → 概览 → 设施 → 周边景点 → 评价 → 政策,`HotelDetailScreen` 默认页签由 overview 改为 rooms(打开即选房)。

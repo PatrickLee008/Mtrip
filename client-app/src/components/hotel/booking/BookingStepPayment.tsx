@@ -12,7 +12,6 @@
 
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 import { useTranslation } from 'react-i18next';
 
 import {
@@ -23,6 +22,7 @@ import {
 } from '@/assets/tempImages';
 import HomeIcon from '@/components/home/HomeIcon';
 import PaymentMethodRow from '@/components/hotel/booking/PaymentMethodRow';
+import WalletCard from '@/components/hotel/booking/WalletCard';
 import {
   CARD_HEADING,
   DEEP_PRIMARY,
@@ -73,6 +73,11 @@ interface Props {
   onToggleExpand: (key: 'card' | 'mobileBanking') => void;
   onComingSoon: () => void;
   coupon?: PaymentCouponState;
+  /**
+   * 多房间新稿把钱包挪到了第 2 步(2659:13152):第 3 步不再出现钱包卡与「使用 mTrip 钱包支付」行,
+   * 只剩折叠的其他渠道(本期均即将开放)。
+   */
+  hideWallet?: boolean;
 }
 
 export default function BookingStepPayment({
@@ -85,6 +90,7 @@ export default function BookingStepPayment({
   onToggleExpand,
   onComingSoon,
   coupon,
+  hideWallet = false,
 }: Props) {
   const { t } = useTranslation();
   /**
@@ -122,37 +128,13 @@ export default function BookingStepPayment({
     <View style={styles.root}>
       {summary}
 
-      {/* mTrip 钱包卡:设计稿是 149.5° 的 #204DDA → #4169ED 渐变,RN 无原生线性渐变,用 svg 画 */}
-      <View style={styles.wallet}>
-        <Svg style={StyleSheet.absoluteFill} width="100%" height="100%">
-          <Defs>
-            <LinearGradient id="bookingWallet" x1="0" y1="0" x2="1" y2="1">
-              <Stop offset="0" stopColor={DEEP_PRIMARY} />
-              <Stop offset="1" stopColor={colors.primary} />
-            </LinearGradient>
-          </Defs>
-          <Rect x="0" y="0" width="100%" height="100%" fill="url(#bookingWallet)" />
-        </Svg>
-
-        <View style={styles.walletBody}>
-          <View style={styles.walletHead}>
-            <HomeIcon name="wallet" width={15.833} height={15} color="#FFFFFF" />
-            <Text style={styles.walletTitle}>{t('hotels.booking.payment.wallet')}</Text>
-          </View>
-          <View style={styles.walletAmountRow}>
-            <Text style={styles.walletCurrency}>{currency}</Text>
-            <Text style={styles.walletAmount}>{formatAmount(balance, currency)}</Text>
-          </View>
-          <Text style={styles.walletHint}>{t('hotels.booking.payment.availableBalance')}</Text>
-        </View>
-        <Pressable style={styles.walletInfo} onPress={onComingSoon} hitSlop={8}>
-          <HomeIcon name="infoCircle" size={20} color="#FFFFFF" />
-        </Pressable>
-      </View>
-
-      {insufficient ? (
-        <Text style={styles.insufficient}>{t('hotels.booking.payment.insufficient')}</Text>
-      ) : null}
+      {hideWallet ? null : (
+        <WalletCard
+          balance={balance}
+          insufficient={insufficient}
+          onInfo={onComingSoon}
+        />
+      )}
 
       <View style={styles.group}>
         {/**
@@ -160,17 +142,21 @@ export default function BookingStepPayment({
          * 能真扣款的只有 mTrip 钱包,所以钱包常驻在上,其余六个未开放渠道收进下面那个折叠区。
          * 折叠区展开后的内容与顺序仍按稿面(Popular ×3 → 到店付 → 银行卡 → 手机银行)。
          */}
-        <Text style={styles.groupTitle}>{t('hotels.booking.payment.other')}</Text>
-        <PaymentMethodRow
-          icon={TEMP_PAY_ICONS.wallet}
-          deepTile
-          title={t('hotels.booking.payment.methods.wallet.title')}
-          desc={t('hotels.booking.payment.methods.wallet.desc', {
-            amount: formatMoney(balance, currency),
-          })}
-          checked={method === 'wallet'}
-          onPress={() => onSelect('wallet')}
-        />
+        {hideWallet ? null : (
+          <>
+            <Text style={styles.groupTitle}>{t('hotels.booking.payment.other')}</Text>
+            <PaymentMethodRow
+              icon={TEMP_PAY_ICONS.wallet}
+              deepTile
+              title={t('hotels.booking.payment.methods.wallet.title')}
+              desc={t('hotels.booking.payment.methods.wallet.desc', {
+                amount: formatMoney(balance, currency),
+              })}
+              checked={method === 'wallet'}
+              onPress={() => onSelect('wallet')}
+            />
+          </>
+        )}
 
         {/* 未开放渠道的折叠头:点一下展开/收起,不参与选中 */}
         <Pressable
@@ -202,6 +188,8 @@ export default function BookingStepPayment({
               />
             ))}
 
+            {/* 多房间新稿在到店付之前有「Other Payment Methods」小标题 */}
+            {hideWallet ? <Text style={styles.groupTitle}>{t('hotels.booking.payment.other')}</Text> : null}
             {PAYMENT_OTHER.filter((key) => key !== 'wallet').map((key) => (
               <PaymentMethodRow
                 key={key}
@@ -375,55 +363,6 @@ const styles = StyleSheet.create({
   flex: { flex: 1, minWidth: 0 },
   /** 未开通渠道展开后的内容,与 PaymentMethodRow 的置灰口径一致 */
   disabled: { opacity: 0.45 },
-  insufficient: {
-    marginTop: -12,
-    fontFamily: fonts.interSemi,
-    fontSize: 12,
-    lineHeight: 16,
-    letterSpacing: 0.6,
-    color: colors.danger,
-  },
-
-  /* ---- 钱包卡 ---- */
-  wallet: {
-    flexDirection: 'row',
-    padding: 24,
-    borderRadius: radius.card,
-    overflow: 'hidden',
-    shadowColor: '#000000',
-    shadowOpacity: 0.1,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 12 },
-    elevation: 5,
-  },
-  walletBody: { flex: 1, minWidth: 0, gap: 8 },
-  walletHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  walletTitle: {
-    fontFamily: fonts.inter,
-    fontSize: 16,
-    lineHeight: 24,
-    letterSpacing: 0.8,
-    opacity: 0.9,
-    color: '#FFFFFF',
-  },
-  walletAmountRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  walletCurrency: {
-    fontFamily: fonts.interMedium,
-    fontSize: 16,
-    lineHeight: 28,
-    opacity: 0.8,
-    color: '#FFFFFF',
-  },
-  walletAmount: { fontFamily: fonts.interBold, fontSize: 28, lineHeight: 28, color: '#FFFFFF' },
-  walletHint: {
-    fontFamily: fonts.interSemi,
-    fontSize: 12,
-    lineHeight: 16,
-    letterSpacing: 0.6,
-    opacity: 0.75,
-    color: '#FFFFFF',
-  },
-  walletInfo: { alignSelf: 'flex-start' },
 
   /* ---- 支付方式 ---- */
   group: { gap: 12 },

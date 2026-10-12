@@ -1357,6 +1357,7 @@
         "dates": "确认日期",
         "guests": "旅客信息",
         "review": "核对确认",
+        "details": "日期与住客信息",
         "trip": "行程明细",
         "payment": "支付"
       },
@@ -1442,6 +1443,7 @@
         "originalPrice": "原价({{nights}})",
         "roomPrice": "房费({{nights}})",
         "longStayDiscount": "长住优惠",
+        "walletCredit": "钱包抵扣",
         "priceChangedTitle": "价格已更新",
         "priceChangedMessage": "价格已由 {{oldAmount}} 变为 {{newAmount}},是否按新价格继续?",
         "priceChangedConfirm": "继续",
@@ -1484,6 +1486,9 @@
         "share": "分享",
         "wallet": "mTRIP 钱包",
         "availableBalance": "可用余额",
+        "useWallet": "使用钱包",
+        "payWithin": "支付剩余时间",
+        "walletApplied": "已使用钱包",
         "popular": "常用支付方式",
         "other": "其他支付方式",
         "methods": {

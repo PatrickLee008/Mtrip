@@ -59,6 +59,15 @@ interface Props {
   hotelName?: string;
   /** 第 1 步填的特殊要求;非空时在入住信息里多一行,下单前让用户确认(QA CA_TC_082) */
   specialRequest?: string;
+  /**
+   * 多房间钱包全额支付时第 2 步就是终点(新稿 2659:13152),此时价格明细要把已应用的券列出来,
+   * 合计才与实扣对得上;其余情况券仍在支付步,不传。
+   */
+  couponLine?: { name: string; discount: number } | null;
+  /** 钱包抵扣额(稿面「Wallet Credit Used」主色行 + 合计胶囊「Wallet applied」);0 不显示 */
+  walletCredit?: number;
+  /** 价格明细下方的钱包卡(多房间新稿);不传不渲染 */
+  walletSlot?: React.ReactNode;
 }
 
 export default function ReviewBody({
@@ -71,6 +80,9 @@ export default function ReviewBody({
   longstayDiscount = 0,
   refundRules = [],
   specialRequest = '',
+  couponLine = null,
+  walletCredit = 0,
+  walletSlot = null,
 }: Props) {
   /** 购物车里有房型才走「酒店卡 + Selected Rooms」的新版式 */
   const hasCart = (cartRooms?.length ?? 0) > 0;
@@ -132,6 +144,24 @@ export default function ReviewBody({
    * 所以这里的合计就是明细合计(房费 − 长住优惠),不再扣券。
    */
   const payable = Math.max(0, stayTotal - longstayDiscount);
+  /** 多房间钱包全额支付:明细追加券行与钱包抵扣行,合计 = 还需另付的部分(全额覆盖时为 0) */
+  if (couponLine && couponLine.discount > 0) {
+    rows.push({
+      key: 'couponLine',
+      label: couponLine.name,
+      value: `-${formatAmount(couponLine.discount, currency)}`,
+      discount: true,
+    });
+  }
+  if (walletCredit > 0) {
+    rows.push({
+      key: 'walletCredit',
+      label: t('hotels.booking.review.walletCredit'),
+      value: `-${formatAmount(walletCredit, currency)}`,
+      accent: true,
+    });
+  }
+  const due = Math.max(0, payable - (couponLine?.discount ?? 0) - walletCredit);
 
   return (
     <View style={styles.root}>
@@ -217,12 +247,20 @@ export default function ReviewBody({
         title={t('hotels.booking.review.priceBreakdown')}
         rows={rows}
         totalLabel={t('hotels.booking.review.totalAmount')}
-        /* 积分不是金额,不能走 formatAmount(会按币种补小数位),用语言环境的千分位 */
-        pointsLabel={t('hotels.booking.review.earnPoints', {
-          points: stay.points.toLocaleString(i18n.language),
-        })}
-        total={formatMoney(payable, currency)}
+        /* 积分不是金额,不能走 formatAmount(会按币种补小数位),用语言环境的千分位;
+           用了钱包则换成稿面的「Wallet applied」主色胶囊 */
+        pointsLabel={
+          walletCredit > 0
+            ? t('hotels.booking.payment.walletApplied')
+            : t('hotels.booking.review.earnPoints', {
+                points: stay.points.toLocaleString(i18n.language),
+              })
+        }
+        pointsAccent={walletCredit > 0}
+        total={formatMoney(due, currency)}
       />
+
+      {walletSlot}
 
       <View style={styles.policies}>
         <CancellationCard

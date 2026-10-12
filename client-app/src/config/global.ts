@@ -97,3 +97,9 @@ export const CURRENCY_SYMBOLS: Record<string, string> = {
 
 /** 不带小数位的币种(设计稿 MMK 写作 185,000 而非 185,000.00) */
 export const ZERO_DECIMAL_CURRENCIES = ['MMK', 'JPY', 'KRW', 'VND'];
+
+/**
+ * 下单后的支付时限(分钟),与后端 `BookingConst::PAYMENT_WINDOW_MINUTES` 一致 —— 超时订单被系统取消并释放库存。
+ * 多房间支付页「Pay Within」展示的就是这个时限(建单时才开始计时)。
+ */
+export const PAYMENT_WINDOW_MINUTES = 10;

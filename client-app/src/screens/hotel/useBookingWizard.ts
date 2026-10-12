@@ -203,6 +203,8 @@ export function useBookingWizard({
     payable: number;
     roomTotal?: number;
     longstay: number;
+    /** 建单时是否由钱包全额覆盖(决定步骤数,建单后余额变了也不跳) */
+    walletCovers: boolean;
   } | null>(null);
 
   /**
@@ -230,9 +232,9 @@ export function useBookingWizard({
       .catch(() => undefined);
   }, [isLogin]);
 
-  /* 进支付步先把余额刷新一次:本地资料可能是上次启动时缓存的,拿旧余额会误判「余额不足」 */
+  /* 进支付步(多房间钱包在复核步)先把余额刷新一次:本地资料可能是上次启动时缓存的,拿旧余额会误判「余额不足」 */
   useEffect(() => {
-    if (step !== 'payment' || !isLogin) return;
+    if ((step !== 'payment' && step !== 'review') || !isLogin) return;
     void refreshProfile().catch(() => undefined);
   }, [step, isLogin, refreshProfile]);
 
@@ -526,16 +528,54 @@ export function useBookingWizard({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tripQuote]);
 
+  const tripTotal = stays.reduce((sum, stay) => sum + stay.total, 0);
+  /**
+   * 吸底栏与支付页汇总卡的金额:多住宿(演示)走 Trip 合计,其余用 `roomsTotal` 扣掉已应用的券。
+   * `roomsTotal` 在多房间模式下是**整车**合计 —— 这里若还按单间算,余额校验会放过余额不足的账号,
+   * 到 `trip/pay` 才被后端打回,用户看到的也会是比实扣少的数字。
+   */
+  /** 长住优惠(复核页价格明细一行);只有试算给得出,没试算(演示/未登录)时为 0 */
+  const longstayDiscount = cartQuote?.longstayDiscount ?? 0;
+  const payableTotal = multi
+    ? tripTotal
+    : tripQuote
+      ? tripQuote.payAmount
+      : Math.max(0, roomsTotal - longstayDiscount - couponDiscount);
+
+  /**
+   * 多房间新稿(2659:13152):钱包放在第 2 步。开着钱包且余额够付全款 → 第 2 步直接 Pay Now,流程只有两步;
+   * 余额不够(或关了钱包)才进第 3 步选其他渠道。后端没有「钱包付一部分 + 其他渠道」的组合支付,
+   * 所以只认「全额覆盖」。建单后余额已扣、车已清空,改读快照里当时的判定,序列不在成功弹窗背后跳变。
+   */
+  const walletCovers = priceSnapshot
+    ? priceSnapshot.walletCovers
+    : cartMode && isLogin && method === 'wallet' && walletBalance >= payableTotal;
+
   /** 步骤序列:调用方给了 `steps` 就用它;否则多住宿才插入 trip */
   const sequence = useMemo<BookingStepKey[]>(
     () =>
       steps ??
       (multi && enableMultiStay
         ? ['dates', 'guests', 'review', 'trip', 'payment']
-        : ['dates', 'guests', 'review', 'payment']),
-    [steps, multi, enableMultiStay],
+        : /* 多房间新稿(2659:12508)四步收成三步:日期与住客信息合并为 details。
+             建单后车已清空,靠金额快照认出这仍是多房间单,序列不跟着变回四步 */
+          cartMode || priceSnapshot !== null
+          ? walletCovers
+            ? ['details', 'review']
+            : ['details', 'review', 'payment']
+          : ['dates', 'guests', 'review', 'payment']),
+    [steps, multi, enableMultiStay, cartMode, priceSnapshot, walletCovers],
   );
+  /**
+   * 初始步骤在 useState 里只能按默认序列给(`dates`),此时购物车模式还没算出来;
+   * 序列变了而当前步骤不在其中时,落到新序列的第一步。
+   */
+  useEffect(() => {
+    if (!sequence.includes(step)) setStep(sequence[0]);
+  }, [sequence, step]);
   const index = Math.max(sequence.indexOf(step), 0);
+  /** 序列最后一步就是付款步:常规是 payment,多房间钱包全额覆盖时是 review */
+  const isPayStep = index === sequence.length - 1;
 
   /** 改一段住宿。金额一律由 `scaleStay` 按新的晚数 × 间数重算,不会停在进来时那一晚的价上 */
   const patchStay = (patch: Partial<BookingStay>) =>
@@ -568,19 +608,6 @@ export function useBookingWizard({
     setStep(sequence[index - 1]);
   };
 
-  const tripTotal = stays.reduce((sum, stay) => sum + stay.total, 0);
-  /**
-   * 吸底栏与支付页汇总卡的金额:多住宿(演示)走 Trip 合计,其余用 `roomsTotal` 扣掉已应用的券。
-   * `roomsTotal` 在多房间模式下是**整车**合计 —— 这里若还按单间算,余额校验会放过余额不足的账号,
-   * 到 `trip/pay` 才被后端打回,用户看到的也会是比实扣少的数字。
-   */
-  /** 长住优惠(复核页价格明细一行);只有试算给得出,没试算(演示/未登录)时为 0 */
-  const longstayDiscount = cartQuote?.longstayDiscount ?? 0;
-  const payableTotal = multi
-    ? tripTotal
-    : tripQuote
-      ? tripQuote.payAmount
-      : Math.max(0, roomsTotal - longstayDiscount - couponDiscount);
 
   /**
    * 真实下单:`create` 建单 → `pay` 支付。
@@ -645,7 +672,12 @@ export function useBookingWizard({
           expectedPayAmount,
         });
         /* 单已落库:先冻结页面金额,再把房型转存为快照并清空购物车,免得留在车里诱发重复下单 */
-        setPriceSnapshot({ payable: trip.payAmount, roomTotal: reviewRoomTotal, longstay: longstayDiscount });
+        setPriceSnapshot({
+          payable: trip.payAmount,
+          roomTotal: reviewRoomTotal,
+          longstay: longstayDiscount,
+          walletCovers,
+        });
         checkoutCart();
         const first = trip.bookings[0];
         try {
@@ -775,7 +807,7 @@ export function useBookingWizard({
      * 且只在真实模式查手机是否为空,不填手机和邮箱也能继续)。手机与注册页同一套宽校验
      * (多国号码),邮箱在关怀模式是选填,填了才校验格式。
      */
-    if (step === 'guests') {
+    if (step === 'guests' || step === 'details') {
       if (!form.firstName.trim() || !form.lastName.trim()) {
         showToast(t('hotels.booking.guests.nameRequired'));
         return;
@@ -801,7 +833,7 @@ export function useBookingWizard({
      * 复核步不再有「同意条款」勾选框(新稿 2659:13281 把它改成了 Continue 下方的一行说明文字,
      * 继续即视为同意),所以这里不再拦截。`agreed` 仍保留导出给关怀模式等旧调用方。
      */
-    if (step === 'payment') {
+    if (isPayStep) {
       if (!method) {
         showToast(t('hotels.booking.payment.methodRequired'));
         return;
@@ -865,7 +897,7 @@ export function useBookingWizard({
   });
 
   const primaryLabel = (() => {
-    if (step === 'payment' && submitting) return t('common.loading');
+    if (isPayStep && submitting) return t('common.loading');
     /**
      * 复核步一律叫 Continue(稿面 `718:3351` 就是 Continue + 右箭头)——
      * 以前多住宿态叫「Add To Trip」,但那一步并不真的把住宿加进 Trip,只是往下走一步,
@@ -873,7 +905,7 @@ export function useBookingWizard({
      */
     if (step === 'trip') return t('hotels.booking.checkOut');
     /* 支付步是流程终点,稿面 `718:3366` 写的是 Pay Now,不是 Continue */
-    if (step === 'payment') return t('hotels.booking.payNow');
+    if (isPayStep) return t('hotels.booking.payNow');
     return t('hotels.booking.continue');
   })();
 
@@ -933,6 +965,8 @@ export function useBookingWizard({
     step,
     sequence,
     index,
+    isPayStep,
+    walletCovers,
     primaryLabel,
 
     /* 住宿与表单 */
