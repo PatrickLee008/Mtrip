@@ -91,6 +91,42 @@ class PricingService
     }
 
     /**
+     * 返还已核销的券(须在事务内调用;已支付预订被取消 / 全额退款后调用)。
+     * - 只认本单核销的那条记录:领券记录 order_id = Trip ID(Trip 内预订)或订单 ID(独立单),状态为已使用;
+     * - Trip 内一张券按比例分摊到各预订,**同一张券还有未取消/未全额退款的预订就不返还**,
+     *   等最后一笔也取消了再还,否则用户能拿回券的同时其余预订继续享受折扣;
+     * - 返还后回到未使用;若已过有效期则置为已过期(进「不可用」列表),模板已用数 -1。
+     * 未核销(待支付时取消)、部分退款、重复调用都不做任何事。返回是否真的返还了。
+     */
+    public function releaseCoupon(array $order): bool
+    {
+        $receiveId = (int) ($order['coupon_id'] ?? 0);
+        if ($receiveId <= 0) {
+            return false;
+        }
+        $owner = (int) ($order['trip_id'] ?? 0) > 0 ? (int) $order['trip_id'] : (int) $order['id'];
+        $rec = Db::table('marketing_coupon_receive')
+            ->where('id', $receiveId)->where('status', 1)->where('order_id', $owner)
+            ->whereNull('deleted_at')->lockForUpdate()->first(['id', 'coupon_id', 'valid_end']);
+        if (! $rec) {
+            return false;
+        }
+        $stillUsed = Db::table('order_main')->where('coupon_id', $receiveId)->where('id', '<>', (int) $order['id'])
+            ->whereNull('deleted_at')->whereNotIn('order_status', [4, 6])->exists();
+        if ($stillUsed) {
+            return false;
+        }
+        $expired = $rec->valid_end && date('Y-m-d H:i:s') > (string) $rec->valid_end;
+        Db::table('marketing_coupon_receive')->where('id', $rec->id)->update([
+            'status' => $expired ? 2 : 0,
+            'order_id' => 0,
+            'used_time' => null,
+        ]);
+        Db::table('marketing_coupon')->where('id', $rec->coupon_id)->where('used_count', '>', 0)->decrement('used_count');
+        return true;
+    }
+
+    /**
      * 单项订单的券校验与抵扣(单房型 / 门票下单):包成一行交给 resolveCouponForLegs,口径与 Trip 一致。
      * $quantity / $useDate / $endDate 用于间数、长住晚数、提前预订、入住日期段等条件;缺省时这些日期类条件不判。
      * @return array{0:int,1:float,2:string} [领券记录ID, 抵扣金额, 券规则快照 JSON]

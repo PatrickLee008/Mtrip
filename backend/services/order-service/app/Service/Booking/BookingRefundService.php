@@ -6,6 +6,7 @@ namespace App\Service\Booking;
 
 use App\Constants\BookingConst;
 use App\Service\OrderStockService;
+use App\Service\PricingService;
 use App\Service\WalletService;
 use Hyperf\DbConnection\Db;
 use Hyperf\Di\Annotation\Inject;
@@ -21,6 +22,10 @@ class BookingRefundService
 {
     #[Inject]
     protected OrderStockService $stockService;
+
+    /** 取消/全额退款后返还优惠券 */
+    #[Inject]
+    protected PricingService $pricingService;
 
     #[Inject]
     protected WalletService $walletService;
@@ -145,6 +150,10 @@ class BookingRefundService
             // 库存:未履约的全额退款回补已售;已入住/已退房视为已消耗不回补
             if ($fullRefund && $bookingStatus === BookingConst::STATUS_CONFIRMED) {
                 $this->stockService->refundRestore($order);
+            }
+            // 全额退款即订单关闭:返还优惠券(部分退款订单仍有效,券继续占用)
+            if ($fullRefund) {
+                $this->pricingService->releaseCoupon($order);
             }
             // 退入 mTrip 钱包 + 资金流水(与后台退款到账确认同模型)
             if ($refundAmount > 0) {

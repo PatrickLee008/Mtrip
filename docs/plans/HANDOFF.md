@@ -5,6 +5,15 @@
 `POST /api/v1/admin/sys/sms/channel/test-send` 接选中渠道已保存配置；SMSPoh 发 Verify OTP，Twilio（api_key=Auth Token、account_sid=Account SID、sign_name=发送号码/签名）与 MessageBird 发输入文本。手机号须完整 E.164，不猜国家码；仅具 `config:sms:test` 权限的管理员可用，非超管仅本站点渠道，禁用渠道也可测试而不切换业务启用状态。同渠道同号 Redis NX 60 秒冷却，手机号加密，日志先发送中再成功/失败；成功仅代表服务商受理，验证码不生成登录/注册票据。
 
 shared 118 用例/1061 断言、控制器 2 用例/20 断言、403 个 PHP 语法检查、admin-web build、client-app typecheck 通过；Chrome 原生界面在 8090 现有超管会话验证启用按钮、弹窗布局与非法手机号拦截。后续用户授权两次真实发码（日志 8/9）均已受理；首次号码缺手机前缀 `9`，用户更正后已再发一次，手机送达待用户确认。Twilio/MessageBird 与普通管理员真实会话未联调。测试接口不依赖后台模板，SMSPoh Verify API 的 template 参数可选；当前测试日志未保存返回的 requestId，服务商对账排查仍需补齐。权限迁移 `V20261012090000` 已应用、账本 35/35；初次缺 `USE` 导致首条 INSERT 前失败，已核验菜单无写入后仅清本轮失败行并重跑。system-service 已重启，admin 静态站已发布；本次 Git 提交仅包含短信测试功能，原有 Merchant App 改动保留。
+### ★ 2026-10-09 取消订单返还优惠券
+
+**规则**:PRD 只规定退款按优惠后金额计算(券抵扣部分不退现金),没写券本身是否返还;按产品要求改为**取消即返还**。
+- 新增 `PricingService::releaseCoupon(array $order)`(须在事务内):只认本单核销的领券记录(`order_main.coupon_id`,且记录 `order_id` = Trip ID 或独立单订单 ID、状态已使用);**同一张券还有未取消 / 未全额退款(order_status 非 4/6)的预订就不返还**,Trip 里最后一笔也取消了才还,避免券回到手里的同时其余预订继续享受折扣。返还后状态回未使用(已过有效期则置 2 已过期)、`order_id=0`、`used_time=NULL`,模板 `used_count` -1。幂等;部分退款不返还。
+- 调用点(已支付订单进入终态的全部三处):`BookingLifecycleService::cancel`(已支付预订被取消)、`BookingRefundService::apply`(商户全额退款)、`AdminRefundController::confirm`(用户申请退款经平台确认全额到账)。待支付取消 / 超时关单本就未核销券,无需处理。
+
+**验证**:新增 `scripts/test-coupon-release.sh` + `order-service/test/coupon-release.php`(隔离库,不碰开发库)8 项全过:已支付取消返还且 used_count -1、重复调用无副作用、Trip 两笔取消第一笔不还/第二笔才还、商户部分退款不还/全额退款还、平台确认全额退款还(过期券置已过期)。`booking-remediation.php` 回归 48 项全过。容器内 `php -l` 通过。**未做 App 端改动**:取消成功页 / 退款摘要还没有「优惠券已返还」提示。
+
+**环境备注**:本轮开始时 Docker Desktop 未运行、开发栈全停;另有新拉取的迁移 `V20261008120000` 未执行导致 MySQL unhealthy,已按账本手工补执行(迁移脚本因 CRLF 校验和噪音拒绝运行),账本 34/34。`scripts/test-booking-remediation.sh` 在 Git Bash 下有路径转换问题(`/tmp` 与 `/c/...` 二选一被改写),本轮只单跑了订单服务那部分。
 
 ### 2026-10-08 Merchant App 登录标签
 

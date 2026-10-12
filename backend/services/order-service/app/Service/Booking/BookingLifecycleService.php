@@ -6,6 +6,7 @@ namespace App\Service\Booking;
 
 use App\Constants\BookingConst;
 use App\Service\OrderStockService;
+use App\Service\PricingService;
 use App\Service\ReferralService;
 use Hyperf\Context\Context;
 use Hyperf\DbConnection\Db;
@@ -27,6 +28,10 @@ class BookingLifecycleService
 
     #[Inject]
     protected OrderStockService $stockService;
+
+    /** 取消/全额退款后返还优惠券 */
+    #[Inject]
+    protected PricingService $pricingService;
 
     #[Inject]
     protected BookingNotificationService $notify;
@@ -275,6 +280,10 @@ class BookingLifecycleService
             ]);
             // 库存联动:已支付回补已售,未支付释放锁定
             $paid ? $this->stockService->refundRestore($order) : $this->stockService->release($order);
+            // 已支付预订取消:返还优惠券(待支付时券尚未核销,无需处理)
+            if ($paid) {
+                $this->pricingService->releaseCoupon($order);
+            }
             $order = $this->lockOrder($orderId);
             $this->events->log($order, 'cancelled', $operatorType, $operatorId, $operatorName, 1, [
                 'reason' => (string) $order['cancel_reason'],
