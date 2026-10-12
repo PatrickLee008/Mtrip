@@ -94,6 +94,11 @@ export default function HotelBookingLiteScreen() {
     appliedCoupon,
     hasUsableCoupon,
     roomNameOf,
+    cartMode,
+    tripRooms,
+    roomCount,
+    reviewRoomTotal,
+    longstayDiscount,
     goBack,
     goNext,
   } = useBookingWizard({
@@ -104,8 +109,9 @@ export default function HotelBookingLiteScreen() {
     confirmLogin: true,
     /* 新稿邮箱是可展开的选填项,填了才校验格式 */
     emailOptional: true,
-    /* 关怀模式只订一间:车里可能还留着完整模式挑的房,不能拿来替它下单 */
-    useCart: false,
+    /* 关怀模式也支持一家酒店多房型(PRD §17.4 两种模式同一套):读共享购物车按整车 trip/create;
+       车属于别的酒店时 useBookingWizard 不会采用(cartPropertyId 须等于本单物业) */
+    useCart: true,
   });
 
   const onPay = step === 'payment';
@@ -140,6 +146,9 @@ export default function HotelBookingLiteScreen() {
             <LiteStepPay
               stay={current}
               total={payableTotal}
+              /* 多房间房费按整车(试算原价),长住优惠单列一行 —— 与完整模式复核页同口径 */
+              roomTotal={reviewRoomTotal}
+              longstayDiscount={longstayDiscount}
               method={method}
               balance={walletBalance}
               insufficient={!current.demo && isLogin && walletBalance < payableTotal}
@@ -158,13 +167,22 @@ export default function HotelBookingLiteScreen() {
             />
           ) : (
             <LiteStepConfirm
-              roomName={roomNameOf(current)}
-              rooms={current.rooms}
+              /* 多房型:逐个列出「房型 ×间数」,间数取整车;床型只在单房型时有意义 */
+              roomName={
+                cartMode && tripRooms.length > 1
+                  ? tripRooms
+                      .map((room) => t('hotels.booking.payment.roomItem', { room: room.name, count: room.quantity }))
+                      .join(t('hotels.booking.payment.roomListSep'))
+                  : cartMode
+                    ? (tripRooms[0]?.name ?? roomNameOf(current))
+                    : roomNameOf(current)
+              }
+              rooms={cartMode ? roomCount : current.rooms}
               checkIn={current.checkIn}
               checkOut={current.checkOut}
               adults={current.adults}
               childCount={current.childCount}
-              bedType={current.bedType}
+              bedType={cartMode && tripRooms.length > 1 ? null : current.bedType}
               form={form}
               onChangeForm={(patch) => setForm((prev) => ({ ...prev, ...patch }))}
               addons={current.addons}

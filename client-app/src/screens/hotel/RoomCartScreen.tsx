@@ -45,6 +45,7 @@ import type { RootStackParamList } from '@/navigation/types';
 import { cartTripItems, useTripQuote } from '@/screens/hotel/useTripQuote';
 import { nightsBetween, useRoomCartStore } from '@/store/roomCartStore';
 import { useSiteStore } from '@/store/siteStore';
+import { useCommonStore } from '@/store/commonStore';
 import { useUserStore } from '@/store/userStore';
 import { formatMoney } from '@/utils/format';
 
@@ -68,6 +69,7 @@ export default function RoomCartScreen() {
   const [pendingRemove, setPendingRemove] = useState<string | null>(null);
 
   const isLogin = useUserStore((s) => s.isLogin);
+  const liteMode = useCommonStore((s) => s.liteMode);
 
   const nights = nightsBetween(checkIn, checkOut);
   const roomCount = items.reduce((sum, item) => sum + item.quantity, 0);
@@ -111,6 +113,13 @@ export default function RoomCartScreen() {
    */
   const checkout = () => {
     const real = items.find((item) => item.sku);
+    /* 关怀模式与完整模式共用本页(设计稿两边一样),结算进各自的订房页;关怀模式没有演示链路,须有真实房型 */
+    if (liteMode) {
+      if (real && propertyId) {
+        navigation.navigate('HotelBookingLite', { propertyId, roomTypeId: real.sku!.id, checkIn, checkOut });
+      }
+      return;
+    }
     navigation.navigate('HotelBooking', {
       roomKey: items[0]?.roomKey,
       checkIn,

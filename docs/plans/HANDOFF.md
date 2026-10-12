@@ -1,10 +1,26 @@
 # 会话交接文档(HANDOFF)
 
+### ★ 2026-10-12 酒店详情页签:房型移到第一位
+
+完整模式 `DETAIL_TABS`(`screens/hotel/detailDemo.ts`)顺序改为 房型 → 概览 → 设施 → 周边景点 → 评价 → 政策,`HotelDetailScreen` 默认页签由 overview 改为 rooms(打开即选房)。
+页签相关逻辑(底栏 / 购物车栏)按页签名判断,不受顺序影响。关怀模式详情页本身没有页签、打开就是房型列表,无需改动。
+Chrome 实测:打开详情默认房型页;切概览后底栏「选择房型」可跳回房型页签。`tsc` 通过。
+
 ### 2026-10-12 后台短信渠道发送测试
 
 `POST /api/v1/admin/sys/sms/channel/test-send` 接选中渠道已保存配置；SMSPoh 发 Verify OTP，Twilio（api_key=Auth Token、account_sid=Account SID、sign_name=发送号码/签名）与 MessageBird 发输入文本。手机号须完整 E.164，不猜国家码；仅具 `config:sms:test` 权限的管理员可用，非超管仅本站点渠道，禁用渠道也可测试而不切换业务启用状态。同渠道同号 Redis NX 60 秒冷却，手机号加密，日志先发送中再成功/失败；成功仅代表服务商受理，验证码不生成登录/注册票据。
 
 shared 118 用例/1061 断言、控制器 2 用例/20 断言、403 个 PHP 语法检查、admin-web build、client-app typecheck 通过；Chrome 原生界面在 8090 现有超管会话验证启用按钮、弹窗布局与非法手机号拦截。后续用户授权两次真实发码（日志 8/9）均已受理；首次号码缺手机前缀 `9`，用户更正后已再发一次，手机送达待用户确认。Twilio/MessageBird 与普通管理员真实会话未联调。测试接口不依赖后台模板，SMSPoh Verify API 的 template 参数可选；当前测试日志未保存返回的 requestId，服务商对账排查仍需补齐。权限迁移 `V20261012090000` 已应用、账本 35/35；初次缺 `USE` 导致首条 INSERT 前失败，已核验菜单无写入后仅清本轮失败行并重跑。system-service 已重启，admin 静态站已发布；本次 Git 提交仅包含短信测试功能，原有 Merchant App 改动保留。
+
+### ★ 2026-10-12 关怀模式多房间预订打通(问题 5)
+
+**缺陷**:关怀模式详情页选房存在本页 state,购物车按钮是 `comingSoon`;Continue 只把第一个房型带进订房页,且订房页 `useCart: false` —— 选两种房型合计显示两间,实际只订、只付一间。
+**修法**(设计稿两模式 RoomCart 相同,复用):
+- `HotelDetailLiteScreen`:选房改写共享 `roomCartStore`(`realRoomCartEntry` 入车、`setContext` 换酒店清车),购物车按钮进 `RoomCart`,底栏合计接 `useTripQuote`(原来还漏乘晚数)。
+- `HotelBookingLiteScreen`:`useCart: true`,按整车 `trip/create`;确认卡多房型列「房型 ×间数」(两行)、间数取整车;支付页 `LiteStepPay` 新增 `roomTotal` / `longstayDiscount`(原来房费只算一间)。
+- `RoomCartScreen`:关怀模式「去结算」进 `HotelBookingLite`。
+- `useBookingWizard`:多房间建单成功即冻结金额快照(`priceSnapshot`),修正建单后清车导致支付成功弹窗背后金额闪回单房型的问题(两种模式都有)。
+**验证**:Chrome 实测关怀模式(测试账号 32):详情页 → 购物车页 → 结算 → 支付两单,行程 21(标准间×1 + 豪华客房×2,157,000)、22(98,000)均为 2 笔预订、整单一次扣款;余额已恢复 40,500。`tsc` 与六个静态检查通过。
 ### ★ 2026-10-09 取消订单返还优惠券
 
 **规则**:PRD 只规定退款按优惠后金额计算(券抵扣部分不退现金),没写券本身是否返还;按产品要求改为**取消即返还**。

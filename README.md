@@ -165,6 +165,10 @@ MSYS_NO_PATHCONV=1 docker run --rm --entrypoint php \
 
 ## 当前状态(2026-07)
 
+酒店详情页签调整(2026-10-12):完整模式「房型」移到第一位并作为默认页签,「概览」排第二;关怀模式详情页本就以房型列表开场,未改。
+
+关怀模式多房间预订打通(2026-10-12):详情页选房改用共享购物车、购物车按钮进 RoomCart(两模式共用)、订房页按整车下单;修正原先选多种房型只订第一种、合计漏乘晚数、支付页房费只算一间,以及建单后支付成功弹窗背后金额闪回的问题。
+
 merchant-app H5 纳入部署链路(2026-09-30):此前 `scripts/auto-deploy.sh` 完全不识别 merchant-app(不在前端清单、cron 变更检测会忽略 `merchant-app/*`、强制目标报未知)。现补为**第五个静态站点** `merchant-h5`(产物 `deploy/web/merchant-h5/`,网关直连端口 8094,构建 `npm run build:web`);强制目标 `merchant-app|merchant-h5`;新增 `merchant-app/.env.production`(`EXPO_PUBLIC_API_BASE_URL=/`、原型模式关闭)。**Client ID/Secret 留空待填**,开启 `MTRIP_CLIENT_SIGN` 后入驻接口会被拒。原生 EAS 发版仍走人工。
 
 表单校验(2026-09-29,QA 表 CA_TC_084/092/093):订房旅客信息页名、姓、手机(格式)、邮箱(完整模式必填 + 格式)逐项校验;常旅客证件号按 NRC / 护照 / 其他三类校验格式,前端 `isTravelerIdNo` 与后端 `TravelerController::validIdNo` 同规则,编辑时换证件类型须重填。

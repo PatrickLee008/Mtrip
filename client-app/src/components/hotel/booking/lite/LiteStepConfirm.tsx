@@ -140,7 +140,8 @@ export default function LiteStepConfirm({
       {/* ---------------------------------------------------------- 房型摘要卡 */}
       <View style={styles.roomCard}>
         <View style={liteBooking.rowBetween}>
-          <Text style={styles.roomName} numberOfLines={1}>
+          {/* 多房型时是「房型 ×间数」列表,给两行 */}
+          <Text style={styles.roomName} numberOfLines={2}>
             {roomName}
           </Text>
           <Pressable

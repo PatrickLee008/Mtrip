@@ -17,9 +17,10 @@
 import type { HomeIconName } from '@/components/home/HomeIcon';
 
 /** 二级导航页签,顺序即设计稿顺序;当前只有 overview 有内容 */
+/** 房型排第一(2026-10-12 产品要求,打开详情即选房),概览第二 */
 export const DETAIL_TABS = [
-  'overview',
   'rooms',
+  'overview',
   'amenities',
   'nearby',
   'reviews',

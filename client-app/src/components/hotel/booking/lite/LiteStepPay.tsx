@@ -57,6 +57,10 @@ interface Props {
   stay: BookingStay;
   /** 已扣券后的实付金额 */
   total: number;
+  /** 房费覆盖值(多房间 = 整车试算原价);不传按 `stay` 那一间算 */
+  roomTotal?: number;
+  /** 长住优惠(试算给出);0 不显示该行 */
+  longstayDiscount?: number;
   method: PaymentMethodKey | null;
   balance: number;
   insufficient: boolean;
@@ -68,6 +72,8 @@ interface Props {
 export default function LiteStepPay({
   stay,
   total,
+  roomTotal,
+  longstayDiscount = 0,
   method,
   balance,
   insufficient,
@@ -110,8 +116,17 @@ export default function LiteStepPay({
         {
           key: 'room',
           label: t('hotels.booking.review.roomPrice', { nights: nightsText }),
-          value: formatAmount(stay.roomPrice, currency),
+          value: formatAmount(roomTotal ?? stay.roomPrice, currency),
         },
+        ...(longstayDiscount > 0
+          ? [
+              {
+                key: 'longstay',
+                label: t('hotels.booking.review.longStayDiscount'),
+                value: `- ${formatAmount(longstayDiscount, currency)}`,
+              },
+            ]
+          : []),
       ];
 
   /* 券的抵扣额一律来自服务端试算,前端不自己算 */
