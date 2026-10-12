@@ -1,4 +1,10 @@
 {
+  "validation": {
+    "phoneRequired": "请输入手机号码。",
+    "invalidPhone": "手机号码格式不正确，请检查区号和号码格式。",
+    "emailRequired": "请输入邮箱地址。",
+    "invalidEmail": "邮箱格式不正确，请输入有效地址，例如 name@example.com。"
+  },
   "bookings": {
     "title": "预订", "search": "搜索住客姓名或预订编号…", "filters": "筛选预订",
     "bookingStatus": "预订状态", "paymentStatus": "付款状态", "allStatus": "全部状态",
@@ -63,10 +69,11 @@
       "emailFirst": "请先填写业务邮箱",
       "sendOtp": "发送验证码",
       "verifyTitle": "验证账户",
-      "verifySubtitle": "我们将向您的业务邮箱发送验证码。",
+      "verifySubtitle": "请选择接收验证码的方式。",
       "noEmail": "尚未填写业务邮箱",
       "optionsFailed": "无法加载验证方式，请检查错误后重新进入此步骤。",
       "emailUnavailable": "当前站点尚未配置邮箱验证。",
+      "smsUnavailable": "当前站点尚未配置短信验证，请选择邮箱验证。",
       "detailRetry": "邮箱已验证，但无法加载申请；请点击继续重试。",
       "continueApplication": "继续填写申请",
       "otpSubtitle": "请输入发送至 {{recipient}} 的 {{digits}} 位验证码"
@@ -381,12 +388,11 @@
       },
       "companyName": "公司 / 集团名称",
       "companyNamePlaceholder": "例如：Grand Royal Group",
-      "regNumber": "公司注册号",
-      "country": "注册国家",
-      "address": "公司地址",
-      "required": "请填写公司名称、注册号、国家和地址"
+      "required": "请填写公司 / 集团名称"
     },
     "businessDetails": {
+      "invalidPhone": "业务 {{index}}：请输入有效的手机号码，并检查区号。",
+      "invalidEmail": "业务 {{index}}：请输入有效的邮箱地址。",
       "title": "业务详情",
       "subtitle": "请填写每个注册业务的详细信息。",
       "cardTitle": "业务 {{index}} 详情",

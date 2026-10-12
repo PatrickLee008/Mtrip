@@ -27,7 +27,7 @@ import { colors } from '@/config/theme';
 import { fonts } from '@/config/typography';
 import { useCommonStore } from '@/store/commonStore';
 import { useRegistrationStore, type RegistrationBusiness } from '@/store/registrationStore';
-import { isE164Mobile, localPhoneNumber, normalizeMobile, phoneCountryCode } from '@/utils/validate';
+import { isEmail, isMobileNumber, localPhoneNumber, normalizeMobile, phoneCountryCode } from '@/utils/validate';
 
 const cardShadow = Platform.select({
   web: { boxShadow: '0px 4px 4px rgba(0, 0, 0, 0.08)' } as unknown as ViewStyle,
@@ -136,8 +136,16 @@ export default function RegisterBusinessDetailsScreen() {
 
   const save = async (submit: boolean) => {
     const { companyName, registrationToken } = registration;
+    for (const [index, card] of cards.entries()) {
+      if ((submit || card.contactPhone) && !isMobileNumber(card.contactPhone)) {
+        showToast(t('register.businessDetails.invalidPhone', { index: index + 1 })); return;
+      }
+      if ((submit || card.contactEmail) && !isEmail(card.contactEmail)) {
+        showToast(t('register.businessDetails.invalidEmail', { index: index + 1 })); return;
+      }
+    }
     const complete = cards.every((card) => card.businessName.trim() && card.businessType && card.contactName.trim()
-      && isE164Mobile(card.contactPhone) && /^\S+@\S+\.\S+$/.test(card.contactEmail) && card.city
+      && isMobileNumber(card.contactPhone) && isEmail(card.contactEmail) && card.city
       && (card.businessType !== 'hotel' || (card.countryCode && card.cityKey && card.address.trim())));
     if (submit && (!companyName.trim() || !complete)) {
       showToast(t('register.businessDetails.required'));
@@ -156,12 +164,9 @@ export default function RegisterBusinessDetailsScreen() {
       const draft = await apiApplicationSave(registrationToken, {
         applicationId: registration.applicationId,
         companyName,
-        regNumber: registration.regNumber,
-        country: registration.country,
-        address: registration.address,
         currentStep: 4,
         removeBusinessIds: registration.removedBusinessIds,
-        businesses: cards.map((card) => ({ ...card, contactPhone: isE164Mobile(card.contactPhone) ? card.contactPhone : '' })),
+        businesses: cards,
       });
       registration.setApplicationDetail(draft);
       if (submit) {

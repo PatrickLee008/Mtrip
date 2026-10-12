@@ -1,4 +1,10 @@
 {
+  "validation": {
+    "phoneRequired": "Enter your mobile number.",
+    "invalidPhone": "Invalid mobile number. Check the country code and number format.",
+    "emailRequired": "Enter your email address.",
+    "invalidEmail": "Invalid email address. Enter a valid address, such as name@example.com."
+  },
   "bookings": {
     "title": "Bookings", "search": "Search guest name or Booking ID…", "filters": "Filter Bookings",
     "bookingStatus": "Booking Status", "paymentStatus": "Payment Status", "allStatus": "All Status",
@@ -63,10 +69,11 @@
       "emailFirst": "Enter a business email first",
       "sendOtp": "Send OTP",
       "verifyTitle": "Verify Account",
-      "verifySubtitle": "We will send the verification code to your business email.",
+      "verifySubtitle": "Choose how you would like to receive your verification code.",
       "noEmail": "No business email entered",
       "optionsFailed": "Could not load verification options. Check the error and reopen this step.",
       "emailUnavailable": "Email verification is not configured for this site.",
+      "smsUnavailable": "SMS verification is not configured for this site. Choose email instead.",
       "detailRetry": "Email verified. Could not load your application; tap Continue to retry.",
       "continueApplication": "Continue to Application",
       "otpSubtitle": "Enter the {{digits}}-digit OTP sent to {{recipient}}"
@@ -381,12 +388,11 @@
       },
       "companyName": "Company / Group Name",
       "companyNamePlaceholder": "e.g., Grand Royal Group",
-      "regNumber": "Registration Number",
-      "country": "Registration Country",
-      "address": "Company Address",
-      "required": "Complete the company name, registration number, country and address"
+      "required": "Enter your company / group name"
     },
     "businessDetails": {
+      "invalidPhone": "Business {{index}}: enter a valid mobile number and check the country code.",
+      "invalidEmail": "Business {{index}}: enter a valid email address.",
       "title": "Business Details",
       "subtitle": "Provide details for each of your businesses.",
       "cardTitle": "Business {{index}} Details",

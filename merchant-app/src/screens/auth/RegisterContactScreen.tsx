@@ -17,7 +17,7 @@ import {
 } from '@/components/onboarding/RegistrationForm';
 import { useCommonStore } from '@/store/commonStore';
 import { useRegistrationStore } from '@/store/registrationStore';
-import { isE164Mobile, localPhoneNumber, normalizeMobile, phoneCountryCode, type PhoneCountryCode } from '@/utils/validate';
+import { isEmail, isMobileNumber, localPhoneNumber, normalizeMobile, phoneCountryCode, type PhoneCountryCode } from '@/utils/validate';
 
 export default function RegisterContactScreen() {
   const navigation = useNavigation();
@@ -33,10 +33,10 @@ export default function RegisterContactScreen() {
   const next = () => {
     const phone = normalizeMobile(mobile, countryCode);
     const mail = email.trim().toLowerCase();
-    if (!isE164Mobile(phone) || !mail || !/^\S+@\S+\.\S+$/.test(mail)) {
-      showToast(t('register.contactInfo.required'));
-      return;
-    }
+    if (!mobile.trim()) { showToast(t('validation.phoneRequired')); return; }
+    if (!isMobileNumber(phone, countryCode)) { showToast(t('validation.invalidPhone')); return; }
+    if (!mail) { showToast(t('validation.emailRequired')); return; }
+    if (!isEmail(mail)) { showToast(t('validation.invalidEmail')); return; }
     setContacts(phone, mail);
     navigation.navigate('RegisterVerification');
   };

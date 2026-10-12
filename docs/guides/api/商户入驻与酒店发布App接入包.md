@@ -98,6 +98,8 @@ X-Sign: {signature}
 
 两家首批酒店的草稿保存示例：
 
+Company Info 对齐 Figma `2332:21915`：App 仅录入业务数量和公司/组织名称；数量由 `businesses` 条数保存。公司 `regNumber`、`country`、`address` 不作为 App 注册必填，也不发送空值覆盖存量资料；酒店业务自身的地址/国家/城市要求仍保留。
+
 ```json
 {
   "registrationToken": "{registrationToken}",
@@ -105,9 +107,6 @@ X-Sign: {signature}
     "applicationId": 101,
     "merchantName": "Example Travel Group",
     "companyName": "Example Travel Co., Ltd.",
-    "regNumber": "COMPANY-2026-001",
-    "country": "Myanmar",
-    "address": "Yangon",
     "currentStep": 4,
     "businesses": [
       {

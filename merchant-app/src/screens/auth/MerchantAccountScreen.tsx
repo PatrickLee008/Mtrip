@@ -15,6 +15,7 @@ import { fonts } from '@/config/typography';
 import { useCommonStore } from '@/store/commonStore';
 import { useMerchantStore } from '@/store/merchantStore';
 import { useRegistrationStore } from '@/store/registrationStore';
+import { isEmail } from '@/utils/validate';
 
 type Mode = 'activation' | 'login' | 'recovery';
 type Step = 'identity' | 'otp';
@@ -69,10 +70,10 @@ export default function MerchantAccountScreen() {
         }
         next = await apiActivationOtpSend(token);
       } else if (mode === 'recovery') {
-        if (!/^\S+@\S+\.\S+$/.test(email.trim())) { showToast(t('flow.account.emailRequired')); return; }
+        if (!isEmail(email)) { showToast(t(email.trim() ? 'validation.invalidEmail' : 'validation.emailRequired')); return; }
         next = await apiRecoveryStart(email.trim().toLowerCase());
       } else {
-        if (!/^\S+@\S+\.\S+$/.test(email.trim())) { showToast(t('flow.account.emailRequired')); return; }
+        if (!isEmail(email)) { showToast(t(email.trim() ? 'validation.invalidEmail' : 'validation.emailRequired')); return; }
         next = await beginEmailLogin(email.trim().toLowerCase());
       }
       setChallenge(next); setCode(''); setResendAt(Date.now() + next.resendAfter * 1000); setStep('otp');

@@ -1,5 +1,9 @@
 # 会话交接文档(HANDOFF)
 
+### 2026-10-12 Merchant App 手机号/邮箱格式提示
+
+Contact Info 下一步细分未填/格式错误；+86/+95 手机号按本地移动号码长度/前缀验证，归一化不再丢弃字母等非法字符。统一邮箱格式检查用于注册/业务联系人/邮箱登录恢复；业务错误指出序号，非法格式不保存/提交/发码，空草稿仍可保存。现有 Toast 双语提示，不改布局及后端。test:validation、typecheck/Web export、Bookings 回归通过，8094 已发布；模拟 API 无真实发码/申请写入，浏览器视觉及真机未验。
+
 ### 2026-10-12 后台短信渠道发送测试
 
 `POST /api/v1/admin/sys/sms/channel/test-send` 接选中渠道已保存配置；SMSPoh 发 Verify OTP，Twilio（api_key=Auth Token、account_sid=Account SID、sign_name=发送号码/签名）与 MessageBird 发输入文本。手机号须完整 E.164，不猜国家码；仅具 `config:sms:test` 权限的管理员可用，非超管仅本站点渠道，禁用渠道也可测试而不切换业务启用状态。同渠道同号 Redis NX 60 秒冷却，手机号加密，日志先发送中再成功/失败；成功仅代表服务商受理，验证码不生成登录/注册票据。
@@ -14,6 +18,14 @@ shared 118 用例/1061 断言、控制器 2 用例/20 断言、403 个 PHP 语�
 **验证**:新增 `scripts/test-coupon-release.sh` + `order-service/test/coupon-release.php`(隔离库,不碰开发库)8 项全过:已支付取消返还且 used_count -1、重复调用无副作用、Trip 两笔取消第一笔不还/第二笔才还、商户部分退款不还/全额退款还、平台确认全额退款还(过期券置已过期)。`booking-remediation.php` 回归 48 项全过。容器内 `php -l` 通过。**未做 App 端改动**:取消成功页 / 退款摘要还没有「优惠券已返还」提示。
 
 **环境备注**:本轮开始时 Docker Desktop 未运行、开发栈全停;另有新拉取的迁移 `V20261008120000` 未执行导致 MySQL unhealthy,已按账本手工补执行(迁移脚本因 CRLF 校验和噪音拒绝运行),账本 34/34。`scripts/test-booking-remediation.sh` 在 Git Bash 下有路径转换问题(`/tmp` 与 `/c/...` 二选一被改写),本轮只单跑了订单服务那部分。
+
+### 2026-10-12 Verify Account SMS
+
+注册 Step 2 恢复 SMS 选项，默认邮箱；按后端渠道配置允许发送，未配置短信时显示提示且禁止发送。发码/验证/重发保留所选渠道，仅短信可用时自动选择。typecheck/Web export 与模拟组件逻辑测试通过，8094 已发布；未改渠道配置/测试模式/其他登录认证入口，未发邮件或短信。当前无浏览器控制工具，视觉、真机及真实送达未验。
+
+### 2026-10-10 Company Info 原型对齐
+
+Figma `2332:21915` 已核对，App Step 4 仅保留业务数量和公司/组织名称；Step 4/5 不再发送公司注册号/注册国家/公司地址，App 服务提交必填与完整度同步调整。存量字段、后台录入、酒店业务地址及 KYC 门禁保留。typecheck/Web export/PHP lint/注册隔离回归通过，8094 中文双字段布局与空名称提示通过；未写用户申请或发邮件，真实会话提交/真机未验。主/App 商户容器已更新；wrapper 未登记 merchant-service-app，本轮直接重启已确认容器，部署脚本未改。
 
 ### 2026-10-08 Merchant App 登录标签
 

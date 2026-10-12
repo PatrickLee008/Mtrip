@@ -87,12 +87,17 @@ try {
     check($restored['applicationId'] === $applicationId, 'same verified contacts restore the existing draft');
     $token = $restored['registrationToken'];
 
+    rejects(ErrorCode::PARAM_ERROR, fn () => $onboarding->submit(991, $token, $applicationId), 'company name remains required');
+    $companyDraft = $onboarding->save(991, $token, [
+        'applicationId' => $applicationId, 'companyName' => 'Stage 2 Travel Group',
+        'businesses' => [['clientRef' => 'hotel-one'], ['clientRef' => 'rental-one']],
+    ]);
+    check(count($companyDraft['businesses']) === 2, 'company step persists the selected business count');
+    rejects(ErrorCode::PARAM_ERROR, fn () => $onboarding->submit(991, $token, $applicationId), 'incomplete business details still block submission');
+
     $saved = $onboarding->save(991, $token, [
         'applicationId' => $applicationId,
         'companyName' => 'Stage 2 Travel Group',
-        'regNumber' => 'STAGE2-REG-001',
-        'country' => 'Myanmar',
-        'address' => 'Yangon HQ',
         'currentStep' => 3,
         'businesses' => [
             [
@@ -108,6 +113,9 @@ try {
     ]);
     check(count($saved['businesses']) === 2 && $saved['businesses'][0]['businessType'] === 'hotel'
         && $saved['businesses'][1]['businessType'] === 'car_rental', 'draft persists multiple real business types');
+    check($saved['application']['regNumber'] === '' && $saved['application']['country'] === ''
+        && $saved['application']['address'] === '' && $saved['completionPercent'] === 100,
+        'prototype company fields and complete businesses reach 100 percent without extra company data');
 
     $businessId = $saved['businesses'][0]['applicationBusinessId'];
     $onboarding->save(991, $token, [

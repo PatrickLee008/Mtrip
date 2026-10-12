@@ -227,21 +227,20 @@ class MerchantAppOnboardingService
         $completeBusinesses = $businesses !== [];
         foreach ($businesses as $business) $completeBusinesses = $completeBusinesses && $this->businessComplete($business);
         $checks = [
-            trim((string) $app['company_name']) !== '', trim((string) $app['reg_number']) !== '',
-            trim((string) $app['country']) !== '' && trim((string) $app['address']) !== '',
+            trim((string) $app['company_name']) !== '',
             $businesses !== [], $completeBusinesses,
         ];
         Db::table('merchant_application')->where('id', $applicationId)->update([
             'business_types' => implode(',', $types),
             'primary_business_type' => $types[0] ?? '',
             'num_businesses' => count($businesses),
-            'completion_percent' => count(array_filter($checks)) * 20,
+            'completion_percent' => (int) round(count(array_filter($checks)) * 100 / count($checks)),
         ]);
     }
 
     private function assertRegistrationComplete(array $app): void
     {
-        foreach (['company_name' => '公司名称', 'reg_number' => '公司注册号', 'country' => '注册国家', 'address' => '公司地址'] as $field => $label) {
+        foreach (['company_name' => '公司名称'] as $field => $label) {
             if (trim((string) $app[$field]) === '') throw new BusinessException(ErrorCode::PARAM_ERROR, $label . '不能为空');
         }
         $businesses = Db::table('merchant_application_business')->where('application_id', (int) $app['id'])->orderBy('id')->get()->map(static fn ($row) => (array) $row)->all();

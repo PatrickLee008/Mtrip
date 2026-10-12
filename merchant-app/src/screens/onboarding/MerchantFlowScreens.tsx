@@ -34,10 +34,11 @@ import { useCommonStore } from '@/store/commonStore';
 import { useMerchantStore } from '@/store/merchantStore';
 import { useRegistrationStore } from '@/store/registrationStore';
 import { apiActivationFinish, apiActivationTotpSetup, apiActivationTotpVerify, apiAgreement, apiAgreementRead, apiAgreementSign, apiApplicationDetail, apiApplicationStatus, apiKycRequirements, apiKycSubmit, apiKycUpload, apiRecoveryTotpSetup, apiRecoveryTotpVerify, apiRegistrationChannels, apiRegistrationOtpSend, apiRegistrationOtpVerify } from '@/api/merchant';
-import type { AgreementDetail, KycDocument, KycRequirements, RegistrationVerifyResult } from '@/api/types';
+import type { AgreementDetail, KycDocument, KycRequirements, RegistrationChannel, RegistrationVerifyResult } from '@/api/types';
 import type { RootStackParamList } from '@/navigation/types';
 import { enableBiometric } from '@/utils/merchantSession';
 import { removeOnboardingSession } from '@/utils/onboardingSession';
+import { isEmail, isMobileNumber } from '@/utils/validate';
 
 const OTP_LENGTH = 6;
 
@@ -69,24 +70,35 @@ export function RegisterVerificationScreen() {
   const showToast = useCommonStore((s) => s.showToast);
   const registration = useRegistrationStore();
   const [emailAvailable, setEmailAvailable] = useState(ONBOARDING_PROTOTYPE);
+  const [smsAvailable, setSmsAvailable] = useState(ONBOARDING_PROTOTYPE);
+  const [channel, setChannel] = useState<RegistrationChannel>('email');
   const [configFailed, setConfigFailed] = useState(false);
   const [sending, setSending] = useState(false);
   useEffect(() => {
     if (ONBOARDING_PROTOTYPE) return;
     apiRegistrationChannels()
-      .then((data) => setEmailAvailable(data.channels.some((item) => item.channel === 'email')))
+      .then((data) => {
+        const email = data.channels.some((item) => item.channel === 'email');
+        const sms = data.channels.some((item) => item.channel === 'sms');
+        setEmailAvailable(email);
+        setSmsAvailable(sms);
+        if (!email && sms) setChannel('sms');
+      })
       .catch(() => setConfigFailed(true));
   }, []);
+  const channelAvailable = channel === 'email' ? emailAvailable : smsAvailable;
   const send = async () => {
+    if (!channelAvailable || sending) return;
+    if (!isMobileNumber(registration.registrationPhone)) { showToast(t('validation.invalidPhone')); return; }
+    if (!isEmail(registration.registrationEmail)) { showToast(t('validation.invalidEmail')); return; }
     if (ONBOARDING_PROTOTYPE) {
-      registration.beginOtp({ channel: 'email', recipient: registration.registrationEmail || 'contact@property.com', pinLength: 6, expiresIn: 300, resendAfter: 60, testMode: true });
+      registration.beginOtp({ channel, recipient: channel === 'sms' ? registration.registrationPhone : registration.registrationEmail, pinLength: 6, expiresIn: 300, resendAfter: 60, testMode: true });
       navigation.navigate('RegisterOtp');
       return;
     }
-    if (!registration.registrationEmail) { showToast(t('flow.registration.emailFirst')); return; }
     setSending(true);
     try {
-      const result = await apiRegistrationOtpSend(registration.registrationPhone, registration.registrationEmail, 'email');
+      const result = await apiRegistrationOtpSend(registration.registrationPhone, registration.registrationEmail, channel);
       registration.beginOtp(result);
       navigation.navigate('RegisterOtp');
     } catch {
@@ -95,10 +107,14 @@ export function RegisterVerificationScreen() {
       setSending(false);
     }
   };
-  return <WhiteStepScaffold current={2} total={5} progress={0.4} onBack={() => navigation.goBack()} footer={<PrimaryButton label={sending ? t('flow.common.sending') : t('flow.registration.sendOtp')} disabled={sending || !emailAvailable} onPress={send} textStyle={styles.largeButton} />}>
+  return <WhiteStepScaffold current={2} total={5} progress={0.4} onBack={() => navigation.goBack()} footer={<PrimaryButton label={sending ? t('flow.common.sending') : t('flow.registration.sendOtp')} disabled={sending || !channelAvailable} onPress={send} textStyle={styles.largeButton} />}>
     <AnimatedPopIcon><IconBubble size={80} icon={<SimpleIcon name="shield" size={34} />} /></AnimatedPopIcon>
     <Heading centered title={t('flow.registration.verifyTitle')} subtitle={t('flow.registration.verifySubtitle')} />
-    <View style={styles.options}>{emailAvailable ? <Option selected icon="mail" label={t('register.contactInfo.email')} value={registration.registrationEmail || t('flow.registration.noEmail')} onPress={() => undefined} /> : <Text style={styles.mutedText}>{configFailed ? t('flow.registration.optionsFailed') : t('flow.registration.emailUnavailable')}</Text>}</View>
+    <View style={styles.options}>
+      <Option selected={channel === 'sms'} icon="sms" label="SMS" value={registration.registrationPhone} onPress={() => { if (!sending) setChannel('sms'); }} />
+      {emailAvailable ? <Option selected={channel === 'email'} icon="mail" label={t('register.contactInfo.email')} value={registration.registrationEmail || t('flow.registration.noEmail')} onPress={() => { if (!sending) setChannel('email'); }} /> : <Text style={styles.mutedText}>{configFailed ? t('flow.registration.optionsFailed') : t('flow.registration.emailUnavailable')}</Text>}
+      {channel === 'sms' && !smsAvailable ? <Text style={styles.mutedText}>{configFailed ? t('flow.registration.optionsFailed') : t('flow.registration.smsUnavailable')}</Text> : null}
+    </View>
   </WhiteStepScaffold>;
 }
 
@@ -145,10 +161,12 @@ export function RegisterOtpScreen() {
     }
   };
   const resend = async () => {
-    if (ONBOARDING_PROTOTYPE || resendRemaining > 0 || resending) return;
+    if (ONBOARDING_PROTOTYPE || !state.channel || resendRemaining > 0 || resending) return;
+    if (!isMobileNumber(state.registrationPhone)) { showToast(t('validation.invalidPhone')); return; }
+    if (!isEmail(state.registrationEmail)) { showToast(t('validation.invalidEmail')); return; }
     setResending(true);
     try {
-      const result = await apiRegistrationOtpSend(state.registrationPhone, state.registrationEmail, 'email');
+      const result = await apiRegistrationOtpSend(state.registrationPhone, state.registrationEmail, state.channel);
       state.beginOtp(result);
       setCode('');
       setVerifiedSession(null);

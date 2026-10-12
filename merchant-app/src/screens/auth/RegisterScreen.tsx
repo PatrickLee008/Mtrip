@@ -36,7 +36,7 @@ export default function RegisterScreen() {
       navigation.reset({ index: 0, routes: [{ name: 'RegistrationReview' }] });
       return;
     }
-    if (!registration.companyName.trim() || !registration.regNumber.trim() || !registration.country.trim() || !registration.address.trim()) {
+    if (!registration.companyName.trim()) {
       showToast(t('register.companyInfo.required'));
       return;
     }
@@ -47,9 +47,6 @@ export default function RegisterScreen() {
         const detail = await apiApplicationSave(registration.registrationToken, {
           applicationId: registration.applicationId,
           companyName: registration.companyName.trim(),
-          regNumber: registration.regNumber.trim(),
-          country: registration.country.trim(),
-          address: registration.address.trim(),
           currentStep: 3,
           removeBusinessIds: registration.removedBusinessIds,
           businesses: registration.businesses,
@@ -95,15 +92,6 @@ export default function RegisterScreen() {
             autoCapitalize="words"
             returnKeyType="next"
           />
-        </FloatingField>
-        <FloatingField label={t('register.companyInfo.regNumber')} required>
-          <FieldInput value={registration.regNumber} onChangeText={(regNumber) => registration.setCompany({ regNumber })} autoCapitalize="characters" />
-        </FloatingField>
-        <FloatingField label={t('register.companyInfo.country')} required>
-          <FieldInput value={registration.country} onChangeText={(country) => registration.setCompany({ country })} />
-        </FloatingField>
-        <FloatingField label={t('register.companyInfo.address')} required>
-          <FieldInput value={registration.address} onChangeText={(address) => registration.setCompany({ address })} />
         </FloatingField>
       </View>
 
