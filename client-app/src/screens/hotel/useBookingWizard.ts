@@ -194,6 +194,16 @@ export function useBookingWizard({
     /** 多房间链路的 Trip 主键;单房型为 0。结果页要靠它读整车明细与重付 */
     tripId: number;
   } | null>(null);
+  /**
+   * 多房间建单成功那一刻的金额快照。建单后立刻 `checkoutCart()` 清空车(防重复下单),
+   * 页面若还按车算会退回单房型金额 —— 支付成功弹窗背后曾闪成「应付 39,000」而实扣 157,000。
+   * 有快照时向页面输出快照值。
+   */
+  const [priceSnapshot, setPriceSnapshot] = useState<{
+    payable: number;
+    roomTotal?: number;
+    longstay: number;
+  } | null>(null);
 
   /**
    * 主要入住人的姓名有两个来源,都**只填姓名**:
@@ -634,7 +644,8 @@ export function useBookingWizard({
           couponId: appliedCoupon?.receiveId,
           expectedPayAmount,
         });
-        /* 单已落库:房型转存为快照并清空购物车,免得留在车里诱发重复下单 */
+        /* 单已落库:先冻结页面金额,再把房型转存为快照并清空购物车,免得留在车里诱发重复下单 */
+        setPriceSnapshot({ payable: trip.payAmount, roomTotal: reviewRoomTotal, longstay: longstayDiscount });
         checkoutCart();
         const first = trip.bookings[0];
         try {
@@ -932,6 +943,7 @@ export function useBookingWizard({
     refundRules,
     /* 多房间(购物车)模式:页面据此把房费与间数换成整车口径 */
     cartMode,
+    tripRooms,
     roomsTotal,
     roomCount,
     request,
@@ -950,9 +962,10 @@ export function useBookingWizard({
     expanded,
     setExpanded,
     walletBalance,
-    payableTotal,
-    longstayDiscount,
-    reviewRoomTotal,
+    /* 多房间建单后车已清空,页面金额改读建单那一刻的快照 */
+    payableTotal: priceSnapshot?.payable ?? payableTotal,
+    longstayDiscount: priceSnapshot ? priceSnapshot.longstay : longstayDiscount,
+    reviewRoomTotal: priceSnapshot ? priceSnapshot.roomTotal : reviewRoomTotal,
     priceChange,
     confirmPriceChange,
     cancelPriceChange,

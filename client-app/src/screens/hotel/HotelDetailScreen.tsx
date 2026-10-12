@@ -74,7 +74,8 @@ export default function HotelDetailScreen() {
   const currency = useSiteStore((s) => s.currency);
   const showToast = useCommonStore((s) => s.showToast);
 
-  const [tab, setTab] = useState<DetailTabKey>('overview');
+  /* 默认落在第一个页签「房型」 */
+  const [tab, setTab] = useState<DetailTabKey>('rooms');
   /**
    * 房型购物车(新稿 222:1428 / Room Cart 2659:11842)。
    * 放在 `roomCartStore` 而不是本页 state —— 购物车页要读同一份,两份状态必然对不上。

@@ -39,13 +39,17 @@ import { fetchHotelDetail } from '@/api/goods';
 import { tempCoverFor } from '@/assets/tempImages';
 import { ErrorView, LoadingView } from '@/components/common/StateViews';
 import HomeIcon from '@/components/home/HomeIcon';
+import { realRoomCartEntry } from '@/components/hotel/HotelRoomsTab';
 import LiteRoomCard from '@/components/hotel/lite/LiteRoomCard';
 import { PAGE_PADDING, colors, radius, shadows } from '@/config/theme';
 import { fonts } from '@/config/typography';
 import type { RootStackParamList } from '@/navigation/types';
 import { DETAIL_DEMO } from '@/screens/hotel/detailDemo';
+import { cartTripItems, useTripQuote } from '@/screens/hotel/useTripQuote';
 import { useCommonStore } from '@/store/commonStore';
+import { nightsBetween, useRoomCartStore } from '@/store/roomCartStore';
 import { useSiteStore } from '@/store/siteStore';
+import { useUserStore } from '@/store/userStore';
 import type { GoodsDetail, GoodsSku } from '@/types/models';
 import { formatMoney } from '@/utils/format';
 
@@ -62,8 +66,15 @@ export default function HotelDetailLiteScreen() {
   const [detail, setDetail] = useState<GoodsDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  /** 多房间选择:房型 id -> 间数 */
-  const [picked, setPicked] = useState<Record<number, number>>({});
+  /**
+   * 多房间选择放共享购物车 `roomCartStore`(与完整模式同一份):购物车页 `RoomCart` 与订房向导读同一车,
+   * 以前存本页 state,Continue 只带第一个房型,选了几种房型最后只订一种。
+   */
+  const cartItems = useRoomCartStore((s) => s.items);
+  const cartToggle = useRoomCartStore((s) => s.toggle);
+  const cartSetQuantity = useRoomCartStore((s) => s.setQuantity);
+  const setCartContext = useRoomCartStore((s) => s.setContext);
+  const isLogin = useUserStore((s) => s.isLogin);
 
   const comingSoon = () => showToast(t('home.comingSoon'));
 
@@ -83,16 +94,40 @@ export default function HotelDetailLiteScreen() {
     void load();
   }, [load]);
 
+  /** 换了酒店 setContext 会清空车(跨物业没法下一单),同一家保留已选;购物车页的酒店名与日期也从这里来 */
+  useEffect(() => {
+    setCartContext({
+      propertyId: params.id,
+      hotelName: detail?.goods_name ?? '',
+      checkIn: params.checkIn,
+      checkOut: params.checkOut,
+    });
+  }, [params.id, detail?.goods_name, params.checkIn, params.checkOut, setCartContext]);
+
   const rooms = useMemo(() => detail?.skus ?? [], [detail]);
-  /** 合计 = Σ 单价 × 间数;间数与购物车角标同源 */
-  const total = useMemo(
-    () => rooms.reduce((sum, sku) => sum + Number(sku.base_price) * (picked[sku.id] ?? 0), 0),
-    [rooms, picked],
+  /** 房型 id → 车内间数(卡片加减器读它) */
+  const picked = useMemo(
+    () => Object.fromEntries(cartItems.filter((item) => item.sku).map((item) => [item.sku!.id, item.quantity])),
+    [cartItems],
+  ) as Record<number, number>;
+  /** 角标与购物车页「已选房型(n)」同口径:总间数 */
+  const pickedCount = cartItems.reduce((sum, item) => sum + item.quantity, 0);
+  /**
+   * 底栏合计与完整模式详情页 / 购物车页同口径:能试算就取 `trip/quote`(日历价 − 长住优惠,不含券),
+   * 否则按 Σ 单价 × 间数 × 晚数 预估。
+   */
+  const nights = nightsBetween(params.checkIn, params.checkOut);
+  const estimate = cartItems.reduce((sum, item) => sum + item.price * item.quantity * nights, 0);
+  const allReal = cartItems.length > 0 && cartItems.every((item) => item.sku);
+  const quoteItems = useMemo(
+    () =>
+      allReal && params.checkIn && params.checkOut
+        ? cartTripItems(params.id, cartItems, params.checkIn, params.checkOut)
+        : [],
+    [allReal, params.id, cartItems, params.checkIn, params.checkOut],
   );
-  const pickedCount = useMemo(
-    () => Object.values(picked).reduce((sum, n) => sum + n, 0),
-    [picked],
-  );
+  const { quote } = useTripQuote(quoteItems, 0, isLogin && quoteItems.length > 0);
+  const total = quote?.payAmount ?? estimate;
 
   /* Hook 必须全部跑完再早退,否则渲染分支之间 Hook 数量不一致 */
   if (loading) return <LoadingView />;
@@ -178,16 +213,12 @@ export default function HotelDetailLiteScreen() {
                   })
                 }
                 /* Choose = 加入选择(置 1 间),之后那枚按钮就地变成加减器 */
-                onChoose={(room) => setPicked((prev) => ({ ...prev, [room.id]: 1 }))}
+                onChoose={(room) => {
+                  const entry = realRoomCartEntry(room, index, t);
+                  cartToggle({ roomKey: entry.roomKey, price: entry.price, sku: entry.sku, ...entry.extra });
+                }}
                 quantity={picked[sku.id] ?? 0}
-                onChangeQuantity={(room, qty) =>
-                  setPicked((prev) => {
-                    const next = { ...prev };
-                    if (qty <= 0) delete next[room.id];
-                    else next[room.id] = qty;
-                    return next;
-                  })
-                }
+                onChangeQuantity={(room, qty) => cartSetQuantity(`room-${room.id}`, qty)}
               />
             ))}
             {rooms.length === 0 ? (
@@ -198,9 +229,8 @@ export default function HotelDetailLiteScreen() {
       </SafeAreaView>
 
       {/**
-       * 多房间合计栏(`2863:7627`),选中任一房型才出现。
-       * ⚠️ **合计只是展示**:后端 `order/create` 一单只收一个 sku,Continue 仍带**第一个**
-       * 选中的房型进订房向导 —— 真正的一单多房型要等后端支持,别以为这里已经能下多间。
+       * 多房间合计栏(`2863:7627`),选中任一房型才出现。购物车按钮进 `RoomCart`(两种模式同一页);
+       * Continue 进关怀模式订房页,它读同一车按整车 `trip/create` 下单。
        */}
       {pickedCount > 0 ? (
         <SafeAreaView style={styles.bottomBar} edges={['bottom']}>
@@ -216,7 +246,7 @@ export default function HotelDetailLiteScreen() {
             <View style={styles.bottomActions}>
               <Pressable
                 style={({ pressed }) => [styles.cartBtn, pressed && styles.pressed]}
-                onPress={comingSoon}
+                onPress={() => navigation.navigate('RoomCart')}
                 hitSlop={6}
               >
                 <HomeIcon name="cart" size={32} color={colors.primary} />
