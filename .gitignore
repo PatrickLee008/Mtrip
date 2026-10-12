@@ -20,6 +20,8 @@ Desktop.ini
 *.log
 /logs/
 deploy/logs/
+# Merchant reset backups contain complete development databases.
+/deploy/backups/merchant-reset-*.sql.gz*
 
 # ---------- 后端 PHP(Hyperf 微服务) ----------
 backend/**/vendor/

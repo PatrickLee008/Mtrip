@@ -126,6 +126,7 @@ cd ../admin-web && npm install && npm run dev    # http://localhost:5173,接口�
 | **各模块详细任务清单与实现记录** | `docs/plans/01~10-*.md`(每模块一文件,含踩坑记录) |
 | **移动端接口规范**(双前缀路由/签名头/分页约定) | [docs/guides/api/移动端接口规范.md](docs/guides/api/移动端接口规范.md) |
 | **环境搭建与启动** | [docs/guides/setup/启动开发指南.md](docs/guides/setup/启动开发指南.md) |
+| **开发期清空入驻线索与商户测试数据** | [清理脚本使用说明](docs/guides/setup/开发期商户测试数据清理.md) |
 | **网关路由表/限流/CORS** | `deploy/openresty/conf.d/mtrip.conf` + [docs/plans/08-部署与网关.md](docs/plans/08-部署与网关.md) |
 | **运维监控台方案与计划** | [mtrip-ops/docs/](mtrip-ops/docs/) + [docs/plans/16-运维监控.md](docs/plans/16-运维监控.md) |
 | **原始需求** | `设计文档/*.docx`(提取文本在 `docs/reference/`) |
@@ -170,6 +171,8 @@ MSYS_NO_PATHCONV=1 docker run --rm --entrypoint php \
 - 工作方式:每完成一项任务,同步更新 `docs/plans/` 对应模块文件、README 进度表和 HANDOFF.md;交付前本地跑一次 `scripts/check.ps1` 作为验收入口。
 
 ## 当前状态(2026-07)
+
+商户测试数据清理(2026-10-12)：新增 `scripts/reset-merchant-test-data.sh`，默认预览，显式执行前检查开发环境、暂停写入服务并备份双库，以 SQL 事务清理所有站点入驻/商户及商品、订单、财务、营销、聊天关联数据；保留基础配置与消费者/供应商/集团账号，恢复服务并选择性清理 Redis。说明和边界见[使用指南](docs/guides/setup/开发期商户测试数据清理.md)。本次不清空当前开发库。
 
 酒店详情页签调整(2026-10-12):完整模式「房型」移到第一位并作为默认页签,「概览」排第二;关怀模式详情页本就以房型列表开场,未改。
 
