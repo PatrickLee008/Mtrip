@@ -68,6 +68,11 @@ interface Props {
   walletCredit?: number;
   /** 价格明细下方的钱包卡(多房间新稿);不传不渲染 */
   walletSlot?: React.ReactNode;
+  /**
+   * 替换顶部商品区(酒店卡 + Selected Rooms / 单房型卡)。多酒店行程在这里放 Stay 1 / Stay 2 卡片
+   * (Figma 1675:9406),其余区块不变。
+   */
+  topSlot?: React.ReactNode;
 }
 
 export default function ReviewBody({
@@ -83,6 +88,7 @@ export default function ReviewBody({
   couponLine = null,
   walletCredit = 0,
   walletSlot = null,
+  topSlot = null,
 }: Props) {
   /** 购物车里有房型才走「酒店卡 + Selected Rooms」的新版式 */
   const hasCart = (cartRooms?.length ?? 0) > 0;
@@ -170,7 +176,9 @@ export default function ReviewBody({
        * 「Selected Rooms」。所以购物车里有房型时走新版式;没有(Stay 明细页 / 关怀模式 /
        * 演示模式)仍是原来的单房型卡,老页面不受影响。
        */}
-      {hasCart ? (
+      {topSlot ? (
+        topSlot
+      ) : hasCart ? (
         <>
           {hotelName ? (
             <View style={styles.hotelCard}>

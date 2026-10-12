@@ -1,5 +1,20 @@
 # 会话交接文档(HANDOFF)
 
+### ★ 2026-10-12 多酒店预订流程(Figma `1675:9406` Stay 卡片 / `1675:9677` Stay 明细 / `1675:9158` 支付首卡)
+
+**流程**:第 2 步点「添加酒店与民宿」→ 当前这家(车 + 入离日期)转存为一段住宿,住客资料暂存 → 回酒店搜索页 → 挑下一家(详情页 / 购物车页只显示这一家的房)→ 继续 → 直接回到第 2 步。仍是三步,不新增步骤。
+**store**(`roomCartStore`):新增 `tripStays`(已加入的住宿)、`tripDraft`(暂存表单)、`stashStay / removeTripStay / clearTripDraft`、`combineTripStays()`;`checkout` 把所有住宿的房转入 `booked` 并清空行程。车仍只装正在挑的那一家。
+**向导**:`hotelStays` = 已加入的住宿 + 车(key `active`,日期用向导纠正后的那组);`tripBaseItems` 按段各带物业与日期,一次 `trip/create`;`stayTotals` 按段取试算(日历价 − 长住);有已加入住宿时向导直接从 review 开始并从 `tripDraft` 恢复表单 / 特殊要求 / 加购;`removeStay`(active 清车,其余移出行程);建单快照带住宿与小计。关怀模式不开。
+**第 2 步**:两段及以上时 `ReviewBody.topSlot` 换成 Stay 卡片(`StaySummaryCard` 新增 `onDelete`,图标 `delete` 取自稿面 fluent:delete-20-filled),其余区块不变。
+**Stay 明细页**(`StayDetailScreen`):按 `index` 取 `combineTripStays` 里的那段,地址 / 退改规则拉 `/hotels/detail`,房费按这一段 `trip/quote`;「修改」对正在挑的那家进购物车,已加入的暂不支持;「去结算」回向导。无真实住宿时仍是演示数据。
+**第 3 步**:首卡眉头「连住预订(共 N 段)」,正文为第 1 段住宿。
+**测试数据(保留)**:新增第二家酒店 物业 `9004` 胤竹精品酒店(曼德勒,复制自物业 3,同商户 3),房型 `9005` 标准间 22,500 / `9006` 豪华客房 32,500。
+**验证**:Chrome 实测完整流程;两段住宿实付成功(行程 25,钱包 205,000,4 笔预订分属物业 3 与 9004,各自日期);测试账号余额已恢复。`tsc` 通过,六个订房静态检查全绿(`check-payment-failure-flow` 的 create→try 字符窗口由 400 放宽到 800)。
+**下单后的详情(同日修正)**:后端一个房型一笔预订,行程详情原来一行一段,两家酒店各两种房型显示成 4 段。新增 `utils/tripStays`(`stayKeyOf` / `groupStays`,段 = 同物业 + 同入离日期):
+`TripDetailScreen` 按段归并(房型行「房型 ×间数」、间数合计,View Details 带 `tripId`);`BookingDetailScreen` 带 tripId 时只列与本单同段的预订,多段时金额取该段实付之和;`useMyPickData` 的 `stayCount` 改按段计。
+Chrome 实测行程 25:列表「多酒店预订(2 段住宿)」→ 详情 2 段 → 第 2 段详情只含胤竹精品酒店 2 间、107,000。`check-booking-detail-page` 对应断言随 tripId 更新。
+**已知**:第 2 步「入住 / 退房」与价格明细「房费(n 晚)」按要求未改,多段时只反映当前这一段的日期 / 晚数;已加入行程的住宿不能改房,只能删除重加;中途离开向导时已加入的住宿会留在行程里,下次进向导仍会带上(可在第 2 步删除)。
+
 ### 2026-10-12 Merchant App 手机号/邮箱格式提示
 
 Contact Info 下一步细分未填/格式错误；+86/+95 手机号按本地移动号码长度/前缀验证，归一化不再丢弃字母等非法字符。统一邮箱格式检查用于注册/业务联系人/邮箱登录恢复；业务错误指出序号，非法格式不保存/提交/发码，空草稿仍可保存。现有 Toast 双语提示，不改布局及后端。test:validation、typecheck/Web export、Bookings 回归通过，8094 已发布；模拟 API 无真实发码/申请写入，浏览器视觉及真机未验。

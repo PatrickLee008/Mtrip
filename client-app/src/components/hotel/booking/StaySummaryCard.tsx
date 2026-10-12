@@ -30,6 +30,8 @@ interface Props {
   /** 「Stay 1」;不传就不渲染眉头行 */
   stayLabel?: string | null;
   onEdit?: () => void;
+  /** 右侧红色删除(多酒店第 2 步 Stay 卡片 2863:7532);不传不显示 */
+  onDelete?: () => void;
   /** 「Multi Booking (2 Stay)」;与 stayLabel 二选一 */
   eyebrow?: string | null;
   hotelName: string;
@@ -54,6 +56,7 @@ interface Props {
 export default function StaySummaryCard({
   stayLabel,
   onEdit,
+  onDelete,
   eyebrow,
   hotelName,
   dateLabel,
@@ -74,9 +77,16 @@ export default function StaySummaryCard({
       {stayLabel ? (
         <View style={styles.stayRow}>
           <Text style={styles.stayLabel}>{stayLabel}</Text>
-          <Pressable onPress={onEdit} hitSlop={8}>
-            <HomeIcon name="edit" size={20} color={colors.primary} />
-          </Pressable>
+          {onEdit ? (
+            <Pressable onPress={onEdit} hitSlop={8}>
+              <HomeIcon name="edit" size={20} color={colors.primary} />
+            </Pressable>
+          ) : null}
+          {onDelete ? (
+            <Pressable style={styles.deleteBtn} onPress={onDelete} hitSlop={8}>
+              <HomeIcon name="delete" size={20} color={colors.hot} />
+            </Pressable>
+          ) : null}
         </View>
       ) : null}
       {eyebrow ? <Text style={styles.eyebrow}>{eyebrow}</Text> : null}
@@ -139,6 +149,7 @@ export default function StaySummaryCard({
 const styles = StyleSheet.create({
   card: { gap: 16 },
   stayRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  deleteBtn: { marginLeft: 'auto' },
   stayLabel: { fontFamily: fonts.interSemi, fontSize: 16, color: colors.primary },
   eyebrow: { fontFamily: fonts.interMedium, fontSize: 16, lineHeight: 24, color: colors.primary },
 

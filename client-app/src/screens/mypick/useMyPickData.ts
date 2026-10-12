@@ -23,6 +23,7 @@ import { TAB_STATUS, type MyPickTab } from '@/screens/mypick/myPickSections';
 import { useCommonStore } from '@/store/commonStore';
 import { useUserStore } from '@/store/userStore';
 import type { GoodsItem, OrderItemData } from '@/types/models';
+import { stayKeyOf } from '@/utils/tripStays';
 
 /**
  * 状态胶囊底色:已支付/已核销/已完成走绿色,待支付走橙色,其余为中性灰。
@@ -112,8 +113,9 @@ export function groupOrdersByTrip(orders: OrderItemData[]): MyPickBooking[] {
     /* 展示用的「首段」按 id 升序取,即下单时的第一项(Trip 建单顺序),不受状态排序影响 */
     const ordered = [...rows].sort((a, b) => a.id - b.id);
     const first = ordered[0];
-    const properties = new Set(ordered.map((o) => o.property_id));
-    const second = ordered.find((o) => o.property_id !== first.property_id);
+    /* 段数 = 物业 + 入离日期 的组合数(同一家酒店订两组日期也算两段),与行程详情同一口径 */
+    const stays = new Set(ordered.map(stayKeyOf));
+    const second = ordered.find((o) => stayKeyOf(o) !== stayKeyOf(first));
     const dates = ordered.map((o) => o.use_date).filter((d): d is string => !!d);
     const ends = ordered.map((o) => o.end_date).filter((d): d is string => !!d);
 
@@ -123,7 +125,7 @@ export function groupOrdersByTrip(orders: OrderItemData[]): MyPickBooking[] {
       tripId: first.trip_id,
       bookingCount: rows.length,
       roomCount: ordered.reduce((sum, o) => sum + (Number(o.quantity) || 0), 0),
-      stayCount: properties.size,
+      stayCount: stays.size,
       status: lead.order_status,
       orderNo: first.order_no,
       hotelName: first.goods_name,

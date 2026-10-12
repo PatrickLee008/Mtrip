@@ -69,7 +69,8 @@ check('五个源文件都在', [wizard, hook, full, lite, detail].every((x) => x
   /* Trip 链路:create 之后紧接着一个自己的 try,pay 在里面 */
   check(
     'Trip 链路 create 后另起 try 包住 pay',
-    /apiTripCreate\([\s\S]{0,400}?try \{[\s\S]{0,400}?apiTripPay\(/u.test(wizard),
+    /* 2026-10-12 建单后先冻结金额 / 多酒店住宿快照再清车,create 与 try 之间多了约 500 字,窗口放宽到 800 */
+    /apiTripCreate\([\s\S]{0,800}?try \{[\s\S]{0,400}?apiTripPay\(/u.test(wizard),
   );
   check(
     '单房型链路 create 后另起 try 包住 pay',

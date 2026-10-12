@@ -67,6 +67,11 @@ export default function HotelBookingScreen() {
     sequence,
     cartMode,
     walletCovers,
+    hotelStays,
+    stayTotals,
+    removeStay,
+    stayCardFor,
+    tripRooms,
     primaryLabel,
     stays,
     current,
@@ -114,6 +119,8 @@ export default function HotelBookingScreen() {
     goBack,
     goNext,
   } = useBookingWizard({ params: route.params, successRoute: 'BookingSuccess' });
+  /** 多酒店行程:两段及以上住宿(第 2 步 Stay 卡片、第 3 步首卡眉头) */
+  const multiHotel = hotelStays.length > 1;
 
   const renderStep = () => {
     switch (step) {
@@ -154,7 +161,33 @@ export default function HotelBookingScreen() {
             <ReviewBody
               stay={current}
               /* 新稿:顶部酒店卡 + Selected Rooms,Edit Rooms 回购物车页 */
-              cartRooms={cartRooms}
+              /* 多酒店:人数与间数按所有住宿算 */
+              cartRooms={multiHotel ? tripRooms : cartRooms}
+              /* 多酒店(Figma 1675:9406):商品区换成 Stay 1 / Stay 2 … 卡片,其余区块不变 */
+              topSlot={
+                multiHotel ? (
+                  <View style={styles.stayList}>
+                    {hotelStays.map((stay, i) => {
+                      const card = stayCardFor(stay);
+                      return (
+                        <StaySummaryCard
+                          key={stay.key}
+                          stayLabel={t('hotels.booking.trip.stay', { index: i + 1 })}
+                          onDelete={() => removeStay(stay.key)}
+                          hotelName={stay.hotelName}
+                          dateLabel={card.dateLabel}
+                          roomLabel={card.roomLabel}
+                          viewDetailsLabel={t('hotels.booking.payment.viewDetails')}
+                          onViewDetails={() => navigation.navigate('StayDetail', { index: i })}
+                          totalLabel={t('hotels.booking.review.totalAmount')}
+                          pointsLabel={t('hotels.booking.review.earnPoints', { points: 0 })}
+                          total={formatMoney(stayTotals[i] ?? 0, currency)}
+                        />
+                      );
+                    })}
+                  </View>
+                ) : null
+              }
               hotelName={cartHotelName}
               /* 房费以试算为准:多房间按整车,单房型试算到了才覆盖(否则按这一段住宿预估) */
               roomTotal={reviewRoomTotal}
@@ -243,16 +276,22 @@ export default function HotelBookingScreen() {
         );
       case 'payment': {
         const parts = summaryFor(current);
+        /* 多酒店(Figma 1675:9158):首卡眉头「Multi Booking (N Stay)」,正文是第 1 段住宿,View Details 看各段 */
+        const firstStay = multiHotel ? stayCardFor(hotelStays[0]) : null;
         return (
           <BookingStepPayment
             summary={
               <StaySummaryCard
                 eyebrow={
-                  multi ? t('hotels.booking.trip.multiBooking', { stays: stays.length }) : null
+                  multiHotel
+                    ? t('hotels.booking.trip.multiBooking', { stays: hotelStays.length })
+                    : multi
+                      ? t('hotels.booking.trip.multiBooking', { stays: stays.length })
+                      : null
                 }
-                hotelName={hotelNameOf(current)}
-                dateLabel={parts.dateLabel}
-                roomLabel={parts.roomLabel}
+                hotelName={multiHotel ? hotelStays[0].hotelName : hotelNameOf(current)}
+                dateLabel={firstStay ? firstStay.dateLabel : parts.dateLabel}
+                roomLabel={firstStay ? firstStay.roomLabel : parts.roomLabel}
                 viewDetailsLabel={t('hotels.booking.payment.viewDetails')}
                 onViewDetails={() => navigation.navigate('StayDetail', { index: 0 })}
                 totalLabel={t('hotels.booking.review.totalAmount')}
@@ -464,4 +503,6 @@ const styles = StyleSheet.create({
   main: { paddingHorizontal: PAGE_PADDING, paddingTop: 32, gap: 24 },
   reviewGroup: { gap: 24 },
   tripGroup: { gap: 24 },
+  /* 稿面 1675:9406 两张 Stay 卡片间距 24 */
+  stayList: { gap: 24 },
 });
