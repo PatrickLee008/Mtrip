@@ -23,7 +23,8 @@ import type { HomeIconName } from '@/components/home/HomeIcon';
  * 向导步骤。`trip` 只在多住宿时出现;`payment` 在多住宿态没有进度条
  * (设计稿 1675:9158 确实没画),故它不占进度格。
  */
-export const BOOKING_STEPS = ['dates', 'guests', 'review', 'trip', 'payment'] as const;
+/** details = 多房间新稿(2659:12801)把 dates + guests 合并成的第 1 步「日期与住客信息」 */
+export const BOOKING_STEPS = ['dates', 'guests', 'details', 'review', 'trip', 'payment'] as const;
 export type BookingStepKey = (typeof BOOKING_STEPS)[number];
 
 /** 进度条固定 4 格(设计稿 Step n of 4) */

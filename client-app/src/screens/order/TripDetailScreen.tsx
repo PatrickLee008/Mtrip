@@ -1,7 +1,9 @@
 /**
  * 多酒店行程详情(Figma `2142:4389` Multihotel Booking Edit booking)
  *
- * 一个 Trip 下的**多段住宿**各占一张卡,按入住日先后排成时间轴:
+ * 一个 Trip 下的**多段住宿**各占一张卡,按入住日先后排成时间轴。一段 = 同物业 + 同入离日期
+ * (`utils/tripStays`):后端一个房型一笔预订,同一家酒店订了几种房型要先归并成一段,
+ * 卡上房型行列出「房型 ×间数」,间数为该段合计:
  *   序号圆(40,主色底 + 4px `--secondary` 描边)+「Stay n」→ 左侧竖线 → 住宿卡。
  * 每张卡就是「我的预订」那张卡的 `stay` 变体(同组件,不同壳)—— 稿面除了卡壳与封面位置,
  * PAID 胶囊 / 酒店名·地址·房型 / DATES·TRAVELERS 两格 / 按钮行 / Booking ID 行全都一样。
@@ -47,6 +49,7 @@ import type { RootStackParamList } from '@/navigation/types';
 import { orderStatusColor } from '@/screens/mypick/useMyPickData';
 import { useCommonStore } from '@/store/commonStore';
 import { formatDate } from '@/utils/format';
+import { groupStays } from '@/utils/tripStays';
 
 export default function TripDetailScreen() {
   const { t } = useTranslation();
@@ -103,7 +106,9 @@ export default function TripDetailScreen() {
         onLayout={(e) => setContentWidth(e.nativeEvent.layout.width - PAGE_PADDING * 2)}
         showsVerticalScrollIndicator={false}
       >
-        {stays.map((row, i) => (
+        {groupStays(stays).map((group, i) => {
+          const row = group[0];
+          return (
           <View key={row.id} style={styles.stayGroup}>
             {/* 段头 2291:5401 */}
             <View style={styles.stayHead}>
@@ -125,7 +130,9 @@ export default function TripDetailScreen() {
                 coverUri={row.goods_image}
                 coverSource={tempCoverFor(i)}
                 address={addresses[row.property_id]}
-                skuName={row.sku_name}
+                skuName={group
+                  .map((g) => t('hotels.booking.payment.roomItem', { room: g.sku_name, count: g.quantity }))
+                  .join(t('hotels.booking.payment.roomListSep'))}
                 bookingNo={row.order_no}
                 statusLabel={t(ORDER_STATUS_I18N[row.order_status] ?? 'common.empty')}
                 statusColor={orderStatusColor(row.order_status)}
@@ -134,15 +141,19 @@ export default function TripDetailScreen() {
                     ? `${formatDate(row.use_date)}${row.end_date ? ` - ${formatDate(row.end_date)}` : ''}`
                     : '-'
                 }
-                travelers={t('myPick.booking.roomsValue', { rooms: row.quantity })}
+                travelers={t('myPick.booking.roomsValue', {
+                  rooms: group.reduce((sum, g) => sum + (Number(g.quantity) || 0), 0),
+                })}
                 travelersLabel={t('myPick.booking.rooms')}
                 /* 单段详情才展开房型/设施/取消入口 */
-                onPressDetail={() => navigation.navigate('BookingDetail', { orderId: row.id })}
+                /* 带上 tripId:预订详情据此列出这一段的全部房型(只取同段,不混入别的酒店) */
+                onPressDetail={() => navigation.navigate('BookingDetail', { orderId: row.id, tripId })}
                 onPressMap={comingSoon}
               />
             </View>
           </View>
-        ))}
+          );
+        })}
       </ScrollView>
 
       {/* 悬浮顶栏 2142:4558(声明在滚动容器之后,否则列表会盖住它) */}

@@ -80,6 +80,7 @@ import type { CartRoom } from '@/store/roomCartStore';
 import type { GoodsDetail, GoodsSku, OrderDetail } from '@/types/models';
 import { formatMoney } from '@/utils/format';
 import { resolveMediaUri } from '@/utils/media';
+import { groupStays, stayKeyOf } from '@/utils/tripStays';
 
 /** 稿面地图缩略图高度 */
 const MAP_HEIGHT = 86;
@@ -112,11 +113,23 @@ export default function BookingDetailScreen() {
     try {
       const detail = await fetchOrderDetail(orderId);
       setOrder(detail);
-      /* 多房间:整个 Trip 的预订都要列出来 */
+      /**
+       * 多房间:列出同 Trip 里**与本单同一段住宿**(同物业 + 同入离日期)的预订。
+       * 多酒店行程里各段是不同酒店,不能把别的酒店的房也列进来;只有一段时金额取 Trip 实付,
+       * 多段时取这一段各预订的实付之和。
+       */
       if (tripId && tripId > 0) {
         const trip = await fetchTripDetail(tripId);
-        setBookings(trip.bookings ?? []);
-        setTripPayAmount(Number(trip.pay_amount) || 0);
+        const all = trip.bookings ?? [];
+        const key = stayKeyOf(detail);
+        const sameStay = all.filter((row) => stayKeyOf(row) === key);
+        const single = groupStays(all).length <= 1;
+        setBookings(sameStay);
+        setTripPayAmount(
+          single
+            ? Number(trip.pay_amount) || 0
+            : sameStay.reduce((sum, row) => sum + (Number(row.pay_amount) || 0), 0),
+        );
       } else {
         setBookings([]);
         setTripPayAmount(null);

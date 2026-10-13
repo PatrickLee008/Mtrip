@@ -30,6 +30,8 @@ interface Props {
   /** 「Stay 1」;不传就不渲染眉头行 */
   stayLabel?: string | null;
   onEdit?: () => void;
+  /** 右侧红色删除(多酒店第 2 步 Stay 卡片 2863:7532);不传不显示 */
+  onDelete?: () => void;
   /** 「Multi Booking (2 Stay)」;与 stayLabel 二选一 */
   eyebrow?: string | null;
   hotelName: string;
@@ -38,8 +40,13 @@ interface Props {
   viewDetailsLabel: string;
   onViewDetails: () => void;
   totalLabel: string;
+  /** 合计右上的胶囊文字;空串不渲染 */
   pointsLabel: string;
+  /** 胶囊用主色字(多房间新稿的「Wallet applied」);默认正文色(积分) */
+  pointsAccent?: boolean;
   total: string;
+  /** 「Pay Within 00:10:00」行(多房间新稿 2659:13318),前后各一条分隔线;不传不渲染 */
+  payWithin?: { label: string; value: string } | null;
   /** 代付条(只有支付页有) */
   payByOtherLabel?: string | null;
   shareLabel?: string | null;
@@ -49,6 +56,7 @@ interface Props {
 export default function StaySummaryCard({
   stayLabel,
   onEdit,
+  onDelete,
   eyebrow,
   hotelName,
   dateLabel,
@@ -57,7 +65,9 @@ export default function StaySummaryCard({
   onViewDetails,
   totalLabel,
   pointsLabel,
+  pointsAccent = false,
   total,
+  payWithin,
   payByOtherLabel,
   shareLabel,
   onShare,
@@ -67,9 +77,16 @@ export default function StaySummaryCard({
       {stayLabel ? (
         <View style={styles.stayRow}>
           <Text style={styles.stayLabel}>{stayLabel}</Text>
-          <Pressable onPress={onEdit} hitSlop={8}>
-            <HomeIcon name="edit" size={20} color={colors.primary} />
-          </Pressable>
+          {onEdit ? (
+            <Pressable onPress={onEdit} hitSlop={8}>
+              <HomeIcon name="edit" size={20} color={colors.primary} />
+            </Pressable>
+          ) : null}
+          {onDelete ? (
+            <Pressable style={styles.deleteBtn} onPress={onDelete} hitSlop={8}>
+              <HomeIcon name="delete" size={20} color={colors.hot} />
+            </Pressable>
+          ) : null}
         </View>
       ) : null}
       {eyebrow ? <Text style={styles.eyebrow}>{eyebrow}</Text> : null}
@@ -94,12 +111,24 @@ export default function StaySummaryCard({
 
       <View style={styles.divider} />
 
+      {payWithin ? (
+        <>
+          <View style={styles.payWithinRow}>
+            <Text style={styles.payWithinLabel}>{payWithin.label}</Text>
+            <Text style={styles.payWithinValue}>{payWithin.value}</Text>
+          </View>
+          <View style={styles.divider} />
+        </>
+      ) : null}
+
       <View>
         <View style={styles.totalHead}>
           <Text style={bookingShared.overline}>{totalLabel}</Text>
-          <View style={styles.pointsBadge}>
-            <Text style={styles.pointsText}>{pointsLabel}</Text>
-          </View>
+          {pointsLabel ? (
+            <View style={styles.pointsBadge}>
+              <Text style={[styles.pointsText, pointsAccent && styles.pointsTextAccent]}>{pointsLabel}</Text>
+            </View>
+          ) : null}
         </View>
         <Text style={styles.total}>{total}</Text>
       </View>
@@ -120,6 +149,7 @@ export default function StaySummaryCard({
 const styles = StyleSheet.create({
   card: { gap: 16 },
   stayRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  deleteBtn: { marginLeft: 'auto' },
   stayLabel: { fontFamily: fonts.interSemi, fontSize: 16, color: colors.primary },
   eyebrow: { fontFamily: fonts.interMedium, fontSize: 16, lineHeight: 24, color: colors.primary },
 
@@ -148,6 +178,11 @@ const styles = StyleSheet.create({
 
   divider: { height: 1, backgroundColor: colors.softBlue },
 
+  payWithinRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+  payWithinLabel: { fontFamily: fonts.inter, fontSize: 16, color: colors.heading },
+  /* 稿面 --tertiary #EC1317,主题里同值的是 hot */
+  payWithinValue: { fontFamily: fonts.interSemi, fontSize: 20, color: colors.hot },
+
   totalHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
   pointsBadge: {
     paddingHorizontal: 8,
@@ -163,6 +198,7 @@ const styles = StyleSheet.create({
     textAlign: 'right',
     color: colors.heading,
   },
+  pointsTextAccent: { color: colors.primary },
   total: {
     fontFamily: fonts.interBold,
     fontSize: 32,

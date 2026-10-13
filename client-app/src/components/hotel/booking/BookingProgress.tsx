@@ -22,17 +22,19 @@ interface Props {
   step: number;
   /** 右侧步骤名 */
   title: string;
+  /** 总步数:单房型四步(默认),多房间新稿三步 */
+  total?: number;
 }
 
-export default function BookingProgress({ step, title }: Props) {
+export default function BookingProgress({ step, title, total = BOOKING_PROGRESS_TOTAL }: Props) {
   const { t } = useTranslation();
-  const ratio = Math.min(Math.max(step / BOOKING_PROGRESS_TOTAL, 0), 1);
+  const ratio = Math.min(Math.max(step / total, 0), 1);
 
   return (
     <View style={styles.root}>
       <View style={styles.row}>
         <Text style={styles.step}>
-          {t('hotels.booking.stepOf', { step, total: BOOKING_PROGRESS_TOTAL })}
+          {t('hotels.booking.stepOf', { step, total })}
         </Text>
         <Text style={styles.title} numberOfLines={1}>
           {title}

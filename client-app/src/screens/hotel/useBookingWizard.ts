@@ -47,12 +47,15 @@ import {
 } from '@/screens/hotel/bookingDemo';
 import { cartTripItems, useTripQuote } from '@/screens/hotel/useTripQuote';
 import { useCommonStore } from '@/store/commonStore';
-import { useRoomCartStore } from '@/store/roomCartStore';
+import { useRoomCartStore, type TripStay } from '@/store/roomCartStore';
 import { useSiteStore } from '@/store/siteStore';
 import { useUserStore } from '@/store/userStore';
 import type { CouponView, RefundRule } from '@/types/models';
 import { formatMoney } from '@/utils/format';
 import { isContactMobile, isEmail } from '@/utils/validate';
+
+/** 多酒店行程里「正在挑的那一家」(车)的住宿 key;其余住宿的 key 来自 `tripStays` */
+export const ACTIVE_STAY_KEY = 'active';
 
 /** 设计稿写死「还能再加 2 位同行人」 */
 export const ADDITIONAL_QUOTA = 2;
@@ -148,7 +151,13 @@ export function useBookingWizard({
   /** 钱包可用余额:登录后取 `/app/user/me` 的 balance(字符串),演示模式回落设计稿数值 */
   const walletBalance = isLogin ? Number(profile?.balance ?? 0) : BOOKING_DEMO.walletBalance;
 
-  const [step, setStep] = useState<BookingStepKey>(steps?.[0] ?? 'dates');
+  /**
+   * 从「Add Hotel and Homestay」挑完下一家回来:向导是新挂载的,已填的住客资料从暂存恢复,
+   * 并直接落在第 2 步(核对确认)—— 第 1 步已经填过,不必再走一遍。
+   */
+  const draftRef = useRef(useRoomCartStore.getState().tripDraft);
+  const resumeTrip = enableMultiStay && useRoomCartStore.getState().tripStays.length > 0;
+  const [step, setStep] = useState<BookingStepKey>(steps?.[0] ?? (resumeTrip ? 'review' : 'dates'));
   /** 未登录时的确认浮层(只有 `confirmLogin` 打开时才会被置起) */
   const [loginPrompt, setLoginPrompt] = useState(false);
   /**
@@ -163,15 +172,17 @@ export function useBookingWizard({
   const [stays, setStays] = useState<BookingStay[]>([
     makeStay(BOOKING_DEMO, 'stay1', initialDates),
   ]);
-  const [request, setRequest] = useState('');
+  const [request, setRequest] = useState(draftRef.current?.request ?? '');
   const [agreed, setAgreed] = useState(false);
-  const [form, setForm] = useState<LeadGuestForm>({
-    firstName: '',
-    lastName: '',
-    phone: '',
-    email: '',
-    saveInfo: false,
-  });
+  const [form, setForm] = useState<LeadGuestForm>(
+    draftRef.current?.form ?? {
+      firstName: '',
+      lastName: '',
+      phone: '',
+      email: '',
+      saveInfo: false,
+    },
+  );
   /** 本期只有钱包余额是真渠道,直接预选上(其余渠道点了只弹 Coming soon) */
   const [method, setMethod] = useState<PaymentMethodKey | null>('wallet');
   const [expanded, setExpanded] = useState<'card' | 'mobileBanking' | null>(null);
@@ -180,7 +191,17 @@ export function useBookingWizard({
   /** 房型购物车:有内容就走 Trip 多房间下单,支付成功后清空 */
   const cartRooms = useRoomCartStore((s) => s.items);
   const cartPropertyId = useRoomCartStore((s) => s.propertyId);
+  const cartHotelName = useRoomCartStore((s) => s.hotelName);
   const checkoutCart = useRoomCartStore((s) => s.checkout);
+  const clearCart = useRoomCartStore((s) => s.clear);
+  const storedTripStays = useRoomCartStore((s) => s.tripStays);
+  const removeTripStay = useRoomCartStore((s) => s.removeTripStay);
+  const stashStay = useRoomCartStore((s) => s.stashStay);
+  const clearTripDraft = useRoomCartStore((s) => s.clearTripDraft);
+  /* 暂存已恢复,清掉(再去挑下一家时会重新暂存) */
+  useEffect(() => {
+    if (draftRef.current) clearTripDraft();
+  }, [clearTripDraft]);
   const [failReason, setFailReason] = useState('');
   /**
    * 真实下单成功后的订单主键 / 单号 / 实付金额 / 核销码(二维码),传给成功页。
@@ -203,6 +224,11 @@ export function useBookingWizard({
     payable: number;
     roomTotal?: number;
     longstay: number;
+    /** 建单时是否由钱包全额覆盖(决定步骤数,建单后余额变了也不跳) */
+    walletCovers: boolean;
+    /** 建单时的各段住宿与小计(第 2 步 Stay 卡片;车清空后仍按它显示) */
+    stays: TripStay[];
+    stayTotals: number[];
   } | null>(null);
 
   /**
@@ -230,9 +256,9 @@ export function useBookingWizard({
       .catch(() => undefined);
   }, [isLogin]);
 
-  /* 进支付步先把余额刷新一次:本地资料可能是上次启动时缓存的,拿旧余额会误判「余额不足」 */
+  /* 进支付步(多房间钱包在复核步)先把余额刷新一次:本地资料可能是上次启动时缓存的,拿旧余额会误判「余额不足」 */
   useEffect(() => {
-    if (step !== 'payment' || !isLogin) return;
+    if ((step !== 'payment' && step !== 'review') || !isLogin) return;
     void refreshProfile().catch(() => undefined);
   }, [step, isLogin, refreshProfile]);
 
@@ -292,7 +318,7 @@ export function useBookingWizard({
             adults: Math.max(1, Number(sku.max_guests) || 2),
             childCount: 0,
             rooms: 1,
-            addons: [],
+            addons: draftRef.current?.addons ?? [],
             /* 真实商品没有税费与积分,只有房费(见 goNext 的说明) */
             units: { originalPrice: unit, roomPrice: unit, taxes: 0, total: unit, points: 0 },
             taxPercent: 0,
@@ -322,38 +348,61 @@ export function useBookingWizard({
    * 这个判定必须与 `submit` 里组 `tripItems` 的条件**完全一致** ——
    * 否则页面显示/校验的金额会与实际提交的内容错开。
    */
-  const tripRooms = useMemo(
+  const activeRooms = useMemo(
     () =>
       useCart && cartPropertyId && cartPropertyId === propertyId
         ? cartRooms.filter((room) => room.sku)
         : [],
     [useCart, cartRooms, cartPropertyId, propertyId],
   );
-  /** 多房间模式:金额与间数一律以车为准,不再是路由带进来的那一个 `roomTypeId` */
+  /**
+   * 多酒店行程(Figma 1675:9406):已加入行程的住宿(`tripStays`,第 2 步「Add Hotel and Homestay」转存的)
+   * + 正在挑的这一家(车)。每段各自的物业与入离日期,一次 `trip/create` 下单。
+   * 关怀模式不开多酒店(`enableMultiStay=false`),只看车。
+   */
+  const hotelStays = useMemo<TripStay[]>(
+    () => [
+      ...(useCart && enableMultiStay ? storedTripStays : []),
+      ...(activeRooms.length > 0
+        ? [
+            {
+              key: ACTIVE_STAY_KEY,
+              propertyId: cartPropertyId as number,
+              hotelName: cartHotelName || current.hotelName || '',
+              checkIn: current.checkIn,
+              checkOut: current.checkOut,
+              items: activeRooms,
+            },
+          ]
+        : []),
+    ],
+    [useCart, enableMultiStay, storedTripStays, activeRooms, cartPropertyId, cartHotelName, current.hotelName, current.checkIn, current.checkOut],
+  );
+  /** 所有住宿里能落单的房型,顺序与 `tripBaseItems` 一一对应(选券的行净额预估按下标取单价) */
+  const tripRooms = useMemo(() => hotelStays.flatMap((stay) => stay.items), [hotelStays]);
+  /** 多房间模式:金额与间数一律以车(及已加入的住宿)为准,不再是路由带进来的那一个 `roomTypeId` */
   const cartMode = tripRooms.length > 0;
   /**
-   * 车里各房型对应的 Trip 行(不含联系人)。`trip/quote` 试算与 `submit` 的 `trip/create`
-   * **共用这一份**,保证试算的就是将要提交的内容。
+   * 各段住宿对应的 Trip 行(不含联系人),每段带自己的物业与入离日期。`trip/quote` 试算与 `submit` 的
+   * `trip/create` **共用这一份**,保证试算的就是将要提交的内容。
    */
   const tripBaseItems = useMemo(
     () =>
-      cartMode
-        ? cartTripItems(cartPropertyId as number, tripRooms, current.checkIn, current.checkOut)
-        : [],
-    [cartMode, tripRooms, cartPropertyId, current.checkIn, current.checkOut],
+      hotelStays.flatMap((stay) => cartTripItems(stay.propertyId, stay.items, stay.checkIn, stay.checkOut)),
+    [hotelStays],
   );
   /**
-   * 车内房费合计 = Σ 单价 × 间数 × 晚数,与详情页底栏、购物车页的合计**同一公式**。
-   * 半选日期(`checkOut` 为空)时按 1 晚,跟 `roomCartStore.nightsBetween` 的兜底一致。
-   *
-   * 这是**预估值**(单价取 `base_price`),实付仍以 `trip/create` 返回的 `payAmount` 为准 ——
-   * 与单房型链路拿 `base_price × 晚数 × 间数` 预估是同一口径。
+   * 房费预估 = Σ 各段(单价 × 间数 × 该段晚数),与详情页底栏、购物车页同一公式;
+   * 实付以 `trip/quote` / `trip/create` 为准。
    */
-  const cartTotal = useMemo(() => {
-    if (!cartMode) return 0;
-    const nights = Math.max(1, nightsBetween(current.checkIn, current.checkOut));
-    return tripRooms.reduce((sum, room) => sum + room.price * room.quantity * nights, 0);
-  }, [cartMode, tripRooms, current.checkIn, current.checkOut]);
+  const cartTotal = useMemo(
+    () =>
+      hotelStays.reduce((sum, stay) => {
+        const nights = Math.max(1, nightsBetween(stay.checkIn, stay.checkOut));
+        return sum + stay.items.reduce((acc, room) => acc + room.price * room.quantity * nights, 0);
+      }, 0),
+    [hotelStays],
+  );
   const roomCount = cartMode
     ? tripRooms.reduce((sum, room) => sum + room.quantity, 0)
     : current.rooms;
@@ -411,6 +460,22 @@ export function useBookingWizard({
     couponId,
     isLogin && Boolean(current.checkIn && current.checkOut),
   );
+  /**
+   * 各段住宿的小计(第 2 步 Stay 卡片的 TOTAL AMOUNT):试算行按下标对上各段(日历价 − 长住优惠,不含券),
+   * 没有试算时按 单价 × 间数 × 该段晚数 预估。
+   */
+  const stayTotals = useMemo(() => {
+    let offset = 0;
+    return hotelStays.map((stay) => {
+      const nights = Math.max(1, nightsBetween(stay.checkIn, stay.checkOut));
+      const sum = stay.items.reduce((acc, room, k) => {
+        const line = cartQuote?.items[offset + k];
+        return acc + (line ? line.original - line.longstayDiscount : room.price * room.quantity * nights);
+      }, 0);
+      offset += stay.items.length;
+      return Math.round(sum * 100) / 100;
+    });
+  }, [hotelStays, cartQuote]);
   /** 向导各处要用的房费口径:试算有值取日历价合计;否则多房间看车、单房型看当前住宿的预估 */
   const roomsTotal = cartQuote?.original ?? (cartMode ? cartTotal : current.total);
   /** 复核页房费/合计的覆盖值:多房间恒传整车;单房型只在试算到了才传,否则 ReviewBody 按这一段住宿自己算 */
@@ -526,48 +591,6 @@ export function useBookingWizard({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tripQuote]);
 
-  /** 步骤序列:调用方给了 `steps` 就用它;否则多住宿才插入 trip */
-  const sequence = useMemo<BookingStepKey[]>(
-    () =>
-      steps ??
-      (multi && enableMultiStay
-        ? ['dates', 'guests', 'review', 'trip', 'payment']
-        : ['dates', 'guests', 'review', 'payment']),
-    [steps, multi, enableMultiStay],
-  );
-  const index = Math.max(sequence.indexOf(step), 0);
-
-  /** 改一段住宿。金额一律由 `scaleStay` 按新的晚数 × 间数重算,不会停在进来时那一晚的价上 */
-  const patchStay = (patch: Partial<BookingStay>) =>
-    setStays((prev) => [scaleStay({ ...prev[0], ...patch }), ...prev.slice(1)]);
-
-  const toggleAddon = (key: BookingAddonKey) =>
-    patchStay({
-      addons: current.addons.includes(key)
-        ? current.addons.filter((k) => k !== key)
-        : [...current.addons, key],
-    });
-
-  const addSecondStay = () => {
-    /* 真实模式下后端一次只收一个 sku,多住宿没法落单;关怀模式整条路都不开 */
-    if (!enableMultiStay || !current.demo) {
-      comingSoon();
-      return;
-    }
-    if (multi) return;
-    setStays((prev) => [...prev, makeStay(BOOKING_SECOND_STAY, 'stay2')]);
-    setStep('trip');
-    showToast(t('hotels.booking.trip.added'));
-  };
-
-  const goBack = () => {
-    if (index <= 0) {
-      navigation.goBack();
-      return;
-    }
-    setStep(sequence[index - 1]);
-  };
-
   const tripTotal = stays.reduce((sum, stay) => sum + stay.total, 0);
   /**
    * 吸底栏与支付页汇总卡的金额:多住宿(演示)走 Trip 合计,其余用 `roomsTotal` 扣掉已应用的券。
@@ -581,6 +604,95 @@ export function useBookingWizard({
     : tripQuote
       ? tripQuote.payAmount
       : Math.max(0, roomsTotal - longstayDiscount - couponDiscount);
+
+  /**
+   * 多房间新稿(2659:13152):钱包放在第 2 步。开着钱包且余额够付全款 → 第 2 步直接 Pay Now,流程只有两步;
+   * 余额不够(或关了钱包)才进第 3 步选其他渠道。后端没有「钱包付一部分 + 其他渠道」的组合支付,
+   * 所以只认「全额覆盖」。建单后余额已扣、车已清空,改读快照里当时的判定,序列不在成功弹窗背后跳变。
+   */
+  const walletCovers = priceSnapshot
+    ? priceSnapshot.walletCovers
+    : cartMode && isLogin && method === 'wallet' && walletBalance >= payableTotal;
+
+  /** 步骤序列:调用方给了 `steps` 就用它;否则多住宿才插入 trip */
+  const sequence = useMemo<BookingStepKey[]>(
+    () =>
+      steps ??
+      (multi && enableMultiStay
+        ? ['dates', 'guests', 'review', 'trip', 'payment']
+        : /* 多房间新稿(2659:12508)四步收成三步:日期与住客信息合并为 details。
+             建单后车已清空,靠金额快照认出这仍是多房间单,序列不跟着变回四步 */
+          cartMode || priceSnapshot !== null
+          ? walletCovers
+            ? ['details', 'review']
+            : ['details', 'review', 'payment']
+          : ['dates', 'guests', 'review', 'payment']),
+    [steps, multi, enableMultiStay, cartMode, priceSnapshot, walletCovers],
+  );
+  /**
+   * 初始步骤在 useState 里只能按默认序列给(`dates`),此时购物车模式还没算出来;
+   * 序列变了而当前步骤不在其中时,落到新序列的第一步。
+   */
+  useEffect(() => {
+    if (!sequence.includes(step)) setStep(sequence[0]);
+  }, [sequence, step]);
+  const index = Math.max(sequence.indexOf(step), 0);
+  /** 序列最后一步就是付款步:常规是 payment,多房间钱包全额覆盖时是 review */
+  const isPayStep = index === sequence.length - 1;
+
+  /** 改一段住宿。金额一律由 `scaleStay` 按新的晚数 × 间数重算,不会停在进来时那一晚的价上 */
+  const patchStay = (patch: Partial<BookingStay>) =>
+    setStays((prev) => [scaleStay({ ...prev[0], ...patch }), ...prev.slice(1)]);
+
+  const toggleAddon = (key: BookingAddonKey) =>
+    patchStay({
+      addons: current.addons.includes(key)
+        ? current.addons.filter((k) => k !== key)
+        : [...current.addons, key],
+    });
+
+  const addSecondStay = () => {
+    /* 关怀模式整条路都不开 */
+    if (!enableMultiStay) {
+      comingSoon();
+      return;
+    }
+    /**
+     * 多酒店行程:这一家(车)连同入离日期转存为一段住宿,暂存已填的住客资料,回酒店搜索页挑下一家;
+     * 挑完点 Continue 回到向导第 2 步,各段合成一次 `trip/create`。
+     */
+    if (cartMode) {
+      stashStay(
+        { form, request, addons: current.addons },
+        { checkIn: current.checkIn, checkOut: current.checkOut },
+      );
+      navigation.navigate('Hotels');
+      return;
+    }
+    if (!current.demo) {
+      comingSoon();
+      return;
+    }
+    if (multi) return;
+    setStays((prev) => [...prev, makeStay(BOOKING_SECOND_STAY, 'stay2')]);
+    setStep('trip');
+    showToast(t('hotels.booking.trip.added'));
+  };
+
+  /** 第 2 步 Stay 卡片的删除:正在挑的那一家清空车,已加入的住宿从行程里移除 */
+  const removeStay = (key: string) => {
+    if (key === ACTIVE_STAY_KEY) clearCart();
+    else removeTripStay(key);
+  };
+
+  const goBack = () => {
+    if (index <= 0) {
+      navigation.goBack();
+      return;
+    }
+    setStep(sequence[index - 1]);
+  };
+
 
   /**
    * 真实下单:`create` 建单 → `pay` 支付。
@@ -645,7 +757,14 @@ export function useBookingWizard({
           expectedPayAmount,
         });
         /* 单已落库:先冻结页面金额,再把房型转存为快照并清空购物车,免得留在车里诱发重复下单 */
-        setPriceSnapshot({ payable: trip.payAmount, roomTotal: reviewRoomTotal, longstay: longstayDiscount });
+        setPriceSnapshot({
+          payable: trip.payAmount,
+          roomTotal: reviewRoomTotal,
+          longstay: longstayDiscount,
+          walletCovers,
+          stays: hotelStays,
+          stayTotals,
+        });
         checkoutCart();
         const first = trip.bookings[0];
         try {
@@ -775,7 +894,7 @@ export function useBookingWizard({
      * 且只在真实模式查手机是否为空,不填手机和邮箱也能继续)。手机与注册页同一套宽校验
      * (多国号码),邮箱在关怀模式是选填,填了才校验格式。
      */
-    if (step === 'guests') {
+    if (step === 'guests' || step === 'details') {
       if (!form.firstName.trim() || !form.lastName.trim()) {
         showToast(t('hotels.booking.guests.nameRequired'));
         return;
@@ -801,7 +920,7 @@ export function useBookingWizard({
      * 复核步不再有「同意条款」勾选框(新稿 2659:13281 把它改成了 Continue 下方的一行说明文字,
      * 继续即视为同意),所以这里不再拦截。`agreed` 仍保留导出给关怀模式等旧调用方。
      */
-    if (step === 'payment') {
+    if (isPayStep) {
       if (!method) {
         showToast(t('hotels.booking.payment.methodRequired'));
         return;
@@ -834,6 +953,36 @@ export function useBookingWizard({
   const roomNameOf = (stay: BookingStay) =>
     stay.roomName || t(`hotels.detail.rooms.names.${stay.roomKey}`);
 
+  /**
+   * 多酒店一段住宿的卡片文案(第 2 步 Stay 卡片 / 第 3 步首卡):日期行与「间数 × 房型, 人数」行,
+   * 口径与 `summaryFor` 相同,只是数据来自这段住宿自己的日期与房型。
+   */
+  const stayCardFor = (stay: TripStay) => {
+    const rooms = stay.items.reduce((sum, room) => sum + room.quantity, 0);
+    const guests = current.adults + current.childCount;
+    return {
+      dateLabel: t('hotels.booking.payment.summaryRange', {
+        checkIn: formatDayMonth(stay.checkIn, i18n.language),
+        checkOut: formatDayMonth(stay.checkOut, i18n.language),
+        nights: nightsLabel(t, nightsBetween(stay.checkIn, stay.checkOut)),
+      }),
+      roomLabel:
+        stay.items.length > 1
+          ? t('hotels.booking.payment.roomLineMulti', {
+              rooms,
+              list: stay.items
+                .map((room) => t('hotels.booking.payment.roomItem', { room: room.name, count: room.quantity }))
+                .join(t('hotels.booking.payment.roomListSep')),
+              guests,
+            })
+          : t('hotels.booking.payment.roomLine', {
+              rooms,
+              room: stay.items[0]?.name ?? '',
+              guests,
+            }),
+    };
+  };
+
   /** 支付页 / Trip 页的汇总卡文案 */
   const summaryFor = (stay: BookingStay) => ({
     dateLabel: t('hotels.booking.payment.summaryRange', {
@@ -865,7 +1014,7 @@ export function useBookingWizard({
   });
 
   const primaryLabel = (() => {
-    if (step === 'payment' && submitting) return t('common.loading');
+    if (isPayStep && submitting) return t('common.loading');
     /**
      * 复核步一律叫 Continue(稿面 `718:3351` 就是 Continue + 右箭头)——
      * 以前多住宿态叫「Add To Trip」,但那一步并不真的把住宿加进 Trip,只是往下走一步,
@@ -873,7 +1022,7 @@ export function useBookingWizard({
      */
     if (step === 'trip') return t('hotels.booking.checkOut');
     /* 支付步是流程终点,稿面 `718:3366` 写的是 Pay Now,不是 Continue */
-    if (step === 'payment') return t('hotels.booking.payNow');
+    if (isPayStep) return t('hotels.booking.payNow');
     return t('hotels.booking.continue');
   })();
 
@@ -933,6 +1082,13 @@ export function useBookingWizard({
     step,
     sequence,
     index,
+    isPayStep,
+    walletCovers,
+    /* 多酒店行程:各段住宿与小计(建单后读快照) */
+    hotelStays: priceSnapshot?.stays ?? hotelStays,
+    stayTotals: priceSnapshot?.stayTotals ?? stayTotals,
+    removeStay,
+    stayCardFor,
     primaryLabel,
 
     /* 住宿与表单 */

@@ -156,7 +156,9 @@ check('四个源文件都在', [screen, wizard, review, payment].every((x) => x 
 {
   const body = strip(wizard);
   check('复核步按钮叫 Continue(addToTrip 分支已删)', !/addToTrip/u.test(body));
-  check('支付步按钮叫 Pay Now', /if \(step === 'payment'\) return t\('hotels\.booking\.payNow'\)/u.test(body));
+  /* 2026-10-12 起「付款步」= 序列最后一步(多房间钱包全额覆盖时第 2 步就是终点),不再写死 payment */
+  check('支付步按钮叫 Pay Now', /const isPayStep = index === sequence\.length - 1;/u.test(body)
+    && /if \(isPayStep\) return t\('hotels\.booking\.payNow'\)/u.test(body));
   check('结算步仍叫 Check Out', /if \(step === 'trip'\) return t\('hotels\.booking\.checkOut'\)/u.test(body));
   /* 稿面 Continue(718:3354)与 Pay Now(718:3367)都带右箭头,只有 Check Out 没有 */
   check('只有 Check Out 不带右箭头', /primaryArrow=\{step !== 'trip'\}/u.test(strip(screen)));

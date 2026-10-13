@@ -1357,6 +1357,7 @@
         "dates": "Date Confirmation",
         "guests": "Traveler Information",
         "review": "Review & Confirm",
+        "details": "Date & Traveler Information",
         "trip": "Trip Details",
         "payment": "Payment"
       },
@@ -1442,6 +1443,7 @@
         "originalPrice": "Original Price ({{nights}})",
         "roomPrice": "Room Price ({{nights}})",
         "longStayDiscount": "Long Stay Discount",
+        "walletCredit": "Wallet Credit Used",
         "priceChangedTitle": "Price Updated",
         "priceChangedMessage": "The price changed from {{oldAmount}} to {{newAmount}}. Continue with the new price?",
         "priceChangedConfirm": "Continue",
@@ -1484,6 +1486,9 @@
         "share": "Share",
         "wallet": "mTRIP WALLET",
         "availableBalance": "Available Balance",
+        "useWallet": "Use wallet",
+        "payWithin": "Pay Within",
+        "walletApplied": "Wallet applied",
         "popular": "Popular Payment Method",
         "other": "Other Payment Methods",
         "methods": {

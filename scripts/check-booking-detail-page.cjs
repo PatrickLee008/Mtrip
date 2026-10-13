@@ -180,7 +180,8 @@ if (screen) {
   check('「Stay n」Inter 600/16 主色', /interSemi/u.test(tb('stayTitle')) && /fontSize: 16/u.test(tb('stayTitle')) && /colors\.primary/u.test(tb('stayTitle')));
   check('时间轴竖线 2px --secondary + 缩进 18 + gap20', /width: 2/u.test(tb('stayLine')) && /paddingLeft: 18/u.test(tb('stayBody')) && /gap: 20/u.test(tb('stayBody')));
   check('每段用 BookingCard 的 stay 变体(不另写一份卡)', /variant="stay"/u.test(trip));
-  check('单段 View Details 进 BookingDetail', /navigate\('BookingDetail', \{ orderId: row\.id \}\)/u.test(trip));
+  /* 2026-10-12 起带 tripId:预订详情据此列出同一段住宿的全部房型 */
+  check('单段 View Details 进 BookingDetail', /navigate\('BookingDetail', \{ orderId: row\.id, tripId \}\)/u.test(trip));
   check('顶栏声明在 ScrollView 之后', tbody.lastIndexOf('styles.topBar') > tbody.lastIndexOf('</ScrollView>'));
   check('地址按 property 去重后各拉一次(订单快照没有地址)', /new Set\(rows\.map\(\(r\) => r\.property_id\)/u.test(trip));
   check('只读:页面里没有任何编辑/改期入口', !/Edit|modify|Modify/u.test(tbody));

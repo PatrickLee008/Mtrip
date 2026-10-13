@@ -31,6 +31,8 @@ import AlertDialog from '@/components/hotel/booking/AlertDialog';
 import BookingBottomBar from '@/components/hotel/booking/BookingBottomBar';
 import BookingProgress from '@/components/hotel/booking/BookingProgress';
 import BookingStepDates from '@/components/hotel/booking/BookingStepDates';
+import BookingStepDetails from '@/components/hotel/booking/BookingStepDetails';
+import WalletCard from '@/components/hotel/booking/WalletCard';
 import BookingStepGuests from '@/components/hotel/booking/BookingStepGuests';
 import BookingStepPayment from '@/components/hotel/booking/BookingStepPayment';
 import CouponPickerSheet from '@/components/hotel/booking/CouponPickerSheet';
@@ -38,6 +40,7 @@ import ReviewBody from '@/components/hotel/booking/ReviewBody';
 import { AddMoreStayCard, PriceBreakdownCard } from '@/components/hotel/booking/ReviewCards';
 import StaySummaryCard from '@/components/hotel/booking/StaySummaryCard';
 import { BOTTOM_BAR_HEIGHT, bookingShared } from '@/components/hotel/booking/bookingShared';
+import { PAYMENT_WINDOW_MINUTES } from '@/config/global';
 import { PAGE_PADDING, colors, shadows } from '@/config/theme';
 import { fonts } from '@/config/typography';
 import type { RootStackParamList } from '@/navigation/types';
@@ -61,6 +64,14 @@ export default function HotelBookingScreen() {
     comingSoon,
     step,
     index,
+    sequence,
+    cartMode,
+    walletCovers,
+    hotelStays,
+    stayTotals,
+    removeStay,
+    stayCardFor,
+    tripRooms,
     primaryLabel,
     stays,
     current,
@@ -108,9 +119,30 @@ export default function HotelBookingScreen() {
     goBack,
     goNext,
   } = useBookingWizard({ params: route.params, successRoute: 'BookingSuccess' });
+  /** 多酒店行程:两段及以上住宿(第 2 步 Stay 卡片、第 3 步首卡眉头) */
+  const multiHotel = hotelStays.length > 1;
 
   const renderStep = () => {
     switch (step) {
+      case 'details':
+        /* 多房间第 1 步(新稿 2659:12801):日期 / 间数来自购物车只读展示 + 住客信息 + 特殊要求 + 加购 */
+        return (
+          <BookingStepDetails
+            checkIn={current.checkIn}
+            checkOut={current.checkOut}
+            adults={current.adults}
+            rooms={roomCount}
+            form={form}
+            onChangeForm={(patch) => setForm((prev) => ({ ...prev, ...patch }))}
+            onSelectTraveler={() => navigation.navigate('Travelers', { pick: true })}
+            request={request}
+            onChangeRequest={setRequest}
+            addons={current.addons}
+            onToggleAddon={toggleAddon}
+            onOpenInsurance={() => navigation.navigate('Insurance')}
+            onComingSoon={comingSoon}
+          />
+        );
       case 'guests':
         return (
           <BookingStepGuests
@@ -129,7 +161,33 @@ export default function HotelBookingScreen() {
             <ReviewBody
               stay={current}
               /* 新稿:顶部酒店卡 + Selected Rooms,Edit Rooms 回购物车页 */
-              cartRooms={cartRooms}
+              /* 多酒店:人数与间数按所有住宿算 */
+              cartRooms={multiHotel ? tripRooms : cartRooms}
+              /* 多酒店(Figma 1675:9406):商品区换成 Stay 1 / Stay 2 … 卡片,其余区块不变 */
+              topSlot={
+                multiHotel ? (
+                  <View style={styles.stayList}>
+                    {hotelStays.map((stay, i) => {
+                      const card = stayCardFor(stay);
+                      return (
+                        <StaySummaryCard
+                          key={stay.key}
+                          stayLabel={t('hotels.booking.trip.stay', { index: i + 1 })}
+                          onDelete={() => removeStay(stay.key)}
+                          hotelName={stay.hotelName}
+                          dateLabel={card.dateLabel}
+                          roomLabel={card.roomLabel}
+                          viewDetailsLabel={t('hotels.booking.payment.viewDetails')}
+                          onViewDetails={() => navigation.navigate('StayDetail', { index: i })}
+                          totalLabel={t('hotels.booking.review.totalAmount')}
+                          pointsLabel={t('hotels.booking.review.earnPoints', { points: 0 })}
+                          total={formatMoney(stayTotals[i] ?? 0, currency)}
+                        />
+                      );
+                    })}
+                  </View>
+                ) : null
+              }
               hotelName={cartHotelName}
               /* 房费以试算为准:多房间按整车,单房型试算到了才覆盖(否则按这一段住宿预估) */
               roomTotal={reviewRoomTotal}
@@ -139,7 +197,26 @@ export default function HotelBookingScreen() {
               specialRequest={request}
               onEditRooms={() => navigation.navigate('RoomCart')}
               onComingSoon={comingSoon}
-              /* 券挪到第 4 步的 COUPONS 卡(稿面 516:2381),复核步不再出现券行 */
+              /**
+               * 多房间新稿(2659:13152):钱包在这一步。开着钱包且余额够付全款时这一步就是终点(Pay Now),
+               * 明细列出自动应用的券与钱包抵扣,合计为还需另付的 0;否则券仍在第 3 步选,这里不出券行。
+               */
+              couponLine={
+                walletCovers && appliedCoupon
+                  ? { name: appliedCoupon.name, discount: appliedCoupon.discount }
+                  : null
+              }
+              walletCredit={walletCovers ? payableTotal : 0}
+              walletSlot={
+                cartMode ? (
+                  <WalletCard
+                    balance={walletBalance}
+                    insufficient={!current.demo && isLogin && method === 'wallet' && !walletCovers}
+                    onInfo={comingSoon}
+                    toggle={{ on: method === 'wallet', onChange: (on) => setMethod(on ? 'wallet' : null) }}
+                  />
+                ) : null
+              }
             />
             {/* 新稿把这张卡收成了一行小按钮(compact),不再占整块 */}
             <AddMoreStayCard
@@ -199,20 +276,35 @@ export default function HotelBookingScreen() {
         );
       case 'payment': {
         const parts = summaryFor(current);
+        /* 多酒店(Figma 1675:9158):首卡眉头「Multi Booking (N Stay)」,正文是第 1 段住宿,View Details 看各段 */
+        const firstStay = multiHotel ? stayCardFor(hotelStays[0]) : null;
         return (
           <BookingStepPayment
             summary={
               <StaySummaryCard
                 eyebrow={
-                  multi ? t('hotels.booking.trip.multiBooking', { stays: stays.length }) : null
+                  multiHotel
+                    ? t('hotels.booking.trip.multiBooking', { stays: hotelStays.length })
+                    : multi
+                      ? t('hotels.booking.trip.multiBooking', { stays: stays.length })
+                      : null
                 }
-                hotelName={hotelNameOf(current)}
-                dateLabel={parts.dateLabel}
-                roomLabel={parts.roomLabel}
+                hotelName={multiHotel ? hotelStays[0].hotelName : hotelNameOf(current)}
+                dateLabel={firstStay ? firstStay.dateLabel : parts.dateLabel}
+                roomLabel={firstStay ? firstStay.roomLabel : parts.roomLabel}
                 viewDetailsLabel={t('hotels.booking.payment.viewDetails')}
                 onViewDetails={() => navigation.navigate('StayDetail', { index: 0 })}
                 totalLabel={t('hotels.booking.review.totalAmount')}
-                pointsLabel={parts.pointsLabel}
+                /* 多房间新稿:钱包已挪到第 2 步,这里不再有钱包胶囊;多一行支付时限 */
+                pointsLabel={cartMode ? '' : parts.pointsLabel}
+                payWithin={
+                  cartMode
+                    ? {
+                        label: t('hotels.booking.payment.payWithin'),
+                        value: `00:${String(PAYMENT_WINDOW_MINUTES).padStart(2, '0')}:00`,
+                      }
+                    : null
+                }
                 total={formatMoney(payableTotal, currency)}
                 payByOtherLabel={t('hotels.booking.payment.payByOther')}
                 shareLabel={t('hotels.booking.payment.share')}
@@ -223,6 +315,8 @@ export default function HotelBookingScreen() {
             expanded={expanded}
             balance={walletBalance}
             insufficient={!current.demo && isLogin && walletBalance < payableTotal}
+            /* 多房间新稿:钱包挪到第 2 步,第 3 步只剩折叠的其他渠道 */
+            hideWallet={cartMode}
             onSelect={setMethod}
             onToggleExpand={(key) => setExpanded((prev) => (prev === key ? null : key))}
             onComingSoon={comingSoon}
@@ -262,6 +356,7 @@ export default function HotelBookingScreen() {
   };
 
   /** 设计稿只有加购已选态那张(1675:7406)带返回栏,其余屏没有;这里第 1 步统一给它,方便退出向导 */
+  /* 多房间第 1 步(details)按新稿 2659:12801 不带返回栏,退出走吸底栏的 Back(第 1 步即离开向导) */
   const showHeader = step === 'dates';
   /** 多住宿的支付页设计稿没有进度条 */
   const showProgress = !(multi && step === 'payment');
@@ -297,6 +392,7 @@ export default function HotelBookingScreen() {
         {showProgress ? (
           <BookingProgress
             step={index + 1}
+            total={sequence.length}
             title={t(`hotels.booking.steps.${step}`)}
           />
         ) : null}
@@ -407,4 +503,6 @@ const styles = StyleSheet.create({
   main: { paddingHorizontal: PAGE_PADDING, paddingTop: 32, gap: 24 },
   reviewGroup: { gap: 24 },
   tripGroup: { gap: 24 },
+  /* 稿面 1675:9406 两张 Stay 卡片间距 24 */
+  stayList: { gap: 24 },
 });

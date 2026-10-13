@@ -10,12 +10,18 @@
  *
  * 单价存的是**每晚单价**(`hotel_room_type.base_price`),合计 = Σ 单价 × 间数 × 晚数;
  * 晚数由入离日期算,没选日期时按 1 晚(与详情页起价口径一致)。
+ *
+ * **多酒店行程**(Figma `1675:9406` / `1675:9158`):订房向导第 2 步点「Add Hotel and Homestay」时,
+ * 当前这家酒店的车连同入离日期整段转存进 `tripStays`,车清空后回搜索页挑下一家;
+ * 车始终只装「正在挑的那一家」(详情页 / 购物车页只看它),向导把 `tripStays` + 车合成多段住宿,
+ * 一次 `trip/create` 下单(后端本就支持跨物业、各自日期)。离开向导时已填的住客资料暂存在 `tripDraft`。
  */
 
 import { create } from 'zustand';
 import type { ImageSourcePropType } from 'react-native';
 
 import type { HomeIconName } from '@/components/home/HomeIcon';
+import type { BookingAddonKey, LeadGuestForm } from '@/screens/hotel/bookingDemo';
 import type { GoodsSku } from '@/types/models';
 
 export interface CartRoom {
@@ -36,6 +42,23 @@ export interface CartRoom {
   sku?: GoodsSku;
 }
 
+/** 已加入行程的一段住宿(一家酒店 + 一组入离日期 + 该酒店选的房型) */
+export interface TripStay {
+  key: string;
+  propertyId: number;
+  hotelName: string;
+  checkIn: string;
+  checkOut: string;
+  items: CartRoom[];
+}
+
+/** 去挑下一家酒店前暂存的向导表单(向导页会被卸载,回来时据此恢复) */
+export interface TripDraft {
+  form: LeadGuestForm;
+  request: string;
+  addons: BookingAddonKey[];
+}
+
 interface RoomCartState {
   /** 车属于哪家酒店(演示模式为 undefined) */
   propertyId?: number;
@@ -49,6 +72,9 @@ interface RoomCartState {
    * 所以清空时把内容转存到这里。
    */
   booked: CartRoom[];
+  /** 已加入行程的住宿(不含正在挑的那一家) */
+  tripStays: TripStay[];
+  tripDraft: TripDraft | null;
 
   /** 进详情页时调用:换了酒店就清空,同一家则保留已选 */
   setContext: (ctx: {
@@ -62,9 +88,47 @@ interface RoomCartState {
   /** 加减器;qty <= 0 表示移出(由调用方先弹确认框) */
   setQuantity: (roomKey: string, quantity: number) => void;
   remove: (roomKey: string) => void;
-  /** 下单成功:车里的内容转存为 `booked` 快照后清空(单房型旧链路车本就是空的,快照也随之清掉) */
+  /** 下单成功:车里与行程里的房型转存为 `booked` 快照后全部清空(单房型旧链路车本就是空的,快照也随之清掉) */
   checkout: () => void;
   clear: () => void;
+  /**
+   * 「Add Hotel and Homestay」:当前车(须有真实物业、日期与真实房型)整段转存进 `tripStays`,
+   * 车清空,并暂存向导表单。日期取向导里实际用的那组(已按 normalizeDates 纠正过)。
+   */
+  stashStay: (draft: TripDraft, dates: { checkIn: string; checkOut: string }) => void;
+  removeTripStay: (key: string) => void;
+  /** 恢复表单后清掉暂存(再加下一家时会重新暂存) */
+  clearTripDraft: () => void;
+}
+
+/**
+ * 行程里的全部住宿:已加入的 + 车里正在挑的那一家(须有物业、日期与真实房型),key 为 `active`。
+ * 订房向导自己按路由日期拼(会纠正过去的日期);Stay 明细页没有向导状态,用这份。
+ * 注意返回新数组,组件里请先分别订阅各字段再 useMemo 调用,别直接当 zustand selector。
+ */
+export function combineTripStays(state: {
+  tripStays: TripStay[];
+  propertyId?: number;
+  hotelName: string;
+  checkIn?: string;
+  checkOut?: string;
+  items: CartRoom[];
+}): TripStay[] {
+  const real = state.items.filter((item) => item.sku);
+  const active =
+    state.propertyId && state.checkIn && state.checkOut && real.length > 0
+      ? [
+          {
+            key: 'active',
+            propertyId: state.propertyId,
+            hotelName: state.hotelName,
+            checkIn: state.checkIn,
+            checkOut: state.checkOut,
+            items: real,
+          },
+        ]
+      : [];
+  return [...state.tripStays, ...active];
 }
 
 /** 入离日期之间的晚数;缺日期或算不出来时按 1 晚 */
@@ -84,6 +148,8 @@ export const useRoomCartStore = create<RoomCartState>((set, get) => ({
   checkOut: undefined,
   items: [],
   booked: [],
+  tripStays: [],
+  tripDraft: null,
 
   setContext: (ctx) => {
     const sameHotel = get().propertyId === ctx.propertyId;
@@ -119,7 +185,41 @@ export const useRoomCartStore = create<RoomCartState>((set, get) => ({
   remove: (roomKey) =>
     set((state) => ({ items: state.items.filter((item) => item.roomKey !== roomKey) })),
 
-  checkout: () => set((state) => ({ booked: state.items, items: [] })),
+  checkout: () =>
+    set((state) => ({
+      booked: [...state.tripStays.flatMap((stay) => stay.items), ...state.items],
+      items: [],
+      tripStays: [],
+      tripDraft: null,
+    })),
 
   clear: () => set({ items: [] }),
+
+  stashStay: (draft, dates) =>
+    set((state) => {
+      const real = state.items.filter((item) => item.sku);
+      if (!state.propertyId || !dates.checkIn || !dates.checkOut || real.length === 0) {
+        return { tripDraft: draft };
+      }
+      return {
+        tripStays: [
+          ...state.tripStays,
+          {
+            key: `stay-${state.propertyId}-${dates.checkIn}-${Date.now()}`,
+            propertyId: state.propertyId,
+            hotelName: state.hotelName,
+            checkIn: dates.checkIn,
+            checkOut: dates.checkOut,
+            items: real,
+          },
+        ],
+        items: [],
+        tripDraft: draft,
+      };
+    }),
+
+  removeTripStay: (key) =>
+    set((state) => ({ tripStays: state.tripStays.filter((stay) => stay.key !== key) })),
+
+  clearTripDraft: () => set({ tripDraft: null }),
 }));

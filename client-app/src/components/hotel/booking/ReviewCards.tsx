@@ -140,6 +140,8 @@ export interface PriceRow {
    * 排版与普通行完全一致;**用主色是刻意偏离**,隐藏节点没给配色,而折扣与房费同色会读成又一笔收费。
    */
   discount?: boolean;
+  /** 整行主色、金额加粗(多房间新稿 3465:9673「Wallet Credit Used」) */
+  accent?: boolean;
   /** 标签下的次级说明(券名、或「暂无可用优惠券」) */
   note?: string;
   /** 右下角操作链接(选择 / 更换);给了就整行可点 */
@@ -151,7 +153,10 @@ interface PriceProps {
   title: string;
   rows: PriceRow[];
   totalLabel: string;
+  /** 合计右上胶囊;空串不渲染 */
   pointsLabel: string;
+  /** 胶囊主色字(多房间新稿的「Wallet applied」) */
+  pointsAccent?: boolean;
   total: string;
   /** 设计稿 Step 3 / Trip 是 40/60 的大号,支付页汇总卡是 32/40 */
   compact?: boolean;
@@ -162,6 +167,7 @@ export function PriceBreakdownCard({
   rows,
   totalLabel,
   pointsLabel,
+  pointsAccent = false,
   total,
   compact = false,
 }: PriceProps) {
@@ -173,7 +179,7 @@ export function PriceBreakdownCard({
           const body = (
             <>
               <View style={styles.priceLabelBox}>
-                <Text style={styles.priceLabel}>{row.label}</Text>
+                <Text style={[styles.priceLabel, row.accent && styles.priceAccentLabel]}>{row.label}</Text>
                 {row.note ? (
                   <Text style={styles.priceNote} numberOfLines={1}>
                     {row.note}
@@ -188,6 +194,7 @@ export function PriceBreakdownCard({
                   styles.priceValue,
                   row.strike && styles.priceStrike,
                   row.discount && styles.priceDiscount,
+                  row.accent && styles.priceAccentValue,
                 ]}
               >
                 {row.value}
@@ -211,9 +218,11 @@ export function PriceBreakdownCard({
         <View style={styles.priceTotal}>
           <View style={styles.priceTotalHead}>
             <Text style={bookingShared.overline}>{totalLabel}</Text>
-            <View style={styles.pointsBadge}>
-              <Text style={styles.pointsText}>{pointsLabel}</Text>
-            </View>
+            {pointsLabel ? (
+              <View style={styles.pointsBadge}>
+                <Text style={[styles.pointsText, pointsAccent && styles.pointsTextAccent]}>{pointsLabel}</Text>
+              </View>
+            ) : null}
           </View>
           <Text style={[styles.priceGrand, compact && styles.priceGrandCompact]}>{total}</Text>
         </View>
@@ -476,6 +485,8 @@ const styles = StyleSheet.create({
     color: colors.heading,
   },
   priceStrike: { textDecorationLine: 'line-through' },
+  priceAccentLabel: { color: colors.primary },
+  priceAccentValue: { fontFamily: fonts.interSemi, color: colors.primary },
   priceDiscount: { color: colors.primary },
   priceTotal: { paddingHorizontal: 16, paddingVertical: 8 },
   priceTotalHead: {
@@ -498,6 +509,7 @@ const styles = StyleSheet.create({
     textAlign: 'right',
     color: colors.heading,
   },
+  pointsTextAccent: { color: colors.primary },
   priceGrand: {
     fontFamily: fonts.interBold,
     fontSize: 40,

@@ -9,26 +9,20 @@
  */
 
 import React from 'react';
-import { StyleSheet, Text, TextInput, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 
-import { TEMP_ADDON_COVERS } from '@/assets/tempImages';
-import HomeIcon from '@/components/home/HomeIcon';
-import AddOnCard from '@/components/hotel/booking/AddOnCard';
 import BookingCalendar from '@/components/hotel/booking/BookingCalendar';
 import BookingSummaryBar from '@/components/hotel/booking/BookingSummaryBar';
 import GuestCounterRow from '@/components/hotel/booking/GuestCounterRow';
+import { AddOnsSection, SpecialRequestsSection } from '@/components/hotel/booking/StayExtras';
 import { bookingShared } from '@/components/hotel/booking/bookingShared';
 import {
   formatWeekdayDate,
   nightsBetween,
   nightsLabel,
 } from '@/components/hotel/booking/bookingFormat';
-import { colors, radius } from '@/config/theme';
-import { fonts } from '@/config/typography';
-import { BOOKING_ADDONS, type BookingAddonKey } from '@/screens/hotel/bookingDemo';
-import { useSiteStore } from '@/store/siteStore';
-import { formatMoney } from '@/utils/format';
+import type { BookingAddonKey } from '@/screens/hotel/bookingDemo';
 
 interface Props {
   checkIn: string;
@@ -64,7 +58,6 @@ export default function BookingStepDates({
   onOpenInsurance,
 }: Props) {
   const { t, i18n } = useTranslation();
-  const currency = useSiteStore((s) => s.currency);
 
   const nights = nightsBetween(checkIn, checkOut);
 
@@ -110,49 +103,9 @@ export default function BookingStepDates({
         </View>
       </View>
 
-      <View style={styles.section}>
-        <View style={styles.sectionHead}>
-          <Text style={bookingShared.sectionTitle}>{t('hotels.booking.dates.enhance')}</Text>
-          <Text style={styles.optional}>{t('hotels.booking.dates.optional')}</Text>
-        </View>
-        <View style={styles.addonList}>
-          {BOOKING_ADDONS.map((addon) => (
-            <AddOnCard
-              key={addon.key}
-              cover={addon.cover ? TEMP_ADDON_COVERS[addon.key] : null}
-              title={t(`hotels.booking.addons.${addon.key}.title`)}
-              desc={t(`hotels.booking.addons.${addon.key}.desc`)}
-              price={formatMoney(addon.price, currency)}
-              selected={addons.includes(addon.key)}
-              addLabel={t('hotels.booking.dates.addToBooking')}
-              selectedLabel={t('hotels.booking.dates.selected')}
-              onToggle={() => (addon.route ? onOpenInsurance() : onToggleAddon(addon.key))}
-            />
-          ))}
-        </View>
-      </View>
+      <AddOnsSection addons={addons} onToggleAddon={onToggleAddon} onOpenInsurance={onOpenInsurance} />
 
-      <View style={styles.section}>
-        <Text style={bookingShared.sectionTitle}>{t('hotels.booking.dates.specialRequests')}</Text>
-        <View style={styles.requestCard}>
-          <Text style={bookingShared.note}>{t('hotels.booking.dates.requestLabel')}</Text>
-          <View style={styles.textarea}>
-            <TextInput
-              style={styles.textareaInput}
-              value={request}
-              onChangeText={onChangeRequest}
-              placeholder={t('hotels.booking.dates.requestPlaceholder')}
-              placeholderTextColor="rgba(116, 118, 134, 0.5)"
-              multiline
-              textAlignVertical="top"
-            />
-          </View>
-          <View style={styles.noteRow}>
-            <HomeIcon name="infoSmall" size={13.333} color={colors.label} />
-            <Text style={styles.noteText}>{t('hotels.booking.dates.requestNote')}</Text>
-          </View>
-        </View>
-      </View>
+      <SpecialRequestsSection request={request} onChangeRequest={onChangeRequest} />
     </View>
   );
 }
@@ -162,50 +115,4 @@ const styles = StyleSheet.create({
   /* 摘要卡与日历之间设计稿是 16,不是区块间的 24 */
   summaryGroup: { gap: 16 },
   section: { gap: 16 },
-  sectionHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  optional: {
-    fontFamily: fonts.interMedium,
-    fontSize: 14,
-    lineHeight: 20,
-    letterSpacing: 0.14,
-    color: colors.primary,
-  },
-  addonList: { gap: 24 },
-
-  /* 特殊要求卡是纯白 + 更柔的投影(设计稿 0/8 blur15 黑 4%),不走共用壳 */
-  requestCard: {
-    gap: 8,
-    padding: 24,
-    borderRadius: radius.card,
-    backgroundColor: colors.card,
-    shadowColor: '#000000',
-    shadowOpacity: 0.04,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 2,
-  },
-  textarea: {
-    minHeight: 106,
-    padding: 17,
-    borderRadius: radius.btn,
-    backgroundColor: 'rgba(229, 238, 255, 0.5)',
-  },
-  textareaInput: {
-    flex: 1,
-    padding: 0,
-    fontFamily: fonts.inter,
-    fontSize: 16,
-    lineHeight: 24,
-    color: colors.heading,
-  },
-  noteRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 4, paddingTop: 3.5 },
-  noteText: {
-    flex: 1,
-    minWidth: 0,
-    fontFamily: fonts.interSemi,
-    fontSize: 12,
-    lineHeight: 16,
-    letterSpacing: 0.6,
-    color: colors.label,
-  },
 });
