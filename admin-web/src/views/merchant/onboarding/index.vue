@@ -420,7 +420,7 @@ const finalApprovalBlockReasons = computed(() => (kyc.value?.finalApproval?.reas
   const [key, propertyId] = reason.split(':');
   return t(`merchant.onboardingPage.finalBlockReasons.${key}`, { id: propertyId || '' });
 }).join(' / '));
-const credentialChannel = computed(() => app.value?.registration_channel === 'admin' ? 'email' : String(app.value?.registration_channel || ''));
+const credentialChannel = computed(() => app.value?.registration_channel === 'admin' ? (app.value?.auth_test_mode ? 'email' : 'sms') : String(app.value?.registration_channel || ''));
 const parsedTypes = computed<string[]>(() =>
   String(app.value?.business_types || '')
     .split(',')
@@ -1120,6 +1120,14 @@ onMounted(() => {
             </div>
           </div>
 
+          <div v-if="app.contact_verification?.length" class="co-info-section">
+            <h4>{{ t('merchant.onboardingPage.contactVerification') }}</h4>
+            <div v-for="contact in app.contact_verification" :key="contact.channel" class="kyc-scope-doc">
+              <span>{{ contact.channel }} · {{ contact.recipient }} · {{ t(`merchant.onboardingPage.contactStates.${contact.status}`) }}</span>
+              <span>{{ t(`merchant.onboardingPage.contactSources.${contact.source}`, contact.source) }} {{ contact.verifiedAt || '' }}</span>
+            </div>
+          </div>
+
           <!-- §3 注册企业(手风琴表格:点击行展开业务提交详情) -->
           <div class="co-info-section">
             <div class="co-section-heading">
@@ -1378,9 +1386,9 @@ onMounted(() => {
               >{{ t('merchant.onboardingPage.showTestCredentials') }}</a-button>
               <template v-if="!finalApprovalResult.testMode">
               <div v-for="delivery in finalApprovalResult.deliveries || []" :key="delivery.id" class="kyc-scope-doc">
-                <span>{{ delivery.channel }} · {{ delivery.recipient }} · {{ delivery.status }} ({{ delivery.attempts }}/{{ delivery.maxAttempts }})</span>
+                <span>{{ delivery.channel }} · {{ delivery.recipient }} · {{ t(`merchant.onboardingPage.credentialStatus.${delivery.status}`) }} ({{ delivery.attempts }}/{{ delivery.maxAttempts }})<br v-if="delivery.lastError" />{{ delivery.lastError ? t(`merchant.onboardingPage.credentialErrors.${delivery.lastError}`, delivery.lastError) : '' }}</span>
                 <a-button
-                  v-if="delivery.status !== 'delivered'"
+                  v-if="!['delivered', 'accepted'].includes(delivery.status)"
                   v-perm="'merchant:onboarding:credential-retry'"
                   type="link"
                   size="small"

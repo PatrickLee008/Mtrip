@@ -8,6 +8,8 @@ use function Hyperf\Support\env;
  * Mtrip 平台级配置(shared 组件与本服务共用)
  */
 return [
+    // Enable only after SMSPoh content permissions and controlled delivery acceptance.
+    'credential_sms_channel_id' => (int) env('MTRIP_MERCHANT_CREDENTIAL_SMS_CHANNEL_ID', 0),
     // 部署级能力门禁；实际启停由 sys_config.merchant_auth_test_mode 控制。
     'merchant_auth_test_allowed' => env('MTRIP_MERCHANT_AUTH_TEST_ALLOWED', false),
     // 全平台统一 JWT 签名密钥(后台与C端共用,claims.aud 区分)

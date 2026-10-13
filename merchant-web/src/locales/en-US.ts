@@ -3,6 +3,8 @@
  * 覆盖:通用/状态/登录/菜单/头部/工作台/子账号/角色/门店/订单/商品/错误页
  */
 export default {
+  contactSecurity: {"title": "Login contacts", "email": "Email", "sms": "Mobile", "verified": "Verified", "unverified": "Not verified", "released": "Released", "verify": "Verify", "rebind": "Change contact", "success": "Contact verified", "testVerified": "Test check completed; contact remains unverified", "testHint": "Test OTP does not establish real contact verification.", "help": "Verify each contact to enable its OTP login. If all verified contacts are unavailable, contact support for identity review.", "verifiedChannel": "Existing verified channel", "totp": "Authenticator code", "newEmail": "New email", "newPhone": "New mobile (E.164)", "oldCode": "Code sent to existing verified contact", "code": "Verification code", "next": "Continue", "confirm": "Confirm", "rebound": "Contact changed. Sign in again.", "rebindHint": "Changing a contact requires Authenticator, an existing verified contact OTP and a new contact OTP. All sessions expire after confirmation."},
+  credentialClaim: {"title": "Claim activation credentials", "description": "For approved merchants awaiting credential delivery. Verify your original registration mobile, then the registered email.", "notice": "The application number alone cannot authorize credential delivery. If a contact is incorrect or unavailable, request an identity review.", "applicationNo": "Application number", "phone": "Original registration mobile (E.164)", "phoneCode": "Enter the code sent to your original mobile", "emailCode": "Enter the code sent to the registered email", "claim": "Send credentials to verified email", "accepted": "Email accepted by provider. Check your inbox, then activate within 24 hours.", "pending": "Both contacts verified; delivery is pending. Retry later or contact support.", "restart": "Start again", "activate": "First activation", "login": "Back to sign in"},
   security: {
   "enroll": "Set up Google Authenticator",
   "verify": "Verify authenticator code",
@@ -82,7 +84,7 @@ export default {
     continue: 'Continue',
     otpCode: 'Six-digit code',
     otpRequired: 'Enter the six-digit verification code',
-    sentTo: 'A verification code was sent to {recipient}.',
+    sentTo: 'If the account and contact are eligible, a verification code will be sent to {recipient}.',
     authenticatorPrompt: 'Enter the current six-digit code from Google Authenticator.',
     verifyAndSignIn: 'Verify and Sign In',
     verifyAndContinue: 'Verify and Continue',

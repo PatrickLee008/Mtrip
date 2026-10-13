@@ -5,6 +5,11 @@ declare(strict_types=1);
 namespace App\Service;
 
 use Hyperf\DbConnection\Db;
+use Mtrip\Shared\Constants\ErrorCode;
+use Mtrip\Shared\Exception\BusinessException;
+use Mtrip\Shared\Support\CryptoHelper;
+
+use function Hyperf\Config\config;
 
 /**
  * 商户审核与注销服务；经营状态变化统一由MerchantStatusService负责。
@@ -27,7 +32,12 @@ class MerchantService
         $username = $this->uniqueUsername((int) $merchant['id']);
         $password = $password !== '' ? $password : $this->randomPassword();
         $accessCode = $accessCode !== '' ? $accessCode : $this->generateAccessCode((int) $merchant['merchant_type']);
-        Db::transaction(static function () use ($merchant, $remark, $username, $password, $accessCode, $channels) {
+        $aes = (string) config('mtrip.aes_key');
+        $phone = preg_replace('/[\s().-]+/', '', trim(CryptoHelper::decrypt((string) $merchant['contact_phone'], $aes))) ?? '';
+        if (! preg_match('/^\+[1-9]\d{6,14}$/D', $phone)) throw new BusinessException(ErrorCode::PARAM_ERROR, '主账号手机号需要完整国际区号');
+        $phoneHash = hash_hmac('sha256', 'merchant-registration-phone-v1:' . $phone, $aes);
+        MerchantPhoneIdentityService::phoneTransaction($phoneHash, static function () use ($merchant, $remark, $username, $password, $accessCode, $channels, $phoneHash, $phone, $aes) {
+            MerchantPhoneIdentityService::assertAvailable($phoneHash);
             Db::table('merchant_info')->where('id', $merchant['id'])->update([
                 'status' => 3,
                 'audit_remark' => mb_substr($remark, 0, 500),
@@ -43,7 +53,8 @@ class MerchantService
                 'username' => $username,
                 'password' => password_hash($password, PASSWORD_BCRYPT),
                 'real_name' => (string) $merchant['contact_name'],
-                'mobile' => (string) $merchant['contact_phone'],
+                'mobile' => CryptoHelper::encrypt($phone, $aes), 'mobile_index' => $phoneHash,
+                'mobile_verification_source' => 'admin',
                 'is_owner' => 1,
                 'status' => 1,
             ]);

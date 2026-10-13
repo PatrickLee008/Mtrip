@@ -74,7 +74,16 @@ Router::post('/api/v1/app/merchant/auth/recovery/challenge', [AppMerchantAuthCon
 Router::post('/api/v1/app/merchant/auth/recovery/verify', [AppMerchantAuthController::class, 'recoveryVerify']);
 Router::post('/api/v1/app/merchant/auth/recovery/totp/setup', [AppMerchantAuthController::class, 'recoveryTotpSetup']);
 Router::post('/api/v1/app/merchant/auth/recovery/totp/verify', [AppMerchantAuthController::class, 'recoveryTotpVerify']);
+Router::post('/api/v1/app/merchant/auth/credential-claim/phone', [\App\Controller\MerchantContactSecurityController::class, 'claimPhone']);
+Router::post('/api/v1/app/merchant/auth/credential-claim/email', [\App\Controller\MerchantContactSecurityController::class, 'claimEmail']);
+Router::post('/api/v1/app/merchant/auth/credential-claim/finish', [\App\Controller\MerchantContactSecurityController::class, 'claimFinish']);
 Router::addGroup('/api/v1/app/merchant', static function () {
+    Router::get('/auth/contacts', [\App\Controller\MerchantContactSecurityController::class, 'contacts']);
+    Router::post('/auth/contacts/send', [\App\Controller\MerchantContactSecurityController::class, 'send']);
+    Router::post('/auth/contacts/verify', [\App\Controller\MerchantContactSecurityController::class, 'verify']);
+    Router::post('/auth/contacts/rebind/start', [\App\Controller\MerchantContactSecurityController::class, 'rebindStart']);
+    Router::post('/auth/contacts/rebind/new', [\App\Controller\MerchantContactSecurityController::class, 'rebindNew']);
+    Router::post('/auth/contacts/rebind/finish', [\App\Controller\MerchantContactSecurityController::class, 'rebindFinish']);
     Router::post('/auth/logout', [AppMerchantAuthController::class, 'logout']);
 }, [
     'middleware' => [MerchantAuthMiddleware::class, OperationLogMiddleware::class],
@@ -97,6 +106,7 @@ Router::addGroup('/api/v1/admin', static function () {
     Router::post('/merchant/activate', [MerchantController::class, 'activate']);
     Router::post('/merchant/reactivate', [MerchantController::class, 'reactivate']);
     Router::get('/merchant/status-history', [MerchantController::class, 'statusHistory']);
+    Router::post('/merchant/security/contacts/correct', [\App\Controller\Admin\ContactSecurityController::class, 'correct']);
     Router::get('/merchant/security/accounts', [\App\Controller\MerchantSecurityController::class, 'accounts']);
     Router::post('/merchant/reset-2fa', [MerchantController::class, 'resetTwoFa']);
     Router::post('/merchant/impersonate/start', [MerchantController::class, 'impersonateStart']);
@@ -265,6 +275,10 @@ Router::post('/api/v1/merchant/auth/2fa/verify', [\App\Controller\MerchantSecuri
 Router::post('/api/v1/merchant/auth/2fa/pairing/create', [\App\Controller\MerchantSecurityController::class, 'createAppPairing']);
 Router::post('/api/v1/merchant/auth/impersonation/exchange', [\App\Controller\MerchantSecurityController::class, 'exchange']);
 
+Router::post('/api/v1/merchant/auth/credential-claim/phone', [\App\Controller\MerchantContactSecurityController::class, 'claimPhone']);
+Router::post('/api/v1/merchant/auth/credential-claim/email', [\App\Controller\MerchantContactSecurityController::class, 'claimEmail']);
+Router::post('/api/v1/merchant/auth/credential-claim/finish', [\App\Controller\MerchantContactSecurityController::class, 'claimFinish']);
+
 Router::addGroup('/api/v1/merchant', static function () {
     // ---------- 登录态 ----------
     Router::post('/auth/logout', [MerchantAuthController::class, 'logout']);
@@ -272,6 +286,13 @@ Router::addGroup('/api/v1/merchant', static function () {
     Router::get('/auth/me', [MerchantAuthController::class, 'me']);
     Router::get('/auth/menus', [MerchantAuthController::class, 'menus']);
     Router::post('/auth/password', [MerchantAuthController::class, 'updatePassword']);
+
+    Router::post('/auth/contacts/rebind/start', [\App\Controller\MerchantContactSecurityController::class, 'rebindStart']);
+    Router::post('/auth/contacts/rebind/new', [\App\Controller\MerchantContactSecurityController::class, 'rebindNew']);
+    Router::post('/auth/contacts/rebind/finish', [\App\Controller\MerchantContactSecurityController::class, 'rebindFinish']);
+    Router::get('/auth/contacts', [\App\Controller\MerchantContactSecurityController::class, 'contacts']);
+    Router::post('/auth/contacts/send', [\App\Controller\MerchantContactSecurityController::class, 'send']);
+    Router::post('/auth/contacts/verify', [\App\Controller\MerchantContactSecurityController::class, 'verify']);
 
     // ---------- 子账号管理 ----------
     Router::get('/account/list', [MerchantAccountController::class, 'index']);
@@ -337,6 +358,13 @@ Router::addGroup('/api/v1/supplier', static function () {
     Router::get('/auth/me', [SupplierAuthController::class, 'me']);
     Router::get('/auth/menus', [SupplierAuthController::class, 'menus']);
     Router::post('/auth/password', [SupplierAuthController::class, 'updatePassword']);
+
+    Router::post('/auth/contacts/rebind/start', [\App\Controller\MerchantContactSecurityController::class, 'rebindStart']);
+    Router::post('/auth/contacts/rebind/new', [\App\Controller\MerchantContactSecurityController::class, 'rebindNew']);
+    Router::post('/auth/contacts/rebind/finish', [\App\Controller\MerchantContactSecurityController::class, 'rebindFinish']);
+    Router::get('/auth/contacts', [\App\Controller\MerchantContactSecurityController::class, 'contacts']);
+    Router::post('/auth/contacts/send', [\App\Controller\MerchantContactSecurityController::class, 'send']);
+    Router::post('/auth/contacts/verify', [\App\Controller\MerchantContactSecurityController::class, 'verify']);
 
     // ---------- 子账号管理 ----------
     Router::get('/account/list', [SupplierAccountController::class, 'index']);

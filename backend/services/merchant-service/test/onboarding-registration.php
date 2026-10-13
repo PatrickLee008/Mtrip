@@ -87,6 +87,16 @@ try {
     check($restored['applicationId'] === $applicationId, 'same verified contacts restore the existing draft');
     $token = $restored['registrationToken'];
 
+    seedEmailOtp($redis, 991, $phones[1], $emails[0], $code);
+    rejects(ErrorCode::DATA_CONFLICT, fn () => $otp->verify(991, $phones[1], $emails[0], 'email', $code),
+        'changing the phone cannot register a second application with the same email');
+    seedEmailOtp($redis, 992, $phones[0], $emails[0], $code);
+    rejects(ErrorCode::DATA_CONFLICT, fn () => $otp->verify(992, $phones[0], $emails[0], 'email', $code),
+        'email uniqueness is global rather than site-bound');
+    seedEmailOtp($redis, 991, $phones[0], strtoupper($emails[0]), $code);
+    check($otp->verify(991, $phones[0], '  ' . strtoupper($emails[0]) . '  ', 'email', $code)['applicationId'] === $applicationId,
+        'case and surrounding whitespace recover the same application');
+
     rejects(ErrorCode::PARAM_ERROR, fn () => $onboarding->submit(991, $token, $applicationId), 'company name remains required');
     $companyDraft = $onboarding->save(991, $token, [
         'applicationId' => $applicationId, 'companyName' => 'Stage 2 Travel Group',
@@ -230,6 +240,13 @@ try {
         'admin contact confirmation does not bypass base approval, KYC, or account activation');
     rejects(ErrorCode::DATA_CONFLICT, fn () => onboardingRequest($admin, 'create', array_replace($leadInput, ['regNumber' => 'ADMIN-CONTACTS-002'])),
         'duplicate admin registration identity is rejected');
+    rejects(ErrorCode::DATA_CONFLICT, fn () => onboardingRequest($admin, 'create', array_replace($leadInput,
+        ['regNumber' => 'ADMIN-CONTACTS-003', 'registrationPhone' => '+95911122009'])),
+        'admin cannot bypass email uniqueness by changing the phone');
+    AdminContext::set(['admin_id' => 92000, 'admin_name' => 'Super', 'site_id' => 0, 'is_super' => true]);
+    rejects(ErrorCode::DATA_CONFLICT, fn () => onboardingRequest($admin, 'create', array_replace($leadInput,
+        ['siteId' => 992, 'regNumber' => 'ADMIN-CONTACTS-004', 'registrationPhone' => '+95911122009'])),
+        'super administrator cannot reuse an email on another site');
     rejects(ErrorCode::PARAM_ERROR, fn () => $otp->verify(991, '+95911122003', 'admin-lead@example.test', 'admin', $code),
         'public OTP API cannot request the admin confirmation channel');
 
@@ -240,6 +257,13 @@ try {
     check($onboarding->status(991, $second['registrationToken'], $secondId)['testMode'] === true,
         'merchant app status exposes active authentication test mode');
     check(count($otp->availableChannels(991)) === 2, 'test registration exposes email and SMS without provider configuration');
+    $logsBefore = Db::connection('system')->table('sys_email_log')->count();
+    foreach (['email', 'sms'] as $channel) {
+        rejects(ErrorCode::DATA_CONFLICT, fn () => $otp->send(991, $phones[1], $emails[0], $channel, ''),
+            'test mode cannot send registration OTP for an occupied email via ' . $channel);
+    }
+    check(Db::connection('system')->table('sys_email_log')->count() === $logsBefore,
+        'occupied registration email is rejected before provider dispatch');
     foreach (['email', 'sms'] as $index => $channel) {
         $phone = '+9591112200' . ($index + 4);
         $email = 'registration-test-' . $channel . '@example.test';
@@ -268,6 +292,7 @@ try {
     foreach ($emails as $index => $email) {
         [, $emailHash] = otpHashes($phones[$index], $email);
         $redis->del("mtrip:merchant:registration:otp:991:email:{$emailHash}");
+        $redis->del("mtrip:merchant:registration:otp:992:email:{$emailHash}");
         $redis->del("mtrip:merchant:registration:cooldown:991:email:{$emailHash}");
         $smsHash = hash_hmac('sha256', 'merchant-registration-sms-v1:' . $phones[$index], (string) Hyperf\Config\config('mtrip.aes_key'));
         $redis->del("mtrip:merchant:registration:otp:991:sms:{$smsHash}");

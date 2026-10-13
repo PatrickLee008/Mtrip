@@ -79,7 +79,7 @@ class MaskHelper
     {
         $defaults = [
             'password', 'pwd', 'secret', 'client_secret', 'token', 'access_key', 'secret_key',
-            'otp', 'twofacode', 'two_fa_code', 'challengetoken', 'challenge_token', 'accesscode', 'access_code',
+            'otpcode', 'newcontact', 'otp', 'twofacode', 'two_fa_code', 'challengetoken', 'challenge_token', 'accesscode', 'access_code',
             'onetimepassword', 'one_time_password', 'manualkey', 'manual_key', 'otpauthuri', 'otpauth_uri',
             'temporarypassword', 'temporary_password', 'activationtoken', 'activation_token', 'recoverytoken', 'recovery_token',
             'googleidtoken', 'google_id_token', 'idtoken', 'id_token', 'exchangecode', 'exchange_code',

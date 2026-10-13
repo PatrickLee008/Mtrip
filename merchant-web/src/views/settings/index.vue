@@ -1,15 +1,60 @@
 <script setup lang="ts">
-import { computed, reactive, ref } from 'vue';
+import { computed, onMounted, reactive, ref } from 'vue';
 import { message } from 'ant-design-vue';
 import { CheckCircleOutlined, GlobalOutlined, LockOutlined, SafetyCertificateOutlined, UserOutlined } from '@ant-design/icons-vue';
 import { useI18n } from 'vue-i18n';
+import { clearAuth } from '@/utils/auth';
 import PageContainer from '@/components/PageContainer.vue';
-import { apiUpdatePassword } from '@/api/auth';
+import { apiUpdatePassword, apiContacts, apiContactSend, apiContactVerify, apiRebindStart, apiRebindNew, apiRebindFinish, type ContactStates } from '@/api/auth';
 import { useUserStore } from '@/stores/user';
 import { SUPPORTED_LOCALES, type SupportedLocale } from '@/locales';
 
 const userStore = useUserStore();
 const { t, locale } = useI18n();
+const contacts = ref<ContactStates>({ contacts: [], testMode: false });
+const contactBusy = ref(false);
+const contactDialog = ref(false);
+const contactForm = reactive({ mode: 'verify', channel: 'email' as 'email' | 'sms', verifiedChannel: 'email' as 'email' | 'sms', step: 0, value: '', code: '', totp: '', token: '' });
+const verifiedContacts = computed(() => contacts.value.contacts.filter(item => item.status === 'verified'));
+const canManageContacts = computed(() => userStore.isOwner && userStore.accountType === 2 && !userStore.profile?.impersonation);
+onMounted(async () => { if (canManageContacts.value) contacts.value = await apiContacts(); });
+
+async function openContact(channel: 'email' | 'sms', mode: 'verify' | 'rebind'): Promise<void> {
+  Object.assign(contactForm, { channel, mode, step: 0, value: '', code: '', totp: '', token: '', verifiedChannel: verifiedContacts.value[0]?.channel || 'email' });
+  if (mode === 'verify') {
+    contactBusy.value = true;
+    try {
+      const result = await apiContactSend(channel);
+      contactForm.token = result.challengeToken;
+      contactDialog.value = true;
+    } finally { contactBusy.value = false; }
+  } else contactDialog.value = true;
+}
+
+async function submitContact(): Promise<void> {
+  contactBusy.value = true;
+  try {
+    if (contactForm.mode === 'verify') {
+      contacts.value = await apiContactVerify(contactForm.token, contactForm.code);
+      message.success(t(contacts.value.testMode ? 'contactSecurity.testVerified' : 'contactSecurity.success'));
+      contactDialog.value = false;
+    } else if (contactForm.step === 0) {
+      const result = await apiRebindStart(contactForm.verifiedChannel, contactForm.totp);
+      contactForm.token = result.challengeToken;
+      contactForm.step = 1;
+    } else if (contactForm.step === 1) {
+      const result = await apiRebindNew(contactForm.token, contactForm.code, contactForm.channel, contactForm.value);
+      contactForm.token = result.challengeToken;
+      contactForm.code = '';
+      contactForm.step = 2;
+    } else {
+      await apiRebindFinish(contactForm.token, contactForm.code);
+      message.success(t('contactSecurity.rebound'));
+      clearAuth();
+      window.location.href = '/login';
+    }
+  } finally { contactBusy.value = false; }
+}
 
 const passwordSaving = ref(false);
 const passwordForm = reactive({ oldPassword: '', newPassword: '', confirmPassword: '' });
@@ -112,6 +157,21 @@ async function submitPassword(): Promise<void> {
           <span class="section-title"><LockOutlined />{{ t('settings.security.title') }}</span>
         </template>
         <a-alert class="security-alert" type="success" show-icon :message="t('settings.security.twoFaTip')" />
+        <div v-if="canManageContacts" class="contact-security">
+          <h3>{{ t('contactSecurity.title') }}</h3>
+          <a-alert v-if="contacts.testMode" type="warning" show-icon :message="t('contactSecurity.testHint')" />
+          <div v-for="contact in contacts.contacts" :key="contact.channel" class="toggle-row">
+            <div>
+              <strong>{{ t(`contactSecurity.${contact.channel}`) }} · {{ contact.recipient || '-' }}</strong>
+              <p>{{ t(`contactSecurity.${contact.status}`) }}</p>
+            </div>
+            <a-space>
+              <a-button v-if="contact.canVerify" :loading="contactBusy" @click="openContact(contact.channel, 'verify')">{{ t('contactSecurity.verify') }}</a-button>
+              <a-button v-if="verifiedContacts.length && !contacts.testMode" @click="openContact(contact.channel, 'rebind')">{{ t('contactSecurity.rebind') }}</a-button>
+            </a-space>
+          </div>
+          <p>{{ t('contactSecurity.help') }}</p>
+        </div>
         <a-form layout="vertical" class="password-form">
           <a-form-item :label="t('header.oldPassword')" required>
             <a-input-password v-model:value="passwordForm.oldPassword" autocomplete="current-password" />
@@ -162,6 +222,23 @@ async function submitPassword(): Promise<void> {
         </a-form>
       </a-card>
     </div>
+    <a-modal v-model:open="contactDialog" :title="t(contactForm.mode === 'verify' ? 'contactSecurity.verify' : 'contactSecurity.rebind')" :confirm-loading="contactBusy" :ok-text="t(contactForm.mode === 'rebind' && contactForm.step < 2 ? 'contactSecurity.next' : 'contactSecurity.confirm')" @ok="submitContact">
+      <a-form layout="vertical">
+        <template v-if="contactForm.mode === 'rebind' && contactForm.step === 0">
+          <a-alert type="info" show-icon :message="t('contactSecurity.rebindHint')" />
+          <a-form-item :label="t('contactSecurity.verifiedChannel')">
+            <a-select v-model:value="contactForm.verifiedChannel">
+              <a-select-option v-for="contact in verifiedContacts" :key="contact.channel" :value="contact.channel">{{ contact.recipient }}</a-select-option>
+            </a-select>
+          </a-form-item>
+          <a-form-item :label="t('contactSecurity.totp')"><a-input v-model:value="contactForm.totp" :maxlength="6" inputmode="numeric" autocomplete="one-time-code" /></a-form-item>
+        </template>
+        <template v-else>
+          <a-form-item v-if="contactForm.mode === 'rebind' && contactForm.step === 1" :label="t(contactForm.channel === 'email' ? 'contactSecurity.newEmail' : 'contactSecurity.newPhone')"><a-input v-model:value="contactForm.value" :placeholder="contactForm.channel === 'sms' ? '+959…' : 'name@example.com'" /></a-form-item>
+          <a-form-item :label="t(contactForm.mode === 'rebind' && contactForm.step === 1 ? 'contactSecurity.oldCode' : 'contactSecurity.code')"><a-input v-model:value="contactForm.code" :maxlength="6" inputmode="numeric" autocomplete="one-time-code" /></a-form-item>
+        </template>
+      </a-form>
+    </a-modal>
   </PageContainer>
 </template>
 

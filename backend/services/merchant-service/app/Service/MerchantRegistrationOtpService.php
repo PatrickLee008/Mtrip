@@ -43,6 +43,8 @@ class MerchantRegistrationOtpService
     {
         $channel = $this->assertChannel($channel);
         [$phone, $email] = $this->validateContacts($phone, $email);
+        (new MerchantDraftExpiryService())->expireContacts($this->contactHash('email', $email), $this->contactHash('phone', $phone));
+        MerchantEmailIdentityService::assertRegistrationContacts($siteId, $this->contactHash('phone', $phone), $this->contactHash('email', $email));
         $recipient = $channel === 'email' ? $email : $phone;
         $testMode = MerchantAuthTestMode::enabled();
         $config = $testMode ? ['ttl' => 300] : ($channel === 'email' ? $this->emailChannel($siteId) : $this->smsChannel($siteId));
@@ -50,7 +52,7 @@ class MerchantRegistrationOtpService
         $hash = $this->contactHash($channel, $recipient);
         $phoneHash = $this->contactHash('phone', $phone);
         $emailHash = $this->contactHash('email', $email);
-        $cooldown = $this->cooldownKey($siteId, $channel, $hash);
+        $cooldown = $this->cooldownKey($siteId, $channel, $hash, (bool) ($payload['testMode'] ?? false));
         if ($this->redis->exists($cooldown)) throw new BusinessException(ErrorCode::SMS_SEND_TOO_FREQUENT);
         $ttl = (int) $config['ttl'];
 
@@ -86,7 +88,7 @@ class MerchantRegistrationOtpService
         $hash = $this->contactHash($channel, $recipient);
         $phoneHash = $this->contactHash('phone', $phone);
         $emailHash = $this->contactHash('email', $email);
-        $key = $this->otpKey($siteId, $channel, $hash);
+        $key = $this->otpKey($siteId, $channel, $hash, (bool) ($payload['testMode'] ?? false));
         $payload = json_decode((string) $this->redis->get($key), true);
         if (! is_array($payload)) throw new BusinessException(ErrorCode::SMS_CODE_EXPIRED);
         if (($payload['testMode'] ?? false) && ! MerchantAuthTestMode::enabled()) throw new BusinessException(ErrorCode::SMS_CODE_EXPIRED);
@@ -109,7 +111,7 @@ class MerchantRegistrationOtpService
         }
         if (! $valid) throw new BusinessException(ErrorCode::SMS_CODE_INVALID);
         $this->redis->del($key);
-        $applicationId = $this->createOrRestoreDraft($siteId, $phone, $email, $phoneHash, $emailHash, $channel, $hash);
+        $applicationId = $this->createOrRestoreDraft($siteId, $phone, $email, $phoneHash, $emailHash, $channel, $hash, (bool) ($payload['testMode'] ?? false));
         return [
             'registrationToken' => JwtHelper::issue([
                 'aud' => 'merchant_registration', 'site_id' => $siteId, 'application_id' => $applicationId,
@@ -131,6 +133,12 @@ class MerchantRegistrationOtpService
             || (int) ($claims['application_id'] ?? 0) <= 0
             || strlen((string) ($claims['phone_hash'] ?? '')) !== 64
             || strlen((string) ($claims['email_hash'] ?? '')) !== 64) {
+            throw new BusinessException(ErrorCode::UNAUTHORIZED);
+        }
+        $app = Db::table('merchant_application')->where('id', $claims['application_id'])->where('site_id', $siteId)
+            ->whereNull('deleted_at')->whereNull('registration_email_released_at')->whereNull('registration_phone_released_at')->first();
+        if (! $app || ! hash_equals((string) $app->registration_phone_index, (string) $claims['phone_hash'])
+            || ! hash_equals((string) $app->registration_email_index, (string) $claims['email_hash'])) {
             throw new BusinessException(ErrorCode::UNAUTHORIZED);
         }
         return $claims;
@@ -159,20 +167,29 @@ class MerchantRegistrationOtpService
     private function key(): string { $key = (string) config('mtrip.jwt_secret'); if ($key === '') throw new BusinessException(ErrorCode::SERVER_ERROR, '认证密钥未配置'); return $key; }
     private function aesKey(): string { $key = (string) config('mtrip.aes_key'); if ($key === '') throw new BusinessException(ErrorCode::SERVER_ERROR, '数据加密密钥未配置'); return $key; }
 
-    private function createOrRestoreDraft(int $siteId, string $phone, string $email, string $phoneHash, string $emailHash, string $channel, string $recipientHash): int
+    private function createOrRestoreDraft(int $siteId, string $phone, string $email, string $phoneHash, string $emailHash, string $channel, string $recipientHash, bool $testMode): int
     {
-        return Db::transaction(function () use ($siteId, $phone, $email, $phoneHash, $emailHash, $channel, $recipientHash): int {
+        (new MerchantDraftExpiryService())->expireContacts($emailHash, $phoneHash);
+        return MerchantPhoneIdentityService::transaction($emailHash, $phoneHash, function () use ($siteId, $phone, $email, $phoneHash, $emailHash, $channel, $recipientHash, $testMode): int {
+            MerchantEmailIdentityService::assertRegistrationContacts($siteId, $phoneHash, $emailHash);
             $existing = Db::table('merchant_application')
                 ->where('site_id', $siteId)
                 ->where('registration_phone_index', $phoneHash)
                 ->where('registration_email_index', $emailHash)
                 ->whereNull('deleted_at')
+                ->whereNull('registration_email_released_at')
                 ->lockForUpdate()
                 ->first();
-            if ($existing) return (int) $existing->id;
+            $proof = ['registration_otp_source' => $testMode ? 'test' : 'otp', 'registration_channel' => $channel, 'registration_contact_hash' => $recipientHash];
+            if (! $testMode) $proof[$channel === 'email' ? 'registration_verified_email_at' : 'registration_verified_mobile_at'] = gmdate('Y-m-d H:i:s');
+            if ($existing) {
+                Db::table('merchant_application')->where('id', $existing->id)->update($proof);
+                return (int) $existing->id;
+            }
 
             $now = gmdate('Y-m-d H:i:s');
-            Db::table('merchant_application')->insertOrIgnore([
+            Db::table('merchant_application')->insert([
+                ...$proof,
                 'site_id' => $siteId,
                 'app_no' => $this->appNo(),
                 'merchant_name' => '',

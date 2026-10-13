@@ -2,6 +2,8 @@
  * 中文语言包:只维护有中文翻译的词条,未翻译的 key 自动回退到 en-US
  */
 export default {
+  contactSecurity: {"title": "登录联系方式", "email": "邮箱", "sms": "手机号", "verified": "已验证", "unverified": "尚未验证", "released": "已释放", "verify": "去验证", "rebind": "换绑", "success": "联系方式验证成功", "testVerified": "测试校验完成，联系方式仍为未验证", "testHint": "测试验证码仅供流程测试，不代表真实联系方式已验证。", "help": "分别验证联系方式后，可使用对应渠道的 OTP 登录。若所有已验证渠道均不可用，请联系管理员进行身份核验。", "verifiedChannel": "现有已验证渠道", "totp": "身份验证器验证码", "newEmail": "新邮箱", "newPhone": "新手机号（含国际区号）", "oldCode": "现有已验证渠道的验证码", "code": "验证码", "next": "下一步", "confirm": "确认", "rebound": "联系方式已换绑，请重新登录。", "rebindHint": "换绑需要身份验证器、现有已验证渠道 OTP 和新联系方式 OTP；成功后所有会话失效。"},
+  credentialClaim: {"title": "领取激活凭证", "description": "适用于最终批准后尚未收到账号凭证的商户。先验证原注册手机号，再验证注册邮箱。", "notice": "申请号仅用于定位，不能单独授权凭证交付。联系方式填错或失效时，请联系管理员进行身份核验。", "applicationNo": "入驻申请号", "phone": "原注册手机号（含国际区号）", "phoneCode": "请输入原注册手机收到的验证码", "emailCode": "请输入注册邮箱收到的验证码", "claim": "向已验证邮箱发送凭证", "accepted": "邮件服务已受理，请检查邮箱并在 24 小时内激活。", "pending": "两项联系方式已验证，凭证待投递；可稍后重试或联系管理员。", "restart": "重新开始", "activate": "首次激活", "login": "返回登录"},
   security: {
   "enroll": "注册 Google 身份验证器",
   "verify": "验证身份验证器代码",
@@ -81,7 +83,7 @@ export default {
     continue: '继续验证',
     otpCode: '六位验证码',
     otpRequired: '请输入六位验证码',
-    sentTo: '验证码已发送至 {recipient}。',
+    sentTo: '如果账号及联系方式符合条件，验证码将发送至 {recipient}。',
     authenticatorPrompt: '请输入 Google Authenticator 当前显示的六位动态码。',
     verifyAndSignIn: '验证并登录',
     verifyAndContinue: '验证并继续',

@@ -7,6 +7,7 @@
  */
 import complianceS6 from './compliance/en-US';
 export default {
+  merchantContactRecovery: {"title": "Correct login contacts after review", "hint": "Only after a human identity review. This releases replaced identities, revokes all sessions and resets changed contacts to unverified. It does not verify the contacts. Pending accounts must claim credentials again.", "phone": "New registration mobile (E.164)", "email": "New registration email", "reason": "Identity evidence and reason (at least 10 characters)", "confirm": "Confirm identity review and correction", "done": "Contacts corrected. Merchant must complete real OTP verification."},
   complianceS6,
   marketplace: {
     title: "Marketplace ranking",
@@ -2315,6 +2316,12 @@ export default {
       approvedAccountTitle: 'Merchant Approved',
     },
     onboardingPage: {
+      contactVerification: 'Real contact verification',
+      contactStates: { verified: 'Verified', unverified: 'Not verified', released: 'Released' },
+      contactSources: { otp: 'Real OTP', admin: 'Administrator confirmation', test: 'Test OTP', unknown: 'No OTP proof' },
+      credentialStatus: { pending: 'Pending delivery', failed: 'Failed', processing: 'Processing', accepted: 'Accepted by provider', delivered: 'Delivered' },
+      credentialErrors: { recipient_otp_required: 'Merchant must claim credentials using mobile and email OTP', sms_text_not_enabled_claim_by_otp: 'Content SMS unavailable; use credential claim', credentials_expired_claim_again: 'Credentials expired; claim again with mobile and email OTP', email_channel_unavailable: 'Email channel unavailable', smtp_delivery_failed: 'Email provider failed' },
+
       subtitle: 'Merchant Verification & Onboarding',
       title: 'Onboarding',
       pageDesc: 'Review submitted base registration details. Approval opens KYC only.',
@@ -2395,6 +2402,8 @@ export default {
       adminContactsConfirmed: 'Registration contacts confirmed by an administrator (not OTP). Credentials will be sent to the registration email.',
       finalBlockReasons: {
         registration_contacts_not_verified: 'Registration phone and email require OTP verification or administrator confirmation',
+        registration_phone_conflict: 'Registration mobile is reserved by another application or owner account',
+        registration_email_conflict: 'Registration email is reserved by another application or account; contact an administrator',
         registration_not_approved: 'Base registration is not approved',
         merchant_kyc_not_approved: 'Merchant KYC is not fully approved',
         property_kyc_not_approved: 'Initial property #{id} KYC is not fully approved',

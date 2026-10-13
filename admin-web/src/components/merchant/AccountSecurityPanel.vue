@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
+import { computed, reactive, ref, watch } from 'vue';
 import { Modal, message } from 'ant-design-vue';
 import { useI18n } from 'vue-i18n';
 import { useUserStore } from '@/stores/user';
-import { apiMerchantSecurityAccounts, apiMerchantReset2Fa, type SecurityAccount } from '@/api/merchant';
+import { apiMerchantSecurityAccounts, apiMerchantReset2Fa, apiMerchantCorrectContacts, type SecurityAccount } from '@/api/merchant';
 
 const props = defineProps<{ merchantId: number; accessConfigured: boolean }>();
 const { t } = useI18n();
@@ -12,6 +12,27 @@ const rows = ref<SecurityAccount[]>([]);
 const target = ref<SecurityAccount | null>(null);
 const reason = ref('');
 const busy = ref(false);
+const correctionOpen = ref(false);
+const correction = reactive({ phone: '', email: '', reason: '' });
+function openCorrection(): void {
+  Object.assign(correction, { phone: '', email: '', reason: '' });
+  correctionOpen.value = true;
+}
+function correctContacts(): void {
+  if (!correction.phone || !correction.email || correction.reason.trim().length < 10) { message.warning(t('common.required')); return; }
+  Modal.confirm({
+    title: t('merchantContactRecovery.confirm'), content: t('merchantContactRecovery.hint'), okType: 'danger',
+    async onOk() {
+      busy.value = true;
+      try {
+        await apiMerchantCorrectContacts(props.merchantId, correction.phone, correction.email, correction.reason);
+        correctionOpen.value = false;
+        message.success(t('merchantContactRecovery.done'));
+        await load();
+      } finally { busy.value = false; }
+    },
+  });
+}
 const columns = computed(() => [
   { title: t('merchantSecurity.account'), dataIndex: 'username' },
   { title: t('merchantSecurity.type'), key: 'type' },
@@ -57,6 +78,7 @@ function confirm(): void {
   <a-divider orientation="left">{{ t('merchant.profile.accountSecurity') }}</a-divider>
   <p>{{ t('merchant.profile.merchantAccessCode') }}: {{ accessConfigured ? t('merchantDirectory.configured') : t('merchantDirectory.notConfigured') }}</p>
   <template v-if="user.profile?.isSuper">
+    <a-button v-perm="'merchant:list:contacts'" danger style="margin-bottom: 12px" @click="openCorrection">{{ t('merchantContactRecovery.title') }}</a-button>
     <a-alert :message="t('merchantSecurity.hint')" type="info" show-icon />
     <a-table :data-source="rows" :columns="columns" row-key="id" :pagination="false" size="small">
       <template #bodyCell="{ column, record }">
@@ -70,6 +92,14 @@ function confirm(): void {
     </a-table>
   </template>
   <a-alert v-else :message="t('merchantSecurity.superOnly')" type="info" />
+  <a-modal v-model:open="correctionOpen" :title="t('merchantContactRecovery.title')" :confirm-loading="busy" @ok="correctContacts">
+    <a-alert type="warning" show-icon :message="t('merchantContactRecovery.hint')" />
+    <a-form layout="vertical" style="margin-top: 12px">
+      <a-form-item :label="t('merchantContactRecovery.phone')" required><a-input v-model:value="correction.phone" placeholder="+959…" /></a-form-item>
+      <a-form-item :label="t('merchantContactRecovery.email')" required><a-input v-model:value="correction.email" :maxlength="100" /></a-form-item>
+      <a-form-item :label="t('merchantContactRecovery.reason')" required><a-textarea v-model:value="correction.reason" :maxlength="500" /></a-form-item>
+    </a-form>
+  </a-modal>
   <a-modal :open="!!target" :title="t('merchant.profile.reset2Fa')" :confirm-loading="busy" @cancel="target = null" @ok="confirm">
     <p>{{ target?.username }}</p>
     <a-alert :message="t('merchantSecurity.resetIncludesPassword')" type="warning" show-icon style="margin-bottom: 12px" />

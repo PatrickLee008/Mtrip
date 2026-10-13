@@ -1,9 +1,11 @@
 import type { Router } from 'vue-router';
+import { watch } from 'vue';
 import { useUserStore } from '@/stores/user';
 import { apiMe } from '@/api/auth';
 import { clearAuth, isSupportSession } from '@/utils/auth';
 import { installDynamicRoutes } from './dynamic';
 import { resolveMenuTitle } from '@/locales/menuI18n';
+import { i18n } from '@/locales';
 
 /**
  * 路由守卫:登录态校验 → 动态路由注入(刷新恢复) → 页面标题
@@ -68,7 +70,8 @@ export function setupRouterGuard(router: Router): void {
     return true;
   });
 
-  router.afterEach((to) => {
+  function updateTitle(): void {
+    const to = router.currentRoute.value;
     // 统一解析:meta.title 为词条 key 时翻译;未命中按语言回退 rawTitle/rawTitleEn,纯文本标题原样显示
     const display = resolveMenuTitle(
       (to.meta.title as string) || '',
@@ -78,5 +81,7 @@ export function setupRouterGuard(router: Router): void {
     document.title = display
       ? `${display} - ${import.meta.env.VITE_APP_TITLE}`
       : (import.meta.env.VITE_APP_TITLE as string);
-  });
+  }
+  router.afterEach(updateTitle);
+  watch(i18n.global.locale, updateTitle);
 }

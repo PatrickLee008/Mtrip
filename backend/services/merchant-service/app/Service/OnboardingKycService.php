@@ -345,6 +345,20 @@ class OnboardingKycService
         if ((int) $app['registration_status'] !== 3) {
             $reasons[] = 'registration_not_approved';
         }
+        if ((int) $app['merchant_id'] === 0 && (string) ($app['registration_email_index'] ?? '') !== '') {
+            try {
+                MerchantEmailIdentityService::assertAvailable((string) $app['registration_email_index'], (int) $app['id']);
+            } catch (BusinessException) {
+                $reasons[] = 'registration_email_conflict';
+            }
+        }
+        if ((int) $app['merchant_id'] === 0) {
+            try {
+                MerchantPhoneIdentityService::assertAvailable((string) ($app['registration_phone_index'] ?? ''), (int) $app['id']);
+            } catch (BusinessException) {
+                $reasons[] = 'registration_phone_conflict';
+            }
+        }
         if ((int) $app['merchant_kyc_status'] !== 5 || ! $this->approvedScopeValid((int) $app['id'], 0, (int) $app['kyc_template_id'])) {
             $reasons[] = 'merchant_kyc_not_approved';
         }

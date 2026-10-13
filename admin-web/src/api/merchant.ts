@@ -514,3 +514,7 @@ export function apiMerchantActivities(
 export function apiMerchantBlacklistList(params: Record<string, unknown>): Promise<PageData<Row>> {
   return get<PageData<Row>>('/admin/merchant/blacklist-list', params);
 }
+
+export function apiMerchantCorrectContacts(merchantId: number, phone: string, email: string, reason: string): Promise<{ accountId: number; verificationRequired: boolean }> {
+  return post('/admin/merchant/security/contacts/correct', { merchantId, phone, email, reason });
+}

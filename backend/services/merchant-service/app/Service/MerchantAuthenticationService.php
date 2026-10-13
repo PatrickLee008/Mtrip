@@ -7,6 +7,7 @@ namespace App\Service;
 use App\Service\Merchant\MerchantAuthService;
 use Hyperf\DbConnection\Db;
 use Mtrip\Shared\Constants\ErrorCode;
+use Mtrip\Shared\Context\MerchantContext;
 use Mtrip\Shared\Exception\BusinessException;
 use Mtrip\Shared\Merchant\Totp;
 use Mtrip\Shared\Support\CryptoHelper;
@@ -76,6 +77,7 @@ class MerchantAuthenticationService
         });
         if (isset($result['error'])) throw new BusinessException(ErrorCode::UNAUTHORIZED, '激活凭证无效');
         $account = $result;
+        $this->assertCredentialsCurrent($account);
 
         $token = $this->newToken();
         Db::table('merchant_auth_challenge')->where('account_id', $account['id'])->where('purpose', 'activation_identity')
@@ -94,22 +96,21 @@ class MerchantAuthenticationService
     {
         $challenge = $this->challenge($token, ['activation_identity', 'activation'], ['pending', 'verified']);
         $account = $this->account((int) $challenge['account_id'], [2]);
-        return $this->profile($account, $challenge['purpose'] === 'activation' && $challenge['status'] === 'verified');
+        $this->assertCredentialsCurrent($account);        return $this->profile($account, $challenge['purpose'] === 'activation' && $challenge['status'] === 'verified');
     }
 
     public function sendActivationOtp(string $identityToken, string $channel, string $ip): array
     {
         $challenge = $this->challenge($identityToken, ['activation_identity'], ['pending']);
         $account = $this->account((int) $challenge['account_id'], [2]);
-        return $this->createOtp($account, 'activation', $channel, $channel, $ip);
+        $this->assertCredentialsCurrent($account);        return $this->createOtp($account, 'activation', $channel, $channel, $ip);
     }
 
     public function verifyActivationOtp(string $token, string $code, string $ip): array
     {
         $challenge = $this->verifyOtp($token, $code, 'activation', $ip);
         $account = $this->account((int) $challenge['account_id'], [2]);
-        $field = $this->otpChannel((string) $challenge['method']) === 'email' ? 'verified_email_at' : 'verified_mobile_at';
-        Db::table('merchant_admin')->where('id', $account['id'])->update([$field => gmdate('Y-m-d H:i:s')]);
+        $this->assertCredentialsCurrent($account);        $this->recordContactProof($account, $challenge);
         MerchantActivityService::account($account, 'activation_contact_verified', $ip);
         return ['activationToken' => $token, 'expiresIn' => max(1, strtotime($challenge['expires_at'] . ' UTC') - time()), 'profile' => $this->profile($this->account((int) $account['id'], [2]), true)];
     }
@@ -156,10 +157,12 @@ class MerchantAuthenticationService
         $result = Db::transaction(function () use ($token, $accountId, $ip): array {
             $challenge = $this->challenge($token, ['activation'], ['verified'], true);
             $account = $this->account($accountId, [2], true);
+            $this->assertCredentialsCurrent($account);
             $merchant = Db::table('merchant_info')->where('id', $account['merchant_id'])->where('site_id', $account['site_id'])
                 ->where('status', 1)->whereNull('deleted_at')->lockForUpdate()->first();
             if (! $merchant) throw new BusinessException(ErrorCode::DATA_CONFLICT, '商户当前不能完成激活');
-            if (! $account['verified_email_at'] && ! $account['verified_mobile_at']) {
+            if (! $account['verified_email_at'] && ! $account['verified_mobile_at']
+                && ! ($challenge['provider_request_id'] === MerchantAuthTestMode::OTP_MARKER && MerchantAuthTestMode::enabled())) {
                 throw new BusinessException(ErrorCode::DATA_CONFLICT, '请先完成注册联系方式 OTP 验证');
             }
             if ((int) $account['two_fa_status'] !== 1 || ! $account['two_fa_enrolled_at']) {
@@ -281,13 +284,15 @@ class MerchantAuthenticationService
     }
 
     /** @return array{challengeToken:string,method:string,verification:string,recipient:string,expiresIn:int,resendAfter:int} */
-    private function createOtp(array $account, string $purpose, string $method, string $channel, string $ip, string $googleHash = ''): array
+    private function createOtp(array $account, string $purpose, string $method, string $channel, string $ip, string $googleHash = '', string $newRecipient = '', array $extraContext = []): array
     {
         $this->assertOtpChannel($channel);
-        return Db::transaction(function () use ($account, $purpose, $method, $channel, $ip, $googleHash): array {
+        return Db::transaction(function () use ($account, $purpose, $method, $channel, $ip, $googleHash, $newRecipient, $extraContext): array {
             $account = $this->account((int) $account['id'], [(int) $account['status']], true);
             $this->assertUnlocked($account);
+            if ($purpose !== 'rebind_new') $this->assertContactOwnership($account, $channel);
             $recipientCiphertext = (string) ($channel === 'email' ? $account['email'] : $account['mobile']);
+            if ($newRecipient !== '') $recipientCiphertext = CryptoHelper::encrypt($newRecipient, $this->aesKey());
             $recipient = $this->decrypt($recipientCiphertext);
             if ($recipient === '') throw new BusinessException(ErrorCode::DATA_CONFLICT, '账号缺少可验证联系方式');
             $latest = Db::table('merchant_auth_challenge')->where('account_id', $account['id'])->where('purpose', $purpose)
@@ -311,6 +316,7 @@ class MerchantAuthenticationService
                 'provider_request_id' => $providerRequestId, 'status' => 'pending', 'max_attempts' => self::MAX_ATTEMPTS,
                 'expires_at' => gmdate('Y-m-d H:i:s', time() + self::OTP_TTL),
                 'resend_available_at' => gmdate('Y-m-d H:i:s', time() + self::RESEND_AFTER), 'request_ip_hash' => $this->ipHash($ip),
+                'context_json' => json_encode(['authVersion' => (int) $account['auth_version']] + $extraContext),
             ]);
             MerchantActivityService::account($account, $purpose . ($testMode ? '_test_otp_requested' : '_otp_requested'), $ip);
             return [
@@ -344,6 +350,18 @@ class MerchantAuthenticationService
         $result = Db::transaction(function () use ($token, $code, $purpose, $ip): array {
             $challenge = $this->challenge($token, [$purpose], ['pending'], true);
             $channel = $this->otpChannel((string) $challenge['method']);
+            if ((int) $challenge['account_id'] > 0) {
+                $account = $this->account((int) $challenge['account_id'], [1, 2], true);
+                $context = json_decode((string) $challenge['context_json'], true) ?: [];
+                if (isset($context['authVersion']) && (int) $context['authVersion'] !== (int) $account['auth_version']) {
+                    throw new BusinessException(ErrorCode::SMS_CODE_EXPIRED);
+                }
+                if ($purpose !== 'rebind_new') $this->assertContactOwnership($account, $channel);
+                if ($purpose !== 'rebind_new' && ! hash_equals((string) $challenge['identifier_hash'], $this->contactHash($channel,
+                    $this->decrypt((string) $account[$channel === 'email' ? 'email' : 'mobile'])))) {
+                    throw new BusinessException(ErrorCode::SMS_CODE_EXPIRED);
+                }
+            }
             $valid = (int) $challenge['account_id'] > 0 && ($channel === 'email' || $challenge['provider_request_id'] === MerchantAuthTestMode::OTP_MARKER
                 ? hash_equals((string) $challenge['otp_hash'], hash_hmac('sha256', $code, $this->jwtKey()))
                 : $this->verifySmsOtp((int) $challenge['site_id'], (string) $challenge['provider_request_id'], $code));
@@ -377,7 +395,9 @@ class MerchantAuthenticationService
     private function verifiedAccount(string $token, string $purpose, array $statuses): array
     {
         $challenge = $this->challenge($token, [$purpose], ['verified']);
-        return $this->account((int) $challenge['account_id'], $statuses);
+        $account = $this->account((int) $challenge['account_id'], $statuses);
+        if ($purpose === 'activation') $this->assertCredentialsCurrent($account);
+        return $account;
     }
 
     private function challenge(string $token, array $purposes, array $statuses, bool $lock = false): array
@@ -415,13 +435,27 @@ class MerchantAuthenticationService
         if (($channel === 'email' && ! filter_var($identifier, FILTER_VALIDATE_EMAIL))
             || ($channel === 'sms' && ! preg_match('/^\+[1-9]\d{6,14}$/D', $identifier))) return null;
         $index = $this->contactHash($channel, $identifier);
+        {
+            $owners = Db::table('merchant_admin')->where($channel === 'email' ? 'email_identity_key' : 'mobile_identity_key', $index)
+                ->whereNull($channel === 'email' ? 'email_released_at' : 'mobile_released_at')
+                ->limit(2)->get()->map(static fn ($row) => (array) $row)->all();
+            if (count($owners) > 1) {
+                foreach ($owners as $owner) MerchantActivityService::account($owner, $channel . '_identity_conflict', '', 0, 'System');
+                return null;
+            }
+        }
         $column = $channel === 'email' ? 'email_index' : 'mobile_index';
         $verified = $channel === 'email' ? 'verified_email_at' : 'verified_mobile_at';
         $query = Db::table('merchant_admin as a')->join('merchant_info as m', 'm.id', '=', 'a.merchant_id')
-            ->where("a.{$column}", $index)->whereNotNull("a.{$verified}")->where('a.status', 1)
+            ->where("a.{$column}", $index)->where(function ($q) use ($verified): void {
+                $q->whereNotNull("a.{$verified}");
+                if (MerchantAuthTestMode::enabled()) $q->orWhereNotNull('a.test_' . $verified);
+            })->where('a.status', 1)
             ->whereIn('m.status', [3, 4])->whereNull('a.deleted_at')->whereNull('m.deleted_at')
             ->whereNotIn('m.id', Db::table('merchant_blacklist')->where('status', 1)->select('merchant_id'));
         if ($siteId > 0) $query->where('a.site_id', $siteId);
+        $query->whereNull($channel === 'email' ? 'a.email_released_at' : 'a.mobile_released_at');
+        if ($channel === 'sms') $query->where('a.account_type', 2)->where('a.is_owner', 1);
         $rows = $query->limit(2)->get(['a.*'])->map(static fn ($row) => (array) $row)->all();
         return count($rows) === 1 ? $rows[0] : null;
     }
@@ -446,10 +480,277 @@ class MerchantAuthenticationService
             'username' => (string) $account['username'], 'email' => MaskHelper::email($email), 'mobile' => MaskHelper::mobile($mobile),
             'otpVerified' => $otpVerified, 'activated' => (int) $account['status'] === 1,
             'methods' => [
-                'email' => (bool) $account['verified_email_at'], 'sms' => (bool) $account['verified_mobile_at'],
+                'email' => ! $account['email_released_at'] && (bool) $account['verified_email_at'],
+                'sms' => ! $account['mobile_released_at'] && (bool) $account['verified_mobile_at'],
                 'google' => (bool) $account['google_linked_at'], 'accessCode' => (int) $account['two_fa_status'] === 1,
             ],
         ];
+    }
+
+    public function claimPhoneOtp(string $applicationNo, string $phone, string $ip): array
+    {
+        $phone = preg_replace('/[\s().-]+/', '', trim($phone)) ?? '';
+        if (! preg_match('/^\+[1-9]\d{6,14}$/D', $phone) || strlen($applicationNo) > 30) throw new BusinessException(ErrorCode::PARAM_ERROR);
+        $this->claimRateLimit($ip, $this->contactHash('sms', $phone));
+        $app = Db::table('merchant_application')->where('app_no', trim($applicationNo))
+            ->where('registration_phone_index', $this->contactHash('sms', $phone))
+            ->whereNotNull('final_approved_at')->whereNull('registration_phone_released_at')->whereNull('deleted_at')->first();
+        $account = $app ? Db::table('merchant_admin')->where('merchant_id', $app->merchant_id)->where('site_id', $app->site_id)
+            ->where('is_owner', 1)->where('account_type', 2)->where('status', 2)->whereNull('mobile_released_at')->whereNull('deleted_at')->first() : null;
+        $result = null;
+        if ($account) {
+            try {
+                $result = $this->createOtp((array) $account, 'credential_phone', 'sms', 'sms', $ip);
+            } catch (BusinessException $e) {
+                if (! in_array($e->getCode(), [ErrorCode::SMS_CHANNEL_UNAVAILABLE, ErrorCode::SMS_SEND_TOO_FREQUENT,
+                    ErrorCode::DATA_CONFLICT, ErrorCode::TOO_MANY_REQUESTS], true)) throw $e;
+            }
+        }
+        $result ??= $this->decoyChallenge(0, 'credential_phone', 'sms', $ip);
+        // Locating an application alone grants no privilege and exposes no account metadata.
+        $result['recipient'] = MaskHelper::mobile($phone);
+        return $result;
+    }
+
+    public function claimEmailOtp(string $phoneToken, string $phoneCode, string $ip): array
+    {
+        $proof = $this->verifyOtp($phoneToken, $phoneCode, 'credential_phone', $ip);
+        $account = $this->account((int) $proof['account_id'], [2]);
+        return MerchantPhoneIdentityService::transaction((string) $account['email_index'], (string) $account['mobile_index'], function () use ($proof, $account, $ip): array {
+            $this->recordContactProof($account, $proof);
+            $result = $this->createOtp($account, 'credential_email', 'email', 'email', $ip);
+            $row = Db::table('merchant_auth_challenge')->where('token_hash', hash('sha256', $result['challengeToken']))->first();
+            $context = json_decode((string) $row->context_json, true) ?: [];
+            $context['phoneProofId'] = $proof['id'];
+            Db::table('merchant_auth_challenge')->where('id', $row->id)->update(['context_json' => json_encode($context)]);
+            Db::table('merchant_auth_challenge')->where('id', $proof['id'])->where('status', 'verified')
+                ->update(['status' => 'consumed', 'consumed_at' => gmdate('Y-m-d H:i:s')]);
+            return $result;
+        });
+    }
+
+    public function claimCredentials(string $token, string $code, string $ip): array
+    {
+        $proof = $this->verifyOtp($token, $code, 'credential_email', $ip);
+        $account = $this->account((int) $proof['account_id'], [2]);
+        $context = json_decode((string) $proof['context_json'], true) ?: [];
+        $phoneProof = Db::table('merchant_auth_challenge')->where('id', (int) ($context['phoneProofId'] ?? 0))
+            ->where('account_id', $account['id'])->where('purpose', 'credential_phone')->where('status', 'consumed')->first();
+        if (! $phoneProof || ! hash_equals((string) $phoneProof->identifier_hash, (string) $account['mobile_index'])
+            || strtotime($phoneProof->expires_at . ' UTC') <= time()
+            || $phoneProof->provider_request_id === MerchantAuthTestMode::OTP_MARKER
+            || $proof['provider_request_id'] === MerchantAuthTestMode::OTP_MARKER) {
+            throw new BusinessException(ErrorCode::DATA_CONFLICT, '凭证交付需要两次真实 OTP，测试模式请由超级管理员查看凭证');
+        }
+        MerchantPhoneIdentityService::transaction((string) $account['email_index'], (string) $account['mobile_index'], function () use ($account, $proof, $ip): void {
+            $account = $this->account((int) $account['id'], [2], true);
+            $this->recordContactProof($account, $proof);
+            Db::table('merchant_auth_challenge')->where('id', $proof['id'])->update(['status' => 'consumed', 'consumed_at' => gmdate('Y-m-d H:i:s')]);
+            MerchantActivityService::account($account, 'credential_claim_verified', $ip);
+        });
+        $receipts = (new OnboardingCredentialDeliveryService())->claimToEmail((int) $account['id']);
+        return ['deliveries' => $receipts, 'recipient' => MaskHelper::email($this->decrypt((string) $account['email']))];
+    }
+
+    private function claimRateLimit(string $ip, string $identifier): void
+    {
+        $prefix = 'mtrip:merchant:credential-claim:' . (string) config('databases.default.database') . ':';
+        $redis = \Hyperf\Context\ApplicationContext::getContainer()->get(\Hyperf\Redis\Redis::class);
+        $allowed = $redis->eval(<<<'LUA'
+local a = redis.call('INCR', KEYS[1])
+if a == 1 then redis.call('EXPIRE', KEYS[1], 3600) end
+local b = redis.call('INCR', KEYS[2])
+if b == 1 then redis.call('EXPIRE', KEYS[2], 3600) end
+if a > 10 or b > 10 then return 0 end
+return 1
+LUA, [$prefix . 'ip:' . $this->ipHash($ip), $prefix . 'contact:' . $identifier], 2);
+        if (! $allowed) throw new BusinessException(ErrorCode::TOO_MANY_REQUESTS);
+    }
+
+    public function contacts(): array
+    {
+        $account = $this->selfAccount();
+        $rows = [];
+        foreach (['email', 'sms'] as $channel) {
+            $email = $channel === 'email';
+            $verified = $account[$email ? 'verified_email_at' : 'verified_mobile_at'];
+            $released = $account[$email ? 'email_released_at' : 'mobile_released_at'];
+            $value = $this->decrypt((string) $account[$email ? 'email' : 'mobile']);
+            $rows[] = ['channel' => $channel, 'recipient' => $email ? MaskHelper::email($value) : MaskHelper::mobile($value),
+                'status' => $released ? 'released' : ($verified ? 'verified' : 'unverified'),
+                'verifiedAt' => $verified, 'source' => $account[$email ? 'email_verification_source' : 'mobile_verification_source'],
+                'canVerify' => ! $released && ! $verified && $value !== ''];
+        }
+        return ['contacts' => $rows, 'testMode' => MerchantAuthTestMode::enabled()];
+    }
+
+    public function sendContactOtp(string $channel, string $ip): array
+    {
+        $this->assertOtpChannel($channel);
+        $account = $this->selfAccount();
+        if ($account[$channel === 'email' ? 'verified_email_at' : 'verified_mobile_at']) {
+            throw new BusinessException(ErrorCode::DATA_CONFLICT, '该联系方式已验证');
+        }
+        return $this->createOtp($account, 'contact_verify', $channel, $channel, $ip);
+    }
+
+    public function verifyContactOtp(string $token, string $code, string $ip): array
+    {
+        $account = $this->selfAccount();
+        $challenge = $this->challenge($token, ['contact_verify'], ['pending']);
+        if ((int) $challenge['account_id'] !== (int) $account['id']) throw new BusinessException(ErrorCode::FORBIDDEN);
+        $challenge = $this->verifyOtp($token, $code, 'contact_verify', $ip);
+        $callback = function () use ($account, $challenge, $ip): array {
+            $account = $this->selfAccount(true);
+            $this->recordContactProof($account, $challenge);
+            Db::table('merchant_auth_challenge')->where('id', $challenge['id'])->where('status', 'verified')
+                ->update(['status' => 'consumed', 'consumed_at' => gmdate('Y-m-d H:i:s')]);
+            MerchantActivityService::account($account, 'contact_verified', $ip);
+            return $this->contacts();
+        };
+        return $account['email_index']
+            ? MerchantPhoneIdentityService::transaction((string) $account['email_index'], (string) $account['mobile_index'], $callback)
+            : MerchantPhoneIdentityService::phoneTransaction((string) $account['mobile_index'], $callback);
+    }
+
+    public function startRebind(string $verifiedChannel, string $totpCode, string $ip): array
+    {
+        $this->assertOtpChannel($verifiedChannel);
+        $account = $this->selfAccount();
+        $result = Db::transaction(function () use ($verifiedChannel, $totpCode, $ip): array {
+            $account = $this->selfAccount(true);
+            $this->assertUnlocked($account);
+            if (! $account[$verifiedChannel === 'email' ? 'verified_email_at' : 'verified_mobile_at']) {
+                throw new BusinessException(ErrorCode::DATA_CONFLICT, '需要已真实验证渠道；若全部失效请联系管理员核验');
+            }
+            $step = (int) $account['two_fa_status'] === 1
+                ? Totp::matchStep($this->decrypt((string) $account['two_fa_secret_enc']), $totpCode, (int) $account['last_accepted_totp_step']) : null;
+            if ($step === null) {
+                $this->authenticationFailure($account, 'contact_rebind_totp_failed');
+                return ['error' => true];
+            }
+            Db::table('merchant_admin')->where('id', $account['id'])->update(['last_accepted_totp_step' => $step]);
+            return $this->createOtp($account, 'rebind_old', $verifiedChannel, $verifiedChannel, $ip);
+        });
+        if (isset($result['error'])) throw new BusinessException(ErrorCode::UNAUTHORIZED, '身份验证器验证码无效');
+        return $result;
+    }
+
+    public function sendRebindNew(string $oldToken, string $oldCode, string $channel, string $value, string $ip): array
+    {
+        $account = $this->selfAccount();
+        $old = $this->challenge($oldToken, ['rebind_old'], ['pending']);
+        if ((int) $old['account_id'] !== (int) $account['id']) throw new BusinessException(ErrorCode::FORBIDDEN);
+        $old = $this->verifyOtp($oldToken, $oldCode, 'rebind_old', $ip);
+        if ($old['provider_request_id'] === MerchantAuthTestMode::OTP_MARKER) throw new BusinessException(ErrorCode::DATA_CONFLICT, '换绑需要真实 OTP');
+        $this->assertOtpChannel($channel);
+        $value = $channel === 'email' ? strtolower(trim($value)) : (preg_replace('/[\s().-]+/', '', trim($value)) ?? '');
+        if (($channel === 'email' && (strlen($value) > 100 || ! filter_var($value, FILTER_VALIDATE_EMAIL)))
+            || ($channel === 'sms' && ! preg_match('/^\+[1-9]\d{6,14}$/D', $value))) throw new BusinessException(ErrorCode::PARAM_ERROR);
+        $hash = $this->contactHash($channel, $value);
+        if ($channel === 'email') MerchantEmailIdentityService::assertAvailable($hash);
+        else MerchantPhoneIdentityService::assertAvailable($hash);
+        $result = $this->createOtp($account, 'rebind_new', $channel, $channel, $ip, '', $value, ['oldProofId' => $old['id']]);
+        Db::table('merchant_auth_challenge')->where('id', $old['id'])->where('status', 'verified')->update([
+            'status' => 'consumed', 'consumed_at' => gmdate('Y-m-d H:i:s'),
+        ]);
+        return $result;
+    }
+
+    public function finishRebind(string $token, string $code, string $ip): array
+    {
+        $account = $this->selfAccount();
+        $pending = $this->challenge($token, ['rebind_new'], ['pending']);
+        if ((int) $pending['account_id'] !== (int) $account['id']) throw new BusinessException(ErrorCode::FORBIDDEN);
+        $proof = $this->verifyOtp($token, $code, 'rebind_new', $ip);
+        if ($proof['provider_request_id'] === MerchantAuthTestMode::OTP_MARKER) throw new BusinessException(ErrorCode::DATA_CONFLICT, '换绑需要真实 OTP');
+        $channel = $this->otpChannel((string) $proof['method']);
+        $email = $channel === 'email';
+        $hash = (string) $proof['identifier_hash'];
+        return MerchantPhoneIdentityService::changeTransaction(
+            [(string) $account['email_index'], $email ? $hash : (string) $account['email_index']],
+            [(string) $account['mobile_index'], $email ? (string) $account['mobile_index'] : $hash],
+            function () use ($proof, $hash, $email, $ip): array {
+                $account = $this->selfAccount(true);
+                $context = json_decode((string) $proof['context_json'], true) ?: [];
+                $old = Db::table('merchant_auth_challenge')->where('id', (int) ($context['oldProofId'] ?? 0))
+                    ->where('account_id', $account['id'])->where('purpose', 'rebind_old')->where('status', 'consumed')->lockForUpdate()->first();
+                if (! $old || strtotime($old->expires_at . ' UTC') <= time()
+                    || (int) ($context['authVersion'] ?? -1) !== (int) $account['auth_version']) throw new BusinessException(ErrorCode::SMS_CODE_EXPIRED);
+                if ($email) MerchantEmailIdentityService::assertAvailable($hash);
+                else MerchantPhoneIdentityService::assertAvailable($hash);
+                $now = gmdate('Y-m-d H:i:s');
+                $field = $email ? 'email' : 'mobile';
+                Db::table('merchant_contact_identity_history')->insert([
+                    'site_id' => $account['site_id'], 'account_id' => $account['id'], 'channel' => $email ? 'email' : 'sms',
+                    'contact_ciphertext' => $account[$field], 'contact_hash' => $account[$field . '_index'],
+                    'released_at' => $now, 'reason' => 'owner_totp_and_dual_otp_rebind',
+                ]);
+                Db::table('merchant_admin')->where('id', $account['id'])->update([
+                    $field => $proof['recipient_ciphertext'], $field . '_index' => $hash,
+                    $email ? 'verified_email_at' : 'verified_mobile_at' => $now,
+                    $field . '_verification_source' => 'otp', $field . '_released_at' => null,
+                    $email ? 'test_verified_email_at' : 'test_verified_mobile_at' => null,
+                    'auth_version' => Db::raw('auth_version + 1'), 'challenge_hash' => null, 'challenge_expires_at' => null,
+                ]);
+                Db::table('merchant_application')->where('merchant_id', $account['merchant_id'])->where('site_id', $account['site_id'])->update([
+                    $email ? 'registration_email' : 'registration_phone' => $proof['recipient_ciphertext'],
+                    $email ? 'registration_email_index' : 'registration_phone_index' => $hash,
+                    $email ? 'registration_verified_email_at' : 'registration_verified_mobile_at' => $now,
+                    $email ? 'registration_email_released_at' : 'registration_phone_released_at' => null,
+                ]);
+                Db::table('merchant_auth_challenge')->where('account_id', $account['id'])->whereIn('status', ['pending', 'verified'])->update(['status' => 'expired']);
+                MerchantActivityService::account($account, 'contact_rebound_sessions_revoked', $ip);
+                return ['requiresLogin' => true];
+            });
+    }
+
+    private function selfAccount(bool $lock = false): array
+    {
+        if (! MerchantContext::isOwner() || MerchantContext::accountType() !== 2
+            || isset(MerchantContext::get()['impersonation_session_id'])) throw new BusinessException(ErrorCode::FORBIDDEN);
+        $account = $this->account(MerchantContext::adminId(), [1], $lock);
+        if ((int) $account['merchant_id'] !== MerchantContext::merchantId() || (int) $account['site_id'] !== MerchantContext::siteId()
+            || (int) $account['account_type'] !== 2 || (int) $account['is_owner'] !== 1) throw new BusinessException(ErrorCode::FORBIDDEN);
+        return $account;
+    }
+
+    private function assertContactOwnership(array $account, string $channel): void
+    {
+        $email = $channel === 'email';
+        if ($account[$email ? 'email_released_at' : 'mobile_released_at']) throw new BusinessException(ErrorCode::DATA_CONFLICT, '联系方式已释放');
+        $applicationId = (int) Db::table('merchant_application')->where('merchant_id', $account['merchant_id'])
+            ->where('site_id', $account['site_id'])->value('id');
+        if ($email) MerchantEmailIdentityService::assertAvailable((string) $account['email_index'], $applicationId, (int) $account['id']);
+        else {
+            if ((int) $account['account_type'] !== 2 || (int) $account['is_owner'] !== 1) throw new BusinessException(ErrorCode::FORBIDDEN);
+            MerchantPhoneIdentityService::assertAvailable((string) $account['mobile_index'], $applicationId, (int) $account['id']);
+        }
+    }
+
+    private function recordContactProof(array $account, array $challenge): void
+    {
+        $channel = $this->otpChannel((string) $challenge['method']);
+        $this->assertContactOwnership($account, $channel);
+        $context = json_decode((string) $challenge['context_json'], true) ?: [];
+        if ((isset($context['authVersion']) && (int) $context['authVersion'] !== (int) $account['auth_version'])
+            || ! hash_equals((string) $challenge['identifier_hash'], $this->contactHash($channel,
+                $this->decrypt((string) $account[$channel === 'email' ? 'email' : 'mobile'])))) {
+            throw new BusinessException(ErrorCode::SMS_CODE_EXPIRED);
+        }
+        $test = $challenge['provider_request_id'] === MerchantAuthTestMode::OTP_MARKER;
+        $verified = $channel === 'email' ? 'verified_email_at' : 'verified_mobile_at';
+        $source = $channel === 'email' ? 'email_verification_source' : 'mobile_verification_source';
+        $changes = [($test ? 'test_' : '') . $verified => gmdate('Y-m-d H:i:s')];
+        if (! $account[$verified]) $changes[$source] = $test ? 'test' : 'otp';
+        Db::table('merchant_admin')->where('id', $account['id'])->update($changes);
+    }
+
+    private function assertCredentialsCurrent(array $account): void
+    {
+        if ($account['credential_expires_at'] && strtotime($account['credential_expires_at'] . ' UTC') <= time()) {
+            throw new BusinessException(ErrorCode::UNAUTHORIZED, '激活凭证已过期，请重新领取');
+        }
     }
 
     private function totpSetup(array $account, string $secret): array

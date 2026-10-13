@@ -5,6 +5,7 @@
  */
 import complianceS6 from './compliance/zh-CN';
 export default {
+  merchantContactRecovery: {"title": "核验后更正登录联系方式", "hint": "仅限已完成人工身份核验时使用。更换的旧身份会释放，所有会话失效，变更的联系方式重置为未验证。此操作不代表 OTP 已验证；待激活账号需重新领取凭证。", "phone": "新的注册手机号（含国际区号）", "email": "新的注册邮箱", "reason": "身份核验依据和换绑原因（至少 10 字）", "confirm": "确认已核验身份并更正", "done": "联系方式已更正，商户需完成真实 OTP 验证。"},
   complianceS6,
   marketplace: {
     title: "市场排名管理",
@@ -2290,6 +2291,12 @@ export default {
       approvedAccountTitle: '商户已通过审核',
     },
     onboardingPage: {
+      contactVerification: '联系方式真实验证状态',
+      contactStates: { verified: '已验证', unverified: '尚未验证', released: '已释放' },
+      contactSources: { otp: '真实 OTP', admin: '管理员确认', test: '测试 OTP', unknown: '无 OTP 证明' },
+      credentialStatus: { pending: '待投递', failed: '失败', processing: '处理中', accepted: '服务商已受理', delivered: '已送达' },
+      credentialErrors: { recipient_otp_required: '请商户通过手机和邮箱 OTP 领取凭证', sms_text_not_enabled_claim_by_otp: '内容短信未启用，请使用凭证领取入口', credentials_expired_claim_again: '凭证过期，请商户通过双 OTP 重新领取', email_channel_unavailable: '邮件渠道不可用', smtp_delivery_failed: '邮件服务发送失败' },
+
       subtitle: '商户验证与入驻',
       title: '入职',
       pageDesc: '审核商户提交的基础注册资料；通过后仅开放 KYC。',
@@ -2370,6 +2377,8 @@ export default {
       adminContactsConfirmed: '注册联系方式已由管理员确认（非 OTP 验证），账号凭证将投递至注册邮箱。',
       finalBlockReasons: {
         registration_contacts_not_verified: '注册手机号和邮箱尚未完成 OTP 验证或管理员确认',
+        registration_phone_conflict: '注册手机号已被其他申请或主账号占用，请联系管理员处理',
+        registration_email_conflict: '注册邮箱已被其他申请或账号占用，请联系管理员处理',
         registration_not_approved: '基础注册尚未批准',
         merchant_kyc_not_approved: '商户主体 KYC 尚未全部通过',
         property_kyc_not_approved: '首批物业 #{id} 的 KYC 尚未全部通过',

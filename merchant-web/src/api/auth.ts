@@ -122,3 +122,15 @@ export function apiMenus(): Promise<MenusResult> {
 export function apiUpdatePassword(oldPassword: string, newPassword: string): Promise<null> {
   return post<null>('/merchant/auth/password', { oldPassword, newPassword });
 }
+
+export interface ContactState { channel: 'email' | 'sms'; recipient: string; status: 'verified' | 'unverified' | 'released'; verifiedAt: string | null; source: string; canVerify: boolean }
+export interface ContactStates { contacts: ContactState[]; testMode: boolean }
+export const apiContacts = (): Promise<ContactStates> => get('/merchant/auth/contacts');
+export const apiContactSend = (channel: 'email' | 'sms'): Promise<AuthChallengeResult> => securePost('/merchant/auth/contacts/send', { channel });
+export const apiContactVerify = (challengeToken: string, otpCode: string): Promise<ContactStates> => securePost('/merchant/auth/contacts/verify', { challengeToken, otpCode });
+export const apiRebindStart = (verifiedChannel: 'email' | 'sms', twoFaCode: string): Promise<AuthChallengeResult> => securePost('/merchant/auth/contacts/rebind/start', { verifiedChannel, twoFaCode });
+export const apiRebindNew = (challengeToken: string, otpCode: string, channel: 'email' | 'sms', value: string): Promise<AuthChallengeResult> => securePost('/merchant/auth/contacts/rebind/new', { challengeToken, otpCode, channel, newContact: value });
+export const apiRebindFinish = (challengeToken: string, otpCode: string): Promise<{ requiresLogin: boolean }> => securePost('/merchant/auth/contacts/rebind/finish', { challengeToken, otpCode });
+export const apiClaimPhone = (applicationNo: string, phone: string): Promise<AuthChallengeResult> => securePost('/merchant/auth/credential-claim/phone', { applicationNo, phone });
+export const apiClaimEmail = (challengeToken: string, otpCode: string): Promise<AuthChallengeResult> => securePost('/merchant/auth/credential-claim/email', { challengeToken, otpCode });
+export const apiClaimFinish = (challengeToken: string, otpCode: string): Promise<{ deliveries: {channel: string; status: string; lastError: string}[]; recipient: string }> => securePost('/merchant/auth/credential-claim/finish', { challengeToken, otpCode });

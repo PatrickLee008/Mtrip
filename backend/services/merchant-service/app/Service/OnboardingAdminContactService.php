@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Service;
 
-use Hyperf\DbConnection\Db;
 use Mtrip\Shared\Constants\ErrorCode;
 use Mtrip\Shared\Exception\BusinessException;
 use Mtrip\Shared\Support\CryptoHelper;
@@ -28,13 +27,12 @@ class OnboardingAdminContactService
         if ($key === '') throw new BusinessException(ErrorCode::SERVER_ERROR, '数据加密密钥未配置');
         $phoneHash = hash_hmac('sha256', 'merchant-registration-phone-v1:' . $phone, $key);
         $emailHash = hash_hmac('sha256', 'merchant-registration-email-v1:' . $email, $key);
-        if (Db::table('merchant_application')->where('site_id', $siteId)->where('id', '<>', $applicationId)
-            ->where('registration_phone_index', $phoneHash)->where('registration_email_index', $emailHash)
-            ->whereNull('deleted_at')->exists()) {
-            throw new BusinessException(ErrorCode::DATA_CONFLICT, '该注册手机号和邮箱已关联本站点的入驻申请');
-        }
+        (new MerchantDraftExpiryService())->expireContacts($emailHash, $phoneHash);
+        MerchantEmailIdentityService::assertAvailable($emailHash, $applicationId);
+        MerchantPhoneIdentityService::assertAvailable($phoneHash, $applicationId);
         return [
             'registration_channel' => 'admin',
+            'registration_otp_source' => 'admin',
             'registration_contact_hash' => $emailHash,
             'registration_phone' => CryptoHelper::encrypt($phone, $key),
             'registration_phone_index' => $phoneHash,

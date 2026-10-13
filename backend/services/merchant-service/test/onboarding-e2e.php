@@ -294,7 +294,7 @@ try {
         && Db::table('merchant_store')->whereIn('id', $approved['propertyIds'])->whereNotNull('source_business_id')->count() === 2,
         'E2E final approval creates the merchant account and both mapped properties');
     $retried = $delivery->retry((int) $deliveryRow->id);
-    check($retried['status'] === 'delivered', 'E2E failed credential delivery can be retried safely');
+    check($retried['status'] === 'accepted', 'E2E failed credential delivery can be retried safely');
     $deliveryRow = Db::table('merchant_credential_delivery')->where('id', $deliveryRow->id)->first();
     $credentials = json_decode(CryptoHelper::decrypt((string) $deliveryRow->credential_ciphertext, (string) config('mtrip.aes_key')), true);
     $auth = new Stage7Authentication(new MerchantAccountSecurityService(), new MerchantAuthService());

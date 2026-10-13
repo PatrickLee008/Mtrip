@@ -42,6 +42,10 @@ SQL
 )"
 printf '%s\n' "$create_sql" | mysql_exec
 
+for email_migration in "$REPO_ROOT/database/migrations/V20261012130000__add-merchant-email-identity-lock.sql" "$REPO_ROOT/database/migrations/V20261012130100__enforce-merchant-email-uniqueness.sql" "$REPO_ROOT/database/migrations/V20261013130000__add-merchant-phone-identity-and-proofs.sql" "$REPO_ROOT/database/migrations/V20261013130100__enforce-merchant-phone-uniqueness.sql"; do
+  sed "s/USE \`mtrip_business\`;/USE \`$TEST_DB\`;/" "$email_migration" | mysql_exec
+done
+
 for container in "$MERCHANT_CONTAINER" "$GOODS_CONTAINER" "$USER_CONTAINER"; do
   sed "s/mtrip_m12_s1_test/$TEST_DB/g" "$REPO_ROOT/backend/shared/tests/integration/M12Bootstrap.php" \
     | $DOCKER exec -i "$container" sh -c 'cat > /tmp/M12Bootstrap.php'

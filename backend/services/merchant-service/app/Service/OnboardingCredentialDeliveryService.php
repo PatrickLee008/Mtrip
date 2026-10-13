@@ -11,6 +11,8 @@ use Mtrip\Shared\Exception\BusinessException;
 use Mtrip\Shared\Support\CryptoHelper;
 use Mtrip\Shared\Support\MaskHelper;
 use Mtrip\Shared\Support\SmtpClient;
+use Mtrip\Shared\Support\SmsPohTextClient;
+use App\Support\PasswordGenerator;
 
 use function Hyperf\Config\config;
 
@@ -77,11 +79,57 @@ class OnboardingCredentialDeliveryService
             throw new BusinessException(ErrorCode::NOT_FOUND, '凭证投递记录不存在');
         }
         $this->assertSite((int) $row->site_id);
-        if ((string) $row->status === 'delivered') {
+        if (in_array((string) $row->status, ['delivered', 'accepted'], true)) {
             return $this->receipt((array) $row);
         }
         $this->deliver($deliveryId, true, MerchantAuthTestMode::enabled());
         return $this->receipt((array) Db::table('merchant_credential_delivery')->where('id', $deliveryId)->first());
+    }
+
+    public function claimToEmail(int $accountId): array
+    {
+        $applicationId = Db::transaction(function () use ($accountId): int {
+            $account = Db::table('merchant_admin')->where('id', $accountId)->where('status', 2)->whereNull('deleted_at')->lockForUpdate()->first();
+            if (! $account || ! $account->verified_mobile_at || ! $account->verified_email_at
+                || $account->mobile_released_at || $account->email_released_at) {
+                throw new BusinessException(ErrorCode::DATA_CONFLICT, '请先完成真实手机和邮箱 OTP 验证');
+            }
+            $app = Db::table('merchant_application')->where('merchant_id', $account->merchant_id)->where('site_id', $account->site_id)
+                ->whereNotNull('final_approved_at')->whereNull('deleted_at')->first();
+            if (! $app) throw new BusinessException(ErrorCode::NOT_FOUND);
+            $existing = Db::table('merchant_credential_delivery')->where('account_id', $accountId)->orderBy('id')->lockForUpdate()->first();
+            if (! $existing) throw new BusinessException(ErrorCode::NOT_FOUND);
+            if (Db::table('merchant_credential_delivery')->where('account_id', $accountId)->where('status', 'processing')
+                ->where('locked_at', '>', gmdate('Y-m-d H:i:s', time() - 300))->exists()) {
+                throw new BusinessException(ErrorCode::DATA_CONFLICT, '凭证正在投递，请稍后重新领取');
+            }
+            $json = CryptoHelper::decrypt((string) $existing->credential_ciphertext, $this->aesKey());
+            if (! hash_equals((string) $existing->payload_hash, hash('sha256', $json))) throw new BusinessException(ErrorCode::DATA_CONFLICT);
+            $payload = json_decode($json, true);
+            if (! is_array($payload)) throw new BusinessException(ErrorCode::DATA_CONFLICT);
+            if (! $account->credential_expires_at || strtotime($account->credential_expires_at . ' UTC') <= time()
+                || Db::table('merchant_credential_delivery')->where('account_id', $accountId)->where('channel', 'email')->where('status', 'accepted')->exists()) {
+                $payload['temporaryPassword'] = PasswordGenerator::random();
+                Db::table('merchant_admin')->where('id', $accountId)->update([
+                    'password' => password_hash($payload['temporaryPassword'], PASSWORD_BCRYPT),
+                    'credential_expires_at' => gmdate('Y-m-d H:i:s', time() + 86400),
+                    'auth_version' => Db::raw('auth_version + 1'),
+                ]);
+                Db::table('merchant_auth_challenge')->where('account_id', $accountId)->whereIn('status', ['pending', 'verified'])->update(['status' => 'expired']);
+                $json = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+                Db::table('merchant_credential_delivery')->where('account_id', $accountId)->update([
+                    'credential_ciphertext' => CryptoHelper::encrypt($json, $this->aesKey()), 'payload_hash' => hash('sha256', $json),
+                    'status' => 'pending', 'attempts' => 0, 'locked_at' => null, 'provider_receipt' => '', 'delivered_at' => null,
+                ]);
+            }
+            if (! Db::table('merchant_credential_delivery')->where('account_id', $accountId)->where('channel', 'email')->exists()) {
+                $this->create((array) $app, (int) $account->merchant_id, $accountId, (string) $app->final_approval_request_id, ['email'], $payload);
+            }
+            Db::table('merchant_credential_delivery')->where('account_id', $accountId)->where('channel', 'email')->where('status', '<>', 'delivered')
+                ->update(['recipient_ciphertext' => $account->email]);
+            return (int) $app->id;
+        });
+        return $this->deliverApplication($applicationId, false);
     }
 
     /** @return list<array<string,mixed>> */
@@ -105,6 +153,9 @@ class OnboardingCredentialDeliveryService
             $account = Db::table('merchant_admin')->where('merchant_id', $app->merchant_id)->where('site_id', $app->site_id)
                 ->where('is_owner', 1)->where('account_type', 2)->where('status', 2)->whereNull('deleted_at')->lockForUpdate()->first();
             if (! $account) throw new BusinessException(ErrorCode::DATA_CONFLICT, '账号已激活或不可用');
+            if ($account->credential_expires_at && strtotime($account->credential_expires_at . ' UTC') <= time()) {
+                throw new BusinessException(ErrorCode::DATA_CONFLICT, '临时凭证已过期，请通过双 OTP 重新领取');
+            }
             $row = Db::table('merchant_credential_delivery')->where('application_id', $applicationId)
                 ->where('account_id', $account->id)->where('site_id', $app->site_id)->orderBy('id')->first();
             if (! $row) throw new BusinessException(ErrorCode::NOT_FOUND, '激活凭证记录不存在');
@@ -135,10 +186,31 @@ class OnboardingCredentialDeliveryService
         $testMode ??= MerchantAuthTestMode::enabled();
         $row = Db::transaction(function () use ($deliveryId, $manual, $testMode): ?array {
             $record = Db::table('merchant_credential_delivery')->where('id', $deliveryId)->lockForUpdate()->first();
-            if (! $record || (string) $record->status === 'delivered') {
+            if (! $record || in_array((string) $record->status, ['delivered', 'accepted'], true)) {
                 return null;
             }
+            if (! Db::table('merchant_admin')->where('id', $record->account_id)->where('status', 2)->whereNull('deleted_at')->exists()) {
+                throw new BusinessException(ErrorCode::DATA_CONFLICT, '账号已删除或邮箱已解除关联，不能重发凭证');
+            }
             if ($testMode && $record->channel !== 'inapp') return null;
+            $account = (array) Db::table('merchant_admin')->where('id', $record->account_id)->first();
+            if ($record->channel !== 'inapp') {
+                $email = $record->channel === 'email';
+                if (! $account[$email ? 'verified_email_at' : 'verified_mobile_at']
+                    || $account[$email ? 'email_released_at' : 'mobile_released_at']
+                    || ! hash_equals((string) $record->recipient_ciphertext, (string) $account[$email ? 'email' : 'mobile'])) {
+                    Db::table('merchant_credential_delivery')->where('id', $deliveryId)->update([
+                        'status' => 'pending', 'last_error' => 'recipient_otp_required',
+                    ]);
+                    return null;
+                }
+                if ($account['credential_expires_at'] && strtotime($account['credential_expires_at'] . ' UTC') <= time()) {
+                    Db::table('merchant_credential_delivery')->where('id', $deliveryId)->update([
+                        'status' => 'pending', 'last_error' => 'credentials_expired_claim_again',
+                    ]);
+                    return null;
+                }
+            }
             if ((string) $record->status === 'processing'
                 && (string) $record->locked_at > gmdate('Y-m-d H:i:s', time() - 300)) {
                 return null;
@@ -164,6 +236,11 @@ class OnboardingCredentialDeliveryService
                 throw new \RuntimeException('credential payload integrity check failed');
             }
             $recipient = CryptoHelper::decrypt((string) $row['recipient_ciphertext'], $this->aesKey());
+            $account = (array) Db::table('merchant_admin')->where('id', $row['account_id'])->first();
+            $payload['unverifiedContacts'] = implode(' and ', array_filter([
+                $account['verified_email_at'] && ! $account['email_released_at'] ? '' : 'email',
+                $account['verified_mobile_at'] && ! $account['mobile_released_at'] ? '' : 'mobile',
+            ]));
             $result = match ((string) $row['channel']) {
                 'email' => $this->deliverEmail((int) $row['site_id'], $recipient, $payload),
                 'sms' => $this->deliverSms((int) $row['site_id'], $recipient, $payload),
@@ -171,12 +248,12 @@ class OnboardingCredentialDeliveryService
                 default => ['ok' => false, 'receipt' => '', 'error' => 'unsupported_channel'],
             };
         } catch (\Throwable $e) {
-            $result = ['ok' => false, 'receipt' => '', 'error' => mb_substr($e->getMessage(), 0, 200)];
+            $result = ['ok' => false, 'receipt' => '', 'error' => 'credential_delivery_failed'];
         }
         $now = gmdate('Y-m-d H:i:s');
         Db::table('merchant_credential_delivery')->where('id', $deliveryId)->where('status', 'processing')->update([
-            'status' => $result['ok'] ? 'delivered' : 'failed',
-            'delivered_at' => $result['ok'] ? $now : null,
+            'status' => $result['ok'] ? ($row['channel'] === 'inapp' ? 'delivered' : 'accepted') : 'failed',
+            'delivered_at' => $result['ok'] && $row['channel'] === 'inapp' ? $now : null,
             'provider_receipt' => mb_substr((string) $result['receipt'], 0, 255),
             'last_error' => mb_substr((string) $result['error'], 0, 255),
             'next_attempt_at' => $result['ok'] ? null : gmdate('Y-m-d H:i:s', time() + 300),
@@ -191,16 +268,24 @@ class OnboardingCredentialDeliveryService
         if ($channel === null) {
             return ['ok' => false, 'receipt' => '', 'error' => 'email_channel_unavailable'];
         }
-        $body = "Your mTrip merchant account is ready.\nAccess code: {$payload['accessCode']}\nUsername: {$payload['username']}\nTemporary password: {$payload['temporaryPassword']}\nPlease activate the account and replace the temporary password.";
+        $body = "Your mTrip merchant account is ready.\nAccess code: {$payload['accessCode']}\nUsername: {$payload['username']}\nTemporary password: {$payload['temporaryPassword']}\nActivate within 24 hours. Unverified contacts: " . ($payload['unverifiedContacts'] ?: 'none') . ". Verify them in Settings & Security after activation.";
         $sent = (new SmtpClient($channel['host'], $channel['port'], $channel['encryption'], $channel['username'], $channel['password']))
             ->send($channel['fromEmail'], $channel['fromName'], $recipient, 'Your mTrip merchant account', $body);
-        return ['ok' => (bool) $sent['ok'], 'receipt' => $sent['ok'] ? 'smtp:accepted' : '', 'error' => $sent['ok'] ? '' : (string) $sent['message']];
+        return ['ok' => (bool) $sent['ok'], 'receipt' => $sent['ok'] ? 'smtp:accepted' : '', 'error' => $sent['ok'] ? '' : 'smtp_delivery_failed'];
     }
 
     /** @param array<string,mixed> $payload @return array{ok:bool,receipt:string,error:string} */
     protected function deliverSms(int $siteId, string $recipient, array $payload): array
     {
-        return ['ok' => false, 'receipt' => '', 'error' => 'sms_provider_supports_otp_only'];
+        $id = (int) config('mtrip.credential_sms_channel_id', 0);
+        $channel = $id > 0 ? Db::connection('system')->table('sys_sms_channel')->where('id', $id)
+            ->whereIn('site_id', [$siteId, 0])->where('provider_code', 'smspoh')->where('status', 1)->whereNull('deleted_at')->first() : null;
+        if (! $channel) return ['ok' => false, 'receipt' => '', 'error' => 'sms_text_not_enabled_claim_by_otp'];
+        $body = "mTrip Access: {$payload['accessCode']}; User: {$payload['username']}; Temporary password: {$payload['temporaryPassword']}. Activate within 24h. Unverified: "
+            . ($payload['unverifiedContacts'] ?: 'none') . '. Verify in Settings & Security.';
+        return (new SmsPohTextClient(CryptoHelper::decrypt((string) $channel->api_key, $this->aesKey()),
+            CryptoHelper::decrypt((string) $channel->api_secret, $this->aesKey())))
+            ->send($recipient, (string) $channel->sign_name, $body, 'merchant-' . $payload['username']);
     }
 
     /** @param array<string,mixed> $row @param array<string,mixed> $payload @return array{ok:bool,receipt:string,error:string} */

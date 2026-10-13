@@ -6,6 +6,8 @@ namespace App\Controller\Admin;
 
 use App\Controller\AbstractController;
 use App\Service\OnboardingAdminContactService;
+use App\Service\MerchantEmailIdentityService;
+use App\Service\MerchantPhoneIdentityService;
 use App\Service\OnboardingCredentialDeliveryService;
 use App\Service\OnboardingFinalApprovalService;
 use App\Service\OnboardingKycService;
@@ -194,6 +196,23 @@ class OnboardingController extends AbstractController
             $kyc['testAgreementAvailable'] = $this->onboardingKyc->testAgreementEnabled() && AdminContext::isSuper();
         }
 
+        $app['auth_test_mode'] = \App\Service\MerchantAuthTestMode::enabled();
+        $account = (int) $app['merchant_id'] > 0 ? Db::table('merchant_admin')->where('merchant_id', $app['merchant_id'])
+            ->where('site_id', $app['site_id'])->where('account_type', 2)->where('is_owner', 1)->whereNull('deleted_at')->first() : null;
+        $app['contact_verification'] = [];
+        foreach (['email', 'sms'] as $channel) {
+            $email = $channel === 'email';
+            $verified = $account ? $account->{$email ? 'verified_email_at' : 'verified_mobile_at'}
+                : $app[$email ? 'registration_verified_email_at' : 'registration_verified_mobile_at'];
+            $released = $account ? $account->{$email ? 'email_released_at' : 'mobile_released_at'}
+                : $app[$email ? 'registration_email_released_at' : 'registration_phone_released_at'];
+            $value = $this->decryptField($account ? (string) $account->{$email ? 'email' : 'mobile'}
+                : (string) $app[$email ? 'registration_email' : 'registration_phone']);
+            $app['contact_verification'][] = ['channel' => $channel,
+                'recipient' => $email ? \Mtrip\Shared\Support\MaskHelper::email($value) : \Mtrip\Shared\Support\MaskHelper::mobile($value),
+                'status' => $released ? 'released' : ($verified ? 'verified' : 'unverified'),
+                'verifiedAt' => $verified, 'source' => $verified ? 'otp' : ($app['registration_otp_source'] ?: 'unknown')];
+        }
         return Result::success([
             'application' => $app,
             'businesses' => $businesses,
@@ -291,7 +310,9 @@ class OnboardingController extends AbstractController
         $contacts = $this->adminContacts->fields($siteId, $this->requireStr('registrationPhone'), $this->requireStr('registrationEmail'));
 
         $appId = 0;
-        Db::transaction(function () use ($companyName, $merchantName, $regNumber, $siteId, $businesses, $businessTypes, $numBusinesses, $now, $contacts, &$appId) {
+        MerchantPhoneIdentityService::transaction($contacts['registration_email_index'], $contacts['registration_phone_index'], function () use ($companyName, $merchantName, $regNumber, $siteId, $businesses, $businessTypes, $numBusinesses, $now, $contacts, &$appId) {
+            MerchantEmailIdentityService::assertAvailable($contacts['registration_email_index']);
+            MerchantPhoneIdentityService::assertAvailable($contacts['registration_phone_index']);
             $appId = Db::table('merchant_application')->insertGetId([
                 ...$contacts,
                 'site_id' => $siteId,
@@ -340,7 +361,7 @@ class OnboardingController extends AbstractController
             }
             $app = $this->findApplication($appId);
             $this->pushTimeline($app, 'lead_created', '入驻线索录入');
-            $this->pushTimeline($app, 'registration_contacts_admin_confirmed', '后台代录注册手机号和邮箱，默认由管理员确认；未执行 OTP，账号凭证默认投递至注册邮箱');
+            $this->pushTimeline($app, 'registration_contacts_admin_confirmed', '后台代录注册手机号和邮箱，默认由管理员确认；未执行 OTP，凭证交付前须通过商户真实 OTP');
         });
 
         $app = $this->findApplication($appId);

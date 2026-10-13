@@ -33,12 +33,18 @@ class OnboardingFinalApprovalService
         }
 
         $testMode = MerchantAuthTestMode::enabled();
-        $result = Db::transaction(function () use ($applicationId, $requestId, $channels, $testMode): array {
+        $identity = Db::table('merchant_application')->where('id', $applicationId)->whereNull('deleted_at')->first(['registration_email_index', 'registration_phone_index']);
+        if (! $identity) throw new BusinessException(ErrorCode::NOT_FOUND, '入驻申请不存在');
+        $result = MerchantPhoneIdentityService::transaction((string) $identity->registration_email_index, (string) $identity->registration_phone_index, function () use ($applicationId, $requestId, $channels, $testMode, $identity): array {
             $app = Db::table('merchant_application')->where('id', $applicationId)->whereNull('deleted_at')->lockForUpdate()->first();
             if (! $app) {
                 throw new BusinessException(ErrorCode::NOT_FOUND, '入驻申请不存在');
             }
             $app = (array) $app;
+            if ((string) $app['registration_email_index'] !== (string) $identity->registration_email_index
+                || (string) $app['registration_phone_index'] !== (string) $identity->registration_phone_index) {
+                throw new BusinessException(ErrorCode::DATA_CONFLICT, '注册邮箱已变更，请重新发起最终批准');
+            }
             if ((int) ($app['state_model_version'] ?? 0) < 1) {
                 throw new BusinessException(ErrorCode::DATA_CONFLICT, '旧入驻申请不能使用新最终批准流程');
             }
@@ -55,6 +61,8 @@ class OnboardingFinalApprovalService
                 || (string) $app['registration_phone'] === '' || (string) $app['registration_email'] === '') {
                 throw new BusinessException(ErrorCode::DATA_CONFLICT, '最终批准前必须完成手机号和邮箱验证');
             }
+            MerchantEmailIdentityService::assertAvailable((string) $app['registration_email_index'], $applicationId);
+            MerchantPhoneIdentityService::assertAvailable((string) $app['registration_phone_index'], $applicationId);
 
             $businesses = Db::table('merchant_application_business')->where('application_id', $applicationId)
                 ->orderBy('id')->lockForUpdate()->get()->map(static fn ($row) => (array) $row)->all();
@@ -109,6 +117,11 @@ class OnboardingFinalApprovalService
                 'mobile' => (string) $app['registration_phone'], 'mobile_index' => $app['registration_phone_index'],
                 'email' => (string) $app['registration_email'], 'email_index' => $app['registration_email_index'],
                 'is_owner' => 1, 'status' => 2,
+                'verified_email_at' => $app['registration_verified_email_at'],
+                'verified_mobile_at' => $app['registration_verified_mobile_at'],
+                'email_verification_source' => $app['registration_verified_email_at'] ? 'otp' : '',
+                'mobile_verification_source' => $app['registration_verified_mobile_at'] ? 'otp' : '',
+                'credential_expires_at' => gmdate('Y-m-d H:i:s', time() + 86400),
             ]);
 
             $propertyIds = [];
@@ -151,7 +164,9 @@ class OnboardingFinalApprovalService
             ];
         });
 
-        $result['deliveries'] = $this->delivery->deliverApplication($applicationId, $testMode);
+        $result['deliveries'] = $result['accountStatus'] === 'active'
+            ? $this->delivery->receipts($applicationId)
+            : $this->delivery->deliverApplication($applicationId, $testMode);
         return $result;
     }
 
@@ -188,8 +203,7 @@ class OnboardingFinalApprovalService
     private function channels(array $app, array $requested): array
     {
         $verified = (string) ($app['registration_channel'] ?? '');
-        // Admin-entered contacts use email delivery; the source remains distinguishable from OTP.
-        if ($verified === 'admin') $verified = 'email';
+        if ($verified === 'admin') $verified = MerchantAuthTestMode::enabled() ? 'email' : 'sms';
         if (! in_array($verified, ['email', 'sms'], true)) {
             throw new BusinessException(ErrorCode::DATA_CONFLICT, '申请缺少已验证的注册渠道');
         }

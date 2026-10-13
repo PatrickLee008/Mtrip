@@ -1,5 +1,7 @@
 # 商户入驻与酒店发布 App 接入包
 
+2026-10-12 邮箱唯一规则：注册／登录邮箱全平台唯一，去首尾空格、转小写后比较；业务／物业联系人邮箱不受影响。同站点和双联系方式匹配、且尚无正式账号时，OTP 成功仍恢复原申请；换手机号或站点不能通过同邮箱取得他人申请。邮箱被其他申请或正式账号占用时，注册发码／验证、后台代录与最终批准返回 `40901`，客户端展示业务提示，不创建本地成功状态。后台 readiness 增加 `registration_email_conflict`。停用／普通软删除不释放邮箱，只有显式审计释放可重新注册。此轮未改 App 代码或请求结构，沿用现有错误展示；旧申请封存后旧 token 不能恢复原申请。真实登录仍为邮箱／短信 OTP → Authenticator。服务器部署及存量处理见[整改报告](../../plans/audits/2026-10-12-merchant-email-uniqueness.md)。
+
 2026-09-30 Merchant App 接入进度：T0-T3 已本地提交，T4-T7 的完整草稿、多业务、审核状态、分范围 KYC、协议签名、邮箱激活/登录/恢复已接入 App 代码。前端构建及后端注册/KYC/认证隔离回归通过，真实客户端签名网关、SMTP 送达与真机 UI 仍待验收，不能把代码完成等同整条入驻链路通过验收。静态原型只在 `EXPO_PUBLIC_ONBOARDING_PROTOTYPE=true` 时启用，默认关闭；它不请求后端，与会真实写入申请数据的服务端测试模式不是同一功能。
 
 2026-09-15 后台代办补充：后台已支持新流程商户/首批物业 KYC 代传和统一提交。开发环境超管可记录协议测试确认，协议响应新增 `status=test_confirmed` 和 `satisfied`；App 对测试记录应明确展示为测试确认，不能当作真实商户签名。生产环境不接受测试确认。后台入口、请求字段和权限见[代办说明](../../plans/audits/2026-09-15-admin-assisted-onboarding-kyc.md)，本次未修改 App 代码。
@@ -346,3 +348,28 @@ Merchant App：
 - 阶段 7 已验证服务层、控制器、数据库事务、站点/物业范围、真实签名网关和两套 Web 构建。
 - 尚未执行 Merchant App 与用户 App 真机 UI、真实 Google、真实 SMTP/SMS、推送通知和商店包验收。
 - Merchant App 的物业经营移动端路由适配尚未实现；实现时不得绕过现有服务层、Permission 键或 `X-Mtrip-Property-Id` 门禁。
+
+
+## 2026-10-13 主账号手机号唯一、联系方式补验与凭证领取
+
+本轮仅后端和 Web 实施，两个 App 源码保持冻结。邮箱与 E.164 手机号是全平台主账号身份，普通物业／业务／员工电话不占用。注册任选一次邮箱或短信 OTP；后台代录和测试固定码不写真实验证时间。最终批准继承注册真实渠道证明，允许未验证的另一渠道在首次登录后补验。
+
+以下接口 Web 前缀为 `/api/v1/merchant`，App 已预留完全相同契约的 `/api/v1/app/merchant` 前缀；App 请求仍遵循既有客户端签名。登录态使用商户 JWT（`aud=merchant`、`amr=totp`），仅当前站点、当前商户主账号有权限；子账号和代入会话拒绝。所有接口 `{code,message,data}`，请求驼峰，响应 `Cache-Control: no-store`。
+
+| 接口 | 请求 | 结果和限制 |
+|---|---|---|
+| `GET /auth/contacts` | 商户 JWT | `contacts: [{channel,recipient,status,verifiedAt,source,canVerify}], testMode`；`recipient` 脱敏，`status=verified/unverified/released`，不返回完整联系人或索引哈希 |
+| `POST /auth/contacts/send` | `channel=email/sms` | `challengeToken,expiresIn,resendAfter,recipient,testMode`；只能当前尚未验证、未释放渠道，60 秒冷却 |
+| `POST /auth/contacts/verify` | `challengeToken,otpCode` | 返回最新 `contacts`；验证码绑定账号、联系人哈希和账号版本；测试证明保持真实状态为未验证 |
+| `POST /auth/contacts/rebind/start` | `verifiedChannel,twoFaCode` | 校验当前主账号 Authenticator 后向现有真实已验证渠道发码；无可用真实渠道需人工核验 |
+| `POST /auth/contacts/rebind/new` | `challengeToken,otpCode,channel,newContact` | 旧渠道真实 OTP 后，预检新邮箱／E.164 手机唯一，发新渠道 OTP；只发给服务端绑定的新联系人 |
+| `POST /auth/contacts/rebind/finish` | `challengeToken,otpCode` | 新渠道真实 OTP 后，在身份锁内再次验唯一、更新账号和申请、历史释放审计、撤销会话；`requiresLogin=true`，客户端清除会话并回登录 |
+| `POST /auth/credential-claim/phone` | `applicationNo,phone`，公共 | 对正确与不存在的申请均返回同形通用 challenge；IP 和联系人各最多 10 次／小时，不泄露申请或账号信息 |
+| `POST /auth/credential-claim/email` | `challengeToken,otpCode`，公共 | 正确原注册手机号 OTP 后，向该申请的注册邮箱发 OTP；此时才返回脱敏邮箱，无账号凭证 |
+| `POST /auth/credential-claim/finish` | `challengeToken,otpCode`，公共 | 两次真实 OTP 后向邮箱交付，返回 `deliveries,recipient`，不返回密码／访问码；凭证过期或已受理后再次领取时可重签 24 小时凭证、撤销旧挑战 |
+
+领取 OTP 有效期 5 分钟，双 OTP 必须在手机证明有效期内完成；错误最多 5 次，挑战一次性消费。测试 `000000` 不能授权真实凭证邮件，测试时仍由超级管理员查看凭证。账号已激活后领取入口不再投递初始凭证。未验证邮箱不能单独领取或激活申请。注册联系方式错误／失效时走后台 `merchant:list:contacts` 人工身份核验更正，变更渠道仍为未验证。
+
+短信注册优先向已验证手机交付内容短信，仅在部署指定并验收 SMSPoh 内容渠道后启用；默认 `MTRIP_MERCHANT_CREDENTIAL_SMS_CHANNEL_ID=0`，使用双 OTP 邮件备用路径。Verify OTP 与 REST 内容发送是两个接口，不能复用 OTP 模板装凭证。`deliveries.status=accepted` 只表示 SMTP／SMSPoh 服务商受理，`delivered` 是站内通知已落库；App 不得把 `accepted` 文案显示为手机或邮箱已收到。另一渠道的待补验提醒动态来自真实状态。
+
+未提交草稿创建满 7 天封存并显式释放两项身份，旧注册 token 失效；已提交、批准、停用和普通软删除不自动释放。正式换绑需更新 App 缓存和登录渠道显示，成功后必须重新登录。后续 App 工作仅按此契约对接页面，不重新发明唯一性或验证状态规则。

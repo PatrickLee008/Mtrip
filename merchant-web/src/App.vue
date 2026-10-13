@@ -27,6 +27,7 @@ watch(
   (value) => {
     locale.value = value;
     dayjs.locale(value === 'zh-CN' ? 'zh-cn' : 'en');
+    document.documentElement.lang = value;
   },
   { immediate: true },
 );

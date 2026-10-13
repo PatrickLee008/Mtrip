@@ -48,6 +48,7 @@ function seedReadyStage4(int $siteId, string $suffix, string $type, int $propert
         'merchant_name' => 'Stage 4 Merchant ' . $suffix, 'company_name' => 'Stage 4 Company ' . $suffix,
         'reg_number' => 'STAGE4-REG-' . $suffix, 'country' => 'Myanmar', 'address' => 'Stage 4 HQ ' . $suffix,
         'business_types' => $type, 'primary_business_type' => $type, 'num_businesses' => $propertyCount,
+        'registration_otp_source' => 'otp', 'registration_verified_email_at' => gmdate('Y-m-d H:i:s'),
         'registration_channel' => 'email', 'registration_contact_hash' => hash('sha256', $email),
         'registration_phone' => CryptoHelper::encrypt($phone, $aes), 'registration_phone_index' => hash('sha256', $phone),
         'registration_email' => CryptoHelper::encrypt($email, $aes), 'registration_email_index' => hash('sha256', $email),
@@ -167,7 +168,7 @@ Db::connection('system')->table('sys_email_channel')->update(['status' => 2]);
     $failedDeliveryId = (int) Db::table('merchant_credential_delivery')->where('application_id', $seed['applicationId'])->where('channel', 'email')->value('id');
     $delivery->emailSucceeds = true;
     $retried = $delivery->retry($failedDeliveryId);
-    check($retried['status'] === 'delivered' && $retried['attempts'] === 3, 'failed credential delivery can be retried safely');
+    check($retried['status'] === 'accepted' && $retried['attempts'] === 3, 'failed credential delivery can be retried safely');
     Db::table('merchant_credential_delivery')->where('id', $failedDeliveryId)->update([
         'status' => 'processing', 'locked_at' => gmdate('Y-m-d H:i:s'),
     ]);
@@ -182,22 +183,23 @@ Db::connection('system')->table('sys_email_channel')->update(['status' => 2]);
     $adminLead = seedReadyStage4($siteId, 'ADMIN', 'hotel', 1, '+95940000005', 'stage4-admin@example.test', $merchantTemplate, $hotelTemplate);
     $adminFields = (new OnboardingAdminContactService())->fields($siteId, '+95940000005', 'stage4-admin@example.test', $adminLead['applicationId']);
     Db::table('merchant_application')->where('id', $adminLead['applicationId'])->update($adminFields);
+    Db::table('merchant_application')->where('id', $adminLead['applicationId'])->update(['registration_verified_email_at' => null, 'registration_otp_source' => 'admin']);
     $adminApp = (array) Db::table('merchant_application')->where('id', $adminLead['applicationId'])->first();
     check($kyc->readiness($adminApp)['ready'], 'admin-confirmed contacts satisfy final approval readiness');
     foreach ([['contact_data_status' => 1], ['registration_phone' => ''], ['registration_email' => ''], ['registration_channel' => '']] as $invalid) {
         check(in_array('registration_contacts_not_verified', $kyc->readiness(array_replace($adminApp, $invalid))['reasons'], true),
             'readiness explains incomplete contacts: ' . key($invalid));
     }
-    stage4Rejects(ErrorCode::DATA_CONFLICT, fn () => $approval->approve($adminLead['applicationId'], 'stage4-admin-request', ['sms']),
-        'admin confirmation does not redirect credentials away from its designated email channel');
+    stage4Rejects(ErrorCode::DATA_CONFLICT, fn () => $approval->approve($adminLead['applicationId'], 'stage4-admin-request', ['email']),
+        'admin confirmation cannot authorize email credential delivery');
     $adminResult = $approval->approve($adminLead['applicationId'], 'stage4-admin-request', []);
     $adminAccount = (array) Db::table('merchant_admin')->where('id', $adminResult['accountId'])->first();
     check(CryptoHelper::decrypt($adminAccount['email'], $aes) === 'stage4-admin@example.test'
         && CryptoHelper::decrypt($adminAccount['mobile'], $aes) === '+95940000005' && (int) $adminAccount['status'] === 2,
         'admin-confirmed lead creates the correct owner account pending activation');
-    check(Db::table('merchant_credential_delivery')->where('application_id', $adminLead['applicationId'])->where('channel', 'email')->exists()
+    check(Db::table('merchant_credential_delivery')->where('application_id', $adminLead['applicationId'])->where('channel', 'sms')->exists()
         && Db::table('merchant_credential_delivery')->where('application_id', $adminLead['applicationId'])->where('channel', 'inapp')->exists(),
-        'admin-confirmed lead defaults to email and in-app credential delivery');
+        'admin-confirmed lead waits for original phone OTP and credential claim');
 
     stage4Rejects(ErrorCode::FORBIDDEN, fn () => $delivery->testCredentials($adminLead['applicationId']),
         'credential viewing is disabled by default');
@@ -228,6 +230,11 @@ Db::connection('system')->table('sys_email_channel')->update(['status' => 2]);
     $config->set('app_env', 'staging');
     Db::table('merchant_admin')->where('id', $testResult['accountId'])->update(['status' => 1]);
     stage4Rejects(ErrorCode::DATA_CONFLICT, fn () => $delivery->testCredentials($testLead['applicationId']), 'activated accounts cannot expose their old temporary credentials');
+    Db::table('merchant_application')->where('id', $testLead['applicationId'])->update(['account_status' => 2]);
+    $activeReceipts = $delivery->receipts($testLead['applicationId']);
+    $activeReplay = $approval->approve($testLead['applicationId'], 'stage4-testmode-request', ['email', 'inapp']);
+    check($activeReplay['accountStatus'] === 'active' && $activeReplay['deliveries'] === $activeReceipts,
+        'replayed final approval after activation returns existing receipts without dispatching stale credentials');
     setMerchantAuthTestMode($config, true, false);
 
     $rollback = seedReadyStage4($siteId, 'ROLLBACK', 'hotel', 1, '+95940000003', 'stage4-rollback@example.test', $merchantTemplate, $hotelTemplate);
@@ -267,5 +274,14 @@ check($workerOne['merchantId'] === $workerTwo['merchantId']
     && Db::table('merchant_info')->where('credit_code', 'STAGE4-REG-CONCURRENT')->count() === 1
     && Db::table('merchant_store')->whereIn('source_business_id', $concurrent['businessIds'])->count() === 2,
     'concurrent requests create one merchant and one property per initial business');
+
+setMerchantAuthTestMode($config, false, false, 'test');
+Db::table('merchant_admin')->where('id', $testResult['accountId'])->update([
+    'deleted_at' => gmdate('Y-m-d H:i:s'), 'email_released_at' => gmdate('Y-m-d H:i:s'),
+]);
+stage4Rejects(ErrorCode::DATA_CONFLICT, fn () => $delivery->retry((int) $emailRow->id),
+    'archived account credentials cannot be sent to a released email');
+check(Db::table('merchant_credential_delivery')->where('id', $emailRow->id)->value('status') === 'pending',
+    'rejected credential retry does not dispatch or mutate the outbox');
 
 echo "Stage 4 onboarding final approval assertions passed\n";

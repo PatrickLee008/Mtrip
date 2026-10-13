@@ -1,8 +1,7 @@
 import { defineStore } from 'pinia';
+import { getInitialLocale, LOCALE_KEY, type SupportedLocale } from '@/locales/preferences';
 
-export type LocaleKey = 'zh-CN' | 'en-US';
-
-const LOCALE_KEY = 'mtrip_merchant_locale';
+export type LocaleKey = SupportedLocale;
 
 interface AppState {
   locale: LocaleKey;
@@ -11,7 +10,7 @@ interface AppState {
 /** 全局应用状态(暗色模式/侧边栏折叠已随原型改造移除,仅保留语言持久化) */
 export const useAppStore = defineStore('app', {
   state: (): AppState => ({
-    locale: (localStorage.getItem(LOCALE_KEY) as LocaleKey) || 'zh-CN',
+    locale: getInitialLocale(),
   }),
   actions: {
     setLocale(locale: LocaleKey): void {

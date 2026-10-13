@@ -15,32 +15,33 @@ import {
 } from '@ant-design/icons-vue';
 import { useI18n } from 'vue-i18n';
 import { useUserStore } from '@/stores/user';
+import { useAppStore } from '@/stores/app';
 import { apiUpdatePassword } from '@/api/auth';
 import { apiNotificationSummary } from '@/api/notifications';
 import { resolveMenuTitle } from '@/locales/menuI18n';
 import { SUPPORTED_LOCALES, type SupportedLocale } from '@/locales';
 
 const userStore = useUserStore();
+const appStore = useAppStore();
 const route = useRoute();
 const router = useRouter();
-const { t, locale } = useI18n();
+const { t } = useI18n();
 const unreadCount = ref(0);
 
 const displayName = computed(() => userStore.profile?.realName || userStore.profile?.username || '-');
 
 /** 当前语言 key,用于下拉菜单选中态 */
-const currentLocale = computed(() => locale.value as SupportedLocale);
+const currentLocale = computed(() => appStore.locale);
 
 /** 当前语言展示名(显示在按钮文字中) */
 const currentLocaleLabel = computed(
   () => SUPPORTED_LOCALES.find((item) => item.key === currentLocale.value)?.label ?? '',
 );
 
-/** 切换语言:写入 localStorage 并即时切换 i18n locale */
+/** 通过统一状态同步页面文案、组件和日期语言。 */
 function onSwitchLanguage(key: SupportedLocale): void {
   if (key === currentLocale.value) return;
-  locale.value = key;
-  localStorage.setItem('mtrip_merchant_locale', key);
+  appStore.setLocale(key);
 }
 
 /** a-menu 点击事件:从 key 字段取出选中的语言 */
