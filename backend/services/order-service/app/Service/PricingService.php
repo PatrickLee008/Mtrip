@@ -8,6 +8,7 @@ use Hyperf\DbConnection\Db;
 use Mtrip\Shared\Constants\ErrorCode;
 use Mtrip\Shared\Exception\BusinessException;
 use Mtrip\Shared\Support\CouponEligibility;
+use Mtrip\Shared\Support\HotelAddons;
 
 /**
  * 下单定价:长住优惠 / 优惠券校验与抵扣 / 住客名单归一化。
@@ -35,8 +36,30 @@ class PricingService
      * 下单金额确认:客户端带了 expectedPayAmount(用户在页面上看到的应付)就与服务端实际计价比对,
      * 差额超过 0.01 抛 PRICE_CHANGED(须在下单事务内、建单前调用,抛错即回滚已锁库存)。
      * data 携带最新明细,客户端展示给用户确认后带新金额重提。未带(旧客户端)不校验。
-     * @param array{original:float,longstayDiscount:float,couponDiscount:float,payAmount:float} $detail
+     * @param array{original:float,longstayDiscount:float,couponDiscount:float,addonAmount?:float,payAmount:float} $detail
      */
+    /**
+     * 附加服务计价(单房型下单 / Trip 下单 / Trip 试算共用):读物业已发布的 `merchant_store.addons`,
+     * 按 shared HotelAddons 规则算出金额。附加服务不进券与长住折扣的基数,取消时全额退。
+     * 选了未启用/不存在的项直接拒绝(商户可能刚下架或改价,不能静默丢弃)。
+     * @return array{0:float,1:?string} [金额, 快照 JSON(写 order_main.addon_snapshot;未选为 null)]
+     */
+    public function addonCharge(int $propertyId, mixed $keys, int $guests, int $nights, int $rooms): array
+    {
+        $keys = is_array($keys) ? array_values(array_filter($keys, 'is_string')) : [];
+        if ($keys === []) return [0.0, null];
+        $config = Db::table('merchant_store')->where('id', $propertyId)->value('addons');
+        try {
+            $quote = HotelAddons::quote($config, $keys, $guests, $nights, $rooms);
+        } catch (\InvalidArgumentException $e) {
+            throw new BusinessException(ErrorCode::DATA_CONFLICT, $e->getMessage());
+        }
+        return [$quote['amount'], json_encode([
+            'guests' => max(1, $guests), 'nights' => max(1, $nights), 'rooms' => max(1, $rooms),
+            'items' => $quote['items'], 'amount' => $quote['amount'],
+        ], JSON_UNESCAPED_UNICODE)];
+    }
+
     public function assertExpectedPay(mixed $expected, array $detail): void
     {
         if ($expected === null || $expected === '' || ! is_numeric($expected)) {

@@ -25,6 +25,10 @@ export interface TripCreateItem {
   contactPhone: string;
   isCitizen?: number;
   remark?: string;
+  /** 附加服务键(只在一段住宿的第一行带;按间取该段总间数) */
+  addons?: string[];
+  /** 入住人数(附加服务「按人」计价用) */
+  guestCount?: number;
 }
 
 export interface TripBooking {
@@ -63,6 +67,8 @@ export type TripQuoteItem = Omit<TripCreateItem, 'contactName' | 'contactPhone' 
 
 /** 试算结果的一行(与 `items` 下标一一对应) */
 export interface TripQuoteLine {
+  /** 这一行带的附加服务金额(一段住宿只记在第一行) */
+  addonAmount?: number;
   propertyId: number;
   roomTypeId: number;
   quantity: number;
@@ -83,6 +89,8 @@ export interface TripQuoteResult {
   couponDiscount: number;
   /** 券不可用的原因(与下单时会报的错一致);可用为 null */
   couponError: string | null;
+  /** 附加服务合计(不参与券与长住折扣,已含在 payAmount 里) */
+  addonAmount?: number;
   payAmount: number;
   items: TripQuoteLine[];
 }

@@ -21,7 +21,8 @@ class SettlementService
             return;
         }
         $siteId = (int) $order['site_id'];
-        $orderAmount = (float) $order['total_amount'];
+        // 附加服务由商户提供:计入订单额参与佣金与商户应收(不进券分摊,券只抵房费)
+        $orderAmount = round((float) $order['total_amount'] + (float) ($order['addon_amount'] ?? 0), 2);
         $discount = (float) $order['coupon_discount'];
         $commission = round($orderAmount * $this->commissionRate($siteId), 2);
 

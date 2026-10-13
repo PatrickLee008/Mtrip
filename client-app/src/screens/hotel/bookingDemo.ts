@@ -163,7 +163,11 @@ export const BOOKING_ADDONS = [
   route: 'Insurance' | null;
 }[];
 
-export type BookingAddonKey = (typeof BOOKING_ADDONS)[number]['key'];
+/**
+ * 附加服务键:演示模式是上面三张卡的键;真实酒店是后端固定的 7 项
+ * (breakfast / airport_transfer / spa / laundry / room_service / extra_bed / late_checkout),所以放宽为 string。
+ */
+export type BookingAddonKey = string;
 
 /* -------------------------------------------------------------------- 支付页 */
 

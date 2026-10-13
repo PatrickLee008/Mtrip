@@ -39,6 +39,9 @@ export interface CreateOrderParams {
   expectedPayAmount?: number;
   /** 入住人,后端 PricingService::normalizeGuests 只取 firstName/lastName/phone/email 四个字段 */
   travelers?: OrderTraveler[];
+  /** 附加服务键与入住人数(「按人」计价用),仅酒店 */
+  addons?: string[];
+  guestCount?: number;
   [key: string]: unknown;
 }
 
@@ -49,6 +52,7 @@ export interface CreateOrderResult {
     original: number;
     longstayDiscount: number;
     couponDiscount: number;
+    addonAmount?: number;
     payAmount: number;
   };
 }

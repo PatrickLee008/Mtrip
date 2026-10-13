@@ -16,6 +16,7 @@ import BookingCalendar from '@/components/hotel/booking/BookingCalendar';
 import BookingSummaryBar from '@/components/hotel/booking/BookingSummaryBar';
 import GuestCounterRow from '@/components/hotel/booking/GuestCounterRow';
 import { AddOnsSection, SpecialRequestsSection } from '@/components/hotel/booking/StayExtras';
+import type { HotelAddon } from '@/types/models';
 import { bookingShared } from '@/components/hotel/booking/bookingShared';
 import {
   formatWeekdayDate,
@@ -40,6 +41,8 @@ interface Props {
   onChangeRequest: (value: string) => void;
   /** 保险那张卡的「Add to booking」跳独立页,不在这里就地勾选 */
   onOpenInsurance: () => void;
+  /** 真实酒店的附加服务选项;null = 演示模式(设计稿三张卡) */
+  addonOptions?: HotelAddon[] | null;
 }
 
 export default function BookingStepDates({
@@ -56,6 +59,7 @@ export default function BookingStepDates({
   onToggleAddon,
   onChangeRequest,
   onOpenInsurance,
+  addonOptions = null,
 }: Props) {
   const { t, i18n } = useTranslation();
 
@@ -103,7 +107,7 @@ export default function BookingStepDates({
         </View>
       </View>
 
-      <AddOnsSection addons={addons} onToggleAddon={onToggleAddon} onOpenInsurance={onOpenInsurance} />
+      <AddOnsSection addons={addons} options={addonOptions} onToggleAddon={onToggleAddon} onOpenInsurance={onOpenInsurance} />
 
       <SpecialRequestsSection request={request} onChangeRequest={onChangeRequest} />
     </View>

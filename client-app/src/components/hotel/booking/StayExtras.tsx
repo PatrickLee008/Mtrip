@@ -16,21 +16,65 @@ import { bookingShared } from '@/components/hotel/booking/bookingShared';
 import { colors, radius } from '@/config/theme';
 import { fonts } from '@/config/typography';
 import { BOOKING_ADDONS, type BookingAddonKey } from '@/screens/hotel/bookingDemo';
+import type { HotelAddon } from '@/types/models';
 import { useSiteStore } from '@/store/siteStore';
 import { formatMoney } from '@/utils/format';
 
-/** 增值服务:标题行(Enhance Your Stay + Optional)+ 加购卡列表;保险不在本页勾选,跳保险页 */
+/** 设计稿只给了早餐与接送两张封面,真实键 airport_transfer 复用接送那张 */
+const COVER_KEY: Record<string, string> = { airport_transfer: 'transfer' };
+
+/**
+ * 增值服务:标题行(Enhance Your Stay + Optional)+ 加购卡列表。
+ *
+ * `options` 为 null = 演示模式,沿用设计稿三张卡(保险跳保险页);
+ * 真实酒店传物业已发布的附加服务(商户端配置、平台审核),一项都没有就整块不显示 ——
+ * 以前真实酒店也显示设计稿的三张卡,选了不计价也不下单(QA CA_TC_034)。
+ */
 export function AddOnsSection({
   addons,
+  options = null,
   onToggleAddon,
   onOpenInsurance,
 }: {
   addons: BookingAddonKey[];
+  options?: HotelAddon[] | null;
   onToggleAddon: (key: BookingAddonKey) => void;
   onOpenInsurance: () => void;
 }) {
   const { t } = useTranslation();
   const currency = useSiteStore((s) => s.currency);
+
+  if (options) {
+    if (options.length === 0) return null;
+    return (
+      <View style={styles.section}>
+        <View style={styles.sectionHead}>
+          <Text style={bookingShared.sectionTitle}>{t('hotels.booking.dates.enhance')}</Text>
+          <Text style={styles.optional}>{t('hotels.booking.dates.optional')}</Text>
+        </View>
+        <View style={styles.addonList}>
+          {options.map((addon) => {
+            const unitLabel = addon.units.length
+              ? addon.units.map((unit) => t(`hotels.booking.addonUnits.${unit}`)).join(' · ')
+              : t('hotels.booking.addonUnits.once');
+            return (
+              <AddOnCard
+                key={addon.key}
+                cover={TEMP_ADDON_COVERS[COVER_KEY[addon.key] ?? addon.key] ?? null}
+                title={t(`hotels.booking.addons.${addon.key}.title`)}
+                desc={addon.description || t(`hotels.booking.addons.${addon.key}.desc`)}
+                price={`${formatMoney(addon.price, currency)} / ${unitLabel}`}
+                selected={addons.includes(addon.key)}
+                addLabel={t('hotels.booking.dates.addToBooking')}
+                selectedLabel={t('hotels.booking.dates.selected')}
+                onToggle={() => onToggleAddon(addon.key)}
+              />
+            );
+          })}
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.section}>

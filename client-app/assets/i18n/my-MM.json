@@ -1411,6 +1411,30 @@
         "insurance": {
           "title": "အာမခံ",
           "desc": "အကာအကွယ် အစီအစဉ် ထည့်ရန်"
+        },
+        "airport_transfer": {
+          "title": "Airport Transfer",
+          "desc": "Private car between the airport and the hotel."
+        },
+        "spa": {
+          "title": "Spa",
+          "desc": "Relaxing spa and massage treatments."
+        },
+        "laundry": {
+          "title": "Laundry",
+          "desc": "Washing and ironing service."
+        },
+        "room_service": {
+          "title": "Room Service",
+          "desc": "In-room dining and personal service."
+        },
+        "extra_bed": {
+          "title": "Extra Bed",
+          "desc": "Add an extra bed to the room."
+        },
+        "late_checkout": {
+          "title": "Late Check-out",
+          "desc": "Leave later on your check-out day."
         }
       },
       "guests": {
@@ -1469,7 +1493,8 @@
         "selectedRooms": "ရွေးချယ်ထားသောအခန်း ({{rooms}})",
         "editRooms": "အခန်းပြင်ရန်",
         "roomTimes": "× {{count}}",
-        "agreeNote": "ဆက်လက်လုပ်ဆောင်ခြင်းဖြင့် ဝန်ဆောင်မှုစည်းမျဉ်း၊ ကိုယ်ရေးအချက်အလက်မူဝါဒနှင့် တည်းခိုရာစည်းကမ်းများကို သဘောတူသည်ဟု မှတ်ယူပါမည်။"
+        "agreeNote": "ဆက်လက်လုပ်ဆောင်ခြင်းဖြင့် ဝန်ဆောင်မှုစည်းမျဉ်း၊ ကိုယ်ရေးအချက်အလက်မူဝါဒနှင့် တည်းခိုရာစည်းကမ်းများကို သဘောတူသည်ဟု မှတ်ယူပါမည်။",
+        "addonServices": "Add-on services"
       },
       "trip": {
         "stay": "တည်းခိုမှု {{index}}",
@@ -1673,7 +1698,13 @@
           "paidToast": "ငွေပေးချေမှု အောင်မြင်ပါသည်"
         }
       },
-      "payNow": "ယခု ငွေပေးရန်"
+      "payNow": "ယခု ငွေပေးရန်",
+      "addonUnits": {
+        "person": "guest",
+        "night": "night",
+        "room": "room",
+        "once": "booking"
+      }
     },
     "reviewsPage": {
       "title": "သုံးသပ်ချက်များ ({{reviews}})",

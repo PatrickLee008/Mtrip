@@ -174,6 +174,21 @@ export function emptyLongStay(): PropertyLongStay {
   return { promotions: [], benefits: [] };
 }
 
+/** 附加服务固定 7 项与计价维度(与后端 shared HotelAddons::KEYS / UNITS 一致) */
+export const ADDON_KEYS = ['breakfast', 'airport_transfer', 'spa', 'laundry', 'room_service', 'extra_bed', 'late_checkout'] as const;
+export const ADDON_UNITS = ['person', 'night', 'room'] as const;
+export type AddonKey = (typeof ADDON_KEYS)[number];
+export type AddonUnit = (typeof ADDON_UNITS)[number];
+
+/** 一项附加服务:金额 = price × 选中维度的乘积(都不选 = 按次);随物业资料审核发布 */
+export interface PropertyAddon {
+  key: string;
+  enabled: boolean;
+  price: number;
+  units: AddonUnit[];
+  description: string;
+}
+
 export function emptyPolicies(): PropertyPolicies {
   return {
     booking: { cancellation: '', prepayment: '', taxesFees: '', payAtHotel: false },

@@ -72,6 +72,7 @@ export default function HotelBookingLiteScreen() {
     setMethod,
     walletBalance,
     payableTotal,
+    addonOptions,
     submitting,
     payResult,
     setPayResult,
@@ -186,6 +187,7 @@ export default function HotelBookingLiteScreen() {
               form={form}
               onChangeForm={(patch) => setForm((prev) => ({ ...prev, ...patch }))}
               addons={current.addons}
+              addonOptions={current.demo ? null : addonOptions}
               onToggleAddon={toggleAddon}
               cancellationDesc={cancellationDesc}
               onOpenDates={() => setDatesOpen(true)}

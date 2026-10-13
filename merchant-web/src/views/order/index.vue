@@ -796,6 +796,7 @@ onBeforeUnmount(() => {
                 <div class="bm-fields">
                   <div class="bm-field"><span class="bm-label">{{ t('booking.pay.roomTotal') }}</span><AmountText class="bm-value" :value="detail.payment.totalAmount" /></div>
                   <div class="bm-field"><span class="bm-label">{{ t('booking.pay.discount') }}</span><AmountText class="bm-value" :value="detail.payment.discountAmount" /></div>
+                  <div v-if="Number(detail.payment.addonAmount) > 0" class="bm-field"><span class="bm-label">{{ t('booking.stay.addons') }}</span><AmountText class="bm-value" :value="detail.payment.addonAmount ?? 0" /></div>
                   <div class="bm-field bm-field-strong"><span class="bm-label">{{ t('booking.pay.payAmount') }}</span><AmountText class="bm-value" :value="detail.payment.payAmount" /></div>
                   <div class="bm-field"><span class="bm-label">{{ t('booking.pay.method') }}</span><span class="bm-value">{{ paymentMethodText(detail.payment.payMethod) }}</span></div>
                   <div v-if="detail.payment.payTime" class="bm-field"><span class="bm-label">{{ t('booking.pay.payTime') }}</span><span class="bm-value">{{ detail.payment.payTime }}</span></div>
@@ -827,6 +828,12 @@ onBeforeUnmount(() => {
                   <div class="bm-field"><span class="bm-label">{{ t('booking.stay.cancellationPolicy') }}</span><span class="bm-value">{{ policyText(detail.stay.cancellationPolicy) }}</span></div>
                   <div v-if="detail.stay.noShowDeadline" class="bm-field"><span class="bm-label">{{ t('booking.stay.noShowDeadline') }}</span><span class="bm-value">{{ deadlineText(detail.stay.noShowDeadline) }}</span></div>
                 </div>
+                <!-- 住客加购的附加服务:商户据此提供服务;金额已含在实付里,取消时全额退 -->
+                <div class="bm-label" style="margin-top: 8px">{{ t('booking.stay.addons') }}</div>
+                <div v-if="detail.stay.addons && detail.stay.addons.items.length" class="bm-value bm-requests">
+                  <div v-for="item in detail.stay.addons.items" :key="item.key">{{ t(`properties.profile.addonsTab.items.${item.key}`) }} × {{ item.quantity }} · {{ item.amount.toLocaleString('en-US') }}</div>
+                </div>
+                <div v-else class="bm-value bm-requests">{{ t('booking.stay.noAddons') }}</div>
                 <div class="bm-label" style="margin-top: 8px">{{ t('booking.stay.specialRequests') }}</div>
                 <div class="bm-value bm-requests">{{ detail.stay.specialRequests || t('booking.stay.noRequests') }}</div>
               </section>

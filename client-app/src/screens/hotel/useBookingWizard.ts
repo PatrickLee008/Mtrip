@@ -53,6 +53,8 @@ import { useUserStore } from '@/store/userStore';
 import type { CouponView, RefundRule } from '@/types/models';
 import { formatMoney } from '@/utils/format';
 import { isContactMobile, isEmail } from '@/utils/validate';
+import { addonsEstimate } from '@/screens/hotel/addonPricing';
+import type { HotelAddon } from '@/types/models';
 
 /** 多酒店行程里「正在挑的那一家」(车)的住宿 key;其余住宿的 key 来自 `tripStays` */
 export const ACTIVE_STAY_KEY = 'active';
@@ -152,12 +154,13 @@ export function useBookingWizard({
   const walletBalance = isLogin ? Number(profile?.balance ?? 0) : BOOKING_DEMO.walletBalance;
 
   /**
-   * 从「Add Hotel and Homestay」挑完下一家回来:向导是新挂载的,已填的住客资料从暂存恢复,
-   * 并直接落在第 2 步(核对确认)—— 第 1 步已经填过,不必再走一遍。
+   * 从「Add Hotel and Homestay」挑完下一家回来:向导是新挂载的,**从第 1 步开始** ——
+   * 每家酒店要各自选附加服务、可以换主要入住人。主要入住人默认沿用上一家(暂存的表单),
+   * 特殊要求与附加服务清空(各家服务与价格不同)。上一家第 1 步的内容已随那段住宿存进 TripStay。
    */
   const draftRef = useRef(useRoomCartStore.getState().tripDraft);
   const resumeTrip = enableMultiStay && useRoomCartStore.getState().tripStays.length > 0;
-  const [step, setStep] = useState<BookingStepKey>(steps?.[0] ?? (resumeTrip ? 'review' : 'dates'));
+  const [step, setStep] = useState<BookingStepKey>(steps?.[0] ?? (resumeTrip ? 'details' : 'dates'));
   /** 未登录时的确认浮层(只有 `confirmLogin` 打开时才会被置起) */
   const [loginPrompt, setLoginPrompt] = useState(false);
   /**
@@ -291,6 +294,8 @@ export function useBookingWizard({
   const [refundRules, setRefundRules] = useState<RefundRule[]>([]);
   /** 物业支持到店付款(本期只用于核对页/支付页的「即将开放」提示) */
   const [payAtHotel, setPayAtHotel] = useState(false);
+  /** 物业已发布的附加服务(Enhance Your Stay 的真实选项);演示模式为空,继续用设计稿三张卡 */
+  const [addonOptions, setAddonOptions] = useState<HotelAddon[]>([]);
 
   useEffect(() => {
     if (!propertyId || !roomTypeId) return;
@@ -300,6 +305,7 @@ export function useBookingWizard({
       .then((detail) => {
         if (!alive) return;
         setPayAtHotel(Boolean(detail.payAtHotel));
+        setAddonOptions(detail.addons ?? []);
         const sku = (detail.skus ?? []).find((r) => r.id === roomTypeId);
         if (!sku) return;
         setRefundRules(detail.refundRules ?? []);
@@ -434,10 +440,43 @@ export function useBookingWizard({
    * 计价完全一致(同一套日历价 / 长住 / 券,且券按该物业与房型校验,2026-09-28 实测三种券型逐项相等)。
    * 演示模式(没有真实房型)不试算。
    */
+  /**
+   * 附加服务(真实酒店):只认当前物业已发布的项;按「住宿」收一次,带在当前住宿的第一行上
+   * (后端按同物业同日期合并间数)。人数 = 成人 + 儿童,给「按人」计价用。
+   */
+  const selectedAddons = useMemo(
+    () => current.addons.filter((key) => addonOptions.some((option) => option.key === key)),
+    [current.addons, addonOptions],
+  );
+  const guestCount = Math.max(1, current.adults + current.childCount);
+  /**
+   * 每段住宿的 Trip 行 + 这一段自己的第 1 步内容:附加服务与人数带在该段第一行上,
+   * 联系人与特殊要求按段取 —— 车里正在挑的这一家(active)取向导当前表单,已加入的住宿取它存下的那份。
+   * `trip/quote` 与 `trip/create` 共用,保证试算的就是将要提交的内容。
+   */
+  const stayLines = useMemo(
+    () =>
+      hotelStays.map((stay) => {
+        const active = stay.key === ACTIVE_STAY_KEY;
+        const addons = active ? selectedAddons : (stay.addons ?? []);
+        const guests = active ? guestCount : (stay.guestCount ?? 1);
+        const items = cartTripItems(stay.propertyId, stay.items, stay.checkIn, stay.checkOut).map((item, i) =>
+          i === 0 && addons.length > 0 ? { ...item, addons, guestCount: guests } : item,
+        );
+        return {
+          items,
+          lead: active ? form : (stay.lead ?? form),
+          request: active ? request : (stay.request ?? ''),
+        };
+      }),
+    [hotelStays, selectedAddons, guestCount, form, request],
+  );
+  const tripItemsWithAddons = useMemo(() => stayLines.flatMap((line) => line.items), [stayLines]);
+
   const quoteItems = useMemo(
     () =>
       cartMode
-        ? tripBaseItems
+        ? tripItemsWithAddons
         : realMode && current.propertyId && current.roomTypeId
           ? [
               {
@@ -446,10 +485,11 @@ export function useBookingWizard({
                 quantity: current.rooms,
                 useDate: current.checkIn,
                 endDate: current.checkOut,
+                ...(selectedAddons.length > 0 ? { addons: selectedAddons, guestCount } : {}),
               },
             ]
           : [],
-    [cartMode, tripBaseItems, realMode, current.propertyId, current.roomTypeId, current.rooms, current.checkIn, current.checkOut],
+    [cartMode, tripItemsWithAddons, realMode, current.propertyId, current.roomTypeId, current.rooms, current.checkIn, current.checkOut, selectedAddons, guestCount],
   );
   /**
    * 试算(`trip/quote`,与下单同一套后端计价),见 `useTripQuote`:
@@ -473,7 +513,7 @@ export function useBookingWizard({
       const nights = Math.max(1, nightsBetween(stay.checkIn, stay.checkOut));
       const sum = stay.items.reduce((acc, room, k) => {
         const line = cartQuote?.items[offset + k];
-        return acc + (line ? line.original - line.longstayDiscount : room.price * room.quantity * nights);
+        return acc + (line ? line.original - line.longstayDiscount + (line.addonAmount ?? 0) : room.price * room.quantity * nights);
       }, 0);
       offset += stay.items.length;
       return Math.round(sum * 100) / 100;
@@ -602,11 +642,21 @@ export function useBookingWizard({
    */
   /** 长住优惠(复核页价格明细一行);只有试算给得出,没试算(演示/未登录)时为 0 */
   const longstayDiscount = cartQuote?.longstayDiscount ?? 0;
+  /**
+   * 附加服务金额:试算给出的为准(已含在 payAmount 里);没有试算时按同公式预估。
+   * 间数按当前住宿(车里这一家)的总间数,与后端按同物业同日期合并的口径一致。
+   */
+  const activeRoomCount = cartMode
+    ? activeRooms.reduce((sum, room) => sum + room.quantity, 0)
+    : current.rooms;
+  const addonTotal =
+    cartQuote?.addonAmount ??
+    addonsEstimate(addonOptions, selectedAddons, guestCount, nightsBetween(current.checkIn, current.checkOut), activeRoomCount);
   const payableTotal = multi
     ? tripTotal
     : tripQuote
       ? tripQuote.payAmount
-      : Math.max(0, roomsTotal - longstayDiscount - couponDiscount);
+      : Math.max(0, roomsTotal - longstayDiscount - couponDiscount) + addonTotal;
 
   /**
    * 多房间新稿(2659:13152):钱包放在第 2 步。开着钱包且余额够付全款 → 第 2 步直接 Pay Now,流程只有两步;
@@ -666,8 +716,11 @@ export function useBookingWizard({
      */
     if (cartMode) {
       stashStay(
-        { form, request, addons: current.addons },
+        /* 下一家的初始表单:主要入住人沿用,特殊要求与附加服务清空(各家服务与价格不同) */
+        { form, request: '', addons: [] },
         { checkIn: current.checkIn, checkOut: current.checkOut },
+        /* 这一家第 1 步填的内容跟着这段住宿走,下单时用它 */
+        { lead: { ...form }, request, addons: selectedAddons, guestCount },
       );
       navigation.navigate('Hotels');
       return;
@@ -746,12 +799,16 @@ export function useBookingWizard({
        * 现在:建单失败 → 留在第 4 步弹窗(无单可重付,重建是对的);
        *      支付失败 → 带着单号进结果页的失败态,在那里对**同一张单**重新发起支付。
        */
-      const tripItems = tripBaseItems.map((item) => ({
-        ...item,
-        contactName,
-        contactPhone,
-        remark: request.trim() || undefined,
-      }));
+      const tripItems = stayLines.flatMap((line) => {
+        const name = `${line.lead.firstName.trim()} ${line.lead.lastName.trim()}`.trim() || contactName;
+        const phone = line.lead.phone.replace(/[\s-]/g, '') || contactPhone;
+        return line.items.map((item) => ({
+          ...item,
+          contactName: name,
+          contactPhone: phone,
+          remark: line.request.trim() || undefined,
+        }));
+      });
 
       if (tripItems.length > 0) {
         const trip = await apiTripCreate({
@@ -814,6 +871,7 @@ export function useBookingWizard({
            所以这里提交的是领券记录 id,不是前端算好的金额 */
         couponId: appliedCoupon?.receiveId,
         expectedPayAmount,
+        ...(selectedAddons.length > 0 ? { addons: selectedAddons, guestCount } : {}),
         travelers: [
           {
             firstName: form.firstName.trim(),
@@ -1074,6 +1132,8 @@ export function useBookingWizard({
 
   return {
     payAtHotel,
+    addonOptions,
+    addonTotal,
     /* 环境 */
     t,
     i18n,

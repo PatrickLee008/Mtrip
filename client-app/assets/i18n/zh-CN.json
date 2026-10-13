@@ -1411,6 +1411,30 @@
         "insurance": {
           "title": "旅行保险",
           "desc": "添加保障方案"
+        },
+        "airport_transfer": {
+          "title": "机场接送",
+          "desc": "机场与酒店之间的专车接送。"
+        },
+        "spa": {
+          "title": "SPA",
+          "desc": "水疗按摩放松身心。"
+        },
+        "laundry": {
+          "title": "洗衣服务",
+          "desc": "衣物清洗与熨烫。"
+        },
+        "room_service": {
+          "title": "客房服务",
+          "desc": "送餐与客房内专属服务。"
+        },
+        "extra_bed": {
+          "title": "加床",
+          "desc": "为房间增加一张床。"
+        },
+        "late_checkout": {
+          "title": "延迟退房",
+          "desc": "在退房日延后离店时间。"
         }
       },
       "guests": {
@@ -1469,7 +1493,8 @@
         "selectedRooms": "已选房型({{rooms}})",
         "editRooms": "修改房间",
         "roomTimes": "× {{count}}",
-        "agreeNote": "继续即表示你同意服务条款、隐私政策以及该住宿的入住规定。"
+        "agreeNote": "继续即表示你同意服务条款、隐私政策以及该住宿的入住规定。",
+        "addonServices": "附加服务"
       },
       "trip": {
         "stay": "第 {{index}} 段住宿",
@@ -1673,7 +1698,13 @@
           "paidToast": "支付成功"
         }
       },
-      "payNow": "立即支付"
+      "payNow": "立即支付",
+      "addonUnits": {
+        "person": "每人",
+        "night": "每晚",
+        "room": "每间",
+        "once": "每次"
+      }
     },
     "reviewsPage": {
       "title": "评价 ({{reviews}})",

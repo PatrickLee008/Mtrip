@@ -10,6 +10,7 @@ use Mtrip\Shared\Context\AdminContext;
 use Mtrip\Shared\Context\MerchantContext;
 use Mtrip\Shared\Exception\BusinessException;
 use Mtrip\Shared\Support\CryptoHelper;
+use Mtrip\Shared\Support\HotelAddons;
 use Psr\Http\Message\UploadedFileInterface;
 
 use function Hyperf\Config\config;
@@ -21,13 +22,13 @@ class PropertyProfileService
         'store_name', 'contact_phone', 'contact_phone2', 'contact_email', 'address', 'country_code',
         'city_key', 'longitude', 'latitude', 'description', 'star_level', 'facilities', 'images',
         'amenities', 'image_gallery', 'website', 'checkin_time', 'checkout_time',
-        'long_stay', 'hotel_policies', 'nearby_attractions',
+        'long_stay', 'hotel_policies', 'nearby_attractions', 'addons',
     ];
 
     /** 逗号分隔的 JSON 列清单:读时统一解码,写时统一编码 */
     private const JSON_FIELDS = [
         'images', 'facilities', 'amenities', 'image_gallery',
-        'long_stay', 'hotel_policies', 'nearby_attractions',
+        'long_stay', 'hotel_policies', 'nearby_attractions', 'addons',
     ];
 
     private const LONG_STAY_LIMITS = ['promotions' => 10, 'benefits' => 12];
@@ -357,6 +358,14 @@ class PropertyProfileService
         if (array_key_exists('hotelPolicies', $input)) {
             $base['hotel_policies'] = $this->encode($this->normalizePolicies($input['hotelPolicies']));
         }
+        // 附加服务:固定 7 项,规则见 shared HotelAddons(与订单计价同一实现)
+        if (array_key_exists('addons', $input)) {
+            try {
+                $base['addons'] = $this->encode(HotelAddons::normalize($input['addons']));
+            } catch (\InvalidArgumentException $e) {
+                throw new BusinessException(ErrorCode::PARAM_ERROR, $e->getMessage());
+            }
+        }
         if (array_key_exists('nearbyAttractions', $input)) {
             $base['nearby_attractions'] = $this->encode($this->normalizeNearby($input['nearbyAttractions']));
         }
@@ -371,6 +380,7 @@ class PropertyProfileService
         $property['long_stay'] = $this->normalizeLongStay($property['long_stay']);
         $property['hotel_policies'] = $this->normalizePolicies($property['hotel_policies']);
         $property['nearby_attractions'] = $this->normalizeNearby($property['nearby_attractions']);
+        $property['addons'] = HotelAddons::normalize($property['addons'], false);
         foreach (['contact_phone', 'contact_phone2'] as $key) $property[$key] = $this->decryptPhone((string) ($property[$key] ?? ''));
         unset($property['deleted_at']);
         return $property;
@@ -390,6 +400,7 @@ class PropertyProfileService
         $payload['long_stay'] = $this->normalizeLongStay($payload['long_stay'] ?? []);
         $payload['hotel_policies'] = $this->normalizePolicies($payload['hotel_policies'] ?? []);
         $payload['nearby_attractions'] = $this->normalizeNearby($payload['nearby_attractions'] ?? []);
+        $payload['addons'] = HotelAddons::normalize($payload['addons'] ?? [], false);
         foreach (['contact_phone', 'contact_phone2'] as $key) $payload[$key] = $this->decryptPhone((string) ($payload[$key] ?? ''));
         return $payload;
     }

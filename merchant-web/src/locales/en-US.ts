@@ -230,7 +230,7 @@ export default {
     },
     profile: {
       title: 'Hotel Profile', subtitle: 'Update your hotel profile, amenities, and check-in/check-out times to help guests plan their stay.', basic: 'Property Content', required: 'Property name and address are required.', publishLocationRequired: 'Country code and city are required before review.',
-      edit: 'Edit Hotel Profile', details: 'Hotel Details', amenities: 'Hotel Amenities', longStay: 'Long Stay Details', roomTypes: 'Room Types', policies: 'Hotel Policies', nearby: 'Nearby Attraction', navigation: 'Open navigation menu', closeNavigation: 'Close navigation menu',
+      edit: 'Edit Hotel Profile', details: 'Hotel Details', amenities: 'Hotel Amenities', longStay: 'Long Stay Details', roomTypes: 'Room Types', policies: 'Hotel Policies', addons: 'Add-on Services', nearby: 'Nearby Attraction', navigation: 'Open navigation menu', closeNavigation: 'Close navigation menu',
       roomTypesMetric: 'Room Types', totalRooms: 'Total Rooms', guestRating: 'Guest Rating', roomsCount: '{count} Rooms', reviewCount: '{count} reviews', stars: '{count}-Stars', notProvided: 'Not provided',
       hotelImages: 'Hotel Images', imageAlt: '{name} · Image {index}', noImages: 'No hotel images added yet.', noDescription: 'No hotel description added yet.', noAmenities: 'No hotel amenities added yet.',
       hotelInformation: 'Hotel Information', hotelLocation: 'Hotel Location', hotelHighlight: 'Hotel Highlight', fullAddress: 'Full Address', exactCoordinates: 'Exact Coordinates', latitude: 'Latitude', longitude: 'Longitude', mapTip: 'Map integration is reserved. Enter exact coordinates below.',
@@ -253,6 +253,13 @@ export default {
         statusActive: 'Active', statusPaused: 'Paused', bold: 'Bold',
         emptyPromotions: 'No long stay promotions added yet.', emptyBenefits: 'No long stay benefits added yet.',
         count: '({count}/{limit})', save: 'Save Changes', createNow: 'Create Now',
+      },
+      addonsTab: {
+        enabledCount: '{count}/{total} enabled',
+        hint: 'Prices and pricing take effect for guests after platform review. Pick any pricing units: amount = price × guests × nights × rooms (selected units only); none selected = charged once. Add-on fees are fully refunded when a booking is cancelled.',
+        on: 'Enabled', off: 'Disabled', price: 'Price', pricing: 'Pricing', pricingHint: 'Multiple allowed; none = charged once', perTime: 'Per booking', description: 'Description (optional)',
+        units: { person: 'Per guest', night: 'Per night', room: 'Per room' },
+        items: { breakfast: 'Breakfast', airport_transfer: 'Airport Transfer', spa: 'Spa', laundry: 'Laundry', room_service: 'Room Service', extra_bed: 'Extra Bed', late_checkout: 'Late Check-out' },
       },
       policiesTab: {
         booking: 'Booking Policies', checkInOut: 'Check In & Out Policies', children: 'Children & Extra Beds Policies',
@@ -583,6 +590,8 @@ export default {
       roomNo: 'Room No.',
       specialRequests: 'Special Requests',
       noRequests: 'No special requests noted.',
+      addons: 'Add-on Services',
+      noAddons: 'No add-on services.',
       cancellationPolicy: 'Cancellation Policy',
       noShowDeadline: 'No-show Deadline',
       policyFree: 'Free cancellation',
@@ -897,12 +906,18 @@ export default {
       descriptionPlaceholder: 'Enter here',
       discountValue: 'Discount Value',
       stayRules: 'Long Stay Rules',
-      minNights: 'Minimum nights',
-      conditions: 'Conditions',
-      bookAdvanceDays: 'Book days ahead',
-      minRoomCount: 'Minimum rooms',
-      minHotelCount: 'Minimum hotels',
-      stayRange: 'Eligible stay dates (empty = any)',
+      minNights: 'Minimum nights',
+
+      conditions: 'Conditions',
+
+      bookAdvanceDays: 'Book days ahead',
+
+      minRoomCount: 'Minimum rooms',
+
+      minHotelCount: 'Minimum hotels',
+
+      stayRange: 'Eligible stay dates (empty = any)',
+
       conditionsTip: '0 or empty means no limit. Advance days and stay dates are checked per room; rooms that do not qualify get no discount.',
       maxNights: 'Maximum nights',
       properties: 'Applicable Properties',
@@ -928,7 +943,8 @@ export default {
       oneMerchant: 'A promotion can only apply to properties of one merchant',
       discount: 'Please enter a discount value greater than 0',
       discountRange: 'Percentage discount must be less than 100',
-      minNights: 'Long stay promotions require at least 2 nights',
+      minNights: 'Long stay promotions require at least 2 nights',
+
       stayRange: 'Stay start date must not be after the end date',
       start: 'Please select a start date',
       end: 'Please select an end date',

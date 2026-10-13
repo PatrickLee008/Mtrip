@@ -1,5 +1,22 @@
 # 会话交接文档(HANDOFF)
 
+### ★ 2026-10-14 酒店附加服务(QA 表 CA_TC_034;Merchant PRD「optional value-added services」)
+
+**产品口径(用户定)**:服务固定 7 项 —— 早餐 / 机场接送 / SPA / 洗衣 / 客房服务 / 加床 / 延迟退房;商户逐项开关、填价格、选计价方式(按人 / 按晚 / 按间,可多选,**金额 = 单价 × 选中维度乘积,都不选 = 按次**);**并入物业资料审核**;**不参与优惠券与长住折扣**;**取消退款时附加服务全额退,不受取消政策影响**。
+
+- **规则唯一实现**:`backend/shared/src/Support/HotelAddons.php`(KEYS / UNITS / `normalize` 严格与宽松 / `enabled` / `amount` / `quote`),单测 `shared/tests/cases/HotelAddonsTest.php` 5 例。
+- **迁移** `V20261014100000__add-hotel-addons.sql`:`merchant_store.addons JSON`(随资料审核发布)、`order_main.addon_amount DECIMAL`(明细写已有的 `addon_snapshot`)。
+- **商户端**:merchant-service `PropertyProfileService` 把 `addons` 纳入 FIELDS/JSON_FIELDS,保存走 `HotelAddons::normalize`(未知项、启用但价格 ≤0 报 40001)。merchant-web 酒店资料新增「附加服务」页签 `components/HotelAddonServices.vue`(视图 + 编辑态:开关 / 单价 / 计价方式多选 / 说明);资料页签由 6 个变 7 个,改为 `grid-auto-flow: column` 单行。预订详情「住宿明细」列出住客加购项、支付概要加「附加服务」行(`BookingController` 下发 `stay.addons` 快照与 `payment.addonAmount`)。admin-web 物业资料审核对比表加 `addons`。
+- **C 端读**:`/app/hotels/detail` 下发 `addons`(仅已发布且启用的项)。
+- **计价**:`PricingService::addonCharge(propertyId, keys, guests, nights, rooms)` 读已发布配置,选了停用/不存在的项报 40901。`order/create` 收 `addons` + `guestCount`(缺省按间数);`trip/quote` / `trip/create` 每行可带 `addons` + `guestCount`,**按住宿收一次**:同物业同入离日期的行合并间数,金额记在带 addons 的那一行。实付 = 房费 − 长住 − 券 + 附加服务;Trip `total_amount` 含附加服务;`expectedPayAmount` 校验与 PRICE_CHANGED 明细带 `addonAmount`。
+- **退款**:`OrderController::computeRefund`(App 退款试算/申请)与 `BookingRefundService::quote`(商户退款)都把实付拆成「房费部分按政策 + 附加服务全额」;平台便民费只按房费部分收;试算接口新增 `addonRefund`。
+- **结算**:`SettlementService` 订单额 = `total_amount + addon_amount`(附加服务由商户提供,同一佣金率,券只抵房费)。
+- **App**:`AddOnsSection` / 关怀模式 `LiteStepConfirm` 真实酒店改为渲染物业配置(价格 + 「每人 · 每晚」类计价说明),没有配置就整块不显示;演示模式仍是设计稿三张卡。以前真实酒店也显示设计稿卡,选了不计价也不下单 —— 即 CA_TC_034 的根因。`useBookingWizard` 取详情 `addons`,把所选项与人数(成人 + 儿童)带进 `trip/quote` 与下单(当前住宿的第一行),`payableTotal` 以试算为准,无试算时按 `screens/hotel/addonPricing.ts` 同公式预估;核对页价格明细新增「附加服务」行。`BookingAddonKey` 放宽为 string。**多酒店行程**(同日按用户要求改):每加一家酒店都**从第 1 步进入**,各自选附加服务、可换主要入住人(默认沿用上一家),特殊要求与附加服务清空;`TripStay` 新增 `lead / request / addons / guestCount`,`stashStay` 第三个参数把当前这家第 1 步内容随住宿存下;向导 `stayLines` 按段生成 Trip 行(附加服务带在该段第一行、联系人与特殊要求按段取),试算与下单共用;第 2 步各段小计含附加服务。实测两家行程:订单 67(QA 测试酒店)联系人 Aung Kyaw、附加服务 40,000、特殊要求「酒店1:高楼层」,订单 68(胤竹酒店)联系人 Mya Thida、无附加服务、特殊要求「酒店2:安静房间」,合计 199,000 扣款正确。核对页的「特殊要求」一行只显示当前这家的。App 预订详情页暂未显示附加服务明细。
+
+**验证**:shared 单测 124/124;容器内 PHP lint;merchant-web / admin-web build、client-app typecheck 通过。端到端(Chrome + 测试商户 m000004 / 物业 9005):商户端配置 早餐 10,000 按人+按晚、机场接送 30,000 按次、加床 15,000 按晚+按间 → 提交审核(审核前 App 详情 `addons=[]`)→ admin-web 审核详情可见 `addons` 并通过 → App 订房页显示三项;测试账号 2 晚 1 间 2 人选早餐 + 接送,核对页 房费 120,000 / 附加服务 70,000 / 钱包抵扣 −190,000,支付后余额 300,000→110,000,订单 `pay_amount=190000 addon_amount=70000` 快照正确,结算 `order_amount=190000`;商户预订详情显示「早餐 × 4 · 40,000 / 机场接送 × 1 · 30,000」与支付概要附加服务行。App 退款试算:免费取消 190,000、临时不可退 70,000、临时阶梯 50% 130,000(临时规则已删);商户侧政策快照试算 4 例全过;商户取消后走商户退款全额 190,000,余额回到 300,000。回归 booking-remediation 48/48、coupon-release 全过。
+
+**注意**:① 商户「取消预订」本身不自动退款(既有设计),要另走退款,附加服务在退款时全额退;② 本轮把新拉取的 5 个迁移(V20261012130000~V20261013130200,商户邮箱/手机唯一性)与本轮迁移按账本手工补执行,账本 42/42;③ 重启服务后网关会连旧 IP 报 50200 `upstream service unavailable`,`./mtrip.sh restart gateway` 即可;④ 测试账号余额现为 300,000,订单 66 已全额退款。
+
 ### 2026-10-13 Merchant Web 统一语言选择
 
 用户反馈后顶栏 LOGO 恢复页面水平居中，语言入口仍在右侧；窄屏按钮使用更紧凑内边距防重叠，登录／激活／恢复页面同步，8091 已更新。

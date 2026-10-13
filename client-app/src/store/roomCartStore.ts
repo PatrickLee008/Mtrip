@@ -50,7 +50,18 @@ export interface TripStay {
   checkIn: string;
   checkOut: string;
   items: CartRoom[];
+  /**
+   * 这一段在向导第 1 步填好的内容(每家酒店各自一份):主要入住人、特殊要求、附加服务与人数。
+   * 下单时这一段的预订用它自己的联系人与附加服务;车里正在挑的那一家(active)取向导当前表单。
+   */
+  lead?: LeadGuestForm;
+  request?: string;
+  addons?: BookingAddonKey[];
+  guestCount?: number;
 }
+
+/** stashStay 时随这一段一起存下的第 1 步内容 */
+export type TripStayExtras = Pick<TripStay, 'lead' | 'request' | 'addons' | 'guestCount'>;
 
 /** 去挑下一家酒店前暂存的向导表单(向导页会被卸载,回来时据此恢复) */
 export interface TripDraft {
@@ -95,7 +106,11 @@ interface RoomCartState {
    * 「Add Hotel and Homestay」:当前车(须有真实物业、日期与真实房型)整段转存进 `tripStays`,
    * 车清空,并暂存向导表单。日期取向导里实际用的那组(已按 normalizeDates 纠正过)。
    */
-  stashStay: (draft: TripDraft, dates: { checkIn: string; checkOut: string }) => void;
+  /**
+   * 把车(当前这家)连同第 1 步内容转存为一段住宿;`draft` 是下一家进向导时的初始表单
+   * (主要入住人默认沿用,特殊要求与附加服务清空)。
+   */
+  stashStay: (draft: TripDraft, dates: { checkIn: string; checkOut: string }, extras?: TripStayExtras) => void;
   removeTripStay: (key: string) => void;
   /** 恢复表单后清掉暂存(再加下一家时会重新暂存) */
   clearTripDraft: () => void;
@@ -195,7 +210,7 @@ export const useRoomCartStore = create<RoomCartState>((set, get) => ({
 
   clear: () => set({ items: [] }),
 
-  stashStay: (draft, dates) =>
+  stashStay: (draft, dates, extras = {}) =>
     set((state) => {
       const real = state.items.filter((item) => item.sku);
       if (!state.propertyId || !dates.checkIn || !dates.checkOut || real.length === 0) {
@@ -211,6 +226,7 @@ export const useRoomCartStore = create<RoomCartState>((set, get) => ({
             checkIn: dates.checkIn,
             checkOut: dates.checkOut,
             items: real,
+            ...extras,
           },
         ],
         items: [],

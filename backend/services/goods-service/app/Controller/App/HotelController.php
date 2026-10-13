@@ -6,6 +6,7 @@ namespace App\Controller\App;
 
 use App\Controller\AbstractController;
 use Hyperf\DbConnection\Db;
+use Mtrip\Shared\Support\HotelAddons;
 use Mtrip\Shared\Support\RoomDefaults;
 use Mtrip\Shared\Constants\ErrorCode;
 use Mtrip\Shared\Context\UserContext;
@@ -322,7 +323,7 @@ final class HotelController extends AbstractController
         $property = (array) Db::table('merchant_store')->where('id', $propertyId)->where('site_id', $siteId)
             ->where('business_type', 'hotel')->whereNull('deleted_at')->first([
                 'id', 'store_name', 'address', 'longitude', 'latitude', 'images', 'description', 'star_level',
-                'facilities', 'website', 'checkin_time', 'checkout_time',
+                'facilities', 'website', 'checkin_time', 'checkout_time', 'addons',
             ]);
         if ($property === []) throw new BusinessException(ErrorCode::NOT_FOUND, '酒店物业不存在');
         foreach (['images', 'facilities'] as $field) $property[$field] = $this->jsonList($property[$field] ?? null);
@@ -360,6 +361,8 @@ final class HotelController extends AbstractController
         $detail['skus'] = $rooms;
         $detail['refundRules'] = $rules;
         $detail['reviewSummary'] = ['rating' => $summary['rating'], 'count' => $summary['reviewCount']];
+        /* 附加服务:只下发已发布配置里启用的项(Enhance Your Stay),计价规则见 shared HotelAddons */
+        $detail['addons'] = HotelAddons::enabled($property['addons'] ?? null);
         $detail['payAtHotel'] = self::payAtHotel(Db::table('merchant_store')->where('id', $propertyId)->value('hotel_policies'));
         $detail['goods_detail'] = $property['description'];
         $detail['open_time'] = $property['checkin_time'];

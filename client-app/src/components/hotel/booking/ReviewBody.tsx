@@ -53,6 +53,8 @@ interface Props {
    * 不传或为 0 不渲染该行,合计也不扣。
    */
   longstayDiscount?: number;
+  /** 附加服务金额(真实酒店):明细单列一行并计入合计;演示数据不传 */
+  addonAmount?: number;
   /** 当前房型的退改规则(`useBookingWizard().refundRules`);演示数据不传 */
   refundRules?: Array<{ rule_type: number }>;
   /** 顶部酒店卡的名称(新稿把房型卡换成了酒店卡);缺省则不渲染该卡 */
@@ -83,6 +85,7 @@ export default function ReviewBody({
   hotelName,
   roomTotal,
   longstayDiscount = 0,
+  addonAmount = 0,
   refundRules = [],
   specialRequest = '',
   couponLine = null,
@@ -142,6 +145,15 @@ export default function ReviewBody({
               },
             ]
           : []),
+        ...(addonAmount > 0
+          ? [
+              {
+                key: 'addons',
+                label: t('hotels.booking.review.addonServices'),
+                value: formatAmount(addonAmount, currency),
+              },
+            ]
+          : []),
       ];
 
   /**
@@ -149,7 +161,7 @@ export default function ReviewBody({
    * 价格明细只列原价/房费/税费,选券挪到第 4 步的 COUPONS 卡。
    * 所以这里的合计就是明细合计(房费 − 长住优惠),不再扣券。
    */
-  const payable = Math.max(0, stayTotal - longstayDiscount);
+  const payable = Math.max(0, stayTotal - longstayDiscount) + addonAmount;
   /** 多房间钱包全额支付:明细追加券行与钱包抵扣行,合计 = 还需另付的部分(全额覆盖时为 0) */
   if (couponLine && couponLine.discount > 0) {
     rows.push({

@@ -72,6 +72,8 @@ export interface BookingDetail {
   payment: {
     totalAmount: string | number;
     discountAmount: string | number;
+    /** 附加服务金额(已含在实付里,取消时全额退) */
+    addonAmount?: number;
     payAmount: string | number;
     payMethod: number;
     payTradeNo: string;
@@ -86,6 +88,9 @@ export interface BookingDetail {
     nights: number;
     quantity: number;
     specialRequests: string;
+    /** 住客加购的附加服务快照(下单时冻结);未加购为 null */
+    addons: { guests: number; nights: number; rooms: number; amount: number;
+      items: { key: string; price: number; units: string[]; quantity: number; amount: number }[] } | null;
     mealPlan: string;
     roomNo: string;
     cancellationPolicy: Record<string, any> | null;

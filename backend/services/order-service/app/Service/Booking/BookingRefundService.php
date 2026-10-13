@@ -42,20 +42,24 @@ class BookingRefundService
      */
     public function quote(array $order): array
     {
+        /* 附加服务全额退,不受取消政策影响:政策只作用于房费部分,最后再把附加服务加回可退额 */
         $pay = (float) $order['pay_amount'];
+        $addon = min($pay, max(0.0, (float) ($order['addon_amount'] ?? 0)));
+        $roomPay = round($pay - $addon, 2);
         $policy = $order['cancellation_policy_snapshot'] ?? null;
         if (is_string($policy)) {
             $policy = json_decode($policy, true);
         }
-        $policyRefundable = $pay;
+        $policyRefundable = $roomPay;
         if (is_array($policy)) {
             $type = (int) ($policy['ruleType'] ?? 1);
             if ($type === 3) {
                 $policyRefundable = 0.0;
             } elseif ($type === 2) {
-                $policyRefundable = $this->stepRefundable($pay, is_string($policy['rules'] ?? null) ? (json_decode($policy['rules'], true) ?: []) : (array) ($policy['rules'] ?? []), (string) ($order['use_date'] ?? ''));
+                $policyRefundable = $this->stepRefundable($roomPay, is_string($policy['rules'] ?? null) ? (json_decode($policy['rules'], true) ?: []) : (array) ($policy['rules'] ?? []), (string) ($order['use_date'] ?? ''));
             }
         }
+        $policyRefundable = round($policyRefundable + $addon, 2);
         $refundedAlready = round((float) Db::table('order_refund')
             ->where('order_id', (int) $order['id'])
             ->where('status', 3)

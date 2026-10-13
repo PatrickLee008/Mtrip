@@ -229,7 +229,7 @@ export default {
     },
     profile: {
       title: '酒店资料', subtitle: '完善酒店资料、设施及入住退房时间，帮助住客规划行程。', basic: '物业内容', required: '物业名称和地址不能为空。', publishLocationRequired: '提交审核前必须填写国家代码和城市。',
-      edit: '编辑酒店资料', details: '酒店详情', amenities: '酒店设施', longStay: '长住详情', roomTypes: '房型', policies: '酒店政策', nearby: '附近景点', navigation: '打开导航菜单', closeNavigation: '关闭导航菜单',
+      edit: '编辑酒店资料', details: '酒店详情', amenities: '酒店设施', longStay: '长住详情', roomTypes: '房型', policies: '酒店政策', addons: '附加服务', nearby: '附近景点', navigation: '打开导航菜单', closeNavigation: '关闭导航菜单',
       roomTypesMetric: '房型', totalRooms: '房间总数', guestRating: '住客评分', roomsCount: '{count} 间', reviewCount: '{count} 条评价', stars: '{count} 星级', notProvided: '未填写',
       hotelImages: '酒店图片', imageAlt: '{name} · 图片 {index}', noImages: '暂未添加酒店图片。', noDescription: '暂未添加酒店介绍。', noAmenities: '暂未添加酒店设施。',
       hotelInformation: '酒店信息', hotelLocation: '酒店位置', hotelHighlight: '酒店亮点', fullAddress: '完整地址', exactCoordinates: '精确坐标', latitude: '纬度', longitude: '经度', mapTip: '地图服务已预留，请在下方填写精确坐标。',
@@ -252,6 +252,13 @@ export default {
         statusActive: '启用', statusPaused: '停用', bold: '加粗',
         emptyPromotions: '暂未添加长住促销。', emptyBenefits: '暂未添加长住权益。',
         count: '（{count}/{limit}）', save: '保存修改', createNow: '立即创建',
+      },
+      addonsTab: {
+        enabledCount: '已启用 {count}/{total}',
+        hint: '价格与计价方式审核通过后对住客生效。可多选计价方式,金额 = 单价 × 人数 × 晚数 × 间数(只乘所选项);都不选按次收取。取消预订时附加服务费用全额退回。',
+        on: '已启用', off: '未启用', price: '单价', pricing: '计价方式', pricingHint: '可多选;都不选 = 按次收取', perTime: '按次', description: '说明(选填)',
+        units: { person: '按人', night: '按晚', room: '按间' },
+        items: { breakfast: '早餐', airport_transfer: '机场接送', spa: 'SPA', laundry: '洗衣', room_service: '客房服务', extra_bed: '加床', late_checkout: '延迟退房' },
       },
       policiesTab: {
         booking: '预订政策', checkInOut: '入住与退房政策', children: '儿童与加床政策',
@@ -582,6 +589,8 @@ export default {
       roomNo: '房号',
       specialRequests: '特殊要求',
       noRequests: '无特殊要求。',
+      addons: '附加服务',
+      noAddons: '未加购附加服务。',
       cancellationPolicy: '取消政策',
       noShowDeadline: 'No-show 截止',
       policyFree: '免费取消',
@@ -896,12 +905,18 @@ export default {
       descriptionPlaceholder: '请输入',
       discountValue: '折扣值',
       stayRules: '长住规则',
-      minNights: '最少入住晚数',
-      conditions: '使用条件',
-      bookAdvanceDays: '需提前预订天数',
-      minRoomCount: '最少间数',
-      minHotelCount: '最少酒店数',
-      stayRange: '适用入住日期(留空不限)',
+      minNights: '最少入住晚数',
+
+      conditions: '使用条件',
+
+      bookAdvanceDays: '需提前预订天数',
+
+      minRoomCount: '最少间数',
+
+      minHotelCount: '最少酒店数',
+
+      stayRange: '适用入住日期(留空不限)',
+
       conditionsTip: '0 或留空表示不限。提前天数与入住日期按每个房型判断,不满足的房型不参与优惠。',
       maxNights: '最多入住晚数',
       properties: '适用物业',
@@ -927,7 +942,8 @@ export default {
       oneMerchant: '一个促销只能适用同一商户的物业',
       discount: '请输入大于 0 的折扣值',
       discountRange: '百分比折扣必须小于 100',
-      minNights: '长住促销最低需 2 晚',
+      minNights: '长住促销最低需 2 晚',
+
       stayRange: '适用入住日期的开始不能晚于结束',
       start: '请选择开始日期',
       end: '请选择结束日期',

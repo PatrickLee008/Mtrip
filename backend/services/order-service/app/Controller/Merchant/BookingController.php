@@ -127,6 +127,7 @@ class BookingController extends AbstractAdminController
                 'totalAmount' => $order['total_amount'],
                 'discountAmount' => $order['discount_amount'],
                 'payAmount' => $order['pay_amount'],
+                'addonAmount' => (float) ($order['addon_amount'] ?? 0),
                 'payMethod' => $order['pay_method'],
                 'payTradeNo' => $order['pay_trade_no'],
                 'payTime' => $order['pay_time'],
@@ -141,6 +142,8 @@ class BookingController extends AbstractAdminController
                 'nights' => $nights,
                 'quantity' => (int) $order['quantity'],
                 'specialRequests' => (string) $order['special_requests'],
+                // 住客加购的附加服务(下单快照:items[{key,price,units,quantity,amount}] + guests/nights/rooms)
+                'addons' => $this->jsonField($order['addon_snapshot'] ?? null),
                 'mealPlan' => (string) $order['meal_plan_snapshot'],
                 'roomNo' => (string) $order['assigned_room_no'],
                 'cancellationPolicy' => $this->jsonField($order['cancellation_policy_snapshot'] ?? null),

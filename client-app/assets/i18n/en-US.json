@@ -1411,6 +1411,30 @@
         "insurance": {
           "title": "Insurance",
           "desc": "Add Protection Plans"
+        },
+        "airport_transfer": {
+          "title": "Airport Transfer",
+          "desc": "Private car between the airport and the hotel."
+        },
+        "spa": {
+          "title": "Spa",
+          "desc": "Relaxing spa and massage treatments."
+        },
+        "laundry": {
+          "title": "Laundry",
+          "desc": "Washing and ironing service."
+        },
+        "room_service": {
+          "title": "Room Service",
+          "desc": "In-room dining and personal service."
+        },
+        "extra_bed": {
+          "title": "Extra Bed",
+          "desc": "Add an extra bed to the room."
+        },
+        "late_checkout": {
+          "title": "Late Check-out",
+          "desc": "Leave later on your check-out day."
         }
       },
       "guests": {
@@ -1469,7 +1493,8 @@
         "selectedRooms": "Selected Rooms ({{rooms}})",
         "editRooms": "Edit Rooms",
         "roomTimes": "x {{count}}",
-        "agreeNote": "By continuing, I agree to the Terms of Service, Privacy Policy, and the property's house rules."
+        "agreeNote": "By continuing, I agree to the Terms of Service, Privacy Policy, and the property's house rules.",
+        "addonServices": "Add-on services"
       },
       "trip": {
         "stay": "Stay {{index}}",
@@ -1673,7 +1698,13 @@
           "paidToast": "Payment successful"
         }
       },
-      "payNow": "Pay Now"
+      "payNow": "Pay Now",
+      "addonUnits": {
+        "person": "guest",
+        "night": "night",
+        "room": "room",
+        "once": "booking"
+      }
     },
     "reviewsPage": {
       "title": "Reviews ({{reviews}})",

@@ -101,13 +101,16 @@ class OrderController extends AbstractController
         $couponId = $this->intInput('couponId', 0);
         $guests = $this->pricingService->normalizeGuests($this->input('travelers'), $quantity);
         $remark = mb_substr($this->strInput('remark'), 0, 500);
+        /* 附加服务(仅酒店):所选服务键 + 入住人数(「按人」计价用,缺省按间数) */
+        $addonKeys = $orderType === 1 ? $this->input('addons') : null;
+        $guestCount = max(1, $this->intInput('guestCount', $quantity));
 
         $orderNo = OrderNoGenerator::orderNo($siteId);
         // M4:预订字段(状态/10分钟支付截止/特殊请求/政策快照),非酒店订单仅双写基础状态字段
         $priced = Db::transaction(function () use (
             $siteId, $userId, $target, $sku, $orderType, $propertyId, $roomTypeId, $goodsId, $skuId,
             $quantity, $dates, $useDate, $endDate, $orderNo, $contactName, $contactPhone,
-            $isCitizen, $couponId, $guests, $remark
+            $isCitizen, $couponId, $guests, $remark, $addonKeys, $guestCount
         ) {
             MerchantAccessGuard::lockBookable([$target['owner']], $siteId);
             if ($orderType === 1) {
@@ -135,12 +138,15 @@ class OrderController extends AbstractController
                     $propertyId, $roomTypeId, $goodsId, $skuId, round($totalAmount - $longstay, 2),
                     true, $quantity, $useDate, $orderType === 1 ? $endDate : null)
                 : [0, 0.0, null];
-            $payAmount = max(0.0, round($totalAmount - $longstay - $couponDiscount, 2));
+            // 附加服务:不进券/长住基数,按原价加在实付上
+            [$addonAmount, $addonSnapshot] = $this->pricingService->addonCharge($propertyId, $addonKeys, $guestCount, count($dates), $quantity);
+            $payAmount = max(0.0, round($totalAmount - $longstay - $couponDiscount, 2)) + $addonAmount;
             // 金额确认:与用户看到的应付不一致就不建单(抛错回滚已锁库存),返回最新明细
             $this->pricingService->assertExpectedPay($this->input('expectedPayAmount'), [
                 'original' => round($totalAmount, 2),
                 'longstayDiscount' => round($longstay, 2),
                 'couponDiscount' => round($couponDiscount, 2),
+                'addonAmount' => $addonAmount,
                 'payAmount' => $payAmount,
             ]);
             $unitPrice = round($totalAmount / max(1, count($dates)) / $quantity, 2);
@@ -171,6 +177,8 @@ class OrderController extends AbstractController
                 'coupon_snapshot' => $couponSnapshot,
                 'alloc_coupon_discount' => $couponDiscount,
                 'pay_amount' => $payAmount,
+                'addon_amount' => $addonAmount,
+                'addon_snapshot' => $addonSnapshot,
                 'order_status' => 0,
                 'use_date' => $useDate,
                 'end_date' => $endDate,
@@ -202,6 +210,7 @@ class OrderController extends AbstractController
                 'original' => $totalAmount,
                 'longstay' => $longstay,
                 'coupon' => $couponDiscount,
+                'addon' => $addonAmount,
                 'payAmount' => $payAmount,
                 'newBooking' => $newBooking,
             ];
@@ -217,6 +226,7 @@ class OrderController extends AbstractController
                 'original' => $priced['original'],
                 'longstayDiscount' => $priced['longstay'],
                 'couponDiscount' => $priced['coupon'],
+                'addonAmount' => $priced['addon'],
                 'payAmount' => $priced['payAmount'],
             ],
         ], '下单成功,请在10分钟内完成支付');
@@ -454,6 +464,8 @@ class OrderController extends AbstractController
             'payAmount' => $q['payAmount'],
             'refundable' => $q['refundable'],
             'cancellationFee' => round($q['payAmount'] - $q['refundable'], 2),
+            // 附加服务退款额(全额退,不受取消政策影响,已含在 refundable / refundAmount 里)
+            'addonRefund' => $q['addonRefund'],
             'platformFee' => $q['platformFee'],
             'refundAmount' => $q['refundAmount'],
             'refundChannel' => 1,
@@ -552,7 +564,10 @@ class OrderController extends AbstractController
      */
     private function computeRefund(array $order): array
     {
-        $pay = (float) $order['pay_amount'];
+        /* 附加服务全额退,不受取消政策影响,也不收平台便民费;下面的规则只作用于房费部分 */
+        $total = (float) $order['pay_amount'];
+        $addon = min($total, max(0.0, (float) ($order['addon_amount'] ?? 0)));
+        $pay = round($total - $addon, 2);
         $orderType = (int) $order['order_type'];
         $rule = Db::table('goods_refund_rule')->whereNull('deleted_at')
             ->when($orderType === 1, static fn ($query) => $query->where('property_id', (int) $order['property_id']))
@@ -579,9 +594,11 @@ class OrderController extends AbstractController
         }
         $rate = $this->platformFeeRate((int) $order['site_id']);
         $platformFee = round($refundable * $rate, 2);
-        $refundAmount = max(0.0, round($refundable - $platformFee, 2));
+        $refundAmount = max(0.0, round($refundable - $platformFee + $addon, 2));
+        $refundable = round($refundable + $addon, 2);
         return [
-            'payAmount' => round($pay, 2),
+            'payAmount' => round($total, 2),
+            'addonRefund' => round($addon, 2),
             'refundable' => round($refundable, 2),
             'platformFee' => $platformFee,
             'refundAmount' => $refundAmount,

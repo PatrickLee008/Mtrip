@@ -5,14 +5,16 @@ import { message } from 'ant-design-vue';
 import { ArrowLeftOutlined, CoffeeOutlined, DeleteOutlined, EditOutlined, EnvironmentFilled, HomeOutlined, PlusOutlined, StarFilled } from '@ant-design/icons-vue';
 import { useI18n } from 'vue-i18n';
 import { apiPropertyProfile, apiPropertyProfileImageUpload, apiPropertyProfileSave, apiPropertyPublish, emptyLongStay, emptyPolicies, type NearbyAttraction,
-  type NearbyStop, type PropertyAmenity, type PropertyImage, type PropertyLongStay, type PropertyPolicies } from '@/api/properties';
+  type NearbyStop, type PropertyAddon, type PropertyAmenity, type PropertyImage, type PropertyLongStay, type PropertyPolicies,
+  ADDON_KEYS, ADDON_UNITS } from '@/api/properties';
 import HotelAmenities from './components/HotelAmenities.vue';
 import HotelLongStay from './components/HotelLongStay.vue';
 import HotelNearby from './components/HotelNearby.vue';
 import HotelPolicies from './components/HotelPolicies.vue';
+import HotelAddonServices from './components/HotelAddonServices.vue';
 
 /** 可停留的页签(rooms 走独立 `/rooms` 页,不在此列) */
-type TabKey = 'details' | 'amenities' | 'long-stay' | 'policies' | 'nearby';
+type TabKey = 'details' | 'amenities' | 'long-stay' | 'policies' | 'addons' | 'nearby';
 
 interface ProfileForm {
   propertyName: string;
@@ -33,6 +35,7 @@ interface ProfileForm {
   imageGallery: PropertyImage[];
   longStay: PropertyLongStay;
   hotelPolicies: PropertyPolicies;
+  addons: PropertyAddon[];
   nearbyAttractions: NearbyAttraction[];
 }
 
@@ -55,7 +58,7 @@ const form = reactive<ProfileForm>({
   propertyName: '', phoneNumber1: '', phoneNumber2: '', emailAddress: '', location: '',
   countryCode: '', cityKey: '', longitude: '', latitude: '', description: '', starLevel: 0,
   website: '', checkinTime: '', checkoutTime: '', amenities: [], imageGallery: [],
-  longStay: emptyLongStay(), hotelPolicies: emptyPolicies(), nearbyAttractions: [],
+  longStay: emptyLongStay(), hotelPolicies: emptyPolicies(), addons: [], nearbyAttractions: [],
 });
 let savedForm: ProfileForm = cloneForm(form);
 
@@ -65,6 +68,7 @@ const tabs = computed(() => [
   { key: 'long-stay', label: t('properties.profile.longStay') },
   { key: 'rooms', label: t('properties.profile.roomTypes') },
   { key: 'policies', label: t('properties.profile.policies') },
+  { key: 'addons', label: t('properties.profile.addons') },
   { key: 'nearby', label: t('properties.profile.nearby') },
 ]);
 const facilities = computed(() => Array.from(new Set(form.amenities
@@ -105,6 +109,7 @@ function cloneForm(source: ProfileForm): ProfileForm {
       children: source.hotelPolicies.children.map((row) => ({ ...row })),
       rules: source.hotelPolicies.rules.map((row) => ({ ...row })),
     },
+    addons: source.addons.map((item) => ({ ...item, units: [...item.units] })),
     nearbyAttractions: source.nearbyAttractions.map((item) => ({ ...item })),
   };
 }
@@ -126,6 +131,22 @@ function normalizeLongStay(value: unknown): PropertyLongStay {
       status: item.status !== false, bold: item.bold === true,
     })),
   };
+}
+
+/** 附加服务:固定 7 项(缺的补成停用),计价维度只认 person/night/room */
+function normalizeAddons(value: unknown): PropertyAddon[] {
+  const list = asArray(value);
+  return ADDON_KEYS.map((key) => {
+    const row = list.find((item) => item.key === key) || {};
+    const units = Array.isArray(row.units) ? row.units.map(String) : [];
+    return {
+      key,
+      enabled: row.enabled === true,
+      price: Number(row.price || 0),
+      units: ADDON_UNITS.filter((unit) => units.includes(unit)),
+      description: String(row.description || ''),
+    };
+  });
 }
 
 function normalizePolicies(value: unknown): PropertyPolicies {
@@ -215,6 +236,7 @@ async function load(): Promise<void> {
         : [],
       longStay: normalizeLongStay(row.long_stay),
       hotelPolicies: normalizePolicies(row.hotel_policies),
+      addons: normalizeAddons(row.addons),
       nearbyAttractions: normalizeNearby(row.nearby_attractions),
     });
     savedForm = cloneForm(form);
@@ -236,7 +258,7 @@ function beginAmenitiesEdit(): void { beginEdit('amenities'); }
 
 function selectTab(key: string): void {
   if (key === 'rooms' && !editing.value) { void router.push({ path: '/rooms', query: { propertyId: propertyId.value } }); return; }
-  if (!['details', 'amenities', 'long-stay', 'policies', 'nearby'].includes(key)) return;
+  if (!['details', 'amenities', 'long-stay', 'policies', 'addons', 'nearby'].includes(key)) return;
   activeTab.value = key as TabKey;
   if (editing.value) editingTab.value = key as TabKey;
 }
@@ -280,6 +302,7 @@ async function save(submit: boolean): Promise<void> {
         children: form.hotelPolicies.children.map((row) => ({ ...row, name: row.name.trim() })),
         rules: form.hotelPolicies.rules.map((row) => ({ ...row, name: row.name.trim() })),
       },
+      addons: form.addons.map((item) => ({ ...item, description: item.description.trim() })),
       nearbyAttractions: form.nearbyAttractions.map((card) => ({
         ...card,
         stops: card.stops.map((stop) => ({ ...stop, name: stop.name.trim(), travelTime: stop.travelTime.trim(), distance: stop.distance.trim() })),
@@ -402,6 +425,7 @@ watch(propertyId, () => {
       <HotelAmenities v-else-if="!editing && activeTab === 'amenities'" v-model="form.amenities" :disabled="loading || latest?.status === 1" @edit-requested="beginAmenitiesEdit" />
       <HotelLongStay v-else-if="!editing && activeTab === 'long-stay'" v-model="form.longStay" :disabled="loading || latest?.status === 1" @edit-requested="beginEdit('long-stay')" />
       <HotelPolicies v-else-if="!editing && activeTab === 'policies'" v-model="form.hotelPolicies" :currency="metrics.currency" :disabled="loading || latest?.status === 1" @edit-requested="beginEdit('policies')" />
+      <HotelAddonServices v-else-if="!editing && activeTab === 'addons'" v-model="form.addons" :currency="metrics.currency" :disabled="loading || latest?.status === 1" @edit-requested="beginEdit('addons')" />
       <HotelNearby v-else-if="!editing && activeTab === 'nearby'" v-model="form.nearbyAttractions" :property-id="propertyId" :disabled="loading || latest?.status === 1" @edit-requested="beginEdit('nearby')" />
 
       <template v-else-if="editing && editingTab === 'details'">
@@ -457,6 +481,7 @@ watch(propertyId, () => {
       <HotelAmenities v-else-if="editingTab === 'amenities'" v-model="form.amenities" editing />
       <HotelLongStay v-else-if="editingTab === 'long-stay'" v-model="form.longStay" editing />
       <HotelPolicies v-else-if="editingTab === 'policies'" v-model="form.hotelPolicies" :currency="metrics.currency" editing />
+      <HotelAddonServices v-else-if="editingTab === 'addons'" v-model="form.addons" :currency="metrics.currency" editing />
       <HotelNearby v-else-if="editingTab === 'nearby'" v-model="form.nearbyAttractions" :property-id="propertyId" editing />
 
       <footer v-if="editing" class="edit-actions">
@@ -499,7 +524,7 @@ watch(propertyId, () => {
 .summary-card strong { display: block; margin-top: 15px; overflow: hidden; font-size: 16px; line-height: 22px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
 .metric-icon { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 6px; font-size: 14px; }
 .metric-icon.amber { color: #ed9a3a; background: #fff7e9; }.metric-icon.blue { color: #5b83f5; background: #eef4ff; }.metric-icon.gold { color: #f7bd22; background: #fffbea; }
-.profile-tabs { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); margin-bottom: 16px; padding: 0 12px; overflow-x: auto; }
+.profile-tabs { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); margin-bottom: 16px; padding: 0 12px; overflow-x: auto; }
 .profile-tabs button { position: relative; height: 48px; padding: 0 8px; border: 0; background: transparent; color: #858895; font-weight: 600; white-space: nowrap; cursor: pointer; }.profile-tabs button:disabled { cursor: not-allowed; }
 .profile-tabs button.active { color: var(--profile-primary); }
 .profile-tabs button.active::after { position: absolute; right: 6px; bottom: 0; left: 6px; height: 3px; border-radius: 3px 3px 0 0; background: var(--profile-primary); content: ''; }
@@ -533,7 +558,7 @@ watch(propertyId, () => {
 .edit-actions { position: sticky; z-index: 3; bottom: 0; margin: auto -28px -48px; padding: 14px 28px; justify-content: flex-end; border-top: 1px solid #e5e8ef; background: rgb(255 255 255 / 96%); box-shadow: 0 -4px 14px rgb(24 27 42 / 5%); }
 
 @media (max-width: 900px) {
-  .profile-page { padding: 18px 16px 36px; }.profile-tabs { grid-template-columns: repeat(6, minmax(140px, 1fr)); }.summary-grid { grid-template-columns: 1fr; }.amenities-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }.view-image-grid, .edit-image-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }.edit-actions { margin: auto -16px -36px; padding: 12px 16px; }
+  .profile-page { padding: 18px 16px 36px; }.profile-tabs { grid-auto-columns: minmax(140px, 1fr); }.summary-grid { grid-template-columns: 1fr; }.amenities-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }.view-image-grid, .edit-image-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }.edit-actions { margin: auto -16px -36px; padding: 12px 16px; }
 }
 @media (max-width: 600px) {
   .profile-head { align-items: flex-start; flex-direction: column; }.profile-head .ant-btn { width: 100%; }.details-grid, .form-grid { grid-template-columns: 1fr; }.amenities-grid, .view-image-grid, .edit-image-grid { grid-template-columns: 1fr; }.map-placeholder { height: 180px; }.map-placeholder > span { right: 58px; font-size: 10px; }.images-editor .section-head { align-items: flex-start; flex-direction: column; }.edit-actions { flex-wrap: wrap; }

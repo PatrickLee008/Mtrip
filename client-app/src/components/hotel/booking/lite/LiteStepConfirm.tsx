@@ -50,6 +50,7 @@ import {
   type LeadGuestForm,
 } from '@/screens/hotel/bookingDemo';
 import { useSiteStore } from '@/store/siteStore';
+import type { HotelAddon } from '@/types/models';
 import { formatMoney } from '@/utils/format';
 
 interface Props {
@@ -66,6 +67,8 @@ interface Props {
   onChangeForm: (patch: Partial<LeadGuestForm>) => void;
   addons: BookingAddonKey[];
   onToggleAddon: (key: BookingAddonKey) => void;
+  /** 真实酒店的附加服务(商户配置、平台审核);null = 演示模式,用设计稿三张卡;空数组 = 整块不显示 */
+  addonOptions?: HotelAddon[] | null;
   /** 退改说明(由页面按真实 `refundRules` 算好后传进来) */
   cancellationDesc: string;
   onOpenDates: () => void;
@@ -87,6 +90,7 @@ export default function LiteStepConfirm({
   onChangeForm,
   addons,
   onToggleAddon,
+  addonOptions = null,
   cancellationDesc,
   onOpenDates,
   onOpenGuests,
@@ -294,6 +298,7 @@ export default function LiteStepConfirm({
       </View>
 
       {/* ------------------------------------------------------ Add On Service */}
+      {addonOptions && addonOptions.length === 0 ? null : (
       <View style={styles.addonGroup}>
         <Pressable
           style={({ pressed }) => [liteBooking.foldBar, pressed && liteBooking.pressed]}
@@ -305,7 +310,25 @@ export default function LiteStepConfirm({
           </Text>
         </Pressable>
 
-        {addonOpen
+        {addonOpen && addonOptions
+          ? addonOptions.map((addon) => (
+              <AddOn
+                key={addon.key}
+                cover={TEMP_ADDON_COVERS[addon.key === 'airport_transfer' ? 'transfer' : addon.key] ?? null}
+                title={t(`hotels.booking.addons.${addon.key}.title`)}
+                desc={addon.description || t(`hotels.booking.addons.${addon.key}.desc`)}
+                price={`${formatMoney(addon.price, currency)} / ${
+                  addon.units.length
+                    ? addon.units.map((unit) => t(`hotels.booking.addonUnits.${unit}`)).join(' · ')
+                    : t('hotels.booking.addonUnits.once')
+                }`}
+                selected={addons.includes(addon.key)}
+                addLabel={t('hotels.booking.dates.addToBooking')}
+                selectedLabel={t('hotels.booking.dates.selected')}
+                onToggle={() => onToggleAddon(addon.key)}
+              />
+            ))
+          : addonOpen
           ? BOOKING_ADDONS.map((addon) => (
               <AddOn
                 key={addon.key}
@@ -321,6 +344,7 @@ export default function LiteStepConfirm({
             ))
           : null}
       </View>
+      )}
 
       {/* --------------------------------------------------- Cancellation Policy */}
       <View style={styles.policyCard}>

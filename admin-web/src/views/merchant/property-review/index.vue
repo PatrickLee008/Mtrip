@@ -76,7 +76,7 @@ const diffRows = computed(() => {
     'city_key', 'longitude', 'latitude', 'description', 'star_level', 'facilities', 'amenities',
     'images', 'image_gallery', 'website', 'checkin_time', 'checkout_time',
     /* 长住 / 政策(含 booking.payAtHotel 到店付款开关)/ 附近景点也随资料审核发布,审核人要看得到 */
-    'long_stay', 'hotel_policies', 'nearby_attractions',
+    'long_stay', 'hotel_policies', 'nearby_attractions', 'addons',
   ];
   return fields.map((field) => ({
     field,

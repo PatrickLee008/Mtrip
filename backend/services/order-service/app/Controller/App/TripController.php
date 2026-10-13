@@ -93,14 +93,16 @@ class TripController extends AbstractController
             }
             unset($item);
             // 1)+2) 逐项锁库存计价 + 整单券校验与占比分摊(与 trip/quote 同一实现)
-            ['legs' => $legs, 'tripTotal' => $tripTotal, 'couponRefId' => $couponRefId, 'couponDiscount' => $couponDiscount,
+            ['legs' => $legs, 'tripTotal' => $tripTotal, 'addonTotal' => $addonTotal, 'couponRefId' => $couponRefId, 'couponDiscount' => $couponDiscount,
                 'couponSnapshot' => $couponSnapshot, 'allocs' => $allocs] = $this->priceTrip($siteId, $userId, $prepared, $couponId, false);
+            $tripPay = round(max(0.0, round($tripTotal - $couponDiscount, 2)) + $addonTotal, 2);
             // 金额确认:与用户看到的应付(trip/quote 给的 payAmount)不一致就不建单,抛错回滚已锁库存
             $this->pricingService->assertExpectedPay($this->input('expectedPayAmount'), [
                 'original' => round(array_sum(array_column($legs, 'original')), 2),
                 'longstayDiscount' => round(array_sum(array_column($legs, 'longstay')), 2),
                 'couponDiscount' => $couponDiscount,
-                'payAmount' => max(0.0, round($tripTotal - $couponDiscount, 2)),
+                'addonAmount' => $addonTotal,
+                'payAmount' => $tripPay,
             ]);
 
             // 3) 建 Trip 主单
@@ -108,10 +110,10 @@ class TripController extends AbstractController
                 'trip_no' => $tripNo,
                 'site_id' => $siteId,
                 'user_id' => $userId,
-                'total_amount' => $tripTotal,
+                'total_amount' => round($tripTotal + $addonTotal, 2),
                 'coupon_id' => $couponRefId,
                 'coupon_discount' => $couponDiscount,
-                'pay_amount' => max(0.0, round($tripTotal - $couponDiscount, 2)),
+                'pay_amount' => $tripPay,
                 'booking_count' => count($legs),
                 'pay_status' => 0,
             ]);
@@ -120,7 +122,7 @@ class TripController extends AbstractController
             $bookings = [];
             foreach ($legs as $i => $leg) {
                 $alloc = $allocs[$i];
-                $payAmount = max(0.0, round($leg['net'] - $alloc, 2));
+                $payAmount = round(max(0.0, round($leg['net'] - $alloc, 2)) + $leg['addonAmount'], 2);
                 $orderNo = OrderNoGenerator::orderNo($siteId);
                 $unitPrice = round($leg['original'] / max(1, count($leg['dates'])) / $leg['quantity'], 2);
                 // M4:预订字段(10分钟支付截止/政策快照),Trip 均为酒店单
@@ -152,6 +154,8 @@ class TripController extends AbstractController
                     // 整单券规则快照,各预订同一份;结算按它算出资方分摊
                     'coupon_snapshot' => $couponSnapshot,
                     'pay_amount' => $payAmount,
+                    'addon_amount' => $leg['addonAmount'],
+                    'addon_snapshot' => $leg['addonSnapshot'],
                     'order_status' => 0,
                     'use_date' => $leg['useDate'],
                     'end_date' => $leg['endDate'],
@@ -175,9 +179,10 @@ class TripController extends AbstractController
             return [
                 'tripId' => $tripId,
                 'tripNo' => $tripNo,
-                'totalAmount' => $tripTotal,
+                'totalAmount' => round($tripTotal + $addonTotal, 2),
                 'couponDiscount' => $couponDiscount,
-                'payAmount' => max(0.0, round($tripTotal - $couponDiscount, 2)),
+                'addonAmount' => $addonTotal,
+                'payAmount' => $tripPay,
                 'bookings' => $bookings,
             ];
         });
@@ -327,7 +332,8 @@ class TripController extends AbstractController
                 'original' => $leg['original'],
                 'longstayDiscount' => $leg['longstay'],
                 'couponDiscount' => $alloc,
-                'payAmount' => max(0.0, round($leg['net'] - $alloc, 2)),
+                'addonAmount' => $leg['addonAmount'],
+                'payAmount' => round(max(0.0, round($leg['net'] - $alloc, 2)) + $leg['addonAmount'], 2),
             ];
         }
         return Result::success([
@@ -336,7 +342,8 @@ class TripController extends AbstractController
             'couponId' => $priced['couponRefId'],
             'couponDiscount' => $priced['couponDiscount'],
             'couponError' => $priced['couponError'],
-            'payAmount' => max(0.0, round($priced['tripTotal'] - $priced['couponDiscount'], 2)),
+            'addonAmount' => $priced['addonTotal'],
+            'payAmount' => round(max(0.0, round($priced['tripTotal'] - $priced['couponDiscount'], 2)) + $priced['addonTotal'], 2),
             'items' => $lines,
         ]);
     }
@@ -358,6 +365,27 @@ class TripController extends AbstractController
             $net = round($original - $longstay, 2);
             $tripTotal = round($tripTotal + $net, 2);
             $legs[] = $p + ['original' => $original, 'longstay' => $longstay, 'net' => $net, 'changes' => $changes];
+        }
+
+        /**
+         * 附加服务:按「住宿」收一次 —— 同一物业、同一入离日期的多个房型行合成一段住宿,
+         * 客户端只在该段的第一行带 addons/guestCount;「按间」取这段住宿的总间数。金额记在带 addons 的那一行上,
+         * 不进券与长住折扣的基数(couponLegs 仍按房费净额)。
+         */
+        $addonTotal = 0.0;
+        foreach ($legs as $i => $leg) {
+            $rooms = 0;
+            foreach ($legs as $other) {
+                if ($other['propertyId'] === $leg['propertyId'] && $other['useDate'] === $leg['useDate'] && $other['endDate'] === $leg['endDate']) {
+                    $rooms += $other['quantity'];
+                }
+            }
+            [$amount, $snapshot] = $this->pricingService->addonCharge(
+                $leg['propertyId'], $leg['addons'], $leg['guestCount'], count($leg['dates']), $rooms
+            );
+            $legs[$i]['addonAmount'] = $amount;
+            $legs[$i]['addonSnapshot'] = $snapshot;
+            $addonTotal = round($addonTotal + $amount, 2);
         }
 
         $couponRefId = 0;
@@ -399,6 +427,7 @@ class TripController extends AbstractController
         return [
             'legs' => $legs,
             'tripTotal' => $tripTotal,
+            'addonTotal' => $addonTotal,
             'couponRefId' => $couponRefId,
             'couponDiscount' => $couponDiscount,
             'couponSnapshot' => $couponSnapshot,
@@ -489,6 +518,8 @@ class TripController extends AbstractController
             'contactName' => $contactName, 'contactPhone' => $contactPhone,
             'guests' => $this->pricingService->normalizeGuests($item['travelers'] ?? null, $quantity),
             'remark' => mb_substr(trim((string) ($item['remark'] ?? '')), 0, 500),
+            'addons' => is_array($item['addons'] ?? null) ? $item['addons'] : [],
+            'guestCount' => max(1, (int) ($item['guestCount'] ?? $quantity)),
             'property' => (array) $property, 'room' => $room,
             'propertyImage' => $this->propertyImage($property->images ?? null),
         ];

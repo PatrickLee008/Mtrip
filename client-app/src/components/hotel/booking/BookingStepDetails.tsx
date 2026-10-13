@@ -15,6 +15,7 @@ import { useTranslation } from 'react-i18next';
 import BookingSummaryBar from '@/components/hotel/booking/BookingSummaryBar';
 import LeadGuestSection from '@/components/hotel/booking/LeadGuestSection';
 import { AddOnsSection, SpecialRequestsSection } from '@/components/hotel/booking/StayExtras';
+import type { HotelAddon } from '@/types/models';
 import {
   formatWeekdayDate,
   nightsBetween,
@@ -35,6 +36,8 @@ interface Props {
   addons: BookingAddonKey[];
   onToggleAddon: (key: BookingAddonKey) => void;
   onOpenInsurance: () => void;
+  /** 真实酒店的附加服务选项;null = 演示模式(设计稿三张卡) */
+  addonOptions?: HotelAddon[] | null;
   onComingSoon: () => void;
 }
 
@@ -51,6 +54,7 @@ export default function BookingStepDetails({
   addons,
   onToggleAddon,
   onOpenInsurance,
+  addonOptions = null,
   onComingSoon,
 }: Props) {
   const { t, i18n } = useTranslation();
@@ -74,7 +78,7 @@ export default function BookingStepDetails({
 
       <SpecialRequestsSection request={request} onChangeRequest={onChangeRequest} />
 
-      <AddOnsSection addons={addons} onToggleAddon={onToggleAddon} onOpenInsurance={onOpenInsurance} />
+      <AddOnsSection addons={addons} options={addonOptions} onToggleAddon={onToggleAddon} onOpenInsurance={onOpenInsurance} />
     </View>
   );
 }

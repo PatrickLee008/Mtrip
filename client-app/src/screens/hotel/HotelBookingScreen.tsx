@@ -92,6 +92,8 @@ export default function HotelBookingScreen() {
     setExpanded,
     walletBalance,
     payAtHotel,
+    addonOptions,
+    addonTotal,
     payableTotal,
     longstayDiscount,
     reviewRoomTotal,
@@ -140,6 +142,7 @@ export default function HotelBookingScreen() {
             request={request}
             onChangeRequest={setRequest}
             addons={current.addons}
+            addonOptions={current.demo ? null : addonOptions}
             onToggleAddon={toggleAddon}
             onOpenInsurance={() => navigation.navigate('Insurance')}
             onComingSoon={comingSoon}
@@ -195,6 +198,8 @@ export default function HotelBookingScreen() {
               roomTotal={reviewRoomTotal}
               /* 长住优惠来自 trip/quote 试算(与下单同口径),单房型链路为 0 不显示 */
               longstayDiscount={longstayDiscount}
+              /* 附加服务(不进券与长住折扣,取消全额退),试算到了取试算,否则按同公式预估 */
+              addonAmount={current.demo ? 0 : addonTotal}
               refundRules={refundRules}
               specialRequest={request}
               onEditRooms={() => navigation.navigate('RoomCart')}
@@ -357,6 +362,7 @@ export default function HotelBookingScreen() {
             onToggleAddon={toggleAddon}
             onChangeRequest={setRequest}
             onOpenInsurance={() => navigation.navigate('Insurance')}
+            addonOptions={current.demo ? null : addonOptions}
           />
         );
     }

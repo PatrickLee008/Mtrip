@@ -178,8 +178,20 @@ export interface RefundRule {
   remark: string;
 }
 
+/** 酒店附加服务(详情只下发已发布且启用的项);金额 = price × 选中计价维度的乘积 */
+export interface HotelAddon {
+  key: string;
+  enabled: boolean;
+  price: number;
+  /** person 按人 / night 按晚 / room 按间,可多选;为空 = 按次 */
+  units: Array<'person' | 'night' | 'room'>;
+  description: string;
+}
+
 /** 商品详情 */
 export interface GoodsDetail extends GoodsItem {
+  /** 酒店附加服务(Enhance Your Stay);非酒店或未配置为空 */
+  addons?: HotelAddon[];
   merchant_id: number;
   goods_detail: string | null;
   images: string[];
