@@ -9,6 +9,11 @@
 -- Part 2  V20261013130100__enforce-merchant-phone-uniqueness
 --   27 owner accounts have an AES-GCM mobile but no mobile_index (SQL cannot decrypt/rehash):
 --   release the mobile and soft-delete 4001-4023, 4701-4704.
+--   Phone ownership conflicts (hash prefix shown):
+--   ac401c53  accounts 4710 4711 (already deleted) 4712 4713 (soft-deleted here)
+--             applications 1020 1030 1033 1034 1036 1037            -> all released
+--   09580782  application 1026 (merchant 0) vs owner 4714/app 1038   -> release 1026 only; 4714/1038 kept
+--   cdade6f9  applications 1021 1022 (merchant 0, no account)       -> both released
 --
 -- Each part verifies exact ids first: all pending -> apply; all done -> skip; anything else -> rollback.
 -- Before commit, each part re-checks the migration's own guard conditions.
@@ -113,6 +118,10 @@ CREATE PROCEDURE fix_unindexed_merchant_mobiles_20261013()
 fix: BEGIN
     DECLARE v_total INT DEFAULT 0;
     DECLARE v_pending INT DEFAULT 0;
+    DECLARE v_conflict_accounts INT DEFAULT 0;
+    DECLARE v_conflict_accounts_pending INT DEFAULT 0;
+    DECLARE v_conflict_apps INT DEFAULT 0;
+    DECLARE v_conflict_apps_pending INT DEFAULT 0;
     DECLARE EXIT HANDLER FOR SQLEXCEPTION BEGIN ROLLBACK; RESIGNAL; END;
 
     DROP TEMPORARY TABLE IF EXISTS tmp_fix_mobile_accounts;
@@ -131,14 +140,27 @@ fix: BEGIN
     WHERE a.account_type = 2 AND a.is_owner = 1 AND a.mobile <> ''
         AND a.username = CONCAT('m', a.merchant_id)
     FOR UPDATE;
-    IF v_total = 27 AND v_pending = 0 AND NOT EXISTS (SELECT 1 FROM merchant_admin a
+    SELECT COUNT(*), COALESCE(SUM(mobile_released_at IS NULL), 0)
+    INTO v_conflict_accounts, v_conflict_accounts_pending FROM merchant_admin
+    WHERE account_type = 2 AND is_owner = 1 AND (id, LEFT(mobile_index, 8)) IN (
+        (4710, 'ac401c53'), (4711, 'ac401c53'), (4712, 'ac401c53'), (4713, 'ac401c53'))
+    FOR UPDATE;
+    SELECT COUNT(*), COALESCE(SUM(registration_phone_released_at IS NULL), 0)
+    INTO v_conflict_apps, v_conflict_apps_pending FROM merchant_application
+    WHERE (id, LEFT(registration_phone_index, 8)) IN (
+        (1020, 'ac401c53'), (1030, 'ac401c53'), (1033, 'ac401c53'), (1034, 'ac401c53'),
+        (1036, 'ac401c53'), (1037, 'ac401c53'), (1026, '09580782'), (1021, 'cdade6f9'), (1022, 'cdade6f9'))
+    FOR UPDATE;
+    IF v_total = 27 AND v_pending = 0 AND v_conflict_accounts = 4 AND v_conflict_accounts_pending = 0
+        AND v_conflict_apps = 9 AND v_conflict_apps_pending = 0 AND NOT EXISTS (SELECT 1 FROM merchant_admin a
         JOIN tmp_fix_mobile_accounts t ON t.id = a.id WHERE a.mobile_released_at IS NULL) THEN
         ROLLBACK;
         DROP TEMPORARY TABLE IF EXISTS tmp_fix_mobile_accounts;
         SELECT 'Part 2 phone: already applied, skipped' AS result;
         LEAVE fix;
     END IF;
-    IF v_total <> 27 OR v_pending <> 27 THEN
+    IF v_total <> 27 OR v_pending <> 27 OR v_conflict_accounts <> 4 OR v_conflict_accounts_pending <> 4
+        OR v_conflict_apps <> 9 OR v_conflict_apps_pending <> 9 THEN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Part 2: rows differ from the confirmed audit; nothing changed';
     END IF;
 
@@ -155,6 +177,31 @@ fix: BEGIN
            CONCAT('Account ', a.id, ': unindexed test mobile released and account soft-deleted (user-authorized maintenance 2026-10-13)'),
            'Maintenance', 0, 'system', a.id, 'account', a.id, ''
     FROM merchant_admin a JOIN tmp_fix_mobile_accounts t ON t.id = a.id;
+
+    -- Duplicate-phone test accounts: 4710/4711 were soft-deleted by Part 1, keep their original deleted_at.
+    UPDATE merchant_admin
+    SET mobile_released_at = NOW(), deleted_at = COALESCE(deleted_at, NOW()), auth_version = auth_version + 1
+    WHERE id IN (4710, 4711, 4712, 4713);
+
+    UPDATE merchant_auth_challenge SET status = 'expired'
+    WHERE account_id IN (4710, 4711, 4712, 4713) AND status IN ('pending', 'verified');
+
+    UPDATE merchant_application SET registration_phone_released_at = NOW()
+    WHERE id IN (1020, 1030, 1033, 1034, 1036, 1037, 1026, 1021, 1022);
+
+    INSERT INTO merchant_activity_log
+        (site_id, merchant_id, activity_type, description, performed_by, performed_by_id,
+         actor_type, target_account_id, entity_type, entity_id, ip_address)
+    SELECT site_id, merchant_id, 'account_change',
+           CONCAT('Account ', id, ': duplicate mobile released and account soft-deleted (user-authorized maintenance 2026-10-13)'),
+           'Maintenance', 0, 'system', id, 'account', id, ''
+    FROM merchant_admin WHERE id IN (4710, 4711, 4712, 4713);
+
+    INSERT INTO merchant_verify_timeline
+        (site_id, merchant_id, application_id, action, actor_type, operator_id, operator_name, note)
+    SELECT site_id, merchant_id, id, 'registration_phone_released', 1, 0, 'Maintenance',
+           'Duplicate registration mobile released (user-authorized maintenance 2026-10-13)'
+    FROM merchant_application WHERE id IN (1020, 1030, 1033, 1034, 1036, 1037, 1026, 1021, 1022);
 
     -- Same conditions as both guards of the phone migration.
     IF EXISTS (SELECT 1 FROM merchant_admin WHERE account_type = 2 AND is_owner = 1 AND mobile_released_at IS NULL
@@ -188,5 +235,9 @@ DROP PROCEDURE IF EXISTS fix_unindexed_merchant_mobiles_20261013;
 -- ---------------------------------------------------------------- Result
 SELECT id, username, merchant_id, email_released_at, mobile_released_at, deleted_at, auth_version
 FROM merchant_admin
-WHERE id IN (4707, 4708, 4709, 4710, 4711) OR id BETWEEN 4001 AND 4023 OR id BETWEEN 4701 AND 4704
+WHERE id BETWEEN 4001 AND 4023 OR id BETWEEN 4701 AND 4714
+ORDER BY id;
+SELECT id, merchant_id, registration_status, registration_email_released_at, registration_phone_released_at, deleted_at
+FROM merchant_application
+WHERE id IN (1019, 1020, 1021, 1022, 1026, 1027, 1028, 1029, 1030, 1032, 1033, 1034, 1036, 1037, 1038, 1039)
 ORDER BY id;
