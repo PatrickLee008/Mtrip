@@ -18,7 +18,7 @@
 2. `V20261012130000__add-merchant-email-identity-lock.sql` 增加锁表、账号 `email_released_at`、申请 `registration_email_released_at`。
 3. 人工确认并审计处理重复归属，不能按创建时间选择账号，不能清空哈希伪装解决；换绑须完成验证、使旧验证上下文失效。
 4. 审计通过后执行 `V20261012130100__enforce-merchant-email-uniqueness.sql`。未处理的重复申请／账号、跨表归属冲突或缺失索引会在业务表 DDL 前停止，不自动删除或合并数据。
-5. 标准发布执行 `bash scripts/db-migrate.sh` 后加载代码、刷新代理／重启商户双池、发布两个 Web，不能只发代码跳过迁移。空库快照为 `database/merchant/43-merchant-email-identity.sql`。
+5. 标准发布执行 `bash scripts/db-migrate.sh` 后加载代码、刷新代理／重启商户双池、发布两个 Web，不能只发代码跳过迁移。空库不再另设快照,由 MySQL 镜像内 `99z-run-migrations.sh` 执行同一批版本迁移。
 
 本机账本 37/37；Admin Web、Merchant Web 已构建并发布到本地网关，商户主池与 App 池已刷新代理并重启。栈健康检查及两个池的注册／认证配置接口通过，最终只读审计无冲突和异常。独立测试服务器须对自己的数据库先审计再迁移，本轮没有连接或修改远程服务器。
 
