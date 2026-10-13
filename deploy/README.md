@@ -41,7 +41,13 @@ cd deploy
 只重启主池不会让 APP 端接口生效,反之亦然 —— 改这 5 个服务的代码时两个都要 restart。
 
 热重启原理:`docker-compose.override.yml` 把本地 `app/`、`config/`、`backend/shared/src` 挂载进容器覆盖镜像内代码,
-`restart` 后 Hyperf 重新扫描即生效,无需重建镜像。
+`restart` 后 Hyperf 重新扫描即生效,无需重建镜像。服务目录下其余文件(`bin/`、`test/` 等)烘焙在镜像里,
+改了必须 `build`;`scripts/auto-deploy.sh` 已按此自动归入镜像重建。`--prod` 栈完全不挂源码,
+auto-deploy 在 `--prod` 下会把所有后端重启改为重建镜像。
+
+**栈模式配置**:`mtrip.sh` 与 `scripts/auto-deploy.sh` 未带 `--dev`/`--prod` 时读取 `deploy/.env` 的
+`MTRIP_DEPLOY_MODE=dev|prod`,未配置为 `dev`;命令行开关始终优先。生产服务器在 `.env` 写
+`MTRIP_DEPLOY_MODE=prod`,手工执行漏带参数也不会误用开发栈;`--s7` 只能显式传入。
 
 ### 2.1 生产数据库增量迁移
 

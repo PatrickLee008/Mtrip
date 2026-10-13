@@ -2,11 +2,11 @@
 #
 # Mtrip 服务启停脚本(deploy/README.md 各场景 docker compose 命令的统一入口)
 #
-#   用法:./mtrip.sh <命令> [服务名...] [--prod|--s7]
+#   用法:./mtrip.sh <命令> [服务名...] [--dev|--prod|--s7]
 #   详见:deploy/使用说明.md
 #
-# 三种栈模式:
-#   默认   docker-compose.yml + docker-compose.override.yml(开发热挂载,网关 8081)
+# 三种栈模式(不带开关时取 deploy/.env 的 MTRIP_DEPLOY_MODE=dev|prod,未配置为 dev):
+#   --dev  docker-compose.yml + docker-compose.override.yml(开发热挂载,网关 8081)
 #   --prod 只用 docker-compose.yml(不挂本地源码,改代码须 build)
 #   --s7   隔离验收栈,等价 scripts/s7-environment.ps1:独立 project mtrip-s7、
 #          s7.env.example、不加载 override 与开发者 .env、网关仅 127.0.0.1:8181
@@ -61,16 +61,29 @@ fail()  { echo "${C_RED}[FAIL]${C_OFF} $*" >&2; }
 die()   { fail "$*"; exit 1; }
 
 # ---------- 参数解析:先摘掉模式开关 ----------
-MODE="dev"
+# 优先级:命令行 --dev/--prod/--s7 > deploy/.env 的 MTRIP_DEPLOY_MODE > dev
+MODE=""
 ARGS=()
 for arg in "$@"; do
     case "$arg" in
+        --dev)  MODE="dev" ;;
         --prod) MODE="prod" ;;
         --s7)   MODE="s7" ;;
         *) ARGS+=("$arg") ;;
     esac
 done
 set -- ${ARGS[@]+"${ARGS[@]}"}
+MODE_SOURCE="命令行参数"
+if [ -z "$MODE" ]; then
+    MODE="$( { grep -E '^[[:space:]]*MTRIP_DEPLOY_MODE=' .env 2>/dev/null || true; } | tail -n 1 | cut -d= -f2- | tr -d '\r"'"'"' ')"
+    MODE_SOURCE="deploy/.env MTRIP_DEPLOY_MODE"
+    [ -n "$MODE" ] || { MODE="dev"; MODE_SOURCE="默认值"; }
+fi
+case "$MODE" in
+    dev|prod|s7) ;;
+    *) die "MTRIP_DEPLOY_MODE 只能是 dev 或 prod(当前:$MODE)" ;;
+esac
+[ "$MODE" != "s7" ] || [ "$MODE_SOURCE" = "命令行参数" ] || die "s7 隔离栈只能用 --s7 显式进入,不能写进 MTRIP_DEPLOY_MODE"
 
 # ---------- docker compose 命令组装 ----------
 detect_compose() {
@@ -92,7 +105,7 @@ detect_compose() {
         prod)
             # 生产:主池 + APP 孪生池,均不挂本地源码
             COMPOSE+=(-f docker-compose.yml -f docker-compose.app-pool.yml)
-            warn "生产模式:跳过 override(不挂载本地源码,改代码需 build)"
+            warn "生产模式(来源:${MODE_SOURCE}):跳过 override(不挂载本地源码,改代码需 build)"
             ;;
         s7)
             [ -f "$S7_ENV_FILE" ] || die "缺少 deploy/$S7_ENV_FILE,无法启动 S7 栈"
@@ -338,7 +351,7 @@ usage() {
 Mtrip 服务启停脚本
 
 用法:
-  ./mtrip.sh <命令> [服务名...] [--prod|--s7]
+  ./mtrip.sh <命令> [服务名...] [--dev|--prod|--s7]
 
 命令:
   start [服务名...]    启动(up -d),不重建镜像;缺 .env 时自动从 .env.example 生成
@@ -352,8 +365,8 @@ Mtrip 服务启停脚本
   health               8 个微服务 healthz + 网关链路探活;全通过退 0,有失败退 1
   help                 显示本帮助
 
-模式:
-  (默认)              docker-compose.yml + override,开发热挂载,网关 8081
+模式(不带开关时取 deploy/.env 的 MTRIP_DEPLOY_MODE=dev|prod,未配置为 dev):
+  --dev                docker-compose.yml + override,开发热挂载,网关 8081
   --prod               只用 docker-compose.yml,不挂本地源码(改代码须 build)
   --s7                 隔离验收栈,等价 scripts/s7-environment.ps1:
                        project mtrip-s7 / s7.env.example / 不加载 override 与 .env /

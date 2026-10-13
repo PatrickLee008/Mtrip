@@ -12,6 +12,8 @@
 #       * 改动【全部落在 Controller/{Admin,Merchant,Supplier}】→ 只重启主池,APP 池零打断
 #       * 触碰 Controller/App 或服务共享代码(Model/Service/Middleware/config)或 backend/shared
 #         → 视为波及 APP,【同步重启 <svc>-app 孪生】并高亮原因(正确性优先)
+#       * 开发栈只挂载 app/、config/、shared/src:服务目录下其余文件(bin/、test/ 等)变更 → 重建镜像
+#       * --prod 栈不挂载源码:上述所有重启一律改为重建镜像(restart 只会重跑旧镜像)
 #   - 网关配置(deploy/openresty/**)有变更 → 重启网关
 #   - 生产模式每次拉取后对比 schema_migrations,先执行 database/migrations/ 的待执行版本
 #       * 新迁移必须命名 VYYYYMMDDHHMMSS__lower-kebab.sql,成功后记录 SHA-256/Git/执行节点/耗时
@@ -21,8 +23,11 @@
 # 安全策略(ff-only):工作区必须干净;只允许快进合并;分叉或有本地改动即中止,绝不覆盖。
 #
 # 用法:
-#   scripts/auto-deploy.sh [--dry-run] [--branch <name>] [--apply-db|--skip-db] [--no-app-sync] [--prod]
+#   scripts/auto-deploy.sh [--dry-run] [--branch <name>] [--apply-db|--skip-db] [--no-app-sync] [--dev|--prod]
 #   scripts/auto-deploy.sh [--dry-run] <target> [target...]
+#
+# 模式:命令行 --dev/--prod 优先;未指定时取 deploy/.env 的 MTRIP_DEPLOY_MODE=dev|prod,未配置为 dev。
+# 生产服务器建议在 deploy/.env 写 MTRIP_DEPLOY_MODE=prod,cron 与手工执行都不会因漏带参数降级为开发栈。
 #
 # 强制发布 target(跳过 fetch/merge/变更判断,也不要求工作区干净):
 #   admin-web|merchant-web|supplier-web  直接构建并发布静态文件
@@ -58,7 +63,7 @@ DRY_RUN=0
 APPLY_DB=0
 SKIP_DB=0
 NO_APP_SYNC=0
-PROD=0
+PROD=""   # 空 = 命令行未指定,稍后取 deploy/.env 的 MTRIP_DEPLOY_MODE
 BRANCH_OVERRIDE=""
 FORCE_TARGETS=""
 prev=""
@@ -69,6 +74,7 @@ for arg in "$@"; do
         --skip-db)     SKIP_DB=1 ;;
         --no-app-sync) NO_APP_SYNC=1 ;;
         --prod)        PROD=1 ;;
+        --dev)         PROD=0 ;;
         --branch)      : ;;
         --branch=*)    BRANCH_OVERRIDE="${arg#*=}" ;;
         -h|--help)     grep -E '^#( |$)' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
@@ -84,13 +90,25 @@ for arg in "$@"; do
 done
 
 [ "$APPLY_DB" -eq 0 ] || [ "$SKIP_DB" -eq 0 ] || { echo "--apply-db 与 --skip-db 不能同时使用" >&2; exit 2; }
-# 生产发布默认先迁移；--skip-db 仅用于已由外部 DBA 流程完成迁移的应急场景。
-[ "$PROD" -eq 0 ] || [ "$SKIP_DB" -eq 1 ] || APPLY_DB=1
 
 # ---------- 常量 ----------
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$REPO_ROOT" || exit 1
+
+# 模式优先级:命令行 --dev/--prod > deploy/.env 的 MTRIP_DEPLOY_MODE > dev(与 mtrip.sh 一致)
+MODE_SOURCE="命令行参数"
+if [ -z "$PROD" ]; then
+    cfg_mode="$( { grep -E '^[[:space:]]*MTRIP_DEPLOY_MODE=' deploy/.env 2>/dev/null || true; } | tail -n 1 | cut -d= -f2- | tr -d '\r"'"'"' ')"
+    case "$cfg_mode" in
+        prod) PROD=1; MODE_SOURCE="deploy/.env MTRIP_DEPLOY_MODE" ;;
+        dev)  PROD=0; MODE_SOURCE="deploy/.env MTRIP_DEPLOY_MODE" ;;
+        "")   PROD=0; MODE_SOURCE="默认值" ;;
+        *)    echo "deploy/.env 的 MTRIP_DEPLOY_MODE 只能是 dev 或 prod(当前:$cfg_mode)" >&2; exit 2 ;;
+    esac
+fi
+# 生产发布默认先迁移；--skip-db 仅用于已由外部 DBA 流程完成迁移的应急场景。
+[ "$PROD" -eq 0 ] || [ "$SKIP_DB" -eq 1 ] || APPLY_DB=1
 MTRIP="$REPO_ROOT/deploy/mtrip.sh"
 DOCKER="${DOCKER:-docker}"
 NPM="${NPM:-npm}"
@@ -123,7 +141,8 @@ web_build_script() {
 APP_SERVING="system-service user-service goods-service order-service marketing-service"
 
 # mtrip.sh 模式透传
-MODE_FLAG=""
+# 始终显式传递,避免 mtrip.sh 再读一次配置得出不同结论
+MODE_FLAG="--dev"
 [ "$PROD" -eq 1 ] && MODE_FLAG="--prod"
 
 # ---------- 输出 ----------
@@ -159,7 +178,7 @@ workspace_status() { git status --porcelain -- . ':!deploy/web' 2>/dev/null; }
 
 CHANGED=""
 if [ -n "$FORCE_TARGETS" ]; then
-    info "强制发布目标:$FORCE_TARGETS  仓库:$REPO_ROOT  模式:${MODE_FLAG:-dev}  dry-run:$DRY_RUN"
+    info "强制发布目标:$FORCE_TARGETS  仓库:$REPO_ROOT  模式:${MODE_FLAG#--}(${MODE_SOURCE})  dry-run:$DRY_RUN"
     warn "强制发布模式:跳过 git fetch/merge/落后检查,直接使用当前工作区内容"
     if [ -n "$(workspace_status)" ]; then
         warn "当前工作区有未提交改动;强制发布会把这些本地内容一并用于构建/重启:"
@@ -173,7 +192,7 @@ else
     if [ "$BRANCH" != "$CUR_BRANCH" ]; then
         die "当前分支是 $CUR_BRANCH,但要求部署 $BRANCH。请先 git checkout $BRANCH 再运行(ff-only 不跨分支合并)"
     fi
-    info "目标分支:$BRANCH  仓库:$REPO_ROOT  模式:${MODE_FLAG:-dev}  dry-run:$DRY_RUN"
+    info "目标分支:$BRANCH  仓库:$REPO_ROOT  模式:${MODE_FLAG#--}(${MODE_SOURCE})  dry-run:$DRY_RUN"
 
     # 工作区必须干净(ff-only 前提,绝不覆盖本地改动;deploy/web 发布产物不算)
     if [ -n "$(workspace_status)" ]; then
@@ -381,7 +400,16 @@ else
                 ;;
 
             backend/services/*)
+                # 开发栈只挂载 app/、config/;bin/、test/ 等其余文件烘焙在镜像里,restart 不会生效
                 s="$(echo "$f" | awk -F/ '{print $3}')"
+                case "$f" in
+                    backend/services/"$s"/app/*|backend/services/"$s"/config/*) ;;
+                    *)
+                        add "$s" "$REBUILD" REBUILD
+                        is_app_serving "$s" && add "${s}-app" "$REBUILD" REBUILD
+                        continue
+                        ;;
+                esac
                 add "$s" "$MAIN_RESTART" MAIN_RESTART
                 if is_app_serving "$s"; then
                     if svc_touches_app "$s"; then
@@ -399,6 +427,11 @@ else
             *) : ;;  # 其余(docs、脚本、UI 设计稿等)不触发部署动作
         esac
     done <<< "$CHANGED"
+fi
+
+# --prod 栈不挂载本地源码,restart 只会重跑镜像里的旧代码:后端一律改为重建镜像
+if [ "$PROD" -eq 1 ]; then
+    for x in $MAIN_RESTART $APP_RESTART; do add "$x" "$REBUILD" REBUILD; done
 fi
 
 # 去重后,凡进入 REBUILD 的服务从 restart 集合剔除(build 已含重启)
