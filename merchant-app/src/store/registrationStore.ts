@@ -58,6 +58,7 @@ interface RegistrationState {
   setCompany: (patch: Partial<Pick<RegistrationState, 'companyName' | 'regNumber' | 'country' | 'address'>>) => void;
   setBusinessCount: (businessCount: number) => void;
   setBusiness: (index: number, patch: Partial<RegistrationBusiness>) => void;
+  prefillBusinessContacts: () => void;
 }
 
 const INITIAL_STATE = {
@@ -65,7 +66,7 @@ const INITIAL_STATE = {
   testMode: false, otpExpiresAt: 0, resendAvailableAt: 0, registrationToken: '', tokenExpiresAt: 0,
   applicationId: 0, status: null, companyName: '', regNumber: '', country: 'Myanmar', address: '',
   businessCount: 1, businesses: [emptyBusiness()], removedBusinessIds: [],
-} satisfies Omit<RegistrationState, 'hydrate' | 'setContacts' | 'beginOtp' | 'verified' | 'setApplication' | 'setApplicationDetail' | 'clear' | 'setCompany' | 'setBusinessCount' | 'setBusiness'>;
+} satisfies Omit<RegistrationState, 'hydrate' | 'setContacts' | 'beginOtp' | 'verified' | 'setApplication' | 'setApplicationDetail' | 'clear' | 'setCompany' | 'setBusinessCount' | 'setBusiness' | 'prefillBusinessContacts'>;
 
 function detailState(detail: ApplicationDetail) {
   return {
@@ -156,5 +157,12 @@ export const useRegistrationStore = create<RegistrationState>((set) => ({
   }),
   setBusiness: (index, patch) => set((state) => ({
     businesses: state.businesses.map((business, position) => position === index ? { ...business, ...patch } : business),
+  })),
+  prefillBusinessContacts: () => set((state) => ({
+    businesses: state.businesses.map((business) => ({
+      ...business,
+      contactPhone: business.contactPhone.trim() ? business.contactPhone : state.registrationPhone,
+      contactEmail: business.contactEmail.trim() ? business.contactEmail : state.registrationEmail,
+    })),
   })),
 }));
