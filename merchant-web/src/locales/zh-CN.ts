@@ -255,6 +255,8 @@ export default {
         booking: '预订政策', checkInOut: '入住与退房政策', children: '儿童与加床政策',
         rules: '物业规则', pet: '宠物政策',
         cancellation: '取消政策', prepayment: '预付政策', taxesFees: '税费',
+        payAtHotel: '支持到店付款', payAtHotelOn: '支持', payAtHotelOff: '不支持',
+        payAtHotelHint: '开启后,住客可在 App 中筛选出本物业;到店付款下单将在后续版本开放。',
         checkInPolicy: '入住政策', checkOutPolicy: '退房政策', checkIn: '入住', checkOut: '退房',
         documents: '需出示证件', description: '说明', amount: '金额', perUnit: '计费单位',
         policyName: '政策名称', shortDescription: '简短说明', ruleName: '规则名称', ruleIcon: '规则图标', ruleNameRequired: '请输入规则名称。',
@@ -894,12 +896,18 @@ export default {
       descriptionPlaceholder: '请输入',
       discountValue: '折扣值',
       stayRules: '长住规则',
-      minNights: '最少入住晚数',
-      conditions: '使用条件',
-      bookAdvanceDays: '需提前预订天数',
-      minRoomCount: '最少间数',
-      minHotelCount: '最少酒店数',
-      stayRange: '适用入住日期(留空不限)',
+      minNights: '最少入住晚数',
+
+      conditions: '使用条件',
+
+      bookAdvanceDays: '需提前预订天数',
+
+      minRoomCount: '最少间数',
+
+      minHotelCount: '最少酒店数',
+
+      stayRange: '适用入住日期(留空不限)',
+
       conditionsTip: '0 或留空表示不限。提前天数与入住日期按每个房型判断,不满足的房型不参与优惠。',
       maxNights: '最多入住晚数',
       properties: '适用物业',
@@ -925,7 +933,8 @@ export default {
       oneMerchant: '一个促销只能适用同一商户的物业',
       discount: '请输入大于 0 的折扣值',
       discountRange: '百分比折扣必须小于 100',
-      minNights: '长住促销最低需 2 晚',
+      minNights: '长住促销最低需 2 晚',
+
       stayRange: '适用入住日期的开始不能晚于结束',
       start: '请选择开始日期',
       end: '请选择结束日期',
@@ -1193,6 +1202,7 @@ export default {
       description: '房型描述',
       maxAdults: '最多成人',
       maxChildren: '最多儿童',
+      bedroomCount: '卧室数',
       maxGuests: '最多入住人数',
       bedType: '床型',
       bedCount: '床数量',

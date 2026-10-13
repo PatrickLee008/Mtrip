@@ -1341,7 +1341,8 @@
         "pool": "泳池",
         "homesApts": "民宿与公寓",
         "hostels": "青年旅舍",
-        "hourly": "钟点房"
+        "hourly": "钟点房",
+        "payAtHotel": "到店付款"
       },
       "starRating": "星级",
       "reviewScore": "住客评分",
@@ -1350,7 +1351,11 @@
       "amenities": "设施与服务",
       "bedType": "床型",
       "roomFeatures": "房间特色与景观",
-      "location": "位置"
+      "location": "位置",
+      "bedrooms": "卧室数",
+      "bedroomsN": "{{bedrooms}} 间卧室",
+      "bedroomsPlus": "{{bedrooms}} 间及以上",
+      "payment": "支付方式"
     },
     "booking": {
       "steps": {
@@ -1787,6 +1792,10 @@
       "checkout": "去结算",
       "removeTitle": "移除该房型?",
       "removeMessage": "确定要把这间房从购物车移除吗?"
+    },
+    "payAtHotel": {
+      "title": "本酒店支持到店付款",
+      "desc": "App 内到店付款即将开放,目前请使用 mTrip 钱包支付。"
     }
   }
 }

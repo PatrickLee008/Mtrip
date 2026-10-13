@@ -31,6 +31,8 @@ export interface MerchantRoom {
   description: string;
   bed_type: string;
   bed_count: number;
+  /** 卧室数,新建默认 1 */
+  bedroom_count: number;
   area: string;
   max_adults: number;
   max_children: number;

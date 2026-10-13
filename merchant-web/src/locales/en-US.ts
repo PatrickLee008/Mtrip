@@ -256,6 +256,8 @@ export default {
         booking: 'Booking Policies', checkInOut: 'Check In & Out Policies', children: 'Children & Extra Beds Policies',
         rules: 'Property Rules', pet: 'Pet Policy',
         cancellation: 'Cancellation', prepayment: 'Prepayment', taxesFees: 'Taxes & Fees',
+        payAtHotel: 'Pay at Hotel', payAtHotelOn: 'Accepted', payAtHotelOff: 'Not accepted',
+        payAtHotelHint: 'When on, guests can find this property with the Pay at Hotel filter. Pay at Hotel checkout will be enabled in a later release.',
         checkInPolicy: 'Check In Policy', checkOutPolicy: 'Check Out Policy', checkIn: 'Check In', checkOut: 'Check Out',
         documents: 'Require Documents', description: 'Description', amount: 'Amount', perUnit: 'Per Unit',
         policyName: 'Policy Name', shortDescription: 'Short Description', ruleName: 'Rule Name', ruleIcon: 'Rule Icon', ruleNameRequired: 'Enter a rule name.',
@@ -895,12 +897,18 @@ export default {
       descriptionPlaceholder: 'Enter here',
       discountValue: 'Discount Value',
       stayRules: 'Long Stay Rules',
-      minNights: 'Minimum nights',
-      conditions: 'Conditions',
-      bookAdvanceDays: 'Book days ahead',
-      minRoomCount: 'Minimum rooms',
-      minHotelCount: 'Minimum hotels',
-      stayRange: 'Eligible stay dates (empty = any)',
+      minNights: 'Minimum nights',
+
+      conditions: 'Conditions',
+
+      bookAdvanceDays: 'Book days ahead',
+
+      minRoomCount: 'Minimum rooms',
+
+      minHotelCount: 'Minimum hotels',
+
+      stayRange: 'Eligible stay dates (empty = any)',
+
       conditionsTip: '0 or empty means no limit. Advance days and stay dates are checked per room; rooms that do not qualify get no discount.',
       maxNights: 'Maximum nights',
       properties: 'Applicable Properties',
@@ -926,7 +934,8 @@ export default {
       oneMerchant: 'A promotion can only apply to properties of one merchant',
       discount: 'Please enter a discount value greater than 0',
       discountRange: 'Percentage discount must be less than 100',
-      minNights: 'Long stay promotions require at least 2 nights',
+      minNights: 'Long stay promotions require at least 2 nights',
+
       stayRange: 'Stay start date must not be after the end date',
       start: 'Please select a start date',
       end: 'Please select an end date',
@@ -1194,6 +1203,7 @@ export default {
       description: 'Room Description',
       maxAdults: 'Maximum Adults',
       maxChildren: 'Maximum Children',
+      bedroomCount: 'Bedrooms',
       maxGuests: 'Maximum Guests',
       bedType: 'Bed Type',
       bedCount: 'Number of Beds',

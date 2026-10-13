@@ -230,6 +230,7 @@ class RoomController extends AbstractAdminController
             'description' => mb_substr($this->strInput('description'), 0, 1000),
             'bed_type' => mb_substr($this->strInput('bedType'), 0, 50),
             'bed_count' => $this->input('bedCount', 1),
+            'bedroom_count' => $this->input('bedroomCount', 1),
             'area' => mb_substr($this->strInput('area'), 0, 20),
             'max_adults' => $this->input('maxAdults', 2),
             'max_children' => $this->input('maxChildren', 0),

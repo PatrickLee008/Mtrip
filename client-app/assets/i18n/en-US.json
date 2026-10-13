@@ -1341,7 +1341,8 @@
         "pool": "Pool",
         "homesApts": "Homes & Apts",
         "hostels": "Hostels",
-        "hourly": "Hourly rate rooms"
+        "hourly": "Hourly rate rooms",
+        "payAtHotel": "Pay at Hotel"
       },
       "starRating": "Star Rating",
       "reviewScore": "Guest Review Score",
@@ -1350,7 +1351,11 @@
       "amenities": "Amenities & Facilities",
       "bedType": "Bed Type",
       "roomFeatures": "Room Features & View",
-      "location": "Location"
+      "location": "Location",
+      "bedrooms": "Bedrooms",
+      "bedroomsN": "{{bedrooms}} bedroom(s)",
+      "bedroomsPlus": "{{bedrooms}}+ bedrooms",
+      "payment": "Payment"
     },
     "booking": {
       "steps": {
@@ -1787,6 +1792,10 @@
       "checkout": "Check Out",
       "removeTitle": "Remove Room?",
       "removeMessage": "Are you sure you want to remove this room?"
+    },
+    "payAtHotel": {
+      "title": "Pay at Hotel accepted",
+      "desc": "Pay at Hotel booking in the app is coming soon. Please pay with your mTrip Wallet for now."
     }
   }
 }

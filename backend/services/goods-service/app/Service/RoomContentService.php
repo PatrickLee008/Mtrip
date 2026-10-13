@@ -45,6 +45,9 @@ final class RoomContentService
             $max = in_array($key, ['base_stock', 'launch_stock'], true) ? 65535 : 127;
             if (! is_numeric($value) || (int) $value != $value || $value < 0 || $value > $max) self::invalid('数量必须为有效非负整数');
         }
+        $bedrooms = $data['bedroom_count'] ?? 1;
+        if (! is_numeric($bedrooms) || (int) $bedrooms != $bedrooms || $bedrooms < 1 || $bedrooms > 20) self::invalid('卧室数须为 1 到 20 的整数');
+        $data['bedroom_count'] = (int) $bedrooms;
         if (($data['launch_stock'] ?? 0) > ($data['base_stock'] ?? 0)) self::invalid('默认可售配额不能超过实体房间总数');
         if (($data['max_guests'] ?? 0) < max((int) ($data['max_adults'] ?? 0), (int) ($data['max_children'] ?? 0))) self::invalid('总入住人数不能少于成人或儿童上限');
         if ($submit && (($data['max_guests'] ?? 0) < 1 || ($data['max_adults'] ?? 0) < 1)) self::invalid('请设置有效入住容量');

@@ -14,7 +14,7 @@ use Mtrip\Shared\Exception\BusinessException;
 class RoomReviewService
 {
     private const LIVE_FIELDS = [
-        'room_name', 'room_code', 'description', 'bed_type', 'bed_count', 'area',
+        'room_name', 'room_code', 'description', 'bed_type', 'bed_count', 'bedroom_count', 'area',
         'max_adults', 'max_children', 'max_guests', 'floor_name', 'room_view', 'smoking',
         'breakfast', 'meal_plan', 'cancellation_policy', 'currency', 'checkin_notes',
         'base_price', 'weekend_price', 'extra_bed_price', 'base_stock', 'launch_stock',

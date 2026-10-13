@@ -71,6 +71,10 @@ export interface HotelListParams extends Omit<GoodsListParams, 'goodsType'> {
   roomFeatures?: string;
   /** 城市键任一命中 */
   cities?: string;
+  /** 卧室数档位任一命中,如 "2,3"(3 = 3 间及以上) */
+  bedrooms?: string;
+  /** 1 = 只看支持到店付款的物业(后端已支持;App 本期未露出) */
+  payAtHotel?: number;
   /** YYYY-MM-DD;入住/离店都带时只返回这段日期有房的物业 */
   checkIn?: string;
   checkOut?: string;
@@ -91,7 +95,7 @@ export interface HotelFacetOption {
 /** 筛选面板的选项与计数(只按目的地/关键词圈定,不叠加其它筛选) */
 export interface HotelFacets {
   total: number;
-  /** 键:breakfast / freeCancel / star:N / score:N / type:X */
+  /** 键:breakfast / freeCancel / payAtHotel / star:N / score:N / type:X / bedroom:N */
   counts: Record<string, number>;
   amenities: HotelFacetOption[];
   beds: HotelFacetOption[];
