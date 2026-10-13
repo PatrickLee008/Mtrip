@@ -83,6 +83,8 @@ export interface GoodsItem {
    */
   rating?: number;
   reviewCount?: number;
+  /** 物业是否支持到店付款(商户端政策开关);本期 App 只做筛选与「即将开放」提示,不能到店付下单 */
+  payAtHotel?: boolean;
   /** 酒店列表带日期搜索时:实际可订的入住/离店日(弹性日期下可能与所选不同) */
   availableCheckIn?: string;
   availableCheckOut?: string;

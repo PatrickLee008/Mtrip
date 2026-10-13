@@ -44,6 +44,7 @@ import HotelDetailTabs from '@/components/hotel/HotelDetailTabs';
 import HotelGallery from '@/components/hotel/HotelGallery';
 import HotelNearbyTab from '@/components/hotel/HotelNearbyTab';
 import HotelOverviewTab from '@/components/hotel/HotelOverviewTab';
+import PayAtHotelNotice from '@/components/hotel/PayAtHotelNotice';
 import HotelPoliciesTab from '@/components/hotel/HotelPoliciesTab';
 import HotelReviewsTab from '@/components/hotel/HotelReviewsTab';
 import HotelRoomsTab from '@/components/hotel/HotelRoomsTab';
@@ -315,6 +316,12 @@ export default function HotelDetailScreen() {
               <HomeIcon name="locationOutline" width={12} height={15} color={colors.textSoft} />
               <Text style={styles.address}>{address}</Text>
             </View>
+            {/* 支持到店付款的酒店:标题卡六个页签共用,放这里任何页签都看得到「即将开放」提示 */}
+            {detail?.payAtHotel ? (
+              <View style={styles.payAtHotel}>
+                <PayAtHotelNotice />
+              </View>
+            ) : null}
           </View>
         </View>
 
@@ -472,6 +479,7 @@ const styles = StyleSheet.create({
     color: colors.heading,
   },
   addressRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 },
+  payAtHotel: { marginTop: 12 },
   address: {
     fontFamily: fonts.interMedium,
     fontSize: 14,

@@ -67,7 +67,7 @@ const roomAuditForm = reactive({ auditStatus: 1, auditRemark: '' });
 const roomDiffRows = computed(() => {
   const current = roomDetail.value?.effective || {};
   const submitted = roomDetail.value?.revision?.payload || {};
-  const fields = ['room_name', 'room_code', 'description', 'bed_type', 'bed_count', 'area', 'max_adults', 'max_children', 'max_guests', 'floor_name', 'room_view', 'smoking', 'facilities', 'images', 'currency', 'base_price', 'weekend_price', 'extra_bed_price', 'base_stock', 'launch_stock', 'cancellation_policy', 'meal_plan', 'checkin_notes', 'breakfast', 'status', 'sort', 'bedding', 'area_unit', 'image_gallery', 'panorama', 'vr_tour', 'floor_plan', 'video_url', 'refund_policy'];
+  const fields = ['room_name', 'room_code', 'description', 'bed_type', 'bed_count', 'bedroom_count', 'area', 'max_adults', 'max_children', 'max_guests', 'floor_name', 'room_view', 'smoking', 'facilities', 'images', 'currency', 'base_price', 'weekend_price', 'extra_bed_price', 'base_stock', 'launch_stock', 'cancellation_policy', 'meal_plan', 'checkin_notes', 'breakfast', 'status', 'sort', 'bedding', 'area_unit', 'image_gallery', 'panorama', 'vr_tour', 'floor_plan', 'video_url', 'refund_policy'];
   return fields.map((field) => ({ field, current: current[field], submitted: submitted[field], changed: JSON.stringify(current[field] ?? null) !== JSON.stringify(submitted[field] ?? null) }));
 });
 async function openRoomDetail(row: TableRow): Promise<void> { roomDrawerOpen.value = true; roomDetailLoading.value = true; try { roomDetail.value = await apiRoomReviewDetail(row.id); } finally { roomDetailLoading.value = false; } }

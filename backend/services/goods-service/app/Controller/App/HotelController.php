@@ -22,6 +22,9 @@ final class HotelController extends AbstractController
     /** 住客评分档位(/10 制,与客户端评价页一致;库里 rating 是 /5 制) */
     private const SCORE_LEVELS = [9, 8, 7, 6];
 
+    /** 卧室数档位:1 / 2 / 3(=3 间及以上),物业任一在售房型命中即算 */
+    private const BEDROOM_LEVELS = [1, 2, 3];
+
     public function list(): array
     {
         $siteId = $this->requireSiteId();
@@ -39,9 +42,12 @@ final class HotelController extends AbstractController
         $cities = array_map('mb_strtolower', $this->csvInput('cities'));
         $breakfast = $this->intInput('breakfast') === 1;
         $freeCancel = $this->intInput('freeCancel') === 1;
+        $bedrooms = array_values(array_intersect(array_map('intval', $this->csvInput('bedrooms')), self::BEDROOM_LEVELS));
+        /* 到店付款:只读物业政策开关,本期 App 未露出该筛选项(支付流程未接) */
+        $payAtHotel = $this->intInput('payAtHotel') === 1;
 
         /* 组内:星级/床型/类型/城市任一命中即可,设施与房间特色须全部具备;组间一律取交集 */
-        $rows = array_values(array_filter($this->searchRows($siteId), static function (array $row) use ($citizen, $star, $stars, $min, $max, $score, $amenities, $features, $beds, $types, $cities, $breakfast, $freeCancel): bool {
+        $rows = array_values(array_filter($this->searchRows($siteId), static function (array $row) use ($citizen, $star, $stars, $min, $max, $score, $amenities, $features, $beds, $types, $cities, $breakfast, $freeCancel, $bedrooms, $payAtHotel): bool {
             $price = (float) ($citizen ? $row['minPriceCitizen'] : $row['minPrice']);
             if ($star > 0 && (int) $row['star_level'] !== $star) return false;
             if ($stars !== [] && ! in_array((int) $row['star_level'], $stars, true)) return false;
@@ -50,6 +56,8 @@ final class HotelController extends AbstractController
             if ($score > 0 && (float) $row['rating'] < $score) return false;
             if ($breakfast && ! $row['hasBreakfast']) return false;
             if ($freeCancel && ! $row['freeCancel']) return false;
+            if ($payAtHotel && ! $row['_tags']['payAtHotel']) return false;
+            if ($bedrooms !== [] && array_intersect($bedrooms, $row['_tags']['bedrooms']) === []) return false;
             if ($types !== [] && ! in_array($row['_tags']['type'], $types, true)) return false;
             if ($cities !== [] && ! in_array($row['_tags']['city'], $cities, true)) return false;
             if ($beds !== [] && array_intersect($beds, array_keys($row['_tags']['beds'])) === []) return false;
@@ -76,6 +84,8 @@ final class HotelController extends AbstractController
         }
         $total = count($rows);
         $list = array_map(static function (array $row): array {
+            /* 到店付款开关下发给卡片/详情做「即将开放」提示;其余筛选标签不出参 */
+            $row['payAtHotel'] = $row['_tags']['payAtHotel'];
             unset($row['_tags']);
             return self::listAliases($row);
         }, array_slice($rows, ($page - 1) * $pageSize, $pageSize));
@@ -84,13 +94,14 @@ final class HotelController extends AbstractController
 
     /**
      * 筛选面板的选项与计数:只按目的地/关键词圈定范围,不叠加其它筛选条件。
-     * counts 的键与客户端选项键一致(star:4 / score:9 / type:hotel / breakfast / freeCancel);
+     * counts 的键与客户端选项键一致(star:4 / score:9 / type:hotel / bedroom:2 / breakfast / freeCancel / payAtHotel);
      * 设施、床型、房间特色、城市的选项取自真实物业/房型数据,按命中物业数倒序。
      */
     public function filters(): array
     {
         $rows = $this->searchRows($this->requireSiteId());
-        $counts = ['breakfast' => 0, 'freeCancel' => 0];
+        $counts = ['breakfast' => 0, 'freeCancel' => 0, 'payAtHotel' => 0];
+        foreach (self::BEDROOM_LEVELS as $level) $counts['bedroom:' . $level] = 0;
         foreach (range(1, 5) as $star) $counts['star:' . $star] = 0;
         foreach (self::SCORE_LEVELS as $level) $counts['score:' . $level] = 0;
         foreach (self::PROPERTY_TYPES as $type) $counts['type:' . $type] = 0;
@@ -101,6 +112,8 @@ final class HotelController extends AbstractController
             ++$counts['type:' . $row['_tags']['type']];
             if ($row['hasBreakfast']) ++$counts['breakfast'];
             if ($row['freeCancel']) ++$counts['freeCancel'];
+            if ($row['_tags']['payAtHotel']) ++$counts['payAtHotel'];
+            foreach ($row['_tags']['bedrooms'] as $level) ++$counts['bedroom:' . $level];
             $tags = $row['_tags'];
             foreach (['amenities' => $tags['amenities'], 'beds' => $tags['beds'], 'features' => $tags['features'],
                 'cities' => $tags['city'] === '' ? [] : [$tags['city'] => ucwords($tags['city'])]] as $group => $items) {
@@ -134,15 +147,17 @@ final class HotelController extends AbstractController
         $ids = array_column($rows, 'property_id');
         if ($ids === []) return [];
 
-        $amenities = Db::table('merchant_store')->where('site_id', $siteId)->whereIn('id', $ids)
-            ->pluck('amenities', 'id')->all();
+        $stores = Db::table('merchant_store')->where('site_id', $siteId)->whereIn('id', $ids)
+            ->get(['id', 'amenities', 'hotel_policies'])->keyBy('id')->all();
         $rooms = Db::table('hotel_room_type')->where('site_id', $siteId)->whereIn('property_id', $ids)
             ->where('status', 1)->where('publish_status', 2)->where('approved_version', '>', 0)->whereNull('deleted_at')
-            ->get(['property_id', 'bed_type', 'bedding', 'room_view', 'facilities']);
+            ->get(['property_id', 'bed_type', 'bedding', 'bedroom_count', 'room_view', 'facilities']);
         $roomTags = [];
         foreach ($rooms as $room) {
             $pid = (int) $room->property_id;
-            $roomTags[$pid] ??= ['beds' => [], 'features' => []];
+            $roomTags[$pid] ??= ['beds' => [], 'features' => [], 'bedrooms' => []];
+            $level = min(3, max(1, (int) $room->bedroom_count));
+            $roomTags[$pid]['bedrooms'][$level] = $level;
             $beds = array_column($this->jsonList($room->bedding), 'type');
             $beds[] = (string) $room->bed_type;
             foreach ($beds as $bed) self::addTag($roomTags[$pid]['beds'], (string) $bed);
@@ -154,7 +169,8 @@ final class HotelController extends AbstractController
             $pid = (int) $row['property_id'];
             $tags = [];
             foreach ($row['facilities'] as $facility) if (is_string($facility)) self::addTag($tags, $facility);
-            foreach ($this->jsonList($amenities[$pid] ?? null) as $amenity) {
+            $store = $stores[$pid] ?? null;
+            foreach ($this->jsonList($store->amenities ?? null) as $amenity) {
                 if (is_array($amenity) && ($amenity['enabled'] ?? true) && is_string($amenity['name'] ?? null)) self::addTag($tags, $amenity['name']);
             }
             $row['_tags'] = [
@@ -163,6 +179,8 @@ final class HotelController extends AbstractController
                 'amenities' => $tags,
                 'beds' => $roomTags[$pid]['beds'] ?? [],
                 'features' => $roomTags[$pid]['features'] ?? [],
+                'bedrooms' => array_values($roomTags[$pid]['bedrooms'] ?? []),
+                'payAtHotel' => self::payAtHotel($store->hotel_policies ?? null),
             ];
         }
         unset($row);
@@ -284,6 +302,13 @@ final class HotelController extends AbstractController
         $tags[$key] = strlen($key) <= 2 ? strtoupper($label) : ucfirst(str_replace('_', ' ', $label));
     }
 
+    /** 物业政策 booking.payAtHotel(商户端「政策」页开关,随资料审核发布) */
+    private static function payAtHotel(mixed $policies): bool
+    {
+        if (is_string($policies)) $policies = json_decode($policies, true);
+        return is_array($policies) && filter_var($policies['booking']['payAtHotel'] ?? false, FILTER_VALIDATE_BOOLEAN);
+    }
+
     private function csvInput(string $key): array
     {
         return array_values(array_filter(array_map('trim', explode(',', $this->strInput($key))), 'strlen'));
@@ -305,7 +330,7 @@ final class HotelController extends AbstractController
         $rooms = Db::table('hotel_room_type')->where('site_id', $siteId)->where('property_id', $propertyId)
             ->where('status', 1)->where('publish_status', 2)->where('approved_version', '>', 0)->whereNull('deleted_at')
             ->orderBy('sort')->orderBy('id')->get([
-                'id', 'property_id', 'room_name', 'description', 'bed_type', 'bed_count', 'bedding', 'area', 'area_unit',
+                'id', 'property_id', 'room_name', 'description', 'bed_type', 'bed_count', 'bedroom_count', 'bedding', 'area', 'area_unit',
                 'max_adults', 'max_children', 'max_guests', 'floor_name', 'room_view', 'smoking', 'breakfast', 'meal_plan',
                 'cancellation_policy', 'currency', 'checkin_notes', 'base_price', 'weekend_price', 'extra_bed_price',
                 'images', 'image_gallery', 'video_url', 'facilities', 'panorama', 'vr_tour', 'floor_plan', 'sort',
@@ -335,6 +360,7 @@ final class HotelController extends AbstractController
         $detail['skus'] = $rooms;
         $detail['refundRules'] = $rules;
         $detail['reviewSummary'] = ['rating' => $summary['rating'], 'count' => $summary['reviewCount']];
+        $detail['payAtHotel'] = self::payAtHotel(Db::table('merchant_store')->where('id', $propertyId)->value('hotel_policies'));
         $detail['goods_detail'] = $property['description'];
         $detail['open_time'] = $property['checkin_time'];
         $detail['close_time'] = $property['checkout_time'];

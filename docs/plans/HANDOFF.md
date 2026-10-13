@@ -15,6 +15,19 @@
 入口 `bash scripts/reset-merchant-test-data.sh` 默认只预览；`--execute --confirm DELETE_ALL_MERCHANT_TEST_DATA` 才清理。覆盖所有站点、软删除/封存入驻与商户及商品/房型/订单/财务/营销/聊天等关联；实际容器 APP_ENV 检查、暂停写入、双库备份、单事务删除、选择性 Redis 清理、恢复原服务/网关。保留消费者余额/积分和账号、集团/供应商、模板/渠道/菜单、共享文件和 ID/商户编号序列。混合 Trip、新增未知商户表等情况拒绝；物理文件和真实支付不操作。当前开发库仅做只读预览，回归使用独立库/Redis/模拟服务。详见[使用说明](../guides/setup/开发期商户测试数据清理.md)。
 
 隔离清理回归 9 组通过，含事务回滚、备份失败、消费者/集团/供应商保留、两类编号碰撞与重复执行；质量基线四步等价执行通过（408 PHP lint、shared 118/1061、admin-web build、client-app typecheck），开发标准栈健康。测试库和临时容器已清理。
+### ★ 2026-10-13 卧室数筛选 + 到店付款筛选与「即将开放」提示(QA 表 CA_TC_014 / CA_TC_010)
+
+**PRD 依据**:Consumer App PRD 模块 3 筛选项含 Number of Bedrooms 与 Pay at Hotel;Merchant PRD 房型字段与支付均未提及,本轮补数据。到店付款先按「方案 B」只做数据与商户端开关,同日改为**「方案 A」:App 露出筛选项,并在详情 / 核对 / 支付页提示「即将开放」;支付流程不动**。
+
+- **卧室数**:迁移 `V20261013100000__add-room-bedroom-count.sql` 给 `hotel_room_type` 加 `bedroom_count TINYINT UNSIGNED NOT NULL DEFAULT 1`(存量回填 1)。商户端 `RoomController` 收 `bedroomCount`(缺省 1),`RoomContentService::normalize` 校验 1~20 整数,`RoomReviewService::LIVE_FIELDS` 加入(随房型审核版本发布);merchant-web 房型编辑器「补充资料」区新增「卧室数」(默认 1)、快照卡展示;admin-web 房型审核差异表加该字段。C 端 `/app/hotels/list` 新参数 `bedrooms=1,2,3`(3 = 3 间及以上,物业任一在售房型命中),`/filters` counts 新增 `bedroom:1/2/3`;`/detail` 房型下发 `bedroom_count`。App 筛选面板新增「卧室数」分组(选项键 `bedroom:N`,`filterToParams` → `bedrooms`)。
+- **到店付款开关**:放在物业政策 `hotel_policies.booking.payAtHotel`(布尔,`PropertyProfileService::normalizePolicies` 归一化,缺省 false),**随物业资料审核发布**,无需加列。merchant-web「政策 → 预订政策」新增开关与说明(「到店付款下单将在后续版本开放」)、只读视图显示「支持/不支持」。C 端列表支持 `payAtHotel=1`、`/filters` counts 有 `payAtHotel`;列表行与 `/detail` 下发 `payAtHotel` 布尔。
+- **App(方案 A)**:筛选面板新增「支付方式 → 到店付款」(选项键 `payAtHotel`)。新增 `components/hotel/PayAtHotelNotice`(「本酒店支持到店付款 / App 内到店付款即将开放,目前请使用 mTrip 钱包支付」),三处调用:① 酒店详情**标题卡**(六个页签共用;详情页现默认先开「房型」页签,放概览里看不到);② 多房间流程核对页钱包卡上方(余额够时这一步直接付款,不会到支付页);③ 支付页「更多支付方式」折叠头上方(到店支付行本身仍在折叠区内置灰)。`useBookingWizard` 从详情取 `payAtHotel` 导出。到店付款支付上线后删掉这三处调用即可。**关怀模式未加提示**。
+
+**验证**:容器内 `php -l` 5 个文件通过;merchant-web / admin-web build 与 client-app typecheck 通过。curl:默认全部 1 卧 → bedrooms=1 两家、2/3 为 0、payAtHotel 0;临时把酒店 3 两房型改为 2 卧/4 卧并开到店付(已恢复)→ bedrooms=1 只剩另一家、2 和 3 各命中酒店 3、`1,3` 两家、payAtHotel=1 命中酒店 3、与 bedrooms=1 组合为 0,详情房型带回 2/4。容器内直调归一化 11 项:卧室数缺省 1、`2`/`"3"` 通过、0/21/1.5 拒绝;payAtHotel 缺省 false、true/"1" 为真、false/"no" 为假。Chrome 实测(App,测试账号):临时把酒店 3 两房型设 2 卧/4 卧(已恢复)→ 卧室数分组计数 1/1/1,「1 间」只出 9004、「2 间」「3 间及以上」只出酒店 3、`1+3` 两家、与青年旅舍组合 0;临时打开酒店 3 到店付(已恢复)→「支付方式 → 到店付款」计数 1、只筛出酒店 3;酒店 3 详情标题卡显示提示、9004 不显示;核对页钱包卡上方、支付页折叠头上方均显示提示(未下单)。**端到端实测(新注册测试商户)**:按用户要求新建 QA 测试商户 —— 在 merchant-service 容器里对开发库走正式入驻服务链路(注册 OTP → 基础审批 → 签协议 + 按真实模板上传全部必需 KYC → 文件审核 → 超管最终批准 → 访问码激活 + 邮箱 OTP + 绑定 Google Authenticator),唯一替身是截获邮件验证码/凭证邮件(开发环境无 SMTP),参照 `merchant-service/test/onboarding-e2e.php`;**未开商户测试模式**。结果:商户 `merchant_info.id=4`、主账号 `m000004`、访问码 `HM5PKG`、物业 9005「QA 测试酒店 1013031835」,登录信息(含 TOTP 密钥)已写入 `merchant_info.remark`。随后 Chrome 全程走 UI:merchant-web 访问码 + 动态码登录 → 酒店资料「政策」打开「支持到店付款」→ 提交审核;新建房型「QA 两卧套房」(卧室数默认 1,改 2,上传图片)→ 提交审核;admin-web(admin/Admin@123456)通过物业资料审核与房型审核;merchant-web 发布物业。C 端:列表 3 家,`payAtHotel=1` 只出 9005,`bedrooms=2` 只出 9005,`bedrooms=1` 出酒店 3 与 9004;App 筛选计数(1 卧 2 / 2 卧 1 / 3+ 0 / 到店付款 1)与结果一致,9005 详情标题卡显示提示、房型卡正常。
+- **顺带修复**:admin-web 物业资料审核详情的对比表原先不含 `long_stay` / `hotel_policies` / `nearby_attractions`,审核人看不到政策(含到店付款开关)改动,已补上(`views/merchant/property-review/index.vue`)。
+
+**环境备注**:新拉取的 `V20261012090000`(短信测试权限菜单)与本轮迁移均按账本手工补执行,账本 36/36。开发库里 9004 号酒店及 9005/9006 房型是 10-12 他人建的测试数据,未动。启动后宿主机 9502 端口曾不通(容器内正常),重启 user-service 后恢复。
+
 ### ★ 2026-10-12 多酒店预订流程(Figma `1675:9406` Stay 卡片 / `1675:9677` Stay 明细 / `1675:9158` 支付首卡)
 
 **流程**:第 2 步点「添加酒店与民宿」→ 当前这家(车 + 入离日期)转存为一段住宿,住客资料暂存 → 回酒店搜索页 → 挑下一家(详情页 / 购物车页只显示这一家的房)→ 继续 → 直接回到第 2 步。仍是三步,不新增步骤。

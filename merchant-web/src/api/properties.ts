@@ -105,6 +105,8 @@ export interface PolicyBooking {
   cancellation: string;
   prepayment: string;
   taxesFees: string;
+  /** 是否支持到店付款(随资料审核发布;C 端筛选读它,支付流程本期未接) */
+  payAtHotel: boolean;
 }
 
 export interface PolicyCheckIn {
@@ -174,7 +176,7 @@ export function emptyLongStay(): PropertyLongStay {
 
 export function emptyPolicies(): PropertyPolicies {
   return {
-    booking: { cancellation: '', prepayment: '', taxesFees: '' },
+    booking: { cancellation: '', prepayment: '', taxesFees: '', payAtHotel: false },
     checkIn: { time: '', description: '', documents: [] },
     checkOut: { time: '', description: '' },
     pet: { description: '', status: true },

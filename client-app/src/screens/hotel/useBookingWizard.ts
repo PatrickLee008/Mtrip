@@ -289,6 +289,8 @@ export function useBookingWizard({
   const [loadingGoods, setLoadingGoods] = useState(realMode);
   /** 真实商品的退改规则,给关怀模式 Step 1 的 Cancellation Policy 卡用(演示模式为空) */
   const [refundRules, setRefundRules] = useState<RefundRule[]>([]);
+  /** 物业支持到店付款(本期只用于核对页/支付页的「即将开放」提示) */
+  const [payAtHotel, setPayAtHotel] = useState(false);
 
   useEffect(() => {
     if (!propertyId || !roomTypeId) return;
@@ -297,6 +299,7 @@ export function useBookingWizard({
     void fetchHotelDetail(propertyId)
       .then((detail) => {
         if (!alive) return;
+        setPayAtHotel(Boolean(detail.payAtHotel));
         const sku = (detail.skus ?? []).find((r) => r.id === roomTypeId);
         if (!sku) return;
         setRefundRules(detail.refundRules ?? []);
@@ -1070,6 +1073,7 @@ export function useBookingWizard({
   const goSuccess = () => goResult('confirmed');
 
   return {
+    payAtHotel,
     /* 环境 */
     t,
     i18n,

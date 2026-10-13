@@ -21,6 +21,7 @@ import {
   TEMP_PAY_MOBILE_BANKING_LOGO,
 } from '@/assets/tempImages';
 import HomeIcon from '@/components/home/HomeIcon';
+import PayAtHotelNotice from '@/components/hotel/PayAtHotelNotice';
 import PaymentMethodRow from '@/components/hotel/booking/PaymentMethodRow';
 import WalletCard from '@/components/hotel/booking/WalletCard';
 import {
@@ -78,6 +79,8 @@ interface Props {
    * 只剩折叠的其他渠道(本期均即将开放)。
    */
   hideWallet?: boolean;
+  /** 物业支持到店付款:在未开放渠道折叠头上方给「即将开放」提示(到店支付行本身仍在折叠区内置灰) */
+  payAtHotel?: boolean;
 }
 
 export default function BookingStepPayment({
@@ -91,6 +94,7 @@ export default function BookingStepPayment({
   onComingSoon,
   coupon,
   hideWallet = false,
+  payAtHotel = false,
 }: Props) {
   const { t } = useTranslation();
   /**
@@ -157,6 +161,8 @@ export default function BookingStepPayment({
             />
           </>
         )}
+
+        {payAtHotel ? <PayAtHotelNotice /> : null}
 
         {/* 未开放渠道的折叠头:点一下展开/收起,不参与选中 */}
         <Pressable

@@ -6,7 +6,7 @@
  *   Recent Filters   本机最近应用过的筛选项(没有就不渲染)
  *   Budget           计价口径下拉 → 直方图+双滑块(PriceRangeSlider)→ 最低/最高输入框
  *   Popular Filters  设计稿的常用项,与下方分组共用同一个选项键(勾一处,另一处同步)
- *   Star Rating / Guest Review Score / Property Types  固定选项
+ *   Star Rating / Guest Review Score / Property Types / Bedrooms  固定选项
  *   Amenities / Bed Type / Room Features & View / Location  选项取自真实物业/房型数据,无数据的分组不渲染
  *
  * 设计稿实测:
@@ -19,7 +19,9 @@
  * 与后端的关系:选项键(见 HotelFilterValue)经 filterToParams 转成 `/app/hotels/list` 的查询参数;
  * 右侧计数来自 `/app/hotels/filters`(按目的地/关键词/日期圈定、不叠加其它条件),
  * CTA 里的总数是用当前草稿实查一次列表(pageSize=1)得到的真实结果数。
- * 设计稿的「2/3 bedrooms」没有卧室数数据可依,暂不提供;计价口径下拉没有第二组选项,走 onComingSoon。
+ * 卧室数取房型 bedroom_count(1 / 2 / 3 间及以上,物业任一在售房型命中即算);
+ * 到店付款(payAtHotel=1)单独成组;支付流程未接,详情/核对/支付页给「即将开放」提示(PayAtHotelNotice)。
+ * 计价口径下拉没有第二组选项,走 onComingSoon。
  */
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
@@ -58,7 +60,7 @@ export const PRICE_STEP = 10_000;
 
 /**
  * checked 里是选项键,形如:
- *   breakfast / freeCancel / star:4 / score:9 / type:hotel
+ *   breakfast / freeCancel / payAtHotel / star:4 / score:9 / type:hotel / bedroom:2(3 = 3 间及以上)
  *   amenity:wifi / bed:king / feature:minibar / city:yangon(后四类的值是后端归一化键)
  */
 export interface HotelFilterValue {
@@ -98,6 +100,8 @@ export function filterToParams(value: HotelFilterValue): HotelListParams {
     cities: csv('city'),
     breakfast: checked.includes('breakfast') ? 1 : undefined,
     freeCancel: checked.includes('freeCancel') ? 1 : undefined,
+    bedrooms: csv('bedroom'),
+    payAtHotel: checked.includes('payAtHotel') ? 1 : undefined,
   };
 }
 
@@ -119,6 +123,8 @@ interface FilterOption {
 const STAR_LEVELS = [5, 4, 3, 2, 1];
 const SCORE_LEVELS = [9, 8, 7, 6];
 const PROPERTY_TYPES = ['hotel', 'homesApts', 'hostels', 'hourly'];
+/** 卧室数档位,3 = 3 间及以上(与后端 BEDROOM_LEVELS 一致) */
+const BEDROOM_LEVELS = [1, 2, 3];
 const POPULAR_KEYS = [
   'breakfast',
   'star:4',
@@ -295,12 +301,16 @@ export default function HotelFilterSheet({
   const staticLabel: Record<string, string> = {
     breakfast: t('hotels.filter.options.breakfast'),
     freeCancel: t('hotels.filter.options.freeCancellation'),
+    payAtHotel: t('hotels.filter.options.payAtHotel'),
     'amenity:wifi': t('hotels.filter.options.wifi'),
     'amenity:gym': t('hotels.filter.options.gym'),
     'amenity:pool': t('hotels.filter.options.pool'),
   };
   PROPERTY_TYPES.forEach((k) => {
     staticLabel[`type:${k}`] = t(`hotels.filter.options.${k}`);
+  });
+  BEDROOM_LEVELS.forEach((n) => {
+    staticLabel[`bedroom:${n}`] = t(n >= 3 ? 'hotels.filter.bedroomsPlus' : 'hotels.filter.bedroomsN', { bedrooms: n });
   });
   SCORE_LEVELS.forEach((n) => {
     staticLabel[`score:${n}`] = t('hotels.filter.scoreAtLeast', { score: n });
@@ -458,6 +468,8 @@ export default function HotelFilterSheet({
             {renderSection('star', t('hotels.filter.starRating'), STAR_LEVELS.map((n) => opt(`star:${n}`)))}
             {renderSection('score', t('hotels.filter.reviewScore'), SCORE_LEVELS.map((n) => opt(`score:${n}`)))}
             {renderSection('type', t('hotels.filter.propertyTypes'), PROPERTY_TYPES.map((k) => opt(`type:${k}`)))}
+            {renderSection('bedroom', t('hotels.filter.bedrooms'), BEDROOM_LEVELS.map((n) => opt(`bedroom:${n}`)))}
+            {renderSection('payment', t('hotels.filter.payment'), [opt('payAtHotel')])}
 
             {/* 05 数据驱动分组(选项来自真实物业/房型) */}
             {renderSection('amenity', t('hotels.filter.amenities'), amenityOptions)}

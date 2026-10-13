@@ -33,6 +33,7 @@ import BookingProgress from '@/components/hotel/booking/BookingProgress';
 import BookingStepDates from '@/components/hotel/booking/BookingStepDates';
 import BookingStepDetails from '@/components/hotel/booking/BookingStepDetails';
 import WalletCard from '@/components/hotel/booking/WalletCard';
+import PayAtHotelNotice from '@/components/hotel/PayAtHotelNotice';
 import BookingStepGuests from '@/components/hotel/booking/BookingStepGuests';
 import BookingStepPayment from '@/components/hotel/booking/BookingStepPayment';
 import CouponPickerSheet from '@/components/hotel/booking/CouponPickerSheet';
@@ -90,6 +91,7 @@ export default function HotelBookingScreen() {
     expanded,
     setExpanded,
     walletBalance,
+    payAtHotel,
     payableTotal,
     longstayDiscount,
     reviewRoomTotal,
@@ -209,12 +211,16 @@ export default function HotelBookingScreen() {
               walletCredit={walletCovers ? payableTotal : 0}
               walletSlot={
                 cartMode ? (
+                  <View style={styles.walletSlot}>
+                    {/* 支持到店付款的酒店:钱包这一步就可能直接付款,提示得放在这里而不是只放支付页 */}
+                    {payAtHotel ? <PayAtHotelNotice /> : null}
                   <WalletCard
                     balance={walletBalance}
                     insufficient={!current.demo && isLogin && method === 'wallet' && !walletCovers}
                     onInfo={comingSoon}
                     toggle={{ on: method === 'wallet', onChange: (on) => setMethod(on ? 'wallet' : null) }}
                   />
+                  </View>
                 ) : null
               }
             />
@@ -317,6 +323,7 @@ export default function HotelBookingScreen() {
             insufficient={!current.demo && isLogin && walletBalance < payableTotal}
             /* 多房间新稿:钱包挪到第 2 步,第 3 步只剩折叠的其他渠道 */
             hideWallet={cartMode}
+            payAtHotel={payAtHotel}
             onSelect={setMethod}
             onToggleExpand={(key) => setExpanded((prev) => (prev === key ? null : key))}
             onComingSoon={comingSoon}
@@ -487,6 +494,8 @@ export default function HotelBookingScreen() {
 }
 
 const styles = StyleSheet.create({
+  /** 核对页钱包位:到店付款提示 + 钱包卡上下排 */
+  walletSlot: { gap: 12 },
   root: { flex: 1, backgroundColor: colors.pageBg },
   flex: { flex: 1 },
   statusBar: { backgroundColor: '#000000' },

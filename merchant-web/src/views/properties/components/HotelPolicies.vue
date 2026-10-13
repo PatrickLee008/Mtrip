@@ -87,6 +87,11 @@ const bookingRows = computed(() => [
   { key: 'cancellation', label: t('properties.profile.policiesTab.cancellation'), value: props.modelValue.booking.cancellation },
   { key: 'prepayment', label: t('properties.profile.policiesTab.prepayment'), value: props.modelValue.booking.prepayment },
   { key: 'taxesFees', label: t('properties.profile.policiesTab.taxesFees'), value: props.modelValue.booking.taxesFees },
+  {
+    key: 'payAtHotel',
+    label: t('properties.profile.policiesTab.payAtHotel'),
+    value: props.modelValue.booking.payAtHotel ? t('properties.profile.policiesTab.payAtHotelOn') : t('properties.profile.policiesTab.payAtHotelOff'),
+  },
 ]);
 const checkInDocuments = computed(() => props.modelValue.checkIn.documents);
 /** 「整块是否填过」:时间、说明、证件任一有值即算填过,未填过才给一处「未填写」提示 */
@@ -365,6 +370,7 @@ function removeRule(row: PolicyRule): void {
         <a-form-item :label="t('properties.profile.policiesTab.cancellation')"><a-textarea :value="modelValue.booking.cancellation" :rows="2" :maxlength="500" @update:value="patchBooking({ cancellation: $event })" /></a-form-item>
         <a-form-item :label="t('properties.profile.policiesTab.prepayment')"><a-textarea :value="modelValue.booking.prepayment" :rows="2" :maxlength="500" @update:value="patchBooking({ prepayment: $event })" /></a-form-item>
         <a-form-item :label="t('properties.profile.policiesTab.taxesFees')"><a-textarea :value="modelValue.booking.taxesFees" :rows="2" :maxlength="500" @update:value="patchBooking({ taxesFees: $event })" /></a-form-item>
+        <a-form-item :label="t('properties.profile.policiesTab.payAtHotel')" :extra="t('properties.profile.policiesTab.payAtHotelHint')"><a-switch :checked="modelValue.booking.payAtHotel" @change="patchBooking({ payAtHotel: Boolean($event) })" /></a-form-item>
       </a-form>
     </section>
 

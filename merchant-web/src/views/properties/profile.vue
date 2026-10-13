@@ -138,7 +138,7 @@ function normalizePolicies(value: unknown): PropertyPolicies {
   return {
     booking: {
       cancellation: String(booking.cancellation || ''), prepayment: String(booking.prepayment || ''),
-      taxesFees: String(booking.taxesFees || ''),
+      taxesFees: String(booking.taxesFees || ''), payAtHotel: booking.payAtHotel === true,
     },
     checkIn: {
       time: String(checkIn.time || ''), description: String(checkIn.description || ''),
