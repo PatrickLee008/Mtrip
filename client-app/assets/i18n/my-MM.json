@@ -521,7 +521,8 @@
       "permissionDenied": "Please allow access to your photos in Settings",
       "imageTooLarge": "Photos must be 10MB or smaller",
       "videoTooLarge": "Videos must be 50MB or smaller",
-      "retry": "Retry"
+      "retry": "Retry",
+      "needAll": "Please rate Overall, Cleanliness, Location, Service and Amenities"
     }
   },
   "user": {
@@ -1074,7 +1075,7 @@
       "citizenOff": "နိုင်ငံသားများအတွက် {{percent}}% လျှော့",
       "bestSeller": "အရောင်းရဆုံး",
       "chips": {
-        "rating4": "အဆင့် 4+",
+        "rating4": "Rating 8+",
         "freeCancellation": "အခမဲ့ပယ်ဖျက်",
         "breakfast": "မနက်စာ",
         "freeWifi": "အခမဲ့ Wifi"
@@ -1261,7 +1262,8 @@
         "topPositive": "အကောင်းဆုံးမှတ်ချက်",
         "improvement": "တိုးတက်ရန်လိုအပ်ချက်",
         "positiveQuote": "\"အမိုးထပ်လောင်ဂျ်မှ နေထွက်မြင်ကွင်းသည် နှိုင်းယှဉ်စရာမရှိပါ။ ကျွန်ုပ်တို့၏ နှစ်ပတ်လည်ညစာအတွက် ဝန်ထမ်းများက အထူးဂရုစိုက်ပေးခဲ့သည်။\"",
-        "improvementQuote": "\"အခန်းများတွင် ကောင်းစွာအလုပ်လုပ်သော်လည်း ဥယျာဉ်ဧရိယာတွင် WiFi အားနည်းနိုင်သည်။\""
+        "improvementQuote": "\"အခန်းများတွင် ကောင်းစွာအလုပ်လုပ်သော်လည်း ဥယျာဉ်ဧရိယာတွင် WiFi အားနည်းနိုင်သည်။\"",
+        "noReviews": "New · No reviews yet"
       },
       "policies": {
         "title": "ဟိုတယ်မူဝါဒများ",
@@ -1864,6 +1866,17 @@
     "payAtHotel": {
       "title": "Pay at Hotel accepted",
       "desc": "Pay at Hotel booking in the app is coming soon. Please pay with your mTrip Wallet for now."
+    },
+    "reviewLabel": {
+      "exceptional": "Exceptional",
+      "excellent": "Excellent",
+      "veryGood": "Very Good",
+      "good": "Good",
+      "average": "Average",
+      "belowAverage": "Below Average",
+      "poor": "Poor",
+      "veryPoor": "Very Poor",
+      "terrible": "Terrible"
     }
   }
 }

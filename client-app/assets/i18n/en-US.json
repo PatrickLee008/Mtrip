@@ -521,7 +521,8 @@
       "permissionDenied": "Please allow access to your photos in Settings",
       "imageTooLarge": "Photos must be 10MB or smaller",
       "videoTooLarge": "Videos must be 50MB or smaller",
-      "retry": "Retry"
+      "retry": "Retry",
+      "needAll": "Please rate Overall, Cleanliness, Location, Service and Amenities"
     }
   },
   "user": {
@@ -1074,7 +1075,7 @@
       "citizenOff": "{{percent}}% off for citizens",
       "bestSeller": "BEST SELLER",
       "chips": {
-        "rating4": "Rating 4+",
+        "rating4": "Rating 8+",
         "freeCancellation": "Free Cancellation",
         "breakfast": "Breakfast",
         "freeWifi": "Free Wifi"
@@ -1261,7 +1262,8 @@
         "topPositive": "Top positive",
         "improvement": "Room for improvement",
         "positiveQuote": "\"The sunrise views from the rooftop lounge are unmatched. Staff went above and beyond for our anniversary dinner.\"",
-        "improvementQuote": "\"WiFi signal can be a bit patchy in the garden areas, though it works perfectly in the rooms.\""
+        "improvementQuote": "\"WiFi signal can be a bit patchy in the garden areas, though it works perfectly in the rooms.\"",
+        "noReviews": "New · No reviews yet"
       },
       "policies": {
         "title": "Hotel Policies",
@@ -1864,6 +1866,17 @@
     "payAtHotel": {
       "title": "Pay at Hotel accepted",
       "desc": "Pay at Hotel booking in the app is coming soon. Please pay with your mTrip Wallet for now."
+    },
+    "reviewLabel": {
+      "exceptional": "Exceptional",
+      "excellent": "Excellent",
+      "veryGood": "Very Good",
+      "good": "Good",
+      "average": "Average",
+      "belowAverage": "Below Average",
+      "poor": "Poor",
+      "veryPoor": "Very Poor",
+      "terrible": "Terrible"
     }
   }
 }

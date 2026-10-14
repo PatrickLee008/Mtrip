@@ -521,7 +521,8 @@
       "permissionDenied": "请在系统设置中允许访问相册",
       "imageTooLarge": "图片不能超过 10MB",
       "videoTooLarge": "视频不能超过 50MB",
-      "retry": "重试"
+      "retry": "重试",
+      "needAll": "请完成总体、清洁度、位置、服务、设施五项评分"
     }
   },
   "user": {
@@ -1074,7 +1075,7 @@
       "citizenOff": "公民价省 {{percent}}%",
       "bestSeller": "热销",
       "chips": {
-        "rating4": "评分 4 分以上",
+        "rating4": "评分 8 分以上",
         "freeCancellation": "免费取消",
         "breakfast": "含早餐",
         "freeWifi": "免费 Wi-Fi"
@@ -1261,7 +1262,8 @@
         "topPositive": "最多好评",
         "improvement": "有待改进",
         "positiveQuote": "「顶楼酒廊的日出景色无可比拟,员工还为我们的周年晚餐费了不少心思。」",
-        "improvementQuote": "「花园区域的无线网信号偶尔不稳,不过房间里一切正常。」"
+        "improvementQuote": "「花园区域的无线网信号偶尔不稳,不过房间里一切正常。」",
+        "noReviews": "新上线 · 暂无评价"
       },
       "policies": {
         "title": "酒店政策",
@@ -1864,6 +1866,17 @@
     "payAtHotel": {
       "title": "本酒店支持到店付款",
       "desc": "App 内到店付款即将开放,目前请使用 mTrip 钱包支付。"
+    },
+    "reviewLabel": {
+      "exceptional": "极佳",
+      "excellent": "超赞",
+      "veryGood": "很好",
+      "good": "良好",
+      "average": "一般",
+      "belowAverage": "较差",
+      "poor": "差",
+      "veryPoor": "很差",
+      "terrible": "极差"
     }
   }
 }

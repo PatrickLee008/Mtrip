@@ -473,11 +473,11 @@ final class HotelController extends AbstractController
         ];
     }
 
-    /** 0-5 的分项评分(0=未评) */
+    /** 分项评分:PRD 要求清洁度/位置/服务/设施每项都必须评 1-5 分(酒店总分 = 五项之和 ÷ 25 × 10) */
     private function subRating(string $key): int
     {
         $value = $this->intInput($key);
-        if ($value < 0 || $value > 5) throw new BusinessException(ErrorCode::PARAM_ERROR, '分项评分须为0-5');
+        if ($value < 1 || $value > 5) throw new BusinessException(ErrorCode::PARAM_ERROR, '请完成全部评分项(每项1-5分)');
         return $value;
     }
 

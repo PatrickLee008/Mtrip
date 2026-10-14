@@ -37,7 +37,6 @@ import LiteDetailBottomBar, {
 } from '@/components/hotel/lite/LiteDetailBottomBar';
 import { liteShared } from '@/components/hotel/lite/liteShared';
 import {
-  EXCELLENT_FROM_SCORE,
   formatReviewDate,
   reviewNickname,
   toTenPointScore,
@@ -50,6 +49,7 @@ import {
   DETAIL_REVIEW_SUMMARY,
 } from '@/screens/hotel/detailDemo';
 import { dimensionRows, type ReviewDimensions } from '@/screens/hotel/reviewDimensions';
+import { reviewLabelKey } from '@/utils/reviewLabel';
 import { useCommonStore } from '@/store/commonStore';
 import { resolveMediaUri } from '@/utils/media';
 
@@ -172,11 +172,15 @@ export default function HotelReviewsLiteScreen() {
   const summary = (
     <View style={[liteShared.card, styles.summaryCard]}>
       <View style={liteShared.row}>
-        <Text style={styles.score}>{score.toFixed(1)}</Text>
+        <Text style={styles.score}>{total > 0 ? score.toFixed(1) : '-'}</Text>
         <View style={liteShared.flexCol}>
-          {score >= EXCELLENT_FROM_SCORE ? (
-            <Text style={liteShared.itemTitle}>{t('hotels.results.excellent')}</Text>
-          ) : null}
+          {total > 0 && reviewLabelKey(score) ? (
+            <Text style={liteShared.itemTitle}>
+              {t(`hotels.reviewLabel.${reviewLabelKey(score)}`).toUpperCase()}
+            </Text>
+          ) : (
+            <Text style={liteShared.itemTitle}>{total > 0 ? '' : t('hotels.detail.reviews.noReviews')}</Text>
+          )}
           <Text style={liteShared.body}>
             {t('hotels.detail.reviews.basedOn', { reviews: total.toLocaleString(i18n.language) })}
           </Text>

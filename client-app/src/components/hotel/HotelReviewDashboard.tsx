@@ -36,20 +36,12 @@ import { colors, radius, shadows } from '@/config/theme';
 import { fonts } from '@/config/typography';
 import { DETAIL_REVIEW_SUMMARY } from '@/screens/hotel/detailDemo';
 import { dimensionRows, type ReviewDimensions } from '@/screens/hotel/reviewDimensions';
+import { reviewLabelKey } from '@/utils/reviewLabel';
 
 /** 设计稿维度条轨道色 */
 const TRACK_COLOR = '#DDE9FF';
 /** 稿面卡圆角(两个节点都是 24,不是 detailShared 的 32) */
 const CARD_RADIUS = 24;
-
-/**
- * EXCELLENT 档位阈值(10 分制)。
- *
- * ⚠ **推定值**:设计稿只给了「8.8 → EXCELLENT」一个样本,没有给分档表,这里按 8.0 推定。
- * 注意它与搜索结果页 `HotelResultCard` 的 `EXCELLENT_FROM = 4.5` **不是同一把尺子** ——
- * 那边量的是 5 分制 rating,两者相差一档(4.5×2 = 9.0);若要统一,以后端补一份分档口径为准。
- */
-const EXCELLENT_FROM_SCORE = 8;
 
 interface Props {
   /** 10 分制总分(`rating × 2`);拿不到真实值时传 0,档位胶囊随之不渲染 */
@@ -66,19 +58,24 @@ interface Props {
 
 export default function HotelReviewDashboard({ score, total, dimensions, onReadAll }: Props) {
   const { t, i18n } = useTranslation();
-  /** 低于阈值不画胶囊 —— 宁可少一个标签,也不要给低分物业贴 EXCELLENT */
-  const showTier = score >= EXCELLENT_FROM_SCORE;
+  /* 档位按 PRD 模块 11 的档位表(10 分制);还没有评价就显示「New · No reviews yet」,不显示数字 */
+  const tierKey = reviewLabelKey(score);
+  const noReviews = total <= 0;
   const rows = dimensionRows(dimensions);
 
   return (
     <View style={styles.card}>
       {/* 总分 */}
       <View style={styles.summaryRow}>
-        <Text style={styles.score}>{score.toFixed(1)}</Text>
+        {noReviews ? (
+          <Text style={styles.noReviews}>{t('hotels.detail.reviews.noReviews')}</Text>
+        ) : (
+          <Text style={styles.score}>{score.toFixed(1)}</Text>
+        )}
         <View style={styles.summaryRight}>
-          {showTier ? (
+          {!noReviews && tierKey ? (
             <View style={styles.tier}>
-              <Text style={styles.tierText}>{t('hotels.results.excellent')}</Text>
+              <Text style={styles.tierText}>{t(`hotels.reviewLabel.${tierKey}`).toUpperCase()}</Text>
             </View>
           ) : null}
           <Text style={styles.basedOn}>
@@ -170,6 +167,7 @@ const styles = StyleSheet.create({
   },
 
   summaryRow: { flexDirection: 'row', alignItems: 'center', gap: 16 },
+  noReviews: { fontFamily: fonts.interBold, fontSize: 24, lineHeight: 32, color: colors.heading },
   score: {
     fontFamily: fonts.interBold,
     fontSize: 60,

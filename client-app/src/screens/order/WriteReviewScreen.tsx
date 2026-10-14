@@ -214,8 +214,9 @@ export default function WriteReviewScreen() {
 
   const submit = async () => {
     if (!ctx || submitting) return;
-    if (rating < 1) {
-      showToast(t('order.review.needOverall'));
+    /* PRD:总体 + 清洁度/位置/服务/设施五项都要评 1-5 分(酒店总分 = 五项之和 ÷ 25 × 10) */
+    if (rating < 1 || cleanliness < 1 || location < 1 || service < 1 || amenities < 1) {
+      showToast(t('order.review.needAll'));
       return;
     }
     if (media.some((m) => m.status === 'uploading')) {
@@ -319,10 +320,10 @@ export default function WriteReviewScreen() {
           {/* 表情评分 */}
           <View style={[styles.card, styles.ratingCard]}>
             <ReviewEmojiRating label={t('order.review.overall')} value={rating} onChange={setRating} readOnly={readOnly} />
-            <ReviewEmojiRating label={t('order.review.cleanliness')} value={cleanliness} onChange={setCleanliness} clearable readOnly={readOnly} />
-            <ReviewEmojiRating label={t('order.review.location')} value={location} onChange={setLocation} clearable readOnly={readOnly} />
-            <ReviewEmojiRating label={t('order.review.service')} value={service} onChange={setService} clearable readOnly={readOnly} />
-            <ReviewEmojiRating label={t('order.review.amenities')} value={amenities} onChange={setAmenities} clearable readOnly={readOnly} />
+            <ReviewEmojiRating label={t('order.review.cleanliness')} value={cleanliness} onChange={setCleanliness} readOnly={readOnly} />
+            <ReviewEmojiRating label={t('order.review.location')} value={location} onChange={setLocation} readOnly={readOnly} />
+            <ReviewEmojiRating label={t('order.review.service')} value={service} onChange={setService} readOnly={readOnly} />
+            <ReviewEmojiRating label={t('order.review.amenities')} value={amenities} onChange={setAmenities} readOnly={readOnly} />
           </View>
 
           {/* 出行类型 */}
