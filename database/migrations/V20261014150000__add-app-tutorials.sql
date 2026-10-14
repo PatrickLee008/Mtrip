@@ -35,15 +35,15 @@ CREATE TABLE IF NOT EXISTS `app_tutorial` (
 INSERT IGNORE INTO `app_tutorial`
   (`id`, `category`, `lang`, `title`, `description`, `cover_url`, `video_url`, `duration_sec`, `sort`, `status`)
 VALUES
-(1, 'hotel', 'zh-CN', '观看酒店预订教程', '如何预订酒店', '', 'https://www.pexels.com/download/video/31767896/', 120, 1, 1),
-(2, 'other', 'zh-CN', '注册账号', '如何注册账号', '', 'https://www.pexels.com/download/video/31767896/', 120, 2, 1),
-(3, 'hotel', 'zh-CN', '取消订单', '如何取消我的订单', '', 'https://www.pexels.com/download/video/31767896/', 120, 3, 1),
-(4, 'hotel', 'en-US', 'Watch the Hotel Booking Guide', 'How to book a hotel', '', 'https://www.pexels.com/download/video/31767896/', 120, 1, 1),
-(5, 'other', 'en-US', 'Create an account', 'How to register an account', '', 'https://www.pexels.com/download/video/31767896/', 120, 2, 1),
-(6, 'hotel', 'en-US', 'Cancel a booking', 'How to cancel my booking', '', 'https://www.pexels.com/download/video/31767896/', 120, 3, 1),
-(7, 'hotel', 'my-MM', 'ဟိုတယ်မှာယူနည်း ကြည့်ရန်', 'ဟိုတယ်ဘယ်လိုမှာမလဲ', '', 'https://www.pexels.com/download/video/31767896/', 120, 1, 1),
-(8, 'other', 'my-MM', 'အကောင့်ဖွင့်ရန်', 'အကောင့်ဘယ်လိုဖွင့်မလဲ', '', 'https://www.pexels.com/download/video/31767896/', 120, 2, 1),
-(9, 'hotel', 'my-MM', 'မှာယူမှုပယ်ဖျက်ရန်', 'မှာယူမှုဘယ်လိုပယ်ဖျက်မလဲ', '', 'https://www.pexels.com/download/video/31767896/', 120, 3, 1);
+(1, 'hotel', 'zh-CN', '观看酒店预订教程', '如何预订酒店', '', 'https://www.pexels.com/download/video/5961493/', 120, 1, 1),
+(2, 'other', 'zh-CN', '注册账号', '如何注册账号', '', 'https://www.pexels.com/download/video/5961493/', 120, 2, 1),
+(3, 'hotel', 'zh-CN', '取消订单', '如何取消我的订单', '', 'https://www.pexels.com/download/video/5961493/', 120, 3, 1),
+(4, 'hotel', 'en-US', 'Watch the Hotel Booking Guide', 'How to book a hotel', '', 'https://www.pexels.com/download/video/5961493/', 120, 1, 1),
+(5, 'other', 'en-US', 'Create an account', 'How to register an account', '', 'https://www.pexels.com/download/video/5961493/', 120, 2, 1),
+(6, 'hotel', 'en-US', 'Cancel a booking', 'How to cancel my booking', '', 'https://www.pexels.com/download/video/5961493/', 120, 3, 1),
+(7, 'hotel', 'my-MM', 'ဟိုတယ်မှာယူနည်း ကြည့်ရန်', 'ဟိုတယ်ဘယ်လိုမှာမလဲ', '', 'https://www.pexels.com/download/video/5961493/', 120, 1, 1),
+(8, 'other', 'my-MM', 'အကောင့်ဖွင့်ရန်', 'အကောင့်ဘယ်လိုဖွင့်မလဲ', '', 'https://www.pexels.com/download/video/5961493/', 120, 2, 1),
+(9, 'hotel', 'my-MM', 'မှာယူမှုပယ်ဖျက်ရန်', 'မှာယူမှုဘယ်လိုပယ်ဖျက်မလဲ', '', 'https://www.pexels.com/download/video/5961493/', 120, 3, 1);
 
 INSERT IGNORE INTO `sys_menu` (`id`, `parent_id`, `menu_name`, `menu_name_en`, `i18n_key`, `perm_key`, `menu_type`, `route_path`, `component`, `icon`, `sort`)
 VALUES (1203, 1200, '教程管理', 'Tutorial Management', '', 'config:tutorial:list', 2, '/content/tutorial', 'content/tutorial/index', '', 3);
