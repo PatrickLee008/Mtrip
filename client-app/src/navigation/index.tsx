@@ -52,6 +52,7 @@ import StayDetailScreen from '@/screens/hotel/StayDetailScreen';
 import AccountScreen from '@/screens/more/AccountScreen';
 import EditEmailScreen from '@/screens/more/EditEmailScreen';
 import GuidesScreen from '@/screens/more/GuidesScreen';
+import TutorialVideoScreen from '@/screens/more/TutorialVideoScreen';
 import HowReferralWorksScreen from '@/screens/more/HowReferralWorksScreen';
 import LegalTermsScreen from '@/screens/more/LegalTermsScreen';
 import ReferralScreen from '@/screens/more/ReferralScreen';
@@ -381,6 +382,11 @@ export default function AppNavigator() {
         <Stack.Screen
           name="Guides"
           component={GuidesScreen}
+          options={{ title: t('more.guides.title'), headerShown: false }}
+        />
+        <Stack.Screen
+          name="TutorialVideo"
+          component={TutorialVideoScreen}
           options={{ title: t('more.guides.title'), headerShown: false }}
         />
         <Stack.Screen

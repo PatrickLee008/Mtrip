@@ -853,25 +853,17 @@
         "guides": "လမ်းညွှန်"
       },
       "duration": "{{minutes}} မိနစ်",
-      "videos": {
-        "booking": {
-          "title": "ဟိုတယ်မှာယူနည်း ကြည့်ရန်",
-          "desc": "ဟိုတယ်ဘယ်လိုမှာမလဲ"
-        },
-        "register": {
-          "title": "အကောင့်ဖွင့်ရန်",
-          "desc": "အကောင့်ဘယ်လိုဖွင့်မလဲ"
-        },
-        "cancel": {
-          "title": "မှာယူမှုပယ်ဖျက်ရန်",
-          "desc": "မှာယူမှုဘယ်လိုပယ်ဖျက်မလဲ"
-        }
-      },
       "articles": {
-        "hotelBooking": "ဟိုတယ်မှာယူခြင်းလမ်းညွှန်",
-        "payment": "ငွေပေးချေမှုလမ်းညွှန်",
-        "cancellation": "ပယ်ဖျက်ခြင်းလမ်းညွှန်"
-      }
+        "hotelBooking": "ဟိုတယ်မှာယူခြင်းလမ်းညွှန်"
+      },
+      "categories": {
+        "hotel": "Hotel",
+        "food": "Food",
+        "other": "Other"
+      },
+      "empty": "No tutorial videos yet",
+      "loadFailed": "Failed to load. Tap to retry",
+      "playFailed": "This video cannot be played right now"
     },
     "legal": {
       "title": "စည်းမျဉ်းစည်းကမ်းများ",

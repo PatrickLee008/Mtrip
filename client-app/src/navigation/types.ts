@@ -273,6 +273,8 @@ export type RootStackParamList = {
   ReferralStatus: undefined;
   HowReferralWorks: undefined;
   Guides: undefined;
+  /** 教程视频播放页:列表项整条带过来,不再二次请求 */
+  TutorialVideo: { id: number; category: 'hotel' | 'food' | 'other'; title: string; description: string; videoUrl: string; coverUrl: string };
   LegalTerms: undefined;
   Login: undefined;
   Register: undefined;

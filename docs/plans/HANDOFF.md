@@ -1,5 +1,20 @@
 # 会话交接文档(HANDOFF)
 
+### ★ 2026-10-14 使用指南:教程视频内容管理 + 图文指南接酒店用户指引(QA 表 CA_TC_104 / 105)
+
+**问题**:More → 使用指南里视频与指南都是写死的设计稿数据,点了只弹「即将开放」,没有播放页、没有内容接口、后台也没地方上传。
+
+**产品口径(用户定)**:视频直接上传到我们自己的存储;多语言,可选「通用」(所有语言都显示);本期不区分站点;现有 App 的三条教程写成迁移脚本自动入库;视频先统一用 `https://www.pexels.com/download/video/31767896/`;**图文指南只保留第一篇「酒店预订指南」,点开显示与酒店搜索页相同的用户指引**。
+
+- **库与菜单**:迁移 `V20261014150000__add-app-tutorials.sql` 建 `mtrip_system.app_tutorial`(分类 hotel/food/other、`lang`=all/en-US/zh-CN/my-MM、标题/简介/封面/视频/时长/排序/状态、软删),种子 9 行(三条教程 × 三种语言,固定主键 INSERT IGNORE),并加菜单「内容管理 → 教程管理」`config:tutorial:list` + 按钮 `config:tutorial:save/delete`(`database/seed/02-menu.sql` 同步)。
+- **后端**:system-service `TutorialController`(同 ThemeController 的跨端写法)—— App `GET /api/v1/app/tutorial/list`(无需登录,按 `X-Lang` 取「通用 + 当前语言」的已上架条目,按排序、分类排好);admin `/config/tutorial/list|save|delete`。`FileController::upload` 权限加 `config:tutorial:save`。网关:app 模块表加 `tutorial`;**新增精确 location `/api/v1/admin/sys/file/upload`(`client_max_body_size 101m`、600s 超时)**,否则 20MB 以上视频在网关就被 413 拦下。
+- **admin-web**:`views/content/tutorial/index.vue`(路径对应菜单 component)—— 筛选(关键字/分类/语言/状态)、列表(封面/语言标签/时长)、新增编辑弹窗;视频与封面都走 `FileResourcePicker`(视频 `file-types=[3]`,上传后自动回填并读取元数据填时长),语言默认「通用」。
+- **client-app**:新增 `api/tutorial.ts`、`TutorialVideoScreen`(expo-av `Video` 原生控件,新增依赖 `expo-av ~14.0.7`;地址不可用/出错显示提示)、导航 `TutorialVideo`;`GuidesScreen` 视频页签读接口(加载中/失败重试/空态,没配封面用本地默认图,时长取接口),图文页签只剩「酒店预订指南」,点击打开 `HotelGuideOverlay`(关怀模式传 `lite`);删掉 `moreDemo` 的 `GUIDE_VIDEOS/GUIDE_ARTICLES` 与 i18n 里的写死视频/另外两篇文章,三种语言新增 `categories / empty / loadFailed / playFailed`。
+
+**验证**:容器内 PHP lint;admin-web build、client-app typecheck 通过(本机没装 PHP,`scripts/check.ps1` 第 1 步会因找不到 php 失败,与代码无关)。接口:三种语言各返回 3 条、不带语言只返回「通用」、新增一条「通用」后各语言都出现、非法分类报 40001、删除生效;**30MB 文件经网关上传成功**(测试文件已删)。Chrome 实测 App:使用指南视频页签读到库里三条(按 酒店/酒店/其他 排序),点第一张卡进入播放页,Pexels 视频 `readyState=4`、时长 19.4s、无错误(浏览器策略不自动带声播放);图文指南只剩一篇,点开出现 7 步引导第 1 步「想去哪里?」。admin-web 页面本身只做了构建验证,未在浏览器里点过上传弹窗。
+
+**注意**:① 本机 8082 上之前残留的 Expo 进程不会加载新代码(页面仍是旧版),`--clear` 重启后才生效;② 迁移已按账本手工执行,账本 43/43;③ 视频地址是示例链接,上线前由运营在后台换成自己上传的;④ QA 表里其余旧的失败状态仍是过期状态,等 QA 重测。
+
 ### ★ 2026-10-14 酒店附加服务(QA 表 CA_TC_034;Merchant PRD「optional value-added services」)
 
 **产品口径(用户定)**:服务固定 7 项 —— 早餐 / 机场接送 / SPA / 洗衣 / 客房服务 / 加床 / 延迟退房;商户逐项开关、填价格、选计价方式(按人 / 按晚 / 按间,可多选,**金额 = 单价 × 选中维度乘积,都不选 = 按次**);**并入物业资料审核**;**不参与优惠券与长住折扣**;**取消退款时附加服务全额退,不受取消政策影响**。

@@ -853,25 +853,17 @@
         "guides": "Guides"
       },
       "duration": "{{minutes}} min",
-      "videos": {
-        "booking": {
-          "title": "Watch the Hotel Booking Guide",
-          "desc": "How to book a hotel"
-        },
-        "register": {
-          "title": "Create an account",
-          "desc": "How to register an account"
-        },
-        "cancel": {
-          "title": "Cancel a booking",
-          "desc": "How to cancel my booking"
-        }
-      },
       "articles": {
-        "hotelBooking": "Hotel Booking Guide",
-        "payment": "Payment Guide",
-        "cancellation": "Cancellation Guide"
-      }
+        "hotelBooking": "Hotel Booking Guide"
+      },
+      "categories": {
+        "hotel": "Hotel",
+        "food": "Food",
+        "other": "Other"
+      },
+      "empty": "No tutorial videos yet",
+      "loadFailed": "Failed to load. Tap to retry",
+      "playFailed": "This video cannot be played right now"
     },
     "legal": {
       "title": "Terms & Conditions",
