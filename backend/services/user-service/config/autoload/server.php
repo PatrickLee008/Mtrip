@@ -35,6 +35,8 @@ return [
         'max_request' => (int) env('MAX_REQUEST', 10000),
         'max_request_grace' => 200,
         'socket_buffer_size' => 2 * 1024 * 1024,
+        // 评价视频上传(ReviewMediaController 单个视频最大 50MB),默认 2MB 会被 Swoole 直接 413
+        'package_max_length' => 60 * 1024 * 1024,
         'buffer_output_size' => 2 * 1024 * 1024,
     ],
     'callbacks' => [

@@ -15,6 +15,7 @@ import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
 import HotelReviewDashboard from '@/components/hotel/HotelReviewDashboard';
+import type { ReviewDimensions } from '@/screens/hotel/reviewDimensions';
 import type { RootStackParamList } from '@/navigation/types';
 
 interface Props {
@@ -22,19 +23,22 @@ interface Props {
   score: number;
   /** 评价条数 */
   total: number;
+  /** 分项平均分(真实酒店传 `reviewSummary.dimensions`,演示酒店不传) */
+  dimensions?: ReviewDimensions | null;
   /** 以下三个原样透传给评价整页,供它取数并在底栏回跳详情时带回上下文 */
   propertyId?: number;
   checkIn?: string;
   checkOut?: string;
 }
 
-export default function HotelReviewsTab({ score, total, propertyId, checkIn, checkOut }: Props) {
+export default function HotelReviewsTab({ score, total, dimensions, propertyId, checkIn, checkOut }: Props) {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
 
   return (
     <HotelReviewDashboard
       score={score}
       total={total}
+      dimensions={dimensions}
       onReadAll={() => navigation.navigate('HotelReviews', { propertyId, checkIn, checkOut })}
     />
   );

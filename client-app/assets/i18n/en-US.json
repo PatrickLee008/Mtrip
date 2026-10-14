@@ -46,7 +46,8 @@
     "feedback": {
       "title": "How was your last stay",
       "desc": "Share your honest feedback and earn 70 loyalty points for your next trip.",
-      "action": "Review Now"
+      "action": "Review Now",
+      "noStay": "No completed stay to review yet"
     },
     "savedHotels": {
       "title": "Save Hotels",
@@ -422,7 +423,9 @@
       "liveChat": "Live Support Chat",
       "modifyBooking": "Modify Booking",
       "cancelBooking": "Cancel Booking",
-      "payNow": "Pay Now"
+      "payNow": "Pay Now",
+      "writeReview": "Write a Review",
+      "viewReview": "View My Review"
     },
     "tripDetail": {
       "stay": "Stay {{index}}"
@@ -479,6 +482,46 @@
       "merchantTitle": "Booking Cancelled by Merchant",
       "merchantDesc": "Your reservation has been cancelled from the merchant side with the following reason. A confirmation email is on its way.",
       "cancelReason": "Cancel Reason"
+    },
+    "review": {
+      "title": "Write a Review",
+      "back": "Back",
+      "loadFailed": "Failed to load. Tap to retry",
+      "promoTitle": "How was your stay?",
+      "promoBody": "Share your honest feedback and earn {{points}} loyalty points for your next trip.",
+      "overall": "Overall",
+      "cleanliness": "Cleanliness",
+      "location": "Location",
+      "service": "Service",
+      "amenities": "Amenities",
+      "travelerTitle": "Select Traveler Type",
+      "traveler": {
+        "solo": "Solo",
+        "couple": "Couple",
+        "family": "Family",
+        "friends": "Friends",
+        "business": "Business"
+      },
+      "shareTitle": "Share your experience",
+      "placeholder": "Tell us about the room, breakfast, and service...",
+      "photosCount": "{{count}}/{{max}} Photos",
+      "videosCount": "{{count}}/{{max}} Videos",
+      "remove": "Remove",
+      "earnPoints": "Earn points",
+      "submit": "Submit Review",
+      "reviewed": "Reviewed",
+      "notAvailable": "Not available",
+      "submittedTitle": "Review Submitted",
+      "submittedBody": "Thank you for your feedback.",
+      "close": "Close",
+      "needOverall": "Please give an overall rating first",
+      "uploading": "Media is still uploading, please wait",
+      "uploadFailed": "Some files failed to upload. Remove them and try again",
+      "submitFailed": "Failed to submit. Please try again",
+      "permissionDenied": "Please allow access to your photos in Settings",
+      "imageTooLarge": "Photos must be 10MB or smaller",
+      "videoTooLarge": "Videos must be 50MB or smaller",
+      "retry": "Retry"
     }
   },
   "user": {
@@ -1210,7 +1253,9 @@
           "cleanliness": "Cleanliness",
           "service": "Service",
           "value": "Value",
-          "comfort": "Comfort"
+          "comfort": "Comfort",
+          "location": "Location",
+          "amenities": "Amenities"
         },
         "aiSummary": "AI Summary",
         "topPositive": "Top positive",

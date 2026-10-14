@@ -71,11 +71,17 @@ export default function MyPickScreen() {
   const showToast = useCommonStore((s) => s.showToast);
 
   /* 取数与改数在 useMyPickData,两种模式共用同一份口径(含获焦重拉) */
-  const { isLogin, favorites, tabBookings, tab, setTab, refreshing, refresh, unfavorite } =
+  const { isLogin, favorites, tabBookings, tab, setTab, refreshing, refresh, unfavorite, latestStayOrderId } =
     useMyPickData();
 
   const comingSoon = () => showToast(t('home.comingSoon'));
   const requireLogin = () => (isLogin ? comingSoon() : navigation.navigate('Login'));
+  /* 入住反馈卡:登录后去评价最近一次入住,没有可评的入住就提示 */
+  const openReview = () => {
+    if (!isLogin) return navigation.navigate('Login');
+    if (latestStayOrderId > 0) return navigation.navigate('WriteReview', { orderId: latestStayOrderId });
+    showToast(t('myPick.feedback.noStay'));
+  };
 
   const tabItems = MY_PICK_TABS.map((key) => ({ key, label: t(`myPick.tab.${key}`) }));
   /* 登录后一律显示真实收藏(可能为空);设计稿示例卡只用于未登录的空壳展示 */
@@ -174,7 +180,7 @@ export default function MyPickScreen() {
         </View>
 
         {/* 03 入住反馈 */}
-        <FeedbackCard onPress={requireLogin} />
+        <FeedbackCard onPress={openReview} />
 
         {/* 04 收藏酒店 */}
         <View>

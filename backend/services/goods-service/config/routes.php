@@ -50,6 +50,7 @@ Router::addGroup('/api/v1/app/hotels', static function () {
 // C端酒店评价提交:需登录(离店/完成后本人订单可评)
 Router::addGroup('/api/v1/app/hotels', static function () {
     Router::post('/review/add', [HotelController::class, 'reviewAdd']);
+    Router::get('/review/context', [HotelController::class, 'reviewContext']);
 }, [
     'middleware' => [UserAuthMiddleware::class],
 ]);

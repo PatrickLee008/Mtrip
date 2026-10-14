@@ -21,8 +21,9 @@
  *
  * **数据口径**:总分行与「Based on N reviews」接真实值(见 `HotelReviewsScreen`)——
  * 后端 `rating` 是 1-5 分制,调用方按 ×2 换算成设计稿的 10 分制后传进来。
- * 维度条与 AI Summary **没有后端字段**(`goods_review` 只有单一 rating),
- * 故按设计稿文案静态展示 —— 这是与用户确认过的取舍。
+ * 维度条接后端 `reviewSummary.dimensions`(清洁度 / 位置 / 服务 / 设施的平均分,取数口径见
+ * `screens/hotel/reviewDimensions.ts`):真实酒店只画有评分的项,没有就整块不画;演示酒店仍是设计稿数值。
+ * AI Summary **没有后端字段**,按设计稿文案静态展示 —— 这是与用户确认过的取舍。
  */
 
 import React from 'react';
@@ -33,7 +34,8 @@ import HomeIcon from '@/components/home/HomeIcon';
 import { detailShared } from '@/components/hotel/detailShared';
 import { colors, radius, shadows } from '@/config/theme';
 import { fonts } from '@/config/typography';
-import { DETAIL_REVIEW_SCORES, DETAIL_REVIEW_SUMMARY } from '@/screens/hotel/detailDemo';
+import { DETAIL_REVIEW_SUMMARY } from '@/screens/hotel/detailDemo';
+import { dimensionRows, type ReviewDimensions } from '@/screens/hotel/reviewDimensions';
 
 /** 设计稿维度条轨道色 */
 const TRACK_COLOR = '#DDE9FF';
@@ -54,16 +56,19 @@ interface Props {
   score: number;
   /** 评价条数 */
   total: number;
+  /** 分项平均分:真实酒店传 `reviewSummary.dimensions`(没有就传 `{}`),演示酒店不传 → 设计稿演示值 */
+  dimensions?: ReviewDimensions | null;
   /**
    * 给了才画「Read All Reviews」。整页自己就是落地页,传了会点回自己,故不传。
    */
   onReadAll?: () => void;
 }
 
-export default function HotelReviewDashboard({ score, total, onReadAll }: Props) {
+export default function HotelReviewDashboard({ score, total, dimensions, onReadAll }: Props) {
   const { t, i18n } = useTranslation();
   /** 低于阈值不画胶囊 —— 宁可少一个标签,也不要给低分物业贴 EXCELLENT */
   const showTier = score >= EXCELLENT_FROM_SCORE;
+  const rows = dimensionRows(dimensions);
 
   return (
     <View style={styles.card}>
@@ -94,15 +99,16 @@ export default function HotelReviewDashboard({ score, total, onReadAll }: Props)
         </Pressable>
       ) : null}
 
-      {/* 维度条 */}
+      {/* 维度条:真实酒店只画有评分的项,一项都没有整块不画 */}
+      {rows.length > 0 ? (
       <View style={styles.scoreList}>
-        {DETAIL_REVIEW_SCORES.map((row) => (
+        {rows.map((row) => (
           <View key={row.key} style={styles.scoreItem}>
             <View style={styles.scoreHead}>
               <Text style={styles.scoreLabel}>
                 {t(`hotels.detail.reviews.dimensions.${row.key}`)}
               </Text>
-              <Text style={styles.scoreValue}>{row.score}</Text>
+              <Text style={styles.scoreValue}>{row.score.toFixed(1)}</Text>
             </View>
             <View style={styles.track}>
               <View
@@ -115,6 +121,7 @@ export default function HotelReviewDashboard({ score, total, onReadAll }: Props)
           </View>
         ))}
       </View>
+      ) : null}
 
       {/* AI 总结 */}
       <View style={styles.aiBlock}>

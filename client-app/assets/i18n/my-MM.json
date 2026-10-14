@@ -46,7 +46,8 @@
     "feedback": {
       "title": "သင့်နောက်ဆုံးတည်းခိုမှု ဘယ်လိုရှိခဲ့ပါသလဲ",
       "desc": "သင့်ရိုးသားသောအမြင်ကို မျှဝေပြီး နောက်ခရီးစဉ်အတွက် သစ္စာရှင်အမှတ် 70 ရယူပါ။",
-      "action": "ယခုသုံးသပ်ရန်"
+      "action": "ယခုသုံးသပ်ရန်",
+      "noStay": "No completed stay to review yet"
     },
     "savedHotels": {
       "title": "သိမ်းဆည်းထားသောဟိုတယ်များ",
@@ -422,7 +423,9 @@
       "liveChat": "တိုက်ရိုက် အကူအညီ",
       "modifyBooking": "ကြိုတင်မှာယူမှု ပြင်ရန်",
       "cancelBooking": "ကြိုတင်မှာယူမှု ပယ်ဖျက်ရန်",
-      "payNow": "ယခု ငွေပေးရန်"
+      "payNow": "ယခု ငွေပေးရန်",
+      "writeReview": "Write a Review",
+      "viewReview": "View My Review"
     },
     "tripDetail": {
       "stay": "တည်းခိုမှု {{index}}"
@@ -479,6 +482,46 @@
       "merchantTitle": "ဟိုတယ်မှ ပယ်ဖျက်လိုက်သည်",
       "merchantDesc": "အောက်ပါအကြောင်းရင်းဖြင့် ဟိုတယ်ဘက်မှ ပယ်ဖျက်လိုက်ပါသည်။ အတည်ပြု အီးမေးလ် ပေးပို့ပါမည်။",
       "cancelReason": "ပယ်ဖျက်ရသည့် အကြောင်းရင်း"
+    },
+    "review": {
+      "title": "Write a Review",
+      "back": "Back",
+      "loadFailed": "Failed to load. Tap to retry",
+      "promoTitle": "How was your stay?",
+      "promoBody": "Share your honest feedback and earn {{points}} loyalty points for your next trip.",
+      "overall": "Overall",
+      "cleanliness": "Cleanliness",
+      "location": "Location",
+      "service": "Service",
+      "amenities": "Amenities",
+      "travelerTitle": "Select Traveler Type",
+      "traveler": {
+        "solo": "Solo",
+        "couple": "Couple",
+        "family": "Family",
+        "friends": "Friends",
+        "business": "Business"
+      },
+      "shareTitle": "Share your experience",
+      "placeholder": "Tell us about the room, breakfast, and service...",
+      "photosCount": "{{count}}/{{max}} Photos",
+      "videosCount": "{{count}}/{{max}} Videos",
+      "remove": "Remove",
+      "earnPoints": "Earn points",
+      "submit": "Submit Review",
+      "reviewed": "Reviewed",
+      "notAvailable": "Not available",
+      "submittedTitle": "Review Submitted",
+      "submittedBody": "Thank you for your feedback.",
+      "close": "Close",
+      "needOverall": "Please give an overall rating first",
+      "uploading": "Media is still uploading, please wait",
+      "uploadFailed": "Some files failed to upload. Remove them and try again",
+      "submitFailed": "Failed to submit. Please try again",
+      "permissionDenied": "Please allow access to your photos in Settings",
+      "imageTooLarge": "Photos must be 10MB or smaller",
+      "videoTooLarge": "Videos must be 50MB or smaller",
+      "retry": "Retry"
     }
   },
   "user": {
@@ -1210,7 +1253,9 @@
           "cleanliness": "သန့်ရှင်းမှု",
           "service": "ဝန်ဆောင်မှု",
           "value": "တန်ဖိုး",
-          "comfort": "သက်တောင့်သက်သာ"
+          "comfort": "သက်တောင့်သက်သာ",
+          "location": "Location",
+          "amenities": "Amenities"
         },
         "aiSummary": "AI အနှစ်ချုပ်",
         "topPositive": "အကောင်းဆုံးမှတ်ချက်",

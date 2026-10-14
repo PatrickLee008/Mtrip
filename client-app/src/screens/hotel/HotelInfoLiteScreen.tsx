@@ -41,10 +41,10 @@ import {
   DETAIL_ATTRACTIONS,
   DETAIL_DEMO,
   DETAIL_REASONS,
-  DETAIL_REVIEW_SCORES,
   DETAIL_REVIEW_SUMMARY,
   DETAIL_TRANSPORT,
 } from '@/screens/hotel/detailDemo';
+import { dimensionRows } from '@/screens/hotel/reviewDimensions';
 import { useCommonStore } from '@/store/commonStore';
 import type { GoodsDetail } from '@/types/models';
 
@@ -243,7 +243,7 @@ export default function HotelInfoLiteScreen() {
               </Text>
             </View>
 
-            {DETAIL_REVIEW_SCORES.map((row) => (
+            {dimensionRows(detail.reviewSummary?.dimensions ?? {}).map((row) => (
               <View key={row.key} style={styles.scoreRow}>
                 <Text style={[liteShared.body, styles.scoreLabel]}>
                   {t(`hotels.detail.reviews.dimensions.${row.key}`)}
@@ -256,7 +256,7 @@ export default function HotelInfoLiteScreen() {
                     ]}
                   />
                 </View>
-                <Text style={styles.scoreValue}>{row.score}</Text>
+                <Text style={styles.scoreValue}>{row.score.toFixed(1)}</Text>
               </View>
             ))}
 

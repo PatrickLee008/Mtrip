@@ -46,7 +46,8 @@
     "feedback": {
       "title": "上次入住体验如何?",
       "desc": "分享你的真实评价,可获得 70 点忠诚积分用于下次出行。",
-      "action": "去评价"
+      "action": "去评价",
+      "noStay": "还没有可评价的入住"
     },
     "savedHotels": {
       "title": "收藏酒店",
@@ -422,7 +423,9 @@
       "liveChat": "在线客服",
       "modifyBooking": "修改预订",
       "cancelBooking": "取消预订",
-      "payNow": "立即支付"
+      "payNow": "立即支付",
+      "writeReview": "写评价",
+      "viewReview": "查看我的评价"
     },
     "tripDetail": {
       "stay": "第 {{index}} 段住宿"
@@ -479,6 +482,46 @@
       "merchantTitle": "酒店已取消这笔预订",
       "merchantDesc": "酒店方以下述原因取消了这笔预订,确认邮件稍后送达。",
       "cancelReason": "取消原因"
+    },
+    "review": {
+      "title": "写评价",
+      "back": "返回",
+      "loadFailed": "加载失败,点击重试",
+      "promoTitle": "这次入住怎么样?",
+      "promoBody": "分享你的真实感受,即可获得 {{points}} 积分,下次出行可用。",
+      "overall": "总体",
+      "cleanliness": "清洁度",
+      "location": "位置",
+      "service": "服务",
+      "amenities": "设施",
+      "travelerTitle": "选择出行类型",
+      "traveler": {
+        "solo": "独自出行",
+        "couple": "情侣",
+        "family": "家庭",
+        "friends": "朋友",
+        "business": "商务"
+      },
+      "shareTitle": "分享你的体验",
+      "placeholder": "说说房间、早餐和服务……",
+      "photosCount": "{{count}}/{{max}} 张照片",
+      "videosCount": "{{count}}/{{max}} 个视频",
+      "remove": "移除",
+      "earnPoints": "可得积分",
+      "submit": "提交评价",
+      "reviewed": "已评价",
+      "notAvailable": "暂不能评价",
+      "submittedTitle": "评价已提交",
+      "submittedBody": "感谢你的反馈。",
+      "close": "关闭",
+      "needOverall": "请先给出总体评分",
+      "uploading": "图片/视频还在上传,请稍候",
+      "uploadFailed": "有文件上传失败,请移除后重试",
+      "submitFailed": "提交失败,请重试",
+      "permissionDenied": "请在系统设置中允许访问相册",
+      "imageTooLarge": "图片不能超过 10MB",
+      "videoTooLarge": "视频不能超过 50MB",
+      "retry": "重试"
     }
   },
   "user": {
@@ -1210,7 +1253,9 @@
           "cleanliness": "卫生",
           "service": "服务",
           "value": "性价比",
-          "comfort": "舒适度"
+          "comfort": "舒适度",
+          "location": "位置",
+          "amenities": "设施"
         },
         "aiSummary": "AI 总结",
         "topPositive": "最多好评",

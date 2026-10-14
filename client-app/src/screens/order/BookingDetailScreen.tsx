@@ -52,13 +52,14 @@ import {
   type ImageSourcePropType,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
+import { useFocusEffect, useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTranslation } from 'react-i18next';
 import * as Clipboard from 'expo-clipboard';
 
 import { fetchHotelDetail } from '@/api/goods';
 import { fetchOrderDetail, payOrder } from '@/api/order';
+import { fetchReviewContext } from '@/api/review';
 import { apiTripPay, fetchTripDetail, type TripBookingRow } from '@/api/trip';
 import { TEMP_HOTEL_GALLERY, tempCoverFor } from '@/assets/tempImages';
 import { ErrorView, LoadingView } from '@/components/common/StateViews';
@@ -145,6 +146,21 @@ export default function BookingDetailScreen() {
       setLoading(false);
     }
   }, [orderId, tripId]);
+
+  /** 已入住 / 已完成才能评价;每次回到本页重读(评价提交后按钮要变成「查看评价」) */
+  const reviewable = order?.order_status === ORDER_STATUS.USED || order?.order_status === ORDER_STATUS.FINISHED;
+  const [reviewState, setReviewState] = useState<{ canReview: boolean; reviewed: boolean } | null>(null);
+  useFocusEffect(
+    useCallback(() => {
+      if (!reviewable) {
+        setReviewState(null);
+        return;
+      }
+      fetchReviewContext(orderId)
+        .then((c) => setReviewState({ canReview: c.canReview, reviewed: c.reviewed }))
+        .catch(() => setReviewState(null));
+    }, [reviewable, orderId]),
+  );
 
   useEffect(() => {
     void load();
@@ -530,6 +546,21 @@ export default function BookingDetailScreen() {
               </Text>
             </Pressable>
           </View>
+          {/* 评价入口:未评 = 主色实底「写评价」;已评 = 描边「查看评价」;两者都不满足(历史单无物业)不显示 */}
+          {reviewState && (reviewState.canReview || reviewState.reviewed) ? (
+            <Pressable
+              style={({ pressed }) => [
+                reviewState.reviewed ? styles.ghostBtn : styles.payBtn,
+                styles.reviewBtn,
+                pressed && styles.pressed,
+              ]}
+              onPress={() => navigation.navigate('WriteReview', { orderId: order.id })}
+            >
+              <Text style={reviewState.reviewed ? styles.ghostText : styles.payText}>
+                {reviewState.reviewed ? t('order.bookingDetail.viewReview') : t('order.bookingDetail.writeReview')}
+              </Text>
+            </Pressable>
+          ) : null}
         </View>
       </ScrollView>
 
@@ -999,4 +1030,6 @@ const styles = StyleSheet.create({
     color: colors.heading,
   },
   dangerText: { color: colors.hot },
+  /** 评价入口独占一行,整宽 */
+  reviewBtn: { flex: 0, alignSelf: 'stretch' },
 });

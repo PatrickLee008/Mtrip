@@ -282,6 +282,7 @@ export default function HotelDetailScreen() {
           <HotelReviewsTab
             score={reviewScore}
             total={reviewTotal}
+            dimensions={detail ? (detail.reviewSummary?.dimensions ?? {}) : undefined}
             propertyId={propertyId}
             checkIn={route.params?.checkIn}
             checkOut={route.params?.checkOut}

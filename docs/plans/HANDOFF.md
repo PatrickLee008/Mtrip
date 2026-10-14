@@ -1,5 +1,22 @@
 # 会话交接文档(HANDOFF)
 
+### ★ 2026-10-14 订单评价页(Figma「Hotel Review」`797:1600`,成功浮层 `800:2286`,出行类型下拉 `800:2209`)
+
+**产品口径(用户定)**:按设计稿做订单评价页并对接后端,**图片最多 20 张、视频最多 3 个**(设计稿只画了照片的添加块,视频块是按要求补的同款)。
+
+- **库**:迁移 `V20261014160000__add-review-detail.sql`,`goods_review` 加 `rating_cleanliness / rating_location / rating_service / rating_amenities`(0-5,0=未评)、`traveler_type`(solo/couple/family/friends/business)、`videos`(JSON)。总体评分沿用 `rating`(1-5 必填),一单一评由 `uk_order` 保证。
+- **上传**:goods-service-app 没挂上传目录,所以评价媒体走 **user-service** 新接口 `POST /api/v1/app/user/review-media`(`ReviewMediaController`,`kind=image|video`,图 ≤10MB(JPEG/PNG/WebP)、视频 ≤50MB(MP4/MOV/WebM),按文件内容嗅探 MIME),落在 `/uploads/user/{uid}/review-{img|vid}-{随机}.{ext}`。网关新增精确 location(51m / 300s 超时);user-service `package_max_length` 加到 60MB(默认 2MB 会被 Swoole 直接 413)。
+- **goods-service**:`GET /app/hotels/review/context?orderId=`(订单摘要 + canReview/reviewed + 已评内容 + 积分/上限);`POST /app/hotels/review/add` 重写 —— 总体分必填、分项 0-5、出行类型白名单、图 ≤20 / 视频 ≤3,**媒体地址必须是本人在 review-media 上传的前缀**(外链、别人的目录、`..` 都拒),事务内写评价并**奖励 70 积分**(`user_info.points` + `user_points_log` change_type=3「评价奖励」)。公开评价列表 `/hotels/reviews` 与 admin 列表新增分项、出行类型、`videos`。
+- **admin-web**:「商品 → 评价审核」加订单ID / 出行类型 / 图片视频数量列和「详情」弹窗(分项评分、内容、图片预览组、视频播放)。
+- **client-app**:新增 `WriteReviewScreen`(头图轮播 + 酒店卡 + 奖励卡 + 五行表情评分 + 出行类型下拉 + 文本框 + 照片/视频块 + 吸底栏 + 成功浮层),`api/review.ts`、`utils/mediaPicker.ts`、`components/review/*`(表情数据由脚本从设计稿 SVG 拆成 Path,**react-native-svg 的 web 入口没有 `SvgXml`**,所以不用它)。入口:预订详情(已入住/已完成的订单显示「写评价」,评过显示「查看我的评价」,每次获焦重读)、My Pick「入住反馈」卡「去评价」(落到最近一张已入住/已完成的酒店订单)。已评过的订单打开是只读回看。选好即上传,逐个传,失败的缩略图点一下重传,上传中不能提交。i18n 三语言(缅文暂用英文兜底,需母语者复核)。设计稿右上角的「提醒 / 分享」圆钮没有对应功能,没画。
+- **踩坑**:后端 `SubmitLockMiddleware` 对「同一用户 + 同一接口」同时只放行一个在途请求,客户端并发上传会被拦成 429,所以上传并发必须是 1(别改回并发,除非给上传请求带唯一 `X-Form-Id`)。
+
+**验证**:容器内 PHP lint;client-app typecheck、admin-web build 通过。后端 API 自测:非本人订单 40401、缺总体分/外链图/别人目录/21 张图/4 个视频/非法出行类型/分项 6 分全部 40001,假图片和视频当图片被拒,正常提交 + 积分 70 到账 + 重复提交被拒。Chrome 实测 App:从 My Pick「去评价」进入,五行评分、出行类型、文字、21 张图选择只收 20、4 个视频只收 3,逐个上传 0 失败,提交后出现成功浮层,库里 20 图 3 视频 + 分项 + family;再进入是只读(文本框禁用、无添加块和 ×、按钮「已评价」);预订详情对已入住订单出现「写评价」并能进入。admin-web 详情弹窗能看到分项星级、20 张图、3 个视频。测试数据已清理(评价、积分、上传文件,订单 61/63/67 状态还原)。
+
+- **分项评分接入酒店详情(同日补)**:`/app/hotels/detail` 的 `reviewSummary` 新增 `dimensions`(清洁度 / 位置 / 服务 / 设施的平均分,1-5 保留 1 位,只统计显示中的评价且只算打了分的,没人评的项为 null;`HotelController::reviewDimensions`)。App 四处维度条(详情页评价总览、评价整页、两个关怀模式页)统一走 `screens/hotel/reviewDimensions.ts`:真实酒店只画有评分的项、一项都没有整块不画,演示酒店仍是设计稿数值;维度由原来的 清洁/服务/性价比/舒适 改为与评价页一致的 清洁度/位置/服务/设施(i18n 补 `location / amenities`)。实测:库里 3 条样例评价(清洁 5/4/未评、位置 4/5/3、设施 3/5/未评、服务全未评),接口返回 4.5 / 4.0 / null / 4.0,App 评价页签显示「卫生 4.5 / 位置 4.0 / 设施 4.0」且不画服务;样例已删。
+
+**没做 / 注意**:① 原生真机的相册权限与多选没测(只测了 web);② App 里公开的评价卡(`HotelReviewCard`)和商户端评价页还没展示单条评价的分项评分、出行类型与图片视频;③ 多房间 / 多酒店行程里每个预订是独立订单,评价按订单(每段/每间各评一次),行程总览页没有评价入口;④ 积分奖励固定 70(`HotelController::REVIEW_POINTS`),没做成后台配置;⑤ 本地验证用的订单状态是手工改库造的。
+
 ### ★ 2026-10-14 使用指南:教程视频内容管理 + 图文指南接酒店用户指引(QA 表 CA_TC_104 / 105)
 
 **问题**:More → 使用指南里视频与指南都是写死的设计稿数据,点了只弹「即将开放」,没有播放页、没有内容接口、后台也没地方上传。
