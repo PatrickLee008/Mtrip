@@ -6,9 +6,9 @@
  * 规范:忽略设计稿中的 iPhone 状态栏,只使用系统透明状态栏和 SafeAreaView。
  */
 
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, type ViewStyle, View } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
 
 import PrimaryButton from '@/components/common/PrimaryButton';
@@ -125,6 +125,10 @@ export default function RegisterBusinessDetailsScreen() {
   const { t } = useTranslation();
   const showToast = useCommonStore((s) => s.showToast);
   const registration = useRegistrationStore();
+  const prefillBusinessContacts = registration.prefillBusinessContacts;
+  useFocusEffect(useCallback(() => {
+    prefillBusinessContacts();
+  }, [prefillBusinessContacts]));
   const [submitting, setSubmitting] = useState(false);
   const [picker, setPicker] = useState<{ kind: PickerKind; index: number } | null>(null);
   const cards = registration.businesses;

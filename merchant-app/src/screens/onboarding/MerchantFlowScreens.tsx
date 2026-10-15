@@ -8,7 +8,7 @@ import * as Clipboard from 'expo-clipboard';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as LocalAuthentication from 'expo-local-authentication';
 import QRCode from 'react-native-qrcode-svg';
-import { useNavigation, useRoute } from '@react-navigation/native';
+import { useIsFocused, useNavigation, useRoute } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -38,6 +38,7 @@ import type { AgreementDetail, KycDocument, KycRequirements, RegistrationChannel
 import type { RootStackParamList } from '@/navigation/types';
 import { enableBiometric } from '@/utils/merchantSession';
 import { removeOnboardingSession } from '@/utils/onboardingSession';
+import { storage } from '@/utils/storage';
 import { isEmail, isMobileNumber } from '@/utils/validate';
 
 const OTP_LENGTH = 6;
@@ -186,9 +187,11 @@ export function RegisterOtpScreen() {
 }
 function ReviewScreen({ kyc = false }: { kyc?: boolean }) {
   const navigation = useNavigation();
+  const focused = useIsFocused();
   const { t } = useTranslation();
   const state = useRegistrationStore();
   const status = state.status;
+  const [approvalNotice, setApprovalNotice] = useState(false);
   const refresh = async () => {
     if (!state.registrationToken || !state.applicationId) return;
     try {
@@ -208,6 +211,23 @@ function ReviewScreen({ kyc = false }: { kyc?: boolean }) {
   const canUpload = status?.registrationStatus === 'approved'
     && (['draft', 'resubmit_required'].includes(status.merchantKycStatus)
       || status.initialProperties.some((property) => ['draft', 'resubmit_required'].includes(property.kycStatus)));
+  useEffect(() => {
+    if (kyc || !focused || !canUpload || !state.applicationId) return;
+    let active = true;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const key = `mtrip:merchant:registration-approved:${state.applicationId}`;
+    void storage.getString(key).then((seen) => {
+      if (!active || seen) return;
+      setApprovalNotice(true);
+      void storage.setString(key, '1');
+      timer = setTimeout(() => setApprovalNotice(false), 5000);
+    });
+    return () => {
+      active = false;
+      if (timer) clearTimeout(timer);
+      setApprovalNotice(false);
+    };
+  }, [kyc, focused, canUpload, state.applicationId]);
   const pendingActivation = status?.accountStatus === 'pending_activation';
   const active = status?.accountStatus === 'active';
   const accountUnavailable = status?.accountStatus === 'suspended' || status?.accountStatus === 'disabled';
@@ -248,8 +268,11 @@ function ReviewScreen({ kyc = false }: { kyc?: boolean }) {
     buttonLabel={rejected ? t('flow.review.rejected') : accountUnavailable ? t('flow.review.unavailable') : needsCorrection ? t('flow.review.edit') : awaitingRegistration || canUpload ? t('flow.review.proceedKyc') : pendingActivation ? t('flow.review.activate') : t('flow.twoFa.dashboardLogin')}
     buttonDisabled={!success || rejected || accountUnavailable}
     onButtonPress={action}
-    secondaryLabel={kyc ? undefined : t('flow.review.anotherPhone')}
-    onSecondaryPress={() => void startAnother()}
+    secondaryLabel={kyc || status?.registrationStatus === 'approved' ? undefined : t('flow.review.anotherPhone')}
+    onSecondaryPress={kyc || status?.registrationStatus === 'approved' ? undefined : () => void startAnother()}
+    notificationTitle={approvalNotice ? t('flow.review.approvalNoticeTitle') : undefined}
+    notificationHeading={t('flow.review.approvalNoticeHeading')}
+    notificationBody={t('flow.review.approvalNoticeBody')}
   />;
 }
 
