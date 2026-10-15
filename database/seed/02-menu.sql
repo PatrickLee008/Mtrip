@@ -283,13 +283,16 @@ INSERT IGNORE INTO `sys_menu` (`id`,`parent_id`,`menu_name`,`menu_name_en`,`perm
 -- ================= 1200 内容管理(Banner 复用 marketing:banner;Theme 复用 config:theme)=================
 INSERT IGNORE INTO `sys_menu` (`id`,`parent_id`,`menu_name`,`menu_name_en`,`i18n_key`,`perm_key`,`menu_type`,`route_path`,`component`,`icon`,`sort`) VALUES
 (1201,1200,'横幅管理','Banner Management','','marketing:banner:list',2,'/marketing/banner','marketing/banner/index','',1),
-(1202,1200,'主题管理','Theme Management','','config:theme:list',2,'/cops/theme','cops/theme/index','',2);
+(1202,1200,'主题管理','Theme Management','','config:theme:list',2,'/cops/theme','cops/theme/index','',2),
+(1203,1200,'教程管理','Tutorial Management','','config:tutorial:list',2,'/content/tutorial','content/tutorial/index','',3);
 INSERT IGNORE INTO `sys_menu` (`id`,`parent_id`,`menu_name`,`menu_name_en`,`perm_key`,`menu_type`,`sort`) VALUES
 (120101,1201,'新增横幅','Add','marketing:banner:add',3,1),
 (120102,1201,'编辑横幅','Edit','marketing:banner:edit',3,2),
 (120103,1201,'上下架','On/Off','marketing:banner:status',3,3),
 (120201,1202,'保存主题','Save','config:theme:save',3,1),
-(120202,1202,'删除主题','Delete','config:theme:delete',3,2);
+(120202,1202,'删除主题','Delete','config:theme:delete',3,2),
+(120301,1203,'保存教程','Save','config:tutorial:save',3,1),
+(120302,1203,'删除教程','Delete','config:tutorial:delete',3,2);
 
 -- ================= 1300 平台配置(= 现系统配置 + 特性开关 + 筛选/税费)=================
 INSERT IGNORE INTO `sys_menu` (`id`,`parent_id`,`menu_name`,`menu_name_en`,`i18n_key`,`perm_key`,`menu_type`,`route_path`,`component`,`icon`,`sort`) VALUES

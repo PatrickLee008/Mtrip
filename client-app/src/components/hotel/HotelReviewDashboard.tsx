@@ -21,8 +21,9 @@
  *
  * **数据口径**:总分行与「Based on N reviews」接真实值(见 `HotelReviewsScreen`)——
  * 后端 `rating` 是 1-5 分制,调用方按 ×2 换算成设计稿的 10 分制后传进来。
- * 维度条与 AI Summary **没有后端字段**(`goods_review` 只有单一 rating),
- * 故按设计稿文案静态展示 —— 这是与用户确认过的取舍。
+ * 维度条接后端 `reviewSummary.dimensions`(清洁度 / 位置 / 服务 / 设施的平均分,取数口径见
+ * `screens/hotel/reviewDimensions.ts`):真实酒店只画有评分的项,没有就整块不画;演示酒店仍是设计稿数值。
+ * AI Summary **没有后端字段**,按设计稿文案静态展示 —— 这是与用户确认过的取舍。
  */
 
 import React from 'react';
@@ -33,47 +34,48 @@ import HomeIcon from '@/components/home/HomeIcon';
 import { detailShared } from '@/components/hotel/detailShared';
 import { colors, radius, shadows } from '@/config/theme';
 import { fonts } from '@/config/typography';
-import { DETAIL_REVIEW_SCORES, DETAIL_REVIEW_SUMMARY } from '@/screens/hotel/detailDemo';
+import { DETAIL_REVIEW_SUMMARY } from '@/screens/hotel/detailDemo';
+import { dimensionRows, type ReviewDimensions } from '@/screens/hotel/reviewDimensions';
+import { reviewLabelKey } from '@/utils/reviewLabel';
 
 /** 设计稿维度条轨道色 */
 const TRACK_COLOR = '#DDE9FF';
 /** 稿面卡圆角(两个节点都是 24,不是 detailShared 的 32) */
 const CARD_RADIUS = 24;
 
-/**
- * EXCELLENT 档位阈值(10 分制)。
- *
- * ⚠ **推定值**:设计稿只给了「8.8 → EXCELLENT」一个样本,没有给分档表,这里按 8.0 推定。
- * 注意它与搜索结果页 `HotelResultCard` 的 `EXCELLENT_FROM = 4.5` **不是同一把尺子** ——
- * 那边量的是 5 分制 rating,两者相差一档(4.5×2 = 9.0);若要统一,以后端补一份分档口径为准。
- */
-const EXCELLENT_FROM_SCORE = 8;
-
 interface Props {
   /** 10 分制总分(`rating × 2`);拿不到真实值时传 0,档位胶囊随之不渲染 */
   score: number;
   /** 评价条数 */
   total: number;
+  /** 分项平均分:真实酒店传 `reviewSummary.dimensions`(没有就传 `{}`),演示酒店不传 → 设计稿演示值 */
+  dimensions?: ReviewDimensions | null;
   /**
    * 给了才画「Read All Reviews」。整页自己就是落地页,传了会点回自己,故不传。
    */
   onReadAll?: () => void;
 }
 
-export default function HotelReviewDashboard({ score, total, onReadAll }: Props) {
+export default function HotelReviewDashboard({ score, total, dimensions, onReadAll }: Props) {
   const { t, i18n } = useTranslation();
-  /** 低于阈值不画胶囊 —— 宁可少一个标签,也不要给低分物业贴 EXCELLENT */
-  const showTier = score >= EXCELLENT_FROM_SCORE;
+  /* 档位按 PRD 模块 11 的档位表(10 分制);还没有评价就显示「New · No reviews yet」,不显示数字 */
+  const tierKey = reviewLabelKey(score);
+  const noReviews = total <= 0;
+  const rows = dimensionRows(dimensions);
 
   return (
     <View style={styles.card}>
       {/* 总分 */}
       <View style={styles.summaryRow}>
-        <Text style={styles.score}>{score.toFixed(1)}</Text>
+        {noReviews ? (
+          <Text style={styles.noReviews}>{t('hotels.detail.reviews.noReviews')}</Text>
+        ) : (
+          <Text style={styles.score}>{score.toFixed(1)}</Text>
+        )}
         <View style={styles.summaryRight}>
-          {showTier ? (
+          {!noReviews && tierKey ? (
             <View style={styles.tier}>
-              <Text style={styles.tierText}>{t('hotels.results.excellent')}</Text>
+              <Text style={styles.tierText}>{t(`hotels.reviewLabel.${tierKey}`).toUpperCase()}</Text>
             </View>
           ) : null}
           <Text style={styles.basedOn}>
@@ -94,15 +96,16 @@ export default function HotelReviewDashboard({ score, total, onReadAll }: Props)
         </Pressable>
       ) : null}
 
-      {/* 维度条 */}
+      {/* 维度条:真实酒店只画有评分的项,一项都没有整块不画 */}
+      {rows.length > 0 ? (
       <View style={styles.scoreList}>
-        {DETAIL_REVIEW_SCORES.map((row) => (
+        {rows.map((row) => (
           <View key={row.key} style={styles.scoreItem}>
             <View style={styles.scoreHead}>
               <Text style={styles.scoreLabel}>
                 {t(`hotels.detail.reviews.dimensions.${row.key}`)}
               </Text>
-              <Text style={styles.scoreValue}>{row.score}</Text>
+              <Text style={styles.scoreValue}>{row.score.toFixed(1)}</Text>
             </View>
             <View style={styles.track}>
               <View
@@ -115,6 +118,7 @@ export default function HotelReviewDashboard({ score, total, onReadAll }: Props)
           </View>
         ))}
       </View>
+      ) : null}
 
       {/* AI 总结 */}
       <View style={styles.aiBlock}>
@@ -163,6 +167,7 @@ const styles = StyleSheet.create({
   },
 
   summaryRow: { flexDirection: 'row', alignItems: 'center', gap: 16 },
+  noReviews: { fontFamily: fonts.interBold, fontSize: 24, lineHeight: 32, color: colors.heading },
   score: {
     fontFamily: fonts.interBold,
     fontSize: 60,

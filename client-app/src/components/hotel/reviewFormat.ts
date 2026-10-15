@@ -14,9 +14,6 @@ import type { HotelReview } from '@/api/goods';
  */
 const BACKEND_ANON_NICKNAME = '匿名用户';
 
-/** 10 分制下达到这个分数才贴「Excellent」(与评价总览卡同一阈值) */
-export const EXCELLENT_FROM_SCORE = 8;
-
 export function reviewNickname(review: HotelReview, t: TFunction): string {
   const raw = typeof review.nickname === 'string' ? review.nickname.trim() : '';
   return raw === '' || raw === BACKEND_ANON_NICKNAME ? t('hotels.reviewsPage.anonymous') : raw;

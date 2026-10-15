@@ -219,7 +219,11 @@ export default function HotelReviewsScreen() {
         ListHeaderComponent={
           <View style={styles.dashboardSlot}>
             {/* 本页就是评价落地页,不画「Read All Reviews」 */}
-            <HotelReviewDashboard score={score} total={total} />
+            <HotelReviewDashboard
+              score={score}
+              total={total}
+              dimensions={detail ? (detail.reviewSummary?.dimensions ?? {}) : undefined}
+            />
           </View>
         }
         ListEmptyComponent={<View style={styles.emptySlot}>{renderEmpty()}</View>}

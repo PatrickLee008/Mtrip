@@ -43,13 +43,12 @@ import { PAGE_PADDING, colors, shadows } from '@/config/theme';
 import { fonts, text } from '@/config/typography';
 import { useSiteStore } from '@/store/siteStore';
 import type { GoodsItem } from '@/types/models';
+import { reviewLabelKey } from '@/utils/reviewLabel';
 import { formatMoney } from '@/utils/format';
 
 const COVER_HEIGHT = 176;
 /** 卡片圆角(设计稿 20,比首页卡的 32 小) */
 const CARD_RADIUS = 20;
-/** 评分达到该分数显示 EXCELLENT(真实数据走后端 5 分制) */
-const EXCELLENT_FROM = 4.5;
 
 /** 徽章/标签配色(键名对应设计稿的色彩变量) */
 export type Tone = 'primary' | 'tint' | 'hot' | 'soft' | 'orange';
@@ -126,13 +125,14 @@ export default function HotelResultCard({
         }
       : undefined);
 
-  /* 评价档徽章:调用方没给就按评分推导 */
+  /*
+   * 评分一律按 PRD 的 10 分制展示:真实数据(调用方没给 ratingTier)后端是 5 分制,×2 换算;
+   * 演示数据本来就是设计稿的 10 分制,原样展示。评价档徽章没给就按 PRD 档位表推导。
+   */
+  const score10 = goods.rating ? (ratingTier === undefined ? goods.rating * 2 : goods.rating) : 0;
+  const tierKey = reviewLabelKey(score10);
   const shownTier =
-    ratingTier === undefined
-      ? goods.rating && goods.rating >= EXCELLENT_FROM
-        ? t('hotels.results.excellent')
-        : null
-      : ratingTier;
+    ratingTier === undefined ? (tierKey ? t(`hotels.reviewLabel.${tierKey}`).toUpperCase() : null) : ratingTier;
 
   /* 右下角徽章:调用方没给就按推荐/热门推导 */
   const shownBadge: CardBadge | null =
@@ -199,7 +199,7 @@ export default function HotelResultCard({
 
             <Text style={styles.ratingLine} numberOfLines={1}>
               <Text style={styles.ratingScore}>
-                {t('hotels.results.rating', { score: goods.rating.toFixed(1) })}{' '}
+                {t('hotels.results.rating', { score: score10.toFixed(1) })}{' '}
               </Text>
               {goods.reviewCount ? (
                 <Text style={styles.ratingCount}>

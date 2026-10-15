@@ -1,5 +1,40 @@
 # 会话交接文档(HANDOFF)
 
+### ★ 2026-10-14 订单评价页(Figma「Hotel Review」`797:1600`,成功浮层 `800:2286`,出行类型下拉 `800:2209`)
+
+**产品口径(用户定)**:按设计稿做订单评价页并对接后端,**图片最多 20 张、视频最多 3 个**(设计稿只画了照片的添加块,视频块是按要求补的同款)。
+
+- **库**:迁移 `V20261014160000__add-review-detail.sql`,`goods_review` 加 `rating_cleanliness / rating_location / rating_service / rating_amenities`(0-5,0=未评)、`traveler_type`(solo/couple/family/friends/business)、`videos`(JSON)。总体评分沿用 `rating`(1-5 必填),一单一评由 `uk_order` 保证。
+- **上传**:goods-service-app 没挂上传目录,所以评价媒体走 **user-service** 新接口 `POST /api/v1/app/user/review-media`(`ReviewMediaController`,`kind=image|video`,图 ≤10MB(JPEG/PNG/WebP)、视频 ≤50MB(MP4/MOV/WebM),按文件内容嗅探 MIME),落在 `/uploads/user/{uid}/review-{img|vid}-{随机}.{ext}`。网关新增精确 location(51m / 300s 超时);user-service `package_max_length` 加到 60MB(默认 2MB 会被 Swoole 直接 413)。
+- **goods-service**:`GET /app/hotels/review/context?orderId=`(订单摘要 + canReview/reviewed + 已评内容 + 积分/上限);`POST /app/hotels/review/add` 重写 —— 总体分必填、分项 0-5、出行类型白名单、图 ≤20 / 视频 ≤3,**媒体地址必须是本人在 review-media 上传的前缀**(外链、别人的目录、`..` 都拒),事务内写评价并**奖励 70 积分**(`user_info.points` + `user_points_log` change_type=3「评价奖励」)。公开评价列表 `/hotels/reviews` 与 admin 列表新增分项、出行类型、`videos`。
+- **admin-web**:「商品 → 评价审核」加订单ID / 出行类型 / 图片视频数量列和「详情」弹窗(分项评分、内容、图片预览组、视频播放)。
+- **client-app**:新增 `WriteReviewScreen`(头图轮播 + 酒店卡 + 奖励卡 + 五行表情评分 + 出行类型下拉 + 文本框 + 照片/视频块 + 吸底栏 + 成功浮层),`api/review.ts`、`utils/mediaPicker.ts`、`components/review/*`(表情数据由脚本从设计稿 SVG 拆成 Path,**react-native-svg 的 web 入口没有 `SvgXml`**,所以不用它)。入口:预订详情(已入住/已完成的订单显示「写评价」,评过显示「查看我的评价」,每次获焦重读)、My Pick「入住反馈」卡「去评价」(落到最近一张已入住/已完成的酒店订单)。已评过的订单打开是只读回看。选好即上传,逐个传,失败的缩略图点一下重传,上传中不能提交。i18n 三语言(缅文暂用英文兜底,需母语者复核)。设计稿右上角的「提醒 / 分享」圆钮没有对应功能,没画。
+- **踩坑**:后端 `SubmitLockMiddleware` 对「同一用户 + 同一接口」同时只放行一个在途请求,客户端并发上传会被拦成 429,所以上传并发必须是 1(别改回并发,除非给上传请求带唯一 `X-Form-Id`)。
+
+**验证**:容器内 PHP lint;client-app typecheck、admin-web build 通过。后端 API 自测:非本人订单 40401、缺总体分/外链图/别人目录/21 张图/4 个视频/非法出行类型/分项 6 分全部 40001,假图片和视频当图片被拒,正常提交 + 积分 70 到账 + 重复提交被拒。Chrome 实测 App:从 My Pick「去评价」进入,五行评分、出行类型、文字、21 张图选择只收 20、4 个视频只收 3,逐个上传 0 失败,提交后出现成功浮层,库里 20 图 3 视频 + 分项 + family;再进入是只读(文本框禁用、无添加块和 ×、按钮「已评价」);预订详情对已入住订单出现「写评价」并能进入。admin-web 详情弹窗能看到分项星级、20 张图、3 个视频。测试数据已清理(评价、积分、上传文件,订单 61/63/67 状态还原)。
+
+- **分项评分接入酒店详情(同日补)**:`/app/hotels/detail` 的 `reviewSummary` 新增 `dimensions`(清洁度 / 位置 / 服务 / 设施的平均分,1-5 保留 1 位,只统计显示中的评价且只算打了分的,没人评的项为 null;`HotelController::reviewDimensions`)。App 四处维度条(详情页评价总览、评价整页、两个关怀模式页)统一走 `screens/hotel/reviewDimensions.ts`:真实酒店只画有评分的项、一项都没有整块不画,演示酒店仍是设计稿数值;维度由原来的 清洁/服务/性价比/舒适 改为与评价页一致的 清洁度/位置/服务/设施(i18n 补 `location / amenities`)。实测:库里 3 条样例评价(清洁 5/4/未评、位置 4/5/3、设施 3/5/未评、服务全未评),接口返回 4.5 / 4.0 / null / 4.0,App 评价页签显示「卫生 4.5 / 位置 4.0 / 设施 4.0」且不画服务;样例已删。
+
+- **评分口径按 PRD 模块 11 校正(同日补)**:PRD 是 **10 分制**:单条评价得分 = (总体 + 清洁度 + 位置 + 服务 + 设施,每项 1-5)÷ 25 × 10,酒店总分 = 所有显示中评价得分的平均,保留 1 位;档位 9.0+ Exceptional / 8.0 Excellent / 7.0 Very Good / 6.0 Good / 5.0 Average / 4.0 Below Average / 3.0 Poor / 2.0 Very Poor / 1.0 Terrible;没有评价显示「New · No reviews yet」。此前总分只是 `AVG(总体评分)×2`,与公式不符。现在:`MarketplaceReader` 的酒店 `rating`(仍是 5 分制口径,App ×2 即 PRD 数值)按公式算(五项评满的取 五项和÷5,分项为 0 的老评价退回总体分);**提交评价五项必须全评**(后端 40001「请完成全部评分项」,App 同步校验,分项不再允许取消);新增 `utils/reviewLabel.ts` 按 PRD 档位表出标签,详情总览卡、评价整页(关怀)、结果卡(完整 / 关怀)统一使用;**结果卡原来显示 5 分制(评分:4.0)改为 10 分制(8.5)**,快捷筛选「评分 4 分以上」文案改为「评分 8 分以上」(阈值不变);总览卡没评价时显示「New · No reviews yet」。实测 PRD 示例(22/23/19/21 分 → 8.8/9.2/7.6/8.4)得 8.5,详情页与列表卡都显示 8.5「超赞」,样例已删。
+- **与 PRD 的差异(用户另有指示)**:PRD 写评价最多 10 张照片,按用户要求做成图片 20 张 / 视频 3 个;PRD 要求评价**先经 admin 审核再发布**(`goods_review.status` 0 待审),目前提交即显示(status=1,沿用此前行为),审核页只能事后隐藏 —— 待确认是否改为先审后显。商户端评价汇总的 `avg_rating` 仍是总体分的 5 分制平均,未按公式改。
+
+**没做 / 注意**:① 原生真机的相册权限与多选没测(只测了 web);② App 里公开的评价卡(`HotelReviewCard`)和商户端评价页还没展示单条评价的分项评分、出行类型与图片视频;③ 多房间 / 多酒店行程里每个预订是独立订单,评价按订单(每段/每间各评一次),行程总览页没有评价入口;④ 积分奖励固定 70(`HotelController::REVIEW_POINTS`),没做成后台配置;⑤ 本地验证用的订单状态是手工改库造的。
+
+### ★ 2026-10-14 使用指南:教程视频内容管理 + 图文指南接酒店用户指引(QA 表 CA_TC_104 / 105)
+
+**问题**:More → 使用指南里视频与指南都是写死的设计稿数据,点了只弹「即将开放」,没有播放页、没有内容接口、后台也没地方上传。
+
+**产品口径(用户定)**:视频直接上传到我们自己的存储;多语言,可选「通用」(所有语言都显示);本期不区分站点;现有 App 的三条教程写成迁移脚本自动入库;视频先统一用 `https://www.pexels.com/download/video/31767896/`;**图文指南只保留第一篇「酒店预订指南」,点开显示与酒店搜索页相同的用户指引**。
+
+- **库与菜单**:迁移 `V20261014150000__add-app-tutorials.sql` 建 `mtrip_system.app_tutorial`(分类 hotel/food/other、`lang`=all/en-US/zh-CN/my-MM、标题/简介/封面/视频/时长/排序/状态、软删),种子 9 行(三条教程 × 三种语言,固定主键 INSERT IGNORE),并加菜单「内容管理 → 教程管理」`config:tutorial:list` + 按钮 `config:tutorial:save/delete`(`database/seed/02-menu.sql` 同步)。
+- **后端**:system-service `TutorialController`(同 ThemeController 的跨端写法)—— App `GET /api/v1/app/tutorial/list`(无需登录,按 `X-Lang` 取「通用 + 当前语言」的已上架条目,按排序、分类排好);admin `/config/tutorial/list|save|delete`。`FileController::upload` 权限加 `config:tutorial:save`。网关:app 模块表加 `tutorial`;**新增精确 location `/api/v1/admin/sys/file/upload`(`client_max_body_size 101m`、600s 超时)**,否则 20MB 以上视频在网关就被 413 拦下。
+- **admin-web**:`views/content/tutorial/index.vue`(路径对应菜单 component)—— 筛选(关键字/分类/语言/状态)、列表(封面/语言标签/时长)、新增编辑弹窗;视频与封面都走 `FileResourcePicker`(视频 `file-types=[3]`,上传后自动回填并读取元数据填时长),语言默认「通用」。
+- **client-app**:新增 `api/tutorial.ts`、`TutorialVideoScreen`(expo-av `Video` 原生控件,新增依赖 `expo-av ~14.0.7`;地址不可用/出错显示提示)、导航 `TutorialVideo`;`GuidesScreen` 视频页签读接口(加载中/失败重试/空态,没配封面用本地默认图,时长取接口),图文页签只剩「酒店预订指南」,点击打开 `HotelGuideOverlay`(关怀模式传 `lite`);删掉 `moreDemo` 的 `GUIDE_VIDEOS/GUIDE_ARTICLES` 与 i18n 里的写死视频/另外两篇文章,三种语言新增 `categories / empty / loadFailed / playFailed`。
+
+**验证**:容器内 PHP lint;admin-web build、client-app typecheck 通过(本机没装 PHP,`scripts/check.ps1` 第 1 步会因找不到 php 失败,与代码无关)。接口:三种语言各返回 3 条、不带语言只返回「通用」、新增一条「通用」后各语言都出现、非法分类报 40001、删除生效;**30MB 文件经网关上传成功**(测试文件已删)。Chrome 实测 App:使用指南视频页签读到库里三条(按 酒店/酒店/其他 排序),点第一张卡进入播放页,Pexels 视频 `readyState=4`、时长 19.4s、无错误(浏览器策略不自动带声播放);图文指南只剩一篇,点开出现 7 步引导第 1 步「想去哪里?」。admin-web 页面本身只做了构建验证,未在浏览器里点过上传弹窗。
+
+**注意**:① 本机 8082 上之前残留的 Expo 进程不会加载新代码(页面仍是旧版),`--clear` 重启后才生效;② 迁移已按账本手工执行,账本 43/43;③ 视频地址是示例链接,上线前由运营在后台换成自己上传的;④ QA 表里其余旧的失败状态仍是过期状态,等 QA 重测。
+
 ### ★ 2026-10-14 酒店附加服务(QA 表 CA_TC_034;Merchant PRD「optional value-added services」)
 
 **产品口径(用户定)**:服务固定 7 项 —— 早餐 / 机场接送 / SPA / 洗衣 / 客房服务 / 加床 / 延迟退房;商户逐项开关、填价格、选计价方式(按人 / 按晚 / 按间,可多选,**金额 = 单价 × 选中维度乘积,都不选 = 按次**);**并入物业资料审核**;**不参与优惠券与长住折扣**;**取消退款时附加服务全额退,不受取消政策影响**。
@@ -4764,6 +4799,8 @@ Mtrip 海外旅游 SaaS 平台:后端 Hyperf 3.1 微服务(backend/)+ 平台管�
 ## 2. 当前进度(与 docs/plans/README.md 保持一致)
 
 本任务最新进度：PRD模块12商户管理S0设计及S1～S4核心开发测试已完成；S5～S7尚未开始。S4真实扫码和完整UI、S3完整上传及模块11端到端未验，详见模块15计划及阶段交付报告；下表为历史底座状态。**2026-09-18 最新一轮为「关怀模式房型详情页第三次逐节点复核(11 处照稿修正 + 税费展示位)」(client-app),见本文件顶部那条 ★;上一轮为「关怀模式实景预览页按 `2352:7051` 重做」,再上为 2026-09-17「客房管理看不出非今日订单」的根因复核与修复。**
+
+**部署修正(2026-10-13)**:`scripts/auto-deploy.sh` 对 `backend/services/<svc>/` 中 `app/`、`config/` 以外的改动(`bin/`、`test/` 等,开发栈不挂载)改为重建镜像;`--prod` 下所有后端重启改为重建镜像(生产栈不挂源码,restart 只重跑旧镜像)。新增 `deploy/.env` 的 `MTRIP_DEPLOY_MODE=dev|prod`:`mtrip.sh`/`auto-deploy.sh` 未带 `--dev`/`--prod` 时以它为准(命令行优先,缺省 dev),auto-deploy 始终把解析结果显式传给 mtrip.sh。测试服务器商户邮箱/手机号唯一性迁移被测试脏数据阻断,一次性处理脚本 `scripts/fixes/2026-10-13-merchant-contact-identity-fix.sql`(释放冲突/无哈希的测试账号联系方式并软删除)。
 
 **商户账号体系三期(2026-08-31)**:补齐平台对商户的三项管控,详见 [12-商家账号体系.md](./12-商家账号体系.md)「三期任务清单」。
 - **功能模块授权**:新表 `merchant_module_grant` + `merchant_menu.module_key`(''=公共菜单)。可见性口径 ——

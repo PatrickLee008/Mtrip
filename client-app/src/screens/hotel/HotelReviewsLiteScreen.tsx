@@ -17,7 +17,7 @@
  *   - 评论列表走 `/app/hotels/reviews` 分页(下拉刷新 / 触底翻页 / 失败重试),卡片的昵称、日期、
  *     10 分制分数取 `components/hotel/reviewFormat.ts`,与完整模式评价卡一致;
  *   - 总分取 `/hotels/detail` 的 `reviewSummary.rating × 2`,条数取列表 `total`,低于 8 分不贴 Excellent;
- *   - 维度条与 AI Summary 后端没有数据,仍是 `detailDemo` 的设计稿数值(完整模式同此状态)。
+ *   - 维度条取 `reviewSummary.dimensions` 的真实分项平均分(演示酒店用设计稿数值);AI Summary 后端没有数据,仍是设计稿文案。
  *   接口没有评论标题与「有用」计数,所以卡片不画标题行、Helpful 不带数字;Helpful / Report 仍 comingSoon。
  */
 
@@ -37,7 +37,6 @@ import LiteDetailBottomBar, {
 } from '@/components/hotel/lite/LiteDetailBottomBar';
 import { liteShared } from '@/components/hotel/lite/liteShared';
 import {
-  EXCELLENT_FROM_SCORE,
   formatReviewDate,
   reviewNickname,
   toTenPointScore,
@@ -47,9 +46,10 @@ import { fonts } from '@/config/typography';
 import type { RootStackParamList } from '@/navigation/types';
 import {
   DETAIL_DEMO,
-  DETAIL_REVIEW_SCORES,
   DETAIL_REVIEW_SUMMARY,
 } from '@/screens/hotel/detailDemo';
+import { dimensionRows, type ReviewDimensions } from '@/screens/hotel/reviewDimensions';
+import { reviewLabelKey } from '@/utils/reviewLabel';
 import { useCommonStore } from '@/store/commonStore';
 import { resolveMediaUri } from '@/utils/media';
 
@@ -131,6 +131,8 @@ export default function HotelReviewsLiteScreen() {
 
   /** 详情只取总分 / 物业名 / 底栏起价;拿不到只是不画那几项,不挡评价列表 */
   const [score, setScore] = useState(0);
+  /** 分项平均分:拿到真实详情后才有值;演示酒店(无 propertyId)保持 undefined → 设计稿演示数值 */
+  const [dimensions, setDimensions] = useState<ReviewDimensions | undefined>(undefined);
   const [propertyName, setPropertyName] = useState('');
   const [priceFrom, setPriceFrom] = useState(0);
   useEffect(() => {
@@ -141,6 +143,7 @@ export default function HotelReviewsLiteScreen() {
         const rating = d.reviewSummary?.rating;
         /* 后端 rating 是 1-5,稿面是 /10 —— ×2 换算;脏值按 0 */
         setScore(typeof rating === 'number' && Number.isFinite(rating) ? rating * 2 : 0);
+        setDimensions(d.reviewSummary?.dimensions ?? {});
         setPropertyName(d.goods_name ?? '');
         setPriceFrom(d.minPrice ?? 0);
       })
@@ -169,19 +172,23 @@ export default function HotelReviewsLiteScreen() {
   const summary = (
     <View style={[liteShared.card, styles.summaryCard]}>
       <View style={liteShared.row}>
-        <Text style={styles.score}>{score.toFixed(1)}</Text>
+        <Text style={styles.score}>{total > 0 ? score.toFixed(1) : '-'}</Text>
         <View style={liteShared.flexCol}>
-          {score >= EXCELLENT_FROM_SCORE ? (
-            <Text style={liteShared.itemTitle}>{t('hotels.results.excellent')}</Text>
-          ) : null}
+          {total > 0 && reviewLabelKey(score) ? (
+            <Text style={liteShared.itemTitle}>
+              {t(`hotels.reviewLabel.${reviewLabelKey(score)}`).toUpperCase()}
+            </Text>
+          ) : (
+            <Text style={liteShared.itemTitle}>{total > 0 ? '' : t('hotels.detail.reviews.noReviews')}</Text>
+          )}
           <Text style={liteShared.body}>
             {t('hotels.detail.reviews.basedOn', { reviews: total.toLocaleString(i18n.language) })}
           </Text>
         </View>
       </View>
 
-      {/* 维度条:后端没有分项评分,仍是设计稿数值(完整模式同此状态) */}
-      {DETAIL_REVIEW_SCORES.map((row) => (
+      {/* 维度条:真实酒店取后端分项平均分(没人评的项不画),演示酒店用设计稿数值 */}
+      {dimensionRows(dimensions).map((row) => (
         <View key={row.key} style={styles.scoreRow}>
           <Text style={[liteShared.body, styles.scoreLabel]}>
             {t(`hotels.detail.reviews.dimensions.${row.key}`)}
@@ -191,7 +198,7 @@ export default function HotelReviewsLiteScreen() {
               style={[styles.barFill, { width: `${(row.score / DETAIL_REVIEW_SUMMARY.scoreMax) * 100}%` }]}
             />
           </View>
-          <Text style={styles.scoreValue}>{row.score}</Text>
+          <Text style={styles.scoreValue}>{row.score.toFixed(1)}</Text>
         </View>
       ))}
 

@@ -20,6 +20,7 @@ use App\Controller\App\ChatController;
 use App\Controller\App\FavoriteController;
 use App\Controller\App\NotifyController;
 use App\Controller\App\ProfileSetupController;
+use App\Controller\App\ReviewMediaController;
 use App\Controller\App\ReferralController;
 use App\Controller\App\TravelerController;
 use App\Controller\App\UserController;
@@ -58,6 +59,8 @@ Router::addGroup('/api/v1/app', static function () {
     Router::post('/user/profile-setup/profile', [ProfileSetupController::class, 'saveProfile']);
     Router::post('/user/profile-setup/identity', [ProfileSetupController::class, 'submitIdentity']);
     Router::post('/user/upload', [ProfileSetupController::class, 'upload']);
+    // 订单评价的图片 / 视频上传(goods-service review/add 按本人目录前缀校验)
+    Router::post('/user/review-media', [ReviewMediaController::class, 'upload']);
 
     // 常旅客(Frequent Traveler)
     Router::get('/user/traveler/list', [TravelerController::class, 'list']);

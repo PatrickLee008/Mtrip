@@ -37,6 +37,7 @@ class AdminReviewController extends AbstractAdminController
             ->get(['r.*', 'p.store_name as property_name'])->map(static function ($row) {
                 $row = (array) $row;
                 $row['images'] = $row['images'] ? json_decode((string) $row['images'], true) : [];
+                $row['videos'] = $row['videos'] ? json_decode((string) $row['videos'], true) : [];
                 unset($row['deleted_at']);
                 return $row;
             })->all();

@@ -22,12 +22,6 @@ export const REFERRAL_RULES = [
 export const REFERRAL_PROGRESS = ['invited', 'registered', 'book', 'stay', 'reward'] as const;
 export type ReferralProgressStep = (typeof REFERRAL_PROGRESS)[number];
 
-/** 教程视频(设计稿 2206:7577 等三张卡) */
-export const GUIDE_VIDEOS = ['booking', 'register', 'cancel'] as const;
-
-/** 图文指南(设计稿 2206:8255 三张折叠卡,内容后端未提供,展开态设计稿也没画) */
-export const GUIDE_ARTICLES = ['hotelBooking', 'payment', 'cancellation'] as const;
-
 /** 条款页的五节(设计稿 1697:7426 起) */
 export const TERMS_SECTIONS = [
   { key: 'useOfService', bullets: ['age', 'confidentiality', 'legalUse'] },

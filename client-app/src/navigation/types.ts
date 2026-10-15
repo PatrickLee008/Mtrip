@@ -230,6 +230,8 @@ export type RootStackParamList = {
    * 通用的 `OrderDetail` 仍在(门票等非酒店订单、以及取消/退款动作暂时还在那边)。
    */
   BookingDetail: { orderId: number; tripId?: number };
+  /** 订单评价页(Figma「Hotel Review」`797:1600`):一单一评,已评过的单进来是只读回看 */
+  WriteReview: { orderId: number };
   /**
    * 多酒店行程详情(Figma `2142:4389`):一个 Trip 下各段住宿排成时间轴,
    * 单段的 View Details 再进 `BookingDetail`。**只读** —— 后端没有改期/改信息接口。
@@ -273,6 +275,8 @@ export type RootStackParamList = {
   ReferralStatus: undefined;
   HowReferralWorks: undefined;
   Guides: undefined;
+  /** 教程视频播放页:列表项整条带过来,不再二次请求 */
+  TutorialVideo: { id: number; category: 'hotel' | 'food' | 'other'; title: string; description: string; videoUrl: string; coverUrl: string };
   LegalTerms: undefined;
   Login: undefined;
   Register: undefined;

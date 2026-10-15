@@ -29,6 +29,7 @@ use App\Controller\Admin\SmsController;
 use App\Controller\Admin\StorageController;
 use App\Controller\App\AppSiteController;
 use App\Controller\ThemeController;
+use App\Controller\TutorialController;
 use Hyperf\HttpServer\Router\Router;
 use Mtrip\Shared\Middleware\AdminAuthMiddleware;
 use Mtrip\Shared\Middleware\OperationLogMiddleware;
@@ -44,6 +45,8 @@ Router::get('/api/v1/app/site/list', [AppSiteController::class, 'list']);
 Router::get('/api/v1/app/site/config', [AppSiteController::class, 'config']);
 // C端动态主题(无需登录,PRD 模块15)
 Router::get('/api/v1/app/theme/active', [ThemeController::class, 'active']);
+// C端教程视频列表(使用指南,无需登录)
+Router::get('/api/v1/app/tutorial/list', [TutorialController::class, 'list']);
 
 Router::addGroup('/api/v1/admin', static function () {
     // ---------- 登录态 ----------
@@ -56,6 +59,11 @@ Router::addGroup('/api/v1/admin', static function () {
     Router::get('/config/theme/list', [ThemeController::class, 'adminList']);
     Router::post('/config/theme/save', [ThemeController::class, 'save']);
     Router::post('/config/theme/delete', [ThemeController::class, 'delete']);
+
+    // ---------- 教程视频管理(使用指南 → 视频教程)----------
+    Router::get('/config/tutorial/list', [TutorialController::class, 'adminList']);
+    Router::post('/config/tutorial/save', [TutorialController::class, 'save']);
+    Router::post('/config/tutorial/delete', [TutorialController::class, 'delete']);
 
     // ---------- 模块1 管理员账号管理 ----------
     Router::get('/sys/admin/list', [AdminController::class, 'index']);

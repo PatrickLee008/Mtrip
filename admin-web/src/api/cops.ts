@@ -112,3 +112,14 @@ export function apiCampaignToggle(data: Record<string, unknown>): Promise<null> 
 export function apiCampaignDelete(data: Record<string, unknown>): Promise<null> {
   return post('/admin/marketing/campaign/delete', data);
 }
+
+// ---------- 教程管理(App 使用指南 → 视频教程)----------
+export function apiTutorialList(params: Record<string, unknown>): Promise<PageData<Row>> {
+  return get<PageData<Row>>('/admin/config/tutorial/list', params);
+}
+export function apiTutorialSave(data: Record<string, unknown>): Promise<{ id: number }> {
+  return post<{ id: number }>('/admin/config/tutorial/save', data);
+}
+export function apiTutorialDelete(data: Record<string, unknown>): Promise<null> {
+  return post<null>('/admin/config/tutorial/delete', data);
+}

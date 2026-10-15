@@ -27,11 +27,11 @@ import { PAGE_PADDING, colors, shadows } from '@/config/theme';
 import { fonts } from '@/config/typography';
 import { useSiteStore } from '@/store/siteStore';
 import type { GoodsItem } from '@/types/models';
+import { reviewLabelKey } from '@/utils/reviewLabel';
 import { formatMoney } from '@/utils/format';
 
-/** 设计稿封面高;评分达到这个分数才挂 EXCELLENT(与完整模式同一口径) */
+/** 设计稿封面高 */
 const COVER_HEIGHT = 176;
-const EXCELLENT_FROM = 4.5;
 
 interface Props {
   goods: GoodsItem;
@@ -62,7 +62,9 @@ export default function LiteHotelCard({
   const citizenPrice = goods.minPriceCitizen ?? 0;
   const hasCitizenPrice = citizen && citizenPrice > 0 && citizenPrice < goods.minPrice;
   const price = hasCitizenPrice ? citizenPrice : goods.minPrice;
-  const tier = goods.rating && goods.rating >= EXCELLENT_FROM ? t('hotels.results.excellent') : null;
+  /* 后端 rating 是 5 分制,×2 即 PRD 的 10 分制;档位按 PRD 表(与完整模式同一口径) */
+  const tierKey = reviewLabelKey((goods.rating ?? 0) * 2);
+  const tier = tierKey ? t(`hotels.reviewLabel.${tierKey}`).toUpperCase() : null;
 
   return (
     <Pressable

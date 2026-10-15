@@ -143,6 +143,8 @@ export function groupOrdersByTrip(orders: OrderItemData[]): MyPickBooking[] {
 export interface MyPickData {
   isLogin: boolean;
   orders: OrderItemData[];
+  /** 最近一张已入住 / 已完成的酒店订单 id(0 = 没有),入住反馈卡「去评价」用 */
+  latestStayOrderId: number;
   favorites: GoodsItem[];
   /**
    * 当前页签下的**列表行**(同 Trip 已归并成一条,按归并后的状态过滤)。
@@ -237,9 +239,18 @@ export function useMyPickData(): MyPickData {
     [orders, tab],
   );
 
+  /** 最近一张已入住 / 已完成的酒店订单:「入住反馈」卡的「去评价」落到它(已评过的进去是只读回看) */
+  const latestStayOrderId = useMemo(() => {
+    const stays = orders.filter(
+      (o) => o.property_id > 0 && (o.order_status === ORDER_STATUS.USED || o.order_status === ORDER_STATUS.FINISHED),
+    );
+    return stays.length > 0 ? Math.max(...stays.map((o) => o.id)) : 0;
+  }, [orders]);
+
   return {
     isLogin,
     orders,
+    latestStayOrderId,
     favorites,
     tabBookings,
     tab,

@@ -360,7 +360,7 @@ final class HotelController extends AbstractController
         $detail['roomTypes'] = $rooms;
         $detail['skus'] = $rooms;
         $detail['refundRules'] = $rules;
-        $detail['reviewSummary'] = ['rating' => $summary['rating'], 'count' => $summary['reviewCount']];
+        $detail['reviewSummary'] = ['rating' => $summary['rating'], 'count' => $summary['reviewCount'], 'dimensions' => $this->reviewDimensions($propertyId)];
         /* 附加服务:只下发已发布配置里启用的项(Enhance Your Stay),计价规则见 shared HotelAddons */
         $detail['addons'] = HotelAddons::enabled($property['addons'] ?? null);
         $detail['payAtHotel'] = self::payAtHotel(Db::table('merchant_store')->where('id', $propertyId)->value('hotel_policies'));
@@ -381,37 +381,172 @@ final class HotelController extends AbstractController
             ->where('r.status', 1)->whereNull('r.deleted_at');
         $total = (clone $query)->count();
         $list = $query->orderByDesc('r.id')->forPage($page, $pageSize)
-            ->get(['r.id', 'r.rating', 'r.content', 'r.images', 'r.reply_content', 'r.created_at', 'u.nickname', 'u.avatar'])
+            ->get(['r.id', 'r.rating', 'r.rating_cleanliness', 'r.rating_location', 'r.rating_service', 'r.rating_amenities',
+                'r.traveler_type', 'r.content', 'r.images', 'r.videos', 'r.reply_content', 'r.created_at', 'u.nickname', 'u.avatar'])
             ->map(function ($row): array {
                 $review = (array) $row;
                 $review['images'] = $this->jsonList($review['images'] ?? null);
+                $review['videos'] = $this->jsonList($review['videos'] ?? null);
                 $review['nickname'] = $review['nickname'] ?: '匿名用户';
                 return $review;
             })->all();
         return Result::page($list, $total, $page, $pageSize);
     }
 
+    /** 评价奖励积分(设计稿「Earn points 70」) */
+    public const REVIEW_POINTS = 70;
+
+    public const REVIEW_MAX_IMAGES = 20;
+
+    public const REVIEW_MAX_VIDEOS = 3;
+
+    private const TRAVELER_TYPES = ['solo', 'couple', 'family', 'friends', 'business'];
+
+    /**
+     * 评价页上下文(Figma「Hotel Review」):订单摘要 + 能不能评 + 已评内容 + 奖励积分与数量上限。
+     * 可评条件与 reviewAdd 一致:本人酒店订单、入住/完成后、未评过。
+     */
+    public function reviewContext(): array
+    {
+        $siteId = $this->requireSiteId();
+        $orderId = $this->requireId('orderId');
+        $order = (array) Db::table('order_main')->where('id', $orderId)->where('site_id', $siteId)
+            ->where('user_id', UserContext::userId())->where('order_type', 1)->whereNull('deleted_at')
+            ->first(['id', 'property_id', 'goods_name', 'sku_name', 'use_date', 'end_date', 'order_status']);
+        if ($order === []) throw new BusinessException(ErrorCode::NOT_FOUND, '酒店订单不存在');
+        $property = (array) Db::table('merchant_store')->where('id', (int) $order['property_id'])->first(['store_name', 'images']);
+        $review = (array) Db::table('goods_review')->where('order_id', $orderId)->whereNull('deleted_at')->first();
+        $reviewed = $review !== [];
+        $statusOk = in_array((int) $order['order_status'], [2, 3], true);
+        return Result::success([
+            'orderId' => $orderId,
+            'propertyId' => (int) $order['property_id'],
+            'hotelName' => (string) ($property['store_name'] ?? $order['goods_name']),
+            'roomName' => (string) ($order['sku_name'] ?: $order['goods_name']),
+            'checkIn' => $order['use_date'],
+            'checkOut' => $order['end_date'],
+            'images' => array_slice(array_values(array_filter($this->jsonList($property['images'] ?? null), 'is_string')), 0, 6),
+            'canReview' => $statusOk && ! $reviewed && (int) $order['property_id'] > 0,
+            'reviewed' => $reviewed,
+            'review' => $reviewed ? $this->reviewView($review) : null,
+            'points' => self::REVIEW_POINTS,
+            'maxImages' => self::REVIEW_MAX_IMAGES,
+            'maxVideos' => self::REVIEW_MAX_VIDEOS,
+        ]);
+    }
+
+    /**
+     * 评价分项平均分(1-5,保留 1 位小数):清洁度 / 位置 / 服务 / 设施。
+     * 只统计「显示中」的评价,且只算打了分的(0 = 没评,不拉低平均);某一项一条都没人评就是 null,
+     * App 据此不画这一条(不用设计稿的假数字顶替)。
+     */
+    private function reviewDimensions(int $propertyId): array
+    {
+        $columns = ['cleanliness' => 'rating_cleanliness', 'location' => 'rating_location', 'service' => 'rating_service', 'amenities' => 'rating_amenities'];
+        $selects = [];
+        foreach ($columns as $key => $column) {
+            $selects[] = "AVG(NULLIF({$column}, 0)) AS {$key}";
+        }
+        $row = (array) Db::table('goods_review')->where('property_id', $propertyId)->where('status', 1)->whereNull('deleted_at')
+            ->selectRaw(implode(', ', $selects))->first();
+        $result = [];
+        foreach ($columns as $key => $column) {
+            $result[$key] = isset($row[$key]) && $row[$key] !== null ? round((float) $row[$key], 1) : null;
+        }
+        return $result;
+    }
+
+    private function reviewView(array $review): array
+    {
+        return [
+            'id' => (int) $review['id'],
+            'rating' => (int) $review['rating'],
+            'rating_cleanliness' => (int) $review['rating_cleanliness'],
+            'rating_location' => (int) $review['rating_location'],
+            'rating_service' => (int) $review['rating_service'],
+            'rating_amenities' => (int) $review['rating_amenities'],
+            'traveler_type' => (string) $review['traveler_type'],
+            'content' => (string) $review['content'],
+            'images' => $this->jsonList($review['images'] ?? null),
+            'videos' => $this->jsonList($review['videos'] ?? null),
+            'created_at' => $review['created_at'],
+        ];
+    }
+
+    /** 分项评分:PRD 要求清洁度/位置/服务/设施每项都必须评 1-5 分(酒店总分 = 五项之和 ÷ 25 × 10) */
+    private function subRating(string $key): int
+    {
+        $value = $this->intInput($key);
+        if ($value < 1 || $value > 5) throw new BusinessException(ErrorCode::PARAM_ERROR, '请完成全部评分项(每项1-5分)');
+        return $value;
+    }
+
+    /** 评价媒体地址:必须是本人在 review-media 接口上传的文件(user-service 写入 /uploads/user/{uid}/review-{img|vid}-*) */
+    private function reviewMedia(string $key, string $tag, int $max, string $label): array
+    {
+        $raw = $this->input($key);
+        if ($raw === null || $raw === '') return [];
+        if (! is_array($raw)) throw new BusinessException(ErrorCode::PARAM_ERROR, $label . '格式不正确');
+        $prefix = '/uploads/user/' . UserContext::userId() . '/review-' . $tag . '-';
+        $urls = [];
+        foreach ($raw as $url) {
+            if (! is_string($url) || ! str_starts_with($url, $prefix) || str_contains($url, '..') || mb_strlen($url) > 255) {
+                throw new BusinessException(ErrorCode::PARAM_ERROR, $label . '地址无效,请重新上传');
+            }
+            $urls[$url] = $url;
+        }
+        $urls = array_values($urls);
+        if (count($urls) > $max) throw new BusinessException(ErrorCode::PARAM_ERROR, $label . '最多 ' . $max . ' 个');
+        return $urls;
+    }
+
     public function reviewAdd(): array
     {
         $siteId = $this->requireSiteId();
         $orderId = $this->requireId('orderId');
-        $rating = $this->intInput('rating', 5);
-        if ($rating < 1 || $rating > 5) throw new BusinessException(ErrorCode::PARAM_ERROR, '评分须为1-5');
+        $rating = $this->intInput('rating', 0);
+        if ($rating < 1 || $rating > 5) throw new BusinessException(ErrorCode::PARAM_ERROR, '请先给总体评分(1-5)');
+        $sub = [
+            'rating_cleanliness' => $this->subRating('ratingCleanliness'),
+            'rating_location' => $this->subRating('ratingLocation'),
+            'rating_service' => $this->subRating('ratingService'),
+            'rating_amenities' => $this->subRating('ratingAmenities'),
+        ];
+        $traveler = $this->strInput('travelerType');
+        if ($traveler !== '' && ! in_array($traveler, self::TRAVELER_TYPES, true)) throw new BusinessException(ErrorCode::PARAM_ERROR, '出行类型不正确');
+        $images = $this->reviewMedia('images', 'img', self::REVIEW_MAX_IMAGES, '图片');
+        $videos = $this->reviewMedia('videos', 'vid', self::REVIEW_MAX_VIDEOS, '视频');
+        $userId = UserContext::userId();
         $order = (array) Db::table('order_main')->where('id', $orderId)->where('site_id', $siteId)
-            ->where('user_id', UserContext::userId())->where('order_type', 1)->whereNull('deleted_at')
+            ->where('user_id', $userId)->where('order_type', 1)->whereNull('deleted_at')
             ->first(['id', 'property_id', 'order_status']);
         if ($order === []) throw new BusinessException(ErrorCode::NOT_FOUND, '酒店订单不存在');
         if (! in_array((int) $order['order_status'], [2, 3], true)) throw new BusinessException(ErrorCode::DATA_CONFLICT, '入住/完成后方可评价');
         if ((int) $order['property_id'] < 1) throw new BusinessException(ErrorCode::DATA_CONFLICT, '历史订单未归属物业，暂无法评价');
         if (Db::table('goods_review')->where('order_id', $orderId)->exists()) throw new BusinessException(ErrorCode::DATA_CONFLICT, '该订单已评价');
-        $images = $this->input('images');
-        Db::table('goods_review')->insert([
-            'site_id' => $siteId, 'property_id' => (int) $order['property_id'], 'goods_id' => 0,
-            'user_id' => UserContext::userId(), 'order_id' => $orderId, 'rating' => $rating,
-            'content' => mb_substr($this->strInput('content'), 0, 2000),
-            'images' => is_array($images) ? json_encode($images, JSON_UNESCAPED_UNICODE) : null, 'status' => 1,
-        ]);
-        return Result::success(null, '评价已提交');
+
+        Db::transaction(function () use ($siteId, $order, $orderId, $userId, $rating, $sub, $traveler, $images, $videos): void {
+            Db::table('goods_review')->insert([
+                'site_id' => $siteId, 'property_id' => (int) $order['property_id'], 'goods_id' => 0,
+                'user_id' => $userId, 'order_id' => $orderId, 'rating' => $rating,
+                'traveler_type' => $traveler,
+                'content' => mb_substr($this->strInput('content'), 0, 2000),
+                'images' => $images === [] ? null : json_encode($images, JSON_UNESCAPED_UNICODE),
+                'videos' => $videos === [] ? null : json_encode($videos, JSON_UNESCAPED_UNICODE),
+                'status' => 1,
+            ] + $sub);
+            // 奖励积分:评价成功才发,同一订单只会走到这里一次(uk_order 兜底)
+            $user = Db::table('user_info')->where('id', $userId)->lockForUpdate()->first(['id', 'points']);
+            if ($user) {
+                $after = (int) $user->points + self::REVIEW_POINTS;
+                Db::table('user_info')->where('id', $userId)->update(['points' => $after]);
+                Db::table('user_points_log')->insert([
+                    'site_id' => $siteId, 'user_id' => $userId, 'change_type' => 3, 'points' => self::REVIEW_POINTS,
+                    'after_points' => $after, 'order_id' => $orderId, 'remark' => '评价奖励',
+                ]);
+            }
+        });
+        return Result::success(['points' => self::REVIEW_POINTS], '评价已提交');
     }
 
     public function calendar(): array

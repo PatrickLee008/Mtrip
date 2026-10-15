@@ -43,7 +43,9 @@ final class MarketplaceReader
             ->selectRaw('(SELECT COUNT(*) FROM hotel_room_type r WHERE r.property_id=s.id AND r.site_id=s.site_id AND r.status=1 AND r.publish_status=2 AND r.approved_version>0 AND r.deleted_at IS NULL) as room_count')
             ->selectRaw('(SELECT MIN(base_price) FROM hotel_room_type r WHERE r.property_id=s.id AND r.site_id=s.site_id AND r.status=1 AND r.publish_status=2 AND r.approved_version>0 AND r.deleted_at IS NULL) as min_price')
             ->selectRaw('(SELECT MIN(base_price_citizen) FROM hotel_room_type r WHERE r.property_id=s.id AND r.site_id=s.site_id AND r.status=1 AND r.publish_status=2 AND r.approved_version>0 AND r.deleted_at IS NULL AND r.base_price_citizen>0) as min_price_citizen')
-            ->selectRaw('(SELECT COALESCE(AVG(rating),0) FROM goods_review r WHERE r.property_id=s.id AND r.site_id=s.site_id AND r.status=1 AND r.deleted_at IS NULL) as rating')
+            // 酒店总分(5 分制口径,App ×2 即 PRD 的 10 分制):每条评价 = 总体 + 清洁/位置/服务/设施 五项之和 ÷ 25 × 10 ÷ 2(即 ÷5),再对所有显示中的评价取平均;
+            // 五项没评满的老评价(分项为 0)退回总体评分
+            ->selectRaw('(SELECT COALESCE(AVG(CASE WHEN r.rating_cleanliness>0 AND r.rating_location>0 AND r.rating_service>0 AND r.rating_amenities>0 THEN (r.rating+r.rating_cleanliness+r.rating_location+r.rating_service+r.rating_amenities)/5 ELSE r.rating END),0) FROM goods_review r WHERE r.property_id=s.id AND r.site_id=s.site_id AND r.status=1 AND r.deleted_at IS NULL) as rating')
             ->selectRaw('(SELECT COUNT(*) FROM goods_review r WHERE r.property_id=s.id AND r.site_id=s.site_id AND r.status=1 AND r.deleted_at IS NULL) as review_count')
             ->selectRaw('(SELECT COUNT(*) FROM order_main o WHERE o.property_id=s.id AND o.site_id=s.site_id AND o.order_type=1 AND o.order_status IN (1,2,3) AND o.deleted_at IS NULL) as sales_count')
             ->selectRaw('(SELECT COUNT(*) FROM hotel_room_type r WHERE r.property_id=s.id AND r.site_id=s.site_id AND r.breakfast>0 AND r.status=1 AND r.publish_status=2 AND r.approved_version>0 AND r.deleted_at IS NULL) as breakfast_room_count')

@@ -168,7 +168,7 @@ class FileController extends AbstractController
         return Result::success(null, '目录已删除');
     }
 
-    #[Permission(['config:storage:upload', 'config:theme:save'])]
+    #[Permission(['config:storage:upload', 'config:theme:save', 'config:tutorial:save'])]
     public function upload(): array
     {
         /** @var UploadedFile|null $file */

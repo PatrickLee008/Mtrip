@@ -204,7 +204,12 @@ export interface GoodsDetail extends GoodsItem {
    * 评价聚合(`/app/hotels/detail` 下发,普通 `/app/goods/detail` 没有)。
    * `rating` 是 **1-5** 分制 —— 页面按 ×2 换算成设计稿的 10 分制,与搜索结果页同一口径。
    */
-  reviewSummary?: { rating: number; count: number };
+  reviewSummary?: {
+    rating: number;
+    count: number;
+    /** 分项平均分(1-5):清洁度 / 位置 / 服务 / 设施;没人评的项是 null */
+    dimensions?: Partial<Record<'cleanliness' | 'location' | 'service' | 'amenities', number | null>>;
+  };
 }
 
 /** 价格库存日历项 */

@@ -52,6 +52,7 @@ import StayDetailScreen from '@/screens/hotel/StayDetailScreen';
 import AccountScreen from '@/screens/more/AccountScreen';
 import EditEmailScreen from '@/screens/more/EditEmailScreen';
 import GuidesScreen from '@/screens/more/GuidesScreen';
+import TutorialVideoScreen from '@/screens/more/TutorialVideoScreen';
 import HowReferralWorksScreen from '@/screens/more/HowReferralWorksScreen';
 import LegalTermsScreen from '@/screens/more/LegalTermsScreen';
 import ReferralScreen from '@/screens/more/ReferralScreen';
@@ -63,6 +64,7 @@ import NotificationScreen from '@/screens/notification/NotificationScreen';
 import OrderConfirmScreen from '@/screens/order/OrderConfirmScreen';
 import BookingCancelledScreen from '@/screens/order/BookingCancelledScreen';
 import BookingDetailScreen from '@/screens/order/BookingDetailScreen';
+import WriteReviewScreen from '@/screens/order/WriteReviewScreen';
 import CancelBookingScreen from '@/screens/order/CancelBookingScreen';
 import OrderDetailScreen from '@/screens/order/OrderDetailScreen';
 import TripDetailScreen from '@/screens/order/TripDetailScreen';
@@ -320,6 +322,11 @@ export default function AppNavigator() {
         />
         {/* 酒店订单详情(Figma 2659:16092)自带悬浮顶栏与图库,关掉 Stack 头 */}
         <Stack.Screen
+          name="WriteReview"
+          component={WriteReviewScreen}
+          options={{ title: t('order.review.title'), headerShown: false }}
+        />
+        <Stack.Screen
           name="BookingDetail"
           component={BookingDetailScreen}
           options={{ title: t('order.bookingDetail.title'), headerShown: false }}
@@ -381,6 +388,11 @@ export default function AppNavigator() {
         <Stack.Screen
           name="Guides"
           component={GuidesScreen}
+          options={{ title: t('more.guides.title'), headerShown: false }}
+        />
+        <Stack.Screen
+          name="TutorialVideo"
+          component={TutorialVideoScreen}
           options={{ title: t('more.guides.title'), headerShown: false }}
         />
         <Stack.Screen
