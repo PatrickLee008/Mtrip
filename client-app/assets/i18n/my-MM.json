@@ -964,24 +964,44 @@
       "system": "စနစ်",
       "booking": "မှာယူမှု"
     },
-    "items": {
-      "version12": {
-        "title": "ဗားရှင်းအသစ် ရနိုင်ပါပြီ",
-        "body": "ဗားရှင်း 1.2 ထွက်ရှိပြီ"
+    "events": {
+      "booking_confirmed": {
+        "title": "Booking confirmed",
+        "body": "Your booking at {{hotel}} ({{orderNo}}) for {{checkIn}} - {{checkOut}} is confirmed. Tap to view your voucher."
       },
-      "version11": {
-        "title": "ဗားရှင်းအသစ် ရနိုင်ပါပြီ",
-        "body": "ဗားရှင်း 1.1 ထွက်ရှိပြီ"
+      "booking_cancelled": {
+        "title": "Booking cancelled",
+        "body": "Your booking at {{hotel}} ({{orderNo}}) has been cancelled.",
+        "body_guest": "You cancelled your booking at {{hotel}} ({{orderNo}}).",
+        "body_hotel": "The hotel cancelled your booking at {{hotel}} ({{orderNo}}). Our support team can help you find an alternative.",
+        "body_platform": "mTrip cancelled your booking at {{hotel}} ({{orderNo}}). Our support team can help you find an alternative."
       },
-      "bookingConfirmed": {
-        "title": "မှာယူမှု အတည်ပြုပြီး",
-        "body": "Hotel Mindama တွင် သင့်မှာယူမှုကို အတည်ပြုပြီးဖြစ်ပြီး ပူးတွဲစာရွက်စာတမ်းများကို အီးမေးလ်ဖြင့် ပို့ပြီးပါပြီ။"
+      "booking_expired": {
+        "title": "Booking cancelled",
+        "body": "Your booking at {{hotel}} ({{orderNo}}) was cancelled because payment was not completed in time."
       },
-      "bookingCancelled": {
-        "title": "မှာယူမှု ပယ်ဖျက်ပြီး",
-        "body": "Hotel Mindama တွင် သင့်မှာယူမှုကို ပယ်ဖျက်လိုက်ပါပြီ။"
+      "refund_requested": {
+        "title": "Cancellation requested",
+        "body": "Your cancellation for {{hotel}} ({{orderNo}}) was submitted. A refund of {{amount}} to your mTrip Wallet is pending review."
+      },
+      "refund_completed": {
+        "title": "Refund completed",
+        "body": "A refund of {{amount}} for {{hotel}} ({{orderNo}}) has been credited to your mTrip Wallet."
+      },
+      "review_request": {
+        "title": "How was your stay?",
+        "body": "Share your experience at {{hotel}} and earn loyalty points. Tap to write a review."
+      },
+      "appeal_result": {
+        "title": "Appeal result",
+        "body": "Your account appeal has been reviewed.",
+        "body_approved": "Your appeal was approved. Your account has been restored.",
+        "body_rejected": "Your appeal was rejected. The restriction on your account remains.",
+        "body_banned": "After review, your account has been banned."
       }
-    }
+    },
+    "loadFailed": "Failed to load. Tap to retry",
+    "loadMore": "Load more"
   },
   "splash": {
     "chooseLanguage": "ဆက်လက်ရန် ဘာသာစကားရွေးပါ",

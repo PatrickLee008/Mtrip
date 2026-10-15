@@ -10,6 +10,7 @@ use Mtrip\Shared\Constants\ErrorCode;
 use Mtrip\Shared\Context\AdminContext;
 use Mtrip\Shared\Exception\BusinessException;
 use Mtrip\Shared\Support\Result;
+use Mtrip\Shared\Support\UserNotify;
 
 /**
  * 管理端风控与申诉(PRD 模块10.1):风控看板 + 申诉队列处理
@@ -77,6 +78,14 @@ class AdminRiskController extends AbstractAdminController
             }
             // action=2 维持:仅记录处理结果,不变更账号
         });
+        // 申诉结果站内通知(PRD 模块 10.1:申诉结果在 App 内通知用户),后置容错
+        try {
+            UserNotify::send((int) $appeal['site_id'], $userId, 'appeal_result', [
+                'result' => [1 => 'approved', 2 => 'rejected', 3 => 'banned'][$action],
+                'remark' => $remark,
+            ], $id);
+        } catch (\Throwable) {
+        }
         return Result::success(null, '申诉已处理');
     }
 

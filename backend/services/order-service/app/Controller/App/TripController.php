@@ -8,7 +8,6 @@ use App\Controller\AbstractController;
 
 use App\Service\Booking\BookingEventService;
 use App\Service\Booking\BookingLifecycleService;
-use App\Service\NotifyService;
 use App\Service\OrderStockService;
 use App\Service\PaymentResultHandler;
 use App\Service\PricingService;
@@ -24,6 +23,7 @@ use Mtrip\Shared\Merchant\MerchantAccessGuard;
 use Mtrip\Shared\Support\CryptoHelper;
 use Mtrip\Shared\Support\OrderNoGenerator;
 use Mtrip\Shared\Support\Result;
+use Mtrip\Shared\Support\UserNotify;
 
 /**
  * C端多酒店 Trip(PRD 模块 1.1):一次结账多家酒店 → 单笔支付 → 支付后各预订独立。
@@ -40,9 +40,6 @@ class TripController extends AbstractController
 
     #[Inject]
     protected SettlementService $settlementService;
-
-    #[Inject]
-    protected NotifyService $notifyService;
 
     #[Inject]
     protected BookingLifecycleService $bookingLifecycle;
@@ -279,15 +276,12 @@ class TripController extends AbstractController
             return ['siteId' => (int) $trip['site_id'], 'userId' => (int) $trip['user_id'], 'tripNo' => (string) $trip['trip_no'], 'codes' => $codes, 'orders' => array_map(static fn ($x) => (array) $x, $bookings->all())];
         });
 
-        // 预订确认通知(整单一次,后置容错)
-        try {
-            $this->notifyService->pushOrder(
-                $snap['siteId'], $snap['userId'], 'booking_confirmed',
-                'Trip 预订已确认',
-                "您的行程 {$snap['tripNo']} 下 " . count($snap['codes']) . ' 个酒店预订已全部确认,可在「我的预订」查看各凭证。',
-                $this->requireId('tripId'),
-            );
-        } catch (\Throwable) {
+        // 预订确认站内通知:PRD 1.1「支付确认一次、预订确认逐个发」,每个预订各一条(后置容错)
+        foreach ($snap['orders'] as $o) {
+            try {
+                UserNotify::order($o, 'booking_confirmed');
+            } catch (\Throwable) {
+            }
         }
         // 商户通知:逐预订通知对应酒店(事件后置容错)
         foreach ($snap['orders'] as $o) {

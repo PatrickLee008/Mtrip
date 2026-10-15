@@ -16,6 +16,7 @@ use Mtrip\Shared\Context\AdminContext;
 use Mtrip\Shared\Exception\BusinessException;
 use Mtrip\Shared\Support\OrderNoGenerator;
 use Mtrip\Shared\Support\Result;
+use Mtrip\Shared\Support\UserNotify;
 
 /**
  * 退款管理(文档 6.4.1 退款审核)
@@ -233,6 +234,11 @@ class AdminRefundController extends AbstractAdminController
                 'fullRefund' => $fullRefund,
             ], 'refund');
         });
+        // 住客站内通知:退款到账(PRD 模块 10 / 退款到账通知),后置容错
+        try {
+            UserNotify::order($order, 'refund_completed', ['amount' => $refundAmount, 'toWallet' => $toWallet]);
+        } catch (\Throwable) {
+        }
         $channelMsg = $toWallet ? '已退入 mTrip 钱包' : '已原路退回';
         return Result::success(null, ($fullRefund ? '退款已完成,订单已关闭并回补库存' : '部分退款已完成,订单继续有效') . ",{$channelMsg}");
     }

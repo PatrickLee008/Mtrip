@@ -8,6 +8,7 @@ use App\Constants\BookingConst;
 use App\Service\OrderStockService;
 use Hyperf\DbConnection\Db;
 use Hyperf\Di\Annotation\Inject;
+use Mtrip\Shared\Support\UserNotify;
 
 /**
  * 预订支付超时服务(实现方案 §2.3):每分钟扫描到期未支付预订,
@@ -90,6 +91,10 @@ class BookingExpiryService
             foreach ([$order, ...$closedSiblings] as $expired) {
                 try {
                     $this->notify->push($expired, '预订支付超时已取消', "预订「{$expired['goods_name']}」(订单 {$expired['order_no']})住客未在时限内支付,已自动取消并释放库存。");
+                } catch (\Throwable) {
+                }
+                try {
+                    UserNotify::order($expired, 'booking_expired');
                 } catch (\Throwable) {
                 }
             }

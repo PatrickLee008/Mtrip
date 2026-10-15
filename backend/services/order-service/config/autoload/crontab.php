@@ -13,5 +13,8 @@ return [
         // Merchant App M4 §9.3:PMS/CM 同步 Outbox 到期任务处理(重试退避/失败通知)
         (new Crontab())->setName('booking-sync-outbox')->setRule('* * * * *')
             ->setCallback([\App\Service\Booking\BookingSyncService::class, 'processDueTasks']),
+        // Consumer App PRD 模块 10:离店 1 天后未评价的预订发「邀请评价」站内通知(每单一次)
+        (new Crontab())->setName('booking-review-request')->setRule('17 * * * *')
+            ->setCallback([\App\Service\Booking\ReviewRequestService::class, 'sendDue']),
     ],
 ];

@@ -13,6 +13,7 @@ use Hyperf\Di\Annotation\Inject;
 use Mtrip\Shared\Constants\ErrorCode;
 use Mtrip\Shared\Exception\BusinessException;
 use Mtrip\Shared\Support\OrderNoGenerator;
+use Mtrip\Shared\Support\UserNotify;
 
 /**
  * 预订退款服务(实现方案 §7.1):按下单时冻结的政策快照试算/发起/跟踪退款。
@@ -196,6 +197,10 @@ class BookingRefundService
             return ['refundNo' => $refundNo, 'refundAmount' => $refundAmount, 'fullRefund' => $fullRefund, 'order' => $order];
         });
 
+        try {
+            UserNotify::order($result['order'], 'refund_completed', ['amount' => $result['refundAmount']]);
+        } catch (\Throwable) {
+        }
         try {
             $this->notify->push($result['order'], '预订退款已处理', "预订「{$result['order']['goods_name']}」(订单 {$result['order']['order_no']})已退款 {$result['refundAmount']}(" . ($result['fullRefund'] ? '全额' : '部分') . '),退入住客 mTrip 钱包。');
         } catch (\Throwable) {

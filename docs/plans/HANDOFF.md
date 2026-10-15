@@ -1,5 +1,14 @@
 # 会话交接文档(HANDOFF)
 
+### ★ 2026-10-15 C 端站内通知接通(Consumer App PRD 模块 10 Notification Center)
+
+**背景**:后端早有 `notify_record` + user-service 列表/未读/已读接口,但只在两处写入(单房型支付确认、住客申请退款),文案写死中文;Trip 整单只发一条;App 通知页是设计稿假数据。本轮按「不依赖第三方」的范围补齐:站内信全链路 + 多语言;**Push / SMS / Email 仍未接**(要先定服务商与账号)。
+
+- **唯一写入口** shared `Mtrip\Shared\Support\UserNotify`:一条通知 = `event_key` + `params`(JSON 变量);App 按当前语言用 i18n `notifications.events.*` 渲染,库里 `title/content` 只存英文兜底(旧数据 params 为 NULL 时 App 回落到它)。迁移 `V20261015090000__add-notify-params.sql` 加 `params` 列与 `(event_key, biz_id)` 索引。order-service 原 `NotifyService` 已删除。新增事件三处同改:`UserNotify::EVENTS`、App i18n、通知页跳转映射。
+- **事件**:`booking_confirmed`(单房型支付 + **Trip 每个预订各一条**,PRD 1.1)、`booking_cancelled`(`BookingLifecycleService::cancel`,覆盖住客取消待支付单 / 商户取消 / 平台取消,`by=guest|hotel|platform`,连带关闭的同 Trip 预订也通知)、`booking_expired`(支付超时自动取消)、`refund_requested`(住客申请退款,原来误用 booking_cancelled)、`refund_completed`(商户退款 `BookingRefundService::apply` + 平台确认到账 `AdminRefundController::confirm`)、`review_request`(新定时任务 `booking-review-request` 每小时 17 分跑 `ReviewRequestService::sendDue`:已入住/已完成、离店满 1 天且在 30 天内、未评价、未发过,单批 500)、`appeal_result`(user-service `AdminRiskController::appealHandle`,`result=approved|rejected|banned`,进 System 页签)。全部在主事务之后调用并 try/catch,通知失败不影响业务。
+- **接口**:`/app/user/notify/list` 新增 `bizType` 过滤(1 订单 / 其他 = 系统)并下发 `params`。
+- **App**:`NotificationScreen` 接真实接口(两个页签各自分页、加载更多、加载失败重试),按事件渲染文案(取消方 / 申诉结果有子文案,金额按站点币种格式化,取消类标题红色),点击标已读,订单类跳预订详情、「邀请评价」直接进评价页;删除 `notificationDemo.ts` 与 i18n 里的假数据。`HomeHeader` 铃铛加未读红点(登录后每次获焦读未读数,首页 / 我的精选 / 两个关怀模式页共用)。i18n 三语言(缅文暂用英文兜底)。
+
 ### ★ 2026-10-14 订单评价页(Figma「Hotel Review」`797:1600`,成功浮层 `800:2286`,出行类型下拉 `800:2209`)
 
 **产品口径(用户定)**:按设计稿做订单评价页并对接后端,**图片最多 20 张、视频最多 3 个**(设计稿只画了照片的添加块,视频块是按要求补的同款)。

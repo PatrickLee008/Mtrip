@@ -1,5 +1,7 @@
 # Mtrip 海外旅游 SaaS 平台
 
+C 端站内通知接通（2026-10-15，PRD 模块 10）：shared `UserNotify` 统一写 `notify_record`（事件键 + 变量，App 按当前语言渲染），事件补齐预订确认（Trip 逐个预订）、取消（住客 / 酒店 / 平台）、支付超时、取消申请、退款到账、离店 1 天后邀请评价（新定时任务）、申诉结果；App 通知页接真实接口并按页签分页，首页铃铛加未读红点；迁移 `V20261015090000`。Push / SMS / Email 仍待接服务商。
+
 订单评价页（2026-10-14，Figma「Hotel Review」）：App 新增评价页（五项表情评分 + 出行类型 + 文字 + 图片最多 20 张 / 视频最多 3 个，选好即上传，评价成功奖励 70 积分），入口在预订详情与 My Pick「入住反馈」卡；后端新增 `GET /app/hotels/review/context`、重写 `POST /app/hotels/review/add`，媒体上传走 user-service `/app/user/review-media`（网关 51MB 专用 location）；`goods_review` 加分项评分 / 出行类型 / 视频字段（迁移 `V20261014160000`）；admin「评价审核」加详情弹窗（分项评分、图片、视频）。
 
 使用指南教程视频内容管理（2026-10-14，QA CA_TC_104/105）：admin-web 新增「内容管理 → 教程管理」，视频/封面上传到我们自己的存储（网关放开 101MB 上传），语言可选「通用」或单一语言，本期不分站点；App 使用指南视频页签读 `GET /api/v1/app/tutorial/list`（按 X-Lang）并新增 expo-av 播放页；图文指南只保留「酒店预订指南」，点开显示与酒店搜索页相同的用户指引；原三条教程由迁移 `V20261014150000` 写入（视频地址暂用 pexels 示例）。

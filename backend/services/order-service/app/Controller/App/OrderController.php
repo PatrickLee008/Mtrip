@@ -10,7 +10,6 @@ use App\Service\Booking\BookingEventService;
 use App\Service\Booking\BookingLifecycleService;
 use App\Service\Booking\BookingNotificationService;
 use App\Service\FraudService;
-use App\Service\NotifyService;
 use App\Service\OrderStockService;
 use App\Service\PaymentResultHandler;
 use App\Service\PricingService;
@@ -27,6 +26,7 @@ use Mtrip\Shared\Support\CryptoHelper;
 use Mtrip\Shared\Support\MaskHelper;
 use Mtrip\Shared\Support\OrderNoGenerator;
 use Mtrip\Shared\Support\Result;
+use Mtrip\Shared\Support\UserNotify;
 
 /**
  * C端订单接口:下单/支付(本期mock)/列表/详情/取消/退款申请/核销码
@@ -39,9 +39,6 @@ class OrderController extends AbstractController
 
     #[Inject]
     protected WalletService $walletService;
-
-    #[Inject]
-    protected NotifyService $notifyService;
 
     #[Inject]
     protected FraudService $fraudService;
@@ -338,12 +335,7 @@ class OrderController extends AbstractController
 
         // 预订确认站内通知(事件后置,失败不影响支付结果)
         try {
-            $this->notifyService->pushOrder(
-                $result['siteId'], $result['userId'], 'booking_confirmed',
-                '预订已确认',
-                "您的预订「{$result['goodsName']}」(订单 {$result['orderNo']})已确认,可在「我的预订」查看凭证。",
-                $orderId,
-            );
+            UserNotify::order($result['order'], 'booking_confirmed');
         } catch (\Throwable) {
         }
         // 商户通知:新预订支付确认(事件后置容错)
@@ -528,14 +520,9 @@ class OrderController extends AbstractController
             ];
         });
 
-        // 预订取消/退款站内通知(事件后置,失败不影响退款申请)
+        // 住客取消(申请退款)站内通知(事件后置,失败不影响退款申请)
         try {
-            $this->notifyService->pushOrder(
-                $snap['siteId'], $snap['userId'], 'booking_cancelled',
-                '退款申请已提交',
-                "您的预订「{$snap['goodsName']}」(订单 {$snap['orderNo']})退款申请已提交,预计退回 mTrip 钱包 {$snap['refundAmount']},审核通过后到账。",
-                $orderId,
-            );
+            UserNotify::order($snap['order'], 'refund_requested', ['amount' => $snap['refundAmount']]);
         } catch (\Throwable) {
         }
         if ($snap['orderType'] === 1) {

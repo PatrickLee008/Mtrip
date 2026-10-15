@@ -13,6 +13,7 @@ use Hyperf\DbConnection\Db;
 use Hyperf\Di\Annotation\Inject;
 use Mtrip\Shared\Constants\ErrorCode;
 use Mtrip\Shared\Exception\BusinessException;
+use Mtrip\Shared\Support\UserNotify;
 
 /**
  * 预订生命周期服务(实现方案-Merchant-M4 §5/§7.1):
@@ -297,6 +298,18 @@ class BookingLifecycleService
         $this->notifyQuietly($order, '预订已取消', "预订「{$order['goods_name']}」(订单 {$order['order_no']})已取消,原因:{$order['cancel_reason']}。");
         foreach ($closedSiblings as $sibling) {
             $this->notifyQuietly($sibling, '预订已取消', "预订「{$sibling['goods_name']}」(订单 {$sibling['order_no']})已取消,原因:{$sibling['cancel_reason']}。");
+        }
+        // 住客站内通知(PRD 模块 10:用户或酒店取消都要通知),by 区分取消方,App 据此出文案
+        $by = match ($operatorType) {
+            BookingConst::OPERATOR_GUEST => 'guest',
+            BookingConst::OPERATOR_PLATFORM => 'platform',
+            default => 'hotel',
+        };
+        foreach ([$order, ...$closedSiblings] as $cancelled) {
+            try {
+                UserNotify::order($cancelled, 'booking_cancelled', ['by' => $by]);
+            } catch (\Throwable) {
+            }
         }
         return $order;
     }

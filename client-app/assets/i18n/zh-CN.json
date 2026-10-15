@@ -964,24 +964,44 @@
       "system": "系统",
       "booking": "订单"
     },
-    "items": {
-      "version12": {
-        "title": "有新版本可用",
-        "body": "版本 1.2 已发布"
-      },
-      "version11": {
-        "title": "有新版本可用",
-        "body": "版本 1.1 已发布"
-      },
-      "bookingConfirmed": {
+    "events": {
+      "booking_confirmed": {
         "title": "预订已确认",
-        "body": "你在 Hotel Mindama 的预订已确认,相关凭证已发送至邮箱。"
+        "body": "您在 {{hotel}} 的预订({{orderNo}},{{checkIn}} 至 {{checkOut}})已确认,点击查看预订凭证。"
       },
-      "bookingCancelled": {
+      "booking_cancelled": {
         "title": "预订已取消",
-        "body": "你在 Hotel Mindama 的预订已取消。"
+        "body": "您在 {{hotel}} 的预订({{orderNo}})已取消。",
+        "body_guest": "您已取消在 {{hotel}} 的预订({{orderNo}})。",
+        "body_hotel": "酒店取消了您在 {{hotel}} 的预订({{orderNo}}),客服可协助您另寻酒店。",
+        "body_platform": "mTrip 取消了您在 {{hotel}} 的预订({{orderNo}}),客服可协助您另寻酒店。"
+      },
+      "booking_expired": {
+        "title": "预订已取消",
+        "body": "您在 {{hotel}} 的预订({{orderNo}})因未在时限内完成支付,已自动取消。"
+      },
+      "refund_requested": {
+        "title": "取消申请已提交",
+        "body": "您在 {{hotel}} 的预订({{orderNo}})取消申请已提交,{{amount}} 退款待审核后退回 mTrip 钱包。"
+      },
+      "refund_completed": {
+        "title": "退款已到账",
+        "body": "{{hotel}} 预订({{orderNo}})的退款 {{amount}} 已退回您的 mTrip 钱包。"
+      },
+      "review_request": {
+        "title": "这次入住怎么样?",
+        "body": "分享您在 {{hotel}} 的入住体验,即可获得积分。点击去评价。"
+      },
+      "appeal_result": {
+        "title": "申诉结果",
+        "body": "您的账号申诉已处理。",
+        "body_approved": "您的申诉已通过,账号已恢复正常。",
+        "body_rejected": "您的申诉未通过,账号限制维持不变。",
+        "body_banned": "经审核,您的账号已被封禁。"
       }
-    }
+    },
+    "loadFailed": "加载失败,点击重试",
+    "loadMore": "加载更多"
   },
   "splash": {
     "chooseLanguage": "请选择语言以继续",
