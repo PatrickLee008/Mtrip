@@ -309,20 +309,10 @@ class BookingController extends AbstractAdminController
     {
         $this->requireMessagePermission();
         $order = $this->findScopedBooking($this->requireId());
-        $content = mb_substr($this->requireStr('content'), 0, 2000);
         $conv = $this->guestConversation($order);
-        if ((int) $conv['status'] === 1) {
-            throw new BusinessException(ErrorCode::DATA_CONFLICT, '会话已结束,无法继续发送');
-        }
-        $messageId = Db::table('chat_message')->insertGetId([
-            'site_id' => (int) $conv['site_id'],
-            'conversation_id' => (int) $conv['id'],
-            'sender_type' => 2, // 坐席/酒店侧消息,复用 C 端既有展示
-            'content' => $content,
-            'msg_type' => 1,
-        ]);
-        Db::table('chat_conversation')->where('id', $conv['id'])
-            ->update(['last_message' => mb_substr($content, 0, 500), 'last_time' => date('Y-m-d H:i:s')]);
+        $result = (new \Mtrip\Shared\Chat\ChatService())->send($conv, 'merchant', MerchantContext::adminId(), MerchantContext::adminName(),
+            $this->requireStr('content'), $this->strInput('clientMessageId') ?: bin2hex(random_bytes(16)));
+        $messageId = $result['messageId'];
         $this->events->log($order, 'guest_message_sent', BookingConst::OPERATOR_MERCHANT, MerchantContext::adminId(), MerchantContext::adminName());
         return Result::success(['messageId' => (int) $messageId], '消息已发送');
     }
@@ -414,24 +404,8 @@ class BookingController extends AbstractAdminController
      */
     private function guestConversation(array $order): array
     {
-        $conv = Db::table('chat_conversation')->where('order_id', (int) $order['id'])
-            ->orderByDesc('id')->first();
-        if ($conv) {
-            return (array) $conv;
-        }
-        if ((int) ($order['user_id'] ?? 0) <= 0) {
-            throw new BusinessException(ErrorCode::DATA_CONFLICT, '该预订无关联用户,无法发送住客消息');
-        }
-        $id = Db::table('chat_conversation')->insertGetId([
-            'site_id' => (int) $order['site_id'],
-            'user_id' => (int) $order['user_id'],
-            'type' => 1, // 酒店咨询会话
-            'target_id' => (int) $order['property_id'],
-            'order_id' => (int) $order['id'],
-            'title' => mb_substr((string) $order['goods_name'], 0, 200),
-            'status' => 0,
-        ]);
-        return (array) Db::table('chat_conversation')->where('id', $id)->first();
+        return (new \Mtrip\Shared\Chat\ChatService())->start((int) $order['site_id'], (int) ($order['user_id'] ?? 0),
+            (int) $order['property_id'], (int) $order['id']);
     }
 
     /** 数据范围:只允许当前账号已授权且当前选择范围内的物业。 */

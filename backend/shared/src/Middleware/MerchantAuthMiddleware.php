@@ -68,7 +68,19 @@ class MerchantAuthMiddleware implements MiddlewareInterface
             'permissions' => $permissions,
         ]);
 
-        $propertyIds = MerchantContext::authorizedPropertyIds();
+        if (str_starts_with($request->getUri()->getPath(), '/api/v1/merchant/chat/')) {
+            $live = \Mtrip\Shared\Chat\ChatAccess::employee(MerchantContext::adminId());
+            foreach (['list','reply','note','assign','resolve','settings'] as $action) {
+                $key = 'mch:chat:' . $action;
+                $permissions = array_values(array_diff($permissions, [$key]));
+                if (\Mtrip\Shared\Chat\ChatAccess::permission($live, $key)) $permissions[] = $key;
+            }
+            MerchantContext::set(array_merge(MerchantContext::get(), ['permissions' => $permissions]));
+        }
+
+        $propertyIds = str_starts_with($request->getUri()->getPath(), '/api/v1/merchant/chat/')
+            ? \Mtrip\Shared\Chat\ChatAccess::properties(\Mtrip\Shared\Chat\ChatAccess::employee(MerchantContext::adminId()))
+            : MerchantContext::authorizedPropertyIds();
         $propertyHeader = $request->getUri()->getPath() === '/api/v1/merchant/auth/menus'
             ? ''
             : trim($request->getHeaderLine('X-Mtrip-Property-Id'));

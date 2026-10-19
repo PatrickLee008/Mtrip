@@ -12,12 +12,15 @@ return [
     'servers' => [
         [
             'name' => 'http',
-            'type' => Server::SERVER_HTTP,
+            'type' => Server::SERVER_WEBSOCKET,
             'host' => '0.0.0.0',
             'port' => (int) env('HTTP_PORT', 9502),
             'sock_type' => SWOOLE_SOCK_TCP,
             'callbacks' => [
                 Event::ON_REQUEST => [Hyperf\HttpServer\Server::class, 'onRequest'],
+                Event::ON_OPEN => [App\Chat\ChatSocket::class, 'onOpen'],
+                Event::ON_MESSAGE => [App\Chat\ChatSocket::class, 'onMessage'],
+                Event::ON_CLOSE => [App\Chat\ChatSocket::class, 'onClose'],
             ],
             'options' => [
                 'enable_request_lifecycle' => false,

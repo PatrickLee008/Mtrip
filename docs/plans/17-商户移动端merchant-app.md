@@ -2,6 +2,10 @@
 
 > 独立计划文件。商户移动端不并入既有 `client-app` 模块 10，目录为 `merchant-app/`，技术栈和工程习惯参考 `client-app`。
 
+## 2026-10-15 访客消息兼容
+
+M11 首期已完成商家 Web + 消费者端，商户 App 源码与订单消息协议保留：`guest-thread`/`guest-message` 接同一 ChatService，并用隔离 order-service 验证共用会话与回复到消费者。商户 App 独立会话列表/完整工作台仍按确认方案留下一阶段，未声称原生新工作台或真机已验。详见[实施报告](./audits/2026-10-15-guest-messaging.md)。
+
 ## 目标
 
 按 `PRD/mTrip_Merchant App PRD_v1.0.docx` 和 Figma `mTrip_Merchant` 原型落地商户移动端：先完成全部设计页面，再按页面业务与 PRD 逐步接入 `/api/v1/merchant/*`、商品/订单/营销/财务等商户口径 API。

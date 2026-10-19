@@ -187,3 +187,7 @@ location / { try_files $uri $uri/ /index.html; }
    于是回落到 `src/config/env.ts` 里的 `https://api.mtrip.com`。
 2. **构建必须带 `--clear`**(已写进 `build:web`)。Metro 按源文件内容缓存 transform,
    只改 `.env` 而源码没动时会复用旧缓存,把过期的 `EXPO_PUBLIC_*` 值编进包里。
+3. 本机后端已有 `MTRIP_CLIENT_SIGN=false`、`MTRIP_PAYLOAD_ENCRYPT=false` 且未配置客户端记录时，
+   H5 也不能携带无对应记录的加密客户端配置：`X-Encrypted: 1` 仍会触发客户端密钥解析。
+   本地可在 Git 忽略的 `client-app/.env.production.local` 中置空 `EXPO_PUBLIC_CLIENT_ID` 与
+   `EXPO_PUBLIC_CLIENT_SECRET`，重新清缓存构建发布；启用签名/强制加密的环境应配置有效客户端。

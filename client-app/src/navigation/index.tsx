@@ -60,6 +60,7 @@ import ReferralStatusScreen from '@/screens/more/ReferralStatusScreen';
 import TravelersScreen from '@/screens/more/TravelersScreen';
 import MyPickLiteScreen from '@/screens/mypick/MyPickLiteScreen';
 import MyPickScreen from '@/screens/mypick/MyPickScreen';
+import ChatScreen from '@/screens/chat/ChatScreen';
 import NotificationScreen from '@/screens/notification/NotificationScreen';
 import OrderConfirmScreen from '@/screens/order/OrderConfirmScreen';
 import BookingCancelledScreen from '@/screens/order/BookingCancelledScreen';
@@ -349,6 +350,7 @@ export default function AppNavigator() {
           options={{ title: t('order.cancelled.title'), headerShown: false }}
         />
         {/* 通知页与「更多」子页共用同一套顶部栏,同样关掉 Stack 头 */}
+        <Stack.Screen name="Chat" component={ChatScreen} options={{ headerShown: false }} />
         <Stack.Screen
           name="Notifications"
           component={NotificationScreen}

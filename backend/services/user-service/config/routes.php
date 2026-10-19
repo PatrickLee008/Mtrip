@@ -87,8 +87,14 @@ Router::addGroup('/api/v1/app', static function () {
     Router::post('/user/appeal/submit', [AppealController::class, 'submit']);
 
     // 在线客服 / 与酒店聊天(Chat)
+    Router::get('/chat/detail', [ChatController::class, 'detail']);
+    Router::post('/chat/receipt', [ChatController::class, 'receipt']);
+    Router::post('/chat/ticket', [\App\Controller\ChatTransportController::class, 'ticket']);
+    Router::post('/chat/upload', [\App\Controller\ChatTransportController::class, 'upload']);
+    Router::post('/chat/file-ticket', [\App\Controller\ChatTransportController::class, 'fileTicket']);
     Router::get('/chat/faqs', [ChatController::class, 'faqs']);
     Router::get('/chat/conversations', [ChatController::class, 'conversations']);
+    Router::get('/chat/summary', [ChatController::class, 'summary']);
     Router::post('/chat/start', [ChatController::class, 'start']);
     Router::get('/chat/messages', [ChatController::class, 'messages']);
     Router::post('/chat/send', [ChatController::class, 'send']);
@@ -134,3 +140,29 @@ Router::addGroup('/api/v1/admin/chat', static function () {
 }, [
     'middleware' => [AdminAuthMiddleware::class, OperationLogMiddleware::class],
 ]);
+
+// Download tickets are single-use capabilities; the handler rechecks live conversation access.
+Router::get('/api/v1/app/chat/file', [\App\Controller\ChatTransportController::class, 'file']);
+Router::get('/api/v1/merchant/chat/file', [\App\Controller\ChatTransportController::class, 'file']);
+Router::addGroup('/api/v1/merchant/chat', static function () {
+    $c = \App\Controller\Merchant\ChatController::class;
+    Router::get('/list', [$c, 'index']);
+    Router::get('/summary', [$c, 'summary']);
+    Router::get('/preferences', [$c, 'preferences']);
+    Router::post('/preferences', [$c, 'savePreferences']);
+    Router::post('/contact', [$c, 'contact']);
+    Router::get('/detail', [$c, 'detail']);
+    Router::get('/messages', [$c, 'messages']);
+    Router::get('/note-history', [$c, 'noteHistory']);
+    Router::get('/quick-replies', [$c, 'quickReplies']);
+    Router::post('/send', [$c, 'send']);
+    Router::post('/receipt', [$c, 'receipt']);
+    Router::post('/note', [$c, 'saveNote']);
+    Router::post('/assign', [$c, 'assign']);
+    Router::post('/claim', [$c, 'claim']);
+    Router::post('/resolve', [$c, 'resolve']);
+    Router::post('/quick-reply', [$c, 'saveQuickReply']);
+    Router::post('/ticket', [\App\Controller\ChatTransportController::class, 'ticket']);
+    Router::post('/upload', [\App\Controller\ChatTransportController::class, 'upload']);
+    Router::post('/file-ticket', [\App\Controller\ChatTransportController::class, 'fileTicket']);
+}, ['middleware' => [\Mtrip\Shared\Middleware\MerchantAuthMiddleware::class, OperationLogMiddleware::class]]);

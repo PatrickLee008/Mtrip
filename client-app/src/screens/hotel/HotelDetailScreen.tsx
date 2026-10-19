@@ -378,7 +378,7 @@ export default function HotelDetailScreen() {
        */}
       <Pressable
         style={({ pressed }) => [styles.fab, { bottom: bottomInset + 2 }, pressed && styles.pressed]}
-        onPress={comingSoon}
+        onPress={() => propertyId ? navigation.navigate('Chat', { propertyId }) : comingSoon()}
       >
         <HomeIcon name="chatFilled" size={20} color="#FFFFFF" />
       </Pressable>

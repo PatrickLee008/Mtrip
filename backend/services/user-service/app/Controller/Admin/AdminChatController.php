@@ -53,6 +53,12 @@ class AdminChatController extends AbstractAdminController
     public function reply(): array
     {
         $conv = $this->ownScoped($this->requireId('conversationId'));
+        if ((int) $conv['type'] === 1) {
+            $result = (new \Mtrip\Shared\Chat\ChatService())->send($conv, 'admin', \Mtrip\Shared\Context\AdminContext::adminId(),
+                \Mtrip\Shared\Context\AdminContext::adminName(), $this->requireStr('content'),
+                $this->strInput('clientMessageId') ?: bin2hex(random_bytes(16)));
+            return Result::success($result);
+        }
         if ((int) $conv['status'] === 1) {
             throw new BusinessException(ErrorCode::DATA_CONFLICT, '会话已结束');
         }
@@ -67,6 +73,7 @@ class AdminChatController extends AbstractAdminController
         ]);
         Db::table('chat_conversation')->where('id', $conv['id'])
             ->update(['last_message' => mb_substr($content, 0, 500), 'last_time' => $now]);
+        (new \Mtrip\Shared\Chat\ChatService())->publish((int) $conv['id'], 'message');
         return Result::success(null, '已回复');
     }
 
@@ -75,7 +82,8 @@ class AdminChatController extends AbstractAdminController
     public function close(): array
     {
         $conv = $this->ownScoped($this->requireId('conversationId'));
-        Db::table('chat_conversation')->where('id', $conv['id'])->update(['status' => 1]);
+        Db::table('chat_conversation')->where('id', $conv['id'])->update(['status' => 1, 'version' => Db::raw('version + 1'), 'resolved_at' => gmdate('Y-m-d H:i:s')]);
+        (new \Mtrip\Shared\Chat\ChatService())->publish((int) $conv['id'], 'state');
         return Result::success(null, '会话已结束');
     }
 

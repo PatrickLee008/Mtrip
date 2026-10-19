@@ -30,6 +30,12 @@ class NotificationController extends AbstractController
                     $scope->orWhereIn('n.property_id', $propertyIds);
                 }
             })
+            ->where(static fn ($q) => $q->whereNull('n.recipient_id')->orWhere('n.recipient_id', MerchantContext::adminId()))
+            ->where(static function ($q) {
+                $a = \Mtrip\Shared\Chat\ChatAccess::employee(MerchantContext::adminId());
+                $q->where('n.deep_link_type', '!=', 'guest_chat');
+                if (\Mtrip\Shared\Chat\ChatAccess::permission($a, 'mch:chat:list')) $q->orWhere('n.deep_link_type', 'guest_chat');
+            })
             ->where('n.status', 1)->whereRaw("FIND_IN_SET('inapp', n.channels)")
             ->where('n.send_at', '<=', gmdate('Y-m-d H:i:s'))
             ->leftJoin('merchant_notify_read as r', static function ($join) {
@@ -105,10 +111,10 @@ class NotificationController extends AbstractController
         $value = (string) $row->deep_link_value;
         (new MerchantNotificationService())->validateLink((int) $row->merchant_id, (int) $row->site_id, $type, $value);
         $path = match ($type) {
-            'booking_detail' => '/order', 'promotion' => '/promotions', 'wallet' => '/earnings',
+            'guest_chat' => '/guest-messaging', 'booking_detail' => '/order', 'promotion' => '/promotions', 'wallet' => '/earnings',
             'user_profile' => '/settings', 'page' => $value, default => '',
         };
         // Destination pages/API retain their own role and resource checks.
-        return Result::success(['path' => $path, 'query' => in_array($type, ['booking_detail', 'promotion'], true) ? ['notificationTarget' => $value] : []]);
+        return Result::success(['path' => $path, 'query' => in_array($type, ['booking_detail', 'promotion'], true) ? ['notificationTarget' => $value] : ($type === 'guest_chat' ? ['conversationId' => $value] : [])]);
     }
 }

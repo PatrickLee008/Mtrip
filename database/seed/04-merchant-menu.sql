@@ -126,6 +126,15 @@ INSERT IGNORE INTO `merchant_menu` (`id`, `parent_id`, `menu_name`, `menu_name_e
 (110002, 1100, '标记复核', 'Flag Review',  'mch:reviews:flag',  3, 2, '1,2,3');
 
 -- ---------- 内置角色(merchant_id=0,is_builtin=1;按 account_type 区分) ----------
+INSERT IGNORE INTO merchant_menu(id,parent_id,menu_name,menu_name_en,i18n_key,perm_key,menu_type,route_path,component,icon,sort,account_scope,is_cache) VALUES
+(1500,0,'访客消息','Guest Messages','menu.guestMessaging','mch:chat:list',2,'/guest-messaging','guest-messaging/index','MessageOutlined',65,'1,2,3',2);
+INSERT IGNORE INTO merchant_menu(id,parent_id,menu_name,menu_name_en,perm_key,menu_type,sort,account_scope) VALUES
+(150001,1500,'回复消息','Reply','mch:chat:reply',3,1,'1,2,3'),
+(150002,1500,'内部备注','Internal Notes','mch:chat:note',3,2,'1,2,3'),
+(150003,1500,'分配会话','Assign','mch:chat:assign',3,3,'1,2,3'),
+(150004,1500,'解决会话','Resolve','mch:chat:resolve',3,4,'1,2,3'),
+(150005,1500,'配置快捷回复','Quick Reply Settings','mch:chat:settings',3,5,'1,2,3');
+
 INSERT INTO `merchant_role` (`id`, `site_id`, `group_id`, `merchant_id`, `account_type`, `role_name`, `role_code`, `is_builtin`, `status`, `remark`)
 VALUES (1, 0, 0, 0, 1, '集团管理员', 'group_admin', 1, 1, '平台内置:集团账号可见全部功能')
 ON DUPLICATE KEY UPDATE `role_name` = VALUES(`role_name`);

@@ -254,6 +254,7 @@ services:
       - "9502:9502"
     volumes:
       - ./uploads:/opt/www/uploads
+      - chat-private:/opt/chat-private
 
   goods-service:
     <<: *hyperf-common
@@ -361,5 +362,6 @@ services:
       - payment-service
 
 volumes:
+  chat-private:
   mysql-data:
   redis-data:

@@ -14,11 +14,29 @@ use Mtrip\Shared\Support\Result;
 
 /**
  * C端在线客服 / 与酒店聊天(PRD 模块 4.1 + 13)
- * type:1酒店咨询(target=酒店商品ID) 2客服(target=0)。客服会话对用户消息给机器人自动应答;
- * 转人工/酒店回复由坐席端(后续 admin/merchant 专项)写入,本期只做 C 端会话与消息。
+ * type:1酒店咨询使用明确 propertyId/orderId，与商家及订单入口共用会话核心；
+ * type:2平台客服保留原有机器人应答和结束规则。
  */
 class ChatController extends AbstractController
 {
+    #[\Hyperf\Di\Annotation\Inject]
+    protected \Mtrip\Shared\Chat\ChatService $chat;
+
+    public function detail(): array
+    {
+        $c = $this->ownConversation($this->requireId('conversationId'));
+        unset($c['thread_key']);
+        $c['receipts'] = $this->chat->receipts($c);
+        return Result::success($c);
+    }
+
+    public function receipt(): array
+    {
+        $c = $this->ownConversation($this->requireId('conversationId'));
+        $this->chat->receipt($c, 'user', UserContext::userId(), $this->requireId('messageId'), $this->intInput('read') === 1);
+        return Result::success();
+    }
+
     /** 客服预置常见问题(PRD 模块4.1 示例) */
     private const FAQS = [
         '入住/退房时间是几点?',
@@ -37,18 +55,29 @@ class ChatController extends AbstractController
     public function conversations(): array
     {
         [$page, $pageSize] = $this->pageParams();
-        $query = Db::table('chat_conversation')->where('user_id', UserContext::userId());
+        $query = Db::table('chat_conversation')->where('user_id', UserContext::userId())->where('site_id', UserContext::siteId());
         if (($type = $this->intInput('type')) > 0) {
             $query->where('type', $type);
         }
         $total = (clone $query)->count();
         $list = $query->orderByDesc('last_time')->orderByDesc('id')->forPage($page, $pageSize)
-            ->get(['id', 'type', 'target_id', 'title', 'status', 'last_message', 'last_time', 'rating'])
-            ->map(static fn ($row) => (array) $row)->all();
+            ->get(['id', 'type', 'target_id', 'property_id', 'order_id', 'title', 'status', 'last_message', 'last_time', 'rating'])
+            ->map(function ($row) { $c = (array) $row; $c['unread'] = $this->chat->unread($c, 'user', UserContext::userId()); return $c; })->all();
         return Result::page($list, $total, $page, $pageSize);
     }
 
-    /** 开启/复用会话:type 1酒店(需 targetId 有效酒店)2客服;返回会话ID */
+    public function summary(): array
+    {
+        $userId = UserContext::userId();
+        $unread = Db::table('chat_message as m')->join('chat_conversation as c', 'c.id', '=', 'm.conversation_id')
+            ->leftJoin('chat_receipt as r', static function ($join) use ($userId) {
+                $join->on('r.conversation_id', '=', 'c.id')->where('r.actor_role', 'user')->where('r.actor_id', $userId);
+            })->where('c.user_id', $userId)->where('c.site_id', UserContext::siteId())->where('c.type', 1)
+            ->where('m.sender_type', 2)->whereRaw('m.id > COALESCE(r.read_id,0)')->count();
+        return Result::success(['unread' => $unread]);
+    }
+
+    /** 开启/复用会话:type 1酒店(明确 propertyId/orderId)2客服;返回会话ID */
     public function start(): array
     {
         $siteId = $this->requireSiteId();
@@ -57,20 +86,24 @@ class ChatController extends AbstractController
         if (! in_array($type, [1, 2], true)) {
             throw new BusinessException(ErrorCode::PARAM_ERROR, '会话类型不正确');
         }
+        if ($type === 1) {
+            $orderId = $this->intInput('orderId');
+            $propertyId = $this->intInput('propertyId');
+            if ($orderId > 0) {
+                $order = Db::table('order_main')->where('id', $orderId)->where('site_id', $siteId)
+                    ->where('user_id', $userId)->whereNull('deleted_at')->first();
+                if (! $order) throw new BusinessException(ErrorCode::NOT_FOUND, '预订不存在');
+                $propertyId = (int) $order->property_id;
+            }
+            if ($propertyId <= 0) throw new BusinessException(ErrorCode::PARAM_ERROR, '请提供明确的 propertyId 或 orderId');
+            $c = $this->chat->start($siteId, $userId, $propertyId, $orderId);
+            return Result::success(['conversationId' => (int) $c['id']]);
+        }
         $targetId = 0;
         $title = '在线客服';
-        if ($type === 1) {
-            $targetId = $this->requireId('targetId');
-            $goods = Db::table('goods_info')->where('id', $targetId)->where('site_id', $siteId)
-                ->whereNull('deleted_at')->first(['goods_name']);
-            if (! $goods) {
-                throw new BusinessException(ErrorCode::NOT_FOUND, '酒店不存在');
-            }
-            $title = (string) $goods->goods_name;
-        }
         // 复用进行中的同目标会话
         $exist = Db::table('chat_conversation')
-            ->where('user_id', $userId)->where('type', $type)->where('target_id', $targetId)
+            ->where('site_id', $siteId)->where('user_id', $userId)->where('type', $type)->where('target_id', $targetId)
             ->where('status', 0)->orderByDesc('id')->first(['id']);
         if ($exist) {
             return Result::success(['conversationId' => (int) $exist->id]);
@@ -90,12 +123,13 @@ class ChatController extends AbstractController
     public function messages(): array
     {
         $conv = $this->ownConversation($this->requireId('conversationId'));
+        if ($this->input('cursor') !== null) {
+            return Result::success(['list' => $this->chat->history($conv, $this->intInput('beforeId'), $this->intInput('afterId')), 'receipts' => $this->chat->receipts($conv)]);
+        }
         [$page, $pageSize] = $this->pageParams();
         $query = Db::table('chat_message')->where('conversation_id', $conv['id']);
         $total = (clone $query)->count();
-        $list = $query->orderByDesc('id')->forPage($page, $pageSize)
-            ->get(['id', 'sender_type', 'content', 'msg_type', 'created_at'])
-            ->map(static fn ($row) => (array) $row)->all();
+        $list = $query->orderByDesc('id')->forPage($page, $pageSize)->get(['id','sender_type','content','msg_type','created_at'])->all();
         return Result::page($list, $total, $page, $pageSize);
     }
 
@@ -103,6 +137,10 @@ class ChatController extends AbstractController
     public function send(): array
     {
         $conv = $this->ownConversation($this->requireId('conversationId'));
+        if ((int) $conv['type'] === 1) {
+            return Result::success($this->chat->send($conv, 'user', UserContext::userId(), '', $this->strInput('content'),
+                $this->strInput('clientMessageId'), (array) $this->input('attachmentIds', [])));
+        }
         if ((int) $conv['status'] === 1) {
             throw new BusinessException(ErrorCode::DATA_CONFLICT, '会话已结束,请重新发起');
         }
@@ -130,6 +168,7 @@ class ChatController extends AbstractController
         }
         Db::table('chat_conversation')->where('id', $conv['id'])
             ->update(['last_message' => $last, 'last_time' => $now]);
+        $this->chat->publish((int) $conv['id'], 'message');
         return Result::success(null, '已发送');
     }
 
@@ -137,7 +176,8 @@ class ChatController extends AbstractController
     public function finish(): array
     {
         $conv = $this->ownConversation($this->requireId('conversationId'));
-        Db::table('chat_conversation')->where('id', $conv['id'])->update(['status' => 1]);
+        Db::table('chat_conversation')->where('id', $conv['id'])->update(['status' => 1, 'version' => Db::raw('version + 1'), 'resolved_at' => gmdate('Y-m-d H:i:s')]);
+        $this->chat->publish((int) $conv['id'], 'state');
         return Result::success(null, '会话已结束');
     }
 
@@ -157,7 +197,7 @@ class ChatController extends AbstractController
     private function ownConversation(int $id): array
     {
         $conv = Db::table('chat_conversation')
-            ->where('id', $id)->where('user_id', UserContext::userId())->first();
+            ->where('id', $id)->where('user_id', UserContext::userId())->where('site_id', UserContext::siteId())->first();
         if (! $conv) {
             throw new BusinessException(ErrorCode::NOT_FOUND, '会话不存在');
         }

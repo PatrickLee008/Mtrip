@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, watch, onBeforeUnmount } from 'vue';
+import { useChatStore } from '@/stores/chat';
 import { useRoute, useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import * as Icons from '@ant-design/icons-vue';
@@ -11,6 +12,12 @@ import { isMenuPathVisible } from '@/config/menuSections';
 const route = useRoute();
 const router = useRouter();
 const userStore = useUserStore();
+const chatStore = useChatStore();
+const chatAvailable = computed(() => pages(userStore.visibleMenus).some((node) => node.route_path === '/guest-messaging'));
+watch(() => [userStore.token, userStore.selectedPropertyId, chatAvailable.value], () => {
+  if (userStore.isLogin && chatAvailable.value) chatStore.start(); else chatStore.stop();
+}, { immediate: true });
+onBeforeUnmount(() => chatStore.stop());
 const { t } = useI18n();
 
 interface MenuItem { path: string; label: string; icon: string }
@@ -29,7 +36,7 @@ const hotelProfilePath = computed(() =>
 const sections = computed(() => [
   { key: 'portfolio', paths: ['/properties', '/dashboard'] },
   // M8 促销与活动:促销页 + 效果分析 + 平台活动同属「Business」分组
-  { key: 'business', paths: ['/earnings', '/promotions', '/promotions/analytics', '/campaigns', '/reviews', '/notifications'] },
+  { key: 'business', paths: ['/earnings', '/promotions', '/promotions/analytics', '/campaigns', '/reviews', '/guest-messaging', '/notifications'] },
   { key: 'hotelManagement', paths: [hotelProfilePath.value, '/rooms'] },
   { key: 'operations', paths: ['/availability', '/order'] },
   { key: 'team', paths: ['/account/list', '/account/role'] },
@@ -103,13 +110,14 @@ function resolveIcon(name: string) {
         @click="router.push(entry.path)"
       >
         <component :is="resolveIcon(entry.icon)" class="item-icon" />
-        <span class="item-label">{{ entry.label }}</span>
+        <span class="item-label">{{ entry.label }}</span><span v-if="entry.path === '/guest-messaging' && chatStore.unread" class="chat-badge">{{ chatStore.unread > 99 ? '99+' : chatStore.unread }}</span>
       </button>
     </section>
   </nav>
 </template>
 
 <style scoped lang="less">
+.chat-badge { margin-left:auto; padding:2px 6px; background:#4169ed; color:white; border-radius:12px; font-size:10px; }
 .side-menu { padding: 0 8px 12px; }
 .menu-group { padding: 16px 0; border-bottom: 1px solid var(--mtrip-border); }
 .menu-group:last-child { border-bottom: 0; }

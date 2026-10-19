@@ -45,6 +45,10 @@ class ClientSignMiddleware implements MiddlewareInterface
 
     public function process(ServerRequestInterface $request, RequestHandlerInterface $handler): ResponseInterface
     {
+        // Download capabilities are issued through signed, logged-in POST and reauthorized on use.
+        if ($request->getMethod() === 'GET' && $request->getUri()->getPath() === '/api/v1/app/chat/file') {
+            return $handler->handle($request);
+        }
         $path = $request->getUri()->getPath();
         if (! $this->enabled || ! str_starts_with($path, '/api/v1/app/')) {
             return $handler->handle($request);

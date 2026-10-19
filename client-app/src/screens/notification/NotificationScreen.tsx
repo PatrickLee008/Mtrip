@@ -19,11 +19,12 @@
 
 import React, { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTranslation } from 'react-i18next';
 
 import { fetchNotifications, markNotifyRead, type NotifyBizType, type NotifyItem } from '@/api/notify';
+import { chatSummary, connectChat } from '@/api/chat';
 import SegmentedTabs from '@/components/common/SegmentedTabs';
 import MorePageLayout from '@/components/more/MorePageLayout';
 import { moreShared } from '@/components/more/moreShared';
@@ -31,6 +32,7 @@ import { colors } from '@/config/theme';
 import { fonts } from '@/config/typography';
 import type { RootStackParamList } from '@/navigation/types';
 import { useSiteStore } from '@/store/siteStore';
+import { useUserStore } from '@/store/userStore';
 import { formatMoney } from '@/utils/format';
 
 const NOTIFICATION_TABS = ['system', 'booking'] as const;
@@ -55,9 +57,40 @@ export default function NotificationScreen() {
   const { t, i18n } = useTranslation();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const currency = useSiteStore((s) => s.currency);
+  const isLogin = useUserStore((s) => s.isLogin);
+  const [unread, setUnread] = useState(0);
   const [tab, setTab] = useState<NotificationTab>('booking');
   const [tabs, setTabs] = useState<Record<NotificationTab, TabState>>({ system: EMPTY_TAB, booking: EMPTY_TAB });
   const state = tabs[tab];
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!isLogin) {
+        setUnread(0);
+        return undefined;
+      }
+      let mounted = true;
+      const refreshChatSummary = async () => {
+        try {
+          const summary = await chatSummary();
+          if (mounted) setUnread(summary.unread);
+        } catch {
+          // Notification history remains usable when chat is unavailable.
+        }
+      };
+      void refreshChatSummary();
+      const stop = connectChat(
+        (event) => {
+          if (event.kind !== 'receipt') void refreshChatSummary();
+        },
+        () => {},
+      );
+      return () => {
+        mounted = false;
+        stop();
+      };
+    }, [isLogin]),
+  );
 
   const loadPage = useCallback(async (which: NotificationTab, page: number) => {
     setTabs((cur) => ({ ...cur, [which]: { ...cur[which], loading: true, error: false } }));
@@ -121,6 +154,11 @@ export default function NotificationScreen() {
 
   return (
     <MorePageLayout title={t('notifications.title')}>
+      <Pressable style={styles.chatLink} onPress={() => navigation.navigate('Chat')}>
+        <Text style={styles.title}>{t('chat.messages')}</Text>
+        {unread > 0 ? <Text style={styles.badge}>{unread}</Text> : null}
+        <Text style={styles.title}>↗</Text>
+      </Pressable>
       <SegmentedTabs
         tabs={NOTIFICATION_TABS}
         value={tab}
@@ -214,4 +252,20 @@ const styles = StyleSheet.create({
   },
   more: { alignItems: 'center', paddingVertical: 12 },
   moreText: { fontFamily: fonts.interSemi, fontSize: 14, lineHeight: 20, color: colors.primary },
+  chatLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 16,
+    backgroundColor: '#f0f4ff',
+    borderRadius: 16,
+    marginBottom: 16,
+  },
+  badge: {
+    backgroundColor: colors.primary,
+    color: 'white',
+    paddingHorizontal: 7,
+    borderRadius: 10,
+    fontSize: 11,
+  },
 });

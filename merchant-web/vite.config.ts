@@ -24,6 +24,7 @@ export default defineConfig({
       '/api': {
         target: process.env.MTRIP_DEV_GATEWAY || 'http://127.0.0.1:8081',
         changeOrigin: true,
+        ws: true,
       },
       '/uploads': {
         target: process.env.MTRIP_DEV_GATEWAY || 'http://127.0.0.1:8081',

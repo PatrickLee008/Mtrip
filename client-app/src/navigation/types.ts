@@ -33,6 +33,7 @@ export type MainTabParamList = {
 
 /** 根 Stack */
 export type RootStackParamList = {
+  Chat: { propertyId?: number; orderId?: number; conversationId?: number; type?: number } | undefined;
   MainTabs: NavigatorScreenParams<MainTabParamList>;
   SiteSelect: undefined;
   /** 酒店搜索页(Figma 91:200),首页快捷入口 hotels 的落地页 */

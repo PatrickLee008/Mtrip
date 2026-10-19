@@ -446,7 +446,7 @@ export default function BookingDetailScreen() {
             <Text style={styles.sectionTitle}>{t('order.bookingDetail.contactProperty')}</Text>
             <Pressable
               style={({ pressed }) => [styles.primaryBtn, pressed && styles.pressed]}
-              onPress={comingSoon}
+              onPress={() => navigation.navigate('Chat', { orderId })}
             >
               <HomeIcon name="chatFilled" size={20} color="#FFFFFF" />
               <Text style={styles.primaryBtnText}>{t('order.bookingDetail.messageProperty')}</Text>
@@ -500,7 +500,7 @@ export default function BookingDetailScreen() {
             </Pressable>
             <Pressable
               style={({ pressed }) => [styles.chatBtn, pressed && styles.pressed]}
-              onPress={comingSoon}
+              onPress={() => navigation.navigate('Chat', { type: 2 })}
             >
               <HomeIcon name="headset" size={20} color={colors.primary} />
               <Text style={styles.chatBtnText}>{t('order.bookingDetail.liveChat')}</Text>

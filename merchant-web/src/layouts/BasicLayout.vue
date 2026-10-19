@@ -28,6 +28,8 @@ const router = useRouter();
 const switcherOpen = ref(false);
 const mobileMenuOpen = ref(false);
 const isPropertyProfile = computed(() => /^\/properties\/\d+\/profile$/.test(route.path));
+const isMessaging = computed(() => route.path === '/guest-messaging');
+const usesMobileNavigation = computed(() => isPropertyProfile.value || isMessaging.value);
 const currentProperty = computed(() => userStore.selectedProperty);
 const propertyGroups = computed(() => {
   const groups = new Map<string, MerchantProperty[]>();
@@ -96,11 +98,11 @@ function onLogout(): void {
 </script>
 
 <template>
-  <div :class="['layout-container', { 'property-profile-layout': isPropertyProfile, 'mobile-menu-open': mobileMenuOpen }]" @keydown.esc="mobileMenuOpen = false">
-    <button v-if="isPropertyProfile && mobileMenuOpen" class="mobile-menu-backdrop" :aria-label="t('properties.profile.closeNavigation')" @click="mobileMenuOpen = false" />
+  <div :class="['layout-container', { 'property-profile-layout': isPropertyProfile, 'messaging-layout': isMessaging, 'mobile-menu-open': mobileMenuOpen }]" @keydown.esc="mobileMenuOpen = false">
+    <button v-if="usesMobileNavigation && mobileMenuOpen" class="mobile-menu-backdrop" :aria-label="t('properties.profile.closeNavigation')" @click="mobileMenuOpen = false" />
     <!-- 侧边栏:贯穿整个页面高度(原型 228px 白底) -->
     <aside class="layout-sidebar">
-      <button v-if="isPropertyProfile && mobileMenuOpen" class="mobile-menu-close" type="button" :aria-label="t('properties.profile.closeNavigation')" @click="mobileMenuOpen = false"><CloseOutlined /></button>
+      <button v-if="usesMobileNavigation && mobileMenuOpen" class="mobile-menu-close" type="button" :aria-label="t('properties.profile.closeNavigation')" @click="mobileMenuOpen = false"><CloseOutlined /></button>
       <!-- Logo 区(原型:纯文字 mTrip + Merchant 副标题) -->
       <div class="sider-logo">
         <div class="logo-text">
@@ -187,7 +189,7 @@ function onLogout(): void {
     <!-- 右侧主区域 -->
     <a-layout class="layout-main">
       <a-layout-header class="layout-header">
-        <button v-if="isPropertyProfile" class="mobile-menu-toggle" type="button" :aria-label="t('properties.profile.navigation')" :aria-expanded="mobileMenuOpen" @click="mobileMenuOpen = !mobileMenuOpen"><MenuOutlined /></button>
+        <button v-if="usesMobileNavigation" class="mobile-menu-toggle" type="button" :aria-label="t('properties.profile.navigation')" :aria-expanded="mobileMenuOpen" @click="mobileMenuOpen = !mobileMenuOpen"><MenuOutlined /></button>
         <AppHeader />
       </a-layout-header>
       <!-- 内容区域(多页签已移除:直接渲染当前路由页面) -->
@@ -476,7 +478,10 @@ function onLogout(): void {
 
 .mobile-menu-toggle, .mobile-menu-backdrop, .mobile-menu-close { display: none; }
 @media (max-width: 600px) {
-  .property-profile-layout {
+  .messaging-layout {
+    :deep(.lang-name), :deep(.user-name) { display: none; }
+  }
+  .property-profile-layout, .messaging-layout {
     .layout-sidebar { display: none; }
     &.mobile-menu-open .layout-sidebar { display: flex; position: fixed; inset: 0 auto 0 0; z-index: 1001; width: 228px; }
     .mobile-menu-backdrop { display: block; position: fixed; inset: 0; z-index: 1000; border: 0; background: rgb(15 23 42 / 35%); }

@@ -75,6 +75,7 @@ services:
       HTTP_PORT: "9502"
     volumes:
       - ./uploads:/opt/www/uploads
+      - chat-private:/opt/chat-private
 
   goods-service-app:
     <<: *app-common
