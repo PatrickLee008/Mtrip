@@ -1,5 +1,12 @@
 # 会话交接文档(HANDOFF)
 
+### 2026-10-19 后台用户列表余额调整
+
+- 用户确认“增加/扣减金额 + 必填原因 + 余额流水”。admin-web 用户列表新增“调整余额”弹窗，打开时重读余额、预览调整后余额，保存后刷新列表和已打开的详情流水，中英文同步；余额流水标题及金额列标签同步明确。
+- 新增 `POST /api/v1/admin/user/adjust-balance`，权限 `user:list:adjust-balance` 与现有菜单种子/本地菜单一致；站点鉴权，事务内行锁 `user_info`，整数分计算，写 `user_balance_log` change_type=4、操作人、原因、前后快照。拒绝零金额、超过两位小数、负余额及字段溢出，无表结构或权限迁移。
+- `test/user-balance/integration.py` 31 项隔离 HTTP 回归通过（含实际权限切面、站点隔离、并发无覆盖及流水失败余额回滚），临时库/容器已清理。质量基线等价执行：429 PHP lint、shared 128 用例/1097 断言、admin-web build、client-app typecheck 全部通过。
+- 本机 8090 已发布，标准 wrapper 重启 user-service 主/APP 双池；HTML 与构建比对、新接口无凭据 40101 通过。Chrome 真实登录态验证按钮/弹窗/扣减预览、非法小数与空原因拦截，表单已取消，未变动真实用户余额；窄屏未验。旧产物备份 `deploy/backups/admin-before-balance-adjust-20261019.tar.gz`。按用户要求本地提交，未推送，详见模块 07。
+
 ### ★ 2026-10-15 C 端站内通知接通(Consumer App PRD 模块 10 Notification Center)
 
 **背景**:后端早有 `notify_record` + user-service 列表/未读/已读接口,但只在两处写入(单房型支付确认、住客申请退款),文案写死中文;Trip 整单只发一条;App 通知页是设计稿假数据。本轮按「不依赖第三方」的范围补齐:站内信全链路 + 多语言;**Push / SMS / Email 仍未接**(要先定服务商与账号)。

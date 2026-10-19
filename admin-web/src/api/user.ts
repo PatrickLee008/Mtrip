@@ -14,6 +14,11 @@ export function apiUserDetail(id: number): Promise<{ user: Row; balanceLogs: Row
   return get('/admin/user/detail', { id });
 }
 
+/** 手动调账:amount 正数增加、负数扣减,原因必填。 */
+export function apiUserAdjustBalance(data: { id: number; amount: string; reason: string }): Promise<{ balance: string }> {
+  return post('/admin/user/adjust-balance', data);
+}
+
 /** 冻结/解冻:1正常 ⇄ 2冻结(必填原因,写入备注留痕) */
 export function apiUserToggleStatus(data: { id: number; reason: string }): Promise<{ userStatus: number }> {
   return post('/admin/user/toggle-status', data);

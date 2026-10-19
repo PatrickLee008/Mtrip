@@ -108,6 +108,7 @@ Router::addGroup('/api/v1/app', static function () {
 Router::addGroup('/api/v1/admin/user', static function () {
     Router::get('/list', [AdminUserController::class, 'index']);
     Router::get('/detail', [AdminUserController::class, 'detail']);
+    Router::post('/adjust-balance', [AdminUserController::class, 'adjustBalance']);
     Router::post('/toggle-status', [AdminUserController::class, 'toggleStatus']);
     Router::get('/feedback/list', [AdminFeedbackController::class, 'index']);
     Router::post('/feedback/handle', [AdminFeedbackController::class, 'handle']);

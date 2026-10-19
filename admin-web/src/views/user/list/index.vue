@@ -10,7 +10,7 @@ import { useTable, type TableRow } from '@/composables/useTable';
 import { useUserStore } from '@/stores/user';
 import { formatAmount } from '@/utils/format';
 import type { StatusItem } from '@/components/StatusTag.vue';
-import { apiUserDetail, apiUserList, apiUserToggleStatus } from '@/api/user';
+import { apiUserAdjustBalance, apiUserDetail, apiUserList, apiUserToggleStatus } from '@/api/user';
 
 const { t } = useI18n();
 
@@ -69,7 +69,7 @@ const columns = computed(() => [
   { title: t('user.listPage.status'), dataIndex: 'user_status', width: 80 },
   { title: t('user.listPage.registerTime'), dataIndex: 'register_time', width: 165 },
   { title: t('user.listPage.lastLogin'), dataIndex: 'last_login_at', width: 165 },
-  { title: t('common.action'), key: 'action_col', width: 130, fixed: 'right' as const },
+  { title: t('common.action'), key: 'action_col', width: 230, fixed: 'right' as const },
 ]);
 
 // ---------- 详情抽屉(含余额/积分流水摘要) ----------
@@ -89,6 +89,60 @@ async function openDetail(row: TableRow): Promise<void> {
     pointsLogs.value = data.pointsLogs;
   } finally {
     detailLoading.value = false;
+  }
+}
+
+// ---------- 余额调整(必填原因) ----------
+const balanceOpen = ref(false);
+const balanceLoading = ref(false);
+const balanceSubmitting = ref(false);
+const balanceForm = reactive({ id: 0, nickname: '', balance: '0.00', direction: 'increase', amount: '', reason: '' });
+const balanceAfter = computed(() => {
+  if (!/^(?:0|[1-9]\d{0,9})(?:\.\d{1,2})?$/.test(balanceForm.amount)) return null;
+  const cents = Math.round(Number(balanceForm.amount) * 100);
+  const before = Math.round(Number(balanceForm.balance) * 100);
+  return (before + (balanceForm.direction === 'increase' ? cents : -cents)) / 100;
+});
+
+async function openBalance(row: TableRow): Promise<void> {
+  if (balanceLoading.value) return;
+  balanceLoading.value = true;
+  try {
+    const { user } = await apiUserDetail(row.id);
+    Object.assign(balanceForm, { id: user.id, nickname: user.nickname, balance: String(user.balance), direction: 'increase', amount: '', reason: '' });
+    balanceOpen.value = true;
+  } finally {
+    balanceLoading.value = false;
+  }
+}
+
+async function submitBalance(): Promise<void> {
+  if (balanceSubmitting.value) return;
+  if (balanceAfter.value === null || Number(balanceForm.amount) <= 0) {
+    message.warning(t('user.listPage.balanceAdjust.invalidAmount'));
+    return;
+  }
+  if (balanceAfter.value < 0 || balanceAfter.value > 9999999999.99) {
+    message.warning(t('user.listPage.balanceAdjust.invalidBalance'));
+    return;
+  }
+  if (!balanceForm.reason.trim()) {
+    message.warning(t('common.required'));
+    return;
+  }
+  balanceSubmitting.value = true;
+  try {
+    await apiUserAdjustBalance({
+      id: balanceForm.id,
+      amount: `${balanceForm.direction === 'decrease' ? '-' : ''}${balanceForm.amount}`,
+      reason: balanceForm.reason.trim(),
+    });
+    balanceOpen.value = false;
+    message.success(t('user.listPage.balanceAdjust.success'));
+    void load();
+    if (drawerOpen.value && detail.value?.id === balanceForm.id) void openDetail(detail.value);
+  } finally {
+    balanceSubmitting.value = false;
   }
 }
 
@@ -196,6 +250,9 @@ async function submitToggle(): Promise<void> {
           <template v-else-if="column.key === 'action_col'">
             <a-space :size="0">
               <a-button type="link" size="small" @click="openDetail(record)">{{ t('common.detail') }}</a-button>
+              <a-button v-perm="'user:list:adjust-balance'" type="link" size="small" :disabled="balanceLoading" @click="openBalance(record)">
+                {{ t('user.listPage.balanceAdjust.title') }}
+              </a-button>
               <a-button
                 v-if="record.user_status === 1 || record.user_status === 2"
                 v-perm="'user:list:status'"
@@ -231,11 +288,11 @@ async function submitToggle(): Promise<void> {
             <a-descriptions-item :label="t('user.listPage.username')">{{ detail.member_level_id || '-' }}</a-descriptions-item>
             <a-descriptions-item v-if="detail.remark" :label="t('common.remark')" :span="2">{{ detail.remark }}</a-descriptions-item>
           </a-descriptions>
-          <a-divider orientation="left">{{ t('merchant.accountPage.balance') }}</a-divider>
+          <a-divider orientation="left">{{ t('user.listPage.balanceAdjust.logs') }}</a-divider>
           <a-table
             :columns="[
-              { title: t('merchant.accountPage.balance'), dataIndex: 'amount', width: 110 },
-              { title: t('merchant.accountPage.balance'), dataIndex: 'after_balance', width: 110 },
+              { title: t('user.listPage.balanceAdjust.changeAmount'), dataIndex: 'amount', width: 110 },
+              { title: t('user.listPage.balanceAdjust.after'), dataIndex: 'after_balance', width: 110 },
               { title: t('common.remark'), dataIndex: 'remark', ellipsis: true },
               { title: t('common.createdAt'), dataIndex: 'created_at', width: 160 },
             ]"
@@ -269,6 +326,37 @@ async function submitToggle(): Promise<void> {
         </template>
       </a-spin>
     </a-drawer>
+
+    <a-modal
+      v-model:open="balanceOpen"
+      :title="t('user.listPage.balanceAdjust.title')"
+      :confirm-loading="balanceSubmitting"
+      :closable="!balanceSubmitting"
+      :mask-closable="false"
+      :keyboard="!balanceSubmitting"
+      :cancel-button-props="{ disabled: balanceSubmitting }"
+      :ok-button-props="{ danger: balanceForm.direction === 'decrease' }"
+      @ok="submitBalance"
+    >
+      <a-alert type="warning" show-icon :message="t('user.listPage.balanceAdjust.notice')" style="margin-bottom: 16px" />
+      <a-form :label-col="{ span: 7 }" :disabled="balanceSubmitting">
+        <a-form-item :label="t('user.listPage.nickname')">{{ balanceForm.nickname || '-' }} (#{{ balanceForm.id }})</a-form-item>
+        <a-form-item :label="t('user.listPage.balanceAdjust.current')">{{ formatAmount(balanceForm.balance) }}</a-form-item>
+        <a-form-item :label="t('user.listPage.balanceAdjust.direction')" required>
+          <a-radio-group v-model:value="balanceForm.direction">
+            <a-radio-button value="increase">{{ t('user.listPage.balanceAdjust.increase') }}</a-radio-button>
+            <a-radio-button value="decrease">{{ t('user.listPage.balanceAdjust.decrease') }}</a-radio-button>
+          </a-radio-group>
+        </a-form-item>
+        <a-form-item :label="t('user.listPage.balanceAdjust.amount')" required>
+          <a-input v-model:value="balanceForm.amount" inputmode="decimal" :maxlength="13" :placeholder="t('user.listPage.balanceAdjust.amountHelp')" />
+        </a-form-item>
+        <a-form-item :label="t('user.listPage.balanceAdjust.after')">{{ balanceAfter === null ? '-' : formatAmount(balanceAfter) }}</a-form-item>
+        <a-form-item :label="t('user.listPage.balanceAdjust.reason')" required>
+          <a-textarea v-model:value="balanceForm.reason" :rows="3" :maxlength="200" show-count :placeholder="t('common.required')" />
+        </a-form-item>
+      </a-form>
+    </a-modal>
 
     <!-- 冻结/解冻 Modal -->
     <a-modal

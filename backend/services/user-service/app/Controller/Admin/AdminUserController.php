@@ -80,6 +80,60 @@ class AdminUserController extends AbstractAdminController
         ]);
     }
 
+    /** 手动调账:正数增加、负数扣减,余额与流水原子写入。 */
+    #[Permission('user:list:adjust-balance')]
+    public function adjustBalance(): array
+    {
+        $id = $this->requireId();
+        $amount = $this->input('amount');
+        if ((! is_string($amount) && ! is_int($amount) && ! is_float($amount))
+            || ! preg_match('/^-?(?:0|[1-9]\d{0,9})(?:\.\d{1,2})?$/D', (string) $amount)) {
+            throw new BusinessException(ErrorCode::PARAM_ERROR, '调整金额须为最多两位小数的有效金额');
+        }
+        // DECIMAL(12,2) 转为整数分计算,避免浮点累加误差。
+        $cents = (int) round((float) $amount * 100);
+        if ($cents === 0) {
+            throw new BusinessException(ErrorCode::PARAM_ERROR, '调整金额不能为0');
+        }
+        $reason = $this->requireStr('reason');
+        if (mb_strlen($reason) > 200) {
+            throw new BusinessException(ErrorCode::PARAM_ERROR, '调整原因不能超过200字');
+        }
+
+        $data = Db::transaction(function () use ($id, $cents, $reason): array {
+            $user = Db::table('user_info')->where('id', $id)->whereNull('deleted_at')
+                ->lockForUpdate()->first();
+            if (! $user) {
+                throw new BusinessException(ErrorCode::NOT_FOUND, '用户不存在');
+            }
+            $user = (array) $user;
+            $this->assertSiteScope((int) $user['site_id']);
+            $before = (int) round((float) $user['balance'] * 100);
+            $after = $before + $cents;
+            if ($after < 0) {
+                throw new BusinessException(ErrorCode::DATA_CONFLICT, '扣减金额不能超过当前余额');
+            }
+            if ($after > 999999999999) {
+                throw new BusinessException(ErrorCode::DATA_CONFLICT, '调整后余额超出允许范围');
+            }
+            $balance = number_format($after / 100, 2, '.', '');
+            Db::table('user_info')->where('id', $id)->update(['balance' => $balance]);
+            Db::table('user_balance_log')->insert([
+                'site_id' => (int) $user['site_id'],
+                'user_id' => $id,
+                'change_type' => 4,
+                'amount' => number_format($cents / 100, 2, '.', ''),
+                'before_balance' => number_format($before / 100, 2, '.', ''),
+                'after_balance' => $balance,
+                'order_id' => 0,
+                'operator_id' => AdminContext::adminId(),
+                'remark' => $reason,
+            ]);
+            return ['balance' => $balance];
+        });
+        return Result::success($data, '余额调整成功');
+    }
+
     /** 冻结/解冻:1正常 ⇄ 2冻结(必填原因,写入备注前缀留痕) */
     #[Permission('user:list:status')]
     public function toggleStatus(): array
