@@ -202,6 +202,64 @@ class UserAuthService
         }
     }
 
+    /** Only FacebookClient-validated identities may enter here; email/name never select an account. */
+    public function facebookAccount(int $siteId, string $appId, string $subject, string $name, string $consentVersion, string $consentAt): array
+    {
+        $identityQuery = static fn () => Db::table('user_social_identity')
+            ->where('site_id', $siteId)->where('provider', 'facebook')
+            ->where('provider_app_id', $appId)->where('provider_user_id', $subject);
+        $identity = $identityQuery()->first();
+        if ($identity) {
+            $this->activeFacebookUser((int) $identity->user_id, $siteId);
+            return ['userId' => (int) $identity->user_id, 'isNewUser' => false];
+        }
+        try {
+            $userId = Db::transaction(function () use ($siteId, $appId, $subject, $name, $consentVersion, $consentAt): int {
+                $userId = (int) Db::table('user_info')->insertGetId([
+                    'site_id' => $siteId, 'nickname' => $name !== '' ? $name : 'Facebook User',
+                    'mobile' => '', 'mobile_hash' => null, 'password' => '',
+                    'register_source' => 3, 'register_time' => date('Y-m-d H:i:s'), 'user_status' => 1,
+                ]);
+                $this->setupReferral($siteId, $userId, '');
+                Db::table('user_social_identity')->insert([
+                    'site_id' => $siteId, 'user_id' => $userId, 'provider' => 'facebook',
+                    'provider_app_id' => $appId, 'provider_user_id' => $subject,
+                    'consent_version' => $consentVersion, 'consent_at' => $consentAt,
+                ]);
+                return $userId;
+            });
+            return ['userId' => $userId, 'isNewUser' => true];
+        } catch (\Throwable $e) {
+            // The unique identity rolls back a losing transaction, including its provisional user/referral code.
+            if (str_contains($e->getMessage(), 'uk_social_identity')) {
+                $identity = $identityQuery()->first();
+                if ($identity) {
+                    $this->activeFacebookUser((int) $identity->user_id, $siteId);
+                    return ['userId' => (int) $identity->user_id, 'isNewUser' => false];
+                }
+            }
+            throw $e;
+        }
+    }
+
+    public function facebookSession(int $userId, int $siteId, string $ip): array
+    {
+        $this->activeFacebookUser($userId, $siteId);
+        Db::table('user_info')->where('id', $userId)->where('site_id', $siteId)->update([
+            'last_login_at' => date('Y-m-d H:i:s'), 'last_login_ip' => $ip,
+        ]);
+        $this->actionLog($siteId, $userId, 1, 'Facebook 登录', $ip);
+        return $this->issueToken($userId, $siteId);
+    }
+
+    private function activeFacebookUser(int $userId, int $siteId): void
+    {
+        $user = Db::table('user_info')->where('id', $userId)->where('site_id', $siteId)->first();
+        if (! $user || $user->deleted_at !== null || (int) $user->user_status !== 1) {
+            throw new BusinessException(ErrorCode::FORBIDDEN, 'Account unavailable; please contact support');
+        }
+    }
+
     public function refresh(int $userId): array
     {
         $user = Db::table('user_info')->where('id', $userId)->whereNull('deleted_at')->first();
@@ -248,6 +306,8 @@ class UserAuthService
             'avatar' => (string) $user['avatar'],
             'mobile' => MaskHelper::mobile($this->decryptSafe((string) $user['mobile'])),
             'email' => MaskHelper::email($this->decryptSafe((string) $user['email'])),
+            'mobileBound' => (string) $user['mobile'] !== '',
+            'hasPassword' => (string) $user['password'] !== '',
             'memberLevelId' => (int) $user['member_level_id'],
             'memberLevelName' => $levelName,
             'balance' => (string) $user['balance'],

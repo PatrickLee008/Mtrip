@@ -1,5 +1,19 @@
 # 会话交接文档(HANDOFF)
 
+### 2026-10-21 Facebook Web 登录开发（真实联调待条件）
+
+- 后续部署前复查：用户确认 Meta/政策已配置，实际两份政策 HTTPS 200。改用现有测试域名做真实联调，无需先完成 Mac HTTPS。远端公开脚本仍旧版、callback 404；无签名 settings 为 40103，不能判断路由配置。本机仅有 App Secret、历史迁移仍阻塞；目标库/环境未读取。本机 H5 签名覆盖为空，不能直接上传该 dist；需按目标签名配置重建。详见[检查记录](./audits/2026-10-21-facebook-deployment-readiness.md)。本次只检查及更新文档，未部署。
+
+- 后续修复用户反馈的 8093 旧入口：已备份旧静态产物，发布新 H5 至 `deploy/web/client/`；8093 HTML/入口脚本哈希与 dist 一致，Chrome 点击 Facebook 显示 HTTPS 入口要求。仅本地前端已发布；后端/常规迁移/远端和真实授权仍待条件，下文“未发布 8093”是此前开发验证阶段记录。
+
+- 用户授权按七阶段方案开发：Web 优先，Facebook 授权直接建 Mtrip 账号；首次无手机号/密码，同身份复用，旧手机号账号不按邮箱合并，冻结/注销/软删不可重建。
+- 新增 user-service `FacebookClient/FacebookLoginService`、`settings/start/exchange` App 接口及独立 `/api/v1/auth/facebook/callback`。后端验证 app/subject/有效期/权限；Redis state 600 秒、票据 60 秒原子消费，Secure/HttpOnly/SameSite=Lax 浏览器绑定；JWT 不进 URL。网关精确回调走 APP 池，内外层日志省略 callback query。
+- 迁移 `V20261021010000` 审计歧义手机号后允许 mobile_hash=NULL，新增站点/provider/app/subject 唯一身份表及同意记录；事务建用户/邀请码/身份、唯一冲突回滚孤立用户。只请求 public_profile，不保存 provider email。App Secret 只注入两个用户服务池；默认关闭。
+- client-app 登录/注册入口、条款/隐私同意及独立账号说明、完成页清 fragment/兑换/持久化/资料提示、密码未设置展示已实现；成功回首页，失败可返回登录，原生/Google/Apple 不接入本期。
+- 验证：51 项临时库/容器 HTTP 回归（含实际 MySQL 事务与 Redis Lua 并发，Facebook transport 为替身）、shared 147/1132、PHP lint/admin build/client typecheck/H5 export、OpenResty/Compose/迁移命名/diff 通过。Chrome 390×844 取消/刷新过期/返回登录/HTTP 入口提示已验；真实授权、HTTPS Cookie、同意/成功态及订单联系信息未验。临时 DB/容器与已跟踪 Redis 凭据已清理。
+- 用户确认 App Secret 已写入忽略 deploy/.env，目前没有政策链接和 HTTPS 开发域名；未改 Meta、未公开隧道、未发真实 SMS、未发布 8093/远端或迁移常规库。`scripts/db-migrate.sh --status` 被既有待执行 20261015090000 低于最高 20261015100000 拦截，notify_record.params 实际缺失；需另经审计备份处理历史迁移，禁止伪造账本/直接绕过。常规库手机号/hash 歧义和空 hash 均 0 条。
+- [分阶段实施与待验项](./21-Facebook-Web登录实施方案.md)、[复现/部署/回退步骤](../../test/facebook/README.md)。2026-10-22 按用户要求纳入本次本地提交，未推送；远端部署和真实授权仍待完成。
+
 ### 2026-10-19 后台用户列表余额调整
 
 - 用户确认“增加/扣减金额 + 必填原因 + 余额流水”。admin-web 用户列表新增“调整余额”弹窗，打开时重读余额、预览调整后余额，保存后刷新列表和已打开的详情流水，中英文同步；余额流水标题及金额列标签同步明确。

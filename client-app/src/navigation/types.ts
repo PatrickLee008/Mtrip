@@ -33,6 +33,7 @@ export type MainTabParamList = {
 
 /** 根 Stack */
 export type RootStackParamList = {
+  FacebookComplete: undefined;
   Chat: { propertyId?: number; orderId?: number; conversationId?: number; type?: number } | undefined;
   MainTabs: NavigatorScreenParams<MainTabParamList>;
   SiteSelect: undefined;

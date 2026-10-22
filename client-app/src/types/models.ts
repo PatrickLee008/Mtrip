@@ -31,6 +31,8 @@ export interface UserProfile {
   avatar: string;
   mobile: string;
   email: string;
+  mobileBound?: boolean;
+  hasPassword?: boolean;
   memberLevelId: number;
   memberLevelName: string;
   balance: string;

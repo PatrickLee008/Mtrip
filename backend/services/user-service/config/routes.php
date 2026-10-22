@@ -16,6 +16,8 @@ use App\Controller\Admin\AdminReferralController;
 use App\Controller\Admin\AdminUserController;
 use App\Controller\App\AppealController;
 use App\Controller\App\AuthController;
+use App\Controller\App\FacebookAuthController;
+use App\Controller\FacebookCallbackController;
 use App\Controller\App\ChatController;
 use App\Controller\App\FavoriteController;
 use App\Controller\App\NotifyController;
@@ -35,6 +37,10 @@ Router::get('/healthz', static fn () => ['status' => 'ok', 'service' => 'user-se
 // 公开接口(游客可用,须携带 X-Site-Id)
 Router::post('/api/v1/app/auth/register', [AuthController::class, 'register']);
 Router::post('/api/v1/app/auth/login', [AuthController::class, 'login']);
+Router::post('/api/v1/app/auth/facebook/settings', [FacebookAuthController::class, 'settings']);
+Router::post('/api/v1/app/auth/facebook/start', [FacebookAuthController::class, 'start']);
+Router::post('/api/v1/app/auth/facebook/exchange', [FacebookAuthController::class, 'exchange']);
+Router::get('/api/v1/auth/facebook/callback', [FacebookCallbackController::class, 'callback']);
 // 短信验证码(SMSPoh Verify API V3):三场景共用发码/验码,验码换一次性 verifyToken
 Router::post('/api/v1/app/auth/sms/send', [AuthController::class, 'smsSend']);
 Router::post('/api/v1/app/auth/sms/verify', [AuthController::class, 'smsVerify']);

@@ -775,6 +775,21 @@
         "idImage": "ID ဓာတ်ပုံများ တင်ပါ",
         "selfie": "ဆဲလ်ဖီ တင်ပါ"
       }
+    },
+    "facebook": {
+      "continue": "Continue with Facebook",
+      "consent": "By continuing, you agree to the Mtrip Terms and Privacy Policy. Your first Facebook login creates a Mtrip account without a phone number or password.",
+      "separateAccount": "Already have a Mtrip account? This does not link your existing phone account. Orders and balances remain with the original account.",
+      "agreeContinue": "Agree and continue",
+      "cancel": "Cancel",
+      "httpsRequired": "Please use the configured HTTPS website for Facebook login.",
+      "unavailable": "Facebook login is not available yet. Please use another login method.",
+      "failed": "Facebook login failed. Please return to sign in and try again.",
+      "cancelled": "Facebook authorization was cancelled. You can try again.",
+      "restricted": "This account is unavailable. Please contact support.",
+      "expired": "This login has expired. Please start again.",
+      "backToLogin": "Back to sign in",
+      "completing": "Completing Facebook login…"
     }
   },
   "more": {

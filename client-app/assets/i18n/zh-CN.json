@@ -775,6 +775,21 @@
         "idImage": "请上传证件照片",
         "selfie": "请上传自拍"
       }
+    },
+    "facebook": {
+      "continue": "使用 Facebook 继续",
+      "consent": "继续即表示你同意 Mtrip 用户条款和隐私政策。首次使用 Facebook 登录将直接创建 Mtrip 账号，无需手机号和密码。",
+      "separateAccount": "已有 Mtrip 账号？此操作不会关联原手机号账号，原账号的订单和余额仍保留在原账号中。",
+      "agreeContinue": "同意并继续",
+      "cancel": "取消",
+      "httpsRequired": "请从已配置的 HTTPS 网站使用 Facebook 登录。",
+      "unavailable": "Facebook 登录暂未开放，请使用其他登录方式。",
+      "failed": "Facebook 登录失败，请返回登录页重试。",
+      "cancelled": "已取消 Facebook 授权，可以重新尝试。",
+      "restricted": "此账号暂不可用，请联系客服。",
+      "expired": "本次登录已过期，请重新发起。",
+      "backToLogin": "返回登录页",
+      "completing": "正在完成 Facebook 登录…"
     }
   },
   "more": {

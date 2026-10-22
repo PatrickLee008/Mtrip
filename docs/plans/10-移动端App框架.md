@@ -1,5 +1,17 @@
 # 模块10:移动端 client-app(Expo 51 + RN + TS)
 
+## 2026-10-21 Facebook Web 登录
+
+2026-10-22 按用户要求将本次前后端、迁移、配置、测试及验收文档纳入本地提交，未推送；真实授权和远端部署状态不变。
+
+部署前复查：用户已准备 Meta 和实际政策链接，公开 HTTPS 页面可用；测试域名仍旧前端、callback 404。需配置目标环境、检查并迁移目标库、按服务器有效客户端签名重建 H5、发布双池/网关后真实授权验收。本机迁移仍有历史阻塞，不代表远端账本相同。详见[检查记录](./audits/2026-10-21-facebook-deployment-readiness.md)。
+
+后续本地发布修复：8093 仍提供旧 H5，导致 Facebook 显示“该业务暂未开放”。现已备份并将新构建发布至 `deploy/web/client/`，实访 HTML/入口 JS 哈希匹配，Chrome 点击显示“请从已配置的 HTTPS 网站使用 Facebook 登录。”。本次仅更新本地前端产物；后端发布、常规迁移及真实 HTTPS 授权仍待条件。
+
+按用户授权实现 Web 优先、Facebook 身份验证后直接建号；无手机号/密码，不按邮箱合并旧账号。登录/注册 Facebook 按钮共用同意流程及独立账号提示，完成页在启动时清理 fragment、兑换一次性票据并复用现有持久化/资料弹窗；账号页准确显示未设置密码。Google/Apple 与原生 Facebook 保留原行为。后端 `settings/start/callback/exchange`、nullable 手机哈希/身份唯一索引、事务并发建号及原登录兼容回归已实现。
+
+51 项隔离 HTTP/MySQL/Redis、shared 147 用例/1132 断言及质量基线通过，H5 导出、网关/Compose 校验通过；Chrome 390px 的取消/过期/返回登录/HTTP 入口提示已验。未执行真实 Facebook 授权、未发布 8093 或远端。用户已在忽略的 deploy/.env 配置 App Secret，但目前没有政策链接/HTTPS 开发入口；功能默认关闭。常规迁移另被既有 `20261015090000` 倒序记录阻塞，未改账本或常规数据。详细阶段、后续联调和回退见[实施方案](./21-Facebook-Web登录实施方案.md)及[test/facebook](../../test/facebook/README.md)。
+
 ## 2026-10-16 本地 H5 登录客户端鉴权修复
 
 8093 登录 `40103 客户端鉴权失败` 的根因是构建包带有 `.env.production` 的客户端配置，而本地 `sys_client` 表为空。后端虽然关闭强制签名/加密，但收到 `X-Encrypted: 1` 仍会查找客户端并解密。新增 Git 忽略的 `.env.production.local`，仅本机将客户端 ID/secret 置空，与现有开发后端开关对齐；原生产配置及后端配置未改。清 Metro 缓存导出并发布 8093，新产物哈希匹配且不含旧客户端凭据；空参数登录恢复为控制器校验 `40001 参数 mobile 不能为空`。未尝试真实账号或发送验证码，真实账号成功登录待重试。旧 H5 备份及详情见[发布记录](./audits/2026-10-16-guest-messaging-local-rollout.md)。

@@ -18,6 +18,7 @@ interface UserState {
   login: (mobile: string, password: string) => Promise<void>;
   /** 短信验证码登录(免密):verifyToken 来自 `apiSmsVerify`(scene=login) */
   loginBySms: (mobile: string, verifyToken: string) => Promise<void>;
+  acceptFacebookAuth: (result: AuthResult & { isNewUser: boolean }) => Promise<void>;
   register: (
     mobile: string,
     password: string,
@@ -71,6 +72,12 @@ export const useUserStore = create<UserState>((set, get) => ({
     set({ token: result.token, profile: result.user, isLogin: true });
     // 资料没完善的老号登录后也提示一次(点过 Later 的不再弹)
     void get().promptProfileSetup();
+  },
+
+  async acceptFacebookAuth(result) {
+    await applyAuth(result);
+    set({ token: result.token, profile: result.user, isLogin: true });
+    void get().promptProfileSetup(result.isNewUser);
   },
 
   async register(mobile, password, extra) {

@@ -86,7 +86,7 @@ export default function AccountScreen() {
         <MenuLink
           icon="lock"
           title={t('more.account.security.password')}
-          desc="*********"
+          desc={profile?.hasPassword === false ? notSet : '*********'}
           onPress={comingSoon}
         />
       </View>

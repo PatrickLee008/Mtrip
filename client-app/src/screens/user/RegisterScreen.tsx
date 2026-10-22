@@ -19,7 +19,7 @@
  *   2. 设计稿没有昵称栏,故删掉原昵称输入;后端 nickname 为空时会自动取「User+手机后四位」
  *
  * 未实现的能力(设计稿有、后端没有),一律走 comingSoon:
- *   区号选择(固定 +95)、三方登录、条款/隐私政策详情页
+ *   区号选择(固定 +95)、Google/Apple 登录、手机号注册的条款/隐私详情页(Facebook 有独立同意流程)
  *
  * **姓名取代了原来的邮箱栏**(用户要求):落库进 `user_info.real_name`(AES 加密列),
  * 必填。注意它不是实名认证 —— `real_name_status` 仍为 0 未认证,后端只存名字不改认证状态。
@@ -38,6 +38,7 @@ import { apiSmsSend } from '@/api/user';
 import HomeIcon from '@/components/home/HomeIcon';
 import AuthShell from '@/components/user/AuthShell';
 import SocialIcon, { type SocialProvider } from '@/components/user/SocialIcon';
+import FacebookLoginEntry from '@/components/user/FacebookLoginEntry';
 import { colors, radius } from '@/config/theme';
 import { fonts } from '@/config/typography';
 import type { RootStackParamList } from '@/navigation/types';
@@ -266,7 +267,7 @@ export default function RegisterScreen() {
         </View>
 
         <View style={styles.socials}>
-          {SOCIALS.map((p) => (
+          {SOCIALS.map((p) => p === 'facebook' ? <FacebookLoginEntry key={p} /> : (
             <Pressable
               key={p}
               style={({ pressed }) => [styles.socialBtn, pressed && styles.pressed]}
