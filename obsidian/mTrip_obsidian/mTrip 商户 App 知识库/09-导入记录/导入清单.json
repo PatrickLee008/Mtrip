@@ -1,0 +1,617 @@
+{
+  "source_path": "/Users/Admin/Projects/Mtrip海外旅游平台/documents/PRD/mTrip_Merchant App PRD_v1.0.12_中文版.md",
+  "source_sha256": "5b816f1446549282d133b214fd1e4807dc0dca261d876c21c631e0c13197ab18",
+  "version": "1.0.12",
+  "imported_on": "2026-10-25",
+  "vault": "/Users/Admin/Projects/Mtrip海外旅游平台/documents/mTrip_obsidian/mTrip_obsidian",
+  "folder": "mTrip 商户 App 知识库",
+  "validation": {
+    "source_hash_match": true,
+    "image_hashes_match": 10,
+    "verbatim_extracts_match": 42,
+    "covered_lines": 1565,
+    "toc_only_in_source_lines": "21-100",
+    "coverage_without_overlap": true,
+    "wiki_links_resolved": 574,
+    "image_links_resolved": 30,
+    "markdown_notes": 54
+  },
+  "sections": [
+    {
+      "path": "01-产品与范围/PRD 文档信息.md",
+      "start": 1,
+      "end": 20,
+      "related": []
+    },
+    {
+      "path": "01-产品与范围/产品定位、目标与约束.md",
+      "start": 101,
+      "end": 152,
+      "related": []
+    },
+    {
+      "path": "01-产品与范围/用户画像.md",
+      "start": 153,
+      "end": 162,
+      "related": []
+    },
+    {
+      "path": "01-产品与范围/组合与业务领域管理.md",
+      "start": 440,
+      "end": 460,
+      "related": []
+    },
+    {
+      "path": "02-业务流程/用户旅程总览.md",
+      "start": 163,
+      "end": 180,
+      "related": []
+    },
+    {
+      "path": "02-业务流程/场景1-注册与两阶段审批.md",
+      "start": 181,
+      "end": 241,
+      "related": []
+    },
+    {
+      "path": "02-业务流程/场景1-账号激活与登录.md",
+      "start": 242,
+      "end": 359,
+      "related": []
+    },
+    {
+      "path": "02-业务流程/场景2-酒店配置与发布.md",
+      "start": 360,
+      "end": 383,
+      "related": []
+    },
+    {
+      "path": "02-业务流程/场景3-预订管理与支付.md",
+      "start": 384,
+      "end": 431,
+      "related": []
+    },
+    {
+      "path": "02-业务流程/端到端平台工作流.md",
+      "start": 432,
+      "end": 439,
+      "related": []
+    },
+    {
+      "path": "03-功能模块/M00-商户工作台.md",
+      "start": 461,
+      "end": 529,
+      "related": []
+    },
+    {
+      "path": "03-功能模块/M01-注册、认证与管理员审批.md",
+      "start": 530,
+      "end": 601,
+      "related": []
+    },
+    {
+      "path": "03-功能模块/M02-酒店与客房管理.md",
+      "start": 602,
+      "end": 635,
+      "related": []
+    },
+    {
+      "path": "03-功能模块/M03-供应、库存与定价.md",
+      "start": 636,
+      "end": 742,
+      "related": []
+    },
+    {
+      "path": "03-功能模块/M04-预订管理.md",
+      "start": 743,
+      "end": 886,
+      "related": []
+    },
+    {
+      "path": "03-功能模块/M05-经营工作台、收益与结算.md",
+      "start": 887,
+      "end": 938,
+      "related": []
+    },
+    {
+      "path": "03-功能模块/M06-通知与设置.md",
+      "start": 939,
+      "end": 1023,
+      "related": []
+    },
+    {
+      "path": "03-功能模块/M07-RBAC 与员工管理.md",
+      "start": 1024,
+      "end": 1098,
+      "related": []
+    },
+    {
+      "path": "03-功能模块/M08-促销与活动管理.md",
+      "start": 1099,
+      "end": 1129,
+      "related": []
+    },
+    {
+      "path": "03-功能模块/M09-评价与评分管理.md",
+      "start": 1130,
+      "end": 1143,
+      "related": []
+    },
+    {
+      "path": "03-功能模块/M10-商户支持与帮助中心.md",
+      "start": 1144,
+      "end": 1228,
+      "related": []
+    },
+    {
+      "path": "04-验收标准/AC00-验收说明与商户工作台.md",
+      "start": 1229,
+      "end": 1241,
+      "related": [
+        "03-功能模块/M00-商户工作台.md"
+      ]
+    },
+    {
+      "path": "04-验收标准/AC01-注册、认证与管理员审批.md",
+      "start": 1242,
+      "end": 1256,
+      "related": [
+        "03-功能模块/M01-注册、认证与管理员审批.md"
+      ]
+    },
+    {
+      "path": "04-验收标准/AC02-酒店与客房管理.md",
+      "start": 1257,
+      "end": 1273,
+      "related": [
+        "03-功能模块/M02-酒店与客房管理.md"
+      ]
+    },
+    {
+      "path": "04-验收标准/AC03-供应、库存与定价.md",
+      "start": 1274,
+      "end": 1310,
+      "related": [
+        "03-功能模块/M03-供应、库存与定价.md"
+      ]
+    },
+    {
+      "path": "04-验收标准/AC04-预订管理.md",
+      "start": 1311,
+      "end": 1319,
+      "related": [
+        "03-功能模块/M04-预订管理.md"
+      ]
+    },
+    {
+      "path": "04-验收标准/AC05-经营工作台、收益与结算.md",
+      "start": 1320,
+      "end": 1326,
+      "related": [
+        "03-功能模块/M05-经营工作台、收益与结算.md"
+      ]
+    },
+    {
+      "path": "04-验收标准/AC06-通知与设置.md",
+      "start": 1327,
+      "end": 1345,
+      "related": [
+        "03-功能模块/M06-通知与设置.md"
+      ]
+    },
+    {
+      "path": "04-验收标准/AC07-RBAC 与员工管理.md",
+      "start": 1346,
+      "end": 1354,
+      "related": [
+        "03-功能模块/M07-RBAC 与员工管理.md"
+      ]
+    },
+    {
+      "path": "04-验收标准/AC08-促销与活动管理.md",
+      "start": 1355,
+      "end": 1375,
+      "related": [
+        "03-功能模块/M08-促销与活动管理.md"
+      ]
+    },
+    {
+      "path": "04-验收标准/AC09-评价与评分管理.md",
+      "start": 1376,
+      "end": 1383,
+      "related": [
+        "03-功能模块/M09-评价与评分管理.md"
+      ]
+    },
+    {
+      "path": "04-验收标准/AC10-商户支持与帮助中心.md",
+      "start": 1384,
+      "end": 1414,
+      "related": [
+        "03-功能模块/M10-商户支持与帮助中心.md"
+      ]
+    },
+    {
+      "path": "05-设计与集成/设计、信息架构与权限矩阵.md",
+      "start": 1415,
+      "end": 1434,
+      "related": []
+    },
+    {
+      "path": "05-设计与集成/技术考量与同步原则.md",
+      "start": 1435,
+      "end": 1456,
+      "related": []
+    },
+    {
+      "path": "05-设计与集成/PMS 与 Channel Manager 集成.md",
+      "start": 1457,
+      "end": 1518,
+      "related": []
+    },
+    {
+      "path": "05-设计与集成/实时通知、配额与扩展性.md",
+      "start": 1519,
+      "end": 1539,
+      "related": []
+    },
+    {
+      "path": "06-规划与治理/成功指标.md",
+      "start": 1540,
+      "end": 1551,
+      "related": []
+    },
+    {
+      "path": "06-规划与治理/原文待决问题.md",
+      "start": 1552,
+      "end": 1561,
+      "related": []
+    },
+    {
+      "path": "06-规划与治理/原文问答.md",
+      "start": 1562,
+      "end": 1578,
+      "related": []
+    },
+    {
+      "path": "06-规划与治理/功能时间线与阶段划分.md",
+      "start": 1579,
+      "end": 1596,
+      "related": []
+    },
+    {
+      "path": "06-规划与治理/参考范围与 PRD 检查清单.md",
+      "start": 1597,
+      "end": 1627,
+      "related": []
+    },
+    {
+      "path": "06-规划与治理/版本变更历史.md",
+      "start": 1628,
+      "end": 1645,
+      "related": []
+    }
+  ],
+  "files": [
+    {
+      "path": "00-知识库首页.md",
+      "bytes": 7661,
+      "sha256": "68afb9b65d48ae61e132bc1298249089a96716954aae1a25569a2bf75a2319d0"
+    },
+    {
+      "path": "01-产品与范围/PRD 文档信息.md",
+      "bytes": 1735,
+      "sha256": "78aea09e39d509172d56b8ca728f076f108ca6fc89d3eb0d633257bbb32e6136"
+    },
+    {
+      "path": "01-产品与范围/产品定位、目标与约束.md",
+      "bytes": 5469,
+      "sha256": "71a12e9e122e00875eb734e9f29f49e2d503215a8dad9baa0771b9cff9e25b7b"
+    },
+    {
+      "path": "01-产品与范围/用户画像.md",
+      "bytes": 2072,
+      "sha256": "04662231a536adcb45afa9d8e018de67ca5317c070c1edd8ec9f25b5b6d3bbec"
+    },
+    {
+      "path": "01-产品与范围/组合与业务领域管理.md",
+      "bytes": 2482,
+      "sha256": "99789a683236d87a5150f4fb41472e8aafaa8c325875cb410b067f310f4f92cf"
+    },
+    {
+      "path": "02-业务流程/场景1-注册与两阶段审批.md",
+      "bytes": 6878,
+      "sha256": "db7992935a0eebea9668536e1ba72ff452ab7e6c7d5c4d1d7e809c3cf2fd1c10"
+    },
+    {
+      "path": "02-业务流程/场景1-账号激活与登录.md",
+      "bytes": 11433,
+      "sha256": "f6be3f780a7c13cbec27f6efdea60cc8932d130b142c64f17ebe24fb0a715fce"
+    },
+    {
+      "path": "02-业务流程/场景2-酒店配置与发布.md",
+      "bytes": 2097,
+      "sha256": "6c2e886be3b584ff27a19ddcc755cd8568fd3e5bc0c56859f238fdccbd7c9aed"
+    },
+    {
+      "path": "02-业务流程/场景3-预订管理与支付.md",
+      "bytes": 5884,
+      "sha256": "573b658c22ddcf2269d1da8fcf4300858c8a9d1e819c689c25a5491a594a5e3b"
+    },
+    {
+      "path": "02-业务流程/用户旅程总览.md",
+      "bytes": 2587,
+      "sha256": "9bc038261dd215bef358ddfa3061af9ea0795473e93dc77e32bc15c767715508"
+    },
+    {
+      "path": "02-业务流程/端到端平台工作流.md",
+      "bytes": 1700,
+      "sha256": "f6abe35dc4ed25949d141c25cf9888a389e8bef9a3d3b4da178429f70613246c"
+    },
+    {
+      "path": "03-功能模块/M00-商户工作台.md",
+      "bytes": 2643,
+      "sha256": "7445afcc31072bcd9d3abcb650acf50208ef06815e2f88ede0ab30bb3fedea2f"
+    },
+    {
+      "path": "03-功能模块/M01-注册、认证与管理员审批.md",
+      "bytes": 6584,
+      "sha256": "54663ca7163c5a9655a35705a9ba69c886c44693051406a32b267e931c22e38b"
+    },
+    {
+      "path": "03-功能模块/M02-酒店与客房管理.md",
+      "bytes": 6204,
+      "sha256": "1959d32bdba4d97fb9be26253cb41cdc754a84bbad3dd3c888f82a29091ca86c"
+    },
+    {
+      "path": "03-功能模块/M03-供应、库存与定价.md",
+      "bytes": 7934,
+      "sha256": "d13d451fb2e048aaf60b6a1e03b5c6d1f70787730f519c099d73e01ba17358d0"
+    },
+    {
+      "path": "03-功能模块/M04-预订管理.md",
+      "bytes": 6834,
+      "sha256": "468357397eae6ec260881d213503c3674b984c1d4efce93ed23fc29775c7f1f3"
+    },
+    {
+      "path": "03-功能模块/M05-经营工作台、收益与结算.md",
+      "bytes": 6821,
+      "sha256": "c061d65588cb9988dde74a44999c21b9c9df8c03052bedbccb77916ec52114fe"
+    },
+    {
+      "path": "03-功能模块/M06-通知与设置.md",
+      "bytes": 5570,
+      "sha256": "edf60b3071af4901fd3fadc356bcc0120194ea051d4788d64fbc04461b373a72"
+    },
+    {
+      "path": "03-功能模块/M07-RBAC 与员工管理.md",
+      "bytes": 3237,
+      "sha256": "0168a550de54e40142a43172af6542143bf66dd398197cf705563cbefe37dc6a"
+    },
+    {
+      "path": "03-功能模块/M08-促销与活动管理.md",
+      "bytes": 7028,
+      "sha256": "66c70d1ec03dfb1e6735be9e82fbc3bf683bb74b79367d380c2cfbd8e2342778"
+    },
+    {
+      "path": "03-功能模块/M09-评价与评分管理.md",
+      "bytes": 2006,
+      "sha256": "9eb4a22615894f0f2906cb358ddbf09e9c9ce639645e95e39bbfd62746c91180"
+    },
+    {
+      "path": "03-功能模块/M10-商户支持与帮助中心.md",
+      "bytes": 6290,
+      "sha256": "2d4a4c416ca9698c0a111990ba1f2cfad4165eedd0851d8d8804760c01097b9d"
+    },
+    {
+      "path": "04-验收标准/AC00-验收说明与商户工作台.md",
+      "bytes": 1687,
+      "sha256": "a7a0827d8585f2918130ae832bb78d563d351b710003f0c9ae159629d1744433"
+    },
+    {
+      "path": "04-验收标准/AC01-注册、认证与管理员审批.md",
+      "bytes": 3119,
+      "sha256": "16ea2ef894cc7fbd837fd6339d221a3014414b2056bd45012c719fb5f276b0bd"
+    },
+    {
+      "path": "04-验收标准/AC02-酒店与客房管理.md",
+      "bytes": 2736,
+      "sha256": "e5ff9136299f5a67c9ddfef0064edba8cde56f1d823c90a357c1fd2382a99c88"
+    },
+    {
+      "path": "04-验收标准/AC03-供应、库存与定价.md",
+      "bytes": 4879,
+      "sha256": "a5a4da7f554f051138a1543c8d570250f38b5b9fc5824e0e84e01b4c4e2ac84d"
+    },
+    {
+      "path": "04-验收标准/AC04-预订管理.md",
+      "bytes": 1899,
+      "sha256": "212773afabc4087ba7dc1d36a7d7c55f3d48886c9cf2719fee86dd1ae99c3d75"
+    },
+    {
+      "path": "04-验收标准/AC05-经营工作台、收益与结算.md",
+      "bytes": 1681,
+      "sha256": "5617212e5ecb323ff0f9e6e60da4ea33a9a8d4d8511de2605d4b48927ea1ca37"
+    },
+    {
+      "path": "04-验收标准/AC06-通知与设置.md",
+      "bytes": 3108,
+      "sha256": "afd182586b29c462d5e3bbc21799caa568bee10c12389511f618ae34e33195e0"
+    },
+    {
+      "path": "04-验收标准/AC07-RBAC 与员工管理.md",
+      "bytes": 1766,
+      "sha256": "bf034dddeefb8efd0ab9bde2dec0ea5ce9e52f461f15367d96cb669b25720e27"
+    },
+    {
+      "path": "04-验收标准/AC08-促销与活动管理.md",
+      "bytes": 3822,
+      "sha256": "10aaf9023e8220977ab4d643f28fd386b30fc5b209ad86306c2898ba9464739a"
+    },
+    {
+      "path": "04-验收标准/AC09-评价与评分管理.md",
+      "bytes": 1689,
+      "sha256": "e0a85aba604cbdf03739c72202c0a2376b6ac46d0994a56b1492e650fdde2d9f"
+    },
+    {
+      "path": "04-验收标准/AC10-商户支持与帮助中心.md",
+      "bytes": 3606,
+      "sha256": "7ed8b7936ac0d82f23e2ca766e9cbef0415809d959a548b69850eb987d771862"
+    },
+    {
+      "path": "05-设计与集成/PMS 与 Channel Manager 集成.md",
+      "bytes": 3198,
+      "sha256": "2d07ca9903cfb5155475e920b960638ce0bf133fe152cd7fec2be9ca100be267"
+    },
+    {
+      "path": "05-设计与集成/实时通知、配额与扩展性.md",
+      "bytes": 1981,
+      "sha256": "55c9ce9b2b502bfa472fef595146741ae74f93c79cd70a76494080243a748366"
+    },
+    {
+      "path": "05-设计与集成/技术考量与同步原则.md",
+      "bytes": 2791,
+      "sha256": "ca8391b5c4a6170cf94d02b790c45f002f8b61636f116783cfd9edd5c791a6d0"
+    },
+    {
+      "path": "05-设计与集成/设计、信息架构与权限矩阵.md",
+      "bytes": 1834,
+      "sha256": "ac14f0b301ff11778f59ba5f6cb909591a67e06198902abdf40a6d06a25728f9"
+    },
+    {
+      "path": "06-规划与治理/功能时间线与阶段划分.md",
+      "bytes": 1894,
+      "sha256": "9c3f22f5fbf8b3057bd04ecdecf24922dbed020e7978b376a64a2fadee4d5df0"
+    },
+    {
+      "path": "06-规划与治理/原文待决问题.md",
+      "bytes": 1759,
+      "sha256": "0d095e4c0e35164e3e65c509d25ae519c63b84bdc2a55fbe0a17761e12baf60d"
+    },
+    {
+      "path": "06-规划与治理/原文问答.md",
+      "bytes": 3056,
+      "sha256": "e5ae2c567d4daea202dd62dcec8cc81755df6a7f4f7b320eb574b2715a2a5e93"
+    },
+    {
+      "path": "06-规划与治理/参考范围与 PRD 检查清单.md",
+      "bytes": 2642,
+      "sha256": "b21b376457b2cfcf2525e6112731b962a58510548f8ae7d3b6b311439fe7a701"
+    },
+    {
+      "path": "06-规划与治理/待澄清事项.md",
+      "bytes": 14331,
+      "sha256": "56b0be5096cfe83a0857581edae48f236be33b48992e09ec56f89ed97f2a26b1"
+    },
+    {
+      "path": "06-规划与治理/成功指标.md",
+      "bytes": 2148,
+      "sha256": "5c120cd22229e8fb799bbf09d257db1bd187cc34ea7ce9e5be30fc7c33e9d783"
+    },
+    {
+      "path": "06-规划与治理/版本变更历史.md",
+      "bytes": 9817,
+      "sha256": "e5e073e5409e5dc96c1571044edb7f7e2cabcbb74c00d4188d2c6b2cb1645148"
+    },
+    {
+      "path": "07-专题索引/促销权益与平台活动.md",
+      "bytes": 2370,
+      "sha256": "114c64483a10079b55caf4d945490a865a1650b4ea5d3eb2ae3efb6fc6c2b4a1"
+    },
+    {
+      "path": "07-专题索引/员工权限与商户服务.md",
+      "bytes": 2700,
+      "sha256": "8b2b67f5a0b333da8b3ef4d20c00057f0812c3b1d18b18cef93a1f53fd9ba628"
+    },
+    {
+      "path": "07-专题索引/库存同步与并发.md",
+      "bytes": 2760,
+      "sha256": "8801d9f2545f80c50437f78a52f7f69f4d6aa95251609469f36003cdb86a3885"
+    },
+    {
+      "path": "07-专题索引/术语与图示索引.md",
+      "bytes": 5041,
+      "sha256": "10ac736a849abe6bc86f138d967561e02c757c67b23002c172297602f0c5b1a5"
+    },
+    {
+      "path": "07-专题索引/注册登录与账号安全.md",
+      "bytes": 2426,
+      "sha256": "fba07b397d5276e03c58bd75b9ef1bf87a4c00b302c1328cc557565ce3887240"
+    },
+    {
+      "path": "07-专题索引/物业房型与媒体.md",
+      "bytes": 2425,
+      "sha256": "deb33de72d829c5ac3792e5781218c0f3b22295701f3e0c803c48a62d48058de"
+    },
+    {
+      "path": "07-专题索引/预订支付与结算.md",
+      "bytes": 2849,
+      "sha256": "ecbc9c80e5827ae76e472f4c5fb03bc1fe9ff66487fe1f5d041769c728eb5533"
+    },
+    {
+      "path": "08-原始资料/images_merchant_v1.0.12/image_01.png",
+      "bytes": 253114,
+      "sha256": "97f3959caf44375594a88747b1105a787d8d9e37bd21672cde68a3d7121a20d1"
+    },
+    {
+      "path": "08-原始资料/images_merchant_v1.0.12/image_02.png",
+      "bytes": 99994,
+      "sha256": "89f02ea5746c076e351e776d2fdfba0279d91e2b07fddc6934c470ae3a1db671"
+    },
+    {
+      "path": "08-原始资料/images_merchant_v1.0.12/image_03.png",
+      "bytes": 305442,
+      "sha256": "14b1a3cff1ffe134e7d7e9d0afa8c42d17737b51322643691be78d6af97fbba4"
+    },
+    {
+      "path": "08-原始资料/images_merchant_v1.0.12/image_04.png",
+      "bytes": 13522,
+      "sha256": "20d2297858c2c5eedaaed792b6ebfe48f24313e4220ea1f6be1956db88249df3"
+    },
+    {
+      "path": "08-原始资料/images_merchant_v1.0.12/image_05.png",
+      "bytes": 9418,
+      "sha256": "49d1cfbee37f6036f96f122b48ac279ba6d87976a1f4c2755e8d1a66dbb8f130"
+    },
+    {
+      "path": "08-原始资料/images_merchant_v1.0.12/image_06.png",
+      "bytes": 14438,
+      "sha256": "ef08908b4b5ccc77d49a6e3925177e9c6a0f58a7baa31af9a6b824de12653cae"
+    },
+    {
+      "path": "08-原始资料/images_merchant_v1.0.12/image_07.png",
+      "bytes": 374658,
+      "sha256": "ecbb891fd9b35beeda421ff4a42fe871a9f71a5c06c8f08c1066a63f0d44ecdb"
+    },
+    {
+      "path": "08-原始资料/images_merchant_v1.0.12/image_08.png",
+      "bytes": 738528,
+      "sha256": "6fad3231c087b5581125a09abb146d3dfcc82802d13a4d3b340d6f9d74a17e5d"
+    },
+    {
+      "path": "08-原始资料/images_merchant_v1.0.12/image_09.png",
+      "bytes": 854734,
+      "sha256": "4223732a17f98853b99fda2c4e19cdd50fe234cc9fba595ade0701d7e7593231"
+    },
+    {
+      "path": "08-原始资料/images_merchant_v1.0.12/image_10.png",
+      "bytes": 1598417,
+      "sha256": "fd8d1c79a7560344d121abc6ceb9534f90b67a15f482dc456de75115999d38cd"
+    },
+    {
+      "path": "08-原始资料/mTrip_Merchant App PRD_v1.0.12_中文版.md",
+      "bytes": 110645,
+      "sha256": "5b816f1446549282d133b214fd1e4807dc0dca261d876c21c631e0c13197ab18"
+    },
+    {
+      "path": "09-导入记录/原文章节映射.md",
+      "bytes": 5924,
+      "sha256": "679e006d0f4d649867010ea85a27b08224b2abd0f77cb872a09fb20eddecb6bb"
+    },
+    {
+      "path": "09-导入记录/导入说明与校验.md",
+      "bytes": 3047,
+      "sha256": "3098ebaf7c179aac117fe6825d64a2263933e2dbf30f4e7de5d6ea502bbf181b"
+    }
+  ]
+}

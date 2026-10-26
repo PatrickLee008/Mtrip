@@ -1,5 +1,9 @@
 # 会话交接文档(HANDOFF)
 
+## 需求依据与项目共享知识库(2026-10-26)
+
+涉及业务需求的任务先按[知识库关联开发规范](../guides/standards/知识库关联开发规范.md)定位产品、版本与条款，再对照代码和验收。三端知识库已迁入 `obsidian/mTrip_obsidian/` 随项目共享，打开方式见[知识库使用说明](../../obsidian/README.md)；Obsidian 可选，个人配置与回收站不纳入 Git。库可用时关联阅读；缺失或不可读时直接使用本次需求、仓库 PRD 与已确认方案，不要求安装/补建、不申请本地库权限、不阻塞任务。版本差异不能自动切换团队需求基线。完整规则只在上述规范维护；本次调整知识库位置、文档与忽略规则，未改业务代码、构建或 CI。
+
 2026-10-22 最新宝塔只读核验：用户新增开关后 deploy/.env 与双用户容器 ENABLED=true，App ID/Secret 已加载；浏览器实际 settings 已变为 50001 `Facebook login policies are not configured`，条款/隐私 URL 和来源仍空。服务器保持 dev，补齐配置后需 wrapper start 双池。目标迁移此前已确认 applied；此前默认站点1停用问题仍在，当前复验浏览器 site=7（未由代理修改选择）。此前远端修复被自动审批要求明确授权，代理未改远端文件/容器/数据，真实授权未执行。详见[排查记录](./audits/2026-10-22-facebook-online-config.md)。
 
 ### 2026-10-22 Facebook 线上配置故障

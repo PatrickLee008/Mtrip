@@ -4,6 +4,7 @@
 
 当前生效的约定:
 
+- 项目知识库关联开发:[知识库关联开发规范](知识库关联开发规范.md)(共享目录 `obsidian/mTrip_obsidian/`,Obsidian 可选,无库按原需求来源继续,不新增开发/CI 依赖)
 - 后端约定(响应格式/错误码/字段命名/路由前缀/代码范本):`docs/plans/HANDOFF.md` 第 4 节
 - 前端页面代码模式:`docs/plans/HANDOFF.md` 第 5 节
 - 统一错误码定义:`backend/shared/src/Constants/ErrorCode.php`

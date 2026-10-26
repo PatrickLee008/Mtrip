@@ -167,6 +167,7 @@ cd ../admin-web && npm install && npm run dev    # http://localhost:5173,接口�
 |---|---|
 | **项目当前进度 / 各模块状态** | [docs/plans/README.md](docs/plans/README.md)(进度总览表 + 变更记录) |
 | **新会话/新人接手全部上下文** | [docs/plans/HANDOFF.md](docs/plans/HANDOFF.md)(交接文档,第一入口) |
+| **需求依据与项目知识库** | [知识库关联开发规范](docs/guides/standards/知识库关联开发规范.md) · [知识库使用说明](obsidian/README.md)(随项目共享,Obsidian 可选,无库按原来源继续) |
 | **后端开发约定**(响应格式/错误码/字段命名/路由前缀/代码范本) | HANDOFF.md 第 4 节;工程范本以 `backend/services/system-service` 为准 |
 | **前端页面代码模式**(useTable/弹窗表单/权限指令/动态路由) | HANDOFF.md 第 5 节 |
 | **各模块详细任务清单与实现记录** | `docs/plans/01~10-*.md`(每模块一文件,含踩坑记录) |
@@ -175,7 +176,7 @@ cd ../admin-web && npm install && npm run dev    # http://localhost:5173,接口�
 | **开发期清空入驻线索与商户测试数据** | [清理脚本使用说明](docs/guides/setup/开发期商户测试数据清理.md) |
 | **网关路由表/限流/CORS** | `deploy/openresty/conf.d/mtrip.conf` + [docs/plans/08-部署与网关.md](docs/plans/08-部署与网关.md) |
 | **运维监控台方案与计划** | [mtrip-ops/docs/](mtrip-ops/docs/) + [docs/plans/16-运维监控.md](docs/plans/16-运维监控.md) |
-| **原始需求** | `设计文档/*.docx`(提取文本在 `docs/reference/`) |
+| **原始需求** | `设计文档/` 内对应版本的 PRD(含 `.md`/`.docx`);辅助提取文本在 `docs/reference/`,使用前核对版本 |
 
 ## 核心开发约定(速览,详细定义见上表)
 
@@ -217,6 +218,8 @@ MSYS_NO_PATHCONV=1 docker run --rm --entrypoint php \
 - 工作方式:每完成一项任务,同步更新 `docs/plans/` 对应模块文件、README 进度表和 HANDOFF.md;交付前本地跑一次 `scripts/check.ps1` 作为验收入口。
 
 ## 当前状态(2026-07)
+
+2026-10-26 协作规范：已接入[知识库关联开发规范](docs/guides/standards/知识库关联开发规范.md)，三端知识库迁入 `obsidian/mTrip_obsidian/` 随项目共享；有库关联需求条款，无库按原需求来源继续。Obsidian 可选，个人配置不纳入 Git；不改变团队任务基线，不增加安装、配置或 CI 前置条件。仅调整知识库、文档与忽略规则。
 
 商户测试数据清理(2026-10-12)：新增 `scripts/reset-merchant-test-data.sh`，默认预览，显式执行前检查开发环境、暂停写入服务并备份双库，以 SQL 事务清理所有站点入驻/商户及商品、订单、财务、营销、聊天关联数据；保留基础配置与消费者/供应商/集团账号，恢复服务并选择性清理 Redis。说明和边界见[使用指南](docs/guides/setup/开发期商户测试数据清理.md)。本次不清空当前开发库。
 多酒店预订(2026-10-12):第 2 步「添加酒店与民宿」把当前酒店转存为一段住宿并回搜索页挑下一家,回来后第 2 步以 Stay 卡片展示各段(可删除 / 查看详情),第 3 步首卡显示「连住预订(共 N 段)」;各段一次 `trip/create` 下单。开发库新增测试酒店物业 9004(胤竹精品酒店)。

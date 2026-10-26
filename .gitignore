@@ -12,6 +12,10 @@ Desktop.ini
 *.swp
 *.swo
 
+# Obsidian 个人配置与回收站不随共享知识库提交
+/obsidian/mTrip_obsidian/.obsidian/
+/obsidian/mTrip_obsidian/.trash/
+
 # ---------- 临时验证目录(本地脚本产物) ----------
 .tmp-mysql-verify/
 
