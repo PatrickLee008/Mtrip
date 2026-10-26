@@ -1,5 +1,11 @@
 # 会话交接文档(HANDOFF)
 
+2026-10-22 最新宝塔只读核验：用户新增开关后 deploy/.env 与双用户容器 ENABLED=true，App ID/Secret 已加载；浏览器实际 settings 已变为 50001 `Facebook login policies are not configured`，条款/隐私 URL 和来源仍空。服务器保持 dev，补齐配置后需 wrapper start 双池。目标迁移此前已确认 applied；此前默认站点1停用问题仍在，当前复验浏览器 site=7（未由代理修改选择）。此前远端修复被自动审批要求明确授权，代理未改远端文件/容器/数据，真实授权未执行。详见[排查记录](./audits/2026-10-22-facebook-online-config.md)。
+
+### 2026-10-22 Facebook 线上配置故障
+
+用户已部署后，Chrome 真实带签名 settings 返回 50001 `Facebook login is not configured`；已进入后端启用/App ID/Secret 第一组校验，政策/来源和真实 Meta 尚未执行。线上新入口 AppEntry-4ea18fb4717a477affd1cbef74f97980.js 和 callback 安全 400 已生效；无签名 40103 不能作为实际浏览器失败原因。未连接服务器终端，无法区分具体缺项/双池配置差异；需服务器 deploy/.env 和运行双池核对，配置变化用 wrapper start 而非仅 restart。[排查记录](./audits/2026-10-22-facebook-online-config.md)。本轮只诊断/文档，未远端修复或授权。
+
 ### 2026-10-21 Facebook Web 登录开发（真实联调待条件）
 
 - 后续部署前复查：用户确认 Meta/政策已配置，实际两份政策 HTTPS 200。改用现有测试域名做真实联调，无需先完成 Mac HTTPS。远端公开脚本仍旧版、callback 404；无签名 settings 为 40103，不能判断路由配置。本机仅有 App Secret、历史迁移仍阻塞；目标库/环境未读取。本机 H5 签名覆盖为空，不能直接上传该 dist；需按目标签名配置重建。详见[检查记录](./audits/2026-10-21-facebook-deployment-readiness.md)。本次只检查及更新文档，未部署。

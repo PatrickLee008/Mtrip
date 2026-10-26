@@ -1,5 +1,9 @@
 # Mtrip 开发工作计划总览
 
+2026-10-22 最新宝塔只读核验：用户已使 Facebook 双池开关 true 生效，App ID/Secret 已加载；浏览器 settings 现为政策配置错误，服务器条款/隐私 URL 和来源白名单仍缺失。目标迁移已执行；本轮未修改远端。[排查记录](./audits/2026-10-22-facebook-online-config.md)。
+
+2026-10-22 线上 Facebook 故障已定位至后端启用/App ID/Secret 配置检查（浏览器 settings 50001）；新前端/回调已生效，远端配置修复及真实登录待验。[排查记录](./audits/2026-10-22-facebook-online-config.md)。
+
 2026-10-22 Facebook Web 登录本次改动纳入本地提交，未推送；远端部署、迁移和真实授权验收仍待完成。
 
 2026-10-21 Facebook 测试域名部署前复查：HTTPS/实际政策可用，远端旧前端和 callback 404；环境、目标库迁移、生产签名构建及真实授权待验。[检查记录](./audits/2026-10-21-facebook-deployment-readiness.md)。

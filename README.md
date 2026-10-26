@@ -1,5 +1,9 @@
 # Mtrip 海外旅游 SaaS 平台
 
+2026-10-22 最新只读复核：用户新增开关后，Facebook 双池 ENABLED=true、App ID/Secret 已加载；实际浏览器 settings 已变为 `Facebook login policies are not configured`，条款/隐私 URL 和来源白名单仍为空。需补齐服务器配置并 wrapper start 双池；本轮未修改远端。见[排查记录](docs/plans/audits/2026-10-22-facebook-online-config.md)。
+
+2026-10-22 用户部署后 Facebook 仍不可用：线上新前端/回调已生效，真实浏览器 settings 返回 50001 `Facebook login is not configured`，需核对服务器用户双池启用/App ID/Secret 的有效配置。[排查记录](docs/plans/audits/2026-10-22-facebook-online-config.md)。
+
 2026-10-22 Facebook Web 登录相关代码、迁移、测试及文档按用户要求纳入本地提交；未推送或部署远端，真实授权仍待验收。
 
 2026-10-21 Facebook 部署前复查：政策链接 HTTPS 200；测试域名仍旧前端、callback 404；目标环境需配置/迁移及使用有效客户端签名重新构建。详见[检查记录](docs/plans/audits/2026-10-21-facebook-deployment-readiness.md)。

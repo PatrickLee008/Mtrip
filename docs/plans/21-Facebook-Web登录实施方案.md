@@ -1,5 +1,9 @@
 # Facebook Web 登录实施方案
 
+2026-10-22 最新服务器只读实证：用户新增开关后双池 true、App ID/Secret 已加载；浏览器 settings 变为政策配置错误，条款/隐私 URL 和来源白名单仍空。目标 Facebook 迁移已完成；本轮未改远端，真实授权待验。此前远端修复被自动审批要求明确授权，尚未由代理执行。[排查记录](./audits/2026-10-22-facebook-online-config.md)。
+
+2026-10-22 线上更新：用户部署后新前端和 callback 已生效；真实 Chrome settings 返回 50001 `Facebook login is not configured`，定位在后端启用/App ID/Secret 配置检查。服务器有效环境尚待核对修复，真实授权未执行。见[排查记录](./audits/2026-10-22-facebook-online-config.md)。
+
 日期：2026-10-21。用户已授权按分阶段方案开发。2026-10-22 按用户要求纳入本地提交；未推送或部署远端。
 
 ## 已确认规则
