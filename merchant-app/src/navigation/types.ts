@@ -15,7 +15,9 @@ export type RootStackParamList = {
   TwoFaSetup: { mode: 'activation' | 'recovery'; token: string } | { mode: 'login' };
   TwoFaVerify: { mode: 'activation' | 'recovery'; token: string } | { mode: 'login' };
   BiometricOptIn: undefined;
-  Dashboard: { openMenu?: boolean } | undefined;
+  Dashboard: undefined;
+  Menu: undefined;
+  MenuSettings: { section: 'profile' | 'notifications' | 'security' | 'localization' };
   Notifications: undefined;
   Bookings: undefined;
   BookingDetail: { orderId: number; propertyId: number; action?: 'check-in' | 'check-out' };

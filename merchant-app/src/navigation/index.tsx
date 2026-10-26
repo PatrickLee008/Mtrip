@@ -21,6 +21,8 @@ import {
   TwoFaVerifyScreen,
 } from '@/screens/onboarding/MerchantFlowScreens';
 import DashboardScreen from '@/screens/dashboard/DashboardScreen';
+import MenuScreen from '@/screens/menu/MenuScreen';
+import MenuSettingsScreen from '@/screens/menu/MenuSettingsScreen';
 import NotificationsScreen from '@/screens/notifications/NotificationsScreen';
 import BookingsScreen from '@/screens/bookings/BookingsScreen';
 import BookingDetailScreen from '@/screens/bookings/BookingDetailScreen';
@@ -67,6 +69,8 @@ export default function AppNavigator() {
         <Stack.Screen name="TwoFaVerify" component={TwoFaVerifyScreen} />
         <Stack.Screen name="BiometricOptIn" component={BiometricOptInScreen} />
         <Stack.Screen name="Dashboard" component={DashboardScreen} />
+        <Stack.Screen name="Menu" component={MenuScreen} />
+        <Stack.Screen name="MenuSettings" component={MenuSettingsScreen} />
         <Stack.Screen name="Notifications" component={NotificationsScreen} />
         <Stack.Screen name="Bookings" component={BookingsScreen} />
         <Stack.Screen name="BookingDetail" component={BookingDetailScreen} />

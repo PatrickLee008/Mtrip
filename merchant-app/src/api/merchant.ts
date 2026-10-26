@@ -18,6 +18,8 @@ export function apiMe(): Promise<MerchantProfile> {
   return get<MerchantProfile>('/auth/me');
 }
 
+export const apiMerchantContacts = () => get<{ contacts: { channel: 'email' | 'sms'; recipient: string }[] }>('/auth/contacts');
+
 export function apiMenus(): Promise<MenusResult> {
   return get<MenusResult>('/auth/menus');
 }
