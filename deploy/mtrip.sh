@@ -11,7 +11,7 @@
 #   --s7   隔离验收栈,等价 scripts/s7-environment.ps1:独立 project mtrip-s7、
 #          s7.env.example、不加载 override 与开发者 .env、网关仅 127.0.0.1:8181
 #
-# 凡是可能重建业务容器的操作(start/build),结束后自动刷新网关,
+# start/build/restart 结束后自动刷新网关,
 # 规避容器 IP 变化后 OpenResty 缓存旧上游导致的全量 502。
 #
 # 用到 bash 数组与 pipefail:被 `sh mtrip.sh` 以 dash 启动时自动改用 bash 重新执行
@@ -211,6 +211,10 @@ cmd_stop() {
 cmd_restart() {
     if [ $# -eq 0 ]; then info "重启全部容器"; else info "热重启:$*"; fi
     "${COMPOSE[@]}" restart "$@" || die "重启失败"
+    # Compose 并行重启时网关可能先缓存旧地址,必须在业务容器重启完成后刷新。
+    if [ "$#" -ne 1 ] || [ "${1:-}" != "gateway" ]; then
+        refresh_gateway || die "网关刷新失败"
+    fi
     ok "重启完成"
 }
 
@@ -318,8 +322,20 @@ health_via_exec() {
 
 cmd_health() {
     command -v curl >/dev/null 2>&1 || die "未安装 curl,无法探活"
-    local rc=0
+    local rc=0 gw_port entry method endpoint code
     if [ "$MODE" = "s7" ]; then health_via_exec || rc=1; else health_via_host || rc=1; fi
+    if [ "$MODE" = "s7" ]; then gw_port="$S7_GATEWAY_PORT"; else gw_port="$(env_get GATEWAY_HOST_PORT 8081)"; fi
+    info "商户聊天网关链路探活(无凭据应返回 401)"
+    for entry in GET:summary POST:ticket GET:preferences; do
+        method="${entry%%:*}"; endpoint="${entry##*:}"
+        code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 3 -X "$method" \
+            "http://127.0.0.1:${gw_port}/api/v1/merchant/chat/${endpoint}" 2>/dev/null)"
+        if [ "$code" = "401" ]; then
+            printf '  chat/%-16s %s401%s (鉴权生效,预期)\n' "$endpoint" "$C_GREEN" "$C_OFF"
+        else
+            printf '  chat/%-16s %s%s%s (预期 401)\n' "$endpoint" "$C_RED" "${code:-ERR}" "$C_OFF"; rc=1
+        fi
+    done
     if [ "$rc" -eq 0 ]; then
         ok "全部探活通过"
     else
