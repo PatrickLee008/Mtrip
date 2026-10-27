@@ -138,7 +138,7 @@ web_build_script() {
     esac
 }
 # 同时服务管理端与 APP 端的共享服务(有 -app 孪生)
-APP_SERVING="system-service user-service goods-service order-service marketing-service"
+APP_SERVING="system-service user-service goods-service order-service marketing-service merchant-service"
 
 # mtrip.sh 模式透传
 # 始终显式传递,避免 mtrip.sh 再读一次配置得出不同结论

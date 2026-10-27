@@ -30,11 +30,11 @@ BUSINESS_SERVICES=(
     system-service user-service goods-service order-service
     merchant-service finance-service marketing-service payment-service
 )
-# APP 端独立实例池:5 个共享服务的 -app 孪生(不发布宿主端口,仅经网关内网可达)
+# APP 端独立实例池:6 个共享服务的 -app 孪生(不发布宿主端口,仅经网关内网可达)
 # 定义见 docker-compose.app-pool.yml;网关 /api/v1/app/* 一律走这些孪生
 APP_POOL_SERVICES=(
     system-service-app user-service-app goods-service-app
-    order-service-app marketing-service-app
+    order-service-app marketing-service-app merchant-service-app
 )
 INFRA_SERVICES=(mysql redis gateway)
 # 业务服务 -> 容器内 HTTP 端口(默认栈同时映射到宿主机同名端口)
@@ -42,7 +42,7 @@ SERVICE_PORTS="system-service:9501 user-service:9502 goods-service:9503 order-se
 merchant-service:9505 finance-service:9506 marketing-service:9507 payment-service:9508"
 # APP 孪生 -> 容器内 HTTP 端口(无宿主映射,仅容器内探活用)
 APP_POOL_PORTS="system-service-app:9501 user-service-app:9502 goods-service-app:9503 \
-order-service-app:9504 marketing-service-app:9507"
+order-service-app:9504 marketing-service-app:9507 merchant-service-app:9505"
 
 S7_PROJECT="mtrip-s7"
 S7_ENV_FILE="s7.env.example"
@@ -338,7 +338,7 @@ print_endpoints() {
         echo "  网关入口      http://localhost:$(env_get GATEWAY_HOST_PORT 8081)   (/api/v1/{admin,app,merchant,supplier}/*)"
         echo "  前端(静态)   admin http://localhost:$(env_get ADMIN_WEB_PORT 8090)  merchant :$(env_get MERCHANT_WEB_PORT 8091)  supplier :$(env_get SUPPLIER_WEB_PORT 8092)  client(H5) :$(env_get CLIENT_WEB_PORT 8093)  merchant(H5) :$(env_get MERCHANT_APP_WEB_PORT 8094)"
         echo "  微服务直连    9501~9508  system/user/goods/order/merchant/finance/marketing/payment"
-        echo "  APP 孪生池    system/user/goods/order/marketing-service-app(无宿主端口,/app/* 走此)"
+        echo "  APP 孪生池    system/user/goods/order/marketing/merchant-service-app(无宿主端口,/app/* 走此)"
         echo "  MySQL         localhost:$(env_get MYSQL_HOST_PORT 3307)    Redis  localhost:$(env_get REDIS_HOST_PORT 6380)"
         echo "  上传目录      deploy/uploads(merchant-service 写 / gateway 读)"
         echo "  探活          ./mtrip.sh health"

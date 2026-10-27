@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { Modal, message } from 'ant-design-vue';
 import {
   BellOutlined,
+  BookOutlined,
   CheckOutlined,
   DownOutlined,
   GlobalOutlined,
@@ -123,6 +124,7 @@ onMounted(() => {
     </div>
 
     <div class="header-space" />
+    <a-button v-if="!userStore.profile?.impersonation && userStore.hasPerm('mch:support:guides')" type="text" :title="t('support.guides')" @click="router.push('/support/guides')"><BookOutlined /><span class="guide-label">{{ t('support.guides') }}</span></a-button>
 
     <!-- 搜索框(原型:176px 浅灰底,视觉占位) -->
     <div class="header-search">

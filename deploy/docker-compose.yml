@@ -188,6 +188,7 @@ services:
       - ../database/order/05-merchant-booking.sql:/docker-entrypoint-initdb.d/99h-merchant-booking.sql:ro
       - ../database/merchant/36-merchant-booking-menu.sql:/docker-entrypoint-initdb.d/99i-merchant-booking-menu.sql:ro
       - ../database/merchant/37-merchant-booking-message.sql:/docker-entrypoint-initdb.d/99j-merchant-booking-message.sql:ro
+      - ../database/merchant/42-merchant-support.sql:/docker-entrypoint-initdb.d/99z1-merchant-support.sql:ro
       # order_main.guests 列类型修正(JSON → TEXT,存的是 AES 密文)
       - ../database/order/06-guests-column-type-fix.sql:/docker-entrypoint-initdb.d/99k-guests-column-type-fix.sql:ro
       # 修复超级管理员录入线索未带站点时生成的 MCH-5019 全链路 site_id=0
@@ -296,10 +297,15 @@ services:
     environment:
       <<: *hyperf-env
       HTTP_PORT: "9505"
+      MTRIP_GUIDE_HUB_URL: ${MTRIP_GUIDE_HUB_URL:-https://guide-hub-production-m6ybjs.laravel.cloud/api}
+      MTRIP_GUIDE_HUB_APP_ID: ${MTRIP_GUIDE_HUB_APP_ID:-}
+      MTRIP_GUIDE_HUB_APP_SECRET: ${MTRIP_GUIDE_HUB_APP_SECRET:-}
+      MTRIP_GUIDE_HUB_MERCHANT_SLUG: ${MTRIP_GUIDE_HUB_MERCHANT_SLUG:-}
     ports:
       - "9505:9505"
     volumes:
       - ./uploads:/opt/www/uploads
+      - support-private:/opt/support-private
 
   finance-service:
     <<: *hyperf-common
@@ -370,6 +376,7 @@ services:
       - payment-service
 
 volumes:
+  support-private:
   chat-private:
   mysql-data:
   redis-data:

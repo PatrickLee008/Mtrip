@@ -1,3 +1,4 @@
+import { supportZh } from './support';
 /**
  * 中文语言包:只维护有中文翻译的词条,未翻译的 key 自动回退到 en-US
  */
@@ -243,7 +244,7 @@ export default {
     promotionPerformance: '效果分析',
     campaigns: '平台活动',
     reviews: '评价管理',
-    support: '帮助中心',
+    support: '支持与帮助',
     settings: '设置',
   },
   header: {
@@ -1221,39 +1222,7 @@ export default {
       localTip: '时区和币种本轮为界面偏好,不会改变实际结算币种。',
     },
   },
-  support: {
-    eyebrow: '商家支持',
-    title: '帮助中心',
-    subtitle: '查找预订、结算、客房管理、政策与支持升级的运营指引。',
-    contactSupport: '联系支持',
-    faqTitle: '常见问题',
-    guidesTitle: '指南与政策',
-    availableSoon: '即将上线',
-    ticketTip: '结构化支持工单需要 M10 工单表与流程;本页先提供自助资源入口。',
-    quick: {
-      booking: '预订运营',
-      bookingDesc: '了解订单状态、入住、离店与住客沟通流程。',
-      settlement: '结算帮助',
-      settlementDesc: '查看打款周期、结算申诉、佣金与商户出资折扣说明。',
-      policies: '政策与合规',
-      policiesDesc: '查看平台政策提醒与商家运营规则。',
-    },
-    faq: {
-      q1: '如何处理今日到店订单?',
-      a1: '进入订单或工作台今日运营,核对订单状态并在住客到店前准备房间。',
-      q2: '在哪里提交结算申诉?',
-      a2: '进入收益结算,打开结算详情,在待确认或处理中状态下提交申诉。',
-      q3: '如何回复住客评价?',
-      a3: '进入评价管理,找到对应评价后点击回复,发布商家的官方回应。',
-      q4: '员工权限可以按角色限制吗?',
-      a4: '可以。通过组织与权限配置角色,限制财务、设置等敏感模块的访问。',
-    },
-    guides: {
-      g1: '商家入驻与验证指南',
-      g2: '预订运营手册',
-      g3: '结算与佣金政策',
-    },
-  },
+  support: supportZh,
   rooms: {
     eyebrow: '酒店库存',
     title: '房型管理',

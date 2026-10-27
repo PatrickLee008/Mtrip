@@ -29,7 +29,7 @@ const switcherOpen = ref(false);
 const mobileMenuOpen = ref(false);
 const isPropertyProfile = computed(() => /^\/properties\/\d+\/profile$/.test(route.path));
 const isMessaging = computed(() => route.path === '/guest-messaging');
-const usesMobileNavigation = computed(() => isPropertyProfile.value || isMessaging.value);
+const usesMobileNavigation = computed(() => isPropertyProfile.value || isMessaging.value || route.path.startsWith('/support'));
 const currentProperty = computed(() => userStore.selectedProperty);
 const propertyGroups = computed(() => {
   const groups = new Map<string, MerchantProperty[]>();
@@ -64,7 +64,7 @@ function selectProperty(id: number | null): void {
     void router.push(id === null ? '/properties' : `/properties/${id}/profile`);
     return;
   }
-  const alwaysAvailable = ['/dashboard', '/properties'].includes(path) || path.startsWith('/properties/');
+  const alwaysAvailable = ['/dashboard', '/properties'].includes(path) || path.startsWith('/properties/') || (path === '/support/guides' && userStore.hasPerm('mch:support:guides'));
   // 切到 All Properties(或切到非酒店物业)后物业专属菜单会从侧边栏消失,此时把停留在这些页面的用户送回「所有物业」
   if (!alwaysAvailable && (!isMenuPathVisible(path, userStore.selectedProperty) || !containsPath(userStore.visibleMenus, path))) {
     void router.push('/properties');
@@ -98,7 +98,7 @@ function onLogout(): void {
 </script>
 
 <template>
-  <div :class="['layout-container', { 'property-profile-layout': isPropertyProfile, 'messaging-layout': isMessaging, 'mobile-menu-open': mobileMenuOpen }]" @keydown.esc="mobileMenuOpen = false">
+  <div :class="['layout-container', { 'property-profile-layout': isPropertyProfile, 'messaging-layout': isMessaging, 'support-layout': route.path.startsWith('/support'), 'mobile-menu-open': mobileMenuOpen }]" @keydown.esc="mobileMenuOpen = false">
     <button v-if="usesMobileNavigation && mobileMenuOpen" class="mobile-menu-backdrop" :aria-label="t('properties.profile.closeNavigation')" @click="mobileMenuOpen = false" />
     <!-- 侧边栏:贯穿整个页面高度(原型 228px 白底) -->
     <aside class="layout-sidebar">
@@ -478,10 +478,10 @@ function onLogout(): void {
 
 .mobile-menu-toggle, .mobile-menu-backdrop, .mobile-menu-close { display: none; }
 @media (max-width: 600px) {
-  .messaging-layout {
-    :deep(.lang-name), :deep(.user-name) { display: none; }
+  .messaging-layout, .support-layout {
+    :deep(.lang-name), :deep(.user-name), :deep(.guide-label) { display: none; }
   }
-  .property-profile-layout, .messaging-layout {
+  .property-profile-layout, .messaging-layout, .support-layout {
     .layout-sidebar { display: none; }
     &.mobile-menu-open .layout-sidebar { display: flex; position: fixed; inset: 0 auto 0 0; z-index: 1001; width: 228px; }
     .mobile-menu-backdrop { display: block; position: fixed; inset: 0; z-index: 1000; border: 0; background: rgb(15 23 42 / 35%); }

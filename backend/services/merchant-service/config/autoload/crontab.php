@@ -8,6 +8,8 @@ use Hyperf\Crontab\Crontab;
 return [
     'enable' => true,
     'crontab' => [
+        (new Crontab())->setName('merchant-support-temp-attachments')->setRule('17 * * * *')
+            ->setCallback([\App\Service\SupportAttachmentService::class, 'expireUnbound']),
         (new Crontab())->setName('merchant-registration-draft-expiry')->setRule('*/10 * * * *')
             ->setCallback([\App\Service\MerchantDraftExpiryService::class, 'expireDue']),
         (new Crontab())->setName('merchant-impersonation-expiry')->setRule('* * * * *')

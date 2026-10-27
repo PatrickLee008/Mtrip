@@ -1,3 +1,4 @@
+import { supportZh } from './support';
 /**
  * 中文语言包
  * - 缺失的 key 会自动回退到 en-US(英文);有需要中文的 key 维护在此
@@ -5,6 +6,7 @@
  */
 import complianceS6 from './compliance/zh-CN';
 export default {
+  support: supportZh,
   merchantContactRecovery: {"title": "核验后更正登录联系方式", "hint": "仅限已完成人工身份核验时使用。更换的旧身份会释放，所有会话失效，变更的联系方式重置为未验证。此操作不代表 OTP 已验证；待激活账号需重新领取凭证。", "phone": "新的注册手机号（含国际区号）", "email": "新的注册邮箱", "reason": "身份核验依据和换绑原因（至少 10 字）", "confirm": "确认已核验身份并更正", "done": "联系方式已更正，商户需完成真实 OTP 验证。"},
   complianceS6,
   marketplace: {
@@ -252,6 +254,7 @@ export default {
     closed: '已关闭',
   },
   menu: {
+    supportTickets: '商户支持工单',
     dashboard: '数据大屏',
     config: '系统配置',
     configSite: '站点管理',

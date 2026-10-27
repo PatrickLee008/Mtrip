@@ -40,7 +40,7 @@ const sections = computed(() => [
   { key: 'hotelManagement', paths: [hotelProfilePath.value, '/rooms'] },
   { key: 'operations', paths: ['/availability', '/order'] },
   { key: 'team', paths: ['/account/list', '/account/role'] },
-  { key: 'system', paths: ['/support', '/settings'] },
+  { key: 'system', paths: ['/support', '/support/guides', '/settings'] },
 ]);
 
 function pages(nodes: MenuNode[]): MenuNode[] {
@@ -52,6 +52,7 @@ function pages(nodes: MenuNode[]): MenuNode[] {
 
 const groups = computed(() => {
   const authorized = new Map(pages(userStore.visibleMenus).map((node) => [node.route_path, node]));
+  if (!userStore.profile?.impersonation && userStore.hasPerm('mch:support:guides')) authorized.set('/support/guides', { route_path: '/support/guides', menu_name: t('support.guides'), icon: 'BookOutlined' } as MenuNode);
   const label: Record<string, string> = {
     '/properties': t('sidebar.allProperties'),
     '/earnings': t('sidebar.dashboardEarnings'),
@@ -64,6 +65,7 @@ const groups = computed(() => {
     '/dashboard': 'AppstoreOutlined',
     '/earnings': 'BarChartOutlined',
     '/account/list': 'TeamOutlined',
+    '/support': 'QuestionCircleOutlined',
     ...(hotelProfilePath.value ? { [hotelProfilePath.value]: 'BankOutlined' } : {}),
   };
   const item = (path: string): MenuItem | null => {

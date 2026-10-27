@@ -71,6 +71,11 @@ class MerchantNotificationService
 
     public function validateLink(int $merchantId, int $siteId, string $type, string $value): void
     {
+        if ($type === 'support_ticket' && ctype_digit($value)) {
+            $ticket = (new SupportTicketService())->notificationTarget((int) $value);
+            if ((int) $ticket['merchant_id'] === $merchantId && (int) $ticket['site_id'] === $siteId) return;
+            throw new BusinessException(ErrorCode::NO_DATA_PERMISSION);
+        }
         if ($type === 'guest_chat' && ctype_digit($value)) {
             $c = (new \Mtrip\Shared\Chat\ChatService())->conversation((int) $value, 'merchant', \Mtrip\Shared\Context\MerchantContext::adminId(), $siteId);
             if ((int) \Hyperf\DbConnection\Db::table('merchant_store')->where('id', $c['property_id'])->value('merchant_id') === $merchantId) return;

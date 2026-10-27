@@ -1,3 +1,4 @@
+import { supportEn } from './support';
 /**
  * 英文语言包(fallbackLocale):所有词条以英文为占位符源
  * 覆盖:通用/状态/登录/菜单/头部/工作台/子账号/角色/门店/订单/商品/错误页
@@ -1222,39 +1223,7 @@ export default {
       localTip: 'Timezone and currency are UI preferences in this iteration and do not change settlement currency.',
     },
   },
-  support: {
-    eyebrow: 'Merchant Support',
-    title: 'Help Center',
-    subtitle: 'Find operational guidance for bookings, settlements, room management, policies, and support escalation.',
-    contactSupport: 'Contact Support',
-    faqTitle: 'Frequently Asked Questions',
-    guidesTitle: 'Guides & Policies',
-    availableSoon: 'Soon',
-    ticketTip: 'Structured support tickets require the M10 ticket table and workflow; this page keeps self-service resources available first.',
-    quick: {
-      booking: 'Booking Operations',
-      bookingDesc: 'Understand booking status, check-in, check-out, and guest communication workflows.',
-      settlement: 'Settlement Help',
-      settlementDesc: 'Review payout cycles, settlement disputes, commission, and merchant-funded discounts.',
-      policies: 'Policies & Compliance',
-      policiesDesc: 'Access platform policy reminders and merchant operating rules.',
-    },
-    faq: {
-      q1: 'How do I handle a same-day arrival?',
-      a1: 'Open Orders or Today’s Operations on the dashboard, verify the booking status, and prepare the room before check-in.',
-      q2: 'Where can I dispute a settlement?',
-      a2: 'Go to Earnings, open a settlement detail, and submit a dispute while the statement is pending or processing.',
-      q3: 'How do I reply to a guest review?',
-      a3: 'Open Reviews, find the review, then use Reply to publish an official merchant response.',
-      q4: 'Can staff access be limited by role?',
-      a4: 'Yes. Use Organization and Roles to assign module permissions and keep finance or settings access restricted.',
-    },
-    guides: {
-      g1: 'Merchant onboarding and verification guide',
-      g2: 'Booking operations manual',
-      g3: 'Settlement and commission policy',
-    },
-  },
+  support: supportEn,
   rooms: {
     eyebrow: 'Hotel Inventory',
     title: 'Room Types',

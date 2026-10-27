@@ -120,5 +120,10 @@ services:
     environment:
       <<: *app-env
       HTTP_PORT: "9505"
+      MTRIP_GUIDE_HUB_URL: ${MTRIP_GUIDE_HUB_URL:-https://guide-hub-production-m6ybjs.laravel.cloud/api}
+      MTRIP_GUIDE_HUB_APP_ID: ${MTRIP_GUIDE_HUB_APP_ID:-}
+      MTRIP_GUIDE_HUB_APP_SECRET: ${MTRIP_GUIDE_HUB_APP_SECRET:-}
+      MTRIP_GUIDE_HUB_MERCHANT_SLUG: ${MTRIP_GUIDE_HUB_MERCHANT_SLUG:-}
     volumes:
       - ./uploads:/opt/www/uploads
+      - support-private:/opt/support-private

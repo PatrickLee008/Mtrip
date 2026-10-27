@@ -1,3 +1,4 @@
+import { supportEn } from './support';
 /**
  * 英文语言包(多语言占位符源)
  * 设计约定:
@@ -7,6 +8,7 @@
  */
 import complianceS6 from './compliance/en-US';
 export default {
+  support: supportEn,
   merchantContactRecovery: {"title": "Correct login contacts after review", "hint": "Only after a human identity review. This releases replaced identities, revokes all sessions and resets changed contacts to unverified. It does not verify the contacts. Pending accounts must claim credentials again.", "phone": "New registration mobile (E.164)", "email": "New registration email", "reason": "Identity evidence and reason (at least 10 characters)", "confirm": "Confirm identity review and correction", "done": "Contacts corrected. Merchant must complete real OTP verification."},
   complianceS6,
   marketplace: {
@@ -255,6 +257,7 @@ export default {
     closed: 'Closed',
   },
   menu: {
+    supportTickets: 'Merchant Support Tickets',
     dashboard: 'Dashboard',
     config: 'System Config',
     configSite: 'Site Management',

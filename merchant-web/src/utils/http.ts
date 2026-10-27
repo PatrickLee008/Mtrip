@@ -60,6 +60,7 @@ instance.interceptors.response.use(
     return Promise.reject(new BizError(result.code, result.message));
   },
   (error) => {
+    if (axios.isCancel(error)) return Promise.reject(error);
     // 后端异常响应带非 2xx 状态码(如 401/429),业务 code 在 response.data 里
     const result = error?.response?.data as ApiResult | undefined;
     if (result && typeof result.code === 'number' && result.code !== 0) {
