@@ -12,4 +12,5 @@ use function Hyperf\Support\env;
 return [
     'upload_root' => env('UPLOAD_ROOT', '/opt/www/uploads'),
     'url_prefix' => '/uploads',
+    'support_private_root' => env('SUPPORT_PRIVATE_ROOT', '/opt/support-private'),
 ];

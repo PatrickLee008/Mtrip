@@ -5,10 +5,11 @@ import { get } from '@/utils/http';
 const router = useRouter();
 async function openDestination(): Promise<void> {
   if (!detail.value) return;
-  const result = await get<{ path: string; query: Record<string, string> }>('/merchant/notifications/destination', { id: detail.value.id });
+  const result = await get<{ path: string; query: Record<string, string>; propertyId?: number | null }>('/merchant/notifications/destination', { id: detail.value.id });
+  if (result.path === '/support') { useUserStore().selectProperty(result.propertyId ?? null); await nextTick(); }
   if (result.path) { detailOpen.value = false; await router.push({ path: result.path, query: result.query }); }
 }
-import { computed, onMounted, ref } from 'vue';
+import { computed, nextTick, onMounted, ref } from 'vue';
 import { message } from 'ant-design-vue';
 import { BellOutlined, CheckCircleOutlined, EyeOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons-vue';
 import { useI18n } from 'vue-i18n';

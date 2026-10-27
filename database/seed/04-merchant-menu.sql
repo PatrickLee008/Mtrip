@@ -26,7 +26,7 @@ INSERT IGNORE INTO `merchant_menu` (`id`, `parent_id`, `menu_name`, `menu_name_e
 (1005, 0, '效果分析',  'Promotion Performance', 'menu.promotionPerformance', 'mch:promotions:performance', 2, '/promotions/analytics', 'promotions/analytics/index', 'LineChartOutlined', 14, '1,2,3'),
 (1006, 0, '平台活动',  'Campaigns', 'menu.campaigns', 'mch:campaigns:list', 2, '/campaigns', 'campaigns/index', 'SoundOutlined', 15, '1,2,3'),
 (1100, 0, '评价管理',  'Reviews', 'menu.reviews', 'mch:reviews:list', 2, '/reviews', 'reviews/index', 'StarOutlined', 11, '1,2,3'),
-(1200, 0, '帮助中心',  'Support', 'menu.support', 'mch:support:list', 2, '/support', 'support/index', 'CustomerServiceOutlined', 12, '1,2,3'),
+(1200, 0, '支持与帮助',  'Support', 'menu.support', 'mch:support:list', 2, '/support', 'support/index', 'QuestionCircleOutlined', 12, '1,2,3'),
 (1300, 0, '设置',      'Settings', 'menu.settings', 'mch:settings:list', 2, '/settings', 'settings/index', 'SettingOutlined', 13, '1,2,3');
 
 INSERT IGNORE INTO merchant_menu (id, parent_id, menu_name, menu_name_en, i18n_key, perm_key, menu_type, route_path, component, icon, sort, account_scope)
@@ -49,6 +49,7 @@ INSERT IGNORE INTO `merchant_menu` (`id`, `parent_id`, `menu_name`, `menu_name_e
 (20103, 201, '启用禁用',   'Enable/Disable', 'mch:account:status',    3, 3, '1,2'),
 (20104, 201, '重置密码',   'Reset Password', 'mch:account:reset-pwd', 3, 4, '1,2'),
 (20105, 201, '分配物业',   'Assign Properties','mch:account:property-assign',3,5,'1,2'),
+(20106, 201, '删除员工',   'Delete Staff',    'mch:account:delete',    3, 6, '1,2'),
 (20201, 202, '新增角色',   'Add Role',       'mch:role:add',          3, 1, '1,2'),
 (20202, 202, '编辑角色',   'Edit Role',      'mch:role:edit',         3, 2, '1,2'),
 (20203, 202, '删除角色',   'Delete Role',    'mch:role:delete',       3, 3, '1,2'),
@@ -144,6 +145,14 @@ ON DUPLICATE KEY UPDATE `role_name` = VALUES(`role_name`);
 INSERT INTO `merchant_role` (`id`, `site_id`, `group_id`, `merchant_id`, `account_type`, `role_name`, `role_code`, `is_builtin`, `status`, `remark`)
 VALUES (3, 0, 0, 0, 3, '门店管理员', 'store_admin', 1, 1, '平台内置:门店账号可见履约相关功能')
 ON DUPLICATE KEY UPDATE `role_name` = VALUES(`role_name`);
+
+INSERT IGNORE INTO merchant_menu(id,parent_id,menu_name,menu_name_en,perm_key,menu_type,sort,account_scope) VALUES
+(120001,1200,'创建工单','Create Ticket','mch:support:create',3,1,'1,2,3'),
+(120002,1200,'回复工单','Reply','mch:support:reply',3,2,'1,2,3'),
+(120003,1200,'关闭工单','Close','mch:support:close',3,3,'1,2,3'),
+(120004,1200,'重开工单','Reopen','mch:support:reopen',3,4,'1,2,3'),
+(120005,1200,'商户通用工单','Merchant Scope','mch:support:merchant-scope',3,5,'1,2'),
+(120006,1200,'用户指南','User Guide','mch:support:guides',3,6,'1,2,3');
 
 -- ---------- 内置角色授权:各角色获授本 account_type 可见的全部菜单 ----------
 INSERT IGNORE INTO `merchant_role_menu` (`role_id`, `menu_id`)

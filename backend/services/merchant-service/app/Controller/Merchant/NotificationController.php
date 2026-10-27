@@ -23,9 +23,9 @@ class NotificationController extends AbstractController
         $merchantIds = MerchantContext::accountType() === 3 && MerchantContext::merchantId() > 0
             ? [MerchantContext::merchantId()]
             : MerchantContext::scopeMerchantIds();
-        return Db::table('merchant_notify as n')->whereIn('n.merchant_id', $merchantIds ?: [0])
+        $query = Db::table('merchant_notify as n')->whereIn('n.merchant_id', $merchantIds ?: [0])
             ->where(static function ($scope) use ($propertyIds) {
-                $scope->whereNull('n.property_id')->orWhere('n.property_id', 0);
+                $scope->whereNull('n.property_id')->orWhere('n.property_id', 0)->orWhere('n.deep_link_type', 'support_ticket');
                 if ($propertyIds !== []) {
                     $scope->orWhereIn('n.property_id', $propertyIds);
                 }
@@ -41,6 +41,8 @@ class NotificationController extends AbstractController
             ->leftJoin('merchant_notify_read as r', static function ($join) {
                 $join->on('r.notify_id', '=', 'n.id')->where('r.account_id', '=', MerchantContext::adminId());
             })->whereNull('r.hidden_at');
+        \Mtrip\Shared\Support\SupportAccess::notificationScope($query);
+        return $query;
     }
 
     public function index(): array
@@ -110,11 +112,15 @@ class NotificationController extends AbstractController
         $type = (string) $row->deep_link_type;
         $value = (string) $row->deep_link_value;
         (new MerchantNotificationService())->validateLink((int) $row->merchant_id, (int) $row->site_id, $type, $value);
+        if ($type === 'support_ticket') {
+            $ticket = (new \App\Service\SupportTicketService())->notificationTarget((int) $value);
+            return Result::success(['path' => '/support', 'query' => ['ticketId' => $value, 'propertyId' => $ticket['property_id']], 'propertyId' => $ticket['property_id']]);
+        }
         $path = match ($type) {
-            'guest_chat' => '/guest-messaging', 'booking_detail' => '/order', 'promotion' => '/promotions', 'wallet' => '/earnings',
+            'support_ticket' => '/support', 'guest_chat' => '/guest-messaging', 'booking_detail' => '/order', 'promotion' => '/promotions', 'wallet' => '/earnings',
             'user_profile' => '/settings', 'page' => $value, default => '',
         };
         // Destination pages/API retain their own role and resource checks.
-        return Result::success(['path' => $path, 'query' => in_array($type, ['booking_detail', 'promotion'], true) ? ['notificationTarget' => $value] : ($type === 'guest_chat' ? ['conversationId' => $value] : [])]);
+        return Result::success(['path' => $path, 'query' => in_array($type, ['booking_detail', 'promotion'], true) ? ['notificationTarget' => $value] : ($type === 'guest_chat' ? ['conversationId' => $value] : ($type === 'support_ticket' ? ['ticketId' => $value] : []))]);
     }
 }

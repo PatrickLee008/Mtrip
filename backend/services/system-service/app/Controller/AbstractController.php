@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace App\Controller;
 
+use Hyperf\Database\Query\Builder;
 use Hyperf\Di\Annotation\Inject;
 use Hyperf\HttpServer\Contract\RequestInterface;
 use Mtrip\Shared\Constants\ErrorCode;
+use Mtrip\Shared\Context\AdminContext;
 use Mtrip\Shared\Exception\BusinessException;
 
 /**
@@ -61,6 +63,15 @@ abstract class AbstractController
         $page = max(1, $this->intInput('page', 1));
         $pageSize = min(200, max(1, $this->intInput('pageSize', 20)));
         return [$page, $pageSize];
+    }
+
+    /** 超管可筛选站点,普通管理员始终限定本站点。 */
+    protected function applySiteScope(Builder $query): void
+    {
+        $siteId = AdminContext::scopeSiteId($this->intInput('siteId') ?: null);
+        if ($siteId !== null) {
+            $query->where('site_id', $siteId);
+        }
     }
 
     /** 客户端真实IP(网关透传 X-Real-IP / X-Forwarded-For) */

@@ -273,12 +273,19 @@ INSERT IGNORE INTO `sys_menu` (`id`,`parent_id`,`menu_name`,`menu_name_en`,`i18n
 (1101,1100,'FAQ 文章','FAQ Articles','','help:article:list',2,'/helpcenter/articles','helpcenter/articles/index','',1),
 (1102,1100,'分类','Categories','','help:category:list',2,'/helpcenter/categories','helpcenter/categories/index','',2),
 (1103,1100,'公告','Announcements','','help:announcement:list',2,'/helpcenter/announcements','helpcenter/announcements/index','',3),
-(1104,1100,'搜索分析','Search Analytics','','help:analytics:list',2,'/helpcenter/analytics','helpcenter/analytics/index','',4);
+(1104,1100,'搜索分析','Search Analytics','','help:analytics:list',2,'/helpcenter/analytics','helpcenter/analytics/index','',4),
+(1105,1100,'商户支持工单','Merchant Support Tickets','menu.supportTickets','help:ticket:list',2,'/helpcenter/merchant-tickets','helpcenter/merchant-tickets/index','',5);
 INSERT IGNORE INTO `sys_menu` (`id`,`parent_id`,`menu_name`,`menu_name_en`,`perm_key`,`menu_type`,`sort`) VALUES
 (110101,1101,'保存文章','Save','help:article:save',3,1),
 (110102,1101,'发布归档','Publish/Archive','help:article:publish',3,2),
 (110201,1102,'保存分类','Save','help:category:save',3,1),
 (110301,1103,'发布公告','Publish','help:announcement:publish',3,1);
+INSERT IGNORE INTO sys_menu(id,parent_id,menu_name,menu_name_en,perm_key,menu_type,sort) VALUES
+(110501,1105,'回复工单','Reply','help:ticket:reply',3,1),
+(110502,1105,'指派工单','Assign','help:ticket:assign',3,2),
+(110503,1105,'调整优先级','Priority','help:ticket:priority',3,3),
+(110504,1105,'处理状态','Status','help:ticket:status',3,4),
+(110505,1105,'重开工单','Reopen','help:ticket:reopen',3,5);
 
 -- ================= 1200 内容管理(Banner 复用 marketing:banner;Theme 复用 config:theme)=================
 INSERT IGNORE INTO `sys_menu` (`id`,`parent_id`,`menu_name`,`menu_name_en`,`i18n_key`,`perm_key`,`menu_type`,`route_path`,`component`,`icon`,`sort`) VALUES

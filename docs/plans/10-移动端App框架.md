@@ -1,5 +1,9 @@
 # 模块10:移动端 client-app(Expo 51 + RN + TS)
 
+2026-10-22 最新只读确认：用户新增开关后 Facebook 双池 true、App ID/Secret 已生效；实际 settings 返回政策配置错误，条款/隐私 URL 和来源白名单仍缺失。当前复验浏览器 site=7，未修改站点选择；此前确认构建默认站点1已停用，默认值调整仍待执行。本轮未修改远端。[排查记录](./audits/2026-10-22-facebook-online-config.md)。
+
+2026-10-22 用户部署后复查：新版前端已生效，Facebook 入口暂未开放是 settings 返回后端配置错误 50001，需核对用户双池启用开关/App ID/Secret。未实施远端修复，真实授权仍待验。[排查记录](./audits/2026-10-22-facebook-online-config.md)。
+
 ## 2026-10-21 Facebook Web 登录
 
 2026-10-22 按用户要求将本次前后端、迁移、配置、测试及验收文档纳入本地提交，未推送；真实授权和远端部署状态不变。

@@ -1,0 +1,58 @@
+.support-controls {
+  .ant-input-affix-wrapper {
+    height: 34px;
+    padding-top: 0;
+    padding-bottom: 0;
+  }
+
+  // The wrapper owns the height and focus ring; the nested input must not add another control box.
+  .ant-input-affix-wrapper > input.ant-input {
+    min-height: 0 !important;
+    height: 100%;
+    border-radius: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+
+  .ant-btn:not(.ant-btn-lg):not(.ant-btn-sm):not(.ant-btn-link):not(.ant-btn-text) {
+    height: 34px;
+  }
+
+  .ant-btn-primary {
+    color: #ffffff;
+  }
+
+  .ant-btn-primary:disabled,
+  .ant-btn-default:disabled {
+    color: var(--mtrip-text-secondary) !important;
+    background: #e2e8f0 !important;
+    border-color: #cbd5e1 !important;
+  }
+
+  .ant-input-search {
+    .ant-input-group {
+      display: flex;
+      align-items: stretch;
+    }
+
+    .ant-input-wrapper > .ant-input,
+    .ant-input-affix-wrapper {
+      flex: 1;
+      min-width: 0;
+      border-radius: var(--mtrip-radius-control) 0 0 var(--mtrip-radius-control) !important;
+    }
+
+    .ant-input-group-addon:last-child {
+      display: flex;
+      width: auto;
+      left: 0;
+      margin-left: -1px;
+      background: transparent;
+    }
+
+    .ant-input-search-button {
+      min-width: 34px;
+      border-radius: 0 var(--mtrip-radius-control) var(--mtrip-radius-control) 0;
+    }
+  }
+}

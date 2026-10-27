@@ -2,6 +2,48 @@
 
 2026-10-27 KBZPay MMQR 支付接入:阶段 1–6(协议库、迁移、后台配置、payment-service 支付中心、order-service 接入、移动端扫码页)代码完成,单测/构建/typecheck 通过;未在运行环境与 UAT 实跑,阶段 7–8(退款 mTLS、异常演练)未开始。详见[方案 22](docs/plans/22-KBZPay-MMQR支付接入方案.md) §9.1 与[下一步提示词](docs/plans/next-task.md)。
 
+2026-10-27 角色管理移除 ID 列，并修复全局固定列背景透明导致的窄窗口内容重叠；角色、员工和通知表格实测及商户构建/质量基线通过，5174 已生效。详见[模块 13](docs/plans/13-商家端merchant-web落地.md#2026-10-27-角色-id-列与全局固定列穿透修复)。
+
+2026-10-27 商户员工管理按 Figma `1493:16714` 优化列表、表单、角色卡片与分页，新增时可选择角色并随账号同事务保存；筛选控件白底，操作列补红色删除图标/确认与软删除，并统一为带悬停/聚焦说明的图标按钮，实际页面与商户构建通过。30 项隔离回归、中英/1440px/375px 和质量基线通过；商户双池及 5174 已更新，本地权限迁移 49/49，未自动授予现有角色新权限。详见[模块 13](docs/plans/13-商家端merchant-web落地.md#2026-10-27-员工管理对齐-figma)。
+
+2026-10-27 用户指南卡片与视频详情不再展示 Guide Hub 的 Screen 名称（如 `mTrip_screen`），分类、标题与视频内容保留。商户构建和项目质量基线通过，已更新本机 8091。
+
+2026-10-27 按用户确认移除用户指南搜索栏右侧、原型未包含的“全部视频”链接按钮，保留分类内“查看全部视频”、搜索与筛选。商户构建及项目质量基线通过。
+
+2026-10-27 用户指南配置后 500 已修复：补齐 Guzzle 运行依赖并重建商户双池；实际鉴权/应用匹配通过，登录态分类接口 `code=0/status=ready`，79 项 Support HTTP、质量基线及 health 通过。外网仍偶发 TLS/超时，真实内容/播放 A12 未完成。见[故障记录](docs/plans/audits/2026-10-27-merchant-support-local-rollout.md#配置-guide-hub-后分类接口-500)。
+
+2026-10-27 用户指南按 Figma `3099:24300` 与已确认 Merchant PRD v1.0.8 §10.8 补齐分类预览、全部视频、搜索/分页、适用功能、缩略图与观看入口；中英/1440/1280/375px 隔离组件验证、媒体专项 6 项、Support HTTP 79 项及质量基线通过。本机 8091 与商户双池已更新，实际登录态如实显示待配置；真实商户内容/播放 A12 继续待验。见[验证记录](docs/plans/audits/2026-10-27-merchant-support-local-rollout.md#用户指南对齐-figma)。
+
+2026-10-27 重启后商户聊天 502 已修复：网关缓存的 user-service 地址与容器当前地址不一致；`mtrip.sh restart` 在业务容器重启完成后再次刷新网关，`health` 增加 summary/ticket/preferences 三条鉴权探针。8 组脚本回归、实际完整重启与全栈健康检查通过，现有商户登录态三个接口均 HTTP 200。见[部署记录](docs/plans/08-部署与网关.md#完成记录)。
+
+2026-10-27 收尾：用户测试反馈本次功能基本正常，按要求清理本次 Support 的 38 张非必需验收截图（共 4,921,599 字节）及文档图片引用，保留文字验证记录与其他模块历史截图。本次功能代码、回归测试及文档整理纳入本地提交；未推送远端。最终 Support 隔离 HTTP 回归为 79 项，外部指南真实内容/播放仍待配置验收。
+
+2026-10-27 平台工单处理修复：客服、优先级和状态改为统一保存，同一事务逐字段校验权限，成功后回显真实值；轮询保留未保存选择，移除“回复后状态”下拉及重复关闭入口。后台对话改为商户左侧浅蓝、客服右侧蓝底白字气泡，含原始问题/附件/时间。79 项隔离 HTTP、中英/375px 组件验收及质量基线通过，已发布 8090、重启商户双池，真实工单只读核对通过。见[验证记录](docs/plans/audits/2026-10-27-merchant-support-local-rollout.md#平台工单统一保存与气泡对话)。
+
+2026-10-27 FAQ 已按 Figma `3047:20149` 改为整行分类折叠卡片：问号图标、问题数量、右侧箭头、320px 搜索框及蓝色帮助条；FAQ 搜索框/帮助按钮均 40px，分类行 50px、间距 16px。保留真实发布源、搜索、分类内分页及创建权限。隔离中英/375px/分页/空态与质量基线通过，已发布 8091，正常登录态两篇文章展开/搜索和实际尺寸已验；未写业务数据。见[验证记录](docs/plans/audits/2026-10-27-merchant-support-local-rollout.md#faq-对齐-figma)。
+
+2026-10-27 平台工单状态入口已明确区分：“变更工单状态”默认不选目标、保存需原因；“回复后状态”默认等待商户回复，发送时生效。增加中英说明及切换/成功后重置，隔离真实组件与质量基线通过，已发布 8090；登录态已过期，未操作真实工单。见[验证记录](docs/plans/audits/2026-10-27-merchant-support-local-rollout.md#平台工单状态入口区分)。
+
+2026-10-27 创建工单附件入口已按 Figma `3047:20646` 改为 72px 虚线上传框，8px 圆角、居中图标/提示/格式说明，支持点击及拖拽，保留原附件限制。中英桌面/375px、商户构建及质量基线通过，已发布 8091。见[验证记录](docs/plans/audits/2026-10-27-merchant-support-local-rollout.md#创建工单附件上传框对齐-figma)。
+
+2026-10-27 Support 工单侧栏已按 Figma `3193:28647` 整改：585px 侧栏、四项信息卡片、左右对话气泡、头像/附件/时间及底部回复区；按用户允许保留对话/活动页签。中英、375px、按钮双状态及 8091 真实工单只读验证通过，质量基线通过，已发布本机。见[验证记录](docs/plans/audits/2026-10-27-merchant-support-local-rollout.md#工单侧栏对齐-figma)。
+
+2026-10-27 Support 工单分页按预订管理对齐：左侧显示当前条数/总数，右侧紧凑页码，移除每页条数下拉框，统一分页栏高度、字号和圆角；商户构建、质量基线及 8091 实际页面核对通过，已发布本机。见[验证记录](docs/plans/audits/2026-10-27-merchant-support-local-rollout.md#工单分页对齐预订管理)。
+
+2026-10-27 平台 FAQ 故障已修复：补全 system-service 基类缺失的站点过滤方法，FAQ 文章/分类/公告/搜索分析在 8090 正常加载；6 项站点隔离回归及质量基线通过，双池已重启。排查证据、修复范围见[记录](docs/plans/audits/2026-10-27-helpcenter-site-scope-fix.md)。
+
+2026-10-27 Merchant Support：P1–P3 已完成并发布至本机 8091 `/support`、8090 `/helpcenter/merchant-tickets`，系统菜单支持与帮助与访客消息独立。已备份、演练并真实补执行遗漏通知迁移，标准迁移复核 48/48；商户双池、网关及两个 Web 已更新，8 主服务/6 APP 实例健康检查通过，正常商户登录态工单/创建弹窗/FAQ/合规可见。此前 71 项隔离 HTTP、质量基线和中英桌面/375px 验证通过；P4 真实指南内容/播放仍待配置。详见[本地发布记录](docs/plans/audits/2026-10-27-merchant-support-local-rollout.md)、[实施记录](docs/plans/audits/2026-10-26-merchant-support.md)和[方案](docs/plans/设计方案-Merchant-M10-Support支持与帮助中心.md)。
+
+2026-10-27 补充样式修复：Support 主按钮/普通按钮的禁用态统一为灰底深色文字，可用主按钮为蓝底白字；移除工单表格外层重复边框和 8px 底部留白。商户 Web 类型检查/构建、组件双状态及表格空态/分页验证通过，8091 已重新发布。
+
+2026-10-27 样式复核：修复 Support 工单/FAQ/合规/指南搜索框内外高度叠加及拼接偏移，普通控件统一 34px；系统「支持与帮助」改为问号图标。商户 Web 类型检查/构建及 8091 登录态尺寸核对通过，创建弹窗单行控件与按钮等高，已重新发布。
+
+2026-10-26 商户 App Menu：按 Figma `7154:30877` 完成独立菜单及商户资料、通知偏好、安全与登录、本地化页面；接入真实物业/脱敏联系信息、语言保存、通知与既有退出，其他设置/注销提交暂不开放。专项与既有 App 回归、质量基线通过，8094 已更新，Chrome 320/393/1440px 已检查；原生与英文完整视觉待验。详见[模块 17](docs/plans/17-商户移动端merchant-app.md)。
+
+2026-10-22 最新只读复核：用户新增开关后，Facebook 双池 ENABLED=true、App ID/Secret 已加载；实际浏览器 settings 已变为 `Facebook login policies are not configured`，条款/隐私 URL 和来源白名单仍为空。需补齐服务器配置并 wrapper start 双池；本轮未修改远端。见[排查记录](docs/plans/audits/2026-10-22-facebook-online-config.md)。
+
+2026-10-22 用户部署后 Facebook 仍不可用：线上新前端/回调已生效，真实浏览器 settings 返回 50001 `Facebook login is not configured`，需核对服务器用户双池启用/App ID/Secret 的有效配置。[排查记录](docs/plans/audits/2026-10-22-facebook-online-config.md)。
+
 2026-10-22 Facebook Web 登录相关代码、迁移、测试及文档按用户要求纳入本地提交；未推送或部署远端，真实授权仍待验收。
 
 2026-10-21 Facebook 部署前复查：政策链接 HTTPS 200；测试域名仍旧前端、callback 404；目标环境需配置/迁移及使用有效客户端签名重新构建。详见[检查记录](docs/plans/audits/2026-10-21-facebook-deployment-readiness.md)。
@@ -165,6 +207,7 @@ cd ../admin-web && npm install && npm run dev    # http://localhost:5173,接口�
 |---|---|
 | **项目当前进度 / 各模块状态** | [docs/plans/README.md](docs/plans/README.md)(进度总览表 + 变更记录) |
 | **新会话/新人接手全部上下文** | [docs/plans/HANDOFF.md](docs/plans/HANDOFF.md)(交接文档,第一入口) |
+| **需求依据与项目知识库** | [知识库关联开发规范](docs/guides/standards/知识库关联开发规范.md) · [知识库使用说明](obsidian/README.md)(随项目共享,Obsidian 可选,无库按原来源继续) |
 | **后端开发约定**(响应格式/错误码/字段命名/路由前缀/代码范本) | HANDOFF.md 第 4 节;工程范本以 `backend/services/system-service` 为准 |
 | **前端页面代码模式**(useTable/弹窗表单/权限指令/动态路由) | HANDOFF.md 第 5 节 |
 | **各模块详细任务清单与实现记录** | `docs/plans/01~10-*.md`(每模块一文件,含踩坑记录) |
@@ -173,7 +216,7 @@ cd ../admin-web && npm install && npm run dev    # http://localhost:5173,接口�
 | **开发期清空入驻线索与商户测试数据** | [清理脚本使用说明](docs/guides/setup/开发期商户测试数据清理.md) |
 | **网关路由表/限流/CORS** | `deploy/openresty/conf.d/mtrip.conf` + [docs/plans/08-部署与网关.md](docs/plans/08-部署与网关.md) |
 | **运维监控台方案与计划** | [mtrip-ops/docs/](mtrip-ops/docs/) + [docs/plans/16-运维监控.md](docs/plans/16-运维监控.md) |
-| **原始需求** | `设计文档/*.docx`(提取文本在 `docs/reference/`) |
+| **原始需求** | `设计文档/` 内对应版本的 PRD(含 `.md`/`.docx`);辅助提取文本在 `docs/reference/`,使用前核对版本 |
 
 ## 核心开发约定(速览,详细定义见上表)
 
@@ -215,6 +258,8 @@ MSYS_NO_PATHCONV=1 docker run --rm --entrypoint php \
 - 工作方式:每完成一项任务,同步更新 `docs/plans/` 对应模块文件、README 进度表和 HANDOFF.md;交付前本地跑一次 `scripts/check.ps1` 作为验收入口。
 
 ## 当前状态(2026-07)
+
+2026-10-26 协作规范：已接入[知识库关联开发规范](docs/guides/standards/知识库关联开发规范.md)，三端知识库迁入 `obsidian/mTrip_obsidian/` 随项目共享；有库关联需求条款，无库按原需求来源继续。Obsidian 可选，个人配置不纳入 Git；不改变团队任务基线，不增加安装、配置或 CI 前置条件。仅调整知识库、文档与忽略规则。
 
 商户测试数据清理(2026-10-12)：新增 `scripts/reset-merchant-test-data.sh`，默认预览，显式执行前检查开发环境、暂停写入服务并备份双库，以 SQL 事务清理所有站点入驻/商户及商品、订单、财务、营销、聊天关联数据；保留基础配置与消费者/供应商/集团账号，恢复服务并选择性清理 Redis。说明和边界见[使用指南](docs/guides/setup/开发期商户测试数据清理.md)。本次不清空当前开发库。
 多酒店预订(2026-10-12):第 2 步「添加酒店与民宿」把当前酒店转存为一段住宿并回搜索页挑下一家,回来后第 2 步以 Stay 卡片展示各段(可删除 / 查看详情),第 3 步首卡显示「连住预订(共 N 段)」;各段一次 `trip/create` 下单。开发库新增测试酒店物业 9004(胤竹精品酒店)。

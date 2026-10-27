@@ -90,6 +90,12 @@ Router::addGroup('/api/v1/app/merchant', static function () {
 ]);
 
 Router::addGroup('/api/v1/admin', static function () {
+    Router::addGroup('/merchant/support', static function () {
+        $controller = \App\Controller\Admin\SupportController::class;
+        foreach (['options' => 'options', 'tickets' => 'index', 'summary' => 'summary', 'ticket' => 'detail', 'replies' => 'replies', 'events' => 'events', 'assignees' => 'assignees', 'attachments/download' => 'download'] as $path => $method) Router::get('/' . $path, [$controller, $method]);
+        foreach (['reply', 'assign', 'priority', 'status', 'reopen'] as $method) Router::post('/' . $method, [$controller, $method]);
+        Router::post('/attachments/upload', [$controller, 'upload']);
+    });
     // ---------- 商户管理(11 接口,文档 6.4.2) ----------
     Router::get('/merchant/list', [MerchantController::class, 'index']);
     Router::get('/merchant/detail', [MerchantController::class, 'detail']);
@@ -280,6 +286,19 @@ Router::post('/api/v1/merchant/auth/credential-claim/email', [\App\Controller\Me
 Router::post('/api/v1/merchant/auth/credential-claim/finish', [\App\Controller\MerchantContactSecurityController::class, 'claimFinish']);
 
 Router::addGroup('/api/v1/merchant', static function () {
+    Router::addGroup('/support', static function () {
+        $controller = \App\Controller\Merchant\SupportController::class;
+        foreach (['options' => 'options', 'tickets' => 'index', 'summary' => 'summary', 'ticket' => 'detail', 'replies' => 'replies', 'events' => 'events', 'attachments/download' => 'download'] as $path => $method) Router::get('/' . $path, [$controller, $method]);
+        foreach (['create', 'reply', 'close', 'reopen'] as $method) Router::post('/' . $method, [$controller, $method]);
+        Router::post('/attachments/upload', [$controller, 'upload']);
+        Router::get('/faq/categories', [$controller, 'faqCategories']);
+        Router::get('/faq/list', [$controller, 'faqList']);
+        Router::get('/faq/detail', [$controller, 'faqDetail']);
+        Router::get('/guides/categories', [$controller, 'guideCategories']);
+        Router::get('/guides/list', [$controller, 'guideList']);
+        Router::get('/guides/detail', [$controller, 'guideDetail']);
+        foreach (['summary', 'rules', 'violations', 'warnings', 'appeals'] as $path) Router::get('/compliance/' . $path, [$controller, 'compliance']);
+    });
     // ---------- 登录态 ----------
     Router::post('/auth/logout', [MerchantAuthController::class, 'logout']);
     Router::post('/auth/impersonation/end', [MerchantAuthController::class, 'logout']);
@@ -301,6 +320,7 @@ Router::addGroup('/api/v1/merchant', static function () {
     Router::get('/account/properties', [MerchantAccountController::class, 'accountProperties']);
     Router::post('/account/add', [MerchantAccountController::class, 'create']);
     Router::post('/account/update', [MerchantAccountController::class, 'update']);
+    Router::post('/account/delete', [MerchantAccountController::class, 'remove']);
     Router::post('/account/toggle-status', [MerchantAccountController::class, 'toggleStatus']);
     Router::post('/account/reset-password', [MerchantAccountController::class, 'resetPassword']);
     Router::post('/account/properties/assign', [MerchantAccountController::class, 'assignProperties']);

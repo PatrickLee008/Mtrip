@@ -9,6 +9,7 @@
 | 新会话接手全部上下文(第一入口) | [docs/plans/HANDOFF.md](docs/plans/HANDOFF.md) |
 | 规范和约定的完整索引 | [README.md「文档索引」一节](README.md) |
 | 项目进度 / 各模块状态 | [docs/plans/README.md](docs/plans/README.md) |
+| 任务需求依据 / 项目知识库(缺失不阻塞) | [docs/guides/standards/知识库关联开发规范.md](docs/guides/standards/知识库关联开发规范.md) |
 | 后端开发约定与代码范本 | HANDOFF.md 第 4 节(另见 `backend/services/AGENTS.md`) |
 | 前端页面代码模式 | HANDOFF.md 第 5 节(另见 `admin-web/src/AGENTS.md`) |
 | 环境搭建 / 启动 / 常见问题 | [docs/guides/setup/启动开发指南.md](docs/guides/setup/启动开发指南.md) |

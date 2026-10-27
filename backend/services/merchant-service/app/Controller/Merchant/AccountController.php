@@ -136,8 +136,34 @@ class AccountController extends AbstractController
             'is_owner' => 0,
             'status' => 1,
         ];
-        $id = Db::transaction(function () use ($data) {
+        $roleIds = array_values(array_unique(array_map('intval', (array) $this->input('roleIds', []))));
+        if ($roleIds !== [] && ! MerchantContext::hasPermission('mch:role:grant')) {
+            throw new BusinessException(ErrorCode::FORBIDDEN);
+        }
+        $id = Db::transaction(function () use ($data, $roleIds) {
+            if ($roleIds !== []) {
+                $visible = Db::table('merchant_role')->whereNull('deleted_at')->where('status', 1)
+                    ->where('account_type', MerchantContext::accountType())->whereIn('id', $roleIds)
+                    ->where(function (Builder $q) {
+                        $q->where('is_builtin', 1)->orWhere(function (Builder $owned) {
+                            $owned->where('is_builtin', 0)->where('site_id', MerchantContext::siteId());
+                            if (MerchantContext::accountType() === 1) {
+                                $owned->where('group_id', MerchantContext::groupId());
+                            } else {
+                                $owned->where('merchant_id', MerchantContext::merchantId());
+                            }
+                        });
+                    })->lockForUpdate()->pluck('id')->map(static fn ($id) => (int) $id)->all();
+                if (count($visible) !== count($roleIds)) {
+                    throw new BusinessException(ErrorCode::NO_DATA_PERMISSION, '角色不存在、已停用或无权分配');
+                }
+            }
             $id = (int) Db::table('merchant_admin')->insertGetId($data);
+            if ($roleIds !== []) {
+                Db::table('merchant_admin_role')->insert(array_map(
+                    static fn (int $roleId) => ['admin_id' => $id, 'role_id' => $roleId], $roleIds
+                ));
+            }
             \App\Service\MerchantActivityService::changed($id, 'created', $this->clientIp());
             return $id;
         });
@@ -197,6 +223,27 @@ class AccountController extends AbstractController
         return Result::success(null, '密码已重置');
     }
 
+    /** 软删除员工，保留历史记录并立即使现有认证失效。 */
+    #[Permission('mch:account:delete')]
+    public function remove(): array
+    {
+        $id = $this->requireId();
+        Db::transaction(function () use ($id) {
+            $account = $this->findScopedAccount($id, true);
+            if ((int) $account['is_owner'] === 1 || $id === MerchantContext::adminId()) {
+                throw new BusinessException(ErrorCode::DATA_CONFLICT, '不能删除主账号或当前登录账号');
+            }
+            Db::table('merchant_admin')->where('id', $id)->update([
+                'deleted_at' => date('Y-m-d H:i:s'), 'status' => 2,
+                'auth_version' => Db::raw('auth_version + 1'), 'challenge_hash' => null, 'pending_secret_enc' => '',
+            ]);
+            Db::table('merchant_admin_role')->where('admin_id', $id)->delete();
+            Db::table('merchant_employee_property')->where('site_id', MerchantContext::siteId())->where('admin_id', $id)->delete();
+            \App\Service\MerchantActivityService::changed($id, 'deleted', $this->clientIp());
+        });
+        return Result::success(null, '员工已删除');
+    }
+
     /**
      * 子账号配额:上限取所属主体的 sub_account_limit(集团→merchant_group,商户/门店→merchant_info),
      * 已用只数 is_owner=0 的同主体账号(主账号不占额)。主体行缺失时回落到默认 3。
@@ -215,6 +262,7 @@ class AccountController extends AbstractController
     private function scopedQuery(): Builder
     {
         $query = Db::table('merchant_admin')->whereNull('deleted_at')
+            ->where('site_id', MerchantContext::siteId())
             ->where('account_type', MerchantContext::accountType());
         return match (MerchantContext::accountType()) {
             1 => $query->where('group_id', MerchantContext::groupId()),
@@ -224,9 +272,10 @@ class AccountController extends AbstractController
     }
 
     /** 取子账号并校验属于当前主体 */
-    private function findScopedAccount(int $id): array
+    private function findScopedAccount(int $id, bool $lock = false): array
     {
-        $account = (clone $this->scopedQuery())->where('id', $id)->first();
+        $query = (clone $this->scopedQuery())->where('id', $id);
+        $account = ($lock ? $query->lockForUpdate() : $query)->first();
         if (! $account) {
             throw new BusinessException(ErrorCode::NOT_FOUND, '账号不存在或无权操作');
         }

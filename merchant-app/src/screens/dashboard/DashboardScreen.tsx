@@ -4,7 +4,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useFocusEffect } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '@/navigation/types';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 import { useTranslation } from 'react-i18next';
 
@@ -15,7 +15,7 @@ import { fonts } from '@/config/typography';
 import { useCommonStore } from '@/store/commonStore';
 import { useMerchantStore } from '@/store/merchantStore';
 
-type IconName = 'home' | 'bookings' | 'calendar' | 'messages' | 'menu' | 'property' | 'chart' | 'support' | 'reviews' | 'bell' | 'chevron' | 'check' | 'logout';
+type IconName = 'home' | 'bookings' | 'calendar' | 'messages' | 'menu' | 'property' | 'chart' | 'support' | 'reviews' | 'bell' | 'chevron' | 'check';
 const iconPaths: Record<IconName, string> = {
   home: 'M3 10.5 12 3l9 7.5V21h-7v-7h-4v7H3V10.5Z',
   bookings: 'M8 4h8m-9 0H5v17h14V4h-2M8 9h8M8 13h8M8 17h5',
@@ -29,7 +29,6 @@ const iconPaths: Record<IconName, string> = {
   bell: 'M18 8a6 6 0 0 0-12 0c0 7-3 8-3 9h18c0-1-3-2-3-9ZM10 21h4',
   chevron: 'm6 9 6 6 6-6',
   check: 'm4 12 5 5L20 6',
-  logout: 'M10 4H5v16h5m4-12 4 4-4 4m4-4H9',
 };
 function Icon({ name, color = colors.primary, size = 24 }: { name: IconName; color?: string; size?: number }) {
   return <Svg width={size} height={size} viewBox="0 0 24 24" fill="none"><Path d={iconPaths[name]} stroke={color} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" /></Svg>;
@@ -38,11 +37,9 @@ function money(value: number, currency: string, lang: string) {
   return `${new Intl.NumberFormat(lang, { maximumFractionDigits: 0 }).format(value)} ${currency}`.trim();
 }
 
-export default function DashboardScreen({ navigation, route }: NativeStackScreenProps<RootStackParamList, 'Dashboard'>) {
-  const insets = useSafeAreaInsets();
+export default function DashboardScreen({ navigation }: NativeStackScreenProps<RootStackParamList, 'Dashboard'>) {
   const { t, i18n } = useTranslation();
   const profile = useMerchantStore((s) => s.profile);
-  const logout = useMerchantStore((s) => s.logout);
   const showToast = useCommonStore((s) => s.showToast);
   const [properties, setProperties] = useState<DashboardProperty[]>([]);
   const propertyId = useMerchantStore((s) => s.propertyId);
@@ -51,11 +48,7 @@ export default function DashboardScreen({ navigation, route }: NativeStackScreen
   const [earnings, setEarnings] = useState<DashboardEarnings | null>(null);
   const [loading, setLoading] = useState(true);
   const [pickerOpen, setPickerOpen] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [logoutConfirm, setLogoutConfirm] = useState(false);
-  const [loggingOut, setLoggingOut] = useState(false);
   const requestId = useRef(0);
-  const logoutInFlight = useRef(false);
 
   useEffect(() => {
     let active = true;
@@ -80,9 +73,6 @@ export default function DashboardScreen({ navigation, route }: NativeStackScreen
     setLoading(false);
   }, [propertyId]);
   useFocusEffect(useCallback(() => { void load(); return () => { requestId.current++; }; }, [load]));
-  useEffect(() => {
-    if (route.params?.openMenu) { setMenuOpen(true); navigation.setParams({ openMenu: false }); }
-  }, [route.params?.openMenu, navigation]);
 
   const selected = properties.find((item) => item.id === propertyId);
   const hour = new Date().getHours();
@@ -93,21 +83,6 @@ export default function DashboardScreen({ navigation, route }: NativeStackScreen
   const canCheckIn = !!profile && (profile.isOwner || profile.permissions.includes('mch:order:check-in'));
   const canViewDetail = !!profile && (profile.isOwner || profile.permissions.includes('mch:order:detail'));
   const openDetail = (booking: DashboardBooking, action?: 'check-in') => navigation.navigate('BookingDetail', { orderId: booking.orderId, propertyId, action });
-  const closeMenu = () => { if (!loggingOut) { setMenuOpen(false); setLogoutConfirm(false); } };
-  const signOut = async () => {
-    if (logoutInFlight.current) return;
-    logoutInFlight.current = true;
-    setLoggingOut(true);
-    try {
-      await logout();
-      navigation.reset({ index: 0, routes: [{ name: 'Onboarding' }] });
-    } catch {
-      showToast(t('dashboardHome.logoutFailed'));
-    } finally {
-      logoutInFlight.current = false;
-      setLoggingOut(false);
-    }
-  };
 
   return <SafeAreaView style={styles.root} edges={['top', 'bottom']}>
     <StatusBar style="dark" translucent backgroundColor="transparent" />
@@ -141,33 +116,11 @@ export default function DashboardScreen({ navigation, route }: NativeStackScreen
         {bookings.slice(0, 1).map((booking) => <BookingCard key={booking.orderId} booking={booking} currency={earnings?.currency || ''} onDetail={canViewDetail ? () => openDetail(booking) : undefined} onCheckIn={canCheckIn && canViewDetail ? () => openDetail(booking, 'check-in') : undefined} />)}
       </ScrollView>
       <View style={styles.tabBar}>
-        {(['home', 'bookings', 'calendar', 'messages', 'menu'] as const).map((name) => <Pressable key={name} style={styles.tab} onPress={name === 'menu' ? () => setMenuOpen(true) : name === 'home' ? () => void load() : name === 'bookings' ? () => navigation.navigate('Bookings') : unavailable} accessibilityRole="button" accessibilityState={{ selected: name === (menuOpen ? 'menu' : 'home') }}>
-          <Icon name={name} size={25} color={name === (menuOpen ? 'menu' : 'home') ? colors.primary : '#65748B'} /><Text style={[styles.tabText, name === (menuOpen ? 'menu' : 'home') && styles.tabActive]}>{t(`dashboardHome.tab.${name}`)}</Text>
+        {(['home', 'bookings', 'calendar', 'messages', 'menu'] as const).map((name) => <Pressable key={name} style={styles.tab} onPress={name === 'menu' ? () => navigation.navigate('Menu') : name === 'home' ? () => void load() : name === 'bookings' ? () => navigation.navigate('Bookings') : unavailable} accessibilityRole="button" accessibilityState={{ selected: name === 'home' }}>
+          <Icon name={name} size={25} color={name === 'home' ? colors.primary : '#65748B'} /><Text style={[styles.tabText, name === 'home' && styles.tabActive]}>{t(`dashboardHome.tab.${name}`)}</Text>
         </Pressable>)}
       </View>
     </View>
-    <Modal visible={menuOpen} transparent animationType="fade" onRequestClose={closeMenu}>
-      <View style={[styles.menuOverlay, { paddingBottom: 18 + insets.bottom }]}>
-        <Pressable style={StyleSheet.absoluteFill} onPress={closeMenu} accessibilityLabel={t('dashboardHome.close')} />
-        <View style={styles.menuSheet}>
-          {logoutConfirm ? <>
-            <Text style={styles.pickerTitle}>{t('dashboardHome.logoutConfirmTitle')}</Text>
-            <Text style={styles.confirmCopy}>{t('dashboardHome.logoutConfirmCopy')}</Text>
-            <View style={styles.confirmActions}>
-              <Pressable style={styles.cancelButton} disabled={loggingOut} onPress={() => setLogoutConfirm(false)} accessibilityRole="button"><Text style={styles.cancelText}>{t('dashboardHome.cancel')}</Text></Pressable>
-              <Pressable style={styles.logoutConfirmButton} disabled={loggingOut} onPress={() => void signOut()} accessibilityRole="button"><Text style={styles.confirmText}>{loggingOut ? t('dashboardHome.loggingOut') : t('dashboardHome.logout')}</Text></Pressable>
-            </View>
-          </> : <>
-            <Text style={styles.pickerTitle}>{t('dashboardHome.account')}</Text>
-            <View style={styles.accountCard}>
-              <View style={styles.accountAvatar}><Text style={styles.accountInitial}>{(profile?.realName || profile?.username || 'M').slice(0, 1).toUpperCase()}</Text></View>
-              <View style={styles.optionCopy}><Text style={styles.accountName} numberOfLines={1}>{profile?.realName || profile?.username}</Text><Text style={styles.accountUsername} numberOfLines={1}>{profile?.username}</Text></View>
-            </View>
-            <Pressable style={styles.logoutRow} onPress={() => setLogoutConfirm(true)} accessibilityRole="button"><Icon name="logout" size={21} color="#B74343" /><Text style={styles.logoutText}>{t('dashboardHome.logout')}</Text></Pressable>
-          </>}
-        </View>
-      </View>
-    </Modal>
     <Modal visible={pickerOpen} transparent animationType="fade" onRequestClose={() => setPickerOpen(false)}>
       <Pressable style={styles.overlay} onPress={() => setPickerOpen(false)}><View style={styles.picker}>
         <Text style={styles.pickerTitle}>{t('dashboardHome.chooseProperty')}</Text>
@@ -233,23 +186,8 @@ const styles = StyleSheet.create({
   tabBar: { flexDirection: 'row', backgroundColor: '#FFFFFF', borderTopWidth: 1, borderTopColor: '#E8EDF1', paddingTop: 9, paddingBottom: 5 },
   tab: { flex: 1, alignItems: 'center', gap: 4 }, tabText: { fontFamily: fonts.interSemi, fontSize: 10, color: '#69788C' }, tabActive: { color: colors.primary },
   overlay: { flex: 1, backgroundColor: 'rgba(19, 33, 48, 0.4)', justifyContent: 'center', paddingHorizontal: 22 },
-  menuOverlay: { flex: 1, backgroundColor: 'rgba(19, 33, 48, 0.4)', justifyContent: 'flex-end', paddingHorizontal: 16, paddingBottom: 18 },
-  menuSheet: { backgroundColor: '#FFFFFF', borderRadius: 18, padding: 18 },
-  accountCard: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, borderRadius: 12, backgroundColor: '#F3F8F7' },
-  accountAvatar: { width: 42, height: 42, borderRadius: 21, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' },
-  accountInitial: { fontFamily: fonts.outfitBold, fontSize: 20, color: '#FFFFFF' },
-  accountName: { fontFamily: fonts.interSemi, fontSize: 14, color: '#1D293B' },
-  accountUsername: { marginTop: 3, fontFamily: fonts.inter, fontSize: 12, color: '#69788C' },
-  logoutRow: { height: 50, marginTop: 14, borderRadius: 10, borderWidth: 1, borderColor: '#F2DCDC', flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14 },
-  logoutText: { fontFamily: fonts.interSemi, fontSize: 14, color: '#B74343' },
-  logoutConfirmButton: { flex: 1, height: 42, borderRadius: 9, backgroundColor: '#B74343', alignItems: 'center', justifyContent: 'center' },
   picker: { backgroundColor: '#FFFFFF', borderRadius: 18, padding: 16, maxHeight: '75%' }, pickerTitle: { fontFamily: fonts.outfitBold, fontSize: 20, color: '#1D293B', marginBottom: 12 },
   propertyOption: { minHeight: 58, flexDirection: 'row', alignItems: 'center', gap: 10, padding: 10, borderRadius: 10 },
   propertyOptionActive: { backgroundColor: '#E8F7F2' }, optionCopy: { flex: 1 }, optionName: { fontFamily: fonts.interSemi, color: '#253247', fontSize: 13 },
   optionAddress: { marginTop: 3, fontFamily: fonts.inter, color: '#718096', fontSize: 11 },
-  confirmCopy: { fontFamily: fonts.inter, fontSize: 14, color: '#475569', marginBottom: 14 },
-  confirmActions: { flexDirection: 'row', gap: 10, marginTop: 18 },
-  cancelButton: { flex: 1, height: 42, borderRadius: 9, borderWidth: 1, borderColor: '#CBD5DF', alignItems: 'center', justifyContent: 'center' },
-  cancelText: { fontFamily: fonts.interSemi, color: '#475569' },
-  confirmText: { fontFamily: fonts.interSemi, color: '#FFFFFF' },
 });

@@ -67,6 +67,7 @@ export function setupRouterGuard(router: Router): void {
       userStore.selectProperty(null);
     }
 
+    if (to.name === 'SupportGuides' && (!userStore.hasPerm('mch:support:guides') || userStore.profile?.impersonation)) return '/403';
     return true;
   });
 

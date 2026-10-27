@@ -78,9 +78,22 @@ class MerchantAuthMiddleware implements MiddlewareInterface
             MerchantContext::set(array_merge(MerchantContext::get(), ['permissions' => $permissions]));
         }
 
+        $supportRoute = str_starts_with($request->getUri()->getPath(), '/api/v1/merchant/support/');
+        if ($supportRoute) {
+            $live = \Mtrip\Shared\Support\SupportAccess::employee(MerchantContext::adminId());
+            foreach (\Mtrip\Shared\Support\SupportAccess::ACTIONS as $action) {
+                $key = 'mch:support:' . $action;
+                $permissions = array_values(array_diff($permissions, [$key]));
+                if (\Mtrip\Shared\Support\SupportAccess::permission($live, $key)) $permissions[] = $key;
+            }
+            MerchantContext::set(array_merge(MerchantContext::get(), ['permissions' => $permissions]));
+        }
         $propertyIds = str_starts_with($request->getUri()->getPath(), '/api/v1/merchant/chat/')
             ? \Mtrip\Shared\Chat\ChatAccess::properties(\Mtrip\Shared\Chat\ChatAccess::employee(MerchantContext::adminId()))
             : MerchantContext::authorizedPropertyIds();
+        if ($supportRoute || str_starts_with($request->getUri()->getPath(), '/api/v1/merchant/notifications/')) {
+            $propertyIds = \Mtrip\Shared\Support\SupportAccess::properties(\Mtrip\Shared\Support\SupportAccess::employee(MerchantContext::adminId()));
+        }
         $propertyHeader = $request->getUri()->getPath() === '/api/v1/merchant/auth/menus'
             ? ''
             : trim($request->getHeaderLine('X-Mtrip-Property-Id'));

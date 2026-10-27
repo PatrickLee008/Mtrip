@@ -12,6 +12,7 @@
     "build:web": "expo export -p web --clear",
     "typecheck": "tsc --noEmit",
     "test:bookings": "node scripts/test-bookings.cjs",
+    "test:menu": "node scripts/test-menu.cjs",
     "test:validation": "node scripts/test-validation.cjs",
     "test:registration": "node scripts/test-registration.cjs",
     "dev": "expo start --web --offline --port 8083",

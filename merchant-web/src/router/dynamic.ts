@@ -30,6 +30,11 @@ function resolveComponent(component: string, name: string): Component {
 export function buildRoutes(menus: MenuNode[]): RouteRecordRaw {
   const children: RouteRecordRaw[] = [
     {
+      path: '/support/guides', name: 'SupportGuides',
+      component: wrapView('../views/support/guides.vue', 'SupportGuides'),
+      meta: { title: 'support.guides', permKey: 'mch:support:guides', keepAlive: false },
+    },
+    {
       path: '/properties',
       name: 'AllProperties',
       component: wrapView('../views/properties/index.vue', 'AllProperties'),
