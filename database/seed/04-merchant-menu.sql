@@ -49,6 +49,7 @@ INSERT IGNORE INTO `merchant_menu` (`id`, `parent_id`, `menu_name`, `menu_name_e
 (20103, 201, '启用禁用',   'Enable/Disable', 'mch:account:status',    3, 3, '1,2'),
 (20104, 201, '重置密码',   'Reset Password', 'mch:account:reset-pwd', 3, 4, '1,2'),
 (20105, 201, '分配物业',   'Assign Properties','mch:account:property-assign',3,5,'1,2'),
+(20106, 201, '删除员工',   'Delete Staff',    'mch:account:delete',    3, 6, '1,2'),
 (20201, 202, '新增角色',   'Add Role',       'mch:role:add',          3, 1, '1,2'),
 (20202, 202, '编辑角色',   'Edit Role',      'mch:role:edit',         3, 2, '1,2'),
 (20203, 202, '删除角色',   'Delete Role',    'mch:role:delete',       3, 3, '1,2'),

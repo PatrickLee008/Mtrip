@@ -35,7 +35,6 @@ async function load(): Promise<void> {
 }
 
 const columns = [
-  { title: t('common.id'), dataIndex: 'id', width: 70 },
   { title: t('role.roleName'), dataIndex: 'roleName', width: 160 },
   { title: t('role.roleCode'), dataIndex: 'roleCode', width: 160 },
   { title: t('role.isBuiltin'), dataIndex: 'isBuiltin', width: 90 },

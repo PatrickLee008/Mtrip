@@ -49,6 +49,10 @@ export function apiAccountUpdate(data: Record<string, unknown>): Promise<null> {
   return post('/merchant/account/update', data);
 }
 
+export function apiAccountDelete(id: number): Promise<null> {
+  return post('/merchant/account/delete', { id });
+}
+
 export function apiAccountToggleStatus(id: number): Promise<{ status: number }> {
   return post('/merchant/account/toggle-status', { id });
 }

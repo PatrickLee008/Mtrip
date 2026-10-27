@@ -320,6 +320,7 @@ Router::addGroup('/api/v1/merchant', static function () {
     Router::get('/account/properties', [MerchantAccountController::class, 'accountProperties']);
     Router::post('/account/add', [MerchantAccountController::class, 'create']);
     Router::post('/account/update', [MerchantAccountController::class, 'update']);
+    Router::post('/account/delete', [MerchantAccountController::class, 'remove']);
     Router::post('/account/toggle-status', [MerchantAccountController::class, 'toggleStatus']);
     Router::post('/account/reset-password', [MerchantAccountController::class, 'resetPassword']);
     Router::post('/account/properties/assign', [MerchantAccountController::class, 'assignProperties']);
