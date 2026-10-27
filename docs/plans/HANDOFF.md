@@ -1,5 +1,23 @@
 # 会话交接文档(HANDOFF)
 
+### 2026-10-27 用户指南隐藏 Screen 名称
+
+按用户截图删除卡片和视频详情中的 Screen 名称，清理对应前端类型字段/样式；后端关联与接口保持。正常登录态卡片已确认隐藏；商户构建、质量基线通过并更新 8091。
+
+### 2026-10-27 用户指南移除额外链接
+
+按用户截图删除 `guides.vue` 搜索栏右侧的“全部视频”链接按钮，清理导航函数的入口参数，保留分类内入口及搜索/筛选。商户构建和项目质量基线通过。
+
+### 2026-10-27 Guide Hub 配置后 500 修复
+
+配置齐全后才触发的 `GuzzleHttp\Client` 缺失已通过 merchant-service 显式声明 Composer 依赖修复；标准 wrapper 重建商户主/APP 双池并刷新网关。真实 Guide Hub 鉴权及 App ID/slug 匹配通过，分类/视频 HTTP 200，登录态分类接口已返回 `code=0/status=ready`。79 项 Support HTTP、PHP lint 447、shared 150/1248、admin build、client typecheck 和全栈 health 通过。后续仍观察到出网 TLS 35/超时 28，页面返回暂不可用；未改 TLS/代理/DNS，真实内容/播放 A12 继续待验。见[故障记录](./audits/2026-10-27-merchant-support-local-rollout.md#配置-guide-hub-后分类接口-500)。未提交/推送。
+
+### 2026-10-27 用户指南对齐 Figma
+
+按用户指定 `3099:24300`，沿用 Merchant PRD v1.0.8 §10.8 与 Support C12，补齐 `/support/guides` 分类预览、双列视频卡片、分类/全局全部视频、搜索与 URL 恢复、分页失败保留/原页重试、详情与播放入口。接口仅增校验后的公开 YouTube ID；缩略图和点击后播放器由 ID 生成，保留外链及失败说明。公开契约没有时长，不填原型示例。列表/详情独立取消及代次校验保护关闭/切换，无新权限/迁移或正常数据写入。
+
+媒体专项 6 用例/11 断言、Support HTTP 79 项、PHP lint 447、shared 150/1248、两个 Web build、client typecheck 通过；中英/1440/1280/375px 隔离组件覆盖分类跨页/预览/分页重试/搜索清空/未分类/迟到响应/异常/详情。备份后发布 8091，实际入口 index-D8Nb8wyv.js 与 dist 一致；wrapper 重启商户双池并刷新网关，全栈健康。真实登录态新标题/40px 搜索/统一入口和待配置提示已验，无新增控制台错误。真实 Guide Hub 配置、商户范围/语言及真实内容/播放 A12 继续待验；未使用 PRD 凭据、未远端部署/提交/推送。用户确认保留知识库首页的并行修改。详见[验证记录](./audits/2026-10-27-merchant-support-local-rollout.md#用户指南对齐-figma)。
+
 ### 2026-10-27 重启后商户聊天 502
 
 网关日志显示 summary/ticket/preferences 连接旧 `172.18.0.15:9502` 被拒，当前 user-service 为 `172.18.0.3`，直连同一路径正常返回 40101。`mtrip.sh restart` 原先只做 Compose 并行 restart，未调用 start/build 已有的网关刷新逻辑；现改为容器重启完成后调用 `refresh_gateway`（仅单独 gateway 时避免重复，S7 沿用 reload），刷新失败不报成功。`health` 在各模式增加 GET summary、POST ticket、GET preferences 无凭据 401 探针，任一失败即整体失败。新增 `scripts/tests/test-mtrip-restart.py`，先复现再通过 8 组回归；Bash 语法检查通过。已用修复后脚本实际完整重启，8 主/6 APP 与新增聊天探活全通过；刷新现有 5174 商户登录页面，网关日志三个接口均 HTTP 200。未修改业务权限或业务数据；按用户要求本地提交，未推送。详见[模块 08](./08-部署与网关.md#完成记录)。

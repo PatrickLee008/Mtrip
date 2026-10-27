@@ -1,5 +1,23 @@
 # Merchant Support 本地正常端口发布
 
+## 用户指南隐藏 Screen 名称
+
+2026-10-27 根据用户截图，删除卡片与视频详情中 Guide Hub Screen 名称的展示及不再使用的前端类型字段/样式；后端数据与关联保持。5174 正常登录态卡片已确认不再出现 `mTrip_screen`。商户/admin 构建、client typecheck、PHP lint 447 与 shared 150/1248 通过。备份后发布本机 8091，实际入口与 dist 一致；无正常数据写入或提交/推送。
+
+## 用户指南移除搜索栏额外链接
+
+2026-10-27 按用户截图删除原型未包含的搜索栏“全部视频”链接，移除导航函数不再使用的全局入口参数；保留分类内“查看全部视频”、搜索/筛选和既有 URL 读取。5174 正常登录态已确认按钮移除，分类与真实视频卡片正常显示。商户构建、admin build、client typecheck、PHP lint 447 和 shared 150/1248 通过；备份后更新本机 8091，实际入口 `/assets/index-BigN5Dg-.js` 与 dist 一致。无后端修改、数据写入或提交/推送。
+
+## 配置 Guide Hub 后分类接口 500
+
+2026-10-27 用户填写环境配置后，商户分类接口触发 `Class "GuzzleHttp\Client" not found`，位置为 `GuideHubService.php:27`。实例创建在请求之前，配置缺失时提前返回，因此此前未配置分支和媒体投影回归未暴露运行依赖遗漏。容器配置四项均非空；不输出或修改用户 Secret。
+
+在 `merchant-service/composer.json` 显式声明 `guzzlehttp/guzzle:^7.0`，通过 `bash deploy/mtrip.sh build merchant-service merchant-service-app --dev` 重建本机双池并刷新网关。主池真实请求已使用 Guzzle 成功；APP 池客户端实例化通过。Guide Hub `/v1/app` HTTP 200，App ID/slug 均与配置匹配；分类与视频列表也均取得过 HTTP 200。浏览器正常登录态的分类请求日志确认 `code=0/status=ready/list=1/hasMore=false`，分类下指南列表为 `code=0/status=ready/list=0`，原 500 已消除。
+
+继续刷新时观察到出网 `cURL 35` TLS 握手失败及 `cURL 28` 连接超时，服务返回 `code=0/status=unavailable`，页面如实显示暂不可用。默认/IPv4 连接均出现失败，宿主机代理连接也有 TLS EOF；没有关闭 TLS 校验或变更代理/DNS。上述结果不能替代稳定的真实内容/播放 A12 验收，仍待网络稳定后复验。
+
+验证：Support 隔离 HTTP 79 项、全量 PHP lint 447、shared 150 用例/1248 断言、admin build、client typecheck 和全部服务/网关 health 通过。测试环境自动清理；运行依赖检查补入 `test/support/README.md`。本轮没有远端部署、提交或推送。
+
 2026-10-27 收尾：用户测试反馈本次功能基本正常，按要求清理本次 Support 的 38 张非必需验收截图（共 4,921,599 字节）及文档图片引用，保留文字验证记录与其他模块历史截图。本次功能代码、回归测试及文档整理纳入本地提交；未推送远端。最终 Support 隔离 HTTP 回归为 79 项，外部指南真实内容/播放仍待配置验收。
 
 日期：2026-10-27。用户反馈 `http://localhost:8091/` 未看到功能，接续[实施记录](./2026-10-26-merchant-support.md)完成本机发布。本记录不代表远端发布或 Guide Hub 真实播放验收。
@@ -161,3 +179,32 @@ Merchant Web 类型检查与 production build、admin build、client typecheck�
 备份 `deploy/backups/admin-before-support-editor-20261027-1055.tar.gz` 后发布到 8090；静态 index 与 dist 相同，浏览器入口 `/assets/index-BJ8zIFzv.js` 一致。使用 wrapper restart 更新 merchant-service 与 merchant-service-app，8 主服务/6 APP 实例/网关健康全部通过。
 
 原用户标签留有未提交原因弹窗，未刷新或提交，在新标签只读核验正常工单 2。服务器实际客服未指派/高优先级/处理中，下拉、顶部、列表一致；对话包含初始问题及三条历史回复，方向/颜色/附件均正确。生产实际控件均 34px，仅一个状态下拉，无旧 reply 状态下拉，无横向溢出和 console error。未更改正常工单、客服或回复，实际写入仅在隔离数据验证；用户可刷新旧页后重新选择并保存。未提交/推送。
+
+## 用户指南对齐 Figma
+
+需求依据：用户指定 [Figma 用户指南模块 `3099:24300`](https://www.figma.com/design/fsK2rrl2sadcowrxspvGV8/mTrip_Merchant?node-id=3099-24300&m=dev)，本轮在 Figma 桌面画布/Inspect 核对首页与分类全部视频页。业务继续沿用已确认的 Merchant PRD v1.0.8 §10.8、模块 10 验收及方案 C12；通过 Git 原始基线核对，知识库 v1.0.12 对应正文一致，不升级其他模块基线。
+
+### 实现与契约
+
+- `merchant-web/src/views/support/guides.vue`：首页按外部真实分类分组，每组取两条预览；分类标题蓝色标记、右侧查看全部、两列视频卡片、白色播放圆钮、分类标签、标题与适用功能。搜索框 320×40px，分类筛选同高；卡片缩略图区比例 610:268、内容 24px 内边距、列间距 24px、圆角 16px；沿用现有 PageContainer、字体及配色变量。
+- 分类全部视频、搜索和全局全部视频均使用 `/support/guides`，通过 `category/q/all` 查询参数恢复刷新/返回状态。全局全部视频保留无分类及历史分类指南的访问，不让首页预览限制完整内容。分类分页先完整读取，每批最多四个预览请求；空分类不填假卡片，分类失败可重试并保留其他分类。
+- 已只读复核公开 Client API 1.0.0 的 `VideoGuideResource`：分类可空，提供 `screen.name`、`video.provider/video_id/url`，没有时长字段；不复制原型样例时长、标题或缩略图作为正常数据。运营维护继续在外部 Guide Hub，未建立第二套内容后台。
+- `GuideHubService::guide()` 仅新增经过提供商与 11 字符格式校验的公开 `video_id` 投影；原鉴权、商户 slug 校验和 HTTPS 链接过滤不变。卡片据此生成 YouTube 缩略图，图片失败显示占位；点击成功读取详情后才加载 YouTube 隐私增强播放器，保留外链观看入口与说明。真实播放依赖发布内容、访问网络和视频提供方允许嵌入。
+- 列表和详情各自取消旧请求并检查请求代次，关闭详情/切换筛选/离页后迟到响应不覆盖新状态。分页仅在成功后递增，失败保留当前结果并重试同一页。详情错误不覆盖列表服务状态，详情单独重试。中英提示包含未配置、限流、服务不可用、空结果和内嵌不可用。
+- 未新增路由、权限键、数据库迁移或正常业务数据；顶部/系统侧栏/Support 原入口继续进入同一指南模块。知识库首页的并行修改经用户确认保留，本轮未编辑它。
+
+### 验证证据
+
+- `test/support/guide-media.php`：先复现 `video_id` 缺失，再补投影，最终 6 用例/11 断言通过。覆盖有效 ID/适用功能、路径和查询注入、长度/未知提供商、非 HTTPS URL 与缺失媒体；镜像以只读挂载、禁网络方式执行，无凭据或外部访问。
+- 既有 Support 隔离 HTTP 回归 `PASS_COUNT=79`，临时库/用户/容器自动清理；全量 PHP lint 447 文件、shared 150 用例/1248 断言、admin build、client typecheck 均通过。最终 merchant build（含 vue-tsc）通过，保留既有 bundle 体积提示。
+- 临时验收页复用实际指南组件、Ant Design、i18n、PageContainer 和全局样式，以内存接口替身生成 28 条合成指南，并屏蔽真实 API。验证分类跨页读取、每组两条、查看全部、下拉筛选、搜索回车/清空/无结果、刷新与浏览器返回、未分类指南访问；25 条分类数据先取 20，再模拟第二页失败后重试，记录页码为 `1,2,2`，最后 25 条无遗漏、无多取第三页。
+- 交互补验：慢搜索紧接快搜索后只显示快结果；慢详情关闭后不重开；详情错误/重试、缺媒体外链降级；首页部分分类失败保留成功分类；未配置/限流/整体失败/空态分别显示；语言切换时结果标题同步翻译。合成有效 ID 的 iframe 与外链地址已核对，未将它当作真实视频播放验收。
+- 1440px 双列为 557px/557px，1280px 双列为 477px/477px；375px 单列为 337px，搜索外框 40px/内 input 38px，播放按钮垂直中心偏移 0，无横向溢出。英文和中文、375px 详情/换行已检查；发现并修复回车未提交、筛选双边框、无图播放按钮偏移。临时文件、15179 服务与测试标签在收尾清理；不保存额外仓库截图。
+
+### 本机发布与剩余项
+
+旧商户静态站备份：`deploy/backups/merchant-before-guides-20261027-1793072533931893000.tar.gz`。复制新静态资源后原子替换入口文件，保留原站点其他文件。8091 实际入口 `/assets/index-D8Nb8wyv.js` 与 dist 的 HTML/入口脚本逐字节一致。
+
+通过 `bash deploy/mtrip.sh restart merchant-service merchant-service-app` 更新双池并刷新 gateway；`mtrip.sh health` 的 8 主服务/6 APP 实例及三个聊天鉴权探针全通过。8091 正常登录态只读核对新标题、搜索框 40px、顶部/侧栏统一入口和“商户指南服务待配置”，控制台无新增 error/warn；未上传、发布外部指南或改动工单。
+
+真实 Guide Hub 配置、实际商户受众/语言/站点范围、真实缩略图和视频播放仍待联调，A12 不计完成。未使用 PRD 中凭据；没有远端部署、提交或推送。

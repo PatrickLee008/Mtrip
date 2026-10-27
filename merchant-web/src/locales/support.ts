@@ -30,7 +30,11 @@ export const supportEn = {
   violation: 'Violation', warning: 'Warning', appeal: 'Submit Appeal Ticket', effective: 'Effective', resolvedViolation: 'Resolved', openViolation: 'Open',
   active: 'Active', revoked: 'Revoked', expired: 'Expired', guideSearch: 'Search guides…', noGuides: 'No published merchant guides found',
   guideUnavailable: 'Merchant guides are awaiting service configuration.', guideError: 'The guide service is unavailable. Please retry later.', watch: 'Watch guide',
-  guidesSubtitle: 'Learn merchant workflows with published video guides.', relatedViolation: 'Related violation #{id}', refresh: 'Refresh',
+  guidesTitle: 'User Guide & Tutorials', guidesSubtitle: 'Learn how to manage your property, update availability, and boost sales on mTrip.',
+  viewAllVideos: 'View All Videos', allVideos: 'All Videos', guideResults: 'Search Results', watchTitle: 'Watch: {title}',
+  watchExternal: 'Watch on YouTube', guidePlaybackHint: 'If the video does not play here, open it on YouTube.',
+  guidePlaybackUnavailable: 'Embedded playback is unavailable for this guide.', guideRateLimited: 'Too many guide requests. Please wait a moment and retry.',
+  relatedViolation: 'Related violation #{id}', refresh: 'Refresh',
 };
 
 export const supportZh = {
@@ -65,5 +69,9 @@ export const supportZh = {
   violation: '违规记录', warning: '警告', appeal: '提交申诉工单', effective: '生效时间', resolvedViolation: '已处理', openViolation: '待处理',
   active: '有效', revoked: '已撤销', expired: '已到期', guideSearch: '搜索指南…', noGuides: '暂无已发布的商户指南',
   guideUnavailable: '商户指南服务待配置。', guideError: '指南服务暂时不可用，请稍后重试。', watch: '观看指南',
-  guidesSubtitle: '通过已发布的视频指南了解商户操作流程。', relatedViolation: '关联违规记录 #{id}', refresh: '刷新',
+  guidesTitle: '用户指南与视频教程', guidesSubtitle: '了解如何管理物业、更新房量，并在 mTrip 提升销售。',
+  viewAllVideos: '查看全部视频', allVideos: '全部视频', guideResults: '搜索结果', watchTitle: '观看：{title}',
+  watchExternal: '在 YouTube 观看', guidePlaybackHint: '若视频无法在此播放，可前往 YouTube 观看。',
+  guidePlaybackUnavailable: '此指南暂不支持内嵌播放。', guideRateLimited: '指南请求过于频繁，请稍后重试。',
+  relatedViolation: '关联违规记录 #{id}', refresh: '刷新',
 };

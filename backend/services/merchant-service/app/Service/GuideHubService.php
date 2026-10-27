@@ -58,8 +58,10 @@ class GuideHubService
     {
         $url = (string) ($row['video']['url'] ?? '');
         if (! filter_var($url, FILTER_VALIDATE_URL) || ! str_starts_with($url, 'https://')) $url = '';
+        $videoId = (string) ($row['video']['video_id'] ?? '');
+        if (($row['video']['provider'] ?? '') !== 'youtube' || ! preg_match('/^[a-zA-Z0-9_-]{11}$/D', $videoId)) $videoId = '';
         return ['id' => $row['id'] ?? '', 'title' => $row['title'] ?? '', 'description' => $row['description'] ?? '',
-            'category' => $row['category'] ?? null, 'screen' => $row['screen'] ?? null, 'video_url' => $url, 'provider' => $row['video']['provider'] ?? ''];
+            'category' => $row['category'] ?? null, 'screen' => $row['screen'] ?? null, 'video_url' => $url, 'provider' => $row['video']['provider'] ?? '', 'video_id' => $videoId];
     }
 
     private function failure(int $status): array

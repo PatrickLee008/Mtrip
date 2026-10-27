@@ -22,3 +22,25 @@ python3 test/support/integration.py --cleanup /absolute/path/from/QA_SESSION/ses
 `--cleanup` 只接受脚本生成并经名称检查的环境。若进程被强制终止，使用已输出的 session 路径清理。测试结束时部分员工权限、指派账号已被故意撤销，浏览器验证应使用合成 owner/admin。
 
 本脚本不替代真实外部 Guide Hub 内容/播放联调、正式账号菜单验收、正常库迁移或发布后验收。图片内容、10MB 边界、集团账号和通知清空仍需补专项覆盖；当前测试已覆盖 PDF、有效 XLSX 容器、任意 ZIP 冒名、附件个数、转绑、匿名/跨主体读取和临时过期。
+
+## 指南媒体投影回归
+
+在仓库根目录运行 `php test/support/guide-media.php`（PHP >= 8.1），或使用现有镜像：
+
+```bash
+docker run --rm --network none --entrypoint php \
+  -v "$PWD:/workspace:ro" mtrip-merchant-service /workspace/test/support/guide-media.php
+```
+
+6 个用例/11 次断言覆盖已发布适用功能保留、YouTube ID 投影、路径/查询注入与无效长度/未知提供商拒绝、非 HTTPS 观看链接过滤以及缺失媒体。无需数据库、外部凭据或网络，不替代真实视频播放验收。
+
+## 已配置指南的运行依赖检查
+
+`GuideHubService` 在配置齐全后才创建 Guzzle 客户端；未配置回归不会覆盖镜像缺少该依赖的情况。修改 Composer 依赖后，使用 `bash deploy/mtrip.sh build merchant-service merchant-service-app --dev` 重建双池，并分别验证实际运行容器：
+
+```bash
+docker exec mtrip-merchant-service-1 php -r 'require "vendor/autoload.php"; new GuzzleHttp\Client(); echo "OK\n";'
+docker exec mtrip-merchant-service-app-1 php -r 'require "vendor/autoload.php"; new GuzzleHttp\Client(); echo "OK\n";'
+```
+
+随后在商户登录态检查分类/列表请求与页面。客户端可实例化不等于外部鉴权、应用匹配或真实内容验收通过；不得输出 Secret 或包含鉴权头的请求日志。

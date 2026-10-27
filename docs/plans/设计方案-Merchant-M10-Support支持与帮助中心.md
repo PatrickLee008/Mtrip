@@ -53,6 +53,7 @@
 | [已关闭详情](https://www.figma.com/design/fsK2rrl2sadcowrxspvGV8/mTrip_Merchant?node-id=3198-31798&m=dev) | `3198:31798` | 已关闭提示、重新开启；不再显示重复“关闭”动作 |
 | [FAQ](https://www.figma.com/design/fsK2rrl2sadcowrxspvGV8/mTrip_Merchant?node-id=3047-20149&m=dev) | `3047:20149` | 搜索、分类数量、折叠问题、创建工单引导 |
 | [合规与规则](https://www.figma.com/design/fsK2rrl2sadcowrxspvGV8/mTrip_Merchant?node-id=3047-20359&m=dev) | `3047:20359` | 合规摘要、警告提示、生效政策列表、支持入口；指标按 C10 分期 |
+| [用户指南](https://www.figma.com/design/fsK2rrl2sadcowrxspvGV8/mTrip_Merchant?node-id=3099-24300&m=dev) | `3099:24300` | 分类分组、每组两条预览、视频卡片、分类全部视频、搜索与观看入口；2026-10-27 已按画布/Inspect 补齐 |
 
 PRD 补齐原型未画全的授权、完整历史分页、异常与双端同步。原型中的商户名、工单号、金额、人数、分页总数和政策正文不作为生产数据；列表底部误写 bookings 应改为工单。原型“1 个工作日回复”属于运营承诺，未获服务时限依据前使用中性提示，不增加自动超时或 SLA 规则。
 
@@ -210,6 +211,8 @@ PRD 补齐原型未画全的授权、完整历史分页、异常与双端同步�
 **指南：**运营维护始终在外部集中指南中心。已只读核对 PRD 指向的公开 API 文档 `https://guide-hub-production-m6ybjs.laravel.cloud/docs/api#/`，Client API 1.0.0 使用 `/api/v1/app`、分类和视频指南接口，鉴权为 `X-App-ID`/`X-App-Secret`；服务端校验 app ID 与商户 slug 后提供最小投影。没有登录外部后台或使用 PRD 凭据；真实已发布商户内容、语言/站点范围及媒体观看仍未联调。账号/凭据不复制入方案、仓库配置样例、前端构建或日志。
 
 已实现服务端 HTTPS/超时/禁重定向、分类分页、搜索/详情投影及鉴权/限流失败状态。待配置 `MTRIP_GUIDE_HUB_APP_ID`、`MTRIP_GUIDE_HUB_APP_SECRET`、`MTRIP_GUIDE_HUB_MERCHANT_SLUG` 后，用真实商户内容继续核验受众/语言/站点定向及媒体访问方式。密钥只在服务端；不把外部后台管理登录页当商户观看入口，不以 C 端 `app_tutorial` 替代。
+
+2026-10-27 按用户指定 Figma 用户指南模块补齐 Web 页面：首页按真实分类取两条预览，分类“查看全部”与全局“全部视频”进入同路由列表，后者保留未分类/历史分类内容的访问；搜索和分类使用 URL 条件，支持刷新/返回恢复与分页重试。卡片显示标题、分类及接口提供的适用功能。服务端仅补充格式校验后的 YouTube `video_id`，客户端据此生成缩略图及点击后加载的隐私增强播放器，保留外链观看；关闭详情/切换查询时取消旧请求并忽略迟到响应。公开契约无时长字段，因此不填原型示例时长。无数据仍为空态，未配置/限流/服务失败/详情失败如实提示。已完成隔离组件与媒体专项、本机发布及质量基线，真实商户内容/播放验收 A12 继续保留未完成，详见[本轮验证](./audits/2026-10-27-merchant-support-local-rollout.md#用户指南对齐-figma)。
 
 外部 401/403、超时、无内容分别给出真实状态与重试；密钥刷新和播放链接有效性按服务契约实现，不猜测接口。若服务缺少必要能力，只暂停指南相关联调，记录缺项，工单/FAQ/合规独立推进；指南验收仍保留未完成，不把空壳算交付。
 wefwefwef
