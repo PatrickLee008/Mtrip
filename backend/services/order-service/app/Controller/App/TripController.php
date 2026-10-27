@@ -4,11 +4,14 @@ declare(strict_types=1);
 
 namespace App\Controller\App;
 
+use App\Constants\BookingConst;
 use App\Controller\AbstractController;
 
 use App\Service\Booking\BookingEventService;
 use App\Service\Booking\BookingLifecycleService;
+use App\Service\OrderPayService;
 use App\Service\OrderStockService;
+use App\Service\Payment\MmqrCheckoutService;
 use App\Service\PaymentResultHandler;
 use App\Service\PricingService;
 use App\Service\SettlementService;
@@ -56,6 +59,14 @@ class TripController extends AbstractController
 
     #[Inject]
     protected ConfigInterface $config;
+
+    /** 支付成功统一落账(与 KBZ 业务通知共用) */
+    #[Inject]
+    protected OrderPayService $orderPay;
+
+    /** KBZPay MMQR 出码 */
+    #[Inject]
+    protected MmqrCheckoutService $mmqr;
 
     /** 创建 Trip:items 多个酒店预订 + 可选整单券,券按净额占比分摊 */
     public function create(): array
@@ -161,7 +172,7 @@ class TripController extends AbstractController
                     'guests' => $leg['guests'] !== [] ? CryptoHelper::encrypt(json_encode($leg['guests'], JSON_UNESCAPED_UNICODE), $this->aesKey()) : null,
                     'remark' => $leg['remark'],
                     'meal_plan_snapshot' => mb_substr((string) ($leg['room']['meal_plan'] ?? ''), 0, 255),
-                ] + $this->bookingLifecycle->buildCreateFields(1, $leg['propertyId'], $leg['roomTypeId'], (string) $leg['remark']));
+                ] + $this->bookingLifecycle->buildCreateFields(1, $leg['propertyId'], $leg['roomTypeId'], (string) $leg['remark'], $siteId));
                 $this->stockService->logChanges($orderId, $leg['changes']);
                 $this->bookingEvents->log([
                     'id' => $orderId, 'order_no' => $orderNo, 'site_id' => $siteId,
@@ -184,16 +195,16 @@ class TripController extends AbstractController
             ];
         });
 
-        return Result::success($result, 'Trip 已创建,请在15分钟内完成支付');
+        return Result::success($result, 'Trip 已创建,请在支付截止时间前完成支付');
     }
 
     /** 支付整个 Trip(单笔支付):确认其下所有预订,券消耗一次 */
     public function pay(): array
     {
         $tripId = $this->requireId('tripId');
-        // 1 Stripe / 2 PayPal(均为 mock)/ 3 余额(真扣 user_info.balance,与 order/pay 同口径)
+        // 1 Stripe / 2 PayPal(均为 mock)/ 3 余额(真扣 user_info.balance,与 order/pay 同口径)/ 5 KBZPay MMQR(只出码)
         $payMethod = $this->intInput('payMethod', 1);
-        if (! in_array($payMethod, [1, 2, 3], true)) {
+        if (! in_array($payMethod, [1, 2, 3, BookingConst::PAY_METHOD_KBZ_MMQR], true)) {
             throw new BusinessException(ErrorCode::PARAM_ERROR, '支付方式不正确');
         }
 
@@ -206,6 +217,9 @@ class TripController extends AbstractController
         $snapshots = Db::table('order_main')->where('trip_id', $tripId)->where('site_id', $siteId)
             ->where('user_id', UserContext::userId())->whereNull('deleted_at')->orderBy('id')->get()
             ->map(static fn ($row) => (array) $row)->all();
+        if ($payMethod === BookingConst::PAY_METHOD_KBZ_MMQR) {
+            return Result::success($this->mmqr->createForTrip((array) $tripSnapshot, $snapshots), '请使用 KBZPay 或 MMQR 银行 App 扫码支付');
+        }
         $snap = Db::transaction(function () use ($tripId, $payMethod, $siteId, $snapshots) {
             MerchantAccessGuard::lockBookable($snapshots, $siteId);
             MerchantAccessGuard::lockProperties($snapshots, $siteId);
@@ -251,42 +265,21 @@ class TripController extends AbstractController
                     "行程 {$trip['trip_no']} 钱包支付",
                 );
             }
-            Db::table('order_trip')->where('id', $tripId)->update([
-                'pay_status' => 1,
-                'pay_method' => $payMethod,
-                'pay_trade_no' => ($payMethod === 3 ? 'WALLET' : 'MOCK') . OrderNoGenerator::flowNo(),
-                'pay_time' => date('Y-m-d H:i:s'),
-            ]);
-
-
-            $codes = [];
-            foreach ($bookings as $b) {
-                $b = (array) $b;
-                $verifyCode = OrderNoGenerator::verifyCode();
-                // 支付状态变更统一走 PaymentResultHandler(幂等+时间线)
-                $verifyCode = $this->payHandler->markPaid($b, $payMethod, 'MOCK' . OrderNoGenerator::flowNo(), $verifyCode);
-                $this->stockService->deduct($b);
-                $this->settlementService->recordBooking($b);
-                $codes[] = ['orderNo' => $b['order_no'], 'verifyCode' => $verifyCode];
-            }
-
-            // 整单券核销一次(已在扣款前锁定并确认可用)
-            $this->pricingService->consumeCoupon($couponRec, $tripId);
+            // 置 Trip 已付 + 各预订已支付 / 库存 / 结算 + 整单券核销一次:与 KBZ 业务通知落账同一实现
             // 推荐返利不在支付时发放:Trip 下各酒店订单各自入住核销时由 BookingLifecycleService::checkIn 发放(PRD 模块14)
-            return ['siteId' => (int) $trip['site_id'], 'userId' => (int) $trip['user_id'], 'tripNo' => (string) $trip['trip_no'], 'codes' => $codes, 'orders' => array_map(static fn ($x) => (array) $x, $bookings->all())];
+            $orders = array_map(static fn ($x) => (array) $x, $bookings->all());
+            $codes = $this->orderPay->settleTrip(
+                $trip,
+                $orders,
+                $payMethod,
+                ($payMethod === 3 ? 'WALLET' : 'MOCK') . OrderNoGenerator::flowNo(),
+                $couponRec,
+            );
+            return ['codes' => $codes, 'orders' => $orders];
         });
 
-        // 预订确认站内通知:PRD 1.1「支付确认一次、预订确认逐个发」,每个预订各一条(后置容错)
-        foreach ($snap['orders'] as $o) {
-            try {
-                UserNotify::order($o, 'booking_confirmed');
-            } catch (\Throwable) {
-            }
-        }
-        // 商户通知:逐预订通知对应酒店(事件后置容错)
-        foreach ($snap['orders'] as $o) {
-            $this->payHandler->notifyMerchantConfirmed($o);
-        }
+        // 预订确认站内通知:PRD 1.1「支付确认一次、预订确认逐个发」,每个预订各一条;商户逐预订通知(后置容错)
+        $this->orderPay->notifyConfirmed($snap['orders']);
 
         return Result::success(['codes' => $snap['codes']], '支付成功,行程内各预订已确认');
     }

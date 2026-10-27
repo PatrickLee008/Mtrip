@@ -11,12 +11,27 @@ import { useUserStore } from '@/stores/user';
 const { t } = useI18n();
 const userStore = useUserStore();
 
+const KNOWN_GROUPS = ['base', 'security', 'upload', 'client'];
+
+/** 固定四组 + 后端返回的其他分组(如 order / payment)自动追加 Tab,避免新增分组的配置项无入口 */
 const GROUP_TABS = computed(() => [
   { key: 'base', label: t('config.global.sectionBase') },
   { key: 'security', label: t('config.global.sectionSecurity') },
   { key: 'upload', label: t('config.global.sectionUpload') },
   { key: 'client', label: t('config.global.sectionClient') },
+  ...Object.keys(groups.value)
+    .filter((key) => !KNOWN_GROUPS.includes(key))
+    .map((key) => ({ key, label: t('config.global.tabs.' + key, key) })),
 ]);
+
+/** 支付窗口(分钟):整数 1–1440,站点可在站点差异化配置中覆盖 */
+const PAYMENT_WINDOW_KEY = 'payment_window_minutes';
+const PAYMENT_WINDOW_MIN = 1;
+const PAYMENT_WINDOW_MAX = 1440;
+
+function numberLimit(key: string): { min?: number; max?: number; precision?: number } {
+  return key === PAYMENT_WINDOW_KEY ? { min: PAYMENT_WINDOW_MIN, max: PAYMENT_WINDOW_MAX, precision: 0 } : {};
+}
 
 const VALUE_TYPE_TEXT = computed<Record<number, string>>(() => ({
   1: t('config.global.valueTypeString'),
@@ -125,6 +140,13 @@ async function save(): Promise<void> {
           return;
         }
       }
+      if (row.config_key === PAYMENT_WINDOW_KEY) {
+        const minutes = Number(current);
+        if (!Number.isInteger(minutes) || minutes < PAYMENT_WINDOW_MIN || minutes > PAYMENT_WINDOW_MAX) {
+          message.error(t('config.global.paymentWindowRange'));
+          return;
+        }
+      }
       changed.push({ key: row.config_key, value: current });
     }
   }
@@ -218,6 +240,7 @@ onMounted(() => {
                 <a-input-number
                   v-else-if="row.value_type === 2"
                   v-model:value="model[row.config_key]"
+                  v-bind="numberLimit(row.config_key)"
                   style="width: 220px"
                 />
                 <!-- JSON:多行文本 -->

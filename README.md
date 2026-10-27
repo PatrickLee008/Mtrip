@@ -1,5 +1,7 @@
 # Mtrip 海外旅游 SaaS 平台
 
+2026-10-27 KBZPay MMQR 支付接入:阶段 1–6(协议库、迁移、后台配置、payment-service 支付中心、order-service 接入、移动端扫码页)代码完成,单测/构建/typecheck 通过;未在运行环境与 UAT 实跑,阶段 7–8(退款 mTLS、异常演练)未开始。详见[方案 22](docs/plans/22-KBZPay-MMQR支付接入方案.md) §9.1 与[下一步提示词](docs/plans/next-task.md)。
+
 2026-10-22 Facebook Web 登录相关代码、迁移、测试及文档按用户要求纳入本地提交；未推送或部署远端，真实授权仍待验收。
 
 2026-10-21 Facebook 部署前复查：政策链接 HTTPS 200；测试域名仍旧前端、callback 404；目标环境需配置/迁移及使用有效客户端签名重新构建。详见[检查记录](docs/plans/audits/2026-10-21-facebook-deployment-readiness.md)。

@@ -84,6 +84,7 @@ class MaskHelper
             'temporarypassword', 'temporary_password', 'activationtoken', 'activation_token', 'recoverytoken', 'recovery_token',
             'googleidtoken', 'google_id_token', 'idtoken', 'id_token', 'exchangecode', 'exchange_code',
             'two_fa_secret_enc', 'pending_secret_enc', 'oldpassword', 'newpassword',
+            'apikey', 'api_key', 'appkey', 'app_key', 'certpem', 'cert_pem', 'keypem', 'key_pem', 'keypwd', 'key_pwd', 'capem', 'ca_pem',
             'mobile', 'phone', 'email', 'id_card', 'idcard', 'bank_card', 'card_no', 'real_name',
         ];
         $keys = array_map('strtolower', array_merge($defaults, $sensitiveKeys));

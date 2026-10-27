@@ -60,6 +60,66 @@ class PaymentResultHandler
         return $verifyCode;
     }
 
+    /**
+     * 是否「仅因系统支付超时而取消、且从未支付」的预订(方案 22 §6.3 恢复前提)
+     *
+     * 取消来源以时间线为准:最后一条 payment_expired / cancelled 事件的操作方须为系统
+     * (超时任务写 payment_expired;Trip 连带关闭的兄弟单写 cancelled + 系统)。
+     * 用户 / 商户 / 平台取消、已支付后取消都返回 false。
+     */
+    public function isExpiryCancelled(array $order): bool
+    {
+        if ((int) $order['booking_status'] !== BookingConst::STATUS_CANCELLED
+            || (int) $order['order_status'] !== 4
+            || ! in_array((int) $order['payment_status'], [BookingConst::PAY_PENDING, BookingConst::PAY_FAILED], true)) {
+            return false;
+        }
+        $event = Db::table('order_booking_event')
+            ->where('order_id', (int) $order['id'])
+            ->whereIn('event_type', ['payment_expired', 'cancelled'])
+            ->orderByDesc('id')->first(['event_type', 'operator_type']);
+        return $event !== null && (int) $event->operator_type === BookingConst::OPERATOR_SYSTEM;
+    }
+
+    /**
+     * 超时取消后到账 → 恢复为已确认(方案 22 §6.3 分支 2;只允许从「系统超时取消」进入)
+     *
+     * 调用方须在已持有 Trip / 订单行锁的事务内调用,并已重新锁定库存、复核优惠券;
+     * 本方法只做状态回写与时间线,库存扣减 / 券核销 / 结算由 OrderPayService 统一完成。
+     * @return string 核销码
+     */
+    public function markPaidAfterExpiry(array $order, int $payMethod, string $tradeNo, string $verifyCode): string
+    {
+        if (! $this->isExpiryCancelled($order)) {
+            throw new BusinessException(ErrorCode::DATA_CONFLICT, '仅系统超时取消的预订可恢复');
+        }
+        $affected = Db::table('order_main')->where('id', (int) $order['id'])
+            ->where('booking_status', BookingConst::STATUS_CANCELLED)
+            ->where('order_status', 4)
+            ->update([
+                'order_status' => 1,
+                'booking_status' => BookingConst::STATUS_CONFIRMED,
+                'payment_status' => BookingConst::PAY_PAID,
+                'pay_method' => $payMethod,
+                'pay_trade_no' => $tradeNo,
+                'pay_time' => date('Y-m-d H:i:s'),
+                'confirmed_at' => date('Y-m-d H:i:s'),
+                'verify_code' => $verifyCode,
+                'cancel_reason' => '',
+                'cancel_time' => null,
+                'version' => Db::raw('version + 1'),
+            ]);
+        if ($affected !== 1) {
+            throw new BusinessException(ErrorCode::DATA_CONFLICT, '预订已被其他操作更新');
+        }
+        $this->events->log($order, 'payment_late_recovered', BookingConst::OPERATOR_SYSTEM, 0, '', 1, [
+            'payMethod' => $payMethod,
+            'tradeNo' => $tradeNo,
+            'previousCancelReason' => (string) ($order['cancel_reason'] ?? ''),
+        ], 'payment');
+        return $verifyCode;
+    }
+
     /** 支付失败记录(不改变预订状态,仅支付状态与时间线) */
     public function markFailed(array $order, string $reason): void
     {
@@ -79,6 +139,19 @@ class PaymentResultHandler
                 $order,
                 '新预订已确认',
                 "收到新预订「{$order['goods_name']}」(订单 {$order['order_no']},{$order['sku_name']} ×{$order['quantity']},入住 {$order['use_date']}),住客 {$order['contact_name']},已支付确认。"
+            );
+        } catch (\Throwable) {
+        }
+    }
+
+    /** 超时取消后到账已恢复的商户通知(此前已收到「支付超时已取消」,须补发,事件后置容错) */
+    public function notifyMerchantRecovered(array $order): void
+    {
+        try {
+            $this->notify->push(
+                $order,
+                '预订已恢复',
+                "预订「{$order['goods_name']}」(订单 {$order['order_no']},{$order['sku_name']} ×{$order['quantity']},入住 {$order['use_date']})此前因支付超时被取消,现已收到住客付款并恢复为已确认,请按原预订安排。"
             );
         } catch (\Throwable) {
         }

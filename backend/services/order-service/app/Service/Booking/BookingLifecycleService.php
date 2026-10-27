@@ -6,6 +6,7 @@ namespace App\Service\Booking;
 
 use App\Constants\BookingConst;
 use App\Service\OrderStockService;
+use App\Service\Payment\PaymentWindow;
 use App\Service\PricingService;
 use App\Service\ReferralService;
 use Hyperf\Context\Context;
@@ -43,17 +44,22 @@ class BookingLifecycleService
     #[Inject]
     protected ReferralService $referralService;
 
+    /** 可配置支付窗口(替换写死的 BookingConst::PAYMENT_WINDOW_MINUTES) */
+    #[Inject]
+    protected PaymentWindow $paymentWindow;
+
     /**
      * 下单时组装预订字段(须在下单事务内调用):
-     * 预订/支付状态、10 分钟支付截止、特殊请求与政策快照(政策此后不再随规则修改变化)。
+     * 预订/支付状态、支付截止(可配置窗口,方案 22 §6.1:站点配置 → 全局配置 → 30 分钟)、特殊请求与政策快照(政策此后不再随规则修改变化)。
+     * $siteId 缺省 0 时只读全局配置(兼容旧调用)。
      */
-    public function buildCreateFields(int $orderType, int $propertyId, int $roomTypeId, string $remark): array
+    public function buildCreateFields(int $orderType, int $propertyId, int $roomTypeId, string $remark, int $siteId = 0): array
     {
         $fields = [
             'booking_status' => BookingConst::STATUS_PENDING_PAYMENT,
             'payment_status' => BookingConst::PAY_PENDING,
             'booking_channel' => BookingConst::CHANNEL_MTRIP,
-            'payment_expires_at' => date('Y-m-d H:i:s', time() + BookingConst::PAYMENT_WINDOW_MINUTES * 60),
+            'payment_expires_at' => date('Y-m-d H:i:s', time() + $this->paymentWindow->minutes($siteId) * 60),
             'special_requests' => mb_substr($remark, 0, 1000),
         ];
         if ($orderType === 1) {

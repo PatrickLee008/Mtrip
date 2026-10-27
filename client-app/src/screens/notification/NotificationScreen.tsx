@@ -40,8 +40,8 @@ type NotificationTab = (typeof NOTIFICATION_TABS)[number];
 const TAB_BIZ: Record<NotificationTab, NotifyBizType> = { system: 3, booking: 1 };
 const PAGE_SIZE = 20;
 
-/** 标题走 `--tertiary` 红色的事件(设计稿「Booking Cancelled」) */
-const DANGER_EVENTS = ['booking_cancelled', 'booking_expired'];
+/** 标题走 `--tertiary` 红色的事件(设计稿「Booking Cancelled」;迟到付款自动退款失败需用户留意,同样标红) */
+const DANGER_EVENTS = ['booking_cancelled', 'booking_expired', 'payment_late_refunded', 'payment_late_refund_failed'];
 
 interface TabState {
   list: NotifyItem[];

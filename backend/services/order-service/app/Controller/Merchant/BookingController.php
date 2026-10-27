@@ -236,14 +236,22 @@ class BookingController extends AbstractAdminController
         return Result::success($this->refundService->quote($order));
     }
 
-    /** 商户发起退款(按试算上限内金额直退钱包) */
+    /**
+     * 商户发起退款(按试算上限内金额):钱包 / mock 支付直退钱包当场完成;
+     * KBZPay 支付原路退回(排队 / 提交支付中心,channel=original,到账后完成)
+     */
     #[Permission('mch:order:refund')]
     public function refundApply(): array
     {
         $order = $this->findScopedBooking($this->requireId());
         $amount = $this->input('amount') !== null && $this->input('amount') !== '' ? $this->floatInput('amount') : null;
         $result = $this->refundService->apply($order, MerchantContext::adminId(), MerchantContext::adminName(), $amount, $this->strInput('reason'));
-        return Result::success(['refundNo' => $result['refundNo'], 'refundAmount' => $result['refundAmount']], '退款已完成');
+        return Result::success([
+            'refundNo' => $result['refundNo'],
+            'refundAmount' => $result['refundAmount'],
+            'channel' => $result['channel'],
+            'refundStatus' => $result['channel'] === 'original' ? (string) ($result['kbzRefund']['status'] ?? 'queued') : 'succeeded',
+        ], $result['message']);
     }
 
     /** 新增内部备注(仅酒店员工可见) */

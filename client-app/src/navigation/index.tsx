@@ -72,6 +72,7 @@ import CancelBookingScreen from '@/screens/order/CancelBookingScreen';
 import OrderDetailScreen from '@/screens/order/OrderDetailScreen';
 import TripDetailScreen from '@/screens/order/TripDetailScreen';
 import OrderListScreen from '@/screens/order/OrderListScreen';
+import MmqrPayScreen from '@/screens/pay/MmqrPayScreen';
 import CouponDetailScreen from '@/screens/promotions/CouponDetailScreen';
 import PromotionsScreen from '@/screens/promotions/PromotionsScreen';
 import SiteSelectScreen from '@/screens/site/SiteSelectScreen';
@@ -298,6 +299,11 @@ export default function AppNavigator() {
           name="BookingSuccessLite"
           component={BookingSuccessLiteScreen}
           options={{ title: t('hotels.booking.success.title'), headerShown: false }}
+        />
+        <Stack.Screen
+          name="MmqrPay"
+          component={MmqrPayScreen}
+          options={{ title: t('pay.mmqr.title'), headerShown: false }}
         />
         <Stack.Screen
           name="GoodsList"

@@ -59,6 +59,7 @@ import * as Clipboard from 'expo-clipboard';
 
 import { fetchHotelDetail } from '@/api/goods';
 import { fetchOrderDetail, payOrder } from '@/api/order';
+import { PAY_METHOD, getPayMethods, isMethodEnabled } from '@/api/pay';
 import { fetchReviewContext } from '@/api/review';
 import { apiTripPay, fetchTripDetail, type TripBookingRow } from '@/api/trip';
 import { TEMP_HOTEL_GALLERY, tempCoverFor } from '@/assets/tempImages';
@@ -74,6 +75,7 @@ import { fonts } from '@/config/typography';
 import type { RootStackParamList } from '@/navigation/types';
 import { ROOM_FACILITY_ICONS } from '@/screens/hotel/detailDemo';
 import { orderStatusColor } from '@/screens/mypick/useMyPickData';
+import { mmqrRouteParams, requestMmqr } from '@/screens/pay/mmqrPay';
 import { useCommonStore } from '@/store/commonStore';
 import { useSiteStore } from '@/store/siteStore';
 import { useUserStore } from '@/store/userStore';
@@ -180,6 +182,39 @@ export default function BookingDetailScreen() {
     } catch (e) {
       /* 超时被取消的单后端报「订单不是待支付状态」,原样展示 */
       showToast(e instanceof Error ? e.message : 'Error');
+      await load();
+    } finally {
+      setPaying(false);
+    }
+  };
+
+  /** 站点是否开通 KBZPay MMQR(渠道接口失败 = 不开,只保留余额支付) */
+  const [mmqrEnabled, setMmqrEnabled] = useState(false);
+  useEffect(() => {
+    if (!pending) return;
+    let alive = true;
+    void getPayMethods(currency || undefined)
+      .then((rows) => {
+        if (alive) setMmqrEnabled(isMethodEnabled(Array.isArray(rows) ? rows : null, PAY_METHOD.MMQR, currency || undefined));
+      })
+      .catch(() => {
+        if (alive) setMmqrEnabled(false);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [pending, currency]);
+
+  /** MMQR 去支付 / 重新支付:拿(或复用)二维码后进扫码页;付完由扫码页回到本页 */
+  const payMmqr = async () => {
+    if (paying || !order) return;
+    setPaying(true);
+    try {
+      const target = { orderId: order.id, tripId: tripId && tripId > 0 ? tripId : undefined };
+      const res = await requestMmqr(target);
+      navigation.navigate('MmqrPay', mmqrRouteParams(res, { ...target, detailRoute: 'BookingDetail' }));
+    } catch {
+      /* 请求层已 Toast 原因;重读一次,单若已失效页面会跟着变 */
       await load();
     } finally {
       setPaying(false);
@@ -515,6 +550,22 @@ export default function BookingDetailScreen() {
            * 而这一页原本只有禁用的 Modify 与 Cancel),只能干等 10 分钟被超时任务取消。
            * 付的是**这张已有的单**,不会新建。
            */}
+          {/* KBZPay MMQR(站点开通时):对这张已有的单调 pay(payMethod=5),后端复用未过期的码 */}
+          {pending && mmqrEnabled ? (
+            <Pressable
+              style={({ pressed }) => [
+                styles.payBtn,
+                styles.reviewBtn,
+                paying && styles.disabled,
+                pressed && styles.pressed,
+              ]}
+              disabled={paying}
+              onPress={() => void payMmqr()}
+            >
+              <Text style={styles.payText}>{t('pay.mmqr.payWithMmqr')}</Text>
+            </Pressable>
+          ) : null}
+
           <View style={styles.actions}>
             {pending ? (
               <Pressable

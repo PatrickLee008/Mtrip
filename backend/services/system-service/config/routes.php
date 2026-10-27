@@ -20,6 +20,7 @@ use App\Controller\Admin\HelpController;
 use App\Controller\Admin\MapConfigController;
 use App\Controller\Admin\MenuController;
 use App\Controller\Admin\OperationLogController;
+use App\Controller\Admin\PayAccountController;
 use App\Controller\Admin\PayChannelController;
 use App\Controller\Admin\PermTemplateController;
 use App\Controller\Admin\RecycleController;
@@ -138,6 +139,14 @@ Router::addGroup('/api/v1/admin', static function () {
     Router::post('/sys/pay/delete', [PayChannelController::class, 'delete']);
     Router::post('/sys/pay/toggle-status', [PayChannelController::class, 'toggleStatus']);
     Router::post('/sys/pay/copy', [PayChannelController::class, 'copy']);
+    // 收款账户(KBZPay MMQR,方案22 §5/§7)
+    Router::get('/sys/pay-account/list', [PayAccountController::class, 'index']);
+    Router::get('/sys/pay-account/options', [PayAccountController::class, 'options']);
+    Router::post('/sys/pay-account/add', [PayAccountController::class, 'create']);
+    Router::post('/sys/pay-account/update', [PayAccountController::class, 'update']);
+    Router::post('/sys/pay-account/delete', [PayAccountController::class, 'delete']);
+    Router::post('/sys/pay-account/toggle-status', [PayAccountController::class, 'toggleStatus']);
+    Router::post('/sys/pay-account/test', [PayAccountController::class, 'test']);
 
     // ---------- 模块9 短信渠道/模板/日志 ----------
     Router::get('/sys/sms/channel/list', [SmsController::class, 'channels']);

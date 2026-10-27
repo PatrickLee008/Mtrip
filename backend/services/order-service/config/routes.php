@@ -19,6 +19,7 @@ use App\Controller\Merchant\OrderController as MerchantOrderController;
 use App\Controller\Merchant\StatsController as MerchantStatsController;
 use App\Controller\App\OrderController;
 use App\Controller\App\TripController;
+use App\Controller\Internal\PaymentNotifyController;
 use Hyperf\HttpServer\Router\Router;
 use Mtrip\Shared\Middleware\AdminAuthMiddleware;
 use Mtrip\Shared\Middleware\MerchantAuthMiddleware;
@@ -37,6 +38,9 @@ Router::addGroup('/api/v1/app/order', static function () {
     Router::get('/refund/quote', [OrderController::class, 'refundQuote']);
     Router::post('/refund/apply', [OrderController::class, 'applyRefund']);
     Router::get('/verify-code', [OrderController::class, 'verifyCode']);
+    // KBZPay MMQR(方案 22 阶段 5):支付状态轮询 / 可用支付方式(出码复用 /pay、/trip/pay 的 payMethod=5)
+    Router::get('/pay/status', [OrderController::class, 'payStatus']);
+    Router::get('/pay/methods', [OrderController::class, 'payMethods']);
 
     // 多酒店 Trip(单结账多预订,PRD 模块1.1)
     Router::post('/trip/quote', [TripController::class, 'quote']);  // 只读试算(不占库存、不建单)
@@ -103,6 +107,12 @@ Router::addGroup('/api/v1/merchant/order', static function () {
 }, [
     'middleware' => [MerchantAuthMiddleware::class, OperationLogMiddleware::class],
 ]);
+
+// 服务间内部接口(方案 22 §4.2):支付中心业务通知 paid / refunded / refund_failed
+// 网关无 /internal location(外网 404);InternalAuthMiddleware(全局 http 中间件,仅拦 /internal/)校验内网来源 + X-Internal-Token
+Router::addGroup('/internal/v1/order', static function () {
+    Router::post('/payment-notify', [PaymentNotifyController::class, 'notify']);
+});
 
 // 商户端经营看板统计(Merchant App M5)
 Router::addGroup('/api/v1/merchant/stats', static function () {

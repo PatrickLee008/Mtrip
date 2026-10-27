@@ -125,6 +125,28 @@ ensure_env() {
         cp .env.example .env
         warn "未找到 deploy/.env,已从 .env.example 复制生成(生产环境务必修改密钥与密码)"
     fi
+    ensure_internal_token
+}
+
+# 服务间内部接口令牌(方案22 §4.1):.env 中缺失或为空时生成 64 位随机 hex 写回,绝不写进仓库
+ensure_internal_token() {
+    local cur token
+    cur="$( { grep -E '^[[:space:]]*MTRIP_INTERNAL_TOKEN=' .env 2>/dev/null || true; } | tail -n 1 | cut -d= -f2- | tr -d '\r"'"'"' ')"
+    [ -n "$cur" ] && return 0
+    token="$(openssl rand -hex 32 2>/dev/null || true)"
+    if [ -z "$token" ] && [ -r /dev/urandom ]; then
+        token="$(od -An -tx1 -N32 /dev/urandom 2>/dev/null | tr -d ' \n\r' || true)"
+    fi
+    [ "${#token}" -eq 64 ] || die "无法生成 MTRIP_INTERNAL_TOKEN(openssl 与 /dev/urandom 均不可用),请手工写入 deploy/.env"
+    if grep -qE '^[[:space:]]*MTRIP_INTERNAL_TOKEN=' .env; then
+        # 已有空值行:原位替换(保留其他行与注释)
+        sed -i -E "s|^[[:space:]]*MTRIP_INTERNAL_TOKEN=.*$|MTRIP_INTERNAL_TOKEN=${token}|" .env
+    else
+        # 文件末尾无换行时先补一个,避免拼到上一行
+        [ -z "$(tail -c 1 .env)" ] || echo >> .env
+        echo "MTRIP_INTERNAL_TOKEN=${token}" >> .env
+    fi
+    info "已为 deploy/.env 生成 MTRIP_INTERNAL_TOKEN(服务间内部接口令牌)"
 }
 
 # merchant-service 写入 / gateway 静态读取的共享目录;不预建会被 Docker 以 root 属主创建

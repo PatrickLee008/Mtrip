@@ -8,7 +8,7 @@
  *   step 1 `2540:19394`  Confirm Your Room & Date → components/hotel/booking/lite/LiteStepConfirm
  *   step 2 `2540:19621`  Price Breakdown          → components/hotel/booking/lite/LiteStepPay
  *
- * **状态与下单逻辑仍与完整模式共用 `useBookingWizard`**(真实/演示两种模式、只开通钱包余额、
+ * **状态与下单逻辑仍与完整模式共用 `useBookingWizard`**(真实/演示两种模式、钱包余额 + 站点开通时的 KBZPay MMQR、
  * 加购与多住宿不提交、优惠券由服务端试算 —— 完整说明见该 Hook 的头部注释)。
  * 这里传 `steps: ['guests', 'payment']` —— **刻意复用原有的 step key**,
  * 这样 Hook 里「姓名/手机必填」「渠道必选 / 未登录 / 余额不足 / 下单」两段校验原样生效。
@@ -69,7 +69,9 @@ export default function HotelBookingLiteScreen() {
     patchStay,
     toggleAddon,
     method,
-    setMethod,
+    selectMethod,
+    mmqrEnabled,
+    walletEnabled,
     walletBalance,
     payableTotal,
     addonOptions,
@@ -163,7 +165,10 @@ export default function HotelBookingLiteScreen() {
                     }
                   : undefined
               }
-              onSelect={setMethod}
+              /* 渠道开关来自 `/app/order/pay/methods`(失败时只有余额可用) */
+              mmqrEnabled={mmqrEnabled}
+              walletEnabled={walletEnabled}
+              onSelect={selectMethod}
               onComingSoon={comingSoon}
             />
           ) : (

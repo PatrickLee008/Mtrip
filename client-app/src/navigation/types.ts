@@ -221,6 +221,35 @@ export type RootStackParamList = {
         status?: 'confirming' | 'confirmed' | 'failed';
       }
     | undefined;
+  /**
+   * KBZPay MMQR 扫码支付页(方案 `docs/plans/22-KBZPay-MMQR支付接入方案.md` §8)。
+   * 入参即 `order/pay` / `trip/pay`(payMethod=5)的返回;时间均为 `Y-m-d H:i:s` UTC 串。
+   * 刷新二维码时页面按 `orderId` / `tripId` 重新调 pay 接口(tripId > 0 优先走整车)。
+   */
+  MmqrPay: {
+    payNo: string;
+    qrCode: string;
+    amount: number | string;
+    currency: string;
+    expireAt: string;
+    orderExpireAt: string;
+    orderId?: number;
+    tripId?: number;
+    /** 支付成功后进哪一页结果页(订房向导进来时给);不传则回预订详情 */
+    successRoute?: 'BookingSuccess' | 'BookingSuccessLite';
+    /** 透传给结果页的展示字段(订房向导带过来,成功页会再按 orderId 读一次订单) */
+    result?: {
+      orderNo?: string;
+      hotelName?: string;
+      address?: string;
+      checkIn?: string;
+      checkOut?: string;
+      adults?: number;
+      rooms?: number;
+    };
+    /** 订单失效/关闭时回到哪个详情页,缺省 `BookingDetail` */
+    detailRoute?: 'BookingDetail' | 'OrderDetail';
+  };
   GoodsList: { goodsType?: number; categoryId?: number; keyword?: string; title?: string };
   GoodsDetail: { id: number };
   OrderList: undefined;

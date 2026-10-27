@@ -1,4 +1,33 @@
 {
+  "pay": {
+    "mmqr": {
+      "title": "Scan to Pay",
+      "methodDesc": "Scan with KBZPay or any MMQR banking app",
+      "amountLabel": "Amount to pay",
+      "scanHint": "Open KBZPay or any Myanmar banking app that supports MMQR, then scan this QR code to pay.",
+      "codeExpiresIn": "QR code expires in {{time}}",
+      "codeExpired": "This QR code has expired",
+      "orderExpiresIn": "Complete payment within {{time}}",
+      "waiting": "Waiting for payment…",
+      "save": "Save QR Code",
+      "saveHintNative": "Take a screenshot to save this QR code, then scan it from your banking app's gallery.",
+      "saved": "QR code saved",
+      "saveFailed": "Could not save the QR code",
+      "paidCheck": "I've Paid",
+      "checking": "Checking…",
+      "notYet": "Payment not received yet. If you have already paid, please wait a moment.",
+      "refresh": "Refresh QR Code",
+      "refreshHint": "Your booking is still reserved. Get a new QR code to continue paying.",
+      "orderClosedTitle": "Payment window closed",
+      "orderClosedDesc": "This booking was not paid in time and has been released. Please book again.",
+      "lateTitle": "Payment received after timeout",
+      "lateDesc": "Your payment arrived after the booking expired. We will restore the booking if the room is still available; otherwise a full refund will be issued automatically.",
+      "viewBooking": "View Booking",
+      "paidToast": "Payment successful",
+      "invalid": "Unable to load the payment QR code",
+      "payWithMmqr": "Pay with KBZPay / MMQR"
+    }
+  },
   "chat": {
     "title": "Messages",
     "search": "Search guest, booking ID or hotel",
@@ -1081,6 +1110,30 @@
       "refund_completed": {
         "title": "Refund completed",
         "body": "A refund of {{amount}} for {{hotel}} ({{orderNo}}) has been credited to your mTrip Wallet."
+      },
+      "refund_requested_original": {
+        "title": "Cancellation requested",
+        "body": "Your cancellation for {{hotel}} ({{orderNo}}) was submitted. A refund of {{amount}} will be returned to your original payment account after review."
+      },
+      "refund_completed_original": {
+        "title": "Refund completed",
+        "body": "A refund of {{amount}} for {{hotel}} ({{orderNo}}) has been returned to your original payment account."
+      },
+      "refund_completed_wallet_fallback": {
+        "title": "Refund completed",
+        "body": "The payment channel refund limit was reached, so the refund of {{amount}} for {{hotel}} ({{orderNo}}) has been credited to your mTrip Wallet."
+      },
+      "payment_late_recovered": {
+        "title": "Booking confirmed",
+        "body": "Your payment for {{hotel}} ({{orderNo}}) arrived after the booking timed out. The booking has been restored and confirmed. Tap to view your voucher."
+      },
+      "payment_late_refunded": {
+        "title": "Payment refunded",
+        "body": "Your payment for {{hotel}} ({{orderNo}}) arrived after the booking was closed. A full refund of {{amount}} to your original payment account is being processed."
+      },
+      "payment_late_refund_failed": {
+        "title": "Refund under review",
+        "body": "Your payment for {{hotel}} ({{orderNo}}) arrived after the booking was closed. The automatic refund of {{amount}} did not go through; our support team will process it manually."
       },
       "review_request": {
         "title": "How was your stay?",

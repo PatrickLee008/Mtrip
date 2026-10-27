@@ -4,13 +4,16 @@ declare(strict_types=1);
 
 namespace App\Controller\App;
 
+use App\Constants\BookingConst;
 use App\Controller\AbstractController;
 
 use App\Service\Booking\BookingEventService;
 use App\Service\Booking\BookingLifecycleService;
 use App\Service\Booking\BookingNotificationService;
 use App\Service\FraudService;
+use App\Service\OrderPayService;
 use App\Service\OrderStockService;
+use App\Service\Payment\MmqrCheckoutService;
 use App\Service\PaymentResultHandler;
 use App\Service\PricingService;
 use App\Service\SettlementService;
@@ -63,6 +66,14 @@ class OrderController extends AbstractController
 
     #[Inject]
     protected ConfigInterface $config;
+
+    /** 支付成功统一落账(与 KBZ 业务通知共用) */
+    #[Inject]
+    protected OrderPayService $orderPay;
+
+    /** KBZPay MMQR 出码 / 状态 / 可用支付方式 */
+    #[Inject]
+    protected MmqrCheckoutService $mmqr;
 
     /** 创建订单:锁定价格日历库存,10分钟未支付由定时任务过期(实现方案 M4 §2.3) */
     public function create(): array
@@ -147,7 +158,7 @@ class OrderController extends AbstractController
                 'payAmount' => $payAmount,
             ]);
             $unitPrice = round($totalAmount / max(1, count($dates)) / $quantity, 2);
-            $bookingFields = $this->bookingLifecycle->buildCreateFields($orderType, $propertyId, $roomTypeId, $remark);
+            $bookingFields = $this->bookingLifecycle->buildCreateFields($orderType, $propertyId, $roomTypeId, $remark, $siteId);
             $orderId = (int) Db::table('order_main')->insertGetId([
                 'order_no' => $orderNo,
                 'site_id' => $siteId,
@@ -226,19 +237,20 @@ class OrderController extends AbstractController
                 'addonAmount' => $priced['addon'],
                 'payAmount' => $priced['payAmount'],
             ],
-        ], '下单成功,请在10分钟内完成支付');
+        ], '下单成功,请在支付截止时间前完成支付');
     }
 
     /**
-     * 支付:payMethod 1Stripe 2PayPal(均为 mock,直接置为已支付)3余额(真实扣 mTrip 钱包)。
+     * 支付:payMethod 1Stripe 2PayPal(均为 mock,直接置为已支付)3余额(真实扣 mTrip 钱包)5KBZPay MMQR。
      * 余额支付在同一事务内:行锁扣 user_info.balance → 写 user_balance_log(消费,负数)
      * → 置已支付生成核销码 → 写 finance_flow(1收入/1订单支付)。任一步失败整单回滚。
+     * KBZ MMQR 只出码(不改为已支付),到账由支付中心业务通知 → PaymentSettleService::onPaid 落账。
      */
     public function pay(): array
     {
         $orderId = $this->requireId('orderId');
         $payMethod = $this->intInput('payMethod', 1);
-        if (! in_array($payMethod, [1, 2, 3], true)) {
+        if (! in_array($payMethod, [1, 2, 3, BookingConst::PAY_METHOD_KBZ_MMQR], true)) {
             throw new BusinessException(ErrorCode::PARAM_ERROR, '支付方式不正确');
         }
 
@@ -254,6 +266,9 @@ class OrderController extends AbstractController
          */
         if ((int) ($snapshot['trip_id'] ?? 0) > 0) {
             throw new BusinessException(ErrorCode::DATA_CONFLICT, '该预订属于多预订行程,请整单支付');
+        }
+        if ($payMethod === BookingConst::PAY_METHOD_KBZ_MMQR) {
+            return Result::success($this->mmqr->createForOrder($snapshot), '请使用 KBZPay 或 MMQR 银行 App 扫码支付');
         }
         $result = Db::transaction(function () use ($orderId, $payMethod, $snapshot) {
             MerchantAccessGuard::lockBookable([$snapshot], (int) $snapshot['site_id']);
@@ -278,7 +293,6 @@ class OrderController extends AbstractController
             }
             // 先锁券再扣款:券已被别的订单用掉就在这里拒绝,不产生任何扣款
             $couponRec = $this->pricingService->lockCouponForPay((int) $order['coupon_id']);
-            $verifyCode = OrderNoGenerator::verifyCode();
             $payAmount = round((float) $order['pay_amount'], 2);
             $tradeNo = ($payMethod === 3 ? 'WALLET' : 'MOCK') . OrderNoGenerator::flowNo();
             // 余额支付:先真实扣款(余额不足在此抛错回滚),再走统一的支付结果入口
@@ -292,56 +306,42 @@ class OrderController extends AbstractController
                     "订单 {$order['order_no']} 钱包支付",
                 );
             }
-            // 支付状态变更统一走 PaymentResultHandler(幂等+迟到支付拦截+时间线)
-            $verifyCode = $this->payHandler->markPaid($order, $payMethod, $tradeNo, $verifyCode);
-            // 资金流水:余额支付是平台真实收到的一笔钱,记 finance_flow(mock 渠道无真实资金,不记)
-            if ($payMethod === 3) {
-                Db::table('finance_flow')->insert([
-                    'flow_no' => OrderNoGenerator::flowNo(),
-                    'site_id' => (int) $order['site_id'],
-                    'flow_type' => 1,
-                    'biz_type' => 1,
-                    'amount' => $payAmount,
-                    'order_id' => $orderId,
-                    'merchant_id' => (int) $order['merchant_id'],
-                    'supplier_id' => (int) $order['supplier_id'],
-                    'user_id' => (int) $order['user_id'],
-                    'pay_channel' => 3,
-                    'trade_no' => $tradeNo,
-                    'flow_status' => 1,
-                    'remark' => "订单 {$order['order_no']} 钱包支付",
-                    'operator_id' => 0,
-                ]);
-            }
-            $this->stockService->deduct($order);
-            if ((int) $order['order_type'] === 2) {
-                Db::table('goods_info')->where('id', (int) $order['goods_id'])
-                    ->increment('sales_count', (int) $order['quantity']);
-            }
-            // 支付成功核销优惠券(已在扣款前锁定并确认可用)
-            $this->pricingService->consumeCoupon($couponRec, $orderId);
-            // 推荐返利不在支付时发放:改为入住核销时由 BookingLifecycleService::checkIn 发放(PRD 模块14)
-            // 结算分录:按优惠券出资方生成按订单分账(PRD 模块8),回填订单佣金/商户实收
-            $this->settlementService->recordBooking($order);
-            return [
-                'verifyCode' => $verifyCode,
-                'siteId' => (int) $order['site_id'],
-                'userId' => (int) $order['user_id'],
-                'goodsName' => (string) $order['goods_name'],
-                'orderNo' => (string) $order['order_no'],
-                'order' => $order,
-            ];
+            // 置已支付 / 资金流水 / 库存 / 销量 / 核销券 / 结算:与 KBZ 业务通知落账同一实现
+            $verifyCode = $this->orderPay->settleOrder($order, $payMethod, $tradeNo, $couponRec);
+            return ['verifyCode' => $verifyCode, 'order' => $order];
         });
 
-        // 预订确认站内通知(事件后置,失败不影响支付结果)
-        try {
-            UserNotify::order($result['order'], 'booking_confirmed');
-        } catch (\Throwable) {
-        }
-        // 商户通知:新预订支付确认(事件后置容错)
-        $this->payHandler->notifyMerchantConfirmed($result['order']);
+        // 预订确认站内通知 + 商户通知(事件后置,失败不影响支付结果)
+        $this->orderPay->notifyConfirmed([$result['order']]);
 
         return Result::success(['verifyCode' => $result['verifyCode']], '支付成功');
+    }
+
+    /**
+     * 支付状态轮询(KBZPay MMQR):GET pay/status?payNo=&refresh=0|1
+     * refresh=1 让支付中心实时查 KBZ;支付中心已 paid 而本服务未落账时同步落账一次(幂等)。只能查本人的单。
+     */
+    public function payStatus(): array
+    {
+        return Result::success($this->mmqr->status(
+            $this->requireStr('payNo'),
+            $this->intInput('refresh', 0) === 1,
+            UserContext::userId(),
+        ));
+    }
+
+    /**
+     * 可用支付方式:GET pay/methods?orderId=&currency=
+     * 传 orderId(本人订单)时按订单计价币种判定(与出码同口径 MmqrCheckoutService::orderCurrency);
+     * 否则用 currency,缺省按当前站点币种。
+     */
+    public function payMethods(): array
+    {
+        $currency = $this->strInput('currency');
+        if (($orderId = $this->intInput('orderId')) > 0) {
+            $currency = $this->mmqr->orderCurrency($this->ownOrder($orderId));
+        }
+        return Result::success($this->mmqr->methods($this->requireSiteId(), $currency));
     }
 
     /** 我的订单分页:status 可选过滤 */
@@ -460,8 +460,9 @@ class OrderController extends AbstractController
             'addonRefund' => $q['addonRefund'],
             'platformFee' => $q['platformFee'],
             'refundAmount' => $q['refundAmount'],
-            'refundChannel' => 1,
-            'refundChannelText' => 'mTrip 钱包',
+            // KBZPay MMQR 支付的订单原路退回 KBZ(2);其余退入 mTrip 钱包(1)
+            'refundChannel' => self::refundChannelOf($order),
+            'refundChannelText' => self::refundChannelOf($order) === 2 ? 'KBZPay 原路退回' : 'mTrip 钱包',
         ]);
     }
 
@@ -493,7 +494,9 @@ class OrderController extends AbstractController
                 'room_type_id' => (int) $order['room_type_id'],
                 'refund_type' => $q['refundAmount'] >= (float) $order['pay_amount'] ? 1 : 2,
                 'apply_amount' => $q['refundAmount'],
-                'refund_channel' => 1,
+                'refund_channel' => self::refundChannelOf($order),
+                // KBZ 原路退款记原支付单号(平台审核通过后排队 / 合并提交支付中心)
+                'pay_no' => self::refundChannelOf($order) === 2 ? (string) $order['pay_trade_no'] : '',
                 'reason' => mb_substr($reason, 0, 500),
                 'images' => is_array($images) ? json_encode($images, JSON_UNESCAPED_UNICODE) : null,
                 'status' => 0,
@@ -520,9 +523,10 @@ class OrderController extends AbstractController
             ];
         });
 
-        // 住客取消(申请退款)站内通知(事件后置,失败不影响退款申请)
+        // 住客取消(申请退款)站内通知(事件后置,失败不影响退款申请);KBZ 订单原路退回用 refund_requested_original
         try {
-            UserNotify::order($snap['order'], 'refund_requested', ['amount' => $snap['refundAmount']]);
+            UserNotify::order($snap['order'], self::refundChannelOf($snap['order']) === 2 ? 'refund_requested_original' : 'refund_requested',
+                ['amount' => $snap['refundAmount']]);
         } catch (\Throwable) {
         }
         if ($snap['orderType'] === 1) {
@@ -590,6 +594,12 @@ class OrderController extends AbstractController
             'platformFee' => $platformFee,
             'refundAmount' => $refundAmount,
         ];
+    }
+
+    /** 退款去向:KBZPay MMQR 支付的订单原路退回(2,后台审核后经支付中心退款),其余入 mTrip 钱包(1) */
+    private static function refundChannelOf(array $order): int
+    {
+        return (int) ($order['pay_method'] ?? 0) === BookingConst::PAY_METHOD_KBZ_MMQR ? 2 : 1;
     }
 
     /** 阶梯退款:rules=[{hours_before,refund_rate}],按距入住剩余小时命中可满足的最优档 */

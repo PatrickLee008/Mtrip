@@ -4,17 +4,13 @@ declare(strict_types=1);
 
 namespace App\Controller\Admin;
 
-use App\Service\Booking\BookingEventService;
-use App\Service\OrderStockService;
-use App\Service\PricingService;
-use App\Service\WalletService;
+use App\Service\Payment\RefundSettleService;
 use Hyperf\DbConnection\Db;
 use Hyperf\Di\Annotation\Inject;
 use Mtrip\Shared\Annotation\Permission;
 use Mtrip\Shared\Constants\ErrorCode;
 use Mtrip\Shared\Context\AdminContext;
 use Mtrip\Shared\Exception\BusinessException;
-use Mtrip\Shared\Support\OrderNoGenerator;
 use Mtrip\Shared\Support\Result;
 use Mtrip\Shared\Support\UserNotify;
 
@@ -22,22 +18,17 @@ use Mtrip\Shared\Support\UserNotify;
  * 退款管理(文档 6.4.1 退款审核)
  * 状态机:0待商户审核 →(通过)1待平台审核 →(通过)2退款中 →(到账确认)3已退款
  *        0/1 →(驳回)4已驳回(订单恢复已支付);5已撤销(用户侧)
- * 平台后台可代商户审核;实际打款对接 payment-service(模块08 联调),此处以人工确认到账闭环
+ * 平台后台可代商户审核;钱包 / 人工原路退款以人工确认到账闭环;
+ * KBZPay MMQR 支付的订单(refund_channel=2)与迟到支付自动退款单(late_pay=1)经 payment-service 原路退款(方案 22):
+ * 平台审核通过即排队(独立单立即提交,行程支付合并提交;同一笔支付超 3 次改退钱包),
+ * 「确认到账」用于立即提交 / 失败后重试,到账由支付中心通知收敛。
+ * 列表 / 详情行附带订单 pay_method,以及 order_refund 的 pay_no / late_pay / channel_submit_status。
  */
 class AdminRefundController extends AbstractAdminController
 {
+    /** 退款到账落账 + KBZ 原路退款(与支付中心通知共用) */
     #[Inject]
-    protected OrderStockService $stockService;
-
-    /** 取消/全额退款后返还优惠券 */
-    #[Inject]
-    protected PricingService $pricingService;
-
-    #[Inject]
-    protected WalletService $walletService;
-
-    #[Inject]
-    protected BookingEventService $bookingEvents;
+    protected RefundSettleService $refundSettle;
 
     /** 退款单列表:筛选 退款单号/订单号/状态/商户/申请日期 */
     public function index(): array
@@ -65,13 +56,17 @@ class AdminRefundController extends AbstractAdminController
             $query->where('created_at', '<=', "{$end} 23:59:59");
         }
         $total = (clone $query)->count();
-        $list = $query->orderByDesc('id')->forPage($page, $pageSize)->get()
-            ->map(function ($row) {
-                $row = (array) $row;
-                $row['images'] = $this->jsonDecode($row['images']);
-                unset($row['deleted_at']);
-                return $row;
-            })->all();
+        $rows = $query->orderByDesc('id')->forPage($page, $pageSize)->get()->map(static fn ($row) => (array) $row)->all();
+        // 订单支付方式(前端据此判断 KBZ 原路退款行:late_pay=1,或 refund_channel=2 且 pay_method=5);order_main 为单表直查
+        $payMethods = $rows === [] ? [] : Db::table('order_main')
+            ->whereIn('id', array_values(array_unique(array_map(static fn ($r) => (int) $r['order_id'], $rows))))
+            ->pluck('pay_method', 'id')->all();
+        $list = array_map(function (array $row) use ($payMethods) {
+            $row['images'] = $this->jsonDecode($row['images']);
+            $row['pay_method'] = (int) ($payMethods[$row['order_id']] ?? 0);
+            unset($row['deleted_at']);
+            return $row;
+        }, $rows);
         return Result::page($list, $total, $page, $pageSize);
     }
 
@@ -86,6 +81,7 @@ class AdminRefundController extends AbstractAdminController
             ->first(['id', 'order_no', 'order_type', 'goods_name', 'sku_name', 'quantity',
                 'total_amount', 'pay_amount', 'order_status', 'refund_status',
                 'use_date', 'end_date', 'contact_name', 'pay_method', 'pay_time', 'created_at']);
+        $refund['pay_method'] = $order !== null ? (int) $order->pay_method : 0;
         return Result::success([
             'refund' => $refund,
             'order' => $order !== null ? (array) $order : null,
@@ -144,12 +140,23 @@ class AdminRefundController extends AbstractAdminController
         if ($refundAmount <= 0 || $refundAmount > (float) $refund['apply_amount']) {
             throw new BusinessException(ErrorCode::PARAM_ERROR, '核定退款金额须大于0且不超过申请金额');
         }
+        // KBZPay MMQR 支付的订单:审核通过即进入原路退款队列(channel_submit_status=1)——独立单立即提交支付中心,
+        // 行程支付等合并窗口由 kbz-refund-batch 合并提交;结果由 refunded / refund_failed 通知收敛。
+        // 提交失败不回滚审核,退款单保持「退款中」并记原因,可在「确认到账」重试
+        $order = (array) Db::table('order_main')->where('id', $refund['order_id'])->first();
+        $kbz = $order !== [] && RefundSettleService::isKbzRefund($refund, $order);
         Db::table('order_refund')->where('id', $refund['id'])->update(array_merge([
             'status' => 2,
             'refund_amount' => $refundAmount,
             'deduct_amount' => round((float) $refund['apply_amount'] - $refundAmount, 2),
             'audit_remark' => mb_substr($remark, 0, 500),
-        ], $this->auditStamp(1)));
+        ], $this->auditStamp(1), $kbz ? RefundSettleService::queueFields($order) : []));
+
+        if ($kbz) {
+            $refund = (array) Db::table('order_refund')->where('id', $refund['id'])->first();
+            $r = $this->refundSettle->afterQueued($refund, $order, AdminContext::adminId());
+            return Result::success(['refundAmount' => $refundAmount, 'kbzRefund' => $r], '平台审核通过,' . $r['message']);
+        }
         return Result::success(['refundAmount' => $refundAmount], '平台审核通过,进入退款中(原路退回)');
     }
 
@@ -165,75 +172,37 @@ class AdminRefundController extends AbstractAdminController
         if ((int) $refund['status'] !== 2) {
             throw new BusinessException(ErrorCode::DATA_CONFLICT, '仅退款中的退款单可确认到账');
         }
+        $order = Db::table('order_main')->where('id', $refund['order_id'])->first();
+        if (! $order) {
+            throw new BusinessException(ErrorCode::NOT_FOUND, '关联订单不存在');
+        }
+        $order = (array) $order;
+        // KBZPay 原路退款(KBZ 支付订单 / 迟到支付自动退款):不人工确认到账,改为(重新)提交支付中心——
+        // 排队中的立即合并提交(不等窗口);已提交的旧请求仍在处理则不重发;次数超限改退钱包;
+        // 结果由 refunded / refund_failed 通知或同步结果收敛
+        if (RefundSettleService::isKbzRefund($refund, $order)) {
+            $r = $this->refundSettle->submit($refund, AdminContext::adminId());
+            return Result::success($r, $r['message']);
+        }
         $toWallet = (int) ($refund['refund_channel'] ?? 1) === 1;
         // 原路退回需第三方退款流水号;钱包退款不需要
         $tradeNo = $this->strInput('refundTradeNo');
         if (! $toWallet && $tradeNo === '') {
             throw new BusinessException(ErrorCode::PARAM_ERROR, '原路退回需填写第三方退款流水号');
         }
-        $order = Db::table('order_main')->where('id', $refund['order_id'])->first();
-        if (! $order) {
-            throw new BusinessException(ErrorCode::NOT_FOUND, '关联订单不存在');
-        }
-        $order = (array) $order;
-        $refundAmount = (float) $refund['refund_amount'];
-        $fullRefund = $refundAmount >= (float) $order['pay_amount'];
 
-        Db::transaction(function () use ($refund, $order, $tradeNo, $fullRefund, $toWallet, $refundAmount) {
-            Db::table('order_refund')->where('id', $refund['id'])->update([
-                'status' => 3,
-                'refund_trade_no' => $tradeNo,
-                'refund_time' => date('Y-m-d H:i:s'),
-            ]);
-            Db::table('order_main')->where('id', $order['id'])->update([
-                'order_status' => $fullRefund ? 6 : 1,
-                'refund_status' => $fullRefund ? 3 : 2,
-                // M4:支付状态双写(部分退款/已退款)
-                'payment_status' => $fullRefund ? \App\Constants\BookingConst::PAY_REFUNDED : \App\Constants\BookingConst::PAY_PARTIAL_REFUNDED,
-                'version' => Db::raw('version + 1'),
-            ]);
-            // 全额退款回补库存(change_type=4);部分退款订单仍有效不回补
-            if ($fullRefund) {
-                $this->stockService->refundRestore($order);
-                // 订单已关闭:返还优惠券(部分退款订单仍有效,券继续占用)
-                $this->pricingService->releaseCoupon($order);
-            }
-            // 退款入 mTrip 钱包:行锁用户余额 + 前后快照写流水(change_type=3 退款)
-            if ($toWallet && $refundAmount > 0) {
-                $this->walletService->credit(
-                    (int) $refund['site_id'],
-                    (int) $order['user_id'],
-                    $refundAmount,
-                    3,
-                    (int) $refund['order_id'],
-                    AdminContext::adminId(),
-                    "退款单 {$refund['refund_no']} 退入钱包",
-                );
-            }
-            // 资金流水:订单退款支出(钱包退款 pay_channel=0)
-            Db::table('finance_flow')->insert([
-                'flow_no' => OrderNoGenerator::flowNo(),
-                'site_id' => (int) $refund['site_id'],
-                'flow_type' => 2,
-                'biz_type' => 2,
-                'amount' => $refundAmount,
-                'order_id' => (int) $refund['order_id'],
-                'merchant_id' => (int) $refund['merchant_id'],
-                'property_id' => (int) ($refund['property_id'] ?? 0),
-                'room_type_id' => (int) ($refund['room_type_id'] ?? 0),
-                'user_id' => (int) $order['user_id'],
-                'pay_channel' => $toWallet ? 0 : (int) $order['pay_method'],
-                'trade_no' => $tradeNo,
-                'flow_status' => 1,
-                'remark' => "退款单 {$refund['refund_no']} 到账确认(" . ($toWallet ? '入mTrip钱包' : '原路退回') . ')',
-                'operator_id' => AdminContext::adminId(),
-            ]);
-            $this->bookingEvents->log($order, 'refund_completed', \App\Constants\BookingConst::OPERATOR_PLATFORM, AdminContext::adminId(), '', 1, [
-                'refundNo' => (string) $refund['refund_no'],
-                'refundAmount' => $refundAmount,
-                'fullRefund' => $fullRefund,
-            ], 'refund');
-        });
+        // 到账落账(退款单 / 订单状态 / 库存 / 返券 / 钱包 / 支出流水 / 时间线)与 KBZ 原路退款完成共用一套实现
+        $done = Db::transaction(fn () => $this->refundSettle->completeRow(
+            $refund,
+            $tradeNo,
+            $toWallet,
+            (int) $order['pay_method'],
+            \App\Constants\BookingConst::OPERATOR_PLATFORM,
+            AdminContext::adminId(),
+        ));
+        $order = $done['order'];
+        $refundAmount = $done['refundAmount'];
+        $fullRefund = $done['fullRefund'];
         // 住客站内通知:退款到账(PRD 模块 10 / 退款到账通知),后置容错
         try {
             UserNotify::order($order, 'refund_completed', ['amount' => $refundAmount, 'toWallet' => $toWallet]);

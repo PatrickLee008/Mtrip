@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue';
+import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { message } from 'ant-design-vue';
 import { CopyOutlined, PlusOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons-vue';
 import { useI18n } from 'vue-i18n';
@@ -9,15 +9,23 @@ import StatusTag from '@/components/StatusTag.vue';
 import { useTable, type TableRow } from '@/composables/useTable';
 import { useUserStore } from '@/stores/user';
 import {
+  apiPayAccountOptions,
   apiPayAdd,
   apiPayCopy,
   apiPayDelete,
   apiPayList,
   apiPayToggleStatus,
   apiPayUpdate,
+  type PayAccountOption,
 } from '@/api/config';
 
-/** 支付渠道:Stripe/PayPal 渠道配置(密钥掩码留空保留)+ 超管跨站点复制 */
+/**
+ * 支付渠道:Stripe/PayPal 渠道配置(密钥掩码留空保留)+ 超管跨站点复制。
+ * KBZPay MMQR(kbz_mmqr)不在本表存凭据,改为绑定「收款账户」(accountId);
+ * 账户为服务商模式时需填子商户号 subMerchCode / subAppId;币种固定 MMK。
+ */
+const KBZ_CHANNEL = 'kbz_mmqr';
+const KBZ_CURRENCY = 'MMK';
 const userStore = useUserStore();
 const isSuper = userStore.profile?.isSuper === true;
 const { t } = useI18n();
@@ -25,6 +33,12 @@ const { t } = useI18n();
 const CHANNEL_TEXT = computed<Record<string, string>>(() => ({
   stripe: t('config.pay.typeStripe'),
   paypal: t('config.pay.typePaypal'),
+  kbz_mmqr: t('config.pay.typeKbzMmqr'),
+}));
+const CHANNEL_COLOR: Record<string, string> = { stripe: 'purple', paypal: 'blue', kbz_mmqr: 'orange' };
+const ACCOUNT_MODE_TEXT = computed<Record<number, string>>(() => ({
+  1: t('config.payAccount.modeDirect'),
+  2: t('config.payAccount.modeIsv'),
 }));
 
 const { loading, list, query, load, search, reset, pagination } = useTable(apiPayList, {
@@ -38,10 +52,12 @@ const columns = computed(() => [
   { title: t('config.pay.channelType'), dataIndex: 'channel_code', width: 100 },
   { title: t('config.pay.channelName'), dataIndex: 'channel_name', width: 150 },
   { title: t('common.code'), dataIndex: 'merchant_no', width: 140, ellipsis: true },
+  { title: t('config.pay.boundAccount'), dataIndex: 'account_name', width: 180, ellipsis: true },
   { title: t('config.pay.feeRate'), dataIndex: 'fee_rate', width: 90 },
   { title: t('config.pay.currency'), dataIndex: 'currencies', width: 160, ellipsis: true },
   { title: t('config.pay.splitAccount'), dataIndex: 'split_enabled', width: 70 },
   { title: t('common.site'), dataIndex: 'site_name', width: 110 },
+  { title: t('config.pay.sort'), dataIndex: 'sort', width: 70 },
   { title: t('common.status'), dataIndex: 'status', width: 80 },
   { title: t('common.action'), key: 'action_col', width: 260, fixed: 'right' as const },
 ]);
@@ -63,7 +79,54 @@ const form = reactive({
   splitEnabled: 0,
   remark: '',
   siteId: 0,
+  accountId: undefined as number | undefined,
+  subMerchCode: '',
+  subAppId: '',
+  sort: 0,
 });
+
+// ---------- KBZPay MMQR:收款账户选择 ----------
+const isKbz = computed(() => form.channelCode === KBZ_CHANNEL);
+const accountOptions = ref<PayAccountOption[]>([]);
+const accountLoading = ref(false);
+/** 编辑回显时 options 尚未返回,用列表行的 account_mode 兜底判断是否服务商 */
+const editingAccountMode = ref(0);
+
+const selectedAccount = computed(() => accountOptions.value.find((item) => item.id === form.accountId));
+const isIsvAccount = computed(() => {
+  if (!isKbz.value || !form.accountId) return false;
+  const mode = selectedAccount.value?.mode ?? editingAccountMode.value;
+  return Number(mode) === 2;
+});
+const accountSelectOptions = computed(() =>
+  accountOptions.value.map((item) => ({
+    value: item.id,
+    label: `${item.account_name} · ${ACCOUNT_MODE_TEXT.value[item.mode] ?? item.mode} · ${String(item.env ?? '').toUpperCase()}`,
+  })),
+);
+
+async function loadAccountOptions(): Promise<void> {
+  accountLoading.value = true;
+  try {
+    accountOptions.value = await apiPayAccountOptions(form.siteId > 0 ? form.siteId : undefined);
+  } finally {
+    accountLoading.value = false;
+  }
+}
+
+function onAccountChange(): void {
+  editingAccountMode.value = 0;
+}
+
+// 选中 KBZ 或切换站点时刷新可选账户;币种固定 MMK
+watch(
+  () => [modalOpen.value, form.channelCode, form.siteId],
+  () => {
+    if (!modalOpen.value || !isKbz.value) return;
+    form.currencies = [KBZ_CURRENCY];
+    void loadAccountOptions();
+  },
+);
 
 const CURRENCY_OPTIONS = ['EUR', 'USD', 'GBP', 'CHF', 'JPY', 'CNY', 'AUD', 'CAD'].map((code) => ({
   value: code,
@@ -85,7 +148,12 @@ function openCreate(): void {
     splitEnabled: 0,
     remark: '',
     siteId: 0,
+    accountId: undefined,
+    subMerchCode: '',
+    subAppId: '',
+    sort: 0,
   });
+  editingAccountMode.value = 0;
   modalOpen.value = true;
 }
 
@@ -105,8 +173,42 @@ function openEdit(row: TableRow): void {
     splitEnabled: row.split_enabled ?? 0,
     remark: row.remark ?? '',
     siteId: row.site_id ?? 0,
+    accountId: Number(row.account_id) > 0 ? Number(row.account_id) : undefined,
+    subMerchCode: row.sub_merch_code ?? '',
+    subAppId: row.sub_app_id ?? '',
+    sort: Number(row.sort ?? 0),
   });
+  editingAccountMode.value = Number(row.account_mode ?? 0);
   modalOpen.value = true;
+}
+
+/** 按渠道组装提交数据:KBZ 不带 Stripe 凭据字段,Stripe/PayPal 不带账户绑定字段 */
+function buildPayload(): Record<string, unknown> | null {
+  const { accountId, subMerchCode, subAppId, apiKey, merchantNo, webhookUrl, ...common } = form;
+  if (isKbz.value) {
+    if (!accountId) {
+      message.warning(t('config.pay.accountRequired'));
+      return null;
+    }
+    if (isIsvAccount.value && (!subMerchCode.trim() || !subAppId.trim())) {
+      message.warning(t('config.pay.subRequired'));
+      return null;
+    }
+    return {
+      ...common,
+      currencies: [KBZ_CURRENCY],
+      accountId,
+      subMerchCode: isIsvAccount.value ? subMerchCode.trim() : '',
+      subAppId: isIsvAccount.value ? subAppId.trim() : '',
+    };
+  }
+  return {
+    ...common,
+    apiKey,
+    merchantNo,
+    webhookUrl,
+    currencies: form.currencies.map((code) => code.toUpperCase()),
+  };
 }
 
 async function savePay(): Promise<void> {
@@ -114,9 +216,12 @@ async function savePay(): Promise<void> {
     message.warning(t('common.pleaseInput'));
     return;
   }
+  const data = buildPayload();
+  if (!data) {
+    return;
+  }
   modalSaving.value = true;
   try {
-    const data = { ...form, currencies: form.currencies.map((code) => code.toUpperCase()) };
     if (editingId.value) {
       await apiPayUpdate({ id: editingId.value, ...data });
       message.success(t('tip.saveSuccess'));
@@ -197,9 +302,10 @@ onMounted(() => {
     <a-card :bordered="false" class="mtrip-card-shadow" style="margin-bottom: 16px">
       <a-form layout="inline">
         <a-form-item :label="t('config.pay.channelType')">
-          <a-select v-model:value="query.channelCode" allow-clear :placeholder="t('common.all')" style="width: 130px">
+          <a-select v-model:value="query.channelCode" allow-clear :placeholder="t('common.all')" style="width: 150px">
             <a-select-option value="stripe">Stripe</a-select-option>
             <a-select-option value="paypal">PayPal</a-select-option>
+            <a-select-option value="kbz_mmqr">{{ t('config.pay.typeKbzMmqr') }}</a-select-option>
           </a-select>
         </a-form-item>
         <a-form-item :label="t('common.status')">
@@ -238,9 +344,17 @@ onMounted(() => {
       >
         <template #bodyCell="{ column, record }">
           <template v-if="column.dataIndex === 'channel_code'">
-            <a-tag :color="record.channel_code === 'stripe' ? 'purple' : 'blue'">
+            <a-tag :color="CHANNEL_COLOR[record.channel_code] ?? 'default'">
               {{ CHANNEL_TEXT[record.channel_code] ?? record.channel_code }}
             </a-tag>
+          </template>
+          <template v-else-if="column.dataIndex === 'account_name'">
+            <template v-if="record.account_name">
+              {{ record.account_name }}
+              <a-tag v-if="record.account_mode" style="margin-left: 4px">{{ ACCOUNT_MODE_TEXT[record.account_mode] ?? record.account_mode }}</a-tag>
+              <div v-if="record.sub_merch_code" class="sub-merch">{{ t('config.pay.subMerchCode') }}: {{ record.sub_merch_code }}</div>
+            </template>
+            <span v-else>-</span>
           </template>
           <template v-else-if="column.dataIndex === 'split_enabled'">
             {{ record.split_enabled === 1 ? t('common.yes') : t('common.no') }}
@@ -292,6 +406,7 @@ onMounted(() => {
               <a-select v-model:value="form.channelCode" :disabled="!!editingId">
                 <a-select-option value="stripe">Stripe</a-select-option>
                 <a-select-option value="paypal">PayPal</a-select-option>
+                <a-select-option value="kbz_mmqr">{{ t('config.pay.typeKbzMmqr') }}</a-select-option>
               </a-select>
             </a-form-item>
           </a-col>
@@ -300,25 +415,58 @@ onMounted(() => {
               <a-input v-model:value="form.channelName" :placeholder="t('config.pay.channelNamePlaceholder')" />
             </a-form-item>
           </a-col>
-          <a-col :span="12">
-            <a-form-item :label="t('config.pay.apiKey')">
-              <a-input-password
-                v-model:value="form.apiKey"
-                :placeholder="editingId ? t('common.optional') : ''"
-                autocomplete="new-password"
-              />
-            </a-form-item>
-          </a-col>
-          <a-col :span="12">
-            <a-form-item :label="t('common.code')">
-              <a-input v-model:value="form.merchantNo" />
-            </a-form-item>
-          </a-col>
-          <a-col :span="24">
-            <a-form-item :label="t('config.pay.webhookUrl')">
-              <a-input v-model:value="form.webhookUrl" :placeholder="t('config.pay.webhookUrlPlaceholder')" />
-            </a-form-item>
-          </a-col>
+          <!-- KBZPay MMQR:绑定收款账户(凭据在收款账户页维护) -->
+          <template v-if="isKbz">
+            <a-col :span="24">
+              <a-form-item :label="t('config.pay.account')" required :extra="t('config.pay.accountTip')">
+                <a-select
+                  v-model:value="form.accountId"
+                  :options="accountSelectOptions"
+                  :loading="accountLoading"
+                  :placeholder="t('config.pay.accountPlaceholder')"
+                  show-search
+                  option-filter-prop="label"
+                  @change="onAccountChange"
+                />
+              </a-form-item>
+            </a-col>
+            <template v-if="isIsvAccount">
+              <a-col :span="24">
+                <a-alert type="info" show-icon :message="t('config.pay.subTip')" style="margin-bottom: 16px" />
+              </a-col>
+              <a-col :span="12">
+                <a-form-item :label="t('config.pay.subMerchCode')" required>
+                  <a-input v-model:value="form.subMerchCode" />
+                </a-form-item>
+              </a-col>
+              <a-col :span="12">
+                <a-form-item :label="t('config.pay.subAppId')" required>
+                  <a-input v-model:value="form.subAppId" />
+                </a-form-item>
+              </a-col>
+            </template>
+          </template>
+          <template v-else>
+            <a-col :span="12">
+              <a-form-item :label="t('config.pay.apiKey')">
+                <a-input-password
+                  v-model:value="form.apiKey"
+                  :placeholder="editingId ? t('common.optional') : ''"
+                  autocomplete="new-password"
+                />
+              </a-form-item>
+            </a-col>
+            <a-col :span="12">
+              <a-form-item :label="t('common.code')">
+                <a-input v-model:value="form.merchantNo" />
+              </a-form-item>
+            </a-col>
+            <a-col :span="24">
+              <a-form-item :label="t('config.pay.webhookUrl')">
+                <a-input v-model:value="form.webhookUrl" :placeholder="t('config.pay.webhookUrlPlaceholder')" />
+              </a-form-item>
+            </a-col>
+          </template>
           <a-col :span="8">
             <a-form-item :label="t('config.pay.feeRate')">
               <a-input-number v-model:value="form.feeRate" :min="0" :max="100" :step="0.01" style="width: 100%" />
@@ -336,7 +484,16 @@ onMounted(() => {
           </a-col>
           <a-col :span="24">
             <a-form-item :label="t('config.pay.currency')">
-              <a-select v-model:value="form.currencies" mode="tags" :options="CURRENCY_OPTIONS" :placeholder="t('config.pay.currencyPlaceholder')" />
+              <template v-if="isKbz">
+                <a-tag color="orange">{{ KBZ_CURRENCY }}</a-tag>
+                <span class="currency-fixed">{{ t('config.pay.currencyFixed') }}</span>
+              </template>
+              <a-select v-else v-model:value="form.currencies" mode="tags" :options="CURRENCY_OPTIONS" :placeholder="t('config.pay.currencyPlaceholder')" />
+            </a-form-item>
+          </a-col>
+          <a-col :span="12">
+            <a-form-item :label="t('config.pay.sort')">
+              <a-input-number v-model:value="form.sort" :min="0" :precision="0" style="width: 100%" />
             </a-form-item>
           </a-col>
           <a-col :span="12">
@@ -391,5 +548,11 @@ onMounted(() => {
 .copy-picker {
   display: flex;
   gap: 8px;
+}
+
+.sub-merch,
+.currency-fixed {
+  font-size: 12px;
+  color: var(--mtrip-text-aux);
 }
 </style>

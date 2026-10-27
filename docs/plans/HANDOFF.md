@@ -1,5 +1,54 @@
 # 会话交接文档(HANDOFF)
 
+### 2026-10-27 KBZPay MMQR §9.1 遗留 6 项修复(代码层)
+
+- **当前进度**:通知事件 6 个、商户退款原路退、admin 退款页 KBZ 适配、`order_refund` 加列替代 reason 前缀、退款「合并提交 + 超限退钱包」(用户确认)、币种与支付窗口继承核实,详见方案 22 §9.1。
+- **已验证**:`run.php` 197/197;60 个改动后端 PHP `php -l` 通过;admin-web build 通过;client-app tsc 仅既有 5 条;`db-migrate.sh --validate` 通过;通知事件 key 在 order-service 调用、shared 定义、App 三语 i18n 三处一致;`diff --check`(cr-at-eol)通过。
+- **未验证 / 风险**:迁移新增 `order_refund` 段未在 MySQL 执行;`completeRow` 共用逻辑调整影响所有退款路径(钱包退款也受影响),联调需回归钱包退款;crontab `kbz-refund-batch` 未实跑;`KBZ_REFUND_MERGE_SECONDS` 未进 compose(默认 300 秒)。
+- **下一步**:见 [next-task.md](./next-task.md)(运行验收 → 阶段 7–8)。
+
+### 2026-10-27 KBZPay MMQR 阶段 4–6 代码完成(全部未在运行环境验证)
+
+- **当前进度**:阶段 4 payment-service 统一支付中心(内部接口、KBZ 回调、对账 / 通知 / 退款同步 crontab)、阶段 5 order-service 接入(payMethod=5 出码、支付状态、可用渠道、业务通知落账与迟到支付恢复/自动退款、可配支付窗口、超时前置查单、KBZ 单退款走支付中心)、阶段 6 client-app 扫码支付页与渠道开关。明细与遗留 6 项见方案 22 §9.1。
+- **用户 2026-10-27 确认**:迟到支付恢复失败 / 用户主动取消 → 自动原路全额退款;默认支付窗口 30 分钟。
+- **已验证**:shared `run.php` 192/192(PHP 8.1);改动的 55 个后端 PHP 全部 `php -l` 通过;admin-web build 通过;client-app typecheck 除既有 5 条缺 expo 依赖外零新增;`git -c core.whitespace=cr-at-eol diff --check` 通过。
+- **未验证**:无 Docker、无 UAT 凭据,下单出码、回调、对账、onPaid 三分支、退款、移动端页面流转全部未实跑。
+- **环境注意**:本机 nvm 当前指向 node v12(今天被切换过),`npm run typecheck` / `check.ps1` 会直接 SyntaxError,需 `nvm use 22`;PHP 用 8.1(见上一条)。
+- **部署前需要**:`.env` 配 `PAYMENT_NOTIFY_BASE_URL`(KBZ 回调对外 https 域名,待用户定)或在收款账户里填 `notify_base_url`;`MTRIP_INTERNAL_TOKEN` 由 `mtrip.sh` 自动生成,S7 用 `s7.env.example` 中的本地测试值。
+- **下一步**:见 [next-task.md](./next-task.md):先在有 Docker 的环境做阶段 1–6 运行验收与 UAT 联调,再处理 §9.1 遗留,最后阶段 7(退款 mTLS)与阶段 8(异常演练)。
+
+### 2026-10-27 KBZPay MMQR 阶段 1–3 代码完成(开发库应用与走查待 Docker)
+
+- **当前进度**:按[方案 22](./22-KBZPay-MMQR支付接入方案.md) §9.1 完成阶段 1–3 代码:shared `Pay/KbzPay` 协议库与单测;迁移 `V20261027100000__add-kbz-mmqr-payment.sql`(`sys_pay_account`、`sys_pay_channel` 新增 4 列、`pay_transaction`、`pay_refund`、`payment_window_minutes`、菜单 1313 与 `config:payAccount:*`、pay_method/pay_channel=5 注释);system-service 收款账户 CRUD + 连通性测试、`PayChannelController` 支持 `kbz_mmqr`;admin-web 收款账户页、支付配置页改造、全局/站点支付窗口、i18n。另修复操作日志明文记录支付密钥(`MaskHelper` 默认键)。
+- **已验证**:`run.php` 162/162(需 PHP ≥ 8.1:本机 PATH 默认 `php` 为 8.0,已有代码的 `readonly` 会让它 parse error,`check.ps1` 请先把 `D:\BtSoft\php\81` 放到 PATH 前);`check.ps1` 前 3 步通过,第 4 步 client-app typecheck 因本机 `node_modules` 缺 `expo-av` / `expo-image-picker` / `expo-document-picker` 失败(client-app 本次未改动,属既有环境问题);admin-web build 通过;迁移 `--validate` + 临时库两次执行一致;`git diff --check`(`core.whitespace=cr-at-eol`)通过 —— en-US/zh-CN locale 在仓库里存为 CRLF 且含 8 行 `\r\r\n`,裸 `--check` 会把新增 CRLF 行误报为尾随空白。
+- **未验证**:本机无 Docker,迁移未上开发库、system-service 未重启、无 HTTP / 浏览器走查、无 UAT 凭据真实调用。新增迁移后开发库 mysql healthcheck 可能因既有 `20261015090000` 账本阻塞而不过,需按审计流程处理,禁止伪造账本。
+- **阶段 5 需注意**:站点覆盖 `payment_window_minutes` 清空时存的是 `''`(`saveConfigs` 不删行),读取方须把空串视为未覆盖。站点管理员不能对平台共享账户做连通性测试(后端拒绝,前端已隐藏)。停用仍被绑定的账户不会被拦截,下单时须视为渠道不可用。
+- **服务划分(用户确认)**:与三方支付的一切对接(主动调用 + 接收回调)集中在 payment-service,它可以对外提供接口(三方回调,以后的收银台);后台管理留在 system-service / order-service,需要触达三方时转调 payment-service 内部接口;payment-service 不提供 admin 路由。阶段 3 的连通性测试暂由 system-service 直调 KBZ,阶段 4 改为转调内部接口。详见方案 22 修订记录、§4.2、§7。
+- **下一步**:恢复 Docker 后 `db-apply` 迁移、重启 system-service 走查;之后按 [next-task.md](./next-task.md) 做阶段 4(payment-service 内部接口、渠道、回调、对账)。
+
+### 2026-10-27 KBZPay MMQR 支付接入方案(方案评审,已转入开发)
+
+- **当前进度**:读完 KBZ 文档站 MMQR 场景及 precreate、queryOrder、refund、notify、签名、错误码 6 页,以及 PHP SDK,形成[接入方案 v2](./22-KBZPay-MMQR支付接入方案.md)。只改了文档,没有代码或迁移改动。
+- **用户 2026-10-26 已确认**:
+  - 支付能力统一放在 payment-service。核实结果:compose、override、s7、`mtrip.sh` 和网关都已包含它,只缺 APP 孪生实例和 `/api/v1/app/payment` 映射,首期不需要补。
+  - 超时后到账的钱"能恢复就入账,恢复不了自动退款";支付窗口可配置。
+  - 收款账户分"账户 + 站点绑定"两层,直连和服务商模式都支持,站点可共用账户。
+  - KBZ 凭据和证书由用户申请,在后台维护。
+  - `vender/` 只是临时资料,不入库。
+- **关键约束**:
+  - KBZ `timeout_express` 取 min(订单剩余分钟 - 1, 120),保证码比订单先过期。
+  - MMQR 没有关单接口。
+  - 退款需要 mTLS,每单最多退 3 次。
+  - 回调回包是纯文本 `success`;必须验签并校验金额。
+  - SDK 不引入:阻塞 curl 没有超时,也不验签。shared 按 `SmsPohClient` 的模式重写。
+- **待确认**:
+  - 恢复失败时自动退款还是转人工;
+  - 默认支付窗口(暂定 30 分钟);
+  - notify 用的 https 域名;
+  - KBZ 开通的是直连还是服务商模式;
+  - SDK 精确下载链接。
+- **下一步**:按 [next-task.md](./next-task.md) 实施阶段 1–3:shared 签名库与客户端、迁移、后台收款账户和站点渠道配置。
+
 ### 2026-10-21 Facebook Web 登录开发（真实联调待条件）
 
 - 后续部署前复查：用户确认 Meta/政策已配置，实际两份政策 HTTPS 200。改用现有测试域名做真实联调，无需先完成 Mac HTTPS。远端公开脚本仍旧版、callback 404；无签名 settings 为 40103，不能判断路由配置。本机仅有 App Secret、历史迁移仍阻塞；目标库/环境未读取。本机 H5 签名覆盖为空，不能直接上传该 dist；需按目标签名配置重建。详见[检查记录](./audits/2026-10-21-facebook-deployment-readiness.md)。本次只检查及更新文档，未部署。

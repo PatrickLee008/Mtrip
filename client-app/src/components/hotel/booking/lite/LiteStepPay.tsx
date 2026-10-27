@@ -22,6 +22,10 @@
  * 后端只有钱包余额是真渠道(`payOrder` 的 `payMethod=3`),照稿把 MMQR 摆主位的话
  * 默认那张卡根本付不了款。MMQR / KBZPay / Wave Pay / 酒店前台等按现有口径收进
  * 「See Other Payment」,展开后一律置灰 + Coming soon。
+ *
+ * KBZPay MMQR 接入后(方案 22 §8):站点开通了 MMQR(`getPayMethods`,由 `mmqrEnabled` 传入)时,
+ * MMQR 卡挪到钱包卡下方可单选(payMethod=5,下单后进扫码页),折叠区不再列它;
+ * 没开通 / 渠道接口失败时维持原样(折叠区里置灰)。站点明确关掉余额时钱包卡灰显。
  */
 
 import React, { useState } from 'react';
@@ -65,6 +69,10 @@ interface Props {
   balance: number;
   insufficient: boolean;
   coupon?: CouponState;
+  /** 站点已开通 KBZPay MMQR(可单选);缺省 false = 维持折叠区置灰 */
+  mmqrEnabled?: boolean;
+  /** 余额渠道可用(站点明确关掉时为 false,卡片灰显);缺省 true */
+  walletEnabled?: boolean;
   onSelect: (key: PaymentMethodKey) => void;
   onComingSoon: () => void;
 }
@@ -78,12 +86,16 @@ export default function LiteStepPay({
   balance,
   insufficient,
   coupon,
+  mmqrEnabled = false,
+  walletEnabled = true,
   onSelect,
   onComingSoon,
 }: Props) {
   const { t, i18n } = useTranslation();
   const currency = useSiteStore((s) => s.currency);
   const [otherOpen, setOtherOpen] = useState(false);
+  /* MMQR 开通后挪到主位,折叠区不再重复列出 */
+  const otherMethods = mmqrEnabled ? OTHER_METHODS.filter((key) => key !== 'mmqr') : OTHER_METHODS;
 
   const nightsText = nightsLowerLabel(t, nightsBetween(stay.checkIn, stay.checkOut));
 
@@ -216,10 +228,14 @@ export default function LiteStepPay({
       <View style={styles.methods}>
         <Text style={styles.methodsTitle}>{t('hotels.booking.lite.choosePayment')}</Text>
 
-        {/* 主位:钱包余额(唯一真渠道) */}
+        {/* 主位:钱包余额 */}
         <Pressable
-          style={({ pressed }) => [styles.methodCard, pressed && liteBooking.pressed]}
-          onPress={() => onSelect('wallet')}
+          style={({ pressed }) => [
+            styles.methodCard,
+            !walletEnabled && styles.methodDisabled,
+            pressed && liteBooking.pressed,
+          ]}
+          onPress={walletEnabled ? () => onSelect('wallet') : onComingSoon}
         >
           <View style={styles.methodLeft}>
             <View style={styles.methodTile}>
@@ -245,6 +261,29 @@ export default function LiteStepPay({
           />
         </Pressable>
 
+        {/* KBZPay MMQR:站点开通后可单选,下单后进扫码页 */}
+        {mmqrEnabled ? (
+          <Pressable
+            style={({ pressed }) => [styles.methodCard, pressed && liteBooking.pressed]}
+            onPress={() => onSelect('mmqr')}
+          >
+            <View style={styles.methodLeft}>
+              <View style={styles.methodTile}>
+                <Image source={TEMP_PAY_ICONS.mmqr} style={styles.methodIcon} resizeMode="contain" />
+              </View>
+              <View style={liteBooking.flexCol}>
+                <Text style={liteBooking.itemTitle}>{t('hotels.booking.payment.methods.mmqr.title')}</Text>
+                <Text style={styles.methodDesc}>{t('pay.mmqr.methodDesc')}</Text>
+              </View>
+            </View>
+            <HomeIcon
+              name={method === 'mmqr' ? 'checkboxIndeterminate' : 'checkbox'}
+              size={24}
+              color={method === 'mmqr' ? colors.primary : colors.softBlue}
+            />
+          </Pressable>
+        ) : null}
+
         <Pressable
           style={({ pressed }) => [liteBooking.foldBar, pressed && liteBooking.pressed]}
           onPress={() => setOtherOpen((v) => !v)}
@@ -258,7 +297,7 @@ export default function LiteStepPay({
 
         {/* 其余渠道后端都没接,展开后一律置灰 + Coming soon(与完整模式同一口径) */}
         {otherOpen
-          ? OTHER_METHODS.map((key) => (
+          ? otherMethods.map((key) => (
               <Pressable
                 key={key}
                 style={({ pressed }) => [

@@ -34,3 +34,8 @@ MiniTest::add('S4 authentication fields are masked recursively', static function
     $masked = MaskHelper::maskParams(['nested' => array_fill_keys($keys, 'must-not-leak')]);
     foreach ($masked['nested'] as $value) MiniTest::assertSame('***已脱敏***', $value);
 });
+MiniTest::add('Payment credential fields are masked in operation logs', static function () {
+    $keys = ['apiKey', 'appKey', 'certPem', 'keyPem', 'keyPwd', 'caPem'];
+    $masked = MaskHelper::maskParams(array_fill_keys($keys, 'must-not-leak'));
+    foreach ($masked as $value) MiniTest::assertSame('***已脱敏***', $value);
+});

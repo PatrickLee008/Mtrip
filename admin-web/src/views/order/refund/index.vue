@@ -65,6 +65,7 @@ const columns = [
   { title: t('order.orderNo'), dataIndex: 'order_no', width: 200 },
   { title: t('order.refund.applyAmount', 'Apply Amount'), dataIndex: 'apply_amount', width: 100 },
   { title: t('order.refund.amount'), dataIndex: 'refund_amount', width: 100 },
+  { title: t('order.refund.channel'), dataIndex: 'refund_channel', width: 150 },
   { title: t('order.refund.reason'), dataIndex: 'reason', width: 180, ellipsis: true },
   { title: t('order.status'), dataIndex: 'status', width: 110 },
   { title: t('order.refund.applyTime'), dataIndex: 'created_at', width: 165 },
@@ -156,27 +157,107 @@ async function submitAudit(): Promise<void> {
   }
 }
 
-// ---------- 到账确认 Modal ----------
+// ---------- 退款渠道 / KBZPay 原路退款(方案 22 §9.1 遗留 3) ----------
+/** 订单支付方式:5 = KBZPay MMQR(与 order-service BookingConst::PAY_METHOD_KBZ_MMQR 一致) */
+const PAY_METHOD_KBZ_MMQR = 5;
+/**
+ * 是否 KBZPay 原路退款单(与后端 RefundSettleService::isKbzRefund 同口径):
+ * 迟到支付自动退款单(order_refund.late_pay=1),或 refund_channel=2 且订单 pay_method=5。
+ * 列表 / 详情行均带 pay_method;缺失时用 channel_submit_status(>0 仅 KBZ 单会写)兜底;
+ * 传入订单快照(详情接口)时以订单为准。
+ */
+function isKbzRefund(row: TableRow | null, order?: TableRow | null): boolean {
+  if (!row) return false;
+  if (Number(row.late_pay ?? 0) === 1) return true;
+  if (Number(row.refund_channel ?? 1) !== 2) return false;
+  if (order) return Number(order.pay_method) === PAY_METHOD_KBZ_MMQR;
+  if (row.pay_method !== undefined && row.pay_method !== null) return Number(row.pay_method) === PAY_METHOD_KBZ_MMQR;
+  return Number(row.channel_submit_status ?? 0) > 0;
+}
+
+/** 退款渠道:1 mTrip 钱包 / 2 原路退回(KBZ 单显示「KBZPay 原路退回」) */
+function channelText(row: TableRow | null, order?: TableRow | null): string {
+  if (!row) return '-';
+  if (isKbzRefund(row, order)) return t('order.refund.channelText.kbz');
+  const channel = Number(row.refund_channel ?? 1);
+  return channel === 2 ? t('order.refund.channelText.original') : t('order.refund.channelText.wallet');
+}
+
+/** 渠道提交状态(order_refund.channel_submit_status):0 不适用 1 排队待提交 2 已提交支付中心 3 已转钱包 */
+const SUBMIT_STATUS_MAP = computed<Record<number, StatusItem>>(() => ({
+  0: { text: t('order.refund.submitStatus.none'), color: 'default' },
+  1: { text: t('order.refund.submitStatus.queued'), color: 'warning' },
+  2: { text: t('order.refund.submitStatus.submitted'), color: 'processing' },
+  3: { text: t('order.refund.submitStatus.wallet'), color: 'purple' },
+}));
+
+/** 列表 / 详情是否带有 channel_submit_status(后端迁移未上线时不展示) */
+function hasSubmitStatus(row: TableRow | null): boolean {
+  return !!row && row.channel_submit_status !== undefined && row.channel_submit_status !== null;
+}
+
+// ---------- 到账确认 Modal(KBZ 单为「提交原路退款 / 重试」) ----------
 const confirmOpen = ref(false);
 const confirmSubmitting = ref(false);
-const confirmForm = reactive({ id: 0, refundNo: '', refundAmount: 0, refundTradeNo: '' });
+const confirmLoading = ref(false);
+const confirmForm = reactive({
+  id: 0,
+  refundNo: '',
+  refundAmount: 0,
+  refundTradeNo: '',
+  /** 原路退回(refund_channel=2)且非 KBZ:需人工填写第三方退款流水号 */
+  needTradeNo: false,
+  /** KBZPay 原路退款:提交 / 重试支付中心,不填流水号 */
+  kbz: false,
+  /** 支付中心退款号(order_refund.refund_trade_no,KBZ 单只读) */
+  centerRefundNo: '',
+  submitStatus: null as number | null,
+});
 
-function openConfirm(row: TableRow): void {
+async function openConfirm(row: TableRow): Promise<void> {
   confirmForm.id = row.id;
   confirmForm.refundNo = row.refund_no;
   confirmForm.refundAmount = Number(row.refund_amount);
   confirmForm.refundTradeNo = '';
+  confirmForm.kbz = isKbzRefund(row);
+  confirmForm.needTradeNo = !confirmForm.kbz && Number(row.refund_channel ?? 1) === 2;
+  confirmForm.centerRefundNo = String(row.refund_trade_no ?? '');
+  confirmForm.submitStatus = hasSubmitStatus(row) ? Number(row.channel_submit_status) : null;
   confirmOpen.value = true;
+  // 列表没有订单支付方式:原路退回单取详情里的订单快照确认是否 KBZ 单
+  if (Number(row.refund_channel ?? 1) !== 2) return;
+  confirmLoading.value = true;
+  try {
+    const data = await apiRefundDetail(row.id);
+    confirmForm.kbz = isKbzRefund(data.refund, data.order);
+    confirmForm.needTradeNo = !confirmForm.kbz;
+    confirmForm.centerRefundNo = String(data.refund?.refund_trade_no ?? '');
+    confirmForm.submitStatus = hasSubmitStatus(data.refund) ? Number(data.refund.channel_submit_status) : null;
+  } finally {
+    confirmLoading.value = false;
+  }
 }
 
 async function submitConfirm(): Promise<void> {
+  if (confirmForm.needTradeNo && !confirmForm.refundTradeNo.trim()) {
+    message.warning(t('order.refund.tradeNoRequired'));
+    return;
+  }
   confirmSubmitting.value = true;
   try {
-    await apiRefundConfirm({
+    const res = await apiRefundConfirm({
       id: confirmForm.id,
-      refundTradeNo: confirmForm.refundTradeNo.trim() || undefined,
+      refundTradeNo: confirmForm.kbz ? undefined : confirmForm.refundTradeNo.trim() || undefined,
     });
-    message.success(t('order.refund.confirmArrived', 'Refund arrival confirmed'));
+    if (confirmForm.kbz) {
+      // 后端返回 {status: processing|succeeded|failed, refundNo}
+      const status = String(res?.status ?? 'processing');
+      if (status === 'succeeded') message.success(t('order.refund.kbzResult.succeeded'));
+      else if (status === 'failed') message.warning(t('order.refund.kbzResult.failed'));
+      else message.info(t('order.refund.kbzResult.processing'));
+    } else {
+      message.success(t('order.refund.confirmArrived', 'Refund arrival confirmed'));
+    }
     confirmOpen.value = false;
     void load();
   } finally {
@@ -236,12 +317,16 @@ async function submitConfirm(): Promise<void> {
         :pagination="pagination"
         row-key="id"
         size="middle"
-        :scroll="{ x: 1300 }"
+        :scroll="{ x: 1450 }"
       >
         <template #bodyCell="{ column, record }">
           <template v-if="column.dataIndex === 'apply_amount'">{{ formatAmount(record.apply_amount) }}</template>
           <template v-else-if="column.dataIndex === 'refund_amount'">
             {{ record.status >= 2 && record.status <= 3 ? formatAmount(record.refund_amount) : '-' }}
+          </template>
+          <template v-else-if="column.dataIndex === 'refund_channel'">
+            <div>{{ channelText(record) }}</div>
+            <StatusTag v-if="hasSubmitStatus(record) && record.channel_submit_status > 0" :value="Number(record.channel_submit_status)" :map="SUBMIT_STATUS_MAP" />
           </template>
           <template v-else-if="column.dataIndex === 'status'">
             <a-tooltip v-if="record.status === 4 && record.audit_remark" :title="`${t('order.refund.rejectModal.reason')}:${record.audit_remark}`">
@@ -265,7 +350,7 @@ async function submitConfirm(): Promise<void> {
                 type="link"
                 size="small"
                 @click="openConfirm(record)"
-              >{{ t('order.refund.confirmArrived', 'Confirm Arrival') }}</a-button>
+              >{{ isKbzRefund(record) ? t('order.refund.kbzSubmit') : t('order.refund.confirmArrived', 'Confirm Arrival') }}</a-button>
             </a-space>
           </template>
         </template>
@@ -284,7 +369,15 @@ async function submitConfirm(): Promise<void> {
             <a-descriptions-item :label="t('order.refund.deductAmount', 'Deduct Amount')">{{ detail.status >= 2 ? formatAmount(detail.deduct_amount) : '-' }}</a-descriptions-item>
             <a-descriptions-item :label="t('order.refund.reason')" :span="2">{{ detail.reason || '-' }}</a-descriptions-item>
             <a-descriptions-item v-if="detail.audit_remark" :label="t('order.refund.auditOpinion', 'Audit Opinion')" :span="2">{{ detail.audit_remark }}</a-descriptions-item>
-            <a-descriptions-item v-if="detail.refund_trade_no" :label="t('order.refund.tradeNo', 'Refund Trade No.')" :span="2">{{ detail.refund_trade_no }}</a-descriptions-item>
+            <a-descriptions-item :label="t('order.refund.channel')" :span="hasSubmitStatus(detail) ? 1 : 2">{{ channelText(detail, detailOrder) }}</a-descriptions-item>
+            <a-descriptions-item v-if="hasSubmitStatus(detail)" :label="t('order.refund.submitStatusLabel')">
+              <StatusTag :value="Number(detail.channel_submit_status)" :map="SUBMIT_STATUS_MAP" />
+            </a-descriptions-item>
+            <a-descriptions-item
+              v-if="detail.refund_trade_no"
+              :label="isKbzRefund(detail, detailOrder) ? t('order.refund.centerRefundNo') : t('order.refund.tradeNo', 'Refund Trade No.')"
+              :span="2"
+            >{{ detail.refund_trade_no }}</a-descriptions-item>
             <a-descriptions-item :label="t('order.refund.applyTime')">{{ detail.created_at }}</a-descriptions-item>
             <a-descriptions-item :label="t('order.refund.refundTime', 'Refund Time')">{{ detail.refund_time || '-' }}</a-descriptions-item>
           </a-descriptions>
@@ -348,17 +441,46 @@ async function submitConfirm(): Promise<void> {
     </a-modal>
 
     <!-- 到账确认 Modal -->
-    <a-modal v-model:open="confirmOpen" :title="t('order.refund.confirmArrivedTitle', 'Confirm Refund Arrival')" :confirm-loading="confirmSubmitting" @ok="submitConfirm">
-      <a-alert type="warning" show-icon :message="t('order.refund.confirmArrivedNotice', 'After confirmation, refund will be completed; full refund closes order and returns stock, partial refund keeps order valid')" style="margin-bottom: 16px" />
-      <a-form :label-col="{ span: 6 }">
-        <a-form-item :label="t('order.refund.refundNo')">{{ confirmForm.refundNo }}</a-form-item>
-        <a-form-item :label="t('order.refund.amount')">
-          <span style="color: var(--mtrip-error, #ff4d4f); font-weight: 600">{{ formatAmount(confirmForm.refundAmount) }}</span>
-        </a-form-item>
-        <a-form-item :label="t('order.refund.tradeNo', 'Refund Trade No.')">
-          <a-input v-model:value="confirmForm.refundTradeNo" :maxlength="64" :placeholder="t('common.optional', 'Optional, third-party refund trade no.')" />
-        </a-form-item>
-      </a-form>
+    <a-modal
+      v-model:open="confirmOpen"
+      :title="confirmForm.kbz ? t('order.refund.kbzSubmitTitle') : t('order.refund.confirmArrivedTitle', 'Confirm Refund Arrival')"
+      :ok-text="confirmForm.kbz ? t('order.refund.kbzSubmit') : undefined"
+      :confirm-loading="confirmSubmitting"
+      :ok-button-props="{ disabled: confirmLoading }"
+      @ok="submitConfirm"
+    >
+      <a-spin :spinning="confirmLoading">
+        <a-alert
+          v-if="confirmForm.kbz"
+          type="info"
+          show-icon
+          :message="t('order.refund.kbzSubmitNotice')"
+          style="margin-bottom: 16px"
+        />
+        <a-alert v-else type="warning" show-icon :message="t('order.refund.confirmArrivedNotice', 'After confirmation, refund will be completed; full refund closes order and returns stock, partial refund keeps order valid')" style="margin-bottom: 16px" />
+        <a-form :label-col="{ span: 7 }">
+          <a-form-item :label="t('order.refund.refundNo')">{{ confirmForm.refundNo }}</a-form-item>
+          <a-form-item :label="t('order.refund.amount')">
+            <span style="color: var(--mtrip-error, #ff4d4f); font-weight: 600">{{ formatAmount(confirmForm.refundAmount) }}</span>
+          </a-form-item>
+          <template v-if="confirmForm.kbz">
+            <a-form-item :label="t('order.refund.channel')">{{ t('order.refund.channelText.kbz') }}</a-form-item>
+            <a-form-item v-if="confirmForm.submitStatus !== null" :label="t('order.refund.submitStatusLabel')">
+              <StatusTag :value="confirmForm.submitStatus" :map="SUBMIT_STATUS_MAP" />
+            </a-form-item>
+            <a-form-item :label="t('order.refund.centerRefundNo')">
+              <a-input :value="confirmForm.centerRefundNo || t('order.refund.centerRefundNoEmpty')" readonly />
+            </a-form-item>
+          </template>
+          <a-form-item v-else :label="t('order.refund.tradeNo', 'Refund Trade No.')" :required="confirmForm.needTradeNo">
+            <a-input
+              v-model:value="confirmForm.refundTradeNo"
+              :maxlength="64"
+              :placeholder="confirmForm.needTradeNo ? t('order.refund.tradeNoRequired') : t('common.optional', 'Optional, third-party refund trade no.')"
+            />
+          </a-form-item>
+        </a-form>
+      </a-spin>
     </a-modal>
   </PageContainer>
 </template>

@@ -1,4 +1,33 @@
 {
+  "pay": {
+    "mmqr": {
+      "title": "扫码支付",
+      "methodDesc": "使用 KBZPay 或任意 MMQR 银行 App 扫码",
+      "amountLabel": "应付金额",
+      "scanHint": "打开 KBZPay 或任意支持 MMQR 的缅甸银行 App,扫描此二维码完成支付。",
+      "codeExpiresIn": "二维码将在 {{time}} 后过期",
+      "codeExpired": "二维码已过期",
+      "orderExpiresIn": "请在 {{time}} 内完成支付",
+      "waiting": "等待支付中…",
+      "save": "保存二维码",
+      "saveHintNative": "请截图保存此二维码,再在银行 App 中从相册识别付款。",
+      "saved": "二维码已保存",
+      "saveFailed": "二维码保存失败",
+      "paidCheck": "我已付款",
+      "checking": "查询中…",
+      "notYet": "暂未收到付款。如已支付,请稍候片刻。",
+      "refresh": "刷新二维码",
+      "refreshHint": "订单仍为您保留,获取新的二维码即可继续支付。",
+      "orderClosedTitle": "支付时间已结束",
+      "orderClosedDesc": "该预订未在规定时间内支付,已被释放,请重新预订。",
+      "lateTitle": "超时后收到付款",
+      "lateDesc": "您的付款在订单过期后才到账。若房间仍可预订,我们会为您恢复订单;否则将自动原路全额退款。",
+      "viewBooking": "查看预订",
+      "paidToast": "支付成功",
+      "invalid": "无法加载支付二维码",
+      "payWithMmqr": "KBZPay / MMQR 扫码支付"
+    }
+  },
   "chat": {
     "title": "访客消息",
     "search": "搜索住客、预订号或酒店",
@@ -1081,6 +1110,30 @@
       "refund_completed": {
         "title": "退款已到账",
         "body": "{{hotel}} 预订({{orderNo}})的退款 {{amount}} 已退回您的 mTrip 钱包。"
+      },
+      "refund_requested_original": {
+        "title": "取消申请已提交",
+        "body": "您在 {{hotel}} 的预订({{orderNo}})取消申请已提交,{{amount}} 退款审核通过后将原路退回您的支付账户。"
+      },
+      "refund_completed_original": {
+        "title": "退款已完成",
+        "body": "{{hotel}} 预订({{orderNo}})的退款 {{amount}} 已原路退回您的支付账户。"
+      },
+      "refund_completed_wallet_fallback": {
+        "title": "退款已到账",
+        "body": "因支付渠道退款次数已达上限,{{hotel}} 预订({{orderNo}})的退款 {{amount}} 已退至您的 mTrip 钱包。"
+      },
+      "payment_late_recovered": {
+        "title": "预订已确认",
+        "body": "您为 {{hotel}} 预订({{orderNo}})的付款在预订超时后才到账,预订已恢复并确认,点击查看预订凭证。"
+      },
+      "payment_late_refunded": {
+        "title": "付款已退回",
+        "body": "您为 {{hotel}} 预订({{orderNo}})的付款在预订关闭后才到账,{{amount}} 正在全额原路退回您的支付账户。"
+      },
+      "payment_late_refund_failed": {
+        "title": "退款处理中",
+        "body": "您为 {{hotel}} 预订({{orderNo}})的付款在预订关闭后才到账,自动退款 {{amount}} 未成功,客服将为您人工处理。"
       },
       "review_request": {
         "title": "这次入住怎么样?",

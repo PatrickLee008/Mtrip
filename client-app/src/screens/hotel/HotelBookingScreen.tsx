@@ -88,6 +88,8 @@ export default function HotelBookingScreen() {
     addSecondStay,
     method,
     setMethod,
+    selectMethod,
+    mmqrEnabled,
     expanded,
     setExpanded,
     walletBalance,
@@ -329,7 +331,9 @@ export default function HotelBookingScreen() {
             /* 多房间新稿:钱包挪到第 2 步,第 3 步只剩折叠的其他渠道 */
             hideWallet={cartMode}
             payAtHotel={payAtHotel}
-            onSelect={setMethod}
+            /* KBZPay MMQR 由 `/app/order/pay/methods` 决定是否可选(失败时只有余额) */
+            mmqrEnabled={mmqrEnabled}
+            onSelect={selectMethod}
             onToggleExpand={(key) => setExpanded((prev) => (prev === key ? null : key))}
             onComingSoon={comingSoon}
             /* COUPONS 卡(516:2381)从占位改成真选券;演示/未登录/多住宿态不开放 */

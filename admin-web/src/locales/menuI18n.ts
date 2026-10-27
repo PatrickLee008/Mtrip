@@ -11,6 +11,7 @@ export const MENU_I18N: Record<string, string> = {
   站点管理: 'menu.configSite',
   全局配置: 'menu.configGlobal',
   支付渠道: 'menu.configPay',
+  收款账户: 'menu.configPayAccount',
   短信渠道: 'menu.configSms',
   存储渠道: 'menu.configStorage',
   地图配置: 'menu.configMap',

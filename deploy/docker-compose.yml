@@ -237,6 +237,9 @@ services:
     environment:
       <<: *hyperf-env
       HTTP_PORT: "9501"
+      # 服务间内部接口令牌(方案22 §4.1):只注入调用方/被调方,值由 mtrip.sh 在 .env 中自动生成,不进 git
+      MTRIP_INTERNAL_TOKEN: ${MTRIP_INTERNAL_TOKEN:-}
+      PAYMENT_CENTER_URL: ${PAYMENT_CENTER_URL:-http://payment-service:9508}
     ports:
       - "9501:9501"
     volumes:
@@ -285,6 +288,8 @@ services:
     environment:
       <<: *hyperf-env
       HTTP_PORT: "9504"
+      MTRIP_INTERNAL_TOKEN: ${MTRIP_INTERNAL_TOKEN:-}
+      PAYMENT_CENTER_URL: ${PAYMENT_CENTER_URL:-http://payment-service:9508}
     ports:
       - "9504:9504"
 
@@ -331,6 +336,10 @@ services:
     environment:
       <<: *hyperf-env
       HTTP_PORT: "9508"
+      # 为空时 InternalAuthMiddleware fail-closed:/internal/* 一律 403
+      MTRIP_INTERNAL_TOKEN: ${MTRIP_INTERNAL_TOKEN:-}
+      # KBZ notify 对外 https 基础地址(账户 notify_base_url 为空时兜底);域名待定,不写默认值
+      PAYMENT_NOTIFY_BASE_URL: ${PAYMENT_NOTIFY_BASE_URL:-}
     ports:
       - "9508:9508"
 

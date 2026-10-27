@@ -1,16 +1,18 @@
 /**
  * 订单详情:状态/商品/金额/联系人 + 操作(余额支付/取消/退款/核销码)
  *
- * 支付本期只开通 mTrip 钱包余额(真扣款并落流水);Stripe / PayPal 置灰只弹 Coming soon。
+ * 支付:mTrip 钱包余额(真扣款并落流水);站点开通 KBZPay MMQR 时多一个「MMQR 扫码支付」进扫码页;
+ * Stripe / PayPal 置灰只弹 Coming soon。
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { useRoute, type RouteProp } from '@react-navigation/native';
+import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTranslation } from 'react-i18next';
 
 import { applyRefund, cancelOrder, fetchOrderDetail, fetchVerifyCode } from '@/api/order';
-import { payOrder } from '@/api/pay';
+import { PAY_METHOD, getPayMethods, isMethodEnabled, payOrder } from '@/api/pay';
 import { apiTripPay } from '@/api/trip';
 import PriceText from '@/components/business/PriceText';
 import VerifyCodeView from '@/components/business/VerifyCodeView';
@@ -21,6 +23,7 @@ import PageLayout from '@/components/layout/PageLayout';
 import { ORDER_STATUS, ORDER_STATUS_I18N } from '@/config/global';
 import { colors, fontSize, radius, spacing } from '@/config/theme';
 import type { RootStackParamList } from '@/navigation/types';
+import { mmqrRouteParams, requestMmqr } from '@/screens/pay/mmqrPay';
 import { useCommonStore } from '@/store/commonStore';
 import { useSiteStore } from '@/store/siteStore';
 import { useUserStore } from '@/store/userStore';
@@ -31,6 +34,7 @@ import { isNotEmpty } from '@/utils/validate';
 export default function OrderDetailScreen() {
   const { t } = useTranslation();
   const route = useRoute<RouteProp<RootStackParamList, 'OrderDetail'>>();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const orderId = route.params.orderId;
   const showToast = useCommonStore((s) => s.showToast);
   const currency = useSiteStore((s) => s.currency);
@@ -77,6 +81,24 @@ export default function OrderDetailScreen() {
     void load();
   }, [load]);
 
+  /** 站点是否开通 KBZPay MMQR(渠道接口失败 = 不开,只保留余额支付) */
+  const isPending = order?.order_status === ORDER_STATUS.PENDING;
+  const [mmqrEnabled, setMmqrEnabled] = useState(false);
+  useEffect(() => {
+    if (!isPending) return;
+    let alive = true;
+    void getPayMethods(currency || undefined)
+      .then((rows) => {
+        if (alive) setMmqrEnabled(isMethodEnabled(Array.isArray(rows) ? rows : null, PAY_METHOD.MMQR, currency || undefined));
+      })
+      .catch(() => {
+        if (alive) setMmqrEnabled(false);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [isPending, currency]);
+
   if (loading) return <LoadingView />;
   if (error || !order) return <ErrorView message={error} onRetry={() => void load()} />;
 
@@ -113,6 +135,23 @@ export default function OrderDetailScreen() {
       else await payOrder(orderId);
       void refreshProfile().catch(() => undefined);
     });
+  };
+
+  /** MMQR 去支付 / 重新支付:拿(或复用,后端负责)二维码后进扫码页 */
+  const payByMmqr = async () => {
+    if (acting) return;
+    setActing(true);
+    try {
+      const tripId = Number(order.trip_id) || 0;
+      const target = { orderId, tripId: tripId > 0 ? tripId : undefined };
+      const res = await requestMmqr(target);
+      navigation.navigate('MmqrPay', mmqrRouteParams(res, { ...target, detailRoute: 'OrderDetail' }));
+    } catch {
+      /* 请求层已 Toast 原因 */
+      await load();
+    } finally {
+      setActing(false);
+    }
   };
 
   const submitRefund = () => {
@@ -178,6 +217,16 @@ export default function OrderDetailScreen() {
             onPress={() => void payByBalance()}
           />
           <View style={styles.actionGap} />
+          {mmqrEnabled ? (
+            <>
+              <CustomButton
+                title={t('pay.mmqr.payWithMmqr')}
+                disabled={acting}
+                onPress={() => void payByMmqr()}
+              />
+              <View style={styles.actionGap} />
+            </>
+          ) : null}
           {/* 未开通渠道:整块置灰,标一行 Coming soon,点按只提示(按钮高度固定,文案不并排以免顶破) */}
           <View style={styles.soonBlock}>
             <Text style={styles.soonLabel}>{t('home.comingSoon')}</Text>

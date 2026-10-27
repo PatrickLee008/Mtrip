@@ -63,6 +63,7 @@ const PAY_METHOD_TEXT = computed<Record<number, string>>(() => ({
   2: t('order.payMethod.paypal'),
   3: t('order.payMethod.balance'),
   4: t('order.payMethod.other', 'Mock Pay'),
+  5: t('order.payMethod.kbzMmqr'),
 }));
 const VERIFY_TYPE_TEXT = computed<Record<number, string>>(() => ({
   1: t('order.verifyType.qrcode', 'Device Verify'),

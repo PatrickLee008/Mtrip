@@ -8,6 +8,9 @@
  * **本期只有 mTrip 钱包余额是真渠道**:余额那行可单选并真扣款,其余渠道(MMQR / KBZPay /
  * Wave Pay / 到店付 / 银行卡 / 手机银行)统一置灰挂 Coming soon 角标,点按只弹提示不选中。
  * 优惠券、Payment Summary 展开、新增卡片、Pay by other/Share 同样走 comingSoon。
+ *
+ * KBZPay MMQR(方案 22 §8):站点开通时(`mmqrEnabled`,来自 `getPayMethods`)MMQR 行移出折叠区、
+ * 放在钱包行下方可单选(payMethod=5,下单后进扫码页);未开通/接口失败时维持在折叠区置灰。
  */
 
 import React from 'react';
@@ -81,6 +84,8 @@ interface Props {
   hideWallet?: boolean;
   /** 物业支持到店付款:在未开放渠道折叠头上方给「即将开放」提示(到店支付行本身仍在折叠区内置灰) */
   payAtHotel?: boolean;
+  /** 站点已开通 KBZPay MMQR(可单选);缺省 false */
+  mmqrEnabled?: boolean;
 }
 
 export default function BookingStepPayment({
@@ -95,6 +100,7 @@ export default function BookingStepPayment({
   coupon,
   hideWallet = false,
   payAtHotel = false,
+  mmqrEnabled = false,
 }: Props) {
   const { t } = useTranslation();
   /**
@@ -162,6 +168,17 @@ export default function BookingStepPayment({
           </>
         )}
 
+        {mmqrEnabled ? (
+          <PaymentMethodRow
+            icon={TEMP_PAY_ICONS.mmqr}
+            iconInset
+            title={t('hotels.booking.payment.methods.mmqr.title')}
+            desc={t('pay.mmqr.methodDesc')}
+            checked={method === 'mmqr'}
+            onPress={() => onSelect('mmqr')}
+          />
+        ) : null}
+
         {payAtHotel ? <PayAtHotelNotice /> : null}
 
         {/* 未开放渠道的折叠头:点一下展开/收起,不参与选中 */}
@@ -181,7 +198,7 @@ export default function BookingStepPayment({
         {moreOpen ? (
           <>
             <Text style={styles.groupTitle}>{t('hotels.booking.payment.popular')}</Text>
-            {PAYMENT_POPULAR.map((key) => (
+            {PAYMENT_POPULAR.filter((key) => !(mmqrEnabled && key === 'mmqr')).map((key) => (
               <PaymentMethodRow
                 key={key}
                 icon={TEMP_PAY_ICONS[key]}

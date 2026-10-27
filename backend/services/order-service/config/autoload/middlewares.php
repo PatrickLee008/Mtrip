@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Middleware\CorsMiddleware;
 use Mtrip\Shared\Middleware\ClientSignMiddleware;
+use Mtrip\Shared\Middleware\InternalAuthMiddleware;
 use Mtrip\Shared\Middleware\PayloadDecryptMiddleware;
 use Mtrip\Shared\Middleware\RequestLogMiddleware;
 use Mtrip\Shared\Middleware\SubmitLockMiddleware;
@@ -14,6 +15,8 @@ return [
         CorsMiddleware::class,
         // 全量请求日志(MTRIP_REQUEST_LOG=true 时启用,写 request.log)
         RequestLogMiddleware::class,
+        // 服务间内部接口鉴权(仅 /internal/* 生效:内网来源 + X-Internal-Token;支付中心业务通知入口)
+        InternalAuthMiddleware::class,
         // 客户端签名鉴权(仅 /api/v1/app/* 生效,MTRIP_CLIENT_SIGN 开关)
         ClientSignMiddleware::class,
         // 敏感接口传输加密解密(X-Encrypted 密文还原,MTRIP_PAYLOAD_ENCRYPT 控制强制名单)

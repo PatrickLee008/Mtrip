@@ -7,7 +7,7 @@ namespace App\Model;
 use Mtrip\Shared\Model\BaseModel;
 
 /**
- * 支付渠道表(文档模块8,api_key AES加密存储)
+ * 支付渠道表(文档模块8,api_key AES加密存储;kbz_mmqr 行经 account_id 绑定 sys_pay_account)
  */
 class SysPayChannel extends BaseModel
 {
@@ -25,5 +25,7 @@ class SysPayChannel extends BaseModel
         'currencies' => 'array',
         'split_enabled' => 'integer',
         'status' => 'integer',
+        'account_id' => 'integer',
+        'sort' => 'integer',
     ];
 }

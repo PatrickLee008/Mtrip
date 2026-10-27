@@ -154,14 +154,27 @@ const cfgGroup = ref('local');
 /** 编辑中的配置行:{group,key,value,name} */
 const cfgRows = ref<{ group: string; key: string; value: string; name: string }[]>([]);
 
+/**
+ * 支付窗口站点覆盖(sys_site_config.payment_window_minutes):单独成字段,不进通用键值行。
+ * 留空 = 继承全局 sys_config(默认 30)。save-configs 只做 upsert 不删除,
+ * 所以「清空已有覆盖」提交空串,由读取方把空值视为未覆盖。
+ */
+const PAYMENT_WINDOW_KEY = 'payment_window_minutes';
+const paymentWindow = ref<number | null>(null);
+const paymentWindowGroup = ref('operate');
+const paymentWindowExisted = ref(false);
+
 async function openConfigs(row: TableRow): Promise<void> {
   cfgSite.value = row;
   cfgGroup.value = 'local';
   cfgOpen.value = true;
   cfgLoading.value = true;
+  paymentWindow.value = null;
+  paymentWindowGroup.value = 'operate';
+  paymentWindowExisted.value = false;
   try {
     const grouped: GroupedConfigs = await apiSiteConfigs(row.id);
-    cfgRows.value = Object.entries(grouped).flatMap(([group, rows]) =>
+    const all = Object.entries(grouped).flatMap(([group, rows]) =>
       rows.map((item) => ({
         group,
         key: String(item.config_key ?? ''),
@@ -169,6 +182,14 @@ async function openConfigs(row: TableRow): Promise<void> {
         name: String(item.config_name ?? ''),
       })),
     );
+    const windowRow = all.find((item) => item.key === PAYMENT_WINDOW_KEY);
+    if (windowRow) {
+      paymentWindowExisted.value = true;
+      paymentWindowGroup.value = windowRow.group || 'operate';
+      const minutes = Number(windowRow.value);
+      paymentWindow.value = windowRow.value.trim() !== '' && Number.isInteger(minutes) ? minutes : null;
+    }
+    cfgRows.value = all.filter((item) => item.key !== PAYMENT_WINDOW_KEY);
   } finally {
     cfgLoading.value = false;
   }
@@ -191,12 +212,31 @@ async function saveConfigs(): Promise<void> {
     message.warning(t('config.site.configKeyRule'));
     return;
   }
+  const minutes = paymentWindow.value;
+  if (minutes !== null && minutes !== undefined && (!Number.isInteger(minutes) || minutes < 1 || minutes > 1440)) {
+    message.warning(t('config.global.paymentWindowRange'));
+    return;
+  }
+  // 通用行里手填的同名键以专用字段为准
+  const payload = rows
+    .filter((item) => item.key.trim() !== PAYMENT_WINDOW_KEY)
+    .map((item) => ({ group: item.group, key: item.key.trim(), value: item.value, name: item.name }));
+  const hasWindow = minutes !== null && minutes !== undefined;
+  if (hasWindow || paymentWindowExisted.value) {
+    payload.push({
+      group: paymentWindowGroup.value,
+      key: PAYMENT_WINDOW_KEY,
+      value: hasWindow ? String(minutes) : '',
+      name: t('config.site.paymentWindow'),
+    });
+  }
+  if (!payload.length) {
+    cfgOpen.value = false;
+    return;
+  }
   cfgSaving.value = true;
   try {
-    const result = await apiSiteSaveConfigs(
-      cfgSite.value.id,
-      rows.map((item) => ({ group: item.group, key: item.key.trim(), value: item.value, name: item.name })),
-    );
+    const result = await apiSiteSaveConfigs(cfgSite.value.id, payload);
     message.success(t('config.site.configSaved', { count: result.saved }));
     cfgOpen.value = false;
   } finally {
@@ -377,6 +417,18 @@ onMounted(() => {
       destroy-on-close
     >
       <a-spin :spinning="cfgLoading">
+        <a-form layout="vertical" class="cfg-payment-window">
+          <a-form-item :label="t('config.site.paymentWindow')" :extra="t('config.site.paymentWindowTip')" style="margin-bottom: 8px">
+            <a-input-number
+              v-model:value="paymentWindow"
+              :min="1"
+              :max="1440"
+              :precision="0"
+              :placeholder="t('config.site.paymentWindowPlaceholder')"
+              style="width: 220px"
+            />
+          </a-form-item>
+        </a-form>
         <a-tabs v-model:active-key="cfgGroup">
           <a-tab-pane v-for="group in CFG_GROUPS" :key="group.key" :tab="group.label">
             <div

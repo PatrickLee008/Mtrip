@@ -62,6 +62,9 @@ services:
     environment:
       <<: *app-env
       HTTP_PORT: "9501"
+      # 与 docker-compose.yml 主池同值(方案22 §4.1 内部接口)
+      MTRIP_INTERNAL_TOKEN: ${MTRIP_INTERNAL_TOKEN:-}
+      PAYMENT_CENTER_URL: ${PAYMENT_CENTER_URL:-http://payment-service:9508}
     volumes:
       - ./uploads:/opt/www/uploads
 
@@ -102,6 +105,8 @@ services:
     environment:
       <<: *app-env
       HTTP_PORT: "9504"
+      MTRIP_INTERNAL_TOKEN: ${MTRIP_INTERNAL_TOKEN:-}
+      PAYMENT_CENTER_URL: ${PAYMENT_CENTER_URL:-http://payment-service:9508}
 
   marketing-service-app:
     <<: *app-common

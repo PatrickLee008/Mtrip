@@ -1,5 +1,7 @@
 # Mtrip 开发工作计划总览
 
+2026-10-27 KBZPay MMQR 阶段 1–6 代码完成:shared 协议库与支付中心客户端、迁移、后台收款配置、payment-service 统一支付中心(内部接口/回调/对账)、order-service 接入(出码、落账、迟到恢复或自动退款、可配窗口)、client-app 扫码支付页。单测 192/192、构建与 typecheck 通过;本机无 Docker 与 UAT 凭据,全部未实跑。遗留见[方案 22](./22-KBZPay-MMQR支付接入方案.md) §9.1,下一步见 [next-task.md](./next-task.md)。
+
 2026-10-22 Facebook Web 登录本次改动纳入本地提交，未推送；远端部署、迁移和真实授权验收仍待完成。
 
 2026-10-21 Facebook 测试域名部署前复查：HTTPS/实际政策可用，远端旧前端和 callback 404；环境、目标库迁移、生产签名构建及真实授权待验。[检查记录](./audits/2026-10-21-facebook-deployment-readiness.md)。
@@ -228,6 +230,7 @@ MTrip/
 | 09 | [09-移动端微服务.md](./09-移动端微服务.md) | C端 /api/v1/app/* 接口(user/goods/order等) | 已完成(联调归模块07/08) | 100% |
 | 10 | [10-移动端App框架.md](./10-移动端App框架.md) | client-app Expo51+RN+TS 多端工程 | 框架已完成；Facebook Web 8093 前端已发布，真实授权和后端发布待条件 | 框架 100%；新增功能待联调 |
 | 21 | [21-Facebook-Web登录实施方案.md](./21-Facebook-Web登录实施方案.md) | Web 授权码登录、无手机号建号、一次性票据 | 51 项隔离 HTTP 通过；本地 HTTPS/政策及真实 Meta、测试域名待验，常规迁移有既有阻塞 | 代码完成，验收未全部完成 |
+| 22 | [22-KBZPay-MMQR支付接入方案.md](./22-KBZPay-MMQR支付接入方案.md) | KBZPay MMQR 扫码支付:统一支付中心、收款账户(直连/服务商)、可配支付窗口、移动端扫码页 | 阶段 1–6 代码完成,§9.1 遗留 6 项已修复(代码层);运行验收与 UAT 联调待 Docker/凭据;阶段 7–8 未开始 | 阶段 1–6 / 8 代码完成,未实跑验收 |
 | 13 | [13-商家端merchant-web落地.md](./13-商家端merchant-web落地.md) | 商户后台、动态 RBAC 与业务页面 | All Properties、Add New Property 第 1 步、全局菜单与 Hotel Profile 三页签 Long Stay / Policies / Nearby（视图 + 编辑 + 提交审核）Figma 对齐；新增沿用原门店流程；真实账号联动与浏览器视觉走查待补 | 进行中 |
 | M11 | [设计方案-Merchant-M11-访客消息.md](./设计方案-Merchant-M11-访客消息.md) | Figma 访客消息工作台与消费者收发闭环 | 2026-10-16 本地 8091/8093 已发布，迁移 45/45；前轮 72 项，本轮 24 项及正常端口探针通过 | 本地已发布，正常账号/真机待复验 |
 | 15 | [15-M12-merchant-management.md](./15-M12-merchant-management.md) | PRD模块12：酒店优先的商户管理，餐厅资料展示、运营延期 | 8/29列表整改已提交；追加取消详情餐厅隐藏，admin构建及Browser混合业务核验通过，追加改动未提交；S7整体原型待收口 | 列表及餐厅展示已验证，S7进行中 |

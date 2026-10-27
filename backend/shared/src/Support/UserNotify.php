@@ -34,6 +34,14 @@ final class UserNotify
         'booking_expired' => [self::BIZ_ORDER, 'Booking cancelled', 'Your booking at {hotel} ({orderNo}) was cancelled because payment was not completed in time.'],
         'refund_requested' => [self::BIZ_ORDER, 'Cancellation requested', 'Your cancellation for {hotel} ({orderNo}) was submitted. A refund of {amount} to your mTrip Wallet is pending review.'],
         'refund_completed' => [self::BIZ_ORDER, 'Refund completed', 'A refund of {amount} for {hotel} ({orderNo}) has been credited to your mTrip Wallet.'],
+        // 原路退回(KBZPay 等外部渠道支付的订单;钱包 / mock 单仍用上面两条)
+        'refund_requested_original' => [self::BIZ_ORDER, 'Cancellation requested', 'Your cancellation for {hotel} ({orderNo}) was submitted. A refund of {amount} will be returned to your original payment account after review.'],
+        'refund_completed_original' => [self::BIZ_ORDER, 'Refund completed', 'A refund of {amount} for {hotel} ({orderNo}) has been returned to your original payment account.'],
+        'refund_completed_wallet_fallback' => [self::BIZ_ORDER, 'Refund completed', 'The payment channel refund limit was reached, so the refund of {amount} for {hotel} ({orderNo}) has been credited to your mTrip Wallet.'],
+        // 付款在支付窗口关闭后才到账(方案 22 §6.3)
+        'payment_late_recovered' => [self::BIZ_ORDER, 'Booking confirmed', 'Your payment for {hotel} ({orderNo}) arrived after the booking timed out. The booking has been restored and confirmed.'],
+        'payment_late_refunded' => [self::BIZ_ORDER, 'Payment refunded', 'Your payment for {hotel} ({orderNo}) arrived after the booking was closed. A full refund of {amount} to your original payment account is being processed.'],
+        'payment_late_refund_failed' => [self::BIZ_ORDER, 'Refund under review', 'Your payment for {hotel} ({orderNo}) arrived after the booking was closed. The automatic refund of {amount} did not go through; our support team will process it manually.'],
         'review_request' => [self::BIZ_ORDER, 'How was your stay?', 'Share your experience at {hotel} and earn loyalty points.'],
         'appeal_result' => [self::BIZ_SYSTEM, 'Appeal result', 'Your account appeal has been reviewed: {result}.'],
     ];

@@ -107,6 +107,43 @@ class OrderStockService
         Db::table('goods_stock_log')->insert($changes);
     }
 
+    /**
+     * 重新锁定库存(须在事务内调用;方案 22 §6.3 超时取消后到账恢复):
+     * 取消时已释放的锁定量重新占回,任一日期停售 / 可用不足即抛错(调用方回滚并转退款)。
+     * 不重新计价 —— 按订单金额快照入账;之后由 deduct() 统一转已售。
+     */
+    public function relock(array $order): void
+    {
+        $skuType = (int) $order['order_type'];
+        $qty = (int) $order['quantity'];
+        $propertyId = (int) ($order['property_id'] ?? 0);
+        $goodsId = $skuType === 1 ? 0 : (int) ($order['goods_id'] ?? 0);
+        $skuId = $skuType === 1 ? (int) ($order['room_type_id'] ?? 0) : (int) $order['sku_id'];
+        $logs = [];
+        foreach ($this->datesOf($skuType, (string) $order['use_date'], $order['end_date'] ? (string) $order['end_date'] : null) as $date) {
+            $row = $this->lockRow($propertyId, $goodsId, $skuType, $skuId, $date);
+            if (! $row || (int) $row['is_closed'] === 1) {
+                throw new BusinessException(ErrorCode::DATA_CONFLICT, "{$date} 已停售");
+            }
+            if ((int) $row['stock_total'] - (int) $row['stock_sold'] - (int) $row['stock_locked'] < $qty) {
+                throw new BusinessException(ErrorCode::DATA_CONFLICT, "{$date} 库存不足");
+            }
+            Db::table('goods_daily_stock')->where('id', $row['id'])->increment('stock_locked', $qty);
+            $logs[] = [
+                'site_id' => (int) $order['site_id'],
+                'property_id' => $propertyId,
+                'goods_id' => $goodsId,
+                'sku_type' => $skuType,
+                'sku_id' => $skuId,
+                'stock_date' => $date,
+                'change_type' => 1,
+                'change_qty' => -$qty,
+                'order_id' => (int) $order['id'],
+            ];
+        }
+        Db::table('goods_stock_log')->insert($logs);
+    }
+
     /** 支付扣减:锁定转已售(须在事务内调用) */
     public function deduct(array $order): void
     {

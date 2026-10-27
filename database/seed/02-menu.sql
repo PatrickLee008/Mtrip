@@ -307,7 +307,8 @@ INSERT IGNORE INTO `sys_menu` (`id`,`parent_id`,`menu_name`,`menu_name_en`,`i18n
 (1309,1300,'特性开关','Feature Toggles','','config:feature:list',2,'/config/features','config/features/index','',9),
 (1310,1300,'筛选排序配置','Filter & Sort','','goods:filter:list',2,'/cops/filter','cops/filter/index','',10),
 (1311,1300,'税费配置','Tax Config','menu.financeTax','finance:tax:list',2,'/finance/tax','finance/tax/index','',11),
-(1312,1300,'邮件配置','Email','menu.configEmail','config:email:list',2,'/config/email','config/email/index','',6);
+(1312,1300,'邮件配置','Email','menu.configEmail','config:email:list',2,'/config/email','config/email/index','',6),
+(1313,1300,'收款账户','Payment Accounts','menu.configPayAccount','config:payAccount:list',2,'/config/pay-account','config/pay-account/index','',4);
 INSERT IGNORE INTO `sys_menu` (`id`,`parent_id`,`menu_name`,`menu_name_en`,`perm_key`,`menu_type`,`sort`) VALUES
 (130101,1301,'编辑参数','Edit','config:global:edit',3,1),
 (130102,1301,'恢复默认','Reset','config:global:reset',3,2),
@@ -323,6 +324,11 @@ INSERT IGNORE INTO `sys_menu` (`id`,`parent_id`,`menu_name`,`menu_name_en`,`perm
 (131202,1312,'编辑邮件渠道','Edit Email Channel','config:email:edit',3,2),
 (131203,1312,'启用禁用邮件渠道','Enable/Disable Email Channel','config:email:status',3,3),
 (131204,1312,'删除邮件渠道','Delete Email Channel','config:email:delete',3,4),
+(131301,1313,'新增收款账户','Add Payment Account','config:payAccount:add',3,1),
+(131302,1313,'编辑收款账户','Edit Payment Account','config:payAccount:edit',3,2),
+(131303,1313,'启用禁用收款账户','Enable/Disable Payment Account','config:payAccount:status',3,3),
+(131304,1313,'删除收款账户','Delete Payment Account','config:payAccount:delete',3,4),
+(131305,1313,'测试收款账户连通性','Test Payment Account','config:payAccount:test',3,5),
 (130901,1309,'保存开关','Save','config:feature:save',3,1),
 (131001,1310,'保存配置','Save','goods:filter:save',3,1);
 

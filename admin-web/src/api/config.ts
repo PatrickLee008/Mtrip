@@ -58,6 +58,31 @@ export const apiPayToggleStatus = (id: number) => post<{ status: number }>('/adm
 export const apiPayCopy = (id: number, siteIds: number[]) =>
   post<{ copied: number[]; skipped: number[] }>('/admin/sys/pay/copy', { id, siteIds });
 
+// ---------- 收款账户(KBZPay MMQR 等,站点支付渠道按 accountId 绑定) ----------
+/** 连通性测试结果:kind 区分失败原因(network 网络 / sign 签名或 AppKey / business 业务 / protocol 响应异常 / config 配置不完整) */
+export interface PayAccountTestResult {
+  ok: boolean;
+  kind: 'network' | 'sign' | 'business' | 'protocol' | 'config' | string;
+  code: string;
+  message: string;
+}
+export interface PayAccountOption {
+  id: number;
+  account_name: string;
+  mode: number;
+  env: string;
+  site_id: number;
+}
+export const apiPayAccountList = (params: Params) => get<PageData<Row>>('/admin/sys/pay-account/list', params);
+export const apiPayAccountOptions = (siteId?: number) =>
+  get<PayAccountOption[]>('/admin/sys/pay-account/options', siteId !== undefined ? { siteId } : undefined);
+export const apiPayAccountAdd = (data: Params) => post<{ id: number }>('/admin/sys/pay-account/add', data);
+export const apiPayAccountUpdate = (data: Params) => post<null>('/admin/sys/pay-account/update', data);
+export const apiPayAccountDelete = (id: number) => post<null>('/admin/sys/pay-account/delete', { id });
+export const apiPayAccountToggleStatus = (id: number) =>
+  post<{ status: number }>('/admin/sys/pay-account/toggle-status', { id });
+export const apiPayAccountTest = (id: number) => post<PayAccountTestResult>('/admin/sys/pay-account/test', { id });
+
 // ---------- 短信 ----------
 export const apiSmsChannelList = (params: Params) => get<PageData<Row>>('/admin/sys/sms/channel/list', params);
 export const apiSmsChannelAdd = (data: Params) => post<{ id: number }>('/admin/sys/sms/channel/add', data);
