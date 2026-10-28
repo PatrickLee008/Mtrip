@@ -19,7 +19,7 @@ INSERT IGNORE INTO `sys_config` (`config_group`, `config_key`, `config_value`, `
 -- security 安全策略
 ('security', 'login_fail_limit',     '5',    2, '登录失败锁定次数',       '5',    '连续失败N次锁定账号'),
 ('security', 'login_lock_minutes',   '30',   2, '账号锁定时长(分钟)',     '30',   ''),
-('security', 'jwt_expire_minutes',   '120',  2, 'JWT有效期(分钟)',        '120',  '管理后台AccessToken'),
+('security', 'jwt_expire_minutes',   '30',   2, 'JWT有效期(分钟)',        '30',   'Admin/Merchant Web AccessToken: 5-120 minutes; silent refresh'),
 ('security', 'jwt_refresh_days',     '7',    2, 'RefreshToken有效期(天)', '7',    ''),
 ('security', 'password_min_length',  '8',    2, '密码最小长度',           '8',    '需含字母+数字'),
 ('security', 'ip_white_enabled',     '0',    3, '后台IP白名单开关',       '0',    '0关闭 1开启'),

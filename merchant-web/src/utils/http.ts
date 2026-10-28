@@ -1,6 +1,7 @@
 import axios, { type AxiosRequestConfig } from 'axios';
 import { message } from 'ant-design-vue';
-import { getToken, clearAuth, isSupportSession } from '@/utils/auth';
+import { getToken } from '@/utils/auth';
+import { ensureSession, expireSession, isProtectedRequest, sessionState } from '@/utils/session';
 import type { ApiResult } from '@/api/types';
 import { getSelectedPropertyId } from '@/utils/propertyContext';
 
@@ -19,7 +20,8 @@ const instance = axios.create({
   timeout: 30000,
 });
 
-instance.interceptors.request.use((config) => {
+instance.interceptors.request.use(async (config) => {
+  if (isProtectedRequest(config.url)) await ensureSession();
   const token = getToken();
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
@@ -33,16 +35,8 @@ instance.interceptors.request.use((config) => {
 
 /** 统一业务错码处理(2xx 与非 2xx 响应共用) */
 function handleBizResult(result: ApiResult): void {
-  // 40101 未登录 / 40102 token过期 → 清理并跳登录(已在登录页则不重复跳转)
   if (result.code === 40101 || result.code === 40102) {
-    const support = isSupportSession();
-    clearAuth();
-    if (support) { window.location.replace('/support-session'); return; }
-    message.warning(result.message || '登录已失效,请重新登录');
-    const publicAuthPaths = ['/login', '/activate', '/recover'];
-    if (!publicAuthPaths.includes(window.location.pathname)) {
-      window.location.href = '/login';
-    }
+    expireSession();
   } else if (result.code === 40301 || result.code === 40302) {
     message.error(result.message || '无操作权限');
   } else {
@@ -50,29 +44,53 @@ function handleBizResult(result: ApiResult): void {
   }
 }
 
-instance.interceptors.response.use(
-  (response) => {
-    const result = response.data as ApiResult;
-    if (result.code === 0) {
-      return response;
-    }
+type RetryConfig = AxiosRequestConfig & { sessionRetried?: boolean };
+
+async function readResult(data: unknown): Promise<ApiResult | undefined> {
+  if (data instanceof Blob) {
+    if (!data.type.includes('json')) return undefined;
+    try { return JSON.parse(await data.text()); } catch { return undefined; }
+  }
+  return data && typeof data === 'object' && 'code' in data ? data as ApiResult : undefined;
+}
+
+async function failedResult(result: ApiResult, config: RetryConfig) {
+  const protectedRequest = isProtectedRequest(config.url);
+  if (result.code === 40102 && protectedRequest && !config.sessionRetried) {
+    const sent = String((config.headers as Record<string, unknown> | undefined)?.Authorization ?? '').replace(/^Bearer /, '');
+    if (getToken() === sent) await ensureSession(true);
+    return instance.request({ ...config, sessionRetried: true } as RetryConfig);
+  }
+  if ((result.code === 40101 || result.code === 40102) && !protectedRequest) {
+    message.warning(result.message);
+  } else {
     handleBizResult(result);
-    return Promise.reject(new BizError(result.code, result.message));
+  }
+  throw new BizError(result.code, result.message);
+}
+
+instance.interceptors.response.use(
+  async (response) => {
+    const result = await readResult(response.data);
+    if (!result || result.code === 0) return response;
+    return failedResult(result, response.config);
   },
-  (error) => {
+  async (error) => {
     if (axios.isCancel(error)) return Promise.reject(error);
-    // 后端异常响应带非 2xx 状态码(如 401/429),业务 code 在 response.data 里
-    const result = error?.response?.data as ApiResult | undefined;
+    const result = await readResult(error?.response?.data);
     if (result && typeof result.code === 'number' && result.code !== 0) {
-      handleBizResult(result);
-      return Promise.reject(new BizError(result.code, result.message));
+      return failedResult(result, error.config ?? {});
     }
-    if (!(error instanceof BizError)) {
+    if (!(error instanceof BizError) && !sessionState.expired) {
       message.error(error?.message === 'Network Error' ? '网络异常,请稍后重试' : '服务异常,请稍后重试');
     }
     return Promise.reject(error);
   },
 );
+
+export function requestBlob(config: AxiosRequestConfig) {
+  return instance.request<Blob>({ ...config, responseType: 'blob' });
+}
 
 /** 统一解包:直接返回 data 字段 */
 export async function request<T = unknown>(config: AxiosRequestConfig): Promise<T> {

@@ -38,6 +38,9 @@ class AdminAuthMiddleware implements MiddlewareInterface
         $claims = JwtHelper::verify($token, $secret);
         // Legacy platform tokens have no audience; merchant/challenge tokens must never enter admin APIs.
         if (isset($claims['aud']) && $claims['aud'] !== 'admin') throw new BusinessException(ErrorCode::UNAUTHORIZED);
+        if (isset($claims['sid'])) {
+            \Hyperf\Support\make(\Mtrip\Shared\Auth\BrowserSessionService::class)->assertAccess($claims, 'admin');
+        }
 
         AdminContext::set([
             'admin_id' => (int) ($claims['admin_id'] ?? 0),

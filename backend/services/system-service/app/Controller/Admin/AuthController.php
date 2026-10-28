@@ -20,9 +20,13 @@ use Mtrip\Shared\Support\Result;
 class AuthController extends AbstractController
 {
     #[Inject]
+    protected \Mtrip\Shared\Auth\BrowserSessionService $sessions;
+    #[Inject]
+    protected \Hyperf\HttpServer\Contract\ResponseInterface $response;
+    #[Inject]
     protected AuthService $authService;
 
-    public function login(): array
+    public function login(): \Psr\Http\Message\ResponseInterface
     {
         $username = $this->requireStr('username');
         $password = $this->requireStr('password');
@@ -32,13 +36,18 @@ class AuthController extends AbstractController
             $this->clientIp(),
             $this->request->getHeaderLine('user-agent')
         );
-        return Result::success($data, '登录成功');
+        return $this->sessions->loginResponse($data, 'admin', $this->request, $this->response->json(Result::success($data, '登录成功')));
     }
 
-    public function logout(): array
+    public function refresh(): \Psr\Http\Message\ResponseInterface
     {
-        // JWT 无状态,由前端丢弃 Token;此处仅确认登录态有效
-        return Result::success(null, '已退出登录');
+        return $this->sessions->refreshResponse('admin', $this->request, $this->response->json(Result::success()),
+            fn (array $claims) => $this->authService->renew($claims));
+    }
+
+    public function logout(): \Psr\Http\Message\ResponseInterface
+    {
+        return $this->sessions->logoutResponse('admin', $this->request, $this->response->json(Result::success(null, '已退出登录')));
     }
 
     public function me(): array

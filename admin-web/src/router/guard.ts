@@ -1,7 +1,7 @@
 import type { Router } from 'vue-router';
 import { useUserStore } from '@/stores/user';
 import { apiMe } from '@/api/auth';
-import { clearAuth } from '@/utils/auth';
+import { sessionState } from '@/utils/session';
 import { installDynamicRoutes } from './dynamic';
 import { resolveMenuTitle } from '@/locales/menuI18n';
 
@@ -15,7 +15,7 @@ export function setupRouterGuard(router: Router): void {
 
     if (to.meta.public) {
       // 已登录访问登录页,回首页
-      if (to.path === '/login' && userStore.isLogin) {
+      if (to.path === '/login' && userStore.isLogin && to.query.reauth !== '1') {
         return { path: '/' };
       }
       return true;
@@ -37,11 +37,9 @@ export function setupRouterGuard(router: Router): void {
         // 重新进入目标路由(此时动态路由已注册)
         return { ...to, replace: true };
       } catch {
-        // 接口失败(如 token 失效/限流):必须清除本地登录态后再去登录页,
-        // 否则 /login 会因 isLogin 仍为 true 被弹回首页,形成导航死循环狂刷接口
-        clearAuth();
-        userStore.$reset();
-        return { path: '/login' };
+        sessionState.recoveryPath = to.fullPath;
+        if (!sessionState.expired) sessionState.recoveryFailed = true;
+        return false;
       }
     }
 

@@ -84,6 +84,7 @@ class AdminController extends AbstractController
         if ($admin->is_super === 1 && ! AdminContext::isSuper()) {
             throw new BusinessException(ErrorCode::FORBIDDEN, '无权编辑超级管理员');
         }
+        $oldScope = [(int) $admin->site_id, Db::table('sys_admin_role')->where('admin_id', $admin->id)->orderBy('role_id')->pluck('role_id')->toArray()];
         if (AdminContext::isSuper() && ($siteId = $this->intInput('siteId', -1)) >= 0) {
             $admin->site_id = $siteId;
         }
@@ -92,6 +93,8 @@ class AdminController extends AbstractController
             $admin->save();
             $this->syncRoles((int) $admin->id);
         });
+        $newScope = [(int) $admin->site_id, Db::table('sys_admin_role')->where('admin_id', $admin->id)->orderBy('role_id')->pluck('role_id')->toArray()];
+        if ($oldScope !== $newScope) $this->revokeSessions((int) $admin->id);
         return Result::success(null, '管理员更新成功');
     }
 
@@ -109,6 +112,7 @@ class AdminController extends AbstractController
             $admin->delete();
             Db::table('sys_admin_role')->where('admin_id', $admin->id)->delete();
         });
+        $this->revokeSessions((int) $admin->id);
         return Result::success(null, '管理员已删除');
     }
 
@@ -122,6 +126,7 @@ class AdminController extends AbstractController
         $admin->login_fail_count = 0;
         $admin->locked_until = null;
         $admin->save();
+        $this->revokeSessions((int) $admin->id);
         return Result::success(null, '密码重置成功');
     }
 
@@ -134,7 +139,13 @@ class AdminController extends AbstractController
         }
         $admin->status = $admin->status === 1 ? 2 : 1;
         $admin->save();
+        $this->revokeSessions((int) $admin->id);
         return Result::success(['status' => $admin->status], $admin->status === 1 ? '已启用' : '已禁用');
+    }
+
+    private function revokeSessions(int $id): void
+    {
+        \Hyperf\Support\make(\Mtrip\Shared\Auth\BrowserSessionService::class)->revokeAccount('admin', $id);
     }
 
     public function loginLogs(): array

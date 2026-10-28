@@ -41,6 +41,10 @@ async function onSubmit(): Promise<void> {
       localStorage.removeItem(REMEMBER_KEY);
     }
     message.success(t('login.success'));
+    if (route.query.reauth === '1' && window.parent !== window) {
+      window.parent.postMessage({ type: 'mtrip:reauth' }, window.location.origin);
+      return;
+    }
     const redirect = (route.query.redirect as string) || '/';
     await router.replace(redirect);
   } finally {

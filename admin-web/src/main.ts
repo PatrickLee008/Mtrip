@@ -1,3 +1,4 @@
+import { setupBrowserSession } from '@/utils/session';
 import { createApp } from 'vue';
 import Antd from 'ant-design-vue';
 import App from './App.vue';
@@ -10,6 +11,7 @@ import '@/styles/index.less';
 import '@/styles/super-admin-layout.less';
 import 'ant-design-vue/dist/reset.css';
 
+setupBrowserSession();
 const app = createApp(App);
 
 app.use(Antd);

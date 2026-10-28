@@ -101,6 +101,7 @@ class RoleController extends AbstractController
         }
         $role->status = $role->status === 1 ? 2 : 1;
         $role->save();
+        $this->revokeRoleSessions((int) $role->id);
         return Result::success(['status' => $role->status], $role->status === 1 ? '已启用' : '已禁用');
     }
 
@@ -134,6 +135,7 @@ class RoleController extends AbstractController
                 Db::table('sys_role_menu')->insert($rows);
             }
         });
+        $this->revokeRoleSessions((int) $role->id);
         return Result::success(null, '权限分配成功');
     }
 
@@ -148,6 +150,14 @@ class RoleController extends AbstractController
             ->get(['a.id', 'a.site_id', 'a.username', 'a.real_name', 'a.status'])
             ->toArray();
         return Result::success($list);
+    }
+
+    private function revokeRoleSessions(int $id): void
+    {
+        $sessions = \Hyperf\Support\make(\Mtrip\Shared\Auth\BrowserSessionService::class);
+        foreach (Db::table('sys_admin_role')->where('role_id', $id)->pluck('admin_id')->toArray() as $adminId) {
+            $sessions->revokeAccount('admin', (int) $adminId);
+        }
     }
 
     private function findScoped(int $id): SysRole

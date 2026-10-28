@@ -40,6 +40,7 @@ Router::get('/healthz', static fn () => ['status' => 'ok', 'service' => 'system-
 
 // 登录(无需鉴权,登录记录写 sys_admin_login_log)
 Router::post('/api/v1/admin/auth/login', [AuthController::class, 'login']);
+Router::post('/api/v1/admin/auth/refresh', [AuthController::class, 'refresh']);
 
 // C端公开站点接口(模块09 移动端微服务,无需登录)
 Router::get('/api/v1/app/site/list', [AppSiteController::class, 'list']);

@@ -21,6 +21,8 @@ class MerchantSecurityController extends AbstractController
     protected \Hyperf\HttpServer\Contract\ResponseInterface $response;
     #[Inject]
     protected MerchantAccountSecurityService $security;
+    #[Inject]
+    protected \Mtrip\Shared\Auth\BrowserSessionService $sessions;
 
     #[Permission(['merchant:list:2fa', 'merchant:list:impersonate'])]
     public function accounts(): array
@@ -35,7 +37,8 @@ class MerchantSecurityController extends AbstractController
 
     public function verify(): \Psr\Http\Message\ResponseInterface
     {
-        return $this->response->json(Result::success($this->security->verify($this->requireStr('challengeToken'), $this->requireStr('twoFaCode'), $this->clientIp())))->withHeader('Cache-Control', 'no-store');
+        $data = $this->security->verify($this->requireStr('challengeToken'), $this->requireStr('twoFaCode'), $this->clientIp());
+        return $this->sessions->loginResponse($data, 'merchant', $this->request, $this->response->json(Result::success($data)));
     }
 
     public function createAppPairing(): \Psr\Http\Message\ResponseInterface

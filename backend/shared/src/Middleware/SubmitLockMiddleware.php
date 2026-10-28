@@ -50,6 +50,7 @@ class SubmitLockMiddleware implements MiddlewareInterface
         $path = $request->getUri()->getPath();
         // Receipts are monotonic; independent file tickets use random Redis keys and may load in parallel.
         if ($method === 'POST' && in_array($path, [
+            '/api/v1/admin/auth/refresh', '/api/v1/merchant/auth/refresh',
             '/api/v1/app/chat/receipt', '/api/v1/merchant/chat/receipt',
             '/api/v1/app/chat/file-ticket', '/api/v1/merchant/chat/file-ticket',
         ], true)) {

@@ -21,6 +21,14 @@ use function Hyperf\Config\config;
  */
 class AuthService
 {
+    public function renew(array $claims): array
+    {
+        $admin = SysAdmin::query()->find((int) $claims['admin_id']);
+        if (! $admin || $admin->status !== 1) throw new BusinessException(ErrorCode::UNAUTHORIZED);
+        $permissions = $admin->is_super === 1 ? [] : $this->collectPermissions((int) $admin->id);
+        $claims['permissions'] = $permissions;
+        return ['token' => JwtHelper::issue($claims, (string) config('mtrip.jwt_secret')), 'admin' => $this->profile($admin, $permissions)];
+    }
     /** 登录记录状态:1成功 2密码错误 3账号锁定 4账号禁用 */
     private const LOGIN_OK = 1;
 
@@ -82,6 +90,7 @@ class AuthService
             'site_id' => (int) $admin->site_id,
             'is_super' => $admin->is_super === 1,
             'permissions' => $permissions,
+            'security_stamp' => \Mtrip\Shared\Auth\AdminSessionIdentity::fingerprint((string) $admin->password, (int) $admin->site_id, (int) $admin->is_super, $permissions),
         ], (string) config('mtrip.jwt_secret'), (int) config('mtrip.jwt_ttl', 7200));
 
         return [
@@ -176,6 +185,7 @@ class AuthService
         self::assertPasswordStrength($newPassword);
         $admin->password = password_hash($newPassword, PASSWORD_BCRYPT);
         $admin->save();
+        \Hyperf\Support\make(\Mtrip\Shared\Auth\BrowserSessionService::class)->revokeAccount('admin', $adminId);
     }
 
     /** 密码强度校验(文档安全策略:至少8位,含字母与数字) */

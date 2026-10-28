@@ -97,7 +97,10 @@ class RoleController extends AbstractController
             $data['status'] = (int) $status;
         }
         if ($data !== []) {
-            Db::table('merchant_role')->where('id', $role['id'])->update($data);
+            Db::transaction(function () use ($role, $data) {
+                Db::table('merchant_role')->where('id', $role['id'])->update($data);
+                if (isset($data['status']) && $data['status'] !== (int) $role['status']) $this->revokeRoleSessions((int) $role['id']);
+            });
         }
         return Result::success(null, '角色更新成功');
     }
@@ -140,6 +143,7 @@ class RoleController extends AbstractController
                 ));
             }
         });
+        $this->revokeRoleSessions((int) $role['id']);
         return Result::success(null, '菜单权限已保存');
     }
 
@@ -164,6 +168,7 @@ class RoleController extends AbstractController
                     $roleIds
                 ));
             }
+            Db::table('merchant_admin')->where('id', $adminId)->update(['auth_version' => Db::raw('auth_version + 1')]);
         });
         return Result::success(null, '角色已分配');
     }
@@ -214,6 +219,12 @@ class RoleController extends AbstractController
             throw new BusinessException(ErrorCode::NOT_FOUND, '角色不存在或无权操作');
         }
         return (array) $role;
+    }
+
+    private function revokeRoleSessions(int $roleId): void
+    {
+        $ids = Db::table('merchant_admin_role')->where('role_id', $roleId)->pluck('admin_id')->all();
+        if ($ids !== []) Db::table('merchant_admin')->whereIn('id', $ids)->update(['auth_version' => Db::raw('auth_version + 1')]);
     }
 
     private function assertEditable(array $role): void

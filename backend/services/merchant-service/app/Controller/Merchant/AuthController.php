@@ -25,6 +25,8 @@ class AuthController extends AbstractController
     protected MerchantAuthService $authService;
     #[Inject]
     protected MerchantAuthenticationService $authentication;
+    #[Inject]
+    protected \Mtrip\Shared\Auth\BrowserSessionService $sessions;
 
     public function authConfig(): array
     {
@@ -138,10 +140,20 @@ class AuthController extends AbstractController
 
     private function noStore(array $data, string $message = 'success'): \Psr\Http\Message\ResponseInterface
     {
-        return $this->response->json(Result::success($data, $message))->withHeader('Cache-Control', 'no-store');
+        return $this->sessions->loginResponse($data, 'merchant', $this->request, $this->response->json(Result::success($data, $message)));
     }
 
-    public function logout(): array
+    public function refresh(): \Psr\Http\Message\ResponseInterface
+    {
+        return $this->sessions->refreshResponse('merchant', $this->request, $this->response->json(Result::success()),
+            function (array $claims): array {
+                $account = Db::table('merchant_admin')->where('id', $claims['admin_id'])->whereNull('deleted_at')->first();
+                if (! $account) throw new BusinessException(ErrorCode::UNAUTHORIZED);
+                return $this->authService->issueSession((array) $account);
+            });
+    }
+
+    public function logout(): \Psr\Http\Message\ResponseInterface
     {
         $sessionId = (int) (MerchantContext::get()['impersonation_session_id'] ?? 0);
         if ($sessionId > 0) {
@@ -152,7 +164,7 @@ class AuthController extends AbstractController
                 \App\Service\MerchantActivityService::changed(MerchantContext::adminId(), 'logout', $this->clientIp());
             });
         }
-        return Result::success(null, '已退出登录');
+        return $this->sessions->logoutResponse('merchant', $this->request, $this->response->json(Result::success(null, '已退出登录')));
     }
 
     public function me(): array

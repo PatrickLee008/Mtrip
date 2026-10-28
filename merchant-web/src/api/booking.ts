@@ -1,7 +1,4 @@
-import axios from 'axios';
-import { get, post } from '@/utils/http';
-import { getToken } from '@/utils/auth';
-import { getSelectedPropertyId } from '@/utils/propertyContext';
+import { get, post, requestBlob } from '@/utils/http';
 import type { PageData } from '@/api/types';
 
 /** 酒店预订管理 API(实现方案-Merchant-M4 §7.2;后端 order_main snake_case 直出) */
@@ -236,15 +233,7 @@ export function apiGuestMessage(id: number, content: string): Promise<{ messageI
 
 /** 导出 CSV(二进制流,不走统一 JSON 解包) */
 export async function downloadBookingCsv(params: Record<string, unknown>): Promise<void> {
-  const propertyId = getSelectedPropertyId();
-  const response = await axios.get(`${import.meta.env.VITE_API_BASE}/merchant/order/export`, {
-    params,
-    responseType: 'blob',
-    headers: {
-      Authorization: `Bearer ${getToken() ?? ''}`,
-      ...(propertyId !== null ? { 'X-Mtrip-Property-Id': String(propertyId) } : {}),
-    },
-  });
+  const response = await requestBlob({ method: 'GET', url: '/merchant/order/export', params });
   const disposition = (response.headers['content-disposition'] ?? '') as string;
   const match = /filename=([^;]+)/.exec(disposition);
   const filename = match ? match[1].trim() : `bookings-${Date.now()}.csv`;

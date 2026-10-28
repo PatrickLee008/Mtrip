@@ -1,3 +1,4 @@
+import { setupBrowserSession } from '@/utils/session';
 import { createApp } from 'vue';
 import Antd from 'ant-design-vue';
 import App from './App.vue';
@@ -15,6 +16,7 @@ if (import.meta.env.DEV && window.location.hostname === 'localhost') {
   canonicalUrl.hostname = '127.0.0.1';
   window.location.replace(canonicalUrl);
 } else {
+  setupBrowserSession();
   const app = createApp(App);
 
   app.use(Antd);

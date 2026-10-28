@@ -23,7 +23,8 @@ export default defineConfig({
       // 开发环境转发到本地网关(OpenResty,deploy/docker-compose 默认 8081)
       '/api': {
         target: process.env.MTRIP_DEV_GATEWAY || 'http://127.0.0.1:8081',
-        changeOrigin: true,
+        // Preserve the browser host for refresh-cookie origin validation.
+        changeOrigin: false,
         ws: true,
       },
       '/uploads': {

@@ -53,6 +53,13 @@ class GlobalConfigController extends AbstractController
         $updates = [];
         foreach ($configs as $item) {
             $key = trim((string) ($item['key'] ?? ''));
+            if (in_array($key, ['jwt_expire_minutes', 'jwt_refresh_days'], true)) {
+                $value = (string) ($item['value'] ?? '');
+                [$min, $max] = $key === 'jwt_expire_minutes' ? [5, 120] : [1, 30];
+                if (! ctype_digit($value) || (int) $value < $min || (int) $value > $max) {
+                    throw new BusinessException(ErrorCode::PARAM_VALIDATE_FAIL, "{$key}: {$min}-{$max}");
+                }
+            }
             if ($key === self::MERCHANT_AUTH_TEST_MODE) {
                 $this->validateMerchantAuthTestMode((string) ($item['value'] ?? ''));
             }

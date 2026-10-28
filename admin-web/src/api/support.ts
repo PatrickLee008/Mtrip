@@ -1,6 +1,4 @@
-import { request, post } from '@/utils/http';
-import { getToken } from '@/utils/auth';
-import { message } from 'ant-design-vue';
+import { request, post, requestBlob } from '@/utils/http';
 
 export interface SupportFile { id: number; filename: string; mime: string; size: number }
 export interface SupportPage<T> { list: T[]; total: number; page: number; pageSize: number }
@@ -25,11 +23,8 @@ export function supportUpload(file: File, scope: Record<string, unknown>) {
   return request<SupportFile>({ method: 'POST', url: root + 'attachments/upload', data });
 }
 export async function supportDownload(file: SupportFile) {
-  const headers: Record<string, string> = { Authorization: 'Bearer ' + getToken() };
-  const base = (import.meta.env.VITE_API_BASE || '/api/v1').replace(/\/$/, '');
-  const response = await fetch(base + root + 'attachments/download?attachmentId=' + file.id, { headers });
-  if (!response.ok) { const result = await response.json(); message.error(result.message); return; }
-  const url = URL.createObjectURL(await response.blob());
+  const response = await requestBlob({ method: 'GET', url: root + 'attachments/download', params: { attachmentId: file.id } });
+  const url = URL.createObjectURL(response.data);
   const link = document.createElement('a'); link.href = url; link.download = file.filename; link.click();
   setTimeout(() => URL.revokeObjectURL(url), 30000);
 }

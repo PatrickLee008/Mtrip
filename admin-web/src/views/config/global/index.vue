@@ -30,6 +30,8 @@ const PAYMENT_WINDOW_MIN = 1;
 const PAYMENT_WINDOW_MAX = 1440;
 
 function numberLimit(key: string): { min?: number; max?: number; precision?: number } {
+  if (key === 'jwt_expire_minutes') return { min: 5, max: 120, precision: 0 };
+  if (key === 'jwt_refresh_days') return { min: 1, max: 30, precision: 0 };
   return key === PAYMENT_WINDOW_KEY ? { min: PAYMENT_WINDOW_MIN, max: PAYMENT_WINDOW_MAX, precision: 0 } : {};
 }
 

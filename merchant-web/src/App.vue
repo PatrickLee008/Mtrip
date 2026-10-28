@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import SessionBoundary from '@/components/SessionBoundary.vue';
 import { computed, watch } from 'vue';
 import { ConfigProvider, theme as antdTheme } from 'ant-design-vue';
 import zhCN from 'ant-design-vue/es/locale/zh_CN';
@@ -36,5 +37,6 @@ watch(
 <template>
   <ConfigProvider :locale="antdLocale" :theme="themeConfig">
     <router-view />
+    <SessionBoundary />
   </ConfigProvider>
 </template>

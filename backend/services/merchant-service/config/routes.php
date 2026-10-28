@@ -261,6 +261,7 @@ Router::addGroup('/api/v1/admin/compliance', static function () {
 // ============================================================
 // 登录(组外,免鉴权)
 Router::post('/api/v1/merchant/auth/login', [MerchantAuthController::class, 'login']);
+Router::post('/api/v1/merchant/auth/refresh', [MerchantAuthController::class, 'refresh']);
 Router::get('/api/v1/merchant/auth/config', [MerchantAuthController::class, 'authConfig']);
 Router::post('/api/v1/merchant/activation/start', [MerchantAuthController::class, 'activationStart']);
 Router::get('/api/v1/merchant/activation/profile', [MerchantAuthController::class, 'activationProfile']);

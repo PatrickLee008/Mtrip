@@ -58,6 +58,10 @@ function resetChallenge(): void {
 async function acceptSession(result: LoginResult): Promise<void> {
   userStore.acceptSession(result);
   message.success(t('login.success'));
+  if (route.query.reauth === '1' && window.parent !== window) {
+    window.parent.postMessage({ type: 'mtrip:reauth' }, window.location.origin);
+    return;
+  }
   const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : '/';
   await router.replace(redirect.startsWith('/') && !redirect.startsWith('//') ? redirect : '/');
 }
@@ -148,10 +152,8 @@ async function completeLegacyTwoFa(): Promise<void> {
   loading.value = true;
   try {
     const result = await apiTwoFaVerify(legacyChallenge.value.challengeToken, otp.value);
-    userStore.acceptSession(result);
     cancelLegacyTwoFa();
-    message.success(t('login.success'));
-    await router.replace('/');
+    await acceptSession(result);
   } finally {
     otp.value = '';
     loading.value = false;

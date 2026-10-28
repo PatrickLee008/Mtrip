@@ -44,6 +44,9 @@ class MerchantAuthMiddleware implements MiddlewareInterface
         }
 
         \Mtrip\Shared\Merchant\MerchantAccessGuard::assertSession($claims);
+        if (isset($claims['sid'])) {
+            \Hyperf\Support\make(\Mtrip\Shared\Auth\BrowserSessionService::class)->assertAccess($claims, 'merchant');
+        }
         $permissions = (array) ($claims['permissions'] ?? []);
         $support = null;
         if (isset($claims['impersonation_session_id'])) {
