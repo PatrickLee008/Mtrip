@@ -228,11 +228,20 @@ textarea.ant-input {
 .ant-btn-primary {
   border-color: var(--mtrip-primary) !important;
   background: var(--mtrip-primary) !important;
+  color: #fff !important;
 
-  &:hover,
-  &:focus {
+  &:hover:not(:disabled):not([disabled]),
+  &:focus:not(:disabled):not([disabled]) {
     border-color: var(--mtrip-primary-dark) !important;
     background: var(--mtrip-primary-dark) !important;
+  }
+
+  &:disabled,
+  &[disabled] {
+    border-color: var(--mtrip-border) !important;
+    background: #f1f5f9 !important;
+    color: #94a3b8 !important;
+    box-shadow: none;
   }
 }
 
