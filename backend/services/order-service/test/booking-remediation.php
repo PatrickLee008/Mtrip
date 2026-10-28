@@ -177,6 +177,18 @@ try {
     contract((float) $quote['refundable'] === 200.0, 'policy cap subtracts completed refunds', json_encode($quote));
     contract((float) $quote['remainingRefundable'] === 200.0, 'remaining refundable means remaining policy allowance', json_encode($quote));
     contract((float) $quote['cancellationFee'] === 500.0, 'cancellation fee excludes historical refunds', json_encode($quote));
+    $lateRefund = (array) Db::table('order_refund')->where('id', $refundIds[0])->first();
+    unset($lateRefund['id']);
+    $refundIds[] = (int) Db::table('order_refund')->insertGetId(array_replace($lateRefund, [
+        'refund_no' => 'BOOKING-LATE-REFUND-' . bin2hex(random_bytes(4)),
+        'apply_amount' => 400,
+        'refund_amount' => 400,
+        'late_pay' => 1,
+    ]));
+    $lateRefundQuote = $refund->quote($order);
+    contract((float) $lateRefundQuote['refundedAlready'] === 300.0
+        && (float) $lateRefundQuote['remainingRefundable'] === 200.0,
+        'late payment refunds do not consume booking refund allowance', json_encode($lateRefundQuote));
     $excessRejected = false;
     try {
         $refund->apply($order, 991001, 'Booking Fixture', 200.01, 'Exceeds policy allowance');

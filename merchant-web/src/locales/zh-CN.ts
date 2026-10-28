@@ -547,6 +547,7 @@ export default {
     },
   },
   booking: {
+    closeDetail: '关闭预订详情',
     title: '预订管理',
     subtitle: '集中管理酒店预订、房态与住客偏好。',
     download: '下载',

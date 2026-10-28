@@ -548,6 +548,7 @@ export default {
     },
   },
   booking: {
+    closeDetail: 'Close Detail Panel',
     title: 'Booking Management',
     subtitle: "Track and manage your hotel's reservations, room availability, and guest preferences all in one place.",
     download: 'Download',

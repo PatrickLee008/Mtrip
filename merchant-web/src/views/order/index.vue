@@ -44,7 +44,7 @@ import {
 
 /**
  * Booking Management(实现方案-Merchant-M4 §8):
- * 严格按 Figma 原型还原——标题/工具条/页签/表格 + 430px 右侧详情面板(并排非抽屉)。
+ * 列表与右侧遮罩详情抽屉，保留预订业务操作。
  * 数据全部来自真实接口;原型未实现的确认弹窗按 PRD §2.4 补齐;
  * 原型中的佣金/净结算等演示数据不展示(方案 §1.5 不伪造)。
  */
@@ -672,9 +672,9 @@ onBeforeUnmount(() => {
         </div>
       </div>
 
-      <!-- 表格 + 详情面板 -->
+      <!-- 列表保持全宽，详情覆盖在页面右侧 -->
       <div class="bm-body">
-        <div class="bm-table-card" :class="{ 'with-panel': selectedId !== null }">
+        <div class="bm-table-card">
           <a-table
             :columns="columns"
             :data-source="list"
@@ -714,17 +714,32 @@ onBeforeUnmount(() => {
           </a-table>
         </div>
 
-        <!-- 右侧详情面板(430px,与表格并排) -->
-        <div v-if="selectedId !== null" class="bm-panel">
-          <div class="bm-panel-head">
-            <span class="bm-panel-no">{{ detail?.order.order_no ?? '...' }}</span>
-            <span v-if="detail" class="btag" :class="`btag-${BOOKING_TAG[detail.order.booking_status] ?? 'pending'}`">
-              {{ bookingStatusText(detail.order.booking_status) }}
-            </span>
-            <a-button type="text" size="small" class="bm-panel-close" @click="closeDetail">
-              <template #icon><CloseOutlined /></template>
-            </a-button>
-          </div>
+        <a-drawer
+          root-class-name="bm-detail-drawer"
+          :open="selectedId !== null"
+          placement="right"
+          width="min(380px, 100vw)"
+          :closable="false"
+          :header-style="{ padding: '24px', borderBottom: '1px solid #f1f5f9' }"
+          :body-style="{ padding: 0 }"
+          :footer-style="{ padding: '20px 24px' }"
+          :mask-style="{ background: 'rgba(0, 0, 0, 0.25)' }"
+          @close="closeDetail"
+        >
+          <template #title>
+            <div class="bm-panel-head">
+              <div class="bm-panel-heading">
+                <span class="bm-panel-no">{{ detail?.order.order_no ?? '...' }}</span>
+                <div v-if="detail" class="bm-panel-received">{{ t('booking.summary.received') }}: {{ detail.order.created_at }}</div>
+              </div>
+              <span v-if="detail" class="btag" :class="`btag-${BOOKING_TAG[detail.order.booking_status] ?? 'pending'}`">
+                {{ bookingStatusText(detail.order.booking_status) }}
+              </span>
+              <a-button type="text" size="small" class="bm-panel-close" :aria-label="t('booking.closeDetail')" @click="closeDetail">
+                <template #icon><CloseOutlined /></template>
+              </a-button>
+            </div>
+          </template>
           <a-spin :spinning="detailLoading">
             <div v-if="detail" class="bm-panel-body">
               <div v-if="detail.order.booking_status === 5 || detail.order.booking_status === 6" class="bm-terminal-alert" :class="{ 'is-noshow': detail.order.booking_status === 6 }">
@@ -969,7 +984,10 @@ onBeforeUnmount(() => {
               </section>
             </div>
           </a-spin>
-        </div>
+          <template #footer>
+            <a-button block @click="closeDetail">{{ t('booking.closeDetail') }}</a-button>
+          </template>
+        </a-drawer>
       </div>
     </div>
 
@@ -1176,6 +1194,9 @@ onBeforeUnmount(() => {
 
   :deep(.ant-input-affix-wrapper) {
     height: 40px;
+    align-items: center;
+    padding-top: 0;
+    padding-bottom: 0;
     border-radius: 7px !important;
     border-color: #e2e8f0;
     background: #fff;
@@ -1185,6 +1206,15 @@ onBeforeUnmount(() => {
 }
 .bm-input {
   flex: 1;
+
+  :deep(input.ant-input) {
+    min-height: 0 !important;
+    height: 100%;
+    padding-top: 0;
+    padding-bottom: 0;
+    line-height: normal;
+    background: transparent !important;
+  }
 }
 .bm-filter-btn {
   width: 40px;
@@ -1252,7 +1282,7 @@ onBeforeUnmount(() => {
   }
 }
 
-/* 表格 + 面板并排 */
+/* 列表 */
 .bm-body {
   display: flex;
   align-items: flex-start;
@@ -1403,40 +1433,36 @@ onBeforeUnmount(() => {
   color: #c8752a;
 }
 
-/* 右侧详情面板(430px,与表格并排) */
-.bm-panel {
-  width: 430px;
-  flex-shrink: 0;
-  background: #fff;
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
-  max-height: calc(100vh - 160px);
-  overflow-y: auto;
-  position: sticky;
-  top: 12px;
+/* Figma: 380px 右侧遮罩抽屉，头部固定、内容独立滚动。 */
+:global(.bm-detail-drawer .ant-drawer-content) {
+  border-radius: 0;
 }
 .bm-panel-head {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 14px 16px;
-  border-bottom: 1px solid #f1f5f9;
-  position: sticky;
-  top: 0;
-  background: #fff;
-  z-index: 1;
+}
+.bm-panel-heading {
+  min-width: 0;
+}
+.bm-panel-received {
+  margin-top: 6px;
+  font-size: 11px;
+  font-weight: 400;
+  color: #94a3b8;
 }
 .bm-panel-no {
-  font-size: 13px;
+  font-size: 16px;
   font-weight: 600;
   color: #0f172a;
+  overflow-wrap: anywhere;
 }
 .bm-panel-close {
   margin-left: auto;
   color: #94a3b8;
 }
 .bm-panel-body {
-  padding: 16px;
+  padding: 24px;
   display: flex;
   flex-direction: column;
   gap: 18px;
@@ -1794,18 +1820,6 @@ onBeforeUnmount(() => {
   font-family: monospace;
   letter-spacing: 2px;
   font-size: 14px;
-}
-
-/* 窄屏:面板转为下方堆叠 */
-@media (max-width: 1366px) {
-  .bm-body {
-    flex-wrap: wrap;
-  }
-  .bm-panel {
-    width: 100%;
-    position: static;
-    max-height: none;
-  }
 }
 
 @media (max-width: 600px) {
