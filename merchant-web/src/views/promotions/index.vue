@@ -275,7 +275,6 @@ onMounted(async () => {
   display: flex;
   flex-direction: column;
   gap: 24px;
-  padding: 32px;
   color: @pr-ink;
 }
 
@@ -367,10 +366,6 @@ onMounted(async () => {
 }
 
 @media (max-width: 900px) {
-  .promotions-page {
-    padding: 16px;
-  }
-
   .page-head {
     align-items: flex-start;
     flex-direction: column;
