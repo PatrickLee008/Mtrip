@@ -11,6 +11,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 3. 在子目录开发前读该目录的 `AGENTS.md`(`backend/services/AGENTS.md`、`admin-web/src/AGENTS.md`)。
 4. **不要把规范正文复制进 CLAUDE.md 或 AGENTS.md** —— 需要更新约定时改 HANDOFF.md,其余文件只留指针。
 
+## ⚠️ 数据库发布闸门(多次因此发布失败)
+
+**生产库只执行 `database/migrations/VYYYYMMDDHHMMSS__lower-kebab.sql`。** 旧目录 `database/merchant|system|goods|seed|...` 是空库快照,生产永远不跑;在旧目录新增或修改 SQL 时**必须同批新增一份迁移**,否则 `auto-deploy.sh` 报 `[FAIL] 新增/修改旧目录快照 SQL 时必须同批新增 database/migrations/...` 中止发布。迁移目录无需登记 compose;快照副本可选。完整定义:HANDOFF 第 3 节「发布闸门」、`database/migrations/README.md`。
+
 ## 常用命令
 
 ```powershell
@@ -42,8 +46,10 @@ cd deploy; ./mtrip.sh restart goods-service-app   # 同一个服务的 APP 孪�
 cd deploy; ./mtrip.sh status                # 容器状态;./mtrip.sh health 探活 8 个服务 + 网关链路
 # 网关会在 start/build 后自动刷新(容器 IP 变了不刷会全量 502/50200),无需手动 restart gateway
 
-# 增量执行 SQL(脚本幂等,不必 down -v 重建;新增 SQL 仍须登记进 compose 的 initdb 挂载)
-powershell -ExecutionPolicy Bypass -File scripts/db-apply.ps1 database/merchant/03-group-store.sql database/seed/04-merchant-menu.sql
+# 增量执行 SQL 到开发库(脚本幂等,不必 down -v 重建)
+powershell -ExecutionPolicy Bypass -File scripts/db-apply.ps1 database/migrations/V20261026100000__merchant-support.sql
+# 生产迁移(生产只跑 database/migrations/,见上方「数据库发布闸门」)
+bash scripts/db-migrate.sh --validate; bash scripts/db-migrate.sh --status
 # 彻底清库重来(会删数据):cd deploy; ./mtrip.sh clean; ./mtrip.sh build
 ```
 

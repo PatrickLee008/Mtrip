@@ -5067,6 +5067,8 @@ Mtrip 海外旅游 SaaS 平台:后端 Hyperf 3.1 微服务(backend/)+ 平台管�
 
 本任务最新进度：PRD模块12商户管理S0设计及S1～S4核心开发测试已完成；S5～S7尚未开始。S4真实扫码和完整UI、S3完整上传及模块11端到端未验，详见模块15计划及阶段交付报告；下表为历史底座状态。**2026-09-18 最新一轮为「关怀模式房型详情页第三次逐节点复核(11 处照稿修正 + 税费展示位)」(client-app),见本文件顶部那条 ★;上一轮为「关怀模式实景预览页按 `2352:7051` 重做」,再上为 2026-09-17「客房管理看不出非今日订单」的根因复核与修复。**
 
+**部署修正(2026-10-30)**:发布被闸门拒绝 `[FAIL] 新增 SQL 必须放 database/migrations/...: database/merchant/42-merchant-support.sql`。该文件只有 `CREATE TABLE IF NOT EXISTS`,是 `V20261026100000__merchant-support.sql` 的子集,对执行无影响(空库时排在 `99z-run-migrations.sh` 之后为空操作,存量库不执行),予以保留。闸门放宽为:旧目录新增/修改快照 SQL 只要同批带 migrations 版本即放行,无迁移仍拒绝。规范见第 3 节「发布闸门」,并在 CLAUDE.md、根 AGENTS.md、README「核心开发约定」与 `database/migrations/README.md` 顶部加醒目提示。
+
 **部署修正(2026-10-13)**:`scripts/auto-deploy.sh` 对 `backend/services/<svc>/` 中 `app/`、`config/` 以外的改动(`bin/`、`test/` 等,开发栈不挂载)改为重建镜像;`--prod` 下所有后端重启改为重建镜像(生产栈不挂源码,restart 只重跑旧镜像)。新增 `deploy/.env` 的 `MTRIP_DEPLOY_MODE=dev|prod`:`mtrip.sh`/`auto-deploy.sh` 未带 `--dev`/`--prod` 时以它为准(命令行优先,缺省 dev),auto-deploy 始终把解析结果显式传给 mtrip.sh。测试服务器商户邮箱/手机号唯一性迁移被测试脏数据阻断,一次性处理脚本 `scripts/fixes/2026-10-13-merchant-contact-identity-fix.sql`(释放冲突/无哈希的测试账号联系方式并软删除)。
 
 **商户账号体系三期(2026-08-31)**:补齐平台对商户的三项管控,详见 [12-商家账号体系.md](./12-商家账号体系.md)「三期任务清单」。
@@ -5104,7 +5106,7 @@ Mtrip 海外旅游 SaaS 平台:后端 Hyperf 3.1 微服务(backend/)+ 平台管�
 - PHP 仅用于语法检查:`D:\BtSoft\php\80\php.exe -l 文件`(服务实际跑 Docker,联调归模块08)。
 - 前端构建:cwd 必须在 `D:\GIT\jiaxu\MTrip\admin-web` 下执行 `npm run build`(vue-tsc + vite,要求零 TS 报错;echarts 已实际引用,chunk 约 522KB 属正常)。
 - 数据库脚本目录是 `database/`(DDL 按服务分目录,种子在 `database/seed/`)。每个脚本**头部自带 `USE \`mtrip_xxx\`;` 且幂等**(`CREATE TABLE IF NOT EXISTS` / 守卫式 `ALTER`),可单独重复执行。
-- **【硬约定】旧目录 `database/{system,merchant,...}` 是空库初始化快照，新增/调整快照 SQL 仍须同步登记到 `deploy/docker-compose.yml` 的 mysql `docker-entrypoint-initdb.d` 挂载列表**，编号体现执行顺序。生产增量则只新增 `database/migrations/VYYYYMMDDHHMMSS__lower-kebab.sql`，该目录已整体挂载并由 `99-run-migrations.sh` 遍历，**无需再逐文件登记 compose**。initdb 只在空数据卷首次启动时执行；存量生产库由 `scripts/db-migrate.sh` 对账执行。
+- **【硬约定·发布闸门】生产库只执行 `database/migrations/VYYYYMMDDHHMMSS__lower-kebab.sql`(UTC 时间、全局唯一、只增不改)。旧目录 `database/{system,merchant,goods,order,finance,marketing,user,seed,...}` 是空库初始化快照，生产永远不跑；在旧目录新增或修改 `.sql` 时，必须同批新增一份 migrations 版本承载生产变更**，否则 `scripts/auto-deploy.sh` 报 `[FAIL] 新增/修改旧目录快照 SQL 时必须同批新增 database/migrations/...` 中止发布(2026-09-23 `marketing/09-*.sql` 只放旧目录、现网漏表即此类事故)。新增的快照文件须登记 `deploy/docker-compose.yml` initdb 挂载；迁移目录已整体挂载并由 `99z-run-migrations.sh` 遍历，**无需逐文件登记 compose**。快照副本可选：迁移本身会在空库初始化时执行，快照只是领域目录内的可读结构，须幂等(`IF NOT EXISTS`/`INSERT IGNORE`)。旧快照禁止 rename/copy 成迁移。initdb 只在空数据卷首次启动时执行；存量生产库由 `scripts/db-migrate.sh` 对账执行。
 - **增量更新已跑起来的库,不必 `down -v` 重建**:脚本幂等,直接灌进运行中的容器即可。单文件 `Get-Content database/xxx.sql | docker exec -i mtrip-mysql-1 mysql -uroot -proot@2026`;批量用 `scripts/db-apply.ps1`(见「常用命令」)。只有想彻底清库重来时才 `docker compose down -v; docker compose up -d --build`。
 - **【硬约定】新增一个「二级模块」路由(`/api/v1/{admin|app|merchant|supplier}/{模块}/*`)后,必须同步在网关 `deploy/openresty/conf.d/mtrip.conf` 对应的 `map $*_module $*_upstream` 里登记「模块 → 上游服务」**,否则网关命中 default `""` → 404(接口和服务都正常也白搭)。改完 `docker compose restart gateway` 生效。2026-08 曾漏登记 admin 的 `config`/`chat`、app 的 `theme`/`chat`/`marketing` 共 5 处。核对口径:各服务 `config/routes.php` 的 `addGroup` 前缀 / 路由第一段 ↔ 四张 map 的键。
 - 遗留待用户手动删除:`d:\GIT\jiaxu\MTrip\.tmp-mysql-verify\` 临时目录。

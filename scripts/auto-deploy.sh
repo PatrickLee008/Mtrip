@@ -18,6 +18,7 @@
 #   - 生产模式每次拉取后对比 schema_migrations,先执行 database/migrations/ 的待执行版本
 #       * 新迁移必须命名 VYYYYMMDDHHMMSS__lower-kebab.sql,成功后记录 SHA-256/Git/执行节点/耗时
 #       * 历史版本被改写、删除、重号或上次执行失败时立即阻断发布
+#       * 旧目录快照 SQL(新增或修改)必须同批新增 database/migrations/ 版本,否则阻断(快照不进生产)
 #   - .env / docker-compose*.yml / Dockerfile / composer.* → 需重建镜像,改用 mtrip.sh build
 #
 # 安全策略(ff-only):工作区必须干净;只允许快进合并;分叉或有本地改动即中止,绝不覆盖。
@@ -259,7 +260,7 @@ else
         exit 0
     fi
 
-    # 新增生产 SQL 必须进统一迁移目录；旧快照若同步修改，必须由同批版本迁移承载生产变更。
+    # 生产 SQL 只走统一迁移目录；旧快照(新增或修改)只供空库初始化，必须由同批版本迁移承载生产变更。
     MIGRATION_ORIGIN_VIOLATIONS="$(
         git diff --find-renames=50% --find-copies=50% --find-copies-harder --name-status \
             "$DIFF_BASE" "$AFTER" -- database \
@@ -269,23 +270,13 @@ else
         || die "禁止将旧初始化快照 rename/copy 为生产迁移；请编写最小增量 SQL:$MIGRATION_ORIGIN_VIOLATIONS"
 
     NEW_DB_FILES="$(git diff --diff-filter=A --name-only "$DIFF_BASE" "$AFTER" | awk '/^database\/.*\.sql$/')"
-    INVALID_NEW_DB=""
-    while IFS= read -r f; do
-        [ -n "$f" ] || continue
-        case "$f" in
-            database/migrations/*.sql|database/init/01-schema-migrations.sql) ;;
-            *) INVALID_NEW_DB="$INVALID_NEW_DB $f" ;;
-        esac
-    done <<< "$NEW_DB_FILES"
-    [ -z "$INVALID_NEW_DB" ] || die "新增 SQL 必须放 database/migrations/ 并使用 VYYYYMMDDHHMMSS__lower-kebab.sql:$INVALID_NEW_DB"
-
     NEW_VERSIONED_DB_FILES="$(printf '%s\n' "$NEW_DB_FILES" | awk '/^database\/migrations\/.*\.sql$/')"
     SNAPSHOT_DB_FILES="$(printf '%s\n' "$CHANGED" | awk '/^database\/.*\.sql$/ && !/^database\/migrations\//')"
     if printf '%s\n' "$NEW_DB_FILES" | grep -qxF 'database/init/01-schema-migrations.sql'; then
         SNAPSHOT_DB_FILES="$(printf '%s\n' "$SNAPSHOT_DB_FILES" | grep -vxF 'database/init/01-schema-migrations.sql' || true)"
     fi
     if [ -n "$SNAPSHOT_DB_FILES" ] && [ -z "$NEW_VERSIONED_DB_FILES" ]; then
-        die "修改初始化快照 SQL 时必须同批新增 database/migrations/ 版本文件:$SNAPSHOT_DB_FILES"
+        die "新增/修改旧目录快照 SQL 时必须同批新增 database/migrations/VYYYYMMDDHHMMSS__lower-kebab.sql(快照只在空库初始化执行，生产只跑迁移):$SNAPSHOT_DB_FILES"
     fi
 fi
 

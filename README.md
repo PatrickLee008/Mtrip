@@ -242,7 +242,7 @@ cd ../admin-web && npm install && npm run dev    # http://localhost:5173,接口�
 - **RBAC 权限**:写接口加 `#[Permission('模块:菜单:按钮')]` 注解,键必须与菜单种子 `database/seed/02-menu.sql` 的 perm_key 一致(支持多键任一匹配);前端按钮用 `v-perm` 同键防护。
 - **站点隔离**:`site_id=0` 超管全平台,其余强制本站点(`AdminContext::scopeSiteId`);新页面目录必须与菜单 component 字段完全一致(动态路由按此解析)。
 - **密钥安全**:`MTRIP_JWT_SECRET` / `MTRIP_AES_KEY` 各服务必须一致,生产必须换强随机值;密钥类字段 AES-256-GCM 加密存储、展示脱敏。
-- **数据库迁移**:生产增量只放 `database/migrations/VYYYYMMDDHHMMSS__lower-kebab.sql`（UTC 全局版本，只增不改）；`auto-deploy.sh --prod` 先迁移后发布，旧目录数字 SQL 仅作空库快照。
+- **数据库迁移**:生产增量只放 `database/migrations/VYYYYMMDDHHMMSS__lower-kebab.sql`（UTC 全局版本，只增不改）；`auto-deploy.sh --prod` 先迁移后发布，旧目录数字 SQL 仅作空库快照。**⚠️ 旧目录新增/修改 SQL 必须同批新增迁移，否则发布闸门直接拒绝。**
 
 ## 质量基线
 

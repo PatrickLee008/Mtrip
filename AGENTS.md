@@ -14,11 +14,12 @@
 | 前端页面代码模式 | HANDOFF.md 第 5 节(另见 `admin-web/src/AGENTS.md`) |
 | 环境搭建 / 启动 / 常见问题 | [docs/guides/setup/启动开发指南.md](docs/guides/setup/启动开发指南.md) |
 
-## 三条硬约定(违反即返工,完整定义见 README「核心开发约定」)
+## 四条硬约定(违反即返工,完整定义见 README「核心开发约定」)
 
 1. **统一响应结构**:`{code, message, data}`,成功 `code=0`;分页 `data={list,total,page,pageSize}`。错误码表:`backend/shared/src/Constants/ErrorCode.php`。
 2. **Permission 注解键与菜单种子一致**:写接口 `#[Permission('...')]` 的键必须与 `database/seed/02-menu.sql` 的 perm_key 对齐;前端按钮用 `v-perm` 同键防护。
 3. **站点隔离**:`site_id=0` 超管全平台,其余强制本站点(`AdminContext::scopeSiteId`);新页面目录必须与菜单 component 字段完全一致。
+4. **生产只跑 `database/migrations/VYYYYMMDDHHMMSS__lower-kebab.sql`**:在旧快照目录(`database/merchant|system|seed|...`)新增或修改 SQL 必须同批新增迁移,否则 `auto-deploy.sh` 直接中止发布。定义见 HANDOFF 第 3 节「发布闸门」与 `database/migrations/README.md`。
 
 ## 工作方式
 
