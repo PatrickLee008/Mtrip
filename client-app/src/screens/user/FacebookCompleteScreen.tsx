@@ -28,7 +28,7 @@ export default function FacebookCompleteScreen() {
     void (async () => {
       try {
         const auth = await facebookExchange(result.ticket);
-        await useUserStore.getState().acceptFacebookAuth(auth);
+        await useUserStore.getState().acceptSocialAuth(auth);
         clearFacebookPath();
         navigation.reset({ index: 0, routes: [{ name: 'MainTabs', params: { screen: auth.returnTo === 'more' ? 'MoreTab' : 'HomeTab' } }] });
       } catch { setError('failed'); }

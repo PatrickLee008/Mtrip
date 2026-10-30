@@ -39,6 +39,7 @@ import HomeIcon from '@/components/home/HomeIcon';
 import AuthShell from '@/components/user/AuthShell';
 import SocialIcon, { type SocialProvider } from '@/components/user/SocialIcon';
 import FacebookLoginEntry from '@/components/user/FacebookLoginEntry';
+import TikTokLoginEntry from '@/components/user/TikTokLoginEntry';
 import { colors, radius } from '@/config/theme';
 import { fonts } from '@/config/typography';
 import type { RootStackParamList } from '@/navigation/types';
@@ -276,6 +277,9 @@ export default function RegisterScreen() {
               <SocialIcon provider={p} />
             </Pressable>
           ))}
+        </View>
+        <View style={styles.socials}>
+          <TikTokLoginEntry />
         </View>
       </View>
     </AuthShell>

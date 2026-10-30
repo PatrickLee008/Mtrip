@@ -36,6 +36,7 @@ import HomeIcon from '@/components/home/HomeIcon';
 import AuthShell from '@/components/user/AuthShell';
 import SocialIcon, { type SocialProvider } from '@/components/user/SocialIcon';
 import FacebookLoginEntry from '@/components/user/FacebookLoginEntry';
+import TikTokLoginEntry from '@/components/user/TikTokLoginEntry';
 import { STORAGE_KEYS } from '@/config/global';
 import { colors, radius } from '@/config/theme';
 import { fonts } from '@/config/typography';
@@ -248,6 +249,9 @@ export default function LoginScreen() {
               <SocialIcon provider={p} />
             </Pressable>
           ))}
+        </View>
+        <View style={styles.socials}>
+          <TikTokLoginEntry />
         </View>
 
         {/* 设计稿没有这段,但登录页需要保留隐私告知,放在卡片末尾弱化处理 */}

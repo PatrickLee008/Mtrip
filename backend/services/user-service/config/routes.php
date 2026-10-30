@@ -17,7 +17,9 @@ use App\Controller\Admin\AdminUserController;
 use App\Controller\App\AppealController;
 use App\Controller\App\AuthController;
 use App\Controller\App\FacebookAuthController;
+use App\Controller\App\TikTokAuthController;
 use App\Controller\FacebookCallbackController;
+use App\Controller\TikTokCallbackController;
 use App\Controller\App\ChatController;
 use App\Controller\App\FavoriteController;
 use App\Controller\App\NotifyController;
@@ -38,9 +40,13 @@ Router::get('/healthz', static fn () => ['status' => 'ok', 'service' => 'user-se
 Router::post('/api/v1/app/auth/register', [AuthController::class, 'register']);
 Router::post('/api/v1/app/auth/login', [AuthController::class, 'login']);
 Router::post('/api/v1/app/auth/facebook/settings', [FacebookAuthController::class, 'settings']);
+Router::post('/api/v1/app/auth/tiktok/settings', [TikTokAuthController::class, 'settings']);
 Router::post('/api/v1/app/auth/facebook/start', [FacebookAuthController::class, 'start']);
+Router::post('/api/v1/app/auth/tiktok/start', [TikTokAuthController::class, 'start']);
 Router::post('/api/v1/app/auth/facebook/exchange', [FacebookAuthController::class, 'exchange']);
+Router::post('/api/v1/app/auth/tiktok/exchange', [TikTokAuthController::class, 'exchange']);
 Router::get('/api/v1/auth/facebook/callback', [FacebookCallbackController::class, 'callback']);
+Router::get('/api/v1/auth/tiktok/callback', [TikTokCallbackController::class, 'callback']);
 // 短信验证码(SMSPoh Verify API V3):三场景共用发码/验码,验码换一次性 verifyToken
 Router::post('/api/v1/app/auth/sms/send', [AuthController::class, 'smsSend']);
 Router::post('/api/v1/app/auth/sms/verify', [AuthController::class, 'smsVerify']);

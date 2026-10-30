@@ -18,7 +18,7 @@ interface UserState {
   login: (mobile: string, password: string) => Promise<void>;
   /** 短信验证码登录(免密):verifyToken 来自 `apiSmsVerify`(scene=login) */
   loginBySms: (mobile: string, verifyToken: string) => Promise<void>;
-  acceptFacebookAuth: (result: AuthResult & { isNewUser: boolean }) => Promise<void>;
+  acceptSocialAuth: (result: AuthResult & { isNewUser: boolean }) => Promise<void>;
   register: (
     mobile: string,
     password: string,
@@ -74,7 +74,7 @@ export const useUserStore = create<UserState>((set, get) => ({
     void get().promptProfileSetup();
   },
 
-  async acceptFacebookAuth(result) {
+  async acceptSocialAuth(result) {
     await applyAuth(result);
     set({ token: result.token, profile: result.user, isLogin: true });
     void get().promptProfileSetup(result.isNewUser);

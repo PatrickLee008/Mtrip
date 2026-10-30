@@ -12,7 +12,7 @@ import Svg, { Path } from 'react-native-svg';
 
 const APPLE = require('../../../assets/images/login/social-apple.png');
 
-export type SocialProvider = 'google' | 'facebook' | 'apple';
+export type SocialProvider = 'google' | 'facebook' | 'apple' | 'tiktok';
 
 interface Props {
   provider: SocialProvider;
@@ -21,6 +21,13 @@ interface Props {
 }
 
 export default function SocialIcon({ provider, size = 20 }: Props) {
+  if (provider === 'tiktok') {
+    return (
+      <Svg width={size} height={size} viewBox="0 0 24 24">
+        <Path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64c.3 0 .6.05.88.13V9.4a6.33 6.33 0 0 0-5.59 10.1 6.34 6.34 0 0 0 11.05-4.19V8.41a8.16 8.16 0 0 0 4.77 1.52V6.55c-.34 0-.67-.04-1-.1v.24Z" fill="#000000" />
+      </Svg>
+    );
+  }
   if (provider === 'apple') {
     return <Image source={APPLE} style={[styles.apple, { width: size, height: size }]} />;
   }

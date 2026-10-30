@@ -1,5 +1,7 @@
 # 模块10:移动端 client-app(Expo 51 + RN + TS)
 
+2026-10-30 按 Figma `505:1293` 与既有 Facebook Web 规则实现消费者 TikTok 登录：登录/注册第二行入口、同意提示、授权/回调/短票据/登录态，复用身份表，无新迁移。TikTok 54 项、Facebook 51 项隔离 HTTP、shared 221/1647、493 PHP lint、admin build、client typecheck/H5 export、Compose/网关语法通过；390/320px 入口、HTTP 提示、取消/返回/刷新过期已验。已补发本机 8093；默认关闭，真实 TikTok/HTTPS 与原生待验，未提交或推送。见[实施记录](./23-TikTok-Web登录实施记录.md)。
+
 2026-10-22 最新只读确认：用户新增开关后 Facebook 双池 true、App ID/Secret 已生效；实际 settings 返回政策配置错误，条款/隐私 URL 和来源白名单仍缺失。当前复验浏览器 site=7，未修改站点选择；此前确认构建默认站点1已停用，默认值调整仍待执行。本轮未修改远端。[排查记录](./audits/2026-10-22-facebook-online-config.md)。
 
 2026-10-22 用户部署后复查：新版前端已生效，Facebook 入口暂未开放是 settings 返回后端配置错误 50001，需核对用户双池启用开关/App ID/Secret。未实施远端修复，真实授权仍待验。[排查记录](./audits/2026-10-22-facebook-online-config.md)。
