@@ -1,12 +1,39 @@
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue';
+import { computed, onMounted, reactive, ref } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { message } from 'ant-design-vue';
 import { PlusOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons-vue';
 import PageContainer from '@/components/PageContainer.vue';
 import SiteTreeSelect from '@/components/SiteTreeSelect.vue';
 import { useTable, type TableRow } from '@/composables/useTable';
 import { useUserStore } from '@/stores/user';
-import { apiCampaignDelete, apiCampaignList, apiCampaignSave, apiCampaignToggle } from '@/api/cops';
+import { apiCampaignDelete, apiCampaignList, apiCampaignSave, apiCampaignToggle, apiCampaignWithdrawals, apiCampaignWithdrawalDecision } from '@/api/cops';
+
+const { t } = useI18n();
+const withdrawals = useTable(apiCampaignWithdrawals, { siteId: 0 });
+const review = ref<TableRow | null>(null);
+const reviewAction = ref('approve');
+const reviewReason = ref('');
+const reviewSaving = ref(false);
+const withdrawalColumns = computed(() => [
+  { title: t('marketing.campaignWithdrawal.campaign'), dataIndex: 'campaign_title' },
+  { title: t('marketing.campaignWithdrawal.merchant'), dataIndex: 'merchant_name' },
+  { title: t('marketing.campaignWithdrawal.reason'), dataIndex: 'reason' },
+  { title: t('marketing.campaignWithdrawal.requestedAt'), dataIndex: 'created_at' },
+  { title: t('marketing.campaignWithdrawal.status'), key: 'state' },
+  { title: t('marketing.campaignWithdrawal.decision'), dataIndex: 'decision_reason' },
+  { title: t('common.action'), key: 'actions' },
+]);
+function openReview(row: TableRow, action: string): void { review.value = row; reviewAction.value = action; reviewReason.value = ''; }
+async function submitReview(): Promise<void> {
+  if (!review.value || reviewSaving.value) return;
+  if (!reviewReason.value.trim()) { message.warning(t('marketing.campaignWithdrawal.reasonRequired')); return; }
+  reviewSaving.value = true;
+  try {
+    await apiCampaignWithdrawalDecision({ id: review.value.id, action: reviewAction.value, reason: reviewReason.value.trim() });
+    review.value = null; await withdrawals.load(); message.success(t('common.opSuccess'));
+  } finally { reviewSaving.value = false; }
+}
 
 /** 促销中心活动:内嵌落地页 + 关联可领券(PRD 模块6.1) */
 const userStore = useUserStore();
@@ -109,7 +136,7 @@ async function remove(row: TableRow): Promise<void> {
   void load();
 }
 
-onMounted(() => void load());
+onMounted(() => { void load(); void withdrawals.load(); });
 </script>
 
 <template>
@@ -166,6 +193,22 @@ onMounted(() => void load());
       </a-table>
     </a-card>
 
+    <a-card :title="t('marketing.campaignWithdrawal.title')" style="margin-top:16px">
+      <template #extra><a-button @click="withdrawals.load">{{ t('common.refresh') }}</a-button></template>
+      <a-table :columns="withdrawalColumns" :data-source="withdrawals.list.value" :loading="withdrawals.loading.value" :pagination="withdrawals.pagination.value" row-key="id" :scroll="{ x: 1100 }">
+        <template #bodyCell="{ column, record }">
+          <template v-if="column.key === 'state'">{{ t(`marketing.campaignWithdrawal.state${record.status}`) }}</template>
+          <template v-else-if="column.key === 'actions' && record.status === 0">
+            <a-button v-perm="'marketing:campaign:withdrawal-review'" type="link" @click="openReview(record, 'approve')">{{ t('marketing.campaignWithdrawal.approve') }}</a-button>
+            <a-button v-perm="'marketing:campaign:withdrawal-review'" type="link" danger @click="openReview(record, 'reject')">{{ t('marketing.campaignWithdrawal.reject') }}</a-button>
+          </template>
+        </template>
+      </a-table>
+    </a-card>
+    <a-modal :open="review !== null" :title="t(`marketing.campaignWithdrawal.${reviewAction}`)" :confirm-loading="reviewSaving" @cancel="review = null" @ok="submitReview">
+      <p>{{ t('marketing.campaignWithdrawal.impact') }}</p>
+      <a-textarea v-model:value="reviewReason" :rows="3" :maxlength="500" :placeholder="t('marketing.campaignWithdrawal.reasonRequired')" :disabled="reviewSaving" />
+    </a-modal>
     <a-modal v-model:open="modalOpen" :title="editingId ? '编辑活动' : '新增活动'" width="640px" :confirm-loading="submitting" @ok="submit">
       <a-form :label-col="{ span: 5 }" :wrapper-col="{ span: 18 }">
         <a-form-item label="标题" required><a-input v-model:value="form.title" /></a-form-item>

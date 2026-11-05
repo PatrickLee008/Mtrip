@@ -157,6 +157,7 @@ INSERT IGNORE INTO `sys_menu` (`id`,`parent_id`,`menu_name`,`menu_name_en`,`i18n
 INSERT IGNORE INTO `sys_menu` (`id`,`parent_id`,`menu_name`,`menu_name_en`,`perm_key`,`menu_type`,`sort`) VALUES
 (50101,501,'保存活动','Save','marketing:campaign:save',3,1),
 (50102,501,'删除活动','Delete','marketing:campaign:delete',3,2),
+(50103,501,'审核活动撤回','Review Campaign Withdrawal','marketing:campaign:withdrawal-review',3,3),
 (50301,503,'保存代金券','Save Voucher','marketing:voucher:save',3,1),
 (50401,504,'保存促销码','Save Code','marketing:promocode:save',3,1),
 (50501,505,'保存新客奖励','Save Welcome','marketing:welcome:save',3,1),

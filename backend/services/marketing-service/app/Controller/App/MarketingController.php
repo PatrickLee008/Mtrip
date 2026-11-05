@@ -6,6 +6,7 @@ namespace App\Controller\App;
 
 use App\Controller\AppAbstractController;
 use App\Service\CouponView;
+use App\Service\CampaignCouponEligibility;
 
 use Hyperf\Di\Annotation\Inject;
 use Hyperf\DbConnection\Db;
@@ -13,6 +14,7 @@ use Mtrip\Shared\Constants\ErrorCode;
 use Mtrip\Shared\Context\UserContext;
 use Mtrip\Shared\Exception\BusinessException;
 use Mtrip\Shared\Support\Result;
+use Mtrip\Shared\Support\CouponVersion;
 
 /**
  * C端营销:促销中心 Banner / 活动 / 领券中心 / 我的优惠券 / 券详情 / 促销码兑换 / 自动择优
@@ -139,6 +141,7 @@ class MarketingController extends AppAbstractController
         if ($receiveId > 0) {
             $row = Db::table('marketing_coupon_receive as r')
                 ->join('marketing_coupon as c', 'c.id', '=', 'r.coupon_id')
+                ->leftJoin('marketing_coupon_version as v', 'v.id', '=', 'r.coupon_version_id')
                 ->where('r.id', $receiveId)->where('r.user_id', $userId)
                 ->whereNull('r.deleted_at')
                 ->first(CouponView::RECEIVE_COLUMNS);
@@ -207,6 +210,11 @@ class MarketingController extends AppAbstractController
         }
 
         $result = Db::transaction(function () use ($siteId, $userId, $code) {
+            // Match merchant edits: always lock the coupon before its code mirror.
+            $couponId = (int) Db::table('marketing_promo_code')->whereRaw('UPPER(`code`) = ?', [$code])
+                ->whereNull('deleted_at')->value('coupon_id');
+            $c = $couponId > 0 ? Db::table('marketing_coupon')->where('id', $couponId)
+                ->whereNull('deleted_at')->lockForUpdate()->first() : null;
             $promo = Db::table('marketing_promo_code')
                 ->whereRaw('UPPER(`code`) = ?', [$code])
                 ->whereNull('deleted_at')
@@ -234,10 +242,7 @@ class MarketingController extends AppAbstractController
                 throw new BusinessException(ErrorCode::PROMO_CODE_DUPLICATED);
             }
 
-            $c = Db::table('marketing_coupon')
-                ->where('id', $couponId)->whereNull('deleted_at')
-                ->lockForUpdate()->first();
-            if (! $c) {
+            if (! $c || (int) $c->id !== $couponId) {
                 throw new BusinessException(ErrorCode::PROMO_CODE_INELIGIBLE, '促销码关联的优惠券已不存在');
             }
             $c = (array) $c;
@@ -274,6 +279,7 @@ class MarketingController extends AppAbstractController
 
         $query = Db::table('marketing_coupon_receive as r')
             ->join('marketing_coupon as c', 'c.id', '=', 'r.coupon_id')
+            ->leftJoin('marketing_coupon_version as v', 'v.id', '=', 'r.coupon_version_id')
             ->where('r.user_id', $userId)
             ->whereNull('r.deleted_at');
         match ($type) {
@@ -323,6 +329,7 @@ class MarketingController extends AppAbstractController
 
         $rows = Db::table('marketing_coupon_receive as r')
             ->join('marketing_coupon as c', 'c.id', '=', 'r.coupon_id')
+            ->leftJoin('marketing_coupon_version as v', 'v.id', '=', 'r.coupon_version_id')
             ->where('r.user_id', $userId)
             ->where('r.status', 0)
             ->whereNull('r.deleted_at')
@@ -380,6 +387,7 @@ class MarketingController extends AppAbstractController
 
         $rows = Db::table('marketing_coupon_receive as r')
             ->join('marketing_coupon as c', 'c.id', '=', 'r.coupon_id')
+            ->leftJoin('marketing_coupon_version as v', 'v.id', '=', 'r.coupon_version_id')
             ->where('r.user_id', $userId)
             ->where('r.status', 0)
             ->whereNull('r.deleted_at')
@@ -479,7 +487,11 @@ class MarketingController extends AppAbstractController
                 ->groupBy('coupon_id')->pluck('c', 'coupon_id')->all();
         }
         $views = array_map(
-            fn (array $row) => $this->couponView->template($row, (int) ($received[$row['id']] ?? 0)),
+            function (array $row) use ($received) {
+                $eligible = CampaignCouponEligibility::apply($row);
+                if ($eligible === null) $row['status'] = 2;
+                return $this->couponView->template($eligible ?? $row, (int) ($received[$row['id']] ?? 0));
+            },
             $rows
         );
         $this->couponView->attachApplicable($views);
@@ -489,6 +501,9 @@ class MarketingController extends AppAbstractController
     /** 生成券码并写领券记录 + 累加已领数;返回 { receiveId, couponCode, validStart, validEnd } */
     private function issueCoupon(int $siteId, int $userId, array $c): array
     {
+        $version = CouponVersion::ensure($c);
+        $c = CampaignCouponEligibility::apply($c, true);
+        if ($c === null) throw new BusinessException(ErrorCode::DATA_CONFLICT, 'Campaign participation is no longer eligible.');
         $now = time();
         // 有效期:领后N天型从当前算,固定型取模板区间
         if ((int) $c['valid_type'] === 2) {
@@ -502,6 +517,8 @@ class MarketingController extends AppAbstractController
         $receiveId = Db::table('marketing_coupon_receive')->insertGetId([
             'site_id' => $siteId,
             'coupon_id' => (int) $c['id'],
+            'coupon_version_id' => $version,
+            'rules_snapshot' => json_encode($c, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR),
             'user_id' => $userId,
             'coupon_code' => $code,
             'status' => 0,
@@ -546,7 +563,8 @@ class MarketingController extends AppAbstractController
     /** 券模板可领判定:复用 CouponView 的口径,保证「能不能领」与「列表上显示能不能领」一致 */
     private function claimBlocker(array $c, int $mine): ?string
     {
-        return $this->couponView->template($c, $mine)['unusableReason'];
+        $c = CampaignCouponEligibility::apply($c);
+        return $c === null ? CouponView::REASON_OFFLINE : $this->couponView->template($c, $mine)['unusableReason'];
     }
 
     /** 促销码本身的状态与有效期校验 */

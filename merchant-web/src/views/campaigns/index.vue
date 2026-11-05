@@ -6,7 +6,7 @@
  * 概览卡 + 参与状态筛选 + 活动卡网格 + 详情抽屉(资格/出资/条款 + 接受或拒绝邀请)。
  * 可见性与响应规则全在 `Merchant/CampaignController`(定向邀请 vs 公开报名)。
  */
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { message } from 'ant-design-vue';
 import { useI18n } from 'vue-i18n';
 import PageContainer from '@/components/PageContainer.vue';
@@ -19,6 +19,7 @@ import {
   apiCampaignList,
   apiCampaignRespond,
   apiCampaignSummary,
+  apiCampaignWithdraw,
   type CampaignSummary,
   type MerchantCampaign,
 } from '@/api/campaigns';
@@ -38,6 +39,22 @@ const drawerOpen = ref(false);
 const drawerDetail = ref<MerchantCampaign | null>(null);
 const drawerCoupons = ref<{ id: number; coupon_name: string; coupon_type: number; discount_value: number }[]>([]);
 const saving = ref(false);
+const withdrawalOpen = ref(false);
+const withdrawalId = ref(0);
+const withdrawalReason = ref('');
+function openWithdrawal(id: number): void {
+  withdrawalId.value = id; withdrawalReason.value = ''; withdrawalOpen.value = true;
+}
+async function submitWithdrawal(): Promise<void> {
+  if (saving.value) return;
+  if (!withdrawalReason.value.trim()) { message.warning(t('campaigns.withdrawal.reasonRequired')); return; }
+  saving.value = true;
+  try {
+    await apiCampaignWithdraw(withdrawalId.value, withdrawalReason.value.trim(), activeMerchantId.value);
+    withdrawalOpen.value = false; closeDrawer(); await refreshAll();
+    message.success(t('campaigns.withdrawal.state0'));
+  } finally { saving.value = false; }
+}
 
 const { loading, list, query, load, search, pagination } = useTable<MerchantCampaign>(apiCampaignList, {
   participation: undefined,
@@ -73,7 +90,7 @@ function pickFilter(filter: string): void {
 }
 
 async function openDetail(row: MerchantCampaign): Promise<void> {
-  const detail = await apiCampaignDetail(row.id);
+  const detail = await apiCampaignDetail(row.id, activeMerchantId.value);
   drawerDetail.value = detail;
   drawerCoupons.value = detail.coupons ?? [];
   drawerOpen.value = true;
@@ -143,8 +160,9 @@ onMounted(async () => {
   merchantOptions.value = Array.from(seen, ([value, label]) => ({ value, label }));
   // 只有一家商户(商户/门店账号)时自动选中,选择器不出现
   activeMerchantId.value = merchantOptions.value.length > 0 ? merchantOptions.value[0].value : 0;
-  await refreshAll();
+  if (!activeMerchantId.value) await refreshAll();
 });
+watch(activeMerchantId, (id) => { query.merchantId = id; closeDrawer(); search(); });
 </script>
 
 <template>
@@ -220,9 +238,14 @@ onMounted(async () => {
       :coupons="drawerCoupons"
       :currency="currency"
       :saving="saving"
+      @withdraw="openWithdrawal"
       @close="closeDrawer"
       @respond="respondFromDrawer"
     />
+    <a-modal v-model:open="withdrawalOpen" :title="t('campaigns.withdrawal.action')" :confirm-loading="saving" :closable="!saving" :mask-closable="!saving" :ok-text="t('common.confirm')" :cancel-text="t('common.cancel')" @ok="submitWithdrawal">
+      <p>{{ t('campaigns.withdrawal.pendingImpact') }}</p>
+      <a-textarea v-model:value="withdrawalReason" :maxlength="500" :rows="3" :placeholder="t('campaigns.withdrawal.reasonRequired')" :disabled="saving" />
+    </a-modal>
   </PageContainer>
 </template>
 

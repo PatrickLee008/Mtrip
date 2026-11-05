@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * Promotions 页统计卡(Figma `2285:21516` 顶部三张卡 + 长住促销的第四张)。
+ * Promotions 页统计卡:三种折扣形态 + Standard / Long Stay。
  *
  * 稿面硬值:卡内 padding 16、gap 12、radius 12、底 `#FEFEFE`、描边 `#E2E8F0`、
  * 阴影 `0 2px 10px 0 rgba(15,23,42,0.04)`;图标底 32×32 radius 8;
@@ -14,12 +14,12 @@ import { PROMOTION_KIND, type PromotionSummary } from '@/api/promotions';
 const props = defineProps<{ summary: PromotionSummary }>();
 const { t } = useI18n();
 
-/** 第四张(长住)是功能需求新增,稿面只有前三张 —— 沿用同一张卡的形状与令牌 */
 const cards = computed(() => [
   { key: 'percentage', icon: 'percent', tone: 'warn', label: t('promotions.cards.percentage'), value: props.summary.percentage },
   { key: 'fixedAmount', icon: 'ticket-percent', tone: 'primary', label: t('promotions.cards.fixedAmount'), value: props.summary.fixedAmount },
   { key: 'promoCode', icon: 'ticket', tone: 'success', label: t('promotions.cards.promoCode'), value: props.summary.promoCode },
-  { key: 'longStay', icon: 'moon', tone: 'primary', label: t('promotions.cards.longStay'), value: props.summary.longStay },
+  { key: 'standard', icon: 'percent', tone: 'standard', label: t('promotions.standard'), value: Math.max(0, props.summary.total - props.summary.longStay) },
+  { key: 'longStay', icon: 'moon', tone: 'stay', label: t('promotions.kind.4'), value: props.summary.longStay },
 ]);
 
 const KIND_HINT: Record<string, number> = {
@@ -27,6 +27,7 @@ const KIND_HINT: Record<string, number> = {
   fixedAmount: PROMOTION_KIND.fixedAmount,
   promoCode: PROMOTION_KIND.promoCode,
   longStay: PROMOTION_KIND.longStay,
+  standard: 0,
 };
 
 defineEmits<{ (e: 'pick', kind: number): void }>();
@@ -57,11 +58,12 @@ defineEmits<{ (e: 'pick', kind: number): void }>();
 
 .stat-row {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 16px;
 }
 
 .stat-card {
+  grid-column: span 2;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -79,6 +81,10 @@ defineEmits<{ (e: 'pick', kind: number): void }>();
     border-color: @pr-primary;
   }
 }
+
+.stat-card:nth-child(n + 4) { grid-column: span 3; }
+.tone-standard { background: #f5eafa; color: #8200c4; }
+.tone-stay { background: #ccfbf1; color: #238f87; }
 
 .stat-head {
   display: flex;
@@ -132,6 +138,8 @@ defineEmits<{ (e: 'pick', kind: number): void }>();
   .stat-row {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+  .stat-card, .stat-card:nth-child(n + 4) { grid-column: auto; }
+  .stat-card:last-child { grid-column: 1 / -1; }
 }
 
 @media (max-width: 620px) {

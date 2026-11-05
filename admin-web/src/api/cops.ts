@@ -123,3 +123,10 @@ export function apiTutorialSave(data: Record<string, unknown>): Promise<{ id: nu
 export function apiTutorialDelete(data: Record<string, unknown>): Promise<null> {
   return post<null>('/admin/config/tutorial/delete', data);
 }
+
+export function apiCampaignWithdrawals(params: Record<string, unknown>): Promise<PageData<Row>> {
+  return get('/admin/marketing/campaign/withdrawals', params);
+}
+export function apiCampaignWithdrawalDecision(data: Record<string, unknown>): Promise<null> {
+  return post('/admin/marketing/campaign/withdrawal-decision', data);
+}

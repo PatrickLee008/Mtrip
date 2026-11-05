@@ -4,7 +4,7 @@
  * 全部为不依赖 Vue 的纯函数,便于 `scripts/check-promotions-figma.mjs` 直接断言,
  * 也避免把换算逻辑散落在模板里(模板禁用 `as` 断言与 TS 类型标注)。
  */
-import type { MerchantPromotion, PromotionPayload, PromotionPerformanceRow } from '@/api/promotions';
+import type { MerchantPromotion, PromotionPayload, PromotionPerformanceRow, PromotionOptions } from '@/api/promotions';
 import { DISCOUNT_UNIT, PROMOTION_KIND } from '@/api/promotions';
 
 /** Tab 顺序(稿面 Tab 条 + 功能需求要求的长住) */
@@ -33,7 +33,7 @@ export function kindOf(row: Pick<MerchantPromotion, 'promotion_kind' | 'coupon_t
  */
 export function unitOf(row: Pick<MerchantPromotion, 'promotion_kind' | 'coupon_type' | 'promo_code' | 'min_nights'>): number {
   const kind = kindOf(row);
-  if (kind === PROMOTION_KIND.percentage || kind === PROMOTION_KIND.longStay) return DISCOUNT_UNIT.percent;
+  if (kind === PROMOTION_KIND.percentage) return DISCOUNT_UNIT.percent;
   if (kind === PROMOTION_KIND.fixedAmount) return DISCOUNT_UNIT.amount;
   return Number(row.coupon_type) === 2 ? DISCOUNT_UNIT.percent : DISCOUNT_UNIT.amount;
 }
@@ -49,23 +49,18 @@ export function discountText(row: MerchantPromotion, currency: string): string {
   return `${currency} ${thousands(Number(row.discount_value || 0))} Off`;
 }
 
-/** 卡片标题里的高亮片段(稿面把折扣数字染成红色 `#EC1317`) */
-export function discountHighlight(row: MerchantPromotion, currency: string): string {
-  if (unitOf(row) === DISCOUNT_UNIT.percent) {
-    return `${trimNumber(Number(row.discount_percent_off || 0))}% Off`;
+/** Enabled is a switch state; the scheduled window determines the visible lifecycle. */
+export function lifecycleKey(row: Pick<MerchantPromotion, 'status' | 'valid_type' | 'valid_start' | 'valid_end' | 'lifecycle_status'>, now = Date.now()): string {
+  if (row.lifecycle_status) return row.lifecycle_status;
+  if (Number(row.status) === 0) return 'draft';
+  if (Number(row.status) === 3) return 'ended';
+  if (Number(row.valid_type) === 1) {
+    const end = row.valid_end ? new Date(row.valid_end.replace(/-/g, '/')).getTime() : NaN;
+    if (end < now) return 'expired';
   }
-  return `${currency} ${thousands(Number(row.discount_value || 0))} Off`;
-}
-
-/**
- * 状态徽标:稿面只有 Active / Upcoming / Expired 三种,这里把后端的「已停发」也映射成
- * Upcoming(未在跑)之外的独立语义 —— 但稿面没有 Paused 徽标样式,故沿用灰底徽标 + 文案区分。
- */
-export function statusKey(status: number): string {
-  if (status === 1) return 'active';
-  if (status === 0) return 'upcoming';
-  if (status === 2) return 'paused';
-  return 'expired';
+  if (Number(row.status) === 2) return 'paused';
+  if (Number(row.valid_type) === 1 && row.valid_start && new Date(row.valid_start.replace(/-/g, '/')).getTime() > now) return 'upcoming';
+  return 'active';
 }
 
 /** 领取进度文案:稿面 `45 / 100 Used` / `Unlimited` */
@@ -113,7 +108,7 @@ export function targetText(row: MerchantPromotion, propertyNames: Record<number,
   }
   const properties = (row.property_ids || []).filter((id) => propertyNames[id]);
   if (properties.length === 1) return propertyNames[properties[0]];
-  if (properties.length > 1) return `${properties[0]} +${properties.length - 1}`;
+  if (properties.length > 1) return `${propertyNames[properties[0]]} +${properties.length - 1}`;
   return '';
 }
 
@@ -186,6 +181,7 @@ export function randomPromoCode(length = 8): string {
 
 /** 抽屉表单模型(模板里只用这个结构,不再散落字段) */
 export interface PromotionForm {
+  enabled: boolean;
   id: number;
   merchantId: number;
   couponName: string;
@@ -207,6 +203,8 @@ export interface PromotionForm {
   stayStart: string;
   stayEnd: string;
   noExpiry: boolean;
+  validType: number;
+  validDays: number;
   validStart: string;
   validEnd: string;
   promoCode: string;
@@ -219,6 +217,7 @@ export interface PromotionForm {
 /** 新建时的表单初值(稿面默认:百分比、20、限 100 次、30 天有效期窗口) */
 export function defaultForm(kind: number = PROMOTION_KIND.percentage): PromotionForm {
   return {
+    enabled: true,
     id: 0,
     merchantId: 0,
     couponName: '',
@@ -239,6 +238,8 @@ export function defaultForm(kind: number = PROMOTION_KIND.percentage): Promotion
     stayStart: '',
     stayEnd: '',
     noExpiry: false,
+    validType: 1,
+    validDays: 0,
     validStart: '',
     validEnd: '',
     promoCode: '',
@@ -252,6 +253,7 @@ export function defaultForm(kind: number = PROMOTION_KIND.percentage): Promotion
 /** 编辑:详情 → 表单。百分比按「立减百分比」回填,金额直接回填 */
 export function formFromDetail(row: MerchantPromotion): PromotionForm {
   const form = defaultForm(kindOf(row));
+  form.enabled = Number(row.status) === 1;
   form.id = Number(row.id);
   form.merchantId = Number(row.merchant_id || 0);
   form.couponName = String(row.coupon_name || '');
@@ -273,6 +275,8 @@ export function formFromDetail(row: MerchantPromotion): PromotionForm {
   form.stayStart = String(row.stay_start || '');
   form.stayEnd = String(row.stay_end || '');
   form.noExpiry = !row.valid_end;
+  form.validType = Number(row.valid_type || 1);
+  form.validDays = Number(row.valid_days || 0);
   form.validStart = String(row.valid_start || '');
   form.validEnd = String(row.valid_end || '');
   form.promoCode = String(row.promo_code || '');
@@ -286,9 +290,9 @@ export function formFromDetail(row: MerchantPromotion): PromotionForm {
 /** 表单 → 接口载荷(把 boolean 勾选翻译成后端要的 0/1 与 0 值语义) */
 export function formToPayload(form: PromotionForm): PromotionPayload {
   const isPercentKind = form.promotionKind === PROMOTION_KIND.percentage
-    || form.promotionKind === PROMOTION_KIND.longStay
-    || (form.promotionKind === PROMOTION_KIND.promoCode && form.discountUnit === DISCOUNT_UNIT.percent);
+    || ((form.promotionKind === PROMOTION_KIND.longStay || form.promotionKind === PROMOTION_KIND.promoCode) && form.discountUnit === DISCOUNT_UNIT.percent);
   return {
+    enabled: form.enabled ? 1 : 0,
     id: form.id > 0 ? form.id : undefined,
     merchantId: form.merchantId > 0 ? form.merchantId : undefined,
     couponName: form.couponName.trim(),
@@ -308,7 +312,8 @@ export function formToPayload(form: PromotionForm): PromotionPayload {
     minHotelCount: Math.max(0, Number(form.minHotelCount || 0)),
     stayStart: form.stayStart || '',
     stayEnd: form.stayEnd || '',
-    validType: 1,
+    validType: form.validType,
+    validDays: form.validDays,
     validStart: form.validStart || undefined,
     // 「No expiry date」勾选 → 不传结束时间(后端落 NULL = 不过期)
     validEnd: form.noExpiry ? undefined : (form.validEnd || undefined),
@@ -326,15 +331,43 @@ export function validateForm(form: PromotionForm): string {
   if (form.couponName.trim() === '') return 'promotions.validation.name';
   if (form.propertyIds.length === 0) return 'promotions.validation.goods';
   if (form.promotionKind === PROMOTION_KIND.promoCode && form.promoCode.trim() === '') return 'promotions.validation.promoCode';
-  if (Number(form.discountValue) <= 0) return 'promotions.validation.discount';
-  if ((form.promotionKind === PROMOTION_KIND.percentage || form.promotionKind === PROMOTION_KIND.longStay
-    || (form.promotionKind === PROMOTION_KIND.promoCode && form.discountUnit === DISCOUNT_UNIT.percent))
+  if (!Number.isFinite(Number(form.discountValue)) || Number(form.discountValue) <= 0) return 'promotions.validation.discount';
+  if ((form.promotionKind === PROMOTION_KIND.percentage
+    || ((form.promotionKind === PROMOTION_KIND.longStay || form.promotionKind === PROMOTION_KIND.promoCode) && form.discountUnit === DISCOUNT_UNIT.percent))
     && Number(form.discountValue) >= 100) {
     return 'promotions.validation.discountRange';
   }
   if (form.promotionKind === PROMOTION_KIND.longStay && Number(form.minNights) < 2) return 'promotions.validation.minNights';
+  if (form.promotionKind === PROMOTION_KIND.longStay && form.maxNights > 0 && form.maxNights < form.minNights) return 'promotions.validation.maxNights';
+  if (form.limitTotal && (!Number.isInteger(form.totalCount) || form.totalCount <= 0)) return 'promotions.validation.usageLimit';
+  if (form.promotionKind === PROMOTION_KIND.promoCode && !/^[A-Z0-9_-]{3,32}$/i.test(form.promoCode.trim())) return 'promotions.validation.codeFormat';
   if (form.stayStart !== '' && form.stayEnd !== '' && form.stayStart > form.stayEnd) return 'promotions.validation.stayRange';
+  if (form.validType !== 1 || form.noExpiry) return 'promotions.validation.fixedSchedule';
   if (form.validStart === '') return 'promotions.validation.start';
   if (!form.noExpiry && form.validEnd === '') return 'promotions.validation.end';
+  const start = new Date(form.validStart.replace(/-/g, '/')).getTime();
+  const end = new Date(form.validEnd.replace(/-/g, '/')).getTime();
+  if (!Number.isFinite(start) || (!form.noExpiry && (!Number.isFinite(end) || end <= start))) return 'promotions.validation.dateRange';
+  return '';
+}
+
+/** Platform limits are read-only. The backend repeats this check with authoritative room prices. */
+export function validatePolicy(form: PromotionForm, options: PromotionOptions): string {
+  const policy = options.policy;
+  if (!policy?.configured) return 'promotions.validation.policyMissing';
+  const percent = form.promotionKind === PROMOTION_KIND.percentage
+    || ((form.promotionKind === PROMOTION_KIND.longStay || form.promotionKind === PROMOTION_KIND.promoCode) && form.discountUnit === DISCOUNT_UNIT.percent);
+  if ((percent && form.discountValue > Number(policy.maxPercent)) || (!percent && form.discountValue > Number(policy.maxAmount))) return 'promotions.validation.limitExceeded';
+  const rooms = options.roomTypes.filter(room => form.propertyIds.includes(room.property_id)
+    && (form.roomTypeIds.length === 0 || form.roomTypeIds.includes(room.id)));
+  if (rooms.length === 0) return 'promotions.validation.roomPrices';
+  for (const room of rooms) {
+    const property = options.properties.find(item => item.id === room.property_id);
+    const protectedPercent = Math.max(Number(policy.minPayablePercent), Number(property?.commission_rate || 0));
+    const official = room.base_price * (form.promotionKind === PROMOTION_KIND.longStay ? form.minNights : 1);
+    const base = Math.max(official, form.minAmount);
+    const discount = percent ? Math.min(base * form.discountValue / 100, form.maxDiscount || Infinity) : form.discountValue;
+    if (room.base_price <= 0 || Math.round((base - discount) * 100) < Math.round(official * protectedPercent)) return 'promotions.validation.limitExceeded';
+  }
   return '';
 }

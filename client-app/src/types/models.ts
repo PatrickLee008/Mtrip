@@ -348,7 +348,8 @@ export type CouponReason =
   | 'advance'
   | 'stay_date'
   | 'min_rooms'
-  | 'min_hotels';
+  | 'min_hotels'
+  | 'protected_minimum';
 
 /**
  * 统一优惠券视图:领券中心 / 活动详情 / 券详情 / 我的券 / 结账共用同一套字段。

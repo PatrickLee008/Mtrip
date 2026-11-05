@@ -3,7 +3,7 @@
  *
  * 与仓库既有的 `scripts/check-*.cjs`(纯文本断言)不同,这个脚本做的是**真实渲染**:
  * 用 Vite 以 SSR 方式打包并渲染展示组件(带稿面样例行),逐条断言稿面硬值
- * (Tab 名、统计卡、表格六列与五行样例文案、卡片 Target/Validity、抽屉字段、
+ * (Tab 名、统计卡、表格八列与五行样例文案、卡片 Target/Validity、抽屉字段、
  * 状态徽标、图标 path),再检查编译产物 CSS 是否带上稿面令牌
  * (主色 `#4169ED`、成功 `#22C55E`、危险 `#EC1317`、警示 `#BB4D00`、抽屉宽 `562px` 等)。
  *
@@ -64,7 +64,7 @@ async function render(component, props, withAntd = false) {
 }
 
 export const renderStatCards = (props) => render(StatCards, props);
-export const renderPromoCard = (props) => render(PromoCard, props);
+export const renderPromoCard = (props) => render(PromoCard, props, true);
 export const renderPromoTable = (props) => render(PromoTable, props);
 export const renderPromoDrawer = (props) => render(PromoDrawer, props, true);
 export const renderPromoIcon = (props) => render(PromoIcon, props);
@@ -112,6 +112,7 @@ export function fixture() {
     roomNames: { 6: 'Deluxe King Only' },
     options: {
       currency: 'MMK',
+      policy: {configured:true,maxPercent:80,maxAmount:80000,minPayablePercent:20,timezone:'UTC'},
       properties: [{ id: 7, merchant_id: 6, merchant_name: 'The Royal Palms Resort', property_name: 'The Royal Palms Resort', city_key: 'phuket' }],
       roomTypes: [
         { id: 5, property_id: 7, room_name: 'Standard Room', base_price: 19500, currency: 'MMK' },
@@ -255,15 +256,17 @@ async function main() {
 
   const bundle = await import(pathToFileURL(path.join(outDir, 'entry.js')).href);
   const fx = bundle.fixture();
+  // Render lifecycle fixtures against a fixed point within their schedule.
+  Date.now = () => new Date('2026-10-15T12:00:00').getTime();
 
   // ---------- 统计卡 ----------
   console.log('\nStatCards(Figma 2285:21516 Header Block)');
   const stats = strip(await bundle.renderStatCards({ summary: fx.summary }));
-  for (const label of ['Percentage Promotions', 'Fixed Amount Promotions', 'Coupon Code Promotions', 'Long Stay Promotions']) {
+  for (const label of ['Percentage Promotions', 'Fixed Amount Promotions', 'Coupon Code Promotions', 'Standard', 'Long Stay']) {
     check(`统计卡文案「${label}」`, stats.includes(`${label}<`));
   }
   check('统计卡数值按 kind 拆分(2 / 2 / 5 / 2)', ['>2<', '>5<'].every((v) => stats.includes(v)));
-  check('统计卡带点击筛选入口(stat-card 可点)', classesOf(stats, 'stat-card').length === 4);
+  check('统计卡带点击筛选入口(stat-card 可点)', classesOf(stats, 'stat-card').length === 5);
 
   // ---------- Tab(由 helpers 的 KIND_TABS 决定) ----------
   console.log('\nTab 条(Figma 2285:21516 Container)');
@@ -273,7 +276,7 @@ async function main() {
   // ---------- 优惠码表格 ----------
   console.log('\nPromoTable(Figma 2285:19876 / 2285:20047)');
   const table = strip(await bundle.renderPromoTable({ list: fx.rows, currency: 'MMK', loading: false }));
-  for (const head of ['Coupon Code', 'Discount', 'Usage Limit', 'Valid Dates', 'Status', 'Actions']) {
+  for (const head of ['Coupon Code', 'Discount', 'Usage Limit', 'Valid Dates', 'Status', 'Run Time', 'Promotion Name', 'Actions']) {
     check(`表头列「${head}」`, table.includes(`>${head}<`));
   }
   for (const code of ['WELCOME26', 'VIP5000', 'SUMMER20', 'LOYALTY10', 'NEWYEAR']) {
@@ -291,7 +294,9 @@ async function main() {
   check('过期券显示 `Expired`', table.includes('>Expired<'));
   check('进行中券显示 `Active`', table.includes('>Active<'));
   check('进度条用量比例类 usage-fill', classesOf(table, 'usage-fill').length === 4);
-  check('行内操作按钮 28×28 形状 icon-btn', classesOf(table, 'icon-btn').length >= 15);
+  check('四行可编辑、五行可复制/归档、四行可结束', classesOf(table, 'icon-btn').length === 18);
+  check('每行有运行开关', classesOf(table, 'status-switch').length === 5);
+  check('已过期运行开关禁用', /role="switch"[^>]*disabled/.test(table));
   const emptyTable = strip(await bundle.renderPromoTable({ list: [], currency: 'MMK', loading: false }));
   check('空列表显示 empty 文案', emptyTable.includes('>No promotions yet<'));
 
@@ -299,22 +304,22 @@ async function main() {
   console.log('\nPromoCard(Figma 2285:19350 / 2285:19781)');
   const card1 = strip(await bundle.renderPromoCard({ promotion: fx.cards[0], currency: 'MMK', propertyNames: fx.propertyNames, roomNames: fx.roomNames }));
   check('卡片标题 `Early Bird`', card1.includes('Early Bird'));
-  check('标题内折扣高亮 `15% Off`', textsOf(card1, 'title-highlight').includes('15% Off'));
+  check('折扣放在元数据 `15% Off`', textsOf(card1, 'meta-value').includes('15% Off'));
   check('元数据 `Target`', card1.includes('>Target<'));
   check('元数据 `Validity Period`', card1.includes('>Validity Period<'));
   check('适用对象 `All Room Types`', card1.includes('>All Room Types<'));
   check('有效期 `Oct 1 – Dec 31, 2026`', card1.includes('>Oct 1 – Dec 31, 2026<'));
   check('Active 卡徽标 + 带圆点', card1.includes('>Active<') && classesOf(card1, 'dot').length === 1);
-  check('Active 卡操作键文案为 `Pause`(稿面误写 Resume)', card1.includes('>Pause<') && !card1.includes('>Resume<'));
+  check('Active 卡运行开关为开启并标注停用', card1.includes('aria-checked="true"') && card1.includes('aria-label="Disable"'));
 
   const card2 = strip(await bundle.renderPromoCard({ promotion: fx.cards[1], currency: 'MMK', propertyNames: fx.propertyNames, roomNames: fx.roomNames }));
-  check('草稿卡徽标 `Upcoming`(且无圆点)', card2.includes('>Upcoming<') && classesOf(card2, 'dot').length === 0);
-  check('草稿卡操作键为 `Start`', card2.includes('>Start<'));
+  check('草稿与已启用的待开始活动区分', card2.includes('>Draft<') && !card2.includes('>Upcoming<'));
+  check('草稿卡操作键为 `Start`', card2.includes('aria-label="Start"'));
   check('房型范围取房型名 `Deluxe King Only`', card2.includes('>Deluxe King Only<'));
-  check('卡片带 `Edit` 与复制按钮', card2.includes('>Edit<') && classesOf(card2, 'icon-only').length === 1);
+  check('草稿卡带编辑与更多菜单', card2.includes('>Edit Promotion<') && classesOf(card2, 'more-btn').length === 1);
 
   const card3 = strip(await bundle.renderPromoCard({ promotion: fx.cards[2], currency: 'MMK', propertyNames: fx.propertyNames, roomNames: fx.roomNames }));
-  check('固定金额卡折扣文案 `MMK 10,000 Off`', textsOf(card3, 'title-highlight').includes('MMK 10,000 Off'));
+  check('固定金额卡折扣文案 `MMK 10,000 Off`', textsOf(card3, 'meta-value').includes('MMK 10,000 Off'));
 
   // ---------- 创建/编辑抽屉 ----------
   console.log('\nPromoDrawer(Figma 2285:20220 / 2285:19542 / 2285:19710)');
@@ -326,12 +331,14 @@ async function main() {
   for (const option of ['% Percentage', '$ Fixed Amount', 'Promo Code']) {
     check(`折扣类型卡片「${option}」`, drawer.includes(option));
   }
-  for (const label of ['Promotion Name', 'Description', 'Discount Value', 'Applicable Properties', 'Select Room Types', 'Usage Limit', 'Limit total number of uses', 'Booking Dates', 'No expiry date', 'Funding Mode', 'Terms &amp; Notes', 'Internal Staff Notes']) {
+  for (const label of ['Promotion Name', 'Description', 'Discount Value', 'Applicable Properties', 'Select Room Types', 'Usage Limit', 'Limit total number of uses', 'Promotion Condition', 'Start Date', 'Start Time', 'End Date', 'End Time', 'Redemption Rules', 'Terms &amp; Notes', 'Internal Staff Notes']) {
     check(`字段「${label}」`, drawer.includes(label));
   }
   check('百分比促销折扣单位只读显示 `%`', drawer.includes('>%<'));
-  check('出资模式只读显示 `Merchant funded · 100%`', drawer.includes('Merchant funded · 100%'));
-  check('页脚 `Cancel` / `Publish Promotion`', drawer.includes('>Cancel<') && drawer.includes('>Publish Promotion<'));
+  check('自费促销不展示出资模式或比例', !drawer.includes('>Funding Mode<') && !drawer.includes('Merchant funded · 100%'));
+  check('日期时间标明平台时区', drawer.includes('Promotion Schedule (UTC)'));
+  check('不提供终身促销绕过结束时间', !drawer.includes('>No expiry date<'));
+  check('创建页脚无审批或草稿流程', drawer.includes('>Cancel<') && drawer.includes('>Create Promotion<'));
   check('无过期勾选框(checkbox)', classesOf(drawer, 'checkbox').length === 2);
 
   const codeDrawer = strip(await bundle.renderPromoDrawer({
@@ -339,8 +346,8 @@ async function main() {
   }));
   check('优惠码抽屉字段 `Coupon Code`', codeDrawer.includes('>Coupon Code<'));
   check('优惠码抽屉按钮 `Generate Random`', codeDrawer.includes('>Generate Random<'));
-  check('优惠码抽屉字段 `Validity Period`', codeDrawer.includes('>Validity Period<'));
-  check('优惠码抽屉隐藏 `Promotion Name`', !codeDrawer.includes('>Promotion Name<'));
+  check('优惠码抽屉字段 `Promotion Schedule`', codeDrawer.includes('Promotion Schedule (UTC)'));
+  check('优惠码抽屉包含独立促销名称', codeDrawer.includes('>Promotion Name<'));
   check('优惠码抽屉隐藏 `Description`', !codeDrawer.includes('>Description<'));
 
   const longStayDrawer = strip(await bundle.renderPromoDrawer({

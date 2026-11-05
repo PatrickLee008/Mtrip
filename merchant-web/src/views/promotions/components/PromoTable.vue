@@ -11,7 +11,7 @@
 import { useI18n } from 'vue-i18n';
 import PromoIcon from './PromoIcon.vue';
 import type { MerchantPromotion } from '@/api/promotions';
-import { discountText, statusKey, usageRatio, usageText, validityText } from '../helpers';
+import { discountText, lifecycleKey, usageRatio, usageText, validityText } from '../helpers';
 
 defineProps<{
   list: MerchantPromotion[];
@@ -25,6 +25,7 @@ defineEmits<{
   (e: 'toggle', row: MerchantPromotion): void;
   (e: 'publish', row: MerchantPromotion): void;
   (e: 'remove', row: MerchantPromotion): void;
+  (e: 'end', row: MerchantPromotion): void;
 }>();
 
 const { t } = useI18n();
@@ -34,10 +35,12 @@ const { t } = useI18n();
   <div class="promo-table">
     <div class="t-head">
       <span class="c-code">{{ t('promotions.table.couponCode') }}</span>
+      <span class="c-name">{{ t('promotions.drawer.name') }}</span>
       <span class="c-discount">{{ t('promotions.table.discount') }}</span>
       <span class="c-usage">{{ t('promotions.table.usageLimit') }}</span>
       <span class="c-dates">{{ t('promotions.table.validDates') }}</span>
       <span class="c-status">{{ t('promotions.table.status') }}</span>
+      <span class="c-runtime">{{ t('promotions.table.runtime') }}</span>
       <span class="c-actions">{{ t('promotions.table.actions') }}</span>
     </div>
 
@@ -49,6 +52,7 @@ const { t } = useI18n();
       <span class="c-code">
         <span class="code-chip">{{ row.promo_code || row.coupon_name }}</span>
       </span>
+      <span class="c-name">{{ row.coupon_name }}</span>
       <span class="c-discount">{{ discountText(row, currency) }}</span>
       <span class="c-usage">
         <template v-if="row.total_count > 0">
@@ -59,33 +63,17 @@ const { t } = useI18n();
       </span>
       <span class="c-dates">{{ validityText(row) || t('promotions.noExpiry') }}</span>
       <span class="c-status">
-        <span class="badge" :class="`badge-${statusKey(row.status)}`">
-          <i v-if="statusKey(row.status) !== 'upcoming'" class="dot" />
-          {{ t(`promotions.status.${statusKey(row.status)}`) }}
+        <span class="badge" :class="`badge-${lifecycleKey(row)}`">
+          <i class="dot" />
+          {{ t(`promotions.status.${lifecycleKey(row)}`) }}
         </span>
+      </span>
+      <span class="c-runtime">
+        <button v-perm="'mch:promotions:status'" type="button" class="status-switch" role="switch" :aria-checked="Number(row.status) === 1" :disabled="['ended', 'expired'].includes(lifecycleKey(row))" :aria-label="Number(row.status) === 0 ? t('promotions.actions.start') : (Number(row.status) === 1 ? t('promotions.actions.pause') : t('promotions.actions.resume'))" @click="Number(row.status) === 0 ? $emit('publish', row) : $emit('toggle', row)"><span /></button>
       </span>
       <span class="c-actions">
         <button
-          v-if="Number(row.status) === 0"
-          v-perm="'mch:promotions:status'"
-          type="button"
-          class="icon-btn"
-          :title="t('promotions.actions.start')"
-          @click="$emit('publish', row)"
-        >
-          <PromoIcon name="play" :size="14" />
-        </button>
-        <button
-          v-else-if="[1, 2].includes(Number(row.status))"
-          v-perm="'mch:promotions:status'"
-          type="button"
-          class="icon-btn"
-          :title="Number(row.status) === 1 ? t('promotions.actions.pause') : t('promotions.actions.resume')"
-          @click="$emit('toggle', row)"
-        >
-          <PromoIcon :name="Number(row.status) === 1 ? 'pause' : 'play'" :size="14" />
-        </button>
-        <button
+          v-if="[0, 1, 2].includes(Number(row.status))"
           v-perm="'mch:promotions:edit'"
           type="button"
           class="icon-btn"
@@ -103,12 +91,13 @@ const { t } = useI18n();
         >
           <PromoIcon name="copy" :size="14" />
         </button>
+        <button v-if="[1, 2].includes(Number(row.status))" v-perm="'mch:promotions:status'" type="button" class="icon-btn" :title="t('promotions.actions.end')" @click="$emit('end', row)"><PromoIcon name="x-circle" :size="14" /></button>
         <button
-          v-if="[0, 3].includes(Number(row.status))"
+          v-if="[0, 1, 2, 3].includes(Number(row.status))"
           v-perm="'mch:promotions:delete'"
           type="button"
           class="icon-btn danger"
-          :title="t('common.delete')"
+          :title="t('promotions.actions.archive')"
           @click="$emit('remove', row)"
         >
           <PromoIcon name="trash" :size="14" />
@@ -123,7 +112,7 @@ const { t } = useI18n();
 @import '../tokens.less';
 
 .promo-table {
-  overflow: hidden;
+  overflow-x: auto;
   border: 1px solid @pr-line;
   border-radius: @pr-radius-card;
   background: #fff;
@@ -136,6 +125,21 @@ const { t } = useI18n();
   justify-content: space-between;
   gap: 16px;
 }
+
+.t-head, .t-row {
+  display: grid;
+  grid-template-columns: 1.05fr 1fr 1fr 1.2fr 1.45fr 100px 56px 148px;
+  min-width: 1120px;
+  > span { width: auto; min-width: 0; }
+}
+.c-name { overflow-wrap: anywhere; }
+.c-runtime { display: flex; align-items: center; }
+.status-switch { display: flex; align-items: center; width: 44px; height: 22px; padding: 2px; border: 0; border-radius: 20px; background: #d4dbfa; cursor: pointer; }
+.status-switch span { width: 18px; height: 18px; border-radius: 50%; background: #fff; }
+.status-switch[aria-checked='true']:not(:disabled) { background: @pr-primary; }
+.status-switch[aria-checked='true'] span { transform: translateX(22px); }
+.status-switch:disabled { opacity: .5; cursor: not-allowed; }
+.badge-draft, .badge-ended { color: @pr-ink-sub; background: @pr-neutral-soft; }
 
 .t-head {
   padding: 12px 24px;

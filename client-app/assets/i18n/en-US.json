@@ -252,7 +252,8 @@
         "advance": "Book further ahead",
         "stay_date": "Stay dates not eligible",
         "min_rooms": "Not enough rooms",
-        "min_hotels": "Not enough hotels"
+        "min_hotels": "Not enough hotels",
+        "protected_minimum": "Discount exceeds the protected minimum payable amount"
       }
     },
     "items": {

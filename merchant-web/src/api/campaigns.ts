@@ -62,6 +62,7 @@ export interface MerchantCampaign {
   participation_funding_source: number;
   responded_at: string | null;
   participation_remark: string;
+  withdrawal?: { id: number; status: number; reason: string; created_at: string; decision_reason: string | null; decided_at: string | null } | null;
   can_respond: boolean;
   coupons?: CampaignCoupon[];
 }
@@ -82,8 +83,8 @@ export function apiCampaignList(params: Record<string, unknown>): Promise<PageDa
   return get('/merchant/campaigns/list', params);
 }
 
-export function apiCampaignDetail(id: number): Promise<MerchantCampaign> {
-  return get('/merchant/campaigns/detail', { id });
+export function apiCampaignDetail(id: number, merchantId = 0): Promise<MerchantCampaign> {
+  return get('/merchant/campaigns/detail', { id, merchantId });
 }
 
 /**
@@ -99,4 +100,8 @@ export function apiCampaignRespond(
   merchantId = 0,
 ): Promise<{ id: number; status: number }> {
   return post('/merchant/campaigns/respond', { id, action, remark, merchantId });
+}
+
+export function apiCampaignWithdraw(id: number, reason: string, merchantId = 0): Promise<{ id: number; status: number }> {
+  return post('/merchant/campaigns/withdraw', { id, reason, merchantId });
 }

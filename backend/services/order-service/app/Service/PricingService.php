@@ -8,6 +8,8 @@ use Hyperf\DbConnection\Db;
 use Mtrip\Shared\Constants\ErrorCode;
 use Mtrip\Shared\Exception\BusinessException;
 use Mtrip\Shared\Support\CouponEligibility;
+use Mtrip\Shared\Support\CouponVersion;
+use Mtrip\Shared\Support\CouponProtection;
 use Mtrip\Shared\Support\HotelAddons;
 
 /**
@@ -214,13 +216,13 @@ class PricingService
         if (($rec['valid_start'] && $now < $rec['valid_start']) || ($rec['valid_end'] && $now > $rec['valid_end'])) {
             throw new BusinessException(ErrorCode::DATA_CONFLICT, '优惠券不在有效期');
         }
-        $coupon = Db::table('marketing_coupon')->where('id', $rec['coupon_id'])->whereNull('deleted_at')->first();
+        $coupon = Db::table('marketing_coupon')->where('id', $rec['coupon_id'])->first();
         if (! $coupon) {
             throw new BusinessException(ErrorCode::NOT_FOUND, '优惠券模板不存在');
         }
-        $coupon = (array) $coupon;
+        $coupon = CouponVersion::forReceive((array) $coupon, $rec);
 
-        $result = CouponEligibility::evaluate($coupon, $legs, $orderType, date('Y-m-d'));
+        $result = CouponProtection::evaluate($coupon, $legs, $orderType, date('Y-m-d'));
         if (! $result['eligible']) {
             throw new BusinessException(ErrorCode::DATA_CONFLICT, $this->couponReasonMessage((string) $result['reason'], $orderType));
         }
@@ -236,6 +238,7 @@ class PricingService
     private function couponReasonMessage(string $reason, int $orderType): string
     {
         return match ($reason) {
+            'protected_minimum' => '优惠金额超过商户促销限额或受保护最低应付金额',
             CouponEligibility::REASON_SCOPE => $orderType === 1 ? '该券不适用于所选酒店或房型' : '该券不适用于本商品或票种',
             CouponEligibility::REASON_NIGHTS => '入住晚数不符合该券要求',
             CouponEligibility::REASON_ADVANCE => '未满足该券要求的提前预订天数',
@@ -256,6 +259,7 @@ class PricingService
         $source = (int) ($coupon['funding_source'] ?? 1);
         return json_encode([
             'receiveId' => (int) $rec['id'],
+            'couponVersionId' => (int) ($rec['coupon_version_id'] ?? 0),
             'couponId' => (int) $coupon['id'],
             'couponName' => (string) ($coupon['coupon_name'] ?? ''),
             'couponType' => (int) $coupon['coupon_type'],

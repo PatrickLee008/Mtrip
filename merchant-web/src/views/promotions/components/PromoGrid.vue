@@ -19,6 +19,8 @@ defineEmits<{
   (e: 'duplicate', row: MerchantPromotion): void;
   (e: 'toggle', row: MerchantPromotion): void;
   (e: 'publish', row: MerchantPromotion): void;
+  (e: 'remove', row: MerchantPromotion): void;
+  (e: 'end', row: MerchantPromotion): void;
 }>();
 
 const { t } = useI18n();
@@ -37,6 +39,8 @@ const { t } = useI18n();
       @duplicate="$emit('duplicate', $event)"
       @toggle="$emit('toggle', $event)"
       @publish="$emit('publish', $event)"
+      @remove="$emit('remove', $event)"
+      @end="$emit('end', $event)"
     />
     <p v-if="list.length === 0" class="grid-empty">{{ t('promotions.empty') }}</p>
   </div>

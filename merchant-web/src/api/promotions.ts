@@ -7,7 +7,7 @@ import type { PageData } from '@/api/types';
  * 设计源:Figma `fsK2rrl2sadcowrxspvGV8` SECTION `2285:21516`「Promotion tables」。
  *
  * ⚠ 两个折扣口径不要混:
- * - **设计口径**(本文件 `discountValue` 入参):`promotionKind=1/4` 或 `discountUnit=1` 时表示
+ * - **设计口径**(本文件 `discountValue` 入参):`promotionKind=1` 或 `discountUnit=1` 时表示
  *   「立减百分比」(15 = 15% off);`promotionKind=2` 或 `discountUnit=2` 时表示金额。
  * - **计价口径**(接口返回的 `discount_value`):后端 `coupon_type=2` 时是 10 分制折扣率
  *   (8.50 = 用户付 85%)。转换在后端 `PromotionController::discountPair()` 收口,
@@ -22,7 +22,7 @@ export const PROMOTION_KIND = {
   longStay: 4,
 } as const;
 
-/** 折扣单位(仅 promotionKind=3 由用户选择;其余由 kind 推定) */
+/** 折扣单位(promotionKind=3/4 保留用户选择;其余由 kind 推定) */
 export const DISCOUNT_UNIT = {
   percent: 1,
   amount: 2,
@@ -60,6 +60,8 @@ export interface PromotionSummary {
 }
 
 export interface MerchantPromotion {
+  lifecycle_status?: string;
+  schedule_timezone?: string;
   id: number;
   site_id: number;
   merchant_id: number;
@@ -106,6 +108,7 @@ export interface MerchantPromotion {
 }
 
 export interface PromotionOptionProperty {
+  commission_rate?: number;
   id: number;
   merchant_id: number;
   merchant_name: string;
@@ -122,6 +125,7 @@ export interface PromotionOptionRoomType {
 }
 
 export interface PromotionOptions {
+  policy?: { configured: boolean; maxPercent: number | null; maxAmount: number | null; minPayablePercent: number | null; timezone: string };
   properties: PromotionOptionProperty[];
   roomTypes: PromotionOptionRoomType[];
   /** 整页只读币种(取范围内房型已配置币种,与房量价格页同一口径) */
@@ -170,6 +174,7 @@ export interface PromotionPerformance {
 
 /** 新建/编辑抽屉的表单载荷(字段名与后端入参一致,全部驼峰) */
 export interface PromotionPayload {
+  enabled?: number;
   id?: number;
   merchantId?: number;
   couponName: string;
@@ -239,6 +244,10 @@ export function apiPromotionPublish(id: number): Promise<{ status: number }> {
 
 export function apiPromotionToggleStatus(id: number): Promise<{ status: number }> {
   return post('/merchant/promotions/toggle-status', { id });
+}
+
+export function apiPromotionEnd(id: number): Promise<{ status: number }> {
+  return post('/merchant/promotions/end', { id });
 }
 
 export function apiPromotionDelete(id: number): Promise<null> {

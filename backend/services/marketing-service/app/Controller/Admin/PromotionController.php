@@ -84,6 +84,7 @@ class PromotionController extends AbstractController
         ];
         $id = $this->intInput('id');
         if ($id > 0) {
+            $this->assertCodeWritable($id);
             Db::table('marketing_promo_code')->where('id', $id)->whereNull('deleted_at')->update($data);
             return Result::success(['id' => $id], '已保存');
         }
@@ -101,6 +102,7 @@ class PromotionController extends AbstractController
     #[Permission('marketing:promocode:save')]
     public function codeDelete(): array
     {
+        $this->assertCodeWritable($this->requireId());
         return $this->softDelete('marketing_promo_code');
     }
 
@@ -135,12 +137,23 @@ class PromotionController extends AbstractController
         return $this->softDelete('marketing_welcome_reward');
     }
 
+    private function assertCodeWritable(int $id): void
+    {
+        $couponId = Db::table('marketing_promo_code')->where('id', $id)->value('coupon_id');
+        if ($couponId && Db::table('marketing_coupon')->where('id', $couponId)->where('created_by_merchant_admin', '>', 0)->exists()) {
+            throw new BusinessException(ErrorCode::FORBIDDEN, 'Merchant promotion codes are read-only.');
+        }
+    }
+
     // ── 通用助手 ───────────────────────────────────────────────
 
     private function listTable(string $table): array
     {
         [$page, $pageSize] = $this->pageParams();
         $query = Db::table($table)->whereNull('deleted_at');
+        if ($table === 'marketing_promo_code') {
+            $query->whereNotIn('coupon_id', Db::table('marketing_coupon')->where('created_by_merchant_admin', '>', 0)->select('id'));
+        }
         $this->applySiteScope($query);
         $status = $this->input('status');
         if ($status !== null && $status !== '') {
