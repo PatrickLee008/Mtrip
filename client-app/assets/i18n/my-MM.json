@@ -252,7 +252,8 @@
         "advance": "ကြိုတင်ဘွတ်ကင်ရက် မပြည့်ပါ",
         "stay_date": "တည်းခိုမည့်ရက် မကိုက်ညီပါ",
         "min_rooms": "အခန်းအရေအတွက် မလုံလောက်ပါ",
-        "min_hotels": "ဟိုတယ်အရေအတွက် မလုံလောက်ပါ"
+        "min_hotels": "ဟိုတယ်အရေအတွက် မလုံလောက်ပါ",
+        "protected_minimum": "Discount exceeds the protected minimum payable amount"
       }
     },
     "items": {

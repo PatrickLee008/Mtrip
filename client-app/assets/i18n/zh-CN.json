@@ -252,7 +252,8 @@
         "advance": "未满提前预订天数",
         "stay_date": "入住日期不适用",
         "min_rooms": "未达最少间数",
-        "min_hotels": "未达最少酒店数"
+        "min_hotels": "未达最少酒店数",
+        "protected_minimum": "优惠后金额低于受保护的最低应付金额"
       }
     },
     "items": {

@@ -5,7 +5,7 @@
  * 稿面是同一页的两种呈现:
  * - Percentage / Fixed Amount(以及功能需求新增的 Long Stay)→ **卡片网格**;
  * - Coupon Code → **表格**。
- * 两者共用页面壳:H1 + 副标题 + `Add New Promotion`,三张统计卡(+长住一张),
+ * 两者共用页面壳:H1 + 副标题 + `Add New Promotion`,五张统计卡,
  * Tab 条,以及同一个新建/编辑抽屉。稿面没画的筛选卡、聚光灯卡、状态条均已移除。
  */
 import { computed, onMounted, ref } from 'vue';
@@ -24,6 +24,7 @@ import {
   apiPromotionDelete,
   apiPromotionDetail,
   apiPromotionDuplicate,
+  apiPromotionEnd,
   apiPromotionList,
   apiPromotionOptions,
   apiPromotionPublish,
@@ -54,6 +55,9 @@ const summary = ref<PromotionSummary>({
   impressions: 0,
 });
 const optionsLoading = ref(false);
+const optionsFailed = ref(false);
+const loadFailed = ref(false);
+const busyId = ref<number | null>(null);
 const options = ref<PromotionOptions>({ properties: [], roomTypes: [], currency: 'THB' });
 /** 新建时抽屉的初始形态(跟随当前 Tab) */
 const activeKind = ref<number>(PROMOTION_KIND.percentage);
@@ -61,7 +65,7 @@ const drawerOpen = ref(false);
 const drawerDetail = ref<MerchantPromotion | null>(null);
 const saving = ref(false);
 
-const { loading, list, query, load, search, pagination } = useTable<MerchantPromotion>(apiPromotionList, {
+const { loading, list, query, page, load, pagination } = useTable<MerchantPromotion>(apiPromotionList, {
   promotionKind: PROMOTION_KIND.percentage,
 });
 
@@ -79,7 +83,6 @@ const pager = computed(() => ({
   current: pagination.value.current ?? 1,
   pageSize: pagination.value.pageSize ?? 20,
   total: pagination.value.total ?? 0,
-  onChange: pagination.value.onChange,
 }));
 
 const currency = computed(() => options.value.currency || 'THB');
@@ -106,32 +109,53 @@ async function loadSummary(): Promise<void> {
 
 async function loadOptions(): Promise<void> {
   optionsLoading.value = true;
+  optionsFailed.value = false;
   try {
     options.value = await apiPromotionOptions();
+  } catch {
+    optionsFailed.value = true;
   } finally {
     optionsLoading.value = false;
   }
 }
 
 async function refreshAll(): Promise<void> {
-  await Promise.all([loadSummary(), load()]);
+  loadFailed.value = false;
+  try {
+    await Promise.all([loadSummary(), load()]);
+  } catch {
+    loadFailed.value = true;
+  }
 }
 
 function pickTab(kind: number): void {
-  if (activeKind.value === kind) return;
+  if (activeKind.value === kind || loading.value || saving.value || busyId.value !== null) return;
   activeKind.value = kind;
   query.promotionKind = kind;
-  search();
+  query.promotionCondition = kind === 0 ? 'standard' : '';
+  page.value = 1;
+  void refreshAll();
+}
+
+function changePage(next: number): void {
+  if (loading.value || busyId.value !== null) return;
+  page.value = next;
+  void refreshAll();
 }
 
 function openCreate(): void {
+  if (optionsLoading.value || optionsFailed.value) return;
   drawerDetail.value = null;
   drawerOpen.value = true;
 }
 
 async function openEdit(row: MerchantPromotion): Promise<void> {
-  drawerDetail.value = await apiPromotionDetail(row.id);
-  drawerOpen.value = true;
+  if (busyId.value !== null || optionsFailed.value || optionsLoading.value) return;
+  busyId.value = row.id;
+  try {
+    drawerDetail.value = await apiPromotionDetail(row.id);
+    drawerOpen.value = true;
+  } finally { busyId.value = null; }
 }
 
 function closeDrawer(): void {
@@ -139,7 +163,15 @@ function closeDrawer(): void {
   drawerDetail.value = null;
 }
 
-async function save(payload: PromotionPayload): Promise<void> {
+function save(payload: PromotionPayload): void {
+  if (drawerDetail.value) {
+    Modal.confirm({ title: t('promotions.confirm.edit'), content: t('promotions.drawer.claimProtection'),
+      okText: t('common.confirm'), cancelText: t('common.cancel'), onOk: () => persist(payload) });
+  } else void persist(payload);
+}
+
+async function persist(payload: PromotionPayload): Promise<void> {
+  if (saving.value) return;
   saving.value = true;
   try {
     if (drawerDetail.value) {
@@ -148,6 +180,11 @@ async function save(payload: PromotionPayload): Promise<void> {
       await apiPromotionAdd(payload);
     }
     message.success(t('common.saveSuccess'));
+    // Editing can move a promotion to another type; follow it after saving.
+    activeKind.value = payload.promotionKind;
+    query.promotionKind = payload.promotionKind;
+    query.promotionCondition = '';
+    page.value = 1;
     closeDrawer();
     await refreshAll();
   } finally {
@@ -156,32 +193,75 @@ async function save(payload: PromotionPayload): Promise<void> {
 }
 
 async function duplicate(row: MerchantPromotion): Promise<void> {
-  await apiPromotionDuplicate(row.id);
-  message.success(t('common.opSuccess'));
-  await refreshAll();
+  if (busyId.value !== null) return;
+  busyId.value = row.id;
+  try {
+    await apiPromotionDuplicate(row.id);
+    message.success(t('common.opSuccess'));
+    page.value = 1;
+    await refreshAll();
+  } finally { busyId.value = null; }
 }
 
 async function toggle(row: MerchantPromotion): Promise<void> {
-  await apiPromotionToggleStatus(row.id);
-  message.success(t('common.opSuccess'));
-  await refreshAll();
+  if (busyId.value !== null) return;
+  Modal.confirm({
+    title: t(Number(row.status) === 1 ? 'promotions.confirm.pause' : 'promotions.confirm.resume'),
+    content: `${row.coupon_name}\n${t(Number(row.status) === 1 ? 'promotions.confirm.claimImpact' : 'promotions.drawer.claimProtection')}`,
+    okText: t('common.confirm'), cancelText: t('common.cancel'),
+    onOk: async () => {
+      if (busyId.value !== null) return;
+      busyId.value = row.id;
+      try {
+        await apiPromotionToggleStatus(row.id);
+        message.success(t('common.opSuccess'));
+        await refreshAll();
+      } finally { busyId.value = null; }
+    },
+  });
 }
 
-async function publish(row: MerchantPromotion): Promise<void> {
-  await apiPromotionPublish(row.id);
-  message.success(t('common.opSuccess'));
-  await refreshAll();
+function publish(row: MerchantPromotion): void {
+  Modal.confirm({ title: t('promotions.confirm.resume'), content: t('promotions.drawer.claimProtection'),
+    okText: t('common.confirm'), cancelText: t('common.cancel'), onOk: async () => {
+      if (busyId.value !== null) return;
+      busyId.value = row.id;
+      try { await apiPromotionPublish(row.id); await refreshAll(); }
+      finally { busyId.value = null; }
+    } });
+}
+
+function endPromotion(row: MerchantPromotion): void {
+  Modal.confirm({
+    title: t('promotions.confirm.end'), content: `${row.coupon_name}\n${t('promotions.confirm.claimImpact')}`,
+    okText: t('common.confirm'), cancelText: t('common.cancel'),
+    onOk: async () => {
+      if (busyId.value !== null) return;
+      busyId.value = row.id;
+      try {
+        await apiPromotionEnd(row.id);
+        message.success(t('common.opSuccess'));
+        await refreshAll();
+      } finally { busyId.value = null; }
+    },
+  });
 }
 
 function remove(row: MerchantPromotion): void {
   Modal.confirm({
-    title: t('common.deleteConfirm'),
+    title: t('promotions.confirm.archive'),
+    content: t('promotions.confirm.claimImpact'),
     okText: t('common.confirm'),
     cancelText: t('common.cancel'),
     onOk: async () => {
-      await apiPromotionDelete(row.id);
-      message.success(t('common.opSuccess'));
-      await refreshAll();
+      if (busyId.value !== null) return;
+      busyId.value = row.id;
+      try {
+        await apiPromotionDelete(row.id);
+        message.success(t('common.opSuccess'));
+        page.value = 1;
+        await refreshAll();
+      } finally { busyId.value = null; }
     },
   });
 }
@@ -199,13 +279,24 @@ onMounted(async () => {
           <h1>{{ t('promotions.title') }}</h1>
           <p>{{ t('promotions.subtitle') }}</p>
         </div>
-        <button v-perm="'mch:promotions:add'" type="button" class="add-btn" @click="openCreate">
+        <button v-perm="'mch:promotions:add'" type="button" class="add-btn" :disabled="optionsLoading || optionsFailed" @click="openCreate">
           <PromoIcon name="plus" :size="16" />
           <span>{{ t('promotions.create') }}</span>
         </button>
       </header>
 
       <StatCards :summary="summary" @pick="pickTab" />
+
+      <section class="budget-overview">
+        <h2>{{ t('promotions.budget.title') }}</h2>
+        <div class="budget-values">
+          <div v-for="key in ['total', 'utilized', 'available']" :key="key"><span>{{ t(`promotions.budget.${key}`) }}</span><strong>--</strong></div>
+        </div>
+        <p>{{ t('promotions.budget.unavailable') }}</p>
+      </section>
+
+      <a-alert v-if="optionsFailed" type="error" :message="t('promotions.optionsFailed')" show-icon><template #action><a-button size="small" @click="loadOptions">{{ t('promotions.retry') }}</a-button></template></a-alert>
+      <a-alert v-if="loadFailed" type="error" :message="t('promotions.loadFailed')" show-icon><template #action><a-button size="small" @click="refreshAll">{{ t('promotions.retry') }}</a-button></template></a-alert>
 
       <nav class="tab-bar">
         <button
@@ -220,7 +311,7 @@ onMounted(async () => {
         </button>
       </nav>
 
-      <a-spin :spinning="loading || optionsLoading">
+      <a-spin v-if="!loadFailed" :spinning="loading || optionsLoading || busyId !== null">
         <PromoTable
           v-if="isTableMode"
           :list="list"
@@ -231,6 +322,7 @@ onMounted(async () => {
           @toggle="toggle"
           @publish="publish"
           @remove="remove"
+          @end="endPromotion"
         />
         <PromoGrid
           v-else
@@ -242,16 +334,18 @@ onMounted(async () => {
           @duplicate="duplicate"
           @toggle="toggle"
           @publish="publish"
+          @remove="remove"
+          @end="endPromotion"
         />
       </a-spin>
 
-      <div v-if="pager.total > pager.pageSize" class="pager">
+      <div v-if="!loadFailed && pager.total > pager.pageSize" class="pager">
         <a-pagination
           :current="pager.current"
           :page-size="pager.pageSize"
           :total="pager.total"
           :show-size-changer="false"
-          @change="pager.onChange"
+          @change="changePage"
         />
       </div>
     </div>
@@ -259,7 +353,7 @@ onMounted(async () => {
     <PromoDrawer
       :open="drawerOpen"
       :detail="drawerDetail"
-      :kind="activeKind"
+      :kind="activeKind || PROMOTION_KIND.percentage"
       :options="options"
       :saving="saving"
       @close="closeDrawer"
@@ -277,6 +371,24 @@ onMounted(async () => {
   gap: 24px;
   color: @pr-ink;
 }
+
+.budget-overview {
+  padding: 16px;
+  border: 1px solid #238f87;
+  border-radius: @pr-radius-card;
+  background: #fff;
+  h2 { margin: 0 0 16px; font: 700 16px @pr-font-display; }
+  p { margin: 12px 0 0; color: @pr-ink-sub; font-size: 12px; }
+}
+.budget-values {
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+  div { display: flex; flex-direction: column; gap: 12px; padding: 0 16px; border-left: 1px solid @pr-line; }
+  div:first-child { padding-left: 0; border: 0; }
+  span { color: @pr-ink-sub; font-size: 12px; text-transform: uppercase; }
+  strong { color: @pr-ink-sub; font: 700 24px @pr-font-display; }
+}
+.add-btn:disabled { opacity: .5; cursor: not-allowed; }
+@media (max-width: 620px) { .page-head { align-items: flex-start; flex-direction: column; } .tab-bar { overflow-x: auto; flex-shrink: 0; } .tab { white-space: nowrap; } }
 
 .page-head {
   display: flex;

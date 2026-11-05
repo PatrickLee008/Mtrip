@@ -1,22 +1,32 @@
 #!/usr/bin/env bash
 # 按 database/migrations 的全局版本增量执行 SQL，并记录生产执行账本。
+# 用法: db-migrate.sh [--validate|--status|--dry-run] [--allow-out-of-order=版本号,版本号]
+# 补迁移白名单只用于人工核对依赖、备份后的恢复，不由 auto-deploy 自动启用。
 
 if [ -z "${BASH_VERSION:-}" ]; then exec bash "$0" "$@"; fi
 set -uo pipefail
 
 MODE="apply"
-case "${1:-}" in
-    "") ;;
-    --validate) MODE="validate" ;;
-    --status)   MODE="status" ;;
-    --dry-run)  MODE="dry-run" ;;
+ALLOW_OUT_OF_ORDER=""
+for arg in "$@"; do
+case "$arg" in
+    --validate|--status|--dry-run)
+        [ "$MODE" = "apply" ] || { echo "只能指定一种迁移模式" >&2; exit 2; }
+        MODE="${arg#--}"
+        ;;
+    --allow-out-of-order=*)
+        [ -z "$ALLOW_OUT_OF_ORDER" ] || { echo "补迁移白名单不能重复指定" >&2; exit 2; }
+        ALLOW_OUT_OF_ORDER="${arg#*=}"
+        [[ "$ALLOW_OUT_OF_ORDER" =~ ^[0-9]{14}(,[0-9]{14})*$ ]] \
+            || { echo "补迁移白名单必须是逗号分隔的 14 位版本号" >&2; exit 2; }
+        ;;
     -h|--help)
         sed -n '1,80s/^# \{0,1\}//p' "$0"
         exit 0
         ;;
-    *) echo "未知参数: $1 (支持 --validate|--status|--dry-run)" >&2; exit 2 ;;
+    *) echo "未知参数: $arg (支持 --validate|--status|--dry-run、--allow-out-of-order=版本号,版本号)" >&2; exit 2 ;;
 esac
-[ $# -le 1 ] || { echo "参数过多" >&2; exit 2; }
+done
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="${MTRIP_REPO_ROOT:-$(cd "$SCRIPT_DIR/.." && pwd)}"
@@ -111,6 +121,19 @@ for migration in ${MIGRATIONS[@]+"${MIGRATIONS[@]}"}; do
     SEEN_VERSIONS="${SEEN_VERSIONS}${version}|"
 done
 [ "$VALIDATION_FAILED" -eq 0 ] || exit 1
+
+IFS=',' read -r -a repair_versions <<< "$ALLOW_OUT_OF_ORDER"
+repair_seen='|'
+for version in ${repair_versions[@]+"${repair_versions[@]}"}; do
+    case "$SEEN_VERSIONS" in
+        *"|$version|"*) ;;
+        *) fail "补迁移版本不在仓库中: $version"; exit 2 ;;
+    esac
+    case "$repair_seen" in
+        *"|$version|"*) fail "补迁移版本重复: $version"; exit 2 ;;
+    esac
+    repair_seen="${repair_seen}${version}|"
+done
 
 if [ "$MODE" = "validate" ]; then
     log "迁移命名校验通过，共 $MIGRATION_COUNT 个版本"
@@ -210,8 +233,13 @@ for migration in ${PENDING[@]+"${PENDING[@]}"}; do
     name="$(basename "$migration")"
     version="${name:1:14}"
     if [ -n "$MAX_APPLIED" ] && [[ "$version" < "$MAX_APPLIED" ]]; then
-        fail "待执行版本 $version 低于已上线最高版本 ${MAX_APPLIED}；禁止倒序补迁移"
-        INTEGRITY_FAILED=1
+        case ",$ALLOW_OUT_OF_ORDER," in
+            *",$version,"*) log "[WARN] 显式允许倒序补迁移 $version (当前最高版本 $MAX_APPLIED)" ;;
+            *)
+                fail "待执行版本 $version 低于已上线最高版本 ${MAX_APPLIED}；禁止倒序补迁移"
+                INTEGRITY_FAILED=1
+                ;;
+        esac
     fi
 done
 [ "$INTEGRITY_FAILED" -eq 0 ] || exit 1
@@ -237,6 +265,10 @@ for migration in ${PENDING[@]+"${PENDING[@]}"}; do
     checksum="$(read_checksum "$migration")" \
         || { fail "无法计算迁移 SHA-256: $name"; exit 1; }
     attempt_id="$(printf '%s' "${GIT_COMMIT:-manual}-$$-${RANDOM:-0}-$(date +%s%N)" | cut -c 1-64)"
+    migration_actor="$DEPLOY_ACTOR"
+    case ",$ALLOW_OUT_OF_ORDER," in
+        *",$version,"*) migration_actor="$(printf 'out-of-order:%s' "$DEPLOY_ACTOR" | cut -c 1-128)" ;;
+    esac
     script_path="database/migrations/$name"
     remote_sql="/tmp/mtrip-migration-$version.sql"
     remote_control="/tmp/mtrip-migration-$version-control.sql"
@@ -251,7 +283,7 @@ for migration in ${PENDING[@]+"${PENDING[@]}"}; do
 		INSERT INTO mtrip_system.schema_migrations
 		  (version, description, script_path, checksum, status, attempt_id, git_commit, applied_by, started_at)
 		VALUES
-		  ('$version', '$description', '$script_path', '$checksum', 'running', '$attempt_id', '$GIT_COMMIT', '$DEPLOY_ACTOR', NOW(6));
+		  ('$version', '$description', '$script_path', '$checksum', 'running', '$attempt_id', '$GIT_COMMIT', '$migration_actor', NOW(6));
 		SOURCE $remote_sql;
 		UPDATE mtrip_system.schema_migrations
 		SET status='applied', finished_at=NOW(6),

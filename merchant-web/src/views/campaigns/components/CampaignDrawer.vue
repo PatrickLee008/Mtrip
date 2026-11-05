@@ -23,6 +23,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: 'close'): void;
+  (e: 'withdraw', id: number): void;
   (e: 'respond', id: number, action: 'accept' | 'decline', remark: string): void;
 }>();
 
@@ -79,6 +80,7 @@ function accept(): void {
       </header>
 
       <div class="drawer-body">
+        <a-alert v-if="campaign.withdrawal" :type="campaign.withdrawal.status === 2 ? 'warning' : 'info'" show-icon :message="t(`campaigns.withdrawal.state${campaign.withdrawal.status}`)" :description="campaign.withdrawal.decision_reason || t('campaigns.withdrawal.pendingImpact')" />
         <p class="overview">{{ campaign.subtitle }}</p>
 
         <section class="field">
@@ -146,11 +148,12 @@ function accept(): void {
             {{ t('campaigns.actions.accept') }}
           </button>
         </template>
-        <span v-else-if="isJoined" class="joined-badge">
+        <button v-if="isJoined" v-perm="'mch:campaigns:respond'" type="button" class="btn ghost" :disabled="saving || campaign.withdrawal?.status === 0" @click="$emit('withdraw', campaign.id)">{{ t('campaigns.withdrawal.action') }}</button>
+        <span v-if="isJoined" class="joined-badge">
           <PromoIcon name="check-circle" :size="14" />
           {{ t('campaigns.participation.accepted') }}
         </span>
-        <button v-else type="button" class="btn ghost" @click="$emit('close')">{{ t('common.cancel') }}</button>
+        <button v-else-if="!canRespond" type="button" class="btn ghost" @click="$emit('close')">{{ t('common.cancel') }}</button>
       </footer>
     </aside>
   </div>

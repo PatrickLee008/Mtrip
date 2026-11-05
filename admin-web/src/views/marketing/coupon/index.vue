@@ -14,6 +14,7 @@ import { apiGoodsList, apiPropertyRoomList, apiTicketList } from '@/api/goods';
 import { apiStoreList } from '@/api/merchant';
 import {
   apiCouponAdd,
+  apiCouponDetail,
   apiCouponDelete,
   apiCouponFinish,
   apiCouponList,
@@ -64,8 +65,13 @@ const coupon = useTable(apiCouponList, {
   couponType: undefined,
   status: undefined,
   siteId: 0,
+  merchantOwned: 0,
+  merchantId: undefined,
+  propertyId: undefined,
 });
 
+const monitor = ref<TableRow | null>(null);
+async function viewMerchantPromotion(row: TableRow): Promise<void> { monitor.value = await apiCouponDetail(row.id); }
 const couponColumns = computed(() => [
   { title: t('common.id'), dataIndex: 'id', width: 70 },
   { title: t('marketing.coupon.name'), dataIndex: 'coupon_name', width: 180, ellipsis: true },
@@ -397,6 +403,7 @@ async function deleteCoupon(row: TableRow): Promise<void> {
 // ---------- Tab2 领券记录 ----------
 const receive = useTable(apiCouponReceives, {
   couponId: undefined,
+  couponVersionId: undefined,
   userId: undefined,
   status: undefined,
   siteId: 0,
@@ -406,6 +413,7 @@ const receiveColumns = computed(() => [
   { title: t('common.id'), dataIndex: 'id', width: 80 },
   { title: t('marketing.coupon.code'), dataIndex: 'coupon_code', width: 180 },
   { title: t('common.id'), dataIndex: 'coupon_id', width: 100 },
+  { title: t('marketing.merchantPromotion.version'), dataIndex: 'coupon_version_id', width: 100 },
   { title: t('user.realName'), dataIndex: 'user_id', width: 90 },
   { title: t('marketing.coupon.status'), dataIndex: 'status', width: 90 },
   { title: t('marketing.coupon.validRange'), dataIndex: 'valid_start', width: 300 },
@@ -413,6 +421,14 @@ const receiveColumns = computed(() => [
   { title: t('marketing.coupon.receiveLog.useTime'), dataIndex: 'used_time', width: 165 },
   { title: t('marketing.coupon.receiveLog.time'), dataIndex: 'created_at', width: 165 },
 ]);
+
+function viewVersionReceipts(couponId: number, versionId: number): void {
+  Object.assign(receive.query, { couponId, couponVersionId: versionId, siteId: coupon.query.siteId, userId: undefined, status: undefined });
+  monitor.value = null;
+  receiveLoaded = true;
+  activeTab.value = 'receive';
+  void receive.search();
+}
 
 // 非顶层 useTable 不自动加载:优惠券立即,领券记录首次切换时加载
 onMounted(() => {
@@ -441,7 +457,20 @@ watch(() => form.siteId, (siteId, previous) => {
       <a-tabs v-model:active-key="activeTab">
         <!-- ========== 优惠券模板 ========== -->
         <a-tab-pane key="coupon" :tab="t('marketing.coupon.title')">
+          <a-radio-group v-model:value="coupon.query.merchantOwned" style="margin-bottom:16px" @change="coupon.search">
+            <a-radio-button :value="0">{{ t('marketing.merchantPromotion.platform') }}</a-radio-button>
+            <a-radio-button :value="1">{{ t('marketing.merchantPromotion.monitor') }}</a-radio-button>
+          </a-radio-group>
+          <a-alert v-if="coupon.query.merchantOwned" :message="t('marketing.merchantPromotion.readOnly')" type="info" show-icon style="margin-bottom:16px" />
           <a-form layout="inline" class="tab-toolbar">
+            <template v-if="coupon.query.merchantOwned">
+              <a-form-item :label="t('marketing.merchantPromotion.merchant') + ' ID'">
+                <a-input-number v-model:value="coupon.query.merchantId" :min="1" style="width:120px" />
+              </a-form-item>
+              <a-form-item :label="t('marketing.merchantPromotion.properties') + ' ID'">
+                <a-input-number v-model:value="coupon.query.propertyId" :min="1" style="width:120px" />
+              </a-form-item>
+            </template>
             <a-form-item :label="t('marketing.coupon.name')">
               <a-input v-model:value="coupon.query.couponName" allow-clear :placeholder="t('common.pleaseInput')" style="width: 160px" @press-enter="coupon.search" />
             </a-form-item>
@@ -462,7 +491,7 @@ watch(() => form.siteId, (siteId, previous) => {
               <a-space>
                 <a-button type="primary" @click="coupon.search"><template #icon><SearchOutlined /></template>{{ t('common.search') }}</a-button>
                 <a-button @click="coupon.reset"><template #icon><ReloadOutlined /></template>{{ t('common.reset') }}</a-button>
-                <a-button v-perm="'marketing:coupon:add'" type="primary" ghost @click="openCreate">
+                <a-button v-if="!coupon.query.merchantOwned" v-perm="'marketing:coupon:add'" type="primary" ghost @click="openCreate">
                   <template #icon><PlusOutlined /></template>{{ t('marketing.coupon.actions.add') }}
                 </a-button>
               </a-space>
@@ -489,7 +518,8 @@ watch(() => form.siteId, (siteId, previous) => {
                 <StatusTag :value="record.status" :map="STATUS_MAP" />
               </template>
               <template v-else-if="column.key === 'action_col'">
-                <a-space :size="0">
+                <a-button v-if="record.created_by_merchant_admin > 0" type="link" @click="viewMerchantPromotion(record)">{{ t('marketing.merchantPromotion.history') }}</a-button>
+                <a-space v-else :size="0">
                   <a-button
                     v-if="record.status === 0"
                     v-perm="'marketing:coupon:edit'"
@@ -543,6 +573,9 @@ watch(() => form.siteId, (siteId, previous) => {
         <!-- ========== 领券记录 ========== -->
         <a-tab-pane key="receive" :tab="t('marketing.coupon.receiveLog.title')">
           <a-form layout="inline" class="tab-toolbar">
+            <a-form-item :label="t('marketing.merchantPromotion.version')">
+              <a-input-number v-model:value="receive.query.couponVersionId" :min="1" style="width:130px" />
+            </a-form-item>
             <a-form-item :label="t('common.id')">
               <a-input-number v-model:value="receive.query.couponId" :min="1" :placeholder="t('common.pleaseInput')" style="width: 130px" />
             </a-form-item>
@@ -589,6 +622,45 @@ watch(() => form.siteId, (siteId, previous) => {
     </a-card>
 
     <!-- 新增/编辑 Modal -->
+    <a-drawer :open="monitor !== null" width="640" :title="t('marketing.merchantPromotion.monitor')" @close="monitor = null">
+      <template v-if="monitor">
+        <a-descriptions :column="1" bordered size="small">
+          <a-descriptions-item :label="t('marketing.coupon.name')">{{ monitor.coupon_name }}</a-descriptions-item>
+          <a-descriptions-item :label="t('marketing.merchantPromotion.merchant')">{{ monitor.merchant_name }}</a-descriptions-item>
+          <a-descriptions-item :label="t('marketing.merchantPromotion.properties')">{{ monitor.property_names?.join(', ') }}</a-descriptions-item>
+          <a-descriptions-item :label="t('marketing.coupon.discount')">{{ discountText(monitor) }}</a-descriptions-item>
+          <a-descriptions-item :label="t('marketing.coupon.validRange')">{{ validText(monitor) }} (UTC)</a-descriptions-item>
+          <a-descriptions-item :label="t('marketing.coupon.status')"><StatusTag :value="monitor.status" :map="STATUS_MAP" /></a-descriptions-item>
+          <a-descriptions-item :label="t('marketing.coupon.receiveLog.title')">{{ monitor.received_count }} / {{ monitor.used_count }}</a-descriptions-item>
+        </a-descriptions>
+        <h3 style="margin-top:24px">{{ t('marketing.merchantPromotion.history') }}</h3>
+        <a-timeline>
+          <a-timeline-item v-for="event in monitor.history" :key="event.id">
+            <strong>#{{ event.id }} · {{ event.action }}</strong>
+            <p>{{ event.actor_type }} #{{ event.actor_id }} · {{ event.created_at }} UTC</p>
+            <details v-if="event.rules_snapshot">
+              <summary>{{ t('marketing.merchantPromotion.rules') }}</summary>
+              <a-descriptions :column="1" size="small" bordered style="margin:12px 0">
+                <a-descriptions-item :label="t('marketing.coupon.name')">{{ event.rules_snapshot.coupon_name }}</a-descriptions-item>
+                <a-descriptions-item :label="t('marketing.coupon.discount')">{{ discountText(event.rules_snapshot) }}</a-descriptions-item>
+                <a-descriptions-item :label="t('marketing.coupon.validRange')">{{ validText(event.rules_snapshot) }} UTC</a-descriptions-item>
+                <a-descriptions-item :label="t('marketing.merchantPromotion.properties')">{{ event.rules_snapshot.property_ids || '-' }}</a-descriptions-item>
+                <a-descriptions-item :label="t('marketing.coupon.roomTypes')">{{ event.rules_snapshot.room_type_ids || '-' }}</a-descriptions-item>
+                <a-descriptions-item :label="t('marketing.coupon.nightsRange')">{{ event.rules_snapshot.min_nights }} ~ {{ event.rules_snapshot.max_nights || '∞' }}</a-descriptions-item>
+                <a-descriptions-item :label="t('marketing.coupon.bookAdvanceDays')">{{ event.rules_snapshot.book_advance_days }}</a-descriptions-item>
+                <a-descriptions-item :label="t('marketing.coupon.minRoomCount')">{{ event.rules_snapshot.min_room_count }}</a-descriptions-item>
+                <a-descriptions-item :label="t('marketing.coupon.minHotelCount')">{{ event.rules_snapshot.min_hotel_count }}</a-descriptions-item>
+                <a-descriptions-item :label="t('marketing.coupon.stayRange')">{{ event.rules_snapshot.stay_start || '-' }} ~ {{ event.rules_snapshot.stay_end || '-' }}</a-descriptions-item>
+                <a-descriptions-item :label="t('marketing.coupon.perUserLimit')">{{ event.rules_snapshot.per_user_limit }}</a-descriptions-item>
+                <a-descriptions-item :label="t('marketing.coupon.totalCount')">{{ event.rules_snapshot.total_count || '∞' }}</a-descriptions-item>
+                <a-descriptions-item :label="t('common.remark')">{{ event.rules_snapshot.remark || '-' }}</a-descriptions-item>
+              </a-descriptions>
+            </details>
+            <a-button type="link" @click="viewVersionReceipts(monitor.id, event.id)">{{ t('marketing.coupon.receiveLog.title') }}</a-button>
+          </a-timeline-item>
+        </a-timeline>
+      </template>
+    </a-drawer>
     <a-modal
       v-model:open="formOpen"
       :title="editingId === 0 ? t('marketing.coupon.actions.add') : t('common.edit')"

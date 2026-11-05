@@ -2,18 +2,18 @@
 /**
  * 新建 / 编辑促销抽屉(Figma `2285:21516` 的 `drawer`)。
  *
- * 稿面结构:头部(标题 + 关闭)→ 主体(表单分组,间距 20)→ 页脚(Cancel / Publish Promotion)。
+ * 稿面结构:头部(标题 + 关闭)→ 主体(表单分组,间距 20)→ 页脚。
  * 面板宽 562、头部/主体/页脚 padding 24、头部与页脚各一条 1px 分隔线、遮罩 `rgba(15,23,42,0.4)`。
  *
  * ## 稿面字段 + 功能需求追加字段
- * 稿面按三种促销各画了一组字段;功能需求额外要求「适用物业 / 兑换上限 / 出资模式 / 条款」,
+ * 稿面按三种促销各画了一组字段;功能需求额外要求「适用物业 / 兑换上限 / 条款」,
  * 故在稿面字段之后按同一 Label/Input 令牌追加(见文件内 `[req]` 注释),其余顺序照稿。
  *
  * ## 百分比 ↔ 计价口径
  * 表单里 `discountValue` 始终是**设计口径**(百分比促销 = 立减百分比),换算交给
  * `helpers.formToPayload` + 后端 `discountPair()`,本组件不做 10 分制转换。
  */
-import { computed, reactive, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, reactive, ref, watch } from 'vue';
 import dayjs, { type Dayjs } from 'dayjs';
 import { message } from 'ant-design-vue';
 import { useI18n } from 'vue-i18n';
@@ -31,6 +31,7 @@ import {
   formToPayload,
   randomPromoCode,
   validateForm,
+  validatePolicy,
   type PromotionForm,
 } from '../helpers';
 
@@ -51,51 +52,67 @@ const emit = defineEmits<{
 
 const { t } = useI18n();
 const form = reactive<PromotionForm>(defaultForm());
-/** 日期区间选择器的桥接值(表单里存字符串,选择器要 dayjs) */
-const dateRange = ref<[Dayjs, Dayjs] | null>(null);
+const panel = ref<HTMLElement | null>(null);
+let previousFocus: HTMLElement | null = null;
 /** 适用入住日期(PRD §17.5 Specific Stay Date);空 = 不限 */
 const stayRange = ref<[Dayjs, Dayjs] | null>(null);
 
 const editing = computed(() => props.detail !== null && Number(props.detail.id) > 0);
 const title = computed(() => (editing.value ? t('promotions.drawer.editTitle') : t('promotions.drawer.title')));
 
-/** 折扣单位是否按「立减百分比」处理(kind=3 才由用户选) */
+/** 长住保留其所属的百分比或金额单位。 */
 const isPercentUnit = computed(() => form.promotionKind === PROMOTION_KIND.percentage
-  || form.promotionKind === PROMOTION_KIND.longStay
-  || (form.promotionKind === PROMOTION_KIND.promoCode && form.discountUnit === DISCOUNT_UNIT.percent));
+  || ((form.promotionKind === PROMOTION_KIND.longStay || form.promotionKind === PROMOTION_KIND.promoCode) && form.discountUnit === DISCOUNT_UNIT.percent));
 
 const unitSuffix = computed(() => (isPercentUnit.value ? '%' : props.options.currency));
 
 /** 房型可选项:只列已选物业下的房型 */
 const roomOptions = computed(() => props.options.roomTypes.filter((room) => form.propertyIds.includes(room.property_id)));
 
-/** 出资模式:商家自建促销一律商家全额出资(平台出资/共担来自平台活动,见 /campaigns)*/
-const fundingText = computed(() => t('promotions.funding.merchantFull'));
+const timezone = computed(() => props.options.policy?.timezone || 'UTC');
 
 function reset(): void {
   const next = props.detail ? formFromDetail(props.detail) : defaultForm(props.kind);
   Object.assign(form, next);
-  dateRange.value = next.validStart && next.validEnd ? [dayjs(next.validStart), dayjs(next.validEnd)] : null;
   stayRange.value = next.stayStart && next.stayEnd ? [dayjs(next.stayStart), dayjs(next.stayEnd)] : null;
-  if (form.validStart === '' && form.validEnd === '') {
-    // 稿面默认给一段已填好的有效期窗口(30 天)
-    const start = dayjs();
-    const end = dayjs().add(30, 'day');
-    dateRange.value = [start, end];
-    form.validStart = start.format('YYYY-MM-DD');
-    form.validEnd = end.format('YYYY-MM-DD');
+  form.validType = 1;
+  form.noExpiry = false;
+  if (!next.validStart || !next.validEnd) {
+    const parts = new Intl.DateTimeFormat('en-CA', { timeZone: timezone.value, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date());
+    const part = (key: string) => parts.find(item => item.type === key)?.value || '';
+    const today = `${part('year')}-${part('month')}-${part('day')}`;
+    form.validStart = `${today} 00:00:00`;
+    form.validEnd = `${dayjs(today).add(30, 'day').format('YYYY-MM-DD')} 23:59:59`;
   }
 }
 
 // immediate:组件在「已打开」状态下挂载时(SSR 校验 / 直接进入编辑)也要完成一次回填
 watch(() => props.open, (open) => {
-  if (open) reset();
+  if (open) {
+    reset();
+    if (typeof document !== 'undefined') {
+      previousFocus = document.activeElement as HTMLElement;
+      void nextTick(() => panel.value?.focus());
+    }
+  } else previousFocus?.focus();
 }, { immediate: true });
 
-watch(dateRange, (range) => {
-  form.validStart = range && range[0] ? range[0].format('YYYY-MM-DD') : '';
-  form.validEnd = range && range[1] ? range[1].format('YYYY-MM-DD') : '';
-});
+onBeforeUnmount(() => previousFocus?.focus());
+
+function datePart(field: 'validStart' | 'validEnd', part: 'date' | 'time') {
+  return computed({
+    get: () => part === 'date' ? form[field].slice(0, 10) : (form[field].slice(11, 16) || (field === 'validEnd' ? '23:59' : '00:00')),
+    set: (value: string) => {
+      const date = part === 'date' ? value : form[field].slice(0, 10);
+      const time = part === 'time' ? value : (form[field].slice(11, 19) || (field === 'validEnd' ? '23:59:59' : '00:00:00'));
+      form[field] = date ? `${date} ${time.length === 5 ? `${time}:00` : time}` : '';
+    },
+  });
+}
+const startDate = datePart('validStart', 'date');
+const startTime = datePart('validStart', 'time');
+const endDate = datePart('validEnd', 'date');
+const endTime = datePart('validEnd', 'time');
 
 watch(stayRange, (range) => {
   form.stayStart = range && range[0] ? range[0].format('YYYY-MM-DD') : '';
@@ -109,11 +126,18 @@ watch(() => form.propertyIds.slice(), () => {
 });
 
 function pickKind(kind: number): void {
+  if (props.saving) return;
+  const longStay = form.promotionKind === PROMOTION_KIND.longStay && kind !== PROMOTION_KIND.promoCode;
   if (form.promotionKind === kind) return;
-  form.promotionKind = kind;
+  form.promotionKind = longStay ? PROMOTION_KIND.longStay : kind;
   form.discountUnit = kind === PROMOTION_KIND.fixedAmount ? DISCOUNT_UNIT.amount : DISCOUNT_UNIT.percent;
   form.discountValue = kind === PROMOTION_KIND.fixedAmount ? 0 : 20;
   if (kind === PROMOTION_KIND.longStay && form.minNights < 2) form.minNights = 3;
+}
+
+function pickCondition(longStay: boolean): void {
+  form.promotionKind = longStay ? PROMOTION_KIND.longStay : (isPercentUnit.value ? PROMOTION_KIND.percentage : PROMOTION_KIND.fixedAmount);
+  if (longStay && form.minNights < 2) form.minNights = 3;
 }
 
 function pickUnit(unit: number): void {
@@ -125,11 +149,8 @@ function generateCode(): void {
 }
 
 function submit(): void {
-  // 优惠码促销在稿面里没有「促销名称」输入框,券码即标识 —— 用券码兜底名称
-  if (form.promotionKind === PROMOTION_KIND.promoCode && form.couponName.trim() === '') {
-    form.couponName = form.promoCode.trim().toUpperCase();
-  }
-  const invalid = validateForm(form);
+  if (props.saving) return;
+  const invalid = validateForm(form) || validatePolicy(form, props.options);
   if (invalid !== '') {
     message.warning(t(invalid));
     return;
@@ -146,22 +167,36 @@ function submit(): void {
 }
 
 function close(): void {
+  if (props.saving) return;
   emit('close');
+}
+
+function onKeydown(event: KeyboardEvent): void {
+  if (event.key === 'Escape') { event.stopPropagation(); close(); }
+  if (event.key !== 'Tab' || !panel.value) return;
+  const elements = Array.from(panel.value.querySelectorAll<HTMLElement>('button:not(:disabled),input:not(:disabled),textarea:not(:disabled),[tabindex="0"]')).filter((element) => element.getClientRects().length > 0);
+  const first = elements[0];
+  const last = elements[elements.length - 1];
+  if (event.shiftKey && (document.activeElement === first || document.activeElement === panel.value)) { event.preventDefault(); last?.focus(); }
+  else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
 }
 </script>
 
 <template>
   <div v-if="open" class="drawer-root">
     <div class="scrim" @click="close" />
-    <aside class="drawer">
+    <aside ref="panel" class="drawer" role="dialog" aria-modal="true" aria-labelledby="promotion-drawer-title" tabindex="-1" @keydown="onKeydown">
       <header class="drawer-header">
-        <h2 class="drawer-title">{{ title }}</h2>
-        <button type="button" class="icon-btn" @click="close">
+        <h2 id="promotion-drawer-title" class="drawer-title">{{ title }}</h2>
+        <button type="button" class="icon-btn" :aria-label="t('common.cancel')" :disabled="saving" @click="close">
           <PromoIcon name="x" :size="14" />
         </button>
       </header>
 
-      <div class="drawer-body">
+      <div class="drawer-body" :inert="saving">
+        <a-alert v-if="!options.policy?.configured" type="warning" show-icon :message="t('promotions.validation.policyMissing')" />
+        <p v-else class="policy-note">{{ t('promotions.drawer.limits', { percent: options.policy.maxPercent, amount: options.policy.maxAmount, currency: options.currency, minimum: options.policy.minPayablePercent }) }}</p>
+        <p class="policy-note">{{ t('promotions.drawer.claimProtection') }}</p>
         <!-- 稿面:Discount Type 三选卡 -->
         <section class="form-field">
           <span class="field-label">{{ t('promotions.drawer.discountType') }}</span>
@@ -169,52 +204,68 @@ function close(): void {
             <button
               type="button"
               class="radio-card"
-              :class="{ active: form.promotionKind === PROMOTION_KIND.percentage }"
+              :class="{ active: form.promotionKind !== PROMOTION_KIND.promoCode && isPercentUnit }"
+              :aria-pressed="form.promotionKind !== PROMOTION_KIND.promoCode && isPercentUnit"
               @click="pickKind(PROMOTION_KIND.percentage)"
             >
-              <PromoIcon name="percent" :size="16" />
               <span>% {{ t('promotions.kind.1') }}</span>
             </button>
             <button
               type="button"
               class="radio-card"
-              :class="{ active: form.promotionKind === PROMOTION_KIND.fixedAmount }"
+              :class="{ active: form.promotionKind !== PROMOTION_KIND.promoCode && !isPercentUnit }"
+              :aria-pressed="form.promotionKind !== PROMOTION_KIND.promoCode && !isPercentUnit"
               @click="pickKind(PROMOTION_KIND.fixedAmount)"
             >
-              <PromoIcon name="banknote" :size="16" />
               <span>$ {{ t('promotions.kind.2') }}</span>
             </button>
             <button
               type="button"
               class="radio-card"
               :class="{ active: form.promotionKind === PROMOTION_KIND.promoCode }"
+              :aria-pressed="form.promotionKind === PROMOTION_KIND.promoCode"
               @click="pickKind(PROMOTION_KIND.promoCode)"
             >
-              <PromoIcon name="ticket" :size="16" />
               <span>{{ t('promotions.drawer.promoCodeType') }}</span>
             </button>
           </div>
         </section>
 
-        <!-- 稿面(kind=3):Coupon Code + Generate Random -->
-        <section v-if="form.promotionKind === PROMOTION_KIND.promoCode" class="form-field">
-          <span class="field-label">{{ t('promotions.drawer.couponCode') }}</span>
-          <div class="inline-row">
-            <input v-model="form.promoCode" class="text-input" :placeholder="t('promotions.drawer.codePlaceholder')" />
-            <button type="button" class="btn primary" @click="generateCode">{{ t('promotions.drawer.generate') }}</button>
+        <section v-if="form.promotionKind !== PROMOTION_KIND.promoCode" class="form-field">
+          <span class="field-label">{{ t('promotions.drawer.promotionCondition') }}</span>
+          <div class="radio-cards">
+            <button type="button" class="radio-card" :class="{ active: form.promotionKind !== PROMOTION_KIND.longStay }" :aria-pressed="form.promotionKind !== PROMOTION_KIND.longStay" @click="pickCondition(false)">{{ t('promotions.standard') }}</button>
+            <button type="button" class="radio-card" :class="{ active: form.promotionKind === PROMOTION_KIND.longStay }" :aria-pressed="form.promotionKind === PROMOTION_KIND.longStay" @click="pickCondition(true)">{{ t('promotions.kind.4') }}</button>
           </div>
         </section>
 
-        <!-- 稿面(kind=1/2/4):Promotion Name -->
-        <section v-else class="form-field">
+        <section class="form-field">
           <span class="field-label">{{ t('promotions.drawer.name') }}</span>
-          <input v-model="form.couponName" class="text-input" :placeholder="t('promotions.drawer.namePlaceholder')" />
+          <input v-model="form.couponName" class="text-input" :placeholder="t('promotions.drawer.namePlaceholder')" maxlength="100" />
+        </section>
+
+        <!-- Coupon Code + Generate Random -->
+        <section v-if="form.promotionKind === PROMOTION_KIND.promoCode" class="form-field">
+          <span class="field-label">{{ t('promotions.drawer.couponCode') }}</span>
+          <div class="inline-row code-row">
+            <input v-model="form.promoCode" class="text-input" :placeholder="t('promotions.drawer.codePlaceholder')" />
+            <button type="button" class="btn primary" @click="generateCode">{{ t('promotions.drawer.generate') }}</button>
+          </div>
         </section>
 
         <!-- 稿面(kind=1/2/4):Description -->
         <section v-if="form.promotionKind !== PROMOTION_KIND.promoCode" class="form-field">
           <span class="field-label">{{ t('promotions.drawer.description') }}</span>
           <input v-model="form.description" class="text-input" :placeholder="t('promotions.drawer.descriptionPlaceholder')" />
+        </section>
+
+        <section class="form-field">
+          <span class="field-label">{{ t('promotions.drawer.redemptionRules') }}</span>
+          <div class="inline-row field-row">
+            <label class="mini-field"><span class="mini-label">{{ t('promotions.drawer.minAmount') }}</span><a-input-number v-model:value="form.minAmount" class="full" :min="0" :precision="2" /></label>
+            <label v-if="isPercentUnit" class="mini-field"><span class="mini-label">{{ t('promotions.drawer.maxDiscount') }}</span><a-input-number v-model:value="form.maxDiscount" class="full" :min="0" :precision="2" /></label>
+            <label class="mini-field"><span class="mini-label">{{ t('promotions.drawer.perUserLimit') }}</span><a-input-number v-model:value="form.perUserLimit" class="full" :min="1" :precision="0" /></label>
+          </div>
         </section>
 
         <!-- 稿面:Discount Value(+ kind=3 的单位下拉) -->
@@ -231,15 +282,17 @@ function close(): void {
               ]"
               @change="pickUnit"
             />
-            <div v-else class="unit-chip">{{ unitSuffix }}</div>
-            <a-input-number v-model:value="form.discountValue" class="grow" :min="0" :precision="2" />
+            <div class="discount-control grow">
+              <a-input-number v-model:value="form.discountValue" class="full" :min="0" :precision="2" :controls="false" />
+              <span v-if="form.promotionKind !== PROMOTION_KIND.promoCode" class="discount-suffix">{{ unitSuffix }}</span>
+            </div>
           </div>
         </section>
 
         <!-- 功能需求:长住规则(最少入住晚数 / 适用入住时长上限) -->
         <section v-if="form.promotionKind === PROMOTION_KIND.longStay" class="form-field">
           <span class="field-label">{{ t('promotions.drawer.stayRules') }}</span>
-          <div class="inline-row">
+          <div class="inline-row field-row">
             <div class="mini-field">
               <span class="mini-label">{{ t('promotions.drawer.minNights') }}</span>
               <a-input-number v-model:value="form.minNights" class="full" :min="2" :precision="0" />
@@ -281,7 +334,7 @@ function close(): void {
         <!-- PRD §17.5 使用条件(0 / 空 = 不限;判定口径见 shared CouponEligibility,与平台后台一致) -->
         <section class="form-field">
           <span class="field-label">{{ t('promotions.drawer.conditions') }}</span>
-          <div class="inline-row">
+          <div class="inline-row field-row">
             <div class="mini-field">
               <span class="mini-label">{{ t('promotions.drawer.bookAdvanceDays') }}</span>
               <a-input-number v-model:value="form.bookAdvanceDays" class="full" :min="0" :max="365" :precision="0" />
@@ -310,21 +363,19 @@ function close(): void {
           </label>
         </section>
 
-        <!-- 稿面:Booking Dates / Validity Period + No expiry date -->
         <section class="form-field">
-          <span class="field-label">{{ form.promotionKind === PROMOTION_KIND.promoCode ? t('promotions.drawer.validityPeriod') : t('promotions.drawer.bookingDates') }}</span>
-          <a-range-picker v-model:value="dateRange" class="full" :disabled="form.noExpiry" />
-          <label class="checkbox-row">
-            <input v-model="form.noExpiry" type="checkbox" class="checkbox" />
-            <span>{{ t('promotions.drawer.noExpiry') }}</span>
-          </label>
+          <span class="field-label">{{ t('promotions.drawer.schedule') }} ({{ timezone }})</span>
+          <div class="schedule-grid">
+            <label class="mini-field"><span class="mini-label">{{ t('promotions.drawer.startDate') }}</span><input v-model="startDate" type="date" class="text-input" /></label>
+            <label class="mini-field"><span class="mini-label">{{ t('promotions.drawer.startTime') }}</span><input v-model="startTime" type="time" class="text-input" /></label>
+            <label class="mini-field"><span class="mini-label">{{ t('promotions.drawer.endDate') }}</span><input v-model="endDate" type="date" class="text-input" :disabled="form.noExpiry" /></label>
+            <label class="mini-field"><span class="mini-label">{{ t('promotions.drawer.endTime') }}</span><input v-model="endTime" type="time" class="text-input" :disabled="form.noExpiry" /></label>
+          </div>
         </section>
-
-        <!-- 功能需求:出资模式(商家自建促销只读) -->
-        <section class="form-field">
-          <span class="field-label">{{ t('promotions.drawer.funding') }}</span>
-          <div class="readonly-pill">{{ fundingText }}</div>
-        </section>
+        <label v-if="!editing" class="checkbox-row">
+          <input v-model="form.enabled" type="checkbox" class="checkbox" />
+          <span>{{ t('promotions.drawer.enabled') }}</span>
+        </label>
 
         <!-- 功能需求:条款(面向客人) -->
         <section class="form-field">
@@ -340,9 +391,9 @@ function close(): void {
       </div>
 
       <footer class="drawer-footer">
-        <button type="button" class="btn ghost" @click="close">{{ t('common.cancel') }}</button>
-        <button type="button" class="btn primary lg" :disabled="saving" @click="submit">
-          {{ t('promotions.drawer.publish') }}
+        <button type="button" class="btn ghost" :disabled="saving" @click="close">{{ t('common.cancel') }}</button>
+        <button type="button" class="btn primary lg" :disabled="saving || !options.policy?.configured" @click="submit">
+          {{ saving ? t('common.loading') : (editing ? t('common.save') : t('promotions.drawer.createPromotion')) }}
         </button>
       </footer>
     </aside>
@@ -445,30 +496,63 @@ function close(): void {
 
 .radio-cards {
   display: flex;
+  flex-wrap: wrap;
   gap: 12px;
 }
 
 .radio-card {
   display: flex;
-  flex: 1;
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: @pr-input-height;
   align-items: center;
   gap: 10px;
-  padding: 12px;
+  padding: 10px 12px;
   border: 1px solid @pr-line;
   border-radius: @pr-radius-control;
   background: #fff;
-  color: @pr-ink;
+  color: @pr-ink-muted;
   font-family: @pr-font-body;
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 500;
   line-height: 1.5;
+  text-align: left;
   cursor: pointer;
+
+  &::before {
+    content: '';
+    width: 16px;
+    height: 16px;
+    flex: none;
+    border: 1px solid currentColor;
+    border-radius: 50%;
+  }
 
   &.active {
     border-color: @pr-primary;
     background: @pr-primary-soft;
     color: @pr-primary;
+    font-weight: 600;
+
+    &::before {
+      background: radial-gradient(circle, currentColor 0 5px, transparent 5.5px);
+    }
   }
+
+  &:focus-visible {
+    outline: 2px solid @pr-primary;
+    outline-offset: 2px;
+  }
+}
+
+.policy-note { margin: 0; color: @pr-ink-sub; font-size: 12px; line-height: 1.6; }
+.schedule-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.drawer { outline: none; }
+.text-input:disabled { background: @pr-soft; color: @pr-ink-muted; }
+@media (max-width: 480px) {
+  .drawer-header, .drawer-body, .drawer-footer { padding: 16px; }
+  .inline-row { flex-wrap: wrap; }
+  .schedule-grid { gap: 12px; }
 }
 
 .inline-row {
@@ -477,8 +561,18 @@ function close(): void {
   gap: 6px;
 }
 
+.field-row { align-items: flex-end; }
+
+.code-row {
+  flex-wrap: nowrap;
+
+  .text-input { flex: 1; }
+  .btn { flex: none; white-space: nowrap; }
+}
+
 .text-input {
   width: 100%;
+  min-width: 0;
   height: @pr-input-height;
   padding: 8px 12px;
   border: 0.8px solid @pr-line;
@@ -499,7 +593,6 @@ function close(): void {
   }
 }
 
-.unit-chip,
 .readonly-pill {
   display: flex;
   height: @pr-input-height;
@@ -514,6 +607,22 @@ function close(): void {
   font-weight: 600;
   line-height: 1.5;
   white-space: nowrap;
+}
+
+.discount-control {
+  position: relative;
+
+  &:has(.discount-suffix) :deep(.ant-input-number-input) { padding-right: 64px; }
+}
+
+.discount-suffix {
+  position: absolute;
+  inset: 0 12px 0 auto;
+  display: flex;
+  align-items: center;
+  color: @pr-ink-muted;
+  font-size: 14px;
+  pointer-events: none;
 }
 
 .readonly-pill {
@@ -604,31 +713,52 @@ function close(): void {
 :deep(.ant-picker),
 :deep(.ant-input) {
   border-radius: @pr-radius-control !important;
+  background: #fff !important;
+  font-size: 14px !important;
 }
 
 :deep(.ant-input-number),
 :deep(.ant-select-single .ant-select-selector),
 :deep(.ant-picker) {
-  height: @pr-input-height;
+  height: @pr-input-height !important;
 }
 
 :deep(.ant-select-single .ant-select-selector .ant-select-selection-item),
 :deep(.ant-select-single .ant-select-selector .ant-select-selection-placeholder) {
-  line-height: @pr-input-height - 2px;
+  line-height: @pr-input-height - 2px !important;
 }
 
 :deep(.ant-select-multiple .ant-select-selector) {
-  min-height: @pr-input-height;
-  padding: 6px 12px;
+  min-height: @pr-input-height !important;
+  padding: 4px 12px;
+}
+
+// Override the global 32px inner input so its content fills the 44px control.
+:deep(.ant-input-number-input-wrap) {
+  height: 100%;
 }
 
 :deep(.ant-input-number-input) {
-  height: @pr-input-height - 2px;
+  height: @pr-input-height - 2px !important;
+  padding: 0 12px;
+  line-height: @pr-input-height - 2px;
+  font-size: 14px !important;
+}
+
+:deep(.ant-picker-input > input) {
+  font-size: 14px;
+}
+
+:deep(.ant-select-disabled .ant-select-selector),
+:deep(.ant-input-number-disabled) {
+  background: @pr-soft !important;
 }
 
 @media (max-width: 620px) {
   .radio-cards {
     flex-direction: column;
+    flex-wrap: nowrap;
   }
+  .radio-card { flex: 0 0 auto; }
 }
 </style>

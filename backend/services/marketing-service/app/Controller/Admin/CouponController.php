@@ -12,6 +12,7 @@ use Mtrip\Shared\Constants\ErrorCode;
 use Mtrip\Shared\Context\AdminContext;
 use Mtrip\Shared\Exception\BusinessException;
 use Mtrip\Shared\Support\CouponEligibility;
+use Mtrip\Shared\Support\CouponVersion;
 use Mtrip\Shared\Support\Result;
 
 /**
@@ -25,7 +26,16 @@ class CouponController extends AbstractController
     public function index(): array
     {
         [$page, $pageSize] = $this->pageParams();
-        $query = Db::table('marketing_coupon')->whereNull('deleted_at');
+        $query = Db::table('marketing_coupon');
+        if ($this->intInput('merchantOwned') === 1) {
+            $query->where('created_by_merchant_admin', '>', 0);
+            if (($merchant = $this->intInput('merchantId')) > 0) $query->where('merchant_id', $merchant);
+            if (($property = $this->intInput('propertyId')) > 0) {
+                $query->whereRaw('JSON_CONTAINS(property_ids, ?)', [json_encode($property)]);
+            }
+        } else {
+            $query->where('created_by_merchant_admin', 0)->whereNull('deleted_at');
+        }
         $this->applySiteScope($query);
         if (($name = $this->strInput('couponName')) !== '') {
             $query->where('coupon_name', 'like', "%{$name}%");
@@ -54,11 +64,18 @@ class CouponController extends AbstractController
     /** 优惠券详情 */
     public function detail(): array
     {
-        $coupon = $this->findScoped($this->requireId());
+        $coupon = $this->findScoped($this->requireId(), true);
         $coupon['goods_ids'] = $this->jsonDecode($coupon['goods_ids']);
         $coupon['property_ids'] = $this->jsonDecode($coupon['property_ids'] ?? null);
         $coupon['sku_ids'] = $this->jsonDecode($coupon['sku_ids'] ?? null);
         $coupon['room_type_ids'] = $this->jsonDecode($coupon['room_type_ids'] ?? null);
+        $coupon['merchant_name'] = (string) Db::table('merchant_info')->where('id', $coupon['merchant_id'])->value('merchant_name');
+        $coupon['property_names'] = Db::table('merchant_store')->whereIn('id', $coupon['property_ids'])->pluck('store_name')->all();
+        $coupon['history'] = Db::table('marketing_coupon_version')->where('coupon_id', $coupon['id'])->orderByDesc('id')->get()->map(static function ($row) {
+            $event = (array) $row;
+            $event['rules_snapshot'] = json_decode($event['rules_snapshot'], true);
+            return $event;
+        })->all();
         unset($coupon['deleted_at']);
         return Result::success($coupon);
     }
@@ -82,7 +99,10 @@ class CouponController extends AbstractController
         $coupon = $this->findScoped($this->requireId());
         $status = (int) $coupon['status'];
         if ($status === 0) {
-            Db::table('marketing_coupon')->where('id', $coupon['id'])->update($this->validatedPayload((int) $coupon['site_id']));
+            $data = $this->validatedPayload((int) $coupon['site_id']);
+            CouponVersion::change((int) $coupon['id'], 'edit', 'admin', AdminContext::adminId(), static function () use ($coupon, $data) {
+                Db::table('marketing_coupon')->where('id', $coupon['id'])->update($data);
+            });
             return Result::success(null, '优惠券已更新');
         }
         if ($status === 1) {
@@ -158,6 +178,9 @@ class CouponController extends AbstractController
         $this->applySiteScope($query);
         if (($couponId = $this->intInput('couponId')) > 0) {
             $query->where('coupon_id', $couponId);
+        }
+        if (($versionId = $this->intInput('couponVersionId')) > 0) {
+            $query->where('coupon_version_id', $versionId);
         }
         if (($userId = $this->intInput('userId')) > 0) {
             $query->where('user_id', $userId);
@@ -272,14 +295,17 @@ class CouponController extends AbstractController
     }
 
     /** 取优惠券并校验站点数据权限 */
-    private function findScoped(int $id): array
+    private function findScoped(int $id, bool $readOnly = false): array
     {
-        $coupon = Db::table('marketing_coupon')->where('id', $id)->whereNull('deleted_at')->first();
+        $coupon = Db::table('marketing_coupon')->where('id', $id)->when(! $readOnly, static fn ($q) => $q->whereNull('deleted_at'))->first();
         if (! $coupon) {
             throw new BusinessException(ErrorCode::NOT_FOUND, '优惠券不存在');
         }
         $coupon = (array) $coupon;
         $this->assertSiteScope((int) $coupon['site_id']);
+        if (! $readOnly && (int) ($coupon['created_by_merchant_admin'] ?? 0) > 0) {
+            throw new BusinessException(ErrorCode::FORBIDDEN, 'Merchant-funded promotions are read-only in the admin portal.');
+        }
         return $coupon;
     }
 

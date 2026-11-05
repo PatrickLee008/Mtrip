@@ -58,6 +58,8 @@ Router::addGroup('/api/v1/admin/marketing', static function () {
     Router::post('/longstay/delete', [LongstayController::class, 'delete']);
     // 促销中心活动(PRD 模块6.1)
     Router::get('/campaign/list', [CampaignController::class, 'index']);
+    Router::get('/campaign/withdrawals', [CampaignController::class, 'withdrawals']);
+    Router::post('/campaign/withdrawal-decision', [CampaignController::class, 'withdrawalDecision']);
     Router::post('/campaign/save', [CampaignController::class, 'save']);
     Router::post('/campaign/toggle-status', [CampaignController::class, 'toggleStatus']);
     Router::post('/campaign/delete', [CampaignController::class, 'remove']);
@@ -89,6 +91,7 @@ Router::addGroup('/api/v1/merchant/promotions', static function () {
     Router::post('/duplicate', [MerchantPromotionController::class, 'duplicate']);
     Router::post('/publish', [MerchantPromotionController::class, 'publish']);
     Router::post('/toggle-status', [MerchantPromotionController::class, 'toggleStatus']);
+    Router::post('/end', [MerchantPromotionController::class, 'end']);
     Router::post('/delete', [MerchantPromotionController::class, 'remove']);
 }, [
     'middleware' => [MerchantAuthMiddleware::class, OperationLogMiddleware::class],
@@ -101,6 +104,7 @@ Router::addGroup('/api/v1/merchant/campaigns', static function () {
     Router::get('/list', [MerchantCampaignController::class, 'index']);
     Router::get('/detail', [MerchantCampaignController::class, 'detail']);
     Router::post('/respond', [MerchantCampaignController::class, 'respond']);
+    Router::post('/withdraw', [MerchantCampaignController::class, 'withdraw']);
 }, [
     'middleware' => [MerchantAuthMiddleware::class, OperationLogMiddleware::class],
 ]);

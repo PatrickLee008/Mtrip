@@ -18,6 +18,58 @@ use Mtrip\Shared\Support\Result;
  */
 class CampaignController extends AbstractController
 {
+    public function withdrawals(): array
+    {
+        [$page, $pageSize] = $this->pageParams();
+        $query = Db::table('marketing_campaign_withdrawal as w')
+            ->join('marketing_campaign as c', 'c.id', '=', 'w.campaign_id')
+            ->join('merchant_info as m', 'm.id', '=', 'w.merchant_id');
+        $this->applySiteScope($query, 'w.site_id');
+        $total = (clone $query)->count();
+        $list = $query->orderByDesc('w.id')->forPage($page, $pageSize)
+            ->get(['w.*', 'c.title as campaign_title', 'm.merchant_name'])
+            ->map(static fn ($row) => (array) $row)->all();
+        return Result::page($list, $total, $page, $pageSize);
+    }
+
+    #[Permission('marketing:campaign:withdrawal-review')]
+    public function withdrawalDecision(): array
+    {
+        $id = $this->requireId();
+        $action = $this->requireStr('action');
+        $reason = mb_substr($this->requireStr('reason'), 0, 500);
+        if (! in_array($action, ['approve', 'reject'], true)) {
+            throw new BusinessException(ErrorCode::PARAM_ERROR);
+        }
+        Db::transaction(function () use ($id, $action, $reason) {
+            $request = Db::table('marketing_campaign_withdrawal')->where('id', $id)->first();
+            if (! $request) throw new BusinessException(ErrorCode::NOT_FOUND);
+            $this->assertSiteScope((int) $request->site_id);
+            // Match the merchant request lock order and serialize concurrent decisions.
+            $participant = Db::table('marketing_campaign_participant')->where('id', $request->participant_id)->lockForUpdate()->first();
+            $request = Db::table('marketing_campaign_withdrawal')->where('id', $id)->lockForUpdate()->first();
+            if ((int) $request->status !== 0 || ! $participant || (int) $participant->status !== 1) {
+                throw new BusinessException(ErrorCode::DATA_CONFLICT, 'withdrawal is no longer pending');
+            }
+            $now = gmdate('Y-m-d H:i:s');
+            if ($action === 'approve') {
+                Db::table('marketing_campaign_participant')->where('id', $participant->id)->update(['status' => 3]);
+            }
+            Db::table('marketing_campaign_withdrawal')->where('id', $id)->update([
+                'status' => $action === 'approve' ? 1 : 2, 'decided_by' => AdminContext::adminId(),
+                'decided_at' => $now, 'decision_reason' => $reason,
+            ]);
+            Db::table('merchant_notify')->insert([
+                'site_id' => $request->site_id, 'merchant_id' => $request->merchant_id, 'category' => 'promotion',
+                'title' => $action === 'approve' ? 'Campaign withdrawal approved' : 'Campaign withdrawal rejected',
+                'message' => $reason . '. Previously claimed benefits and existing bookings retain their original terms.',
+                'channels' => 'inapp', 'send_at' => $now, 'operator_id' => AdminContext::adminId(),
+                'operator_name' => AdminContext::adminName(),
+            ]);
+        });
+        return Result::success(null, 'withdrawal decision recorded');
+    }
+
     public function index(): array
     {
         [$page, $pageSize] = $this->pageParams();

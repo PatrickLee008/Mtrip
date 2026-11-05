@@ -6,6 +6,8 @@ namespace App\Service;
 
 use Hyperf\DbConnection\Db;
 use Mtrip\Shared\Support\CouponEligibility;
+use Mtrip\Shared\Support\CouponVersion;
+use Mtrip\Shared\Support\CouponProtection;
 
 /**
  * 统一优惠券字段口径(C-M6)
@@ -57,17 +59,18 @@ class CouponView
     /** 券模板需要的列(领券中心 / 活动详情 / 券详情) */
     public const TEMPLATE_COLUMNS = [
         'id', 'coupon_name', 'coupon_type', 'discount_value', 'min_amount', 'max_discount',
-        'goods_scope', 'goods_ids', 'property_ids', 'sku_ids', 'room_type_ids', 'total_count', 'received_count', 'per_user_limit',
+        'merchant_policy', 'goods_scope', 'goods_ids', 'property_ids', 'sku_ids', 'room_type_ids', 'total_count', 'received_count', 'per_user_limit',
         'valid_type', 'valid_start', 'valid_end', 'valid_days', 'stackable', 'status', 'remark',
         'min_nights', 'max_nights', 'book_advance_days', 'min_room_count', 'min_hotel_count', 'stay_start', 'stay_end',
     ];
 
     /** 领券记录 + 模板的联表列(我的优惠券 / 结账) */
     public const RECEIVE_COLUMNS = [
+        'v.rules_snapshot as entitlement_snapshot', 'r.rules_snapshot as claim_snapshot', 'r.coupon_version_id',
         'r.id as receive_id', 'r.coupon_code', 'r.status as receive_status',
         'r.valid_start', 'r.valid_end', 'r.order_id',
         'c.id', 'c.coupon_name', 'c.coupon_type', 'c.discount_value', 'c.min_amount',
-        'c.max_discount', 'c.goods_scope', 'c.goods_ids', 'c.property_ids', 'c.sku_ids', 'c.room_type_ids', 'c.stackable',
+        'c.merchant_policy', 'c.max_discount', 'c.goods_scope', 'c.goods_ids', 'c.property_ids', 'c.sku_ids', 'c.room_type_ids', 'c.stackable',
         'c.status as template_status', 'c.remark',
         'c.min_nights', 'c.max_nights', 'c.book_advance_days', 'c.min_room_count', 'c.min_hotel_count', 'c.stay_start', 'c.stay_end',
     ];
@@ -116,6 +119,7 @@ class CouponView
      */
     public function receive(array $row, ?array $ctx = null, ?int $now = null): array
     {
+        $row = CouponVersion::overlay($row, $row['claim_snapshot'] ?? $row['entitlement_snapshot'] ?? null);
         $now ??= time();
         $view = $this->baseFields($row);
         $view['coupon_id'] = (int) $row['id'];
@@ -147,7 +151,7 @@ class CouponView
         // 有下单上下文时再叠一层「这单能不能用」的判定(PRD §17.5/§17.6,与下单同一实现)
         $view['discount'] = 0.0;
         if ($ctx !== null && $view['unusableReason'] === null) {
-            $result = CouponEligibility::evaluate($row, $this->legsOf($ctx), (int) ($ctx['orderType'] ?? 1), date('Y-m-d', $now));
+            $result = CouponProtection::evaluate($row, $this->legsOf($ctx), (int) ($ctx['orderType'] ?? 1), date('Y-m-d', $now));
             if (! $result['eligible']) {
                 $view['status'] = self::STATUS_UNUSABLE;
                 $view['unusableReason'] = $result['reason'];

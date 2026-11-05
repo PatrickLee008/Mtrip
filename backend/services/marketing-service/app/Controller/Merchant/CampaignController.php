@@ -116,6 +116,11 @@ class CampaignController extends AbstractController
     #[Permission('mch:campaigns:respond')]
     public function respond(): array
     {
+        return Db::transaction(fn () => $this->respondInTransaction());
+    }
+
+    private function respondInTransaction(): array
+    {
         $campaignId = $this->requireId();
         $action = strtolower($this->strInput('action'));
         if (! in_array($action, ['accept', 'decline'], true)) {
@@ -135,7 +140,10 @@ class CampaignController extends AbstractController
 
         $existing = Db::table('marketing_campaign_participant')
             ->where('campaign_id', $campaignId)->where('merchant_id', $merchantId)->whereNull('deleted_at')
-            ->first();
+            ->lockForUpdate()->first();
+        if ($existing && (int) $existing->status === self::STATUS_ACCEPTED) {
+            throw new BusinessException(ErrorCode::DATA_CONFLICT, 'Accepted offers require an approved withdrawal request.');
+        }
         if ((int) $campaign['invite_mode'] === 1 && ! $existing) {
             // 定向邀请的活动,未被邀请的商户不能自行报名
             throw new BusinessException(ErrorCode::NO_DATA_PERMISSION, 'this campaign is invitation only');
@@ -167,6 +175,30 @@ class CampaignController extends AbstractController
         );
     }
 
+    #[Permission('mch:campaigns:respond')]
+    public function withdraw(): array
+    {
+        $campaignId = $this->requireId();
+        $merchantId = $this->resolveMerchantId($this->scopeMerchantIds());
+        $reason = mb_substr($this->requireStr('reason'), 0, 500);
+        $id = Db::transaction(function () use ($campaignId, $merchantId, $reason) {
+            $participant = Db::table('marketing_campaign_participant')->where('campaign_id', $campaignId)
+                ->where('merchant_id', $merchantId)->whereNull('deleted_at')->lockForUpdate()->first();
+            if (! $participant || (int) $participant->status !== self::STATUS_ACCEPTED) {
+                throw new BusinessException(ErrorCode::DATA_CONFLICT, 'Only accepted offers can request withdrawal.');
+            }
+            if (Db::table('marketing_campaign_withdrawal')->where('participant_id', $participant->id)->where('status', 0)->exists()) {
+                throw new BusinessException(ErrorCode::DATA_CONFLICT, 'A withdrawal request is already pending.');
+            }
+            return Db::table('marketing_campaign_withdrawal')->insertGetId([
+                'site_id' => MerchantContext::siteId(), 'campaign_id' => $campaignId,
+                'participant_id' => $participant->id, 'merchant_id' => $merchantId,
+                'reason' => $reason, 'requested_by' => MerchantContext::adminId(),
+            ]);
+        });
+        return Result::success(['id' => (int) $id, 'status' => 0], 'withdrawal pending approval');
+    }
+
     // ─────────────────────────── 内部 ───────────────────────────
 
     /**
@@ -177,6 +209,10 @@ class CampaignController extends AbstractController
     {
         $now = date('Y-m-d H:i:s');
         $merchantIds = $this->scopeMerchantIds();
+        if (($selected = $this->intInput('merchantId')) > 0) {
+            if (! in_array($selected, $merchantIds, true)) throw new BusinessException(ErrorCode::NO_DATA_PERMISSION);
+            $merchantIds = [$selected];
+        }
 
         return Db::table('marketing_campaign as c')
             ->leftJoin('marketing_campaign_participant as p', static function ($join) use ($merchantIds) {
@@ -221,6 +257,7 @@ class CampaignController extends AbstractController
         $row['participation_id'] = (int) ($row['participation_id'] ?? 0);
         // null = 未参加(公开报名且尚未响应);有值时为 0待响应/1已接受/2已拒绝/3已退出
         $row['participation_status'] = $row['participation_id'] > 0 ? (int) $row['participation_status'] : null;
+        $row['withdrawal'] = $row['participation_id'] > 0 ? Db::table('marketing_campaign_withdrawal')->where('participant_id', $row['participation_id'])->orderByDesc('id')->first() : null;
         $row['can_respond'] = (int) $row['invite_mode'] === 2
             ? ! in_array($row['participation_status'], [self::STATUS_ACCEPTED], true)
             : in_array($row['participation_status'], [self::STATUS_INVITED, self::STATUS_DECLINED, self::STATUS_WITHDRAWN], true);

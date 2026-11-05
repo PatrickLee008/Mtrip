@@ -11,6 +11,8 @@ use Mtrip\Shared\Constants\ErrorCode;
 use Mtrip\Shared\Context\MerchantContext;
 use Mtrip\Shared\Exception\BusinessException;
 use Mtrip\Shared\Support\CouponEligibility;
+use Mtrip\Shared\Support\CouponVersion;
+use App\Service\MerchantPromotionPolicy;
 use Mtrip\Shared\Support\Result;
 
 /**
@@ -58,8 +60,8 @@ class PromotionController extends AbstractController
     {
         $row = (array) $this->baseQuery()->first([
             Db::raw('COUNT(*) AS total'),
-            Db::raw('SUM(CASE WHEN promotion_kind = 1 THEN 1 ELSE 0 END) AS percentage'),
-            Db::raw('SUM(CASE WHEN promotion_kind = 2 THEN 1 ELSE 0 END) AS fixed_amount'),
+            Db::raw('SUM(CASE WHEN promotion_kind IN (1, 4) AND coupon_type = 2 THEN 1 ELSE 0 END) AS percentage'),
+            Db::raw('SUM(CASE WHEN promotion_kind IN (2, 4) AND coupon_type = 1 THEN 1 ELSE 0 END) AS fixed_amount'),
             Db::raw('SUM(CASE WHEN promotion_kind = 3 THEN 1 ELSE 0 END) AS promo_code'),
             Db::raw('SUM(CASE WHEN promotion_kind = 4 THEN 1 ELSE 0 END) AS long_stay'),
             Db::raw('SUM(CASE WHEN status = 0 THEN 1 ELSE 0 END) AS draft'),
@@ -104,7 +106,15 @@ class PromotionController extends AbstractController
             });
         }
         if (($kind = $this->intInput('promotionKind')) > 0) {
-            $query->where('c.promotion_kind', $kind);
+            if (in_array($kind, [self::KIND_PERCENTAGE, self::KIND_FIXED_AMOUNT], true)) {
+                $query->whereIn('c.promotion_kind', [$kind, self::KIND_LONG_STAY])
+                    ->where('c.coupon_type', $kind === self::KIND_PERCENTAGE ? 2 : 1);
+            } else {
+                $query->where('c.promotion_kind', $kind);
+            }
+        }
+        if ($this->strInput('promotionCondition') === 'standard') {
+            $query->where('c.promotion_kind', '!=', self::KIND_LONG_STAY);
         }
         if (($type = $this->intInput('couponType')) > 0) {
             $query->where('c.coupon_type', $type);
@@ -115,10 +125,11 @@ class PromotionController extends AbstractController
         }
 
         $total = (clone $query)->count();
+        $timezone = MerchantPromotionPolicy::get(MerchantContext::siteId())['timezone'];
         $list = $query->orderByDesc('c.id')
             ->forPage($page, $pageSize)
             ->get($this->columns())
-            ->map(fn ($row) => $this->normalize((array) $row))
+            ->map(fn ($row) => $this->normalize((array) $row, $timezone))
             ->all();
 
         return Result::page($list, $total, $page, $pageSize);
@@ -143,12 +154,13 @@ class PromotionController extends AbstractController
             ->whereIn('s.id', $this->scopePropertyIds())
             ->whereNull('s.deleted_at')
             ->orderBy('s.id')
-            ->get(['s.id', 's.merchant_id', 's.store_name', 's.city_key', 'm.merchant_name'])
+            ->get(['s.id', 's.merchant_id', 's.store_name', 's.city_key', 'm.merchant_name', 'm.commission_rate'])
             ->map(static fn ($row) => [
                 'id' => (int) $row->id,
                 'merchant_id' => (int) $row->merchant_id,
                 'merchant_name' => (string) ($row->merchant_name ?? ''),
                 'property_name' => (string) $row->store_name,
+                'commission_rate' => (float) $row->commission_rate,
                 'city_key' => (string) ($row->city_key ?? ''),
             ])
             ->all();
@@ -184,6 +196,7 @@ class PromotionController extends AbstractController
             'properties' => $properties,
             'roomTypes' => $roomTypes,
             'currency' => $currency !== '' ? $currency : 'THB',
+            'policy' => MerchantPromotionPolicy::get(MerchantContext::siteId()),
         ]);
     }
 
@@ -285,10 +298,14 @@ class PromotionController extends AbstractController
         $data = $this->validatedPayload($merchantId);
         $data['merchant_id'] = $merchantId;
         $data['site_id'] = $this->merchantSiteId($merchantId);
-        $data['status'] = 0;
+        $data['status'] = $this->intInput('enabled', 1) === 1 ? 1 : 2;
         $data['created_by_merchant_admin'] = MerchantContext::adminId();
-        $id = (int) Db::table('marketing_coupon')->insertGetId($data);
-        $this->syncPromoCode($id);
+        $id = Db::transaction(function () use ($data) {
+            $id = (int) Db::table('marketing_coupon')->insertGetId($data);
+            CouponVersion::record((array) Db::table('marketing_coupon')->find($id), 'create', 'merchant', MerchantContext::adminId());
+            $this->syncPromoCode($id);
+            return $id;
+        });
 
         return Result::success(['id' => $id], 'promotion created');
     }
@@ -297,12 +314,17 @@ class PromotionController extends AbstractController
     public function update(): array
     {
         $coupon = $this->findScoped($this->requireId());
-        if (! in_array((int) $coupon['status'], [0, 2], true)) {
-            throw new BusinessException(ErrorCode::DATA_CONFLICT, 'only draft or paused promotions can be edited');
-        }
         $data = $this->validatedPayload((int) $coupon['merchant_id'], (int) $coupon['id']);
-        Db::table('marketing_coupon')->where('id', $coupon['id'])->update($data);
-        $this->syncPromoCode((int) $coupon['id']);
+        CouponVersion::change((int) $coupon['id'], 'edit', 'merchant', MerchantContext::adminId(), function (array $row) use ($data) {
+            if (! in_array((int) $row['status'], [0, 1, 2], true)) {
+                throw new BusinessException(ErrorCode::DATA_CONFLICT, 'ended promotions cannot be edited');
+            }
+            if ($data['total_count'] > 0 && $data['total_count'] < (int) $row['received_count']) {
+                throw new BusinessException(ErrorCode::PARAM_ERROR, 'usage limit cannot be less than already claimed');
+            }
+            Db::table('marketing_coupon')->where('id', $row['id'])->update($data);
+            $this->syncPromoCode((int) $row['id']);
+        });
 
         return Result::success(null, 'promotion updated');
     }
@@ -315,6 +337,10 @@ class PromotionController extends AbstractController
     public function duplicate(): array
     {
         $coupon = $this->findScoped($this->requireId());
+        $coupon = (array) Db::table('marketing_coupon')->find($coupon['id']);
+        if ((int) $coupon['valid_type'] !== 1 || ! $coupon['valid_start'] || ! $coupon['valid_end'] || $coupon['valid_start'] >= $coupon['valid_end']) {
+            throw new BusinessException(ErrorCode::PARAM_ERROR, 'Set explicit start and end date/time before duplicating.');
+        }
         $data = [
             'site_id' => $coupon['site_id'],
             'merchant_id' => $coupon['merchant_id'],
@@ -350,12 +376,17 @@ class PromotionController extends AbstractController
             'valid_end' => $coupon['valid_end'],
             'valid_days' => $coupon['valid_days'],
             'stackable' => $coupon['stackable'] ?? 0,
-            'status' => 0,
+            'status' => 2,
             'remark' => $coupon['remark'],
             'staff_note' => $coupon['staff_note'],
         ];
-        $id = (int) Db::table('marketing_coupon')->insertGetId($data);
-        $this->syncPromoCode($id);
+        $data['merchant_policy'] = json_encode(MerchantPromotionPolicy::validate((int) $data['site_id'], (int) $data['merchant_id'], $data));
+        $id = Db::transaction(function () use ($data) {
+            $id = (int) Db::table('marketing_coupon')->insertGetId($data);
+            CouponVersion::record((array) Db::table('marketing_coupon')->find($id), 'duplicate', 'merchant', MerchantContext::adminId());
+            $this->syncPromoCode($id);
+            return $id;
+        });
 
         return Result::success(['id' => $id], 'promotion duplicated');
     }
@@ -363,45 +394,58 @@ class PromotionController extends AbstractController
     #[Permission('mch:promotions:status')]
     public function publish(): array
     {
-        $coupon = $this->findScoped($this->requireId());
-        if ((int) $coupon['status'] !== 0) {
-            throw new BusinessException(ErrorCode::DATA_CONFLICT, 'only draft promotions can be published');
-        }
-        Db::table('marketing_coupon')->where('id', $coupon['id'])->update(['status' => 1]);
-        $this->syncPromoCode((int) $coupon['id']);
-
-        return Result::success(['status' => 1], 'promotion published');
+        return $this->transition('enable');
     }
 
     #[Permission('mch:promotions:status')]
     public function toggleStatus(): array
     {
-        $coupon = $this->findScoped($this->requireId());
-        $status = (int) $coupon['status'];
-        if (! in_array($status, [1, 2], true)) {
-            throw new BusinessException(ErrorCode::DATA_CONFLICT, 'only active or paused promotions can be toggled');
-        }
-        $next = $status === 1 ? 2 : 1;
-        Db::table('marketing_coupon')->where('id', $coupon['id'])->update(['status' => $next]);
-        $this->syncPromoCode((int) $coupon['id']);
+        return $this->transition('toggle');
+    }
 
-        return Result::success(['status' => $next], 'promotion status updated');
+    #[Permission('mch:promotions:status')]
+    public function end(): array
+    {
+        return $this->transition('end');
     }
 
     #[Permission('mch:promotions:delete')]
     public function remove(): array
     {
-        $coupon = $this->findScoped($this->requireId());
-        if (! in_array((int) $coupon['status'], [0, 3], true)) {
-            throw new BusinessException(ErrorCode::DATA_CONFLICT, 'only draft or ended promotions can be deleted');
-        }
-        $now = date('Y-m-d H:i:s');
-        Db::table('marketing_coupon')->where('id', $coupon['id'])->update(['deleted_at' => $now]);
-        // 券码一并作废,否则 C 端按码仍能兑换到已删除的券
-        Db::table('marketing_promo_code')->where('coupon_id', $coupon['id'])->whereNull('deleted_at')
-            ->update(['deleted_at' => $now, 'status' => 2]);
+        return $this->transition('archive');
+    }
 
-        return Result::success(null, 'promotion deleted');
+    private function transition(string $action): array
+    {
+        $coupon = $this->findScoped($this->requireId());
+        $next = 3;
+        CouponVersion::change((int) $coupon['id'], $action, 'merchant', MerchantContext::adminId(), function (array $row) use ($action, &$next) {
+            $status = (int) $row['status'];
+            if (($action === 'toggle' && ! in_array($status, [1, 2], true))
+                || ($action === 'enable' && ! in_array($status, [0, 2], true))
+                || ($action === 'end' && $status === 3)) {
+                throw new BusinessException(ErrorCode::DATA_CONFLICT, 'invalid promotion status transition');
+            }
+            $next = $action === 'enable' ? 1 : ($action === 'toggle' ? ($status === 1 ? 2 : 1) : 3);
+            $data = ['status' => $next];
+            if ($next === 1) {
+                if ((int) $row['valid_type'] !== 1 || ! $row['valid_start'] || ! $row['valid_end'] || $row['valid_end'] <= gmdate('Y-m-d H:i:s')) {
+                    throw new BusinessException(ErrorCode::PARAM_ERROR, 'Set a valid start and end date/time before enabling.');
+                }
+                $data['merchant_policy'] = json_encode(MerchantPromotionPolicy::validate((int) $row['site_id'], (int) $row['merchant_id'], $row));
+            }
+            if ($action === 'archive') {
+                $data['deleted_at'] = gmdate('Y-m-d H:i:s');
+            }
+            Db::table('marketing_coupon')->where('id', $row['id'])->update($data);
+            if ($action === 'archive') {
+                Db::table('marketing_promo_code')->where('coupon_id', $row['id'])->whereNull('deleted_at')
+                    ->update(['deleted_at' => $data['deleted_at'], 'status' => 3]);
+            } else {
+                $this->syncPromoCode((int) $row['id']);
+            }
+        });
+        return Result::success(['status' => $next], 'promotion updated');
     }
 
     // ─────────────────────────── 查询基础 ───────────────────────────
@@ -599,14 +643,14 @@ class PromotionController extends AbstractController
             throw new BusinessException(ErrorCode::PARAM_ERROR, 'invalid promotionKind');
         }
 
-        // 折扣单位:百分比/长住固定按「立减百分比」;固定金额固定按金额;优惠码由用户选
+        // 百分比/金额固定计价单位;长住与优惠码保留用户选择的单位。
         $unit = match ($kind) {
-            self::KIND_PERCENTAGE, self::KIND_LONG_STAY => self::UNIT_PERCENT,
+            self::KIND_PERCENTAGE => self::UNIT_PERCENT,
             self::KIND_FIXED_AMOUNT => self::UNIT_AMOUNT,
             default => $this->intInput('discountUnit') === self::UNIT_AMOUNT ? self::UNIT_AMOUNT : self::UNIT_PERCENT,
         };
         $discountValue = round($this->floatInput('discountValue'), 2);
-        if ($discountValue <= 0) {
+        if (! is_finite($discountValue) || $discountValue <= 0) {
             throw new BusinessException(ErrorCode::PARAM_ERROR, 'discountValue must be greater than 0');
         }
         [$couponType, $storedDiscount] = $this->discountPair($unit, $discountValue);
@@ -644,26 +688,18 @@ class PromotionController extends AbstractController
         }
 
         $validType = $this->intInput('validType', 1);
-        if (! in_array($validType, [1, 2], true)) {
-            throw new BusinessException(ErrorCode::PARAM_ERROR, 'invalid validType');
+        if ($validType !== 1 || $this->intInput('noExpiry') === 1) {
+            throw new BusinessException(ErrorCode::PARAM_ERROR, 'Start and end date/time are required for merchant promotions.');
         }
-        $validStart = $this->strInput('validStart');
-        $validEnd = $this->strInput('validEnd');
-        $validDays = $this->intInput('validDays');
-        // 稿面「No expiry date」勾选 → 固定日期口径但不设结束时间(下游 claimBlocker 对空 valid_end 视为不过期)
-        $noExpiry = $this->intInput('noExpiry') === 1;
-        if ($validType === 1) {
-            if ($validStart === '') {
-                throw new BusinessException(ErrorCode::PARAM_ERROR, 'validStart is required');
-            }
-            if (! $noExpiry && ($validEnd === '' || $validStart > $validEnd)) {
-                throw new BusinessException(ErrorCode::PARAM_ERROR, 'invalid valid date range');
-            }
-        } elseif ($validDays <= 0) {
-            throw new BusinessException(ErrorCode::PARAM_ERROR, 'validDays must be greater than 0');
+        $validStart = $this->scheduleTimestamp($this->strInput('validStart'));
+        $validEnd = $this->scheduleTimestamp($this->strInput('validEnd'));
+        if ($validStart >= $validEnd) {
+            throw new BusinessException(ErrorCode::PARAM_ERROR, 'End date/time must be later than start date/time.');
         }
+        $noExpiry = false;
+        $validDays = 0;
 
-        return [
+        $data = [
             'coupon_name' => mb_substr($this->requireStr('couponName'), 0, 100),
             'description' => mb_substr($this->strInput('description'), 0, 255),
             'coupon_type' => $couponType,
@@ -692,6 +728,13 @@ class PromotionController extends AbstractController
             'remark' => mb_substr($this->strInput('remark'), 0, 500),
             'staff_note' => mb_substr($this->strInput('staffNote'), 0, 500),
         ] + $this->conditionColumns();
+        foreach (['min_amount', 'max_discount'] as $field) {
+            if (! is_finite($data[$field]) || $data[$field] < 0) {
+                throw new BusinessException(ErrorCode::PARAM_ERROR, 'Minimum spend and discount cap must be non-negative amounts.');
+            }
+        }
+        $data['merchant_policy'] = json_encode(MerchantPromotionPolicy::validate(MerchantContext::siteId(), $merchantId, $data));
+        return $data;
     }
 
     /**
@@ -707,6 +750,16 @@ class PromotionController extends AbstractController
             'stayStart' => $this->input('stayStart'),
             'stayEnd' => $this->input('stayEnd'),
         ]);
+    }
+
+    private function scheduleTimestamp(string $value): string
+    {
+        $zone = new \DateTimeZone(MerchantPromotionPolicy::get(MerchantContext::siteId())['timezone']);
+        $date = \DateTimeImmutable::createFromFormat('!Y-m-d H:i:s', $value, $zone);
+        if ($date === false || $date->format('Y-m-d H:i:s') !== $value) {
+            throw new BusinessException(ErrorCode::PARAM_ERROR, 'A valid date and time are required.');
+        }
+        return $date->setTimezone(new \DateTimeZone('UTC'))->format('Y-m-d H:i:s');
     }
 
     /**
@@ -767,12 +820,15 @@ class PromotionController extends AbstractController
         $coupon = (array) $coupon;
         $code = (string) ($coupon['promo_code'] ?? '');
         if ((int) $coupon['promotion_kind'] !== self::KIND_PROMO_CODE || $code === '') {
+            Db::table('marketing_promo_code')->where('coupon_id', $couponId)->whereNull('deleted_at')
+                ->update(['status' => 3, 'deleted_at' => gmdate('Y-m-d H:i:s')]);
             return;
         }
 
         $type = (int) $coupon['coupon_type'];
         $value = (float) $coupon['discount_value'];
         $data = [
+            'code' => $code,
             'site_id' => (int) $coupon['site_id'],
             'name' => (string) $coupon['coupon_name'],
             'coupon_id' => $couponId,
@@ -883,7 +939,7 @@ class PromotionController extends AbstractController
         return (int) (Db::table('merchant_info')->where('id', $merchantId)->value('site_id') ?? MerchantContext::siteId());
     }
 
-    private function normalize(array $row): array
+    private function normalize(array $row, ?string $timezone = null): array
     {
         $row['goods_ids'] = $this->jsonDecode($row['goods_ids'] ?? null);
         $row['property_ids'] = $this->jsonDecode($row['property_ids'] ?? null);
@@ -895,6 +951,18 @@ class PromotionController extends AbstractController
         $row['discount_percent_off'] = (int) ($row['coupon_type'] ?? 1) === 2
             ? round((10 - (float) $row['discount_value']) * 10, 2)
             : 0.0;
+        $now = gmdate('Y-m-d H:i:s');
+        $status = (int) $row['status'];
+        $row['lifecycle_status'] = $status === 3 ? 'ended' : ($status === 0 ? 'draft'
+            : ((! empty($row['valid_end']) && $row['valid_end'] <= $now) ? 'expired'
+                : ($status === 2 ? 'paused' : ((! empty($row['valid_start']) && $row['valid_start'] > $now) ? 'upcoming' : 'active'))));
+        $zone = new \DateTimeZone($timezone ?? MerchantPromotionPolicy::get((int) $row['site_id'])['timezone']);
+        $row['schedule_timezone'] = $zone->getName();
+        foreach (['valid_start', 'valid_end'] as $field) {
+            if (! empty($row[$field])) {
+                $row[$field] = (new \DateTimeImmutable($row[$field], new \DateTimeZone('UTC')))->setTimezone($zone)->format('Y-m-d H:i:s');
+            }
+        }
         unset($row['deleted_at']);
 
         return $row;
