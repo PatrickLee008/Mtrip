@@ -63,10 +63,18 @@ export function actionOf(status: CouponStatus): CouponAction {
 /** 优惠值主标题:满减/无门槛 = 金额,折扣 = 百分比(后端是 10 分制,8.5 折 = 15% OFF) */
 export function discountTitle(view: CouponView, t: TFunction, currency: string): string {
   if (view.coupon_type === 2) {
-    const percent = Math.round((10 - view.discount_value) * 10);
-    return t('promotions.coupon.percentOff', { percent });
+    return t('promotions.coupon.percentOff', { percent: discountPercent(view) });
   }
   return t('promotions.coupon.amountOff', { amount: formatMoney(view.discount_value, currency) });
+}
+
+/** 主标题里的数值部分(「MMK 5,000」/「15%」),详情页用它把其余文案(OFF / 立减)标成主色 */
+export function discountValue(view: CouponView, currency: string): string {
+  return view.coupon_type === 2 ? `${discountPercent(view)}%` : formatMoney(view.discount_value, currency);
+}
+
+function discountPercent(view: CouponView): number {
+  return Math.round((10 - view.discount_value) * 10);
 }
 
 /** 副标题:有门槛显示最低消费,无门槛直说无门槛 */

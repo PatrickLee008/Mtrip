@@ -39,6 +39,7 @@ import {
   actionOf,
   categoryOf,
   discountTitle,
+  discountValue,
   expiryText,
   reasonText,
   thresholdText,
@@ -63,6 +64,7 @@ export default function CouponDetailScreen() {
   const [coupon, setCoupon] = useState<CouponView | null>(null);
   const [loading, setLoading] = useState(hasParams);
   const [claiming, setClaiming] = useState(false);
+  const [codeWidth, setCodeWidth] = useState(0);
 
   const load = useCallback(async () => {
     if (!hasParams) return;
@@ -100,6 +102,7 @@ export default function CouponDetailScreen() {
         category: categoryOf(coupon),
         expiry: expiryText(coupon, t),
         amount: discountTitle(coupon, t, currency),
+        amountValue: discountValue(coupon, currency),
         badge: null as string | null,
         code: coupon.coupon_code,
         codeLabel: coupon.coupon_code ? t('promotions.coupon.codeLabel') : '',
@@ -120,6 +123,7 @@ export default function CouponDetailScreen() {
       category: COUPON_DETAIL.category,
       expiry: t('promotions.coupon.expiry', { date: COUPON_DETAIL.expiry }),
       amount: `${t('promotions.detail.amount')} ${t('promotions.detail.off')}`,
+      amountValue: t('promotions.detail.amount'),
       badge: t(`promotions.coupon.badges.${COUPON_DETAIL.badge}`),
       code: COUPON_DETAIL.code,
       codeLabel: t('promotions.coupon.codeLabel'),
@@ -193,7 +197,7 @@ export default function CouponDetailScreen() {
                 </View>
 
                 <View style={styles.amountRow}>
-                  <Text style={styles.amount}>{view.amount}</Text>
+                  <AmountText full={view.amount} value={view.amountValue} />
                 </View>
 
                 {view.badge ? (
@@ -208,7 +212,13 @@ export default function CouponDetailScreen() {
                 <View style={styles.codeBlock}>
                   <Text style={styles.codeLabel}>{view.codeLabel}</Text>
                   <View style={styles.codeBox}>
-                    <Text style={styles.code}>{view.code}</Text>
+                    <Text
+                      style={[styles.code, { fontSize: codeFontSize(view.code, codeWidth) }]}
+                      numberOfLines={1}
+                      onLayout={(e) => setCodeWidth(e.nativeEvent.layout.width)}
+                    >
+                      {view.code}
+                    </Text>
                     <Pressable
                       style={({ pressed }) => [styles.copyBtn, pressed && promoShared.pressed]}
                       accessibilityLabel={t('promotions.coupon.copy')}
@@ -222,7 +232,9 @@ export default function CouponDetailScreen() {
             </View>
 
             <View style={[promoShared.panel, styles.textPanel]}>
-              <Text style={promoShared.panelTitle}>{t('promotions.detail.descriptionTitle')}</Text>
+              <Text style={[promoShared.panelTitle, styles.descTitle]}>
+                {t('promotions.detail.descriptionTitle')}
+              </Text>
               <Text style={promoShared.body}>{view.desc}</Text>
             </View>
 
@@ -258,6 +270,30 @@ export default function CouponDetailScreen() {
       </SafeAreaView>
     </View>
   );
+}
+
+/** 金额行:数值深色,其余(OFF / 立减 / % 折扣)主色;语序随语言,按数值在整句中的位置切分 */
+function AmountText({ full, value }: { full: string; value: string }) {
+  const at = full.indexOf(value);
+  if (at < 0) return <Text style={styles.amount}>{full}</Text>;
+  const before = full.slice(0, at);
+  const after = full.slice(at + value.length);
+  return (
+    <Text style={styles.amount}>
+      {before ? <Text style={styles.amountOff}>{before}</Text> : null}
+      {value}
+      {after ? <Text style={styles.amountOff}>{after}</Text> : null}
+    </Text>
+  );
+}
+
+/**
+ * 券码单行展示:设计稿码框只放一行(Inter 700/24)。系统生成的长码(如 20 位)在 24 号下会折行,
+ * 按可用宽度把字号压到放得下为止(Inter Bold 大写/数字平均字宽约 0.68em),最小 14。
+ */
+function codeFontSize(code: string, width: number): number {
+  if (width <= 0 || code.length === 0) return 24;
+  return Math.max(14, Math.min(24, Math.floor(width / (code.length * 0.68))));
 }
 
 /**
@@ -357,6 +393,7 @@ const styles = StyleSheet.create({
 
   amountRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 6 },
   amount: { fontFamily: fonts.interSemi, fontSize: 24, lineHeight: 32, color: colors.heading },
+  amountOff: { color: colors.primary },
   badge: {
     marginTop: 6,
     paddingHorizontal: 8,
@@ -404,6 +441,8 @@ const styles = StyleSheet.create({
   },
 
   textPanel: { gap: 16 },
+  /* 设计稿「PROMOTION DESCRIPTION」为主色,「TERMS & CONDITIONS」保持深色 */
+  descTitle: { color: colors.primary },
   termsList: { gap: 12 },
   termsText: { flex: 1, minWidth: 0 },
   ctaDisabled: { opacity: 0.5 },

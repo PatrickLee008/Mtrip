@@ -1,6 +1,6 @@
 /**
  * 本地体验卡(设计稿 11):370x256 r32,整图 + 渐变遮罩 + 底部文案
- * highDemand 时左上角显示 88x23 r999 #EC1317 角标
+ * highDemand 时在描述下方显示 88x23 r999 #EC1317 角标(设计稿 81:2609)
  */
 
 import React from 'react';
@@ -42,11 +42,6 @@ export default function ExperienceCard({
         radius={radius.card}
       />
       <View style={styles.mask} />
-      {highDemand ? (
-        <View style={styles.badge}>
-          <Text style={styles.badgeText}>{t('home.experiences.highDemand')}</Text>
-        </View>
-      ) : null}
       <View style={styles.body}>
         <Text style={styles.name} numberOfLines={2}>
           {name}
@@ -54,6 +49,11 @@ export default function ExperienceCard({
         <Text style={styles.desc} numberOfLines={2}>
           {desc}
         </Text>
+        {highDemand ? (
+          <View style={styles.badge}>
+            <Text style={styles.badgeText}>{t('home.experiences.highDemand')}</Text>
+          </View>
+        ) : null}
       </View>
     </Pressable>
   );
@@ -71,9 +71,8 @@ const styles = StyleSheet.create({
   pressed: { opacity: 0.92 },
   mask: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(6, 28, 52, 0.32)' },
   badge: {
-    position: 'absolute',
-    top: 20,
-    left: 20,
+    alignSelf: 'flex-start',
+    marginTop: 4,
     borderRadius: 999,
     backgroundColor: colors.hot,
     paddingHorizontal: 10,

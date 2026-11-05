@@ -40,8 +40,9 @@ const styles = StyleSheet.create({
   },
   titleRow: { flexDirection: 'row', alignItems: 'center' },
   title: { marginLeft: 12 },
+  /* 设计稿 884:1700 按钮靠右 */
   btn: {
-    alignSelf: 'flex-start',
+    alignSelf: 'flex-end',
     height: 40,
     justifyContent: 'center',
     paddingHorizontal: 24,

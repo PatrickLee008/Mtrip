@@ -107,7 +107,9 @@ export default function HomeScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const goDetail = (goods: GoodsItem) => navigation.navigate('GoodsDetail', { id: goods.id });
+  /** 酒店特惠的行是物业(id = property_id),进酒店详情而不是门票商品详情 */
+  const goHotel = (goods: GoodsItem) =>
+    navigation.navigate('HotelDetail', { propertyId: goods.property_id ?? goods.id });
   const goList = (goodsType?: number, title?: string) =>
     navigation.navigate('GoodsList', goodsType ? { goodsType, title } : {});
   const comingSoon = () => showToast(t('home.comingSoon'));
@@ -215,7 +217,7 @@ export default function HomeScreen() {
               decelerationRate="fast"
             >
               {recommend.map((g) => (
-                <StayCard key={g.id} goods={g} onPress={goDetail} />
+                <StayCard key={g.id} goods={g} onPress={goHotel} />
               ))}
             </ScrollView>
           </View>

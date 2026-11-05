@@ -1191,6 +1191,8 @@
     "guests": "Guests",
     "guestsValue": "{{adults}} Adults, {{rooms}} room",
     "myanmarCitizen": "Myanmar Citizen",
+    "citizenTip": "Myanmar citizens enjoy local resident rates. Please bring a valid NRC for check-in.",
+    "howToBook": "how do I book",
     "search": "Search",
     "stayLonger": "Stay Longer, Save More",
     "guide": {

@@ -1191,6 +1191,8 @@
     "guests": "入住人",
     "guestsValue": "{{adults}} 位成人,{{rooms}} 间房",
     "myanmarCitizen": "缅甸公民",
+    "citizenTip": "缅甸公民可享受本地居民价格,入住时请出示有效 NRC 身份证。",
+    "howToBook": "如何预订",
     "search": "搜索",
     "stayLonger": "住得越久,省得越多",
     "guide": {

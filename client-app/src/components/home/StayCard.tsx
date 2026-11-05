@@ -37,6 +37,8 @@ export default function StayCard({
   onToggleFavorite,
 }: Props) {
   const { t } = useTranslation();
+  // 首页 Hotel Promotion 的行来自酒店排行/可搜索酒店(MarketplaceReader),只有 property_name
+  const name = goods.goods_name || goods.property_name || '';
   const heartIcon = (
     <HomeIcon name={favorite ? 'heartFilled' : 'heart'} size={14} color="#FFFFFF" />
   );
@@ -51,7 +53,7 @@ export default function StayCard({
           fallback={coverSource}
           width={COVER_WIDTH}
           height={176}
-          label={goods.goods_name}
+          label={name}
         />
         {onToggleFavorite ? (
           <Pressable
@@ -68,7 +70,7 @@ export default function StayCard({
       <View style={styles.body}>
         <View style={styles.row}>
           <Text style={[text.cardTitle, styles.name]} numberOfLines={1}>
-            {goods.goods_name}
+            {name}
           </Text>
           {goods.star_level > 0 ? (
             <View style={styles.rating}>
