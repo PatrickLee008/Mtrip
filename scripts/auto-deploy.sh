@@ -453,7 +453,7 @@ echo "  网关动作     :${GATEWAY_ACTION:- (无)}"
 [ "$APPLY_DB" -eq 1 ] && echo "  数据库迁移   :对比完整账本并在代码发布前执行待执行版本"
 [ "$SKIP_DB" -eq 1 ] && echo "  ${C_YELLOW}数据库迁移   :已用 --skip-db 显式跳过${C_OFF}"
 [ "$NEED_STACK_UP" -eq 1 ] && echo "  ${C_YELLOW}.env/compose 变更:需 ./mtrip.sh build 或 start 重建容器(本脚本不自动执行)${C_OFF}"
-[ -n "$DB_FILES" ] && echo "  DB 文件变更  :$DB_FILES"
+[ -n "$DB_FILES" ] && echo "  DB 文件变更(含快照，仅 migrations 待执行版本会入库):$DB_FILES"
 [ "$NOTE_MOBILE" -eq 1 ] && echo "  移动端(client-app/merchant-app):本次只发 H5 网页版(见上方前端构建);iOS/Android 商店发版仍需人工 EAS build + 提审"
 if [ -n "$SKIPPED_APP" ]; then
     warn "--no-app-sync:跳过 APP 孪生重启 [$SKIPPED_APP]"

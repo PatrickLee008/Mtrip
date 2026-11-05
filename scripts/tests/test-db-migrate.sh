@@ -72,17 +72,19 @@ case "$cmd" in
                 printf '%s\t%s\t%s\t%s\trunning\towner-a\n' "$version" "$description" "$script_path" "$checksum" > "$state_dir/row"
                 exit 1
             fi
-            printf '%s\t%s\t%s\t%s\tapplied\t%s\n' "$version" "$description" "$script_path" "$checksum" "$attempt_id" > "$state_dir/row"
+            printf '%s\t%s\t%s\t%s\tapplied\t%s\n' "$version" "$description" "$script_path" "$checksum" "$attempt_id" >> "$state_dir/row"
             exit 0
         fi
 
         query="${*: -1}"
-        IFS=$'\t' read -r version description script_path checksum status attempt_id < "$state_dir/row" || true
+        requested_version="$(printf '%s' "$query" | sed -n "s/.*WHERE version='\([0-9]\{14\}\)'.*/\1/p")"
+        row="$(awk -F '\t' -v version="$requested_version" '$1 == version' "$state_dir/row")"
+        IFS=$'\t' read -r version description script_path checksum status attempt_id <<< "$row" || true
         case "$query" in
             *information_schema.TABLES*) cat "$state_dir/ledger-exists" ;;
-            *"COUNT(*)"*"status='applied'"*) [ "${status:-}" = "applied" ] && echo 1 || echo 0 ;;
-            *"COUNT(*)"*"status<>'applied'"*) [ -n "${status:-}" ] && [ "$status" != "applied" ] && echo 1 || echo 0 ;;
-            *"MAX(version)"*) echo "${version:-}" ;;
+            *"COUNT(*)"*"status='applied'"*) awk -F '\t' '$5 == "applied" { n++ } END { print n+0 }' "$state_dir/row" ;;
+            *"COUNT(*)"*"status<>'applied'"*) awk -F '\t' '$5 != "applied" { n++ } END { print n+0 }' "$state_dir/row" ;;
+            *"MAX(version)"*) awk -F '\t' '$5 == "applied" { print $1 }' "$state_dir/row" | sort | tail -n 1 ;;
             *"SELECT status"*) echo "${status:-}" ;;
             *"UPDATE mtrip_system.schema_migrations"*"status='failed'"*)
                 requested_attempt="$(printf '%s' "$query" | sed -n "s/.*attempt_id='\([^']*\)'.*/\1/p")"
@@ -189,6 +191,45 @@ if run_migrate --status > "$TEST_ROOT/order.out" 2>&1; then
     exit 1
 fi
 grep -q "禁止倒序补迁移" "$TEST_ROOT/order.out"
+
+# Explicit recovery must permit only the reviewed versions, with a read-only preview.
+cp "$TEST_ROOT/original-migration.sql" "$FIXTURE/database/migrations/V20260908000000__another-older-migration.sql"
+cp "$FAKE_DIR/row" "$TEST_ROOT/before-repair-row"
+if run_migrate --allow-out-of-order=20260909000000 > "$TEST_ROOT/partial-repair.out" 2>&1; then
+    echo "未列入白名单的倒序迁移本应阻断" >&2
+    exit 1
+fi
+cmp "$FAKE_DIR/row" "$TEST_ROOT/before-repair-row"
+for invalid in '' all 20260909000000, 20260909000000,20260909000000 20260907000000; do
+    if run_migrate "--allow-out-of-order=$invalid" > "$TEST_ROOT/invalid-repair.out" 2>&1; then
+        echo "非法或不存在的补迁移版本本应拒绝: $invalid" >&2
+        exit 1
+    fi
+done
+repair_versions=20260908000000,20260909000000
+run_migrate --dry-run "--allow-out-of-order=$repair_versions" > "$TEST_ROOT/repair-preview.out"
+grep -q "待执行 2" "$TEST_ROOT/repair-preview.out"
+cmp "$FAKE_DIR/row" "$TEST_ROOT/before-repair-row"
+printf '\n-- tampered\n' >> "$FIXTURE/database/migrations/V20260909000001__test-migration.sql"
+if run_migrate "--allow-out-of-order=$repair_versions" > "$TEST_ROOT/repair-tamper.out" 2>&1; then
+    echo "补迁移不能绕过 SHA-256 校验" >&2
+    exit 1
+fi
+cp "$TEST_ROOT/original-migration.sql" "$FIXTURE/database/migrations/V20260909000001__test-migration.sql"
+awk 'BEGIN { FS=OFS="\t" } { $5="failed"; print }' "$FAKE_DIR/row" > "$FAKE_DIR/row.tmp"
+mv "$FAKE_DIR/row.tmp" "$FAKE_DIR/row"
+if run_migrate "--allow-out-of-order=$repair_versions" > "$TEST_ROOT/repair-failed.out" 2>&1; then
+    echo "补迁移不能绕过 failed 状态" >&2
+    exit 1
+fi
+cp "$TEST_ROOT/before-repair-row" "$FAKE_DIR/row"
+run_migrate "--allow-out-of-order=$repair_versions" > "$TEST_ROOT/repair.out"
+grep -q "全部迁移成功，共执行 2 个版本" "$TEST_ROOT/repair.out"
+run_migrate "--allow-out-of-order=$repair_versions" > "$TEST_ROOT/repair-repeat.out"
+grep -q "数据库已是最新版本" "$TEST_ROOT/repair-repeat.out"
+run_migrate --status > "$TEST_ROOT/after-repair.out"
+grep -q "已执行 3，待执行 0" "$TEST_ROOT/after-repair.out"
+rm "$FIXTURE/database/migrations/V20260908000000__another-older-migration.sql"
 
 # A losing concurrent attempt must not mark the winning attempt's running row as failed.
 rm "$FIXTURE/database/migrations/V20260909000000__older-migration.sql"
