@@ -312,6 +312,7 @@ export default {
       namePlaceholder: 'e.g. The Grand Palace', typePlaceholder: 'Select Type', locationPlaceholder: 'e.g. Township...', upload: 'Click to upload or drag and drop', uploadHint: 'PNG, JPG or GIF (max. 5MB)',
       step: 'Step 1 of 2', stepTwo: 'Step 2 of 2', next: 'Next', previous: 'Previous', merchant: 'Merchant', merchantPlaceholder: 'Select merchant', merchantRequired: 'Select a merchant.',
       invalidImage: 'Choose a PNG, JPG or GIF image up to 5MB.', nameRequired: 'Enter a property name.',
+      invalidRoomTypes: 'Room type count must be a whole number greater than or equal to 0.',
       documentsSubtitle: 'Upload required documents for all 1 properties to proceed.', reviewWarning: 'An administrator must review and approve these documents before you can access this property dashboard.',
       documentFormats: 'PDF, JPG or PNG (max. 10MB)', invalidDocument: 'Choose a valid PDF, JPG or PNG file up to 10MB.', chooseFile: 'Choose file', replace: 'Replace', uploaded: 'Uploaded', submitReview: 'Submit Review', submitted: 'Property KYC submitted for review.', reviewReason: 'Review note', backToProperties: 'Back to Properties',
     },

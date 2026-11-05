@@ -311,6 +311,7 @@ export default {
       namePlaceholder: '例如：皇宫酒店', typePlaceholder: '选择类型', locationPlaceholder: '例如：所在乡镇...', upload: '点击上传或拖放图片', uploadHint: 'PNG、JPG 或 GIF（不超过 5MB）',
       step: '第 1 步，共 2 步', stepTwo: '第 2 步，共 2 步', next: '下一步', previous: '上一步', merchant: '商户', merchantPlaceholder: '选择商户', merchantRequired: '请选择商户。',
       invalidImage: '请选择不超过 5MB 的 PNG、JPG 或 GIF 图片。', nameRequired: '请输入物业名称。',
+      invalidRoomTypes: '房型数量必须是大于或等于 0 的整数。',
       documentsSubtitle: '上传 1 家物业所需的全部文件后继续。', reviewWarning: '管理员审核并批准这些文件后，才能访问该物业的工作台。',
       documentFormats: 'PDF、JPG 或 PNG（不超过 10MB）', invalidDocument: '请选择不超过 10MB 的有效 PDF、JPG 或 PNG 文件。', chooseFile: '选择文件', replace: '替换', uploaded: '已上传', submitReview: '提交审核', submitted: '物业 KYC 已提交审核。', reviewReason: '审核说明', backToProperties: '返回物业列表',
     },

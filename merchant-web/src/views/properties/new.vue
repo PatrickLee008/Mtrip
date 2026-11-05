@@ -86,6 +86,10 @@ async function next(): Promise<void> {
     message.warning(t('properties.new.merchantRequired'));
     return;
   }
+  if (!Number.isInteger(roomTypes.value) || roomTypes.value < 0) {
+    message.warning(t('properties.new.invalidRoomTypes'));
+    return;
+  }
   saving.value = true;
   try {
     const result = await apiPropertySave({
