@@ -35,7 +35,13 @@ class GoodsController extends AbstractController
             ->where('status', 3)
             ->whereNull('deleted_at');
 
-        $recommend = array_slice(MarketplaceReader::published($siteId, 'listing'), 0, 8);
+        // 首页 Hotel Promotion:优先取后台排行已发布的酒店;站点还没发布排行时回落为可搜索酒店的默认排序,
+        // 避免整块区域消失(设计稿 81:2619 该区块常驻)
+        $recommend = MarketplaceReader::published($siteId, 'listing');
+        if ($recommend === []) {
+            $recommend = MarketplaceReader::searchable($siteId);
+        }
+        $recommend = array_slice($recommend, 0, 8);
         $hot = $base()->where('is_hot', 1)
             ->orderByDesc('sales_count')->orderByDesc('id')
             ->limit(8)->get(self::LIST_FIELDS)

@@ -2,7 +2,7 @@
  * 酒店搜索结果卡(Figma M-Trip / Long Stay Search Results 1695:6325 的 Card 7/2/6/5)
  *
  * 结构:封面(176 高,上下各压一条主色渐变条)+ 正文(名称 / 地址 / 价格与徽章)。
- *   渐变条上:左上角星级(star_level 颗 12px 星)、右上角收藏心;
+ *   渐变条上:左上角星级(star_level 颗 12px 金色星 colors.star)、右上角收藏心;
  *             左下角评分与评价数、右下角评价档徽章(EXCELLENT)。
  *
  * 设计稿实测:
@@ -172,7 +172,7 @@ export default function HotelResultCard({
 
           <View style={styles.stars}>
             {Array.from({ length: goods.star_level }).map((_, i) => (
-              <HomeIcon key={i} name="star" size={12} color="#FFFFFF" />
+              <HomeIcon key={i} name="star" size={12} color={colors.star} />
             ))}
           </View>
           <Pressable

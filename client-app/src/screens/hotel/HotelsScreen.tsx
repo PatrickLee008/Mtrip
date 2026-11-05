@@ -2,7 +2,7 @@
  * 酒店搜索页(按 Figma M-Trip / Search 1 91:200 重做)
  *
  * 结构:顶部大图 → 悬浮顶部栏(返回 / 筛选)→ 搜索筛选卡 → 阶梯折扣卡 → 促销卡 → 广告位。
- * 搜索卡内容:标题 → 目的地搜索 → 入住/离店(两列)→ 入住人 → Myanmar Citizen → Search CTA。
+ * 搜索卡内容:标题 → 目的地搜索 → 入住/离店(两列)→ 入住人 → Myanmar Citizen(+ 说明 i)→ Search CTA。
  *
  * 设计稿实测:
  *   大图     402x268,顶部对齐;Main 从页面 y=174 起(即大图下方 148px 处与其重叠)
@@ -42,6 +42,7 @@ import HotelFilterSheet, {
   HotelFilterValue,
 } from '@/components/hotel/HotelFilterSheet';
 import HotelGuideOverlay from '@/components/hotel/guide/HotelGuideOverlay';
+import { CitizenCheck, GuidePill } from '@/components/hotel/HotelSearchBits';
 import { GOODS_TYPE } from '@/config/global';
 import { PAGE_PADDING, colors, radius } from '@/config/theme';
 import { fonts } from '@/config/typography';
@@ -175,18 +176,7 @@ export default function HotelsScreen() {
                 </View>
               </Pressable>
 
-              <Pressable
-                style={({ pressed }) => [styles.citizenRow, pressed && styles.pressed]}
-                onPress={() => setCitizen((v) => !v)}
-                hitSlop={6}
-              >
-                <HomeIcon
-                  name={citizen ? 'checkboxIndeterminate' : 'checkbox'}
-                  size={20}
-                  color={citizen ? colors.primary : colors.textSoft}
-                />
-                <Text style={styles.citizenText}>{t('hotels.myanmarCitizen')}</Text>
-              </Pressable>
+              <CitizenCheck value={citizen} onChange={setCitizen} />
 
               <Pressable
                 style={({ pressed }) => [styles.cta, pressed && styles.pressed]}
@@ -248,14 +238,8 @@ export default function HotelsScreen() {
             <HomeIcon name="arrowLeft" size={20} color="#FFFFFF" />
           </Pressable>
           <View style={styles.topRight}>
-            {/* 用户指引:筛选旁边的问号(Figma section Hotel Search Coach mark UI 2150:4865) */}
-            <Pressable
-              style={({ pressed }) => [styles.roundBtn, styles.filterBtn, pressed && styles.pressed]}
-              onPress={() => setGuideOpen(true)}
-              hitSlop={8}
-            >
-              <HomeIcon name="questionCircle" size={20} color="#FFFFFF" />
-            </Pressable>
+            {/* 用户指引(Coach mark 2150:4865) */}
+            <GuidePill onPress={() => setGuideOpen(true)} />
             <Pressable
               style={({ pressed }) => [styles.roundBtn, styles.filterBtn, pressed && styles.pressed]}
               onPress={() => setFilterOpen(true)}
@@ -333,8 +317,8 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.4)',
   },
   filterBtn: { borderRadius: 999 },
-  /** 顶栏右侧:问号 + 筛选两枚 */
-  topRight: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  /** 顶栏右侧:指引胶囊 + 筛选,间距 10 */
+  topRight: { flexDirection: 'row', alignItems: 'center', gap: 10 },
 
   searchCard: {
     backgroundColor: colors.surface,
@@ -394,13 +378,6 @@ const styles = StyleSheet.create({
     color: colors.heading,
   },
 
-  citizenRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  citizenText: {
-    fontFamily: fonts.inter,
-    fontSize: 12,
-    lineHeight: 24,
-    color: colors.textSoft,
-  },
 
   cta: {
     alignItems: 'center',
@@ -436,7 +413,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     lineHeight: 24,
     color: colors.textSoft,
-    textAlign: 'center',
   },
   /* 设计稿四行都是 50% 透明(尚未生效的档位) */
   tierRow: {

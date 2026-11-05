@@ -138,7 +138,7 @@ function StepGuests({ lite }: StepProps) {
         <Text style={[styles.citizenText, lite && styles.citizenTextLite]}>
           {t('hotels.myanmarCitizen')}
         </Text>
-        <HomeIcon name="infoCircle" size={lite ? 24 : 20} color={colors.textSoft} />
+        <HomeIcon name="info20" size={lite ? 24 : 20} color={colors.textSoft} />
       </View>
     </View>
   );

@@ -61,6 +61,7 @@ import HotelFilterSheet, {
   filterToParams,
 } from '@/components/hotel/HotelFilterSheet';
 import HotelGuideOverlay from '@/components/hotel/guide/HotelGuideOverlay';
+import { CitizenCheck, GuidePill } from '@/components/hotel/HotelSearchBits';
 import HotelResultCard from '@/components/hotel/HotelResultCard';
 import SortSheet, { sortLabelKey, type SortAnchor } from '@/components/hotel/SortSheet';
 import { PAGE_PADDING, colors, radius, shadows } from '@/config/theme';
@@ -329,18 +330,7 @@ export default function HotelResultsScreen() {
             </View>
           </Pressable>
 
-          <Pressable
-            style={({ pressed }) => [styles.citizenRow, pressed && styles.pressed]}
-            onPress={() => setCitizen((v) => !v)}
-            hitSlop={6}
-          >
-            <HomeIcon
-              name={citizen ? 'checkboxIndeterminate' : 'checkbox'}
-              size={20}
-              color={citizen ? colors.primary : colors.textSoft}
-            />
-            <Text style={styles.citizenText}>{t('hotels.myanmarCitizen')}</Text>
-          </Pressable>
+          <CitizenCheck value={citizen} onChange={setCitizen} />
 
           <Pressable style={({ pressed }) => [styles.cta, pressed && styles.pressed]} onPress={submit}>
             <Text style={styles.ctaText}>{t('hotels.search')}</Text>
@@ -482,14 +472,8 @@ export default function HotelResultsScreen() {
             <HomeIcon name="arrowLeft" size={20} color="#FFFFFF" />
           </Pressable>
           <View style={styles.topRight}>
-            {/* 用户指引:筛选旁边的问号(Figma section Hotel Search Coach mark UI 2150:4865) */}
-            <Pressable
-              style={({ pressed }) => [styles.roundBtn, styles.filterBtn, pressed && styles.pressed]}
-              onPress={() => setGuideOpen(true)}
-              hitSlop={8}
-            >
-              <HomeIcon name="questionCircle" size={20} color="#FFFFFF" />
-            </Pressable>
+            {/* 用户指引:「how do I book ?」胶囊(Coach mark 2150:4865) */}
+            <GuidePill onPress={() => setGuideOpen(true)} />
             <Pressable
               style={({ pressed }) => [styles.roundBtn, styles.filterBtn, pressed && styles.pressed]}
               onPress={() => setFilterOpen(true)}
@@ -586,8 +570,8 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.4)',
   },
   filterBtn: { borderRadius: 999 },
-  /** 顶栏右侧:问号 + 筛选两枚 */
-  topRight: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  /** 顶栏右侧:指引胶囊 + 筛选,间距 10 */
+  topRight: { flexDirection: 'row', alignItems: 'center', gap: 10 },
 
   searchCard: {
     backgroundColor: colors.surface,
@@ -637,13 +621,6 @@ const styles = StyleSheet.create({
     color: colors.heading,
   },
 
-  citizenRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  citizenText: {
-    fontFamily: fonts.inter,
-    fontSize: 12,
-    lineHeight: 24,
-    color: colors.textSoft,
-  },
 
   cta: {
     alignItems: 'center',
