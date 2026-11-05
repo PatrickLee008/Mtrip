@@ -9,7 +9,8 @@
  *           右侧评分药丸:底 rgba(66,104,244,.1)、1px rgba(32,77,218,.2)、圆角 32,
  *           分数 Inter 400/18/28 主色 + 「/10」Inter 500/12/16 主色
  *   正文    Inter 400/16/24 `--text-2`
- *   图墙    横滑,单图 192×128 圆角 32,间距 12(稿面 EL-7f71f37d)
+ *   图墙    横滑,单图 192×128 圆角 32,间距 12(稿面 EL-7f71f37d);
+ *           住客上传的视频排在图片后,同尺寸、原生播放控件(可全屏),QA RV_TC_008
  *   商家回复 底 #ECF5FE、左边框 4px rgba(32,77,218,.3)、圆角 32、padding 16、gap 8,
  *           抬头「已核实物业」徽章 + 物业名 Inter 400/16/24 #141D23
  *   头像兜底 稿面第三张卡没有头像图:48 圆底 #E1E3E4 + 20 人形字形
@@ -24,6 +25,7 @@
 
 import React from 'react';
 import { Image, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ResizeMode, Video } from 'expo-av';
 import { useTranslation } from 'react-i18next';
 
 import type { HotelReview } from '@/api/goods';
@@ -58,6 +60,9 @@ export default function HotelReviewCard({ review, propertyName }: Props) {
   const photos = (Array.isArray(review.images) ? review.images : [])
     .map((uri) => resolveMediaUri(uri))
     .filter((uri): uri is string => uri !== null);
+  const videos = (Array.isArray(review.videos) ? review.videos : [])
+    .map((uri) => resolveMediaUri(uri))
+    .filter((uri): uri is string => uri !== null);
 
   const reply = typeof review.reply_content === 'string' ? review.reply_content.trim() : '';
 
@@ -90,7 +95,7 @@ export default function HotelReviewCard({ review, propertyName }: Props) {
 
       {review.content ? <Text style={detailShared.body}>{review.content}</Text> : null}
 
-      {photos.length > 0 ? (
+      {photos.length + videos.length > 0 ? (
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -104,6 +109,16 @@ export default function HotelReviewCard({ review, propertyName }: Props) {
               source={{ uri }}
               style={styles.photo}
               resizeMode="cover"
+            />
+          ))}
+          {videos.map((uri, index) => (
+            <Video
+              key={`${review.id}-v${index}`}
+              source={{ uri }}
+              style={styles.photo}
+              resizeMode={ResizeMode.COVER}
+              useNativeControls
+              shouldPlay={false}
             />
           ))}
         </ScrollView>

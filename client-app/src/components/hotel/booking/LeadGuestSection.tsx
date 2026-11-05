@@ -22,6 +22,7 @@ import {
 import { colors } from '@/config/theme';
 import { fonts } from '@/config/typography';
 import type { LeadGuestForm } from '@/screens/hotel/bookingDemo';
+import { phoneChars } from '@/utils/validate';
 
 interface Props {
   form: LeadGuestForm;
@@ -91,7 +92,7 @@ export default function LeadGuestSection({ form, onChange, onSelectTraveler, onC
                 <TextInput
                   style={bookingShared.controlText}
                   value={form.phone}
-                  onChangeText={(v) => onChange({ phone: v })}
+                  onChangeText={(v) => onChange({ phone: phoneChars(v) })}
                   placeholder={t('hotels.booking.guests.phonePlaceholder')}
                   placeholderTextColor={PLACEHOLDER}
                   keyboardType="phone-pad"

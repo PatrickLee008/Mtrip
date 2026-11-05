@@ -25,7 +25,7 @@ import { colors, radius, shadows } from '@/config/theme';
 import { fonts } from '@/config/typography';
 import type { RootStackParamList } from '@/navigation/types';
 import { useCommonStore } from '@/store/commonStore';
-import { isMobile } from '@/utils/validate';
+import { digitsOnly, isMobile } from '@/utils/validate';
 
 /** 与登录/注册页一致:固定 +95(缅甸),区号选择未实现 */
 const COUNTRY_CODE = '+95';
@@ -94,7 +94,7 @@ export default function ForgotPasswordScreen() {
             <TextInput
               style={styles.input}
               value={mobile}
-              onChangeText={setMobile}
+              onChangeText={(v) => setMobile(digitsOnly(v))}
               placeholder={t('user.mobilePlaceholder')}
               placeholderTextColor={colors.textSoft}
               keyboardType="phone-pad"

@@ -4,6 +4,7 @@
 
 import type { NavigatorScreenParams } from '@react-navigation/native';
 
+import type { BalanceLog } from '@/api/user';
 import type { SmsScene } from '@/api/user';
 import type { HotelFilterValue } from '@/components/hotel/HotelFilterSheet';
 import type { DetailTabKey } from '@/screens/hotel/detailDemo';
@@ -309,6 +310,10 @@ export type RootStackParamList = {
   Guides: undefined;
   /** 教程视频播放页:列表项整条带过来,不再二次请求 */
   TutorialVideo: { id: number; category: 'hotel' | 'food' | 'other'; title: string; description: string; videoUrl: string; coverUrl: string };
+  /** mTrip 钱包:余额 + 流水(Figma 3452:9373) */
+  Wallet: undefined;
+  /** 钱包交易详情:流水行整条带过来,不再二次请求 */
+  WalletTxnDetail: { log: BalanceLog };
   LegalTerms: undefined;
   Login: undefined;
   Register: undefined;

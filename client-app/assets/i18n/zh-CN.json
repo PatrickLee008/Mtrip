@@ -71,9 +71,9 @@
     "sendFailed": "发送失败",
     "newMessages": "有新消息",
     "quick": {
-      "checkin": "入住时间",
-      "wifi": "Wi-Fi 信息",
-      "directions": "路线指引"
+      "checkIn": "入住和退房时间是几点?",
+      "breakfast": "房价含早餐吗?",
+      "transfer": "酒店提供接送机服务吗?"
     },
     "quickSettings": "物业快捷回复",
     "remove": "移除",
@@ -360,7 +360,15 @@
         "period": "有效期 {{start}} 至 {{end}}"
       }
     },
-    "loginHint": "登录后查看你的优惠券"
+    "loginHint": "登录后查看你的优惠券",
+    "campaignTypes": {
+      "all": "全部",
+      "1": "季节活动",
+      "2": "每周活动",
+      "3": "每月活动",
+      "4": "节日特别活动",
+      "empty": "该分类暂无进行中的活动"
+    }
   },
   "home": {
     "searchPlaceholder": "想去哪里?",
@@ -655,7 +663,8 @@
     "gdprTip": "继续使用即代表同意《隐私政策》,我们将按 GDPR 规范处理你的数据",
     "notLogin": "未登录,点击登录",
     "invalidMobile": "手机号格式不正确",
-    "invalidPassword": "密码长度须为6-32位",
+    "invalidPassword": "密码须为6-32位,且至少包含1个大写字母和1个数字",
+    "invalidLoginPassword": "密码长度须为6-32位",
     "tagline": "与我们一起旅行",
     "mobilePlaceholder": "9xxxxxxxx",
     "passwordPlaceholder": "请输入密码",
@@ -845,7 +854,69 @@
     "wallet": {
       "title": "mTrip 钱包",
       "balanceLabel": "可用余额",
-      "topUp": "充值"
+      "topUp": "充值",
+      "history": "交易记录",
+      "balanceHint": "余额可用于下一笔符合条件的预订。",
+      "allMonths": "全部月份",
+      "selectMonth": "选择月份",
+      "viewDetails": "查看详情 >",
+      "empty": "暂无交易记录",
+      "loadFailed": "加载失败,点击重试",
+      "loadMore": "加载更多",
+      "close": "关闭",
+      "tabs": {
+        "all": "全部",
+        "refund": "退款",
+        "spend": "消费",
+        "expired": "已过期"
+      },
+      "kinds": {
+        "topUp": "充值",
+        "booking": "酒店预订",
+        "refund": "取消退款",
+        "referral": "推荐奖励",
+        "adjustment": "余额调整",
+        "withdrawal": "提现",
+        "expired": "已过期"
+      },
+      "descriptions": {
+        "topUp": "余额已存入 mTrip 钱包",
+        "booking": "使用钱包支付酒店预订",
+        "refund": "取消预订的退款已退回钱包",
+        "referral": "推荐奖励已存入钱包",
+        "adjustment": "mTrip 调整了钱包余额",
+        "withdrawal": "钱包余额已提现",
+        "expired": "钱包余额已过期"
+      },
+      "detail": {
+        "title": "交易详情",
+        "completed": "已完成",
+        "info": "交易信息",
+        "txnId": "交易编号",
+        "time": "交易时间",
+        "type": "交易类型",
+        "bookingId": "酒店预订编号",
+        "property": "物业",
+        "description": "说明",
+        "copy": "复制",
+        "copied": "已复制"
+      },
+      "guide": {
+        "title": "mTrip 钱包怎么用",
+        "refund": {
+          "title": "符合条件的退款自动到账",
+          "desc": "符合条件的取消在处理完成后退回 mTrip 钱包,到账时间视取消类型而定。"
+        },
+        "use": {
+          "title": "余额可用于符合条件的预订",
+          "desc": "结账时可用 mTrip 钱包余额支付酒店、租车等 mTrip 支持的服务。"
+        },
+        "noTopUp": {
+          "title": "不支持充值、转账或提现",
+          "desc": "mTrip 钱包余额是出行抵用金,只能用于符合条件的 mTrip 服务。"
+        },
+        "note": "mTrip 钱包是预订抵用金,不是电子钱包。退款会存入余额供下次预订使用。\n1 抵用金 = 1 MMK"
+      }
     },
     "menu": {
       "account": {

@@ -145,7 +145,7 @@ export default function MoreLiteScreen() {
           {/* 钱包卡 */}
           <Pressable
             style={({ pressed }) => [styles.walletCard, pressed && moreShared.pressed]}
-            onPress={comingSoon}
+            onPress={() => navigation.navigate(isLogin ? 'Wallet' : 'Login')}
           >
             <Svg style={StyleSheet.absoluteFill} width="100%" height="100%">
               <Defs>

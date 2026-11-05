@@ -71,9 +71,9 @@
     "sendFailed": "Message failed",
     "newMessages": "New messages",
     "quick": {
-      "checkin": "Check-in time",
-      "wifi": "Wi-Fi info",
-      "directions": "Directions"
+      "checkIn": "What time are check-in and check-out?",
+      "breakfast": "Is breakfast included in the room rate?",
+      "transfer": "Do you provide airport transfer?"
     },
     "quickSettings": "Property quick replies",
     "remove": "Remove",
@@ -360,7 +360,15 @@
         "period": "Valid from {{start}} to {{end}}"
       }
     },
-    "loginHint": "Sign in to view your coupons"
+    "loginHint": "Sign in to view your coupons",
+    "campaignTypes": {
+      "all": "All",
+      "1": "Seasonal",
+      "2": "Weekly",
+      "3": "Monthly",
+      "4": "Special Events",
+      "empty": "No campaigns in this category right now"
+    }
   },
   "home": {
     "searchPlaceholder": "Search anything...",
@@ -655,7 +663,8 @@
     "gdprTip": "By continuing you agree to the Privacy Policy. Your data is processed under GDPR.",
     "notLogin": "Not signed in, tap to sign in",
     "invalidMobile": "Invalid mobile number",
-    "invalidPassword": "Password must be 6-32 characters",
+    "invalidPassword": "Password must be 6-32 characters with at least 1 uppercase letter and 1 number",
+    "invalidLoginPassword": "Password must be 6-32 characters",
     "tagline": "Travel with us",
     "mobilePlaceholder": "9xxxxxxxx",
     "passwordPlaceholder": "Enter your password",
@@ -845,7 +854,69 @@
     "wallet": {
       "title": "mTrip Wallet",
       "balanceLabel": "Available Balance",
-      "topUp": "Top Up"
+      "topUp": "Top Up",
+      "history": "Transaction History",
+      "balanceHint": "Use your balance for your next eligible booking.",
+      "allMonths": "All months",
+      "selectMonth": "Select month",
+      "viewDetails": "View details >",
+      "empty": "No transactions yet",
+      "loadFailed": "Failed to load. Tap to retry",
+      "loadMore": "Load more",
+      "close": "Close",
+      "tabs": {
+        "all": "All",
+        "refund": "Refunds",
+        "spend": "Spend",
+        "expired": "Expired"
+      },
+      "kinds": {
+        "topUp": "Top Up",
+        "booking": "Hotel Booking",
+        "refund": "Cancellation Refund",
+        "referral": "Referral Reward",
+        "adjustment": "Balance Adjustment",
+        "withdrawal": "Withdrawal",
+        "expired": "Expired"
+      },
+      "descriptions": {
+        "topUp": "Balance added to your mTrip Wallet",
+        "booking": "Wallet payment for hotel booking",
+        "refund": "Refund for cancelled booking credited to your wallet",
+        "referral": "Referral reward credited to your wallet",
+        "adjustment": "Balance adjusted by mTrip",
+        "withdrawal": "Balance withdrawn from your wallet",
+        "expired": "Wallet balance expired"
+      },
+      "detail": {
+        "title": "Transaction Details",
+        "completed": "Completed",
+        "info": "Transaction Information",
+        "txnId": "Transaction ID",
+        "time": "Transaction Time",
+        "type": "Transaction Type",
+        "bookingId": "Hotel Booking ID",
+        "property": "Property",
+        "description": "Description",
+        "copy": "Copy",
+        "copied": "Copied"
+      },
+      "guide": {
+        "title": "How mTrip wallet work",
+        "refund": {
+          "title": "Receive eligible refunds automatically",
+          "desc": "Eligible cancellations are refunded to your mTrip Wallet after processing. Refund time may vary depending on the cancellation type."
+        },
+        "use": {
+          "title": "Use Wallet balance for eligible bookings",
+          "desc": "Your mTrip Wallet balance can be used at checkout for eligible bookings across mTrip services, including hotels, cars, and other supported services."
+        },
+        "noTopUp": {
+          "title": "No top-up, transfer, or cash withdrawal",
+          "desc": "Your mTrip Wallet balance is travel credit that can only be used for eligible mTrip services."
+        },
+        "note": "mTrip Wallet is booking credit, not an e-wallet. Refunds are added to your balance for your next booking.\n1 credit = 1 MMK"
+      }
     },
     "menu": {
       "account": {

@@ -57,6 +57,8 @@ import AccountScreen from '@/screens/more/AccountScreen';
 import EditEmailScreen from '@/screens/more/EditEmailScreen';
 import GuidesScreen from '@/screens/more/GuidesScreen';
 import TutorialVideoScreen from '@/screens/more/TutorialVideoScreen';
+import WalletScreen from '@/screens/more/WalletScreen';
+import WalletTxnDetailScreen from '@/screens/more/WalletTxnDetailScreen';
 import HowReferralWorksScreen from '@/screens/more/HowReferralWorksScreen';
 import LegalTermsScreen from '@/screens/more/LegalTermsScreen';
 import ReferralScreen from '@/screens/more/ReferralScreen';
@@ -408,6 +410,16 @@ export default function AppNavigator() {
           name="TutorialVideo"
           component={TutorialVideoScreen}
           options={{ title: t('more.guides.title'), headerShown: false }}
+        />
+        <Stack.Screen
+          name="Wallet"
+          component={WalletScreen}
+          options={{ title: t('more.wallet.title'), headerShown: false }}
+        />
+        <Stack.Screen
+          name="WalletTxnDetail"
+          component={WalletTxnDetailScreen}
+          options={{ title: t('more.wallet.detail.title'), headerShown: false }}
         />
         <Stack.Screen
           name="LegalTerms"

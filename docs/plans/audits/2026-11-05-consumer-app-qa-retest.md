@@ -14,7 +14,24 @@ UI(与设计稿一致):UI/UX_TC_011(订房第 1 步底栏 Back + Continue)、UI/
 
 ## 二、确认仍有问题
 
-### 功能(25 条)
+### 功能(25 条)— 2026-11-05 已修复,待 QA 复测
+
+修复与实测结论(用户 11-05 拍板:旅行保障只恢复入口;活动分类走后台字段;短信接 SMSPoh):
+| 用例 | 修复 | 实测 |
+|---|---|---|
+| L_TC_008、R_TC_007 | 登录 / 注册 / 忘记密码 / 保险页手机号只留数字(`utils/validate.ts digitsOnly`);订房联系电话保留空格横线与 +(`phoneChars`) | `9abc77-00x123` → `97700123` |
+| R_TC_012 | 设密码统一「6-32 位 + ≥1 大写 + ≥1 数字」:App `isPassword` 与 user-service `UserAuthService::PASSWORD_PATTERN`(注册 / 重置 / 改密);登录只校验长度(`isLoginPassword`),不挡老密码 | 注册页 `abcdef1` 被拦;后端正则 5 组样例符合预期 |
+| H_TC_036 / 096 / 097 | 真实酒店订房第 1 步(普通 + 关怀模式)末尾常驻 Insurance 入口卡,进 Travel Protection 页;价格位写「Coming soon」不计价 —— 保险在 PRD 是 Phase 2,无保险商接口,**096 / 097(付保费)仍属 Phase 2** | 入口出现并能进保险页 |
+| P_TC_001 | 券卡抽成 `CouponSelectCard`,多房间第 2 步(余额够付即终点)也放券卡,可选 / 换 / 不用券,明细与钱包抵扣随之重算 | 余额临时调到 200,000:第 2 步 Pay Now 下可「Don't use a coupon」,合计改为钱包抵 120,000;余额已恢复 101,000 |
+| P_TC_003 | 卡片首行改为券名(无名称才退回券码) | 「我的优惠券」显示「[C Demo] 5,000 Off No Minimum」 |
+| P_TC_005 | 迁移 `V20261105100000__campaign-type`:`marketing_campaign.campaign_type`(0 常规 1 季节 2 每周 3 每月 4 节日/特别);后台「促销活动」可选类型、列表列与筛选;App 促销中心按类型分页签,同类多场用标题胶囊切换 | 临时建 2 场活动验证分页签与空态后已删除 |
+| MTW_TC_001–007 | 新增钱包页 `WalletScreen`(Figma 3452:9373:余额卡、All/Refunds/Spend/Expired、月份筛选、流水卡、「?」说明弹窗)与交易详情 `WalletTxnDetailScreen`(3452:8470);`/app/user/balance-logs` 增加 `type` / `month` 筛选并补 `txn_no` / `booking_no` / `property_name`(按备注区分 Trip 号与订单号);「更多」页钱包卡点击进入 | 测试账号流水、退款筛选、10 月筛选、详情、说明弹窗均正常。钱包余额目前无过期机制,Expired 页签恒空(预留 change_type 6) |
+| MTW_TC_008 | 启动即拉站点配置;登录 / 注册 / 第三方登录后对齐账号所属站点(`siteStore.followUserSite`) | 本地默认站点 1 本身是 EUR 站;QA 环境若默认站点不是缅甸站,`EXPO_PUBLIC_DEFAULT_SITE_ID` 需指向缅甸站 |
+| RV_TC_008 | 评价卡在图片后渲染视频(原生控件,可全屏) | 临时插一条带视频的评价验证后已删除 |
+| CH_TC_002 | 与酒店的会话在输入框为空时给 3 条预设问题(入住退房时间 / 早餐 / 接送机),点了填进输入框可改后发送 | 实测填入正常 |
+| N_TC_018–020 | `UserSms`:退款申请(含金额、退款去向、预计 3-7 个工作日)、退款完成、写评价提醒在站内信之外经 SMSPoh RESTful API 发短信(协程异步、写 `sys_sms_log` scene=notify);复用后台短信渠道配置 | 单测覆盖模板与发送请求;**本地未启用短信渠道,真实发送需在 QA 环境验证**(短信渠道需开通 SMSPoh 普通短信与 Sender ID) |
+
+原问题清单:
 | 用例 | 问题 | 定位 |
 |---|---|---|
 | L_TC_008、R_TC_007 | 手机号框可输入字母符号 | Web 上 `keyboardType="phone-pad"` 不限制字符;登录/注册/忘记密码页需在 onChangeText 过滤非数字 |
@@ -57,3 +74,4 @@ UI/UX_TC_004:`goods/home` 的 recommend 在站点未发布酒店排行时回落�
 
 ## 测试数据
 订单 72、73(测试账号已支付);领取优惠券 receive_id 74;余额已恢复 101,000。
+11-05 修功能时:临时活动 / 临时评价均已删除;从酒店详情点聊天按钮新建了一条测试账号与 QA 测试酒店的会话。

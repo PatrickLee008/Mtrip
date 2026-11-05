@@ -30,9 +30,27 @@ export function isEmail(value: string): boolean {
   return /^[\w.+-]+@[\w-]+(\.[\w-]+)+$/.test(value.trim());
 }
 
-/** 密码:6-32位 */
+/**
+ * 设密码(注册 / 重置 / 修改):6-32 位,至少 1 个大写字母和 1 个数字
+ * (与 user-service UserAuthService::PASSWORD_PATTERN 同步,改一处须同改)
+ */
 export function isPassword(value: string): boolean {
+  return /^(?=.*[A-Z])(?=.*\d).{6,32}$/s.test(value);
+}
+
+/** 登录只校验长度:规则收紧前注册的老密码可能不含大写/数字,不能挡在登录页 */
+export function isLoginPassword(value: string): boolean {
   return value.length >= 6 && value.length <= 32;
+}
+
+/** 手机号输入框只留数字(Web 上 keyboardType="phone-pad" 不限制字符,QA L_TC_008 / R_TC_007) */
+export function digitsOnly(value: string): string {
+  return value.replace(/\D/g, '');
+}
+
+/** 联系电话输入框:数字外保留用户习惯的空格、横线与开头的 + */
+export function phoneChars(value: string): string {
+  return value.replace(/[^\d\s+-]/g, '');
 }
 
 export function isNotEmpty(value: unknown): boolean {

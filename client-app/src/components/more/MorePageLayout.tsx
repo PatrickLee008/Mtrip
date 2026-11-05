@@ -24,10 +24,12 @@ interface Props {
   showVersion?: boolean;
   /** 固定在底部的操作区(设计稿部分子页有一枚整宽 CTA) */
   footer?: React.ReactNode;
+  /** 返回栏右侧的操作(如钱包页的「?」说明钮) */
+  headerRight?: React.ReactNode;
   children: React.ReactNode;
 }
 
-export default function MorePageLayout({ title, showVersion, footer, children }: Props) {
+export default function MorePageLayout({ title, showVersion, footer, headerRight, children }: Props) {
   const { t } = useTranslation();
   const navigation = useNavigation();
 
@@ -45,6 +47,7 @@ export default function MorePageLayout({ title, showVersion, footer, children }:
           <Text style={styles.title} numberOfLines={1}>
             {title}
           </Text>
+          {headerRight}
         </View>
 
         <ScrollView

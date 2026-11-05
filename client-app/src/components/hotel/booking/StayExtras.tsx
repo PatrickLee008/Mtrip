@@ -27,8 +27,9 @@ const COVER_KEY: Record<string, string> = { airport_transfer: 'transfer' };
  * 增值服务:标题行(Enhance Your Stay + Optional)+ 加购卡列表。
  *
  * `options` 为 null = 演示模式,沿用设计稿三张卡(保险跳保险页);
- * 真实酒店传物业已发布的附加服务(商户端配置、平台审核),一项都没有就整块不显示 ——
- * 以前真实酒店也显示设计稿的三张卡,选了不计价也不下单(QA CA_TC_034)。
+ * 真实酒店传物业已发布的附加服务(商户端配置、平台审核),末尾常驻旅行保障入口卡 ——
+ * 以前真实酒店也显示设计稿的三张卡,选了不计价也不下单(QA CA_TC_034);
+ * 保险至今没有计价接口(PRD Phase 2),所以只做入口,不进 addons 选择。
  */
 export function AddOnsSection({
   addons,
@@ -45,7 +46,6 @@ export function AddOnsSection({
   const currency = useSiteStore((s) => s.currency);
 
   if (options) {
-    if (options.length === 0) return null;
     return (
       <View style={styles.section}>
         <View style={styles.sectionHead}>
@@ -71,6 +71,18 @@ export function AddOnsSection({
               />
             );
           })}
+          {/* 旅行保障入口:真实酒店也常驻(QA H_TC_036)。保险属 PRD Phase 2、尚无保险商接口,
+              这里只进 Travel Protection 页,不计价;价格位显示「即将上线」而不是设计稿的示意价 */}
+          <AddOnCard
+            cover={null}
+            title={t('hotels.booking.addons.insurance.title')}
+            desc={t('hotels.booking.addons.insurance.desc')}
+            price={t('home.comingSoon')}
+            selected={false}
+            addLabel={t('hotels.booking.dates.addToBooking')}
+            selectedLabel={t('hotels.booking.dates.selected')}
+            onToggle={onOpenInsurance}
+          />
         </View>
       </View>
     );

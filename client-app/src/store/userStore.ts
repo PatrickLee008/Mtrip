@@ -6,6 +6,7 @@ import { create } from 'zustand';
 
 import { apiLogin, apiLoginBySms, apiLogout, apiRegister, fetchMe } from '@/api/user';
 import { STORAGE_KEYS } from '@/config/global';
+import { useSiteStore } from '@/store/siteStore';
 import type { AuthResult, UserProfile } from '@/types/models';
 import { storage } from '@/utils/storage';
 
@@ -140,4 +141,6 @@ export const useUserStore = create<UserState>((set, get) => ({
 async function applyAuth(result: AuthResult): Promise<void> {
   await storage.setString(STORAGE_KEYS.TOKEN, result.token);
   await storage.setObject(STORAGE_KEYS.USER, result.user);
+  // 货币 / 时区跟账号注册站点走(QA MTW_TC_008:钱包不该停在默认站点的 EUR)
+  void useSiteStore.getState().followUserSite(result.user.siteId);
 }

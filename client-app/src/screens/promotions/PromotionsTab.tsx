@@ -6,14 +6,15 @@
  * 段内标题↔卡片 16、卡片之间 16。
  *
  * 数据(C-M6.1):
- *   登录后走真实接口 —— 横幅/概览取 `/marketing/campaigns` 的首个展示中活动,
+ *   登录后走真实接口 —— 横幅/概览取 `/marketing/campaigns` 的展示中活动:顶部按活动类型分页签
+ *   (全部 / 季节 / 每周 / 每月 / 节日特别活动,PRD 6.1,QA P_TC_005),同类有多场时下面一排标题胶囊切换;
  *   券列表取 `/marketing/coupon/available`(领券中心)。设计稿把券分「每周/每月/酒店」三段,
  *   后端没有这个分组维度,故改为「可领取 / 已领完或不可领」两段 —— 不拿分组名硬套。
  *   未登录(接口挂 UserAuthMiddleware,调了必 401)才回落 promoSections.ts 的设计稿示例券。
  */
 
-import React from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useState } from 'react';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 
 import CampaignBanner from '@/components/promotion/CampaignBanner';
@@ -28,8 +29,8 @@ import type { CampaignItem } from '@/types/models';
 
 export interface PromotionsTabProps {
   loading: boolean;
-  /** 当前展示的活动(未登录 / 站点无活动时为 null,组件自行回落设计稿文案) */
-  campaign: CampaignItem | null;
+  /** 展示中的活动(未登录 / 站点无活动时为空,组件自行回落设计稿文案) */
+  campaigns: CampaignItem[];
   /** 已经转好的卡片模型;回调按下标回到父层的原始 CouponView 列表 */
   cards: CouponCardModel[];
   /** 未登录:整页走设计稿示例券,按钮点了引导登录 */
@@ -41,7 +42,7 @@ export interface PromotionsTabProps {
 
 export default function PromotionsTab({
   loading,
-  campaign,
+  campaigns,
   cards,
   isLogin,
   onCouponPress,
@@ -49,6 +50,13 @@ export default function PromotionsTab({
   onBookHotels,
 }: PromotionsTabProps) {
   const { t } = useTranslation();
+  const [type, setType] = useState<CampaignTypeFilter>('all');
+  const [selectedId, setSelectedId] = useState(0);
+
+  const filtered = type === 'all' ? campaigns : campaigns.filter((c) => Number(c.campaign_type) === type);
+  const campaign = filtered.find((c) => c.id === selectedId) ?? filtered[0] ?? null;
+  /** 选了具体类型却没有活动:不回落设计稿示例横幅,直接提示该类暂无活动 */
+  const typeEmpty = type !== 'all' && filtered.length === 0;
 
   // 可领 / 不可领两段(不可领的沉到下面,与设计稿「已过期券排在后面」的观感一致)
   const claimable = cards.filter((card) => card.action === 'claim');
@@ -60,12 +68,54 @@ export default function PromotionsTab({
 
   return (
     <View style={styles.root}>
-      <CampaignBanner title={campaign?.title} banner={campaign?.banner} />
-      <CampaignOverview
-        name={campaign?.title}
-        desc={campaign?.subtitle}
-        period={campaignPeriod(campaign)}
-      />
+      {isLogin ? (
+        <View style={styles.filters}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
+            {CAMPAIGN_TYPE_FILTERS.map((key) => (
+              <Pressable
+                key={key}
+                style={[styles.chip, type === key && styles.chipActive]}
+                onPress={() => {
+                  setType(key);
+                  setSelectedId(0);
+                }}
+              >
+                <Text style={[styles.chipText, type === key && styles.chipTextActive]}>
+                  {t(`promotions.campaignTypes.${key}`)}
+                </Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+          {filtered.length > 1 ? (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
+              {filtered.map((c) => (
+                <Pressable
+                  key={c.id}
+                  style={[styles.pick, campaign?.id === c.id && styles.pickActive]}
+                  onPress={() => setSelectedId(c.id)}
+                >
+                  <Text style={[styles.pickText, campaign?.id === c.id && styles.pickTextActive]} numberOfLines={1}>
+                    {c.title}
+                  </Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+          ) : null}
+        </View>
+      ) : null}
+
+      {typeEmpty ? (
+        <Text style={styles.empty}>{t('promotions.campaignTypes.empty')}</Text>
+      ) : (
+        <>
+          <CampaignBanner title={campaign?.title} banner={campaign?.banner} />
+          <CampaignOverview
+            name={campaign?.title}
+            desc={campaign?.subtitle}
+            period={campaignPeriod(campaign)}
+          />
+        </>
+      )}
 
       <View style={styles.sections}>
         {loading ? (
@@ -131,6 +181,10 @@ export default function PromotionsTab({
   );
 }
 
+/** 活动类型页签:all + 后端 campaign_type 1~4(0 常规只在「全部」里出现) */
+type CampaignTypeFilter = 'all' | 1 | 2 | 3 | 4;
+const CAMPAIGN_TYPE_FILTERS: CampaignTypeFilter[] = ['all', 1, 2, 3, 4];
+
 /** 活动期间:「2026-07-01 - 2026-07-31」;缺任一端则不显示(交给设计稿回落文案) */
 function campaignPeriod(campaign: CampaignItem | null): string | undefined {
   if (!campaign?.start_time || !campaign?.end_time) return undefined;
@@ -139,6 +193,23 @@ function campaignPeriod(campaign: CampaignItem | null): string | undefined {
 
 const styles = StyleSheet.create({
   root: { gap: 24 },
+  filters: { gap: 12 },
+  chipRow: { gap: 8 },
+  chip: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: colors.softBlue,
+    backgroundColor: colors.surface,
+  },
+  chipActive: { borderColor: colors.primary, backgroundColor: colors.primary },
+  chipText: { fontFamily: fonts.interMedium, fontSize: 14, lineHeight: 20, color: colors.textSoft },
+  chipTextActive: { color: '#FFFFFF' },
+  pick: { maxWidth: 220, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999, backgroundColor: colors.tintBg },
+  pickActive: { backgroundColor: colors.softBlue },
+  pickText: { fontFamily: fonts.inter, fontSize: 12, lineHeight: 16, color: colors.textSoft },
+  pickTextActive: { fontFamily: fonts.interSemi, color: colors.primary },
   /* 概览卡↔券列表设计稿是 32,root 已给 24,这里补 8 */
   sections: { marginTop: 8, gap: 40 },
   section: { gap: 16 },

@@ -35,6 +35,7 @@ import {
 import { useCommonStore } from '@/store/commonStore';
 import { useSiteStore } from '@/store/siteStore';
 import { formatMoney } from '@/utils/format';
+import { digitsOnly } from '@/utils/validate';
 
 type Menu = 'persons' | 'days' | null;
 
@@ -134,7 +135,7 @@ export default function InsuranceScreen() {
                 <TextInput
                   style={bookingShared.controlText}
                   value={phone}
-                  onChangeText={setPhone}
+                  onChangeText={(v) => setPhone(digitsOnly(v))}
                   placeholder={t('hotels.booking.insurance.phonePlaceholder')}
                   placeholderTextColor={PLACEHOLDER}
                   keyboardType="phone-pad"

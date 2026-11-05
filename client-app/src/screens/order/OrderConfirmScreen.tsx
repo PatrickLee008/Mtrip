@@ -21,7 +21,7 @@ import type { RootStackParamList } from '@/navigation/types';
 import { useCommonStore } from '@/store/commonStore';
 import type { GoodsDetail, GoodsSku } from '@/types/models';
 import { formatDate } from '@/utils/format';
-import { isMobile, isNotEmpty } from '@/utils/validate';
+import { isMobile, isNotEmpty, phoneChars } from '@/utils/validate';
 
 /** 今天起第 offset 天(本地时区) */
 function dayAfter(offset: number): string {
@@ -174,7 +174,7 @@ export default function OrderConfirmScreen() {
             <CustomInput
               label={t('order.contactPhone')}
               value={contactPhone}
-              onChangeText={setContactPhone}
+              onChangeText={(v) => setContactPhone(phoneChars(v))}
               keyboardType="phone-pad"
               maxLength={20}
             />

@@ -30,6 +30,10 @@ class CampaignController extends AbstractController
         if ($status !== null && $status !== '') {
             $query->where('status', (int) $status);
         }
+        $campaignType = $this->input('campaignType');
+        if ($campaignType !== null && $campaignType !== '') {
+            $query->where('campaign_type', (int) $campaignType);
+        }
         $total = (clone $query)->count();
         $list = $query->orderBy('sort')->orderByDesc('id')->forPage($page, $pageSize)
             ->get()->map(static function ($row) {
@@ -49,6 +53,8 @@ class CampaignController extends AbstractController
         $data = [
             'title' => mb_substr($this->requireStr('title'), 0, 200),
             'subtitle' => mb_substr($this->strInput('subtitle'), 0, 255),
+            // 活动类型(P_TC_005):0常规 1季节 2每周 3每月 4节日/特别活动,App 促销中心按它分页签
+            'campaign_type' => in_array($this->intInput('campaignType'), [0, 1, 2, 3, 4], true) ? $this->intInput('campaignType') : 0,
             'banner' => $this->strInput('banner'),
             'landing_url' => $this->strInput('landingUrl'),
             'coupon_ids' => is_array($couponIds) ? json_encode(array_map('intval', $couponIds)) : null,

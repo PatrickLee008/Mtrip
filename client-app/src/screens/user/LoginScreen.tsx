@@ -44,7 +44,7 @@ import type { RootStackParamList } from '@/navigation/types';
 import { useCommonStore } from '@/store/commonStore';
 import { useUserStore } from '@/store/userStore';
 import { storage } from '@/utils/storage';
-import { isMobile, isPassword } from '@/utils/validate';
+import { digitsOnly, isLoginPassword, isMobile } from '@/utils/validate';
 
 /** 设计稿固定展示 +95(缅甸),区号选择未实现 */
 const COUNTRY_CODE = '+95';
@@ -86,8 +86,8 @@ export default function LoginScreen() {
       showToast(t('user.invalidMobile'));
       return;
     }
-    if (!isPassword(password)) {
-      showToast(t('user.invalidPassword'));
+    if (!isLoginPassword(password)) {
+      showToast(t('user.invalidLoginPassword'));
       return;
     }
     setSubmitting(true);
@@ -158,7 +158,7 @@ export default function LoginScreen() {
             <TextInput
               style={styles.input}
               value={mobile}
-              onChangeText={setMobile}
+              onChangeText={(v) => setMobile(digitsOnly(v))}
               placeholder={t('user.mobilePlaceholder')}
               placeholderTextColor={colors.textSoft}
               keyboardType="phone-pad"

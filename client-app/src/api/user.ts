@@ -181,7 +181,32 @@ export function changePassword(params: {
   return post<null>('/api/v1/app/user/change-password', params);
 }
 
-export function fetchBalanceLogs(params: PageParams): Promise<PageData<Record<string, unknown>>> {
+/** 钱包流水一行(user-service `/app/user/balance-logs`,snake_case 直出 + 后端补的展示字段) */
+export interface BalanceLog {
+  id: number;
+  /** 1 充值 2 消费 3 退款 4 调账(含推荐返利) 5 提现 6 过期(预留) */
+  change_type: number;
+  /** 正增负减 */
+  amount: number | string;
+  before_balance: number | string;
+  after_balance: number | string;
+  order_id: number;
+  remark: string;
+  /** UTC */
+  created_at: string;
+  /** 展示用流水号 WAL-YYYYMMDD-000123 */
+  txn_no: string;
+  /** 关联的订单号或整单 Trip 号;无关联为空串 */
+  booking_no: string;
+  property_name: string;
+}
+
+/** 钱包流水页签:all 全部 / refund 退款 / spend 消费 / expired 过期 */
+export type BalanceLogType = 'all' | 'refund' | 'spend' | 'expired';
+
+export function fetchBalanceLogs(
+  params: PageParams & { type?: BalanceLogType; month?: string },
+): Promise<PageData<BalanceLog>> {
   return get('/api/v1/app/user/balance-logs', { ...params });
 }
 

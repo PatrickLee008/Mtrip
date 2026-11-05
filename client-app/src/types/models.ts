@@ -297,6 +297,8 @@ export interface CampaignItem {
   id: number;
   title: string;
   subtitle: string;
+  /** 活动类型:0 常规 1 季节 2 每周 3 每月 4 节日/特别活动(后台「促销活动」里选) */
+  campaign_type: number;
   banner: string;
   landing_url: string;
   start_time: string | null;

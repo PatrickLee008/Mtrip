@@ -2,7 +2,7 @@
 
 ### 2026-11-05 Consumer App QA 复测(待修清单)
 
-按 11-05 版测试表复测 Consumer App 全部未通过项并对照 Figma:旧功能项 48 条与 UI 4 条已可关闭;仍有问题的 25 条功能 + 10 条 UI 不一致见 [复测记录](./audits/2026-11-05-consumer-app-qa-retest.md)。**UI 对稿 10 条已于当日修复**(见记录第二节,待 QA 复测;首页 Hotel Promotion 在未发布排行时回落为可搜索酒店)。**下一步建议优先**:旅行保障入口(StayExtras 附加服务改造引入的回归)、钱包明细页、余额足够时的选券入口。
+按 11-05 版测试表复测 Consumer App 全部未通过项并对照 Figma:旧功能项 48 条与 UI 4 条已可关闭;仍有问题的 25 条功能 + 10 条 UI 不一致见 [复测记录](./audits/2026-11-05-consumer-app-qa-retest.md)。**UI 对稿 10 条与功能 25 条已于当日全部修复**(见记录第二节,待 QA 复测)。要点:新增钱包页 / 交易详情(`balance-logs` 加 type / month 筛选与预订信息)、迁移 `V20261105100000__campaign-type`(促销活动类型,后台可选、App 分页签)、shared `UserSms`(退款申请 / 退款完成 / 写评价提醒经 SMSPoh 发短信)、设密码规则改为「6-32 位 + 大写 + 数字」(登录不受影响)。**仍待外部条件**:旅行保障按用户决定只恢复入口(付保费属 PRD Phase 2);通知短信需在 QA 环境开通 SMSPoh 普通短信与 Sender ID 后实测;QA 环境默认站点若非缅甸站需改 `EXPO_PUBLIC_DEFAULT_SITE_ID`。
 
 
 2026-10-30 按 Figma `505:1293` 与既有 Facebook Web 规则实现消费者 TikTok 登录：登录/注册第二行入口、同意提示、授权/回调/短票据/登录态，复用身份表，无新迁移。TikTok 54 项、Facebook 51 项隔离 HTTP、shared 221/1647、493 PHP lint、admin build、client typecheck/H5 export、Compose/网关语法通过；390/320px 入口、HTTP 提示、取消/返回/刷新过期已验。已补发本机 8093；默认关闭，真实 TikTok/HTTPS 与原生待验，未提交或推送。见[实施记录](./23-TikTok-Web登录实施记录.md)。

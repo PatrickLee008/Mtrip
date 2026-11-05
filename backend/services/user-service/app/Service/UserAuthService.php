@@ -19,6 +19,16 @@ use Mtrip\Shared\Support\RedisLock;
  */
 class UserAuthService
 {
+    /** 设密码规则(注册 / 重置 / 修改共用,与 client-app utils/validate.ts isPassword 同步):6-32 位,至少 1 个大写字母和 1 个数字 */
+    public const PASSWORD_PATTERN = '/^(?=.*[A-Z])(?=.*\d).{6,32}$/s';
+
+    public static function assertPassword(string $password): void
+    {
+        if (! preg_match(self::PASSWORD_PATTERN, $password)) {
+            throw new BusinessException(ErrorCode::PARAM_ERROR, '密码须为6-32位,且至少包含1个大写字母和1个数字');
+        }
+    }
+
     public function __construct(protected ConfigInterface $config, protected RedisLock $lock)
     {
     }

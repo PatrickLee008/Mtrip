@@ -24,6 +24,11 @@ interface SiteState {
   loadSiteList: () => Promise<SiteInfo[]>;
   /** 切换站点并拉取站点配置 */
   switchSite: (siteId: number) => Promise<void>;
+  /**
+   * 对齐到账号所属站点:登录后 / 启动时调用。站点不同,或本地还没有站点快照
+   * (货币还是占位值)时拉一次站点配置;失败静默,下次进首页会再补拉。
+   */
+  followUserSite: (userSiteId?: number) => Promise<void>;
 }
 
 interface PersistedSite {
@@ -67,5 +72,12 @@ export const useSiteStore = create<SiteState>((set, get) => ({
     };
     await storage.setObject(STORAGE_KEYS.SITE, persisted);
     set({ ...persisted, configs: data.configs });
+  },
+
+  async followUserSite(userSiteId) {
+    const { siteId, siteName } = get();
+    const target = userSiteId && userSiteId > 0 ? userSiteId : siteId;
+    if (target === siteId && siteName) return;
+    await get().switchSite(target).catch(() => undefined);
   },
 }));

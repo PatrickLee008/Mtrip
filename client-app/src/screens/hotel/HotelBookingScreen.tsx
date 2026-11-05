@@ -37,6 +37,7 @@ import PayAtHotelNotice from '@/components/hotel/PayAtHotelNotice';
 import BookingStepGuests from '@/components/hotel/booking/BookingStepGuests';
 import BookingStepPayment from '@/components/hotel/booking/BookingStepPayment';
 import CouponPickerSheet from '@/components/hotel/booking/CouponPickerSheet';
+import CouponSelectCard from '@/components/hotel/booking/CouponSelectCard';
 import ReviewBody from '@/components/hotel/booking/ReviewBody';
 import { AddMoreStayCard, PriceBreakdownCard } from '@/components/hotel/booking/ReviewCards';
 import StaySummaryCard from '@/components/hotel/booking/StaySummaryCard';
@@ -208,10 +209,10 @@ export default function HotelBookingScreen() {
               onComingSoon={comingSoon}
               /**
                * 多房间新稿(2659:13152):钱包在这一步。开着钱包且余额够付全款时这一步就是终点(Pay Now),
-               * 明细列出自动应用的券与钱包抵扣,合计为还需另付的 0;否则券仍在第 3 步选,这里不出券行。
+               * 所以券卡也放在这一步(QA P_TC_001:余额够付时也要能选 / 换 / 取消券),明细列出当前券与钱包抵扣。
                */
               couponLine={
-                walletCovers && appliedCoupon
+                cartMode && couponEnabled && appliedCoupon
                   ? { name: appliedCoupon.name, discount: appliedCoupon.discount }
                   : null
               }
@@ -221,6 +222,17 @@ export default function HotelBookingScreen() {
                   <View style={styles.walletSlot}>
                     {/* 支持到店付款的酒店:钱包这一步就可能直接付款,提示得放在这里而不是只放支付页 */}
                     {payAtHotel ? <PayAtHotelNotice /> : null}
+                  {couponEnabled ? (
+                    <CouponSelectCard
+                      coupon={{
+                        applied: appliedCoupon,
+                        hasUsable: hasUsableCoupon,
+                        loading: couponLoading,
+                        onOpen: () => setCouponOpen(true),
+                      }}
+                      onComingSoon={comingSoon}
+                    />
+                  ) : null}
                   <WalletCard
                     balance={walletBalance}
                     insufficient={!current.demo && isLogin && method === 'wallet' && !walletCovers}

@@ -25,6 +25,7 @@ import {
 } from '@/assets/tempImages';
 import HomeIcon from '@/components/home/HomeIcon';
 import PayAtHotelNotice from '@/components/hotel/PayAtHotelNotice';
+import CouponSelectCard, { type PaymentCouponState } from '@/components/hotel/booking/CouponSelectCard';
 import PaymentMethodRow from '@/components/hotel/booking/PaymentMethodRow';
 import WalletCard from '@/components/hotel/booking/WalletCard';
 import {
@@ -50,19 +51,7 @@ import {
 import { useSiteStore } from '@/store/siteStore';
 import { formatAmount, formatMoney } from '@/utils/format';
 
-/**
- * 结账优惠券(C-M6)。不传 = COUPONS 卡维持占位(点了只弹 Coming soon)——
- * 关怀模式 / 演示模式 / 未登录走这条路,行为与从前一致。
- */
-export interface PaymentCouponState {
-  /** 已应用的券;null = 当前没用券 */
-  applied: { receiveId: number; name: string; discount: number } | null;
-  /** 本单是否有可用券(决定卡片副标题是「选一张」还是「暂无可用」) */
-  hasUsable: boolean;
-  loading: boolean;
-  /** 打开选券弹窗 */
-  onOpen: () => void;
-}
+export type { PaymentCouponState } from '@/components/hotel/booking/CouponSelectCard';
 
 interface Props {
   /** 汇总卡由页面渲染后作为 children 传进来(单住宿 / 多住宿两种眉头) */
@@ -123,16 +112,6 @@ export default function BookingStepPayment({
     width: 24,
   }));
 
-  /* 券卡三态:加载中 / 已用券(显示券名)/ 有可用券(选一张)/ 没有可用券(不可点) */
-  const couponDisabled = coupon ? !coupon.applied && !coupon.hasUsable && !coupon.loading : false;
-  const couponDesc = (() => {
-    if (!coupon) return t('hotels.booking.payment.couponsDesc');
-    if (coupon.applied) return coupon.applied.name;
-    if (coupon.loading) return t('common.loading');
-    return coupon.hasUsable
-      ? t('hotels.booking.payment.couponsDesc')
-      : t('hotels.booking.coupon.none');
-  })();
 
   return (
     <View style={styles.root}>
@@ -296,35 +275,7 @@ export default function BookingStepPayment({
          * 副标题三态:已用券显示券名 / 有可用券显示「选一张」/ 没有可用券显示「暂无」且整卡不可点。
          * 不传 `coupon` 时维持原来的占位行为(演示 / 关怀 / 未登录)。
          */}
-        <Text style={bookingShared.overline}>{t('hotels.booking.payment.couponsLabel')}</Text>
-        <Pressable
-          style={({ pressed }) => [
-            styles.coupon,
-            couponDisabled && styles.couponIdle,
-            pressed && !couponDisabled && bookingShared.pressed,
-          ]}
-          onPress={couponDisabled ? undefined : (coupon?.onOpen ?? onComingSoon)}
-          disabled={couponDisabled}
-        >
-          <View style={styles.savedLeft}>
-            <View style={styles.couponTile}>
-              <HomeIcon name="ticketDiagonal20" size={20} color={DEEP_PRIMARY} />
-            </View>
-            <View style={styles.flex}>
-              <Text style={styles.couponTitle}>{t('hotels.booking.payment.couponsTitle')}</Text>
-              <Text style={styles.couponDesc} numberOfLines={1}>
-                {couponDesc}
-              </Text>
-            </View>
-          </View>
-          {coupon?.applied ? (
-            <Text style={styles.couponSaved}>
-              {`- ${formatAmount(coupon.applied.discount, currency)}`}
-            </Text>
-          ) : (
-            <HomeIcon name="chevronDown" width={12} height={7.4} color="#FFFFFF" />
-          )}
-        </Pressable>
+        <CouponSelectCard coupon={coupon} onComingSoon={onComingSoon} />
       </View>
 
       <View style={styles.cashback}>
@@ -425,34 +376,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
   },
 
-  /* ---- 优惠券 ---- */
-  coupon: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 22,
-    minHeight: 82,
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: colors.softBlue,
-    backgroundColor: colors.primary,
-  },
-  couponTile: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 8,
-    backgroundColor: PAY_TILE_BG,
-  },
-  couponTitle: { fontFamily: fonts.interBold, fontSize: 16, lineHeight: 24, color: '#FFFFFF' },
-  couponDesc: { fontFamily: fonts.inter, fontSize: 16, lineHeight: 24, color: colors.softBlue },
-  /* 已抵扣额:与券名同卡,右侧白色加粗 */
-  couponSaved: { fontFamily: fonts.interBold, fontSize: 16, lineHeight: 24, color: '#FFFFFF' },
-  /* 没有可用券:整卡压暗且不可点 */
-  couponIdle: { opacity: 0.55 },
 
   /* ---- 未开放渠道的折叠头 ---- */
   moreHead: {

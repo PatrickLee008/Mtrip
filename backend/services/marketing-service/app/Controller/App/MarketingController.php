@@ -41,8 +41,10 @@ class MarketingController extends AppAbstractController
             ->where(static function ($q) use ($now) {
                 $q->whereNull('end_time')->orWhere('end_time', '>=', $now);
             })
+            // 促销中心按活动类型分页签(0常规 1季节 2每周 3每月 4节日/特别活动);不传 = 全部
+            ->when(($type = $this->input('campaignType')) !== null && $type !== '', static fn ($q) => $q->where('campaign_type', (int) $type))
             ->orderBy('sort')->orderByDesc('id')
-            ->get(['id', 'title', 'subtitle', 'banner', 'landing_url', 'start_time', 'end_time'])
+            ->get(['id', 'title', 'subtitle', 'campaign_type', 'banner', 'landing_url', 'start_time', 'end_time'])
             ->map(static fn ($r) => (array) $r)->all();
         return Result::success($rows);
     }

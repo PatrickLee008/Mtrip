@@ -22,6 +22,9 @@ class SmsPohClient
 {
     public const BASE_URL = 'https://v3.smspoh.com/api/otp';
 
+    /** RESTful SMS API V3 发送地址(普通短信,JSON 体 + Bearer 鉴权) */
+    public const REST_SEND_URL = 'https://v3.smspoh.com/api/rest/send';
+
     /** SMSPoh 对三个可调参数的取值范围(超出会被服务商拒绝,故在本地先夹取) */
     public const TTL_MIN = 60;
     public const TTL_MAX = 3600;
@@ -140,6 +143,37 @@ class SmsPohClient
     }
 
     /**
+     * 发一条普通短信(RESTful SMS API V3:POST https://v3.smspoh.com/api/rest/send,JSON 体,Bearer 鉴权)。
+     * 用于预订通知类短信(退款申请 / 退款完成 / 写评价提醒),与上面的 Verify API 是两套接口、同一组凭证。
+     * 返回 `['ok'=>bool, 'status'=>int, 'messageId'=>string, 'message'=>string]`,**不抛异常**。
+     */
+    public function sendMessage(string $to, string $from, string $message, string $clientReference = ''): array
+    {
+        [$status, $body] = $this->httpPostJson(self::REST_SEND_URL, [
+            'to' => self::normalizeMobile($to, $this->countryCode),
+            'message' => $message,
+            'from' => $from,
+            'clientReference' => $clientReference,
+        ]);
+        return self::parseSendResponse($status, $body);
+    }
+
+    /**
+     * 解析发短信响应(纯函数)。成功体:201 {"messages":[{"messageId":"..","status":"Accepted",..}]}
+     */
+    public static function parseSendResponse(int $status, string $body): array
+    {
+        $json = self::decode($body);
+        $ok = $status >= 200 && $status < 300;
+        $first = is_array($json['messages'][0] ?? null) ? $json['messages'][0] : [];
+        $messageId = is_scalar($first['messageId'] ?? null) ? trim((string) $first['messageId']) : '';
+        if ($ok && $messageId === '') {
+            return ['ok' => false, 'status' => $status, 'messageId' => '', 'message' => '短信服务商未返回 messageId'];
+        }
+        return ['ok' => $ok, 'status' => $status, 'messageId' => $messageId, 'message' => self::errorMessage($json, $body, $ok)];
+    }
+
+    /**
      * 解析发码响应(纯函数)
      *
      * 成功体:{"channel":"SMS","requestId":123456789,"to":"09********","createdAt":..,"expireAt":..}
@@ -202,6 +236,38 @@ class SmsPohClient
         $body = @file_get_contents($url, false, $context);
         if ($body === false) {
             // 连不上/超时:$http_response_header 可能压根没有,用 0 表示「没有拿到 HTTP 响应」
+            return [0, ''];
+        }
+        return [self::statusFromHeaders($http_response_header ?? []), $body];
+    }
+
+    /**
+     * JSON 体 POST(RESTful SMS API 用),Bearer = base64(APIKey:APISecret);返回 [HTTP状态码, 响应体]。
+     * 与 httpPost 同一套 stream 写法(Swoole hook 协程化);单测覆写本方法即可脱网。
+     *
+     * @param array<string, mixed> $payload
+     * @return array{0:int,1:string}
+     */
+    protected function httpPostJson(string $url, array $payload): array
+    {
+        $content = (string) json_encode($payload, JSON_UNESCAPED_UNICODE);
+        $context = stream_context_create([
+            'http' => [
+                'method' => 'POST',
+                'header' => implode("
+", [
+                    'Accept: application/json',
+                    'Content-Type: application/json',
+                    'Authorization: Bearer ' . self::accessToken($this->apiKey, $this->apiSecret),
+                    'Content-Length: ' . strlen($content),
+                ]),
+                'content' => $content,
+                'ignore_errors' => true,
+                'timeout' => $this->timeout,
+            ],
+        ]);
+        $body = @file_get_contents($url, false, $context);
+        if ($body === false) {
             return [0, ''];
         }
         return [self::statusFromHeaders($http_response_header ?? []), $body];

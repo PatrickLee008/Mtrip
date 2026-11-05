@@ -38,9 +38,7 @@ class AuthController extends AbstractController
         if (! preg_match('/^\+?\d{6,20}$/', $mobile)) {
             throw new BusinessException(ErrorCode::PARAM_ERROR, '手机号格式不正确');
         }
-        if (strlen($password) < 6 || strlen($password) > 32) {
-            throw new BusinessException(ErrorCode::PARAM_ERROR, '密码长度须为6-32位');
-        }
+        UserAuthService::assertPassword($password);
 
         /*
          * 是否要 verifyToken = 全局强制开关 OR 渠道可用(见 SmsVerifyService::registerRequiresSms):
@@ -133,9 +131,7 @@ class AuthController extends AbstractController
         $mobile = $this->requireStr('mobile');
         $password = $this->requireStr('password');
         $verifyToken = $this->requireStr('verifyToken');
-        if (strlen($password) < 6 || strlen($password) > 32) {
-            throw new BusinessException(ErrorCode::PARAM_ERROR, '密码长度须为6-32位');
-        }
+        UserAuthService::assertPassword($password);
 
         $this->sms->assertTicket($siteId, 'reset', $mobile, $verifyToken);
         $this->authService->resetPassword($siteId, $mobile, $password, $this->clientIp());

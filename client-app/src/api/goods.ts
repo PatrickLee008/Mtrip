@@ -130,6 +130,8 @@ export interface HotelReview {
   rating: number;
   content: string;
   images: string[] | null;
+  /** 评价视频(最多 3 个,写评价页上传) */
+  videos?: string[] | null;
   reply_content: string;
   created_at: string;
   nickname: string;

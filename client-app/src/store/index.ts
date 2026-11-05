@@ -33,6 +33,8 @@ export async function bootstrapStores(): Promise<void> {
     useSiteStore.getState().hydrate(),
     useCommonStore.getState().hydrate(),
   ]);
+  // 启动即对齐站点配置(登录态跟账号站点,否则默认站点),不等首页挂载 —— 否则「更多」页钱包先显示占位货币
+  void useSiteStore.getState().followUserSite(useUserStore.getState().profile?.siteId);
   const consent = await getGdprConsent();
   useCommonStore.getState().setGdprAccepted(consent?.accepted === true);
 }

@@ -44,7 +44,7 @@ import { colors, radius } from '@/config/theme';
 import { fonts } from '@/config/typography';
 import type { RootStackParamList } from '@/navigation/types';
 import { useCommonStore } from '@/store/commonStore';
-import { isMobile, isPassword } from '@/utils/validate';
+import { digitsOnly, isMobile, isPassword } from '@/utils/validate';
 
 /** 设计稿固定展示 +95(缅甸),区号选择未实现 */
 const COUNTRY_CODE = '+95';
@@ -165,7 +165,7 @@ export default function RegisterScreen() {
             <TextInput
               style={styles.input}
               value={mobile}
-              onChangeText={setMobile}
+              onChangeText={(v) => setMobile(digitsOnly(v))}
               placeholder={t('user.mobilePlaceholder')}
               placeholderTextColor={colors.textSoft}
               keyboardType="phone-pad"

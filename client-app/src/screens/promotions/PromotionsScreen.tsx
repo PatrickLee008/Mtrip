@@ -86,7 +86,7 @@ export default function PromotionsScreen() {
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [redeeming, setRedeeming] = useState(false);
-  const [campaign, setCampaign] = useState<CampaignItem | null>(null);
+  const [campaigns, setCampaigns] = useState<CampaignItem[]>([]);
   const [available, setAvailable] = useState<CouponView[]>([]);
   const [myType, setMyType] = useState<MyCouponType>('available');
   const [mine, setMine] = useState<CouponView[]>([]);
@@ -94,7 +94,7 @@ export default function PromotionsScreen() {
   const load = useCallback(
     async (isRefresh = false) => {
       if (!isLogin) {
-        setCampaign(null);
+        setCampaigns([]);
         setAvailable([]);
         setMine([]);
         return;
@@ -102,14 +102,14 @@ export default function PromotionsScreen() {
       if (isRefresh) setRefreshing(true);
       else setLoading(true);
       try {
-        const [campaigns, availablePage, minePage] = await Promise.all([
+        const [liveCampaigns, availablePage, minePage] = await Promise.all([
           fetchCampaigns(),
           fetchAvailableCoupons({ page: 1, pageSize: 50 }),
           fetchMyCoupons(myType, { page: 1, pageSize: 50 }),
         ]);
-        // 设计稿只有一张活动横幅,取排序最前的展示中活动
-        const banner = campaigns[0] ?? null;
-        setCampaign(banner);
+        // 全部展示中活动交给页签按类型筛选;曝光仍按默认展示的那一场(排序最前)报
+        const banner = liveCampaigns[0] ?? null;
+        setCampaigns(liveCampaigns);
         setAvailable(availablePage.list);
         setMine(minePage.list);
         // M8 曝光上报:只在拿到列表、卡片真的会渲染出来时按批上报一次(埋点失败静默,不影响领券)
@@ -120,7 +120,7 @@ export default function PromotionsScreen() {
         if (items.length > 0) void reportImpressions(items).catch(() => undefined);
       } catch {
         // request.ts 已经统一 Toast 过一次,这里只负责把页面退回空态
-        setCampaign(null);
+        setCampaigns([]);
         setAvailable([]);
         setMine([]);
       } finally {
@@ -270,7 +270,7 @@ export default function PromotionsScreen() {
           {tab === 'promotions' ? (
             <PromotionsTab
               loading={loading && available.length === 0}
-              campaign={campaign}
+              campaigns={campaigns}
               cards={availableCards}
               isLogin={isLogin}
               onCouponPress={(index) => openDetail(isLogin ? available[index] : undefined)}

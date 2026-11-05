@@ -15,6 +15,7 @@ const isSuper = userStore.profile?.isSuper === true;
 const { loading, list, query, load, search, reset, pagination } = useTable(apiCampaignList, {
   title: '',
   status: undefined,
+  campaignType: undefined,
   siteId: 0,
 });
 
@@ -24,10 +25,20 @@ const STATUS: Record<number, { text: string; color: string }> = {
   2: { text: '下架', color: 'warning' },
 };
 
+/** 活动类型(App 促销中心按它分页签,PRD 6.1 季节 / 每周 / 每月 / 节日特别活动) */
+const CAMPAIGN_TYPES: Record<number, string> = {
+  0: '常规',
+  1: '季节活动',
+  2: '每周活动',
+  3: '每月活动',
+  4: '节日/特别活动',
+};
+
 const columns = [
   { title: 'ID', dataIndex: 'id', width: 70 },
   { title: '标题', dataIndex: 'title', ellipsis: true },
   { title: '副标题', dataIndex: 'subtitle', width: 200, ellipsis: true },
+  { title: '类型', dataIndex: 'campaign_type', width: 120 },
   { title: '排序', dataIndex: 'sort', width: 70 },
   { title: '状态', dataIndex: 'status', width: 90 },
   { title: '更新时间', dataIndex: 'updated_at', width: 170 },
@@ -38,9 +49,10 @@ const modalOpen = ref(false);
 const submitting = ref(false);
 const editingId = ref(0);
 const couponIdsText = ref('');
-const form = reactive<{ title: string; subtitle: string; banner: string; landingUrl: string; startTime: string; endTime: string; sort: number; status: number }>({
+const form = reactive<{ title: string; subtitle: string; campaignType: number; banner: string; landingUrl: string; startTime: string; endTime: string; sort: number; status: number }>({
   title: '',
   subtitle: '',
+  campaignType: 0,
   banner: '',
   landingUrl: '',
   startTime: '',
@@ -51,7 +63,7 @@ const form = reactive<{ title: string; subtitle: string; banner: string; landing
 
 function openCreate(): void {
   editingId.value = 0;
-  Object.assign(form, { title: '', subtitle: '', banner: '', landingUrl: '', startTime: '', endTime: '', sort: 0, status: 0 });
+  Object.assign(form, { title: '', subtitle: '', campaignType: 0, banner: '', landingUrl: '', startTime: '', endTime: '', sort: 0, status: 0 });
   couponIdsText.value = '';
   modalOpen.value = true;
 }
@@ -60,6 +72,7 @@ function openEdit(row: TableRow): void {
   Object.assign(form, {
     title: row.title,
     subtitle: row.subtitle,
+    campaignType: row.campaign_type ?? 0,
     banner: row.banner,
     landingUrl: row.landing_url,
     startTime: row.start_time || '',
@@ -113,6 +126,11 @@ onMounted(() => void load());
             <a-select-option :value="2">下架</a-select-option>
           </a-select>
         </a-form-item>
+        <a-form-item label="类型">
+          <a-select v-model:value="query.campaignType" placeholder="全部" allow-clear style="width: 140px">
+            <a-select-option v-for="(text, key) in CAMPAIGN_TYPES" :key="key" :value="Number(key)">{{ text }}</a-select-option>
+          </a-select>
+        </a-form-item>
         <a-form-item v-if="isSuper" label="站点">
           <SiteTreeSelect v-model:value="query.siteId" allow-all style="width: 160px" />
         </a-form-item>
@@ -131,7 +149,8 @@ onMounted(() => void load());
       </template>
       <a-table :columns="columns" :data-source="list" :loading="loading" :pagination="pagination" row-key="id" size="middle" :scroll="{ x: 1000 }">
         <template #bodyCell="{ column, record }">
-          <template v-if="column.dataIndex === 'status'">
+          <template v-if="column.dataIndex === 'campaign_type'">{{ CAMPAIGN_TYPES[record.campaign_type] ?? '常规' }}</template>
+          <template v-else-if="column.dataIndex === 'status'">
             <a-tag :color="STATUS[record.status]?.color">{{ STATUS[record.status]?.text ?? record.status }}</a-tag>
           </template>
           <template v-else-if="column.key === 'action_col'">
@@ -151,6 +170,11 @@ onMounted(() => void load());
       <a-form :label-col="{ span: 5 }" :wrapper-col="{ span: 18 }">
         <a-form-item label="标题" required><a-input v-model:value="form.title" /></a-form-item>
         <a-form-item label="副标题"><a-input v-model:value="form.subtitle" /></a-form-item>
+        <a-form-item label="活动类型">
+          <a-select v-model:value="form.campaignType" style="width: 200px">
+            <a-select-option v-for="(text, key) in CAMPAIGN_TYPES" :key="key" :value="Number(key)">{{ text }}</a-select-option>
+          </a-select>
+        </a-form-item>
         <a-form-item label="头图URL"><a-input v-model:value="form.banner" /></a-form-item>
         <a-form-item label="落地页URL"><a-input v-model:value="form.landingUrl" placeholder="内嵌 Web 促销落地页" /></a-form-item>
         <a-form-item label="关联券ID"><a-input v-model:value="couponIdsText" placeholder="优惠券模板ID,逗号分隔" /></a-form-item>

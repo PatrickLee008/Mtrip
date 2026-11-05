@@ -14,7 +14,7 @@ use Hyperf\DbConnection\Db;
  * 给后台排查和没有对应文案的旧版本 App 兜底。
  *
  * 写在 mtrip_business.notify_record,order-service / user-service 都直接调用;
- * 只做站内信(In-App),Push / SMS / Email 待接第三方服务商后在 send() 里扩展分发。
+ * 站内信(In-App)之外,部分事件经 UserSms 另发短信(SMSPoh);Push / Email 待接服务商后同样在 send() 里扩展。
  * 调用方须在业务事务**之后**调用并自行容错 —— 通知失败不能回滚预订、退款等主流程。
  */
 final class UserNotify
@@ -75,6 +75,8 @@ final class UserNotify
             'biz_id' => $bizId,
             'is_read' => 0,
         ]);
+        // 退款申请 / 退款完成 / 写评价提醒另发短信(异步,不影响主流程;只对 UserSms::TEMPLATES 里的事件)
+        UserSms::dispatch($siteId, $userId, $event, $params, $bizId);
     }
 
     /** 订单类通知的公共变量(酒店名 / 订单号 / 入离日期),从 order_main 行取 */

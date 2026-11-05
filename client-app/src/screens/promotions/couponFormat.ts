@@ -22,7 +22,7 @@ export type CouponAction = 'claim' | 'use' | 'used' | 'expired' | 'unavailable';
 export interface CouponCardModel {
   key: string;
   category: CouponCategory;
-  /** 券码行:已领取显示券码,未领取显示券名 */
+  /** 卡片首行:券名(无名称时退回券码) */
   codeLine: string;
   badge: CouponBadge | null;
   title: string;
@@ -117,7 +117,8 @@ export function toCouponCard(view: CouponView, t: TFunction, currency: string): 
   return {
     key: view.receive_id > 0 ? `r${view.receive_id}` : `c${view.coupon_id}`,
     category: categoryOf(view),
-    codeLine: view.coupon_code || view.coupon_name,
+    // 首行显示券名(QA P_TC_003);券码在详情页码框里,名称缺失时才退回券码
+    codeLine: view.coupon_name || view.coupon_code,
     badge: badgeOf(view),
     title: discountTitle(view, t, currency),
     desc: thresholdText(view, t, currency),

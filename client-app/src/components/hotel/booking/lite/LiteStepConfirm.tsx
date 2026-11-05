@@ -52,6 +52,7 @@ import {
 import { useSiteStore } from '@/store/siteStore';
 import type { HotelAddon } from '@/types/models';
 import { formatMoney } from '@/utils/format';
+import { phoneChars } from '@/utils/validate';
 
 interface Props {
   roomName: string;
@@ -245,7 +246,7 @@ export default function LiteStepConfirm({
             <TextInput
               style={liteBooking.controlText}
               value={form.phone}
-              onChangeText={(v) => onChangeForm({ phone: v })}
+              onChangeText={(v) => onChangeForm({ phone: phoneChars(v) })}
               placeholder={t('hotels.booking.guests.phonePlaceholder')}
               placeholderTextColor={colors.textSoft}
               keyboardType="phone-pad"
@@ -298,7 +299,6 @@ export default function LiteStepConfirm({
       </View>
 
       {/* ------------------------------------------------------ Add On Service */}
-      {addonOptions && addonOptions.length === 0 ? null : (
       <View style={styles.addonGroup}>
         <Pressable
           style={({ pressed }) => [liteBooking.foldBar, pressed && liteBooking.pressed]}
@@ -311,7 +311,7 @@ export default function LiteStepConfirm({
         </Pressable>
 
         {addonOpen && addonOptions
-          ? addonOptions.map((addon) => (
+          ? [...addonOptions.map((addon) => (
               <AddOn
                 key={addon.key}
                 cover={TEMP_ADDON_COVERS[addon.key === 'airport_transfer' ? 'transfer' : addon.key] ?? null}
@@ -327,7 +327,19 @@ export default function LiteStepConfirm({
                 selectedLabel={t('hotels.booking.dates.selected')}
                 onToggle={() => onToggleAddon(addon.key)}
               />
-            ))
+            )),
+            /* 旅行保障入口常驻(QA H_TC_036);保险尚无计价接口(PRD Phase 2),只进 Travel Protection 页 */
+            <AddOn
+              key="insurance"
+              cover={null}
+              title={t('hotels.booking.addons.insurance.title')}
+              desc={t('hotels.booking.addons.insurance.desc')}
+              price={t('home.comingSoon')}
+              selected={false}
+              addLabel={t('hotels.booking.dates.addToBooking')}
+              selectedLabel={t('hotels.booking.dates.selected')}
+              onToggle={onOpenInsurance}
+            />]
           : addonOpen
           ? BOOKING_ADDONS.map((addon) => (
               <AddOn
@@ -344,7 +356,6 @@ export default function LiteStepConfirm({
             ))
           : null}
       </View>
-      )}
 
       {/* --------------------------------------------------- Cancellation Policy */}
       <View style={styles.policyCard}>
