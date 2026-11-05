@@ -1,5 +1,28 @@
 # 13 - 商家端 merchant-web 落地
 
+2026-11-05 提交补充：按用户要求，将本轮 AP_TC_014 校验修复、12 项回归脚本及 AP_TC_020/021/022 联合复测记录一并纳入本地提交，不推送；下文“未提交”保留为各验证阶段的历史状态。
+
+## 2026-11-05 营业登记文件超限复测（AP_TC_020）
+
+联合复测补充：用户要求一并确认第 50 行 `AP_TC_021`（Hotel Operating License）与第 52 行 `AP_TC_022`（Owner ID / Passport）。三条均属于“添加物业 → KYC 文件”的超过 10MB 校验，共用 `uploadDocument()`、`POST /merchant/properties/kyc/upload` 和 `PropertyKycService::upload()`；`docType` 仅区分文件类别。第 52 行的步骤 3 误写为酒店营业许可证，本次按其场景验证 Owner ID / Passport，未回写原表。
+
+5174 已登录草稿的第二、第三个上传入口分别选择 10,485,761 字节 PDF，均显示超限提示，文件仍未上传、审核按钮保持禁用；新增两入口真实浏览器检查均通过。复跑覆盖三类文档的临时组件 36 项与后端 11 项边界检查全部通过。本地三条均未复现历史缺陷，因此未新增上传业务改动；Staging/8091 验证边界仍按下文保留，未写真实 KYC 数据、未部署/提交/推送。`git diff --check` 通过。
+
+依据同一 Google 测试表 `All Properties [Merchant Dashboard]` 第 48 行 `AP_TC_020`：添加物业填写基本信息后，营业登记文件超过 10MB 应拒绝，历史实际结果为允许上传。本次当前本地版本未复现，未改上传业务代码；既有前端 `uploadDocument()` 与后端 `PropertyKycService::upload()` 均限制 `10 * 1024 * 1024` 字节（10MiB），超过限制立即返回。
+
+- 真实浏览器：5174 已登录现有草稿 `propertyId=16` 的 Business Registration，系统文件选择器选择 11MiB（11,534,336 字节）及 10MiB + 1（10,485,761 字节）PDF 均显示“请选择不超过 10MB 的有效 PDF、JPG 或 PNG 文件”，未显示已上传且审核按钮保持禁用。未创建物业或写入 KYC 文件。浏览器扩展自动选文件受限后改用系统选择器，未修改扩展权限。
+- 临时组件检查 36 项通过：直接编译当前 SFC 的 `uploadDocument()`，覆盖三类 KYC 文档、PDF/JPG/PNG、上限减 1/等于上限/加 1/11MiB；合法大小进入桩上传 API，超限零上传调用，并验证文件输入重置。合法文件实际落盘不属于该桩检查的证明范围。
+- 当前商户服务容器独立服务检查 11 项通过：三类文档的上限加 1/11MiB/20MiB 均在读取文件或访问数据库之前抛 `40001`；上限减 1/等于上限进入 MIME 校验阶段。未做真实 HTTP multipart 上传或数据库写入。
+- 范围：8091 当前未登录，原表所记 Staging 环境未复测；结论仅适用于当前工作区、5174 页面和本机商户服务容器。没有据此回写 Google 测试状态或发布版本；本轮仅记录验证结果，`git diff --check` 通过，保留上一任务全部未提交修改。
+
+## 2026-11-05 添加物业房型数量校验（AP_TC_014）
+
+依据用户指定的 [mTrip Test Cases / All Properties 第 36 行](https://docs.google.com/spreadsheets/d/1Zu-b3QU5euNPA-C1Wl0cVw-hd1GJzLhFn7qzUh73UA0/edit?gid=1629320030#gid=1629320030)，修复负数房型数量仍可进入下一步的问题。原输入框已有 `min=0`、`step=1`，但普通按钮直接执行 `next()`，未校验数量。现在保存前要求非负整数，负数、小数、清空及非数字均显示中英提示并停留第一步，不调用物业保存接口；0 及正整数沿用既有流程。
+
+范围：仅添加物业页面及中英提示。已核对 `PropertyKycService` 与前端 API：该数量目前不提交或持久化，实际房型数量由房型记录统计，因此不新增后端字段、接口或迁移。知识库商户 v1.0.12 M02 只用于导航，本轮验收以用户指定测试用例及既有输入下限 0 为依据。
+
+验证：新增 `node merchant-web/scripts/check-property-room-types.mjs`，修改前在 `-1` 仍调用保存处失败，修改后 12 项通过，覆盖负数、小数、空值、非数字、0/正整数及改正后继续提交。5174 已登录真实页面输入 `-1` 后点击下一步，出现英文数量提示并保持第一步；未创建真实物业。商户及 admin Web 类型检查/构建、client-app 类型检查、493 个 PHP 语法检查、shared 221 用例/1647 断言、`git diff --check` 通过（macOS 无 PowerShell，按 `check.ps1` 四步等价执行）。5174 热更新生效，未发布 8091、未回写 Google 表格、未提交/推送。
+
 ## 2026-10-28 营销三个页面内边距统一
 
 依据用户要求，移除营销活动 `promotions/index.vue`、效果分析 `promotions/analytics/index.vue`、平台活动 `campaigns/index.vue` 页面根容器额外的桌面 `32px` 和窄屏 `16px` padding，避免与 `PageContainer` 叠加；统一使用公共容器桌面上下 `24px`、左右 `28px`，900px 及以下四边 `16px`。保留页面内容、内部组件间距及响应式排列。对照经营看板与员工管理确认公共容器口径，商户 `npm run build`（含类型检查）通过；未做登录态浏览器目视验收，未发布 8091、未提交/推送。
