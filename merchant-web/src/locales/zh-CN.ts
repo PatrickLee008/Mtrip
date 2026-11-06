@@ -939,6 +939,7 @@ export default {
     },
   },
   promotions: {
+    tutorialVideos: '视频教程',
     retry: '重试',
     standard: '标准促销',
     pauseToEdit: '请先暂停促销，再编辑规则。',

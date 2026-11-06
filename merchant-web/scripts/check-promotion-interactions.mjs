@@ -19,13 +19,15 @@ async function compile(file) {
     stdin: { contents: script.content, loader: 'ts', resolveDir: filename.slice(0, filename.lastIndexOf('/')) },
     bundle: true, write: false, format: 'iife', globalName: 'subject', alias: { '@': src },
     plugins: [{ name: 'isolated-promotion', setup(b) {
-      b.onResolve({ filter: /^(vue|vue-i18n|ant-design-vue)$/ }, ({ path }) => ({ path, namespace: 'fixture' }));
+      b.onResolve({ filter: /^(vue|vue-router|vue-i18n|ant-design-vue)$/ }, ({ path }) => ({ path, namespace: 'fixture' }));
       b.onLoad({ filter: /.*/, namespace: 'fixture' }, ({ path }) => ({ contents:
         path === 'vue' ? 'export const {defineComponent,computed,reactive,ref,watch,nextTick}=h.vue; export const onMounted=fn=>h.mounted.push(fn),onBeforeUnmount=()=>{};' :
         path === 'vue-i18n' ? 'export const useI18n=()=>({t:key=>key});' :
+        path === 'vue-router' ? 'export const useRouter=()=>h.router;' :
         'export const message=h.message; export const Modal={confirm:options=>h.confirm=options};',
       }));
       b.onLoad({ filter: /\.vue$/ }, () => ({ contents: 'export default {};' }));
+      b.onLoad({ filter: /\/stores\/user\.ts$/ }, () => ({ contents: 'export const useUserStore=()=>h.user;' }));
       b.onLoad({ filter: /\/utils\/http\.ts$/ }, () => ({ contents: 'export const get=()=>{},post=()=>{};' }));
       b.onLoad({ filter: /\/api\/promotions\.ts$/ }, () => ({ contents:
         'export const PROMOTION_KIND={percentage:1,fixedAmount:2,promoCode:3,longStay:4},DISCOUNT_UNIT={percent:1,amount:2};\n'
@@ -41,10 +43,12 @@ const options = () => ({ currency: 'MMK', policy: { configured: true, maxPercent
   properties: [{ id: 1, merchant_id: 9, commission_rate: 30 }, { id: 2, merchant_id: 10, commission_rate: 10 }],
   roomTypes: [{ id: 11, property_id: 1, base_price: 100000 }, { id: 22, property_id: 2, base_price: 100000 }] });
 function fixture(code = drawerCode, overrides = {}) {
-  const h = { vue, mounted: [], calls: [], messages: [], events: [],
+  const h = { vue, mounted: [], calls: [], messages: [], events: [], navigations: [],
+    user: vue.reactive({ profile: { impersonation: false }, hasPerm: key => key === 'mch:support:guides' }),
     response: async name => name === 'List' ? { list: [], total: 0 } : name === 'Options' ? options() : {},
     call: async (name, args) => { h.calls.push([name, args]); return h.response(name, args); },
   };
+  h.router = { push: async target => h.navigations.push(target) };
   h.message = Object.fromEntries(['success', 'warning'].map(type => [type, key => h.messages.push([type, key])]));
   const props = vue.reactive({ open: true, detail: null, kind: 1, options: options(), saving: false, ...overrides });
   const context = vm.createContext({ h, console, Intl });
@@ -58,6 +62,26 @@ function valid(s) {
 }
 let passed = 0;
 async function test(name, run) { await run(); passed++; console.log('PASS', name); }
+
+await test('P_TC_008 tutorial shortcut opens the existing guides page without changing promotions', async () => {
+  const { h, s } = fixture(pageCode);
+  assert.equal(s.canViewTutorials?.value, true, 'Promotions must provide the tutorial shortcut');
+  await s.openTutorials();
+  assert.deepEqual(h.navigations, ['/support/guides']);
+  assert.equal(h.calls.length, 0);
+  assert.equal(s.drawerOpen.value, false);
+});
+await test('tutorial shortcut respects guide permission and support impersonation restrictions', () => {
+  const { h, s } = fixture(pageCode);
+  h.user.hasPerm = () => false;
+  assert.equal(s.canViewTutorials.value, false);
+  s.openTutorials();
+  h.user.hasPerm = () => true;
+  h.user.profile.impersonation = true;
+  assert.equal(s.canViewTutorials.value, false);
+  s.openTutorials();
+  assert.equal(h.navigations.length, 0);
+});
 
 await test('fixed long stay retains amount when moving between type and condition', () => {
   const { s } = fixture(); valid(s);
@@ -78,6 +102,29 @@ await test('invalid schedule and absent policy never emit a save', () => {
   assert.equal(h.events.length, 0); assert.equal(h.messages.at(-1)[1], 'promotions.validation.dateRange');
   s.form.validEnd = '2027-02-01 18:30:00'; props.options.policy.configured = false; s.submit();
   assert.equal(h.events.length, 0); assert.equal(h.messages.at(-1)[1], 'promotions.validation.policyMissing');
+});
+await test('P_TC_016 rejects 99.99% without rounding or saving across percentage variants', () => {
+  for (const promotionKind of [1, 3, 4]) {
+    for (const enabled of [false, true]) {
+      const { h, s } = fixture(); valid(s);
+      Object.assign(s.form, { promotionKind, discountUnit: 1, discountValue: 99.99,
+        promoCode: 'P_TC_016', minNights: 3, enabled });
+      s.submit();
+      assert.equal(h.events.length, 0);
+      assert.equal(h.messages.at(-1)[1], 'promotions.validation.limitExceeded');
+      assert.equal(s.form.discountValue, 99.99);
+    }
+  }
+});
+await test('P_TC_016 rejects 100% independently of platform limits', () => {
+  for (const promotionKind of [1, 3, 4]) {
+    const { h, s } = fixture(); valid(s);
+    Object.assign(s.form, { promotionKind, discountUnit: 1, discountValue: 100,
+      promoCode: 'P_TC_016', minNights: 3 });
+    s.submit();
+    assert.equal(h.events.length, 0);
+    assert.equal(h.messages.at(-1)[1], 'promotions.validation.discountRange');
+  }
 });
 await test('merchant commission floor blocks a discount allowed by the percentage cap', () => {
   const { h, s } = fixture(); valid(s); s.form.discountValue = 75; s.submit();
@@ -122,4 +169,22 @@ await test('disable and enable confirmations describe the correct impact', async
   await s.toggle({ id: 1, coupon_name: 'Fixture', status: 2 }); assert.match(h.confirm.content, /drawer.claimProtection/);
   assert.equal(h.calls.length, 0);
 });
+for (const [caseId, promotionKind, id] of [['P_TC_034', 1, 34], ['P_TC_038', 2, 38]]) {
+  await test(`${caseId} archives a disabled kind=${promotionKind} promotion only after confirmation`, async () => {
+    const { h, s } = fixture(pageCode);
+    s.page.value = 3;
+    s.remove({ id, coupon_name: 'Disabled promotion', promotion_kind: promotionKind, status: 2 });
+    assert.equal(h.confirm.title, 'promotions.confirm.archive');
+    assert.equal(h.confirm.content, 'promotions.confirm.claimImpact');
+    assert.equal(h.calls.length, 0, 'opening or cancelling the confirmation must not delete');
+    await h.confirm.onOk();
+    assert.equal(h.calls[0][0], 'Delete');
+    assert.equal(h.calls[0][1][0], id);
+    assert.equal(h.calls.filter(([name]) => name === 'Delete').length, 1);
+    assert.equal(s.page.value, 1);
+    assert.ok(h.calls.some(([name]) => name === 'List'));
+    assert.ok(h.calls.some(([name]) => name === 'Summary'));
+    assert.equal(s.busyId.value, null);
+  });
+}
 console.log(`Promotion interactions: ${passed} tests passed`);

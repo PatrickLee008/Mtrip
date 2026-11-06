@@ -940,6 +940,7 @@ export default {
     },
   },
   promotions: {
+    tutorialVideos: 'Tutorial Videos',
     retry: 'Retry',
     standard: 'Standard',
     pauseToEdit: 'Pause this promotion to edit its rules.',

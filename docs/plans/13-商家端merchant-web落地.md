@@ -1,5 +1,53 @@
 # 13 - 商家端 merchant-web 落地
 
+## 2026-11-06 促销视频教程按钮按 Figma 对齐
+
+用户指定 [Figma Percentage promotion tables `2285:19350`](https://www.figma.com/design/fsK2rrl2sadcowrxspvGV8/mTrip_Merchant?node-id=2285-19350&m=dev)，本轮仅对齐标题区“视频教程”按钮。通过 Figma Inspect 核对 Tuto video btn 默认主组件 `3153:24718`、悬停 `3153:24720` 及文字/图标属性：白底、1px `#E2E8F0` 内描边、8px 圆角，`#1B1D30` Inter 14px/600/21px 行高，lucide/play 14×14、图文间距 8px；padding 10px/16px、外尺寸约 156×41px，距离新建按钮 16px；悬停底色 `#EBF0FF`。
+
+`promotions/index.vue` 将原圆形播放改为既有三角播放图标，局部覆盖默认/悬停配色与字体，按钮组间距改为 16px 并垂直居中；CSS padding 使用 9px/15px 配合 1px border，对齐 Figma 内描边外尺寸并避免按钮增高。原指南跳转、权限/代登录限制保留。英文实测宽 155.734px、高 41px，按钮实际间距 16px；中文宽 110px、高 41px；中英 375px 页面 scrollWidth 均等于视口 375px，英文按钮自动换行，中文正常同排。实际点击到达用户指南页，语言和临时视口已还原。
+
+`npm run build`（含 vue-tsc）、`check-promotions-figma.mjs` 212/212、交互 17 项及 diff 检查通过；构建仅保留既有大包提示。截图 `/private/tmp/mtrip-tutorial-figma-desktop-zh.png`、`/private/tmp/mtrip-tutorial-figma-desktop-en.png`、`/private/tmp/mtrip-tutorial-figma-mobile-zh.png`、`/private/tmp/mtrip-tutorial-figma-mobile-en.png`。本机 5174 热更新生效；未部署 8091/远端、未提交/推送，保留此前未提交改动。
+
+## 2026-11-06 固定金额促销删除归档复测（P_TC_038）
+
+依据用户指定 [Promotions 测试表第 84 行](https://docs.google.com/spreadsheets/d/1Zu-b3QU5euNPA-C1Wl0cVw-hd1GJzLhFn7qzUh73UA0/edit?gid=1835050152#gid=1835050152) `P_TC_038`：固定金额促销删除，预期仅暂停时可删，历史实际为没有删除选项；备注为商户可直接删除自费促销，无需超管审批。按已确认 Merchant PRD v1.0.12 M8 / AC08，删除为软删除/归档且保留原领取权益，未定义仅暂停时可删。本轮单独验证固定金额分支，未复现缺陷，不改变业务逻辑或增加旧状态限制。
+
+界面验收：临时只读页面使用仓库真实 PromoCard、Ant Design Vue 及现有中文文案，夹具为已停用、固定金额 5,000 的促销；右上角操作菜单显示“复制 / 结束促销 / 归档”，点击归档正确发出该固定金额记录的 remove 事件。该页面只记录事件，不连接写接口，不代表在实际业务库执行归档。截图 `/private/tmp/mtrip-p-tc-038-fixed-menu.png`、`/private/tmp/mtrip-p-tc-038-fixed-event.png`；验收页和临时标签已清理。
+
+回归验证：既有真实页面 SFC 确认后删除测试增加固定金额参数，确认前不调用 API，确认后 Delete 一次、页码回到 1 并刷新统计/列表。隔离库新增固定金额夹具，先领取再停用，跨物业归档 40401，本站直接归档 code=0；模板保留软删除标记且金额仍为 5,000，固定金额列表不再展示，记录商户 archive 操作，原领取记录/快照完全不变，原权益可见且原有效期保留，新增领取被拒绝。17 项交互测试、营销隔离集成及订单权益定价回归全部通过，专用临时库正常清理；只改测试与文档，不重复构建。
+
+未改开发业务数据或配置、未部署 8091/远端、未复测远端、未回写 Google 测试表、未提交/推送，保留此前未提交改动。
+
+## 2026-11-06 百分比促销删除归档复测（P_TC_034）
+
+用户指定 [Promotions 测试表第 76 行](https://docs.google.com/spreadsheets/d/1Zu-b3QU5euNPA-C1Wl0cVw-hd1GJzLhFn7qzUh73UA0/edit?gid=1835050152#gid=1835050152) `P_TC_034`：删除百分比促销，预期仅暂停时允许删除，历史实际为没有删除选项；备注说明商户自费促销可直接删除，无需超管审批。按已确认 Merchant PRD v1.0.12 Module 8 / AC08（原始快照 1099–1129 / 1355–1375 行），删除是软删除/归档，停止新增领取并保留原权益、预订和审计；没有“仅暂停可删除”要求，本轮不加入该旧状态限制。
+
+5174 实际登录态点击现有“周末特惠”卡片的“操作”，菜单提供“复制 / 结束促销 / 归档”。点击归档打开确认框：“归档此促销？归档后停止新增领取。”，正文说明“新增领取将立即停止。已领取权益仍可按原条款和有效期查看及核销，现有预订不受影响。”；已取消，未归档或停用现有促销。截图 `/private/tmp/mtrip-p-tc-034-menu.png`、`/private/tmp/mtrip-p-tc-034-confirm.png`。当前本地未复现入口缺失，保留业务逻辑。
+
+新增真实 SFC 交互回归：已停用百分比促销打开确认时零写请求，确认后调用原删除接口一次，重置页码并刷新列表/统计。扩充隔离库既有已停用百分比夹具：跨物业归档返回 40401；本站归档 code=0 无审批，模板保留且写入软删除标记、商户列表移除、记录 archive 操作及商户操作者；原领取记录/规则快照完全不变、原权益可查看且有效，归档后新增领取被拒绝。`check-promotion-interactions.mjs` 16 项、`bash scripts/test-merchant-promotions.sh` 营销隔离集成及订单权益定价回归全部通过；临时库正常清理。仅测试与文档变更，不重复构建。
+
+结论仅针对当前本地基线；未改开发业务数据、未部署 8091/远端、未复测远端、未回写 Google 测试表、未提交/推送，保留之前未提交改动。
+
+## 2026-11-06 促销百分比边界复测（P_TC_016）
+
+依据用户指定 [Google 测试表 Promotions 第 40 行](https://docs.google.com/spreadsheets/d/1Zu-b3QU5euNPA-C1Wl0cVw-hd1GJzLhFn7qzUh73UA0/edit?gid=1835050152#gid=1835050152) `P_TC_016`：预期禁止 100% 全免并报错，历史实际为输入 99.99% 后成功创建为 100%。按已确认 Merchant PRD v1.0.12 Module 8 / AC08 核对，当前本地未复现，无需追加业务修复。
+
+5174 登录态在独立新建草稿填写名称及物业，输入 99.99 后失焦保持 99.99，点击创建提示“该折扣超过商户促销限额或受保护最低应付金额”；改为 100 点击创建提示“百分比折扣必须小于 100”。当次页面的平台上限为 60%、最低实付比例为官方价的 70%，只读核对未修改。取消草稿后仍为原促销列表。后端换算仍使用两位小数十进制折扣率，但有效折扣须再通过平台限额及最低应付校验，全免值无法通过校验入库；此次不改变已有存储精度和计价契约。
+
+新增两项真实抽屉 SFC 回归，覆盖 99.99 不被改写/不触发保存、100 独立全免校验；覆盖百分比、优惠码百分比、长住百分比以及启用/停用。后端集成新增 24 组创建/编辑拒绝检查（同三类、两种状态、99.99/100，均为 40001），同时确认无新增促销、已有折扣不变。`check-promotion-interactions.mjs` 15 项、`check-promotion-rules.mjs` 9 项、`bash scripts/test-merchant-promotions.sh` 营销及订单权益定价全部通过；脚本专用隔离库正常清理，未写入开发业务库。只改测试及文档，未改业务代码，不重复构建。截图：`/private/tmp/mtrip-p-tc-016-99.99.png`、`/private/tmp/mtrip-p-tc-016-100.png`。
+
+此结论仅针对当前本地基线；未部署 8091/远端、未复测远端、未回写 Google 测试表、未提交/推送，保留此前 P_TC_008 的未提交改动。
+
+## 2026-11-06 促销视频教程入口修复（P_TC_008）
+
+依据用户指定 [Google 测试表 Promotions 第 24 行](https://docs.google.com/spreadsheets/d/1Zu-b3QU5euNPA-C1Wl0cVw-hd1GJzLhFn7qzUh73UA0/edit?gid=1835050152#gid=1835050152) `P_TC_008`：促销页应提供 Tutorial Videos 按钮并跳转教程页，原记录为入口缺失。5174 登录态确认原页面只有“新建促销”，现于标题操作区补充中英“视频教程 / Tutorial Videos”按钮及现有播放图标，复用 `/support/guides` 用户指南模块；沿用 `mch:support:guides` 权限，代登录隐藏且不允许触发跳转，原促销操作保持不变。
+
+需求补充核对：Merchant PRD v1.0.12 M10 §10.8（仓库知识库原始快照 1212–1224 行）规定指南包含促销工作流视频，并统一进入用户指南模块；此次以用户指定缺陷用例补齐促销页快捷入口，不新建教程模块、内容接口或迁移。
+
+验证：先补回归，旧实现因缺少教程入口失败；修复后 `check-promotion-interactions.mjs` 13 项通过（含正常跳转、无权限与代登录零导航），`check-promotions-figma.mjs` 212/212 通过（含真实模板按钮可见及权限隐藏），商户类型检查/构建、diff 检查通过，保留既有大包提示。5174 实际点击后到达“用户指南与视频教程”，显示已有分类及视频卡片；桌面和 375px 按钮可见，375px 页面宽度同视口，无横向溢出，临时视口已还原。未实际验收外部视频播放，未创建/修改促销或指南数据。截图：`/private/tmp/mtrip-p-tc-008-button.png`、`/private/tmp/mtrip-p-tc-008-guides.png`、`/private/tmp/mtrip-p-tc-008-mobile.png`。
+
+本机 Vite 5174 原未运行，已恢复为仅本机监听并热更新生效；只读确认现有 Docker 服务运行，未重启/部署后端，未发布 8091/远端、未回写 Google 测试表、未提交/推送。
+
 ## 2026-11-06 所有物业搜索修复（AP_TC_002）
 
 按用户确认修复第 12 行缺陷：仅在 `/properties` 接通顶部搜索框，通过路由 `search` 查询参数同步输入与列表，输入即按物业名称、地址或所属商户名称做不区分大小写的包含匹配，忽略首尾空格；清空恢复全部列表，刷新保留关键词及结果，使用 replace 避免每次输入增加浏览历史。无匹配时显示中英提示；统计卡仍按全部物业计算。搜索在前端过滤既有授权数据，加载时按原接口补齐后续页，避免遗漏第 200 条之后的物业；输入不重复请求接口，后端权限/站点隔离不变。
