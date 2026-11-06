@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
-import { useRouter } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { BankOutlined, CheckCircleOutlined, CoffeeOutlined, EnvironmentOutlined, HomeOutlined, PlusOutlined } from '@ant-design/icons-vue';
 import { apiPropertyList, type PropertyRow } from '@/api/properties';
@@ -11,12 +11,16 @@ import villasImage from '@/assets/properties/hotel-villas.png';
 
 const { t } = useI18n();
 const router = useRouter();
+const route = useRoute();
 const userStore = useUserStore();
 const loading = ref(false);
 const properties = ref<PropertyRow[]>([]);
+const searchKeyword = computed(() => typeof route.query.search === 'string' ? route.query.search.trim().toLowerCase() : '');
+const filteredProperties = computed(() => properties.value.filter((item) =>
+  !searchKeyword.value || [item.store_name, item.address, item.merchant_name].some((value) => value?.toLowerCase().includes(searchKeyword.value)),
+));
 const hotels = computed(() => properties.value.filter((item) => item.business_type === 'hotel'));
 const restaurants = computed(() => properties.value.filter((item) => item.business_type === 'restaurant'));
-const other = computed(() => properties.value.filter((item) => !['hotel', 'restaurant'].includes(item.business_type)));
 
 const canAdd = computed(() => userStore.hasPerm('mch:properties:add'));
 const summary = computed(() => [
@@ -26,9 +30,9 @@ const summary = computed(() => [
   { label: t('properties.verifiedBusinesses'), value: properties.value.filter((item) => item.kyc_status === 1).length, sub: t('properties.verifiedSubtitle'), icon: CheckCircleOutlined, tone: 'green' },
 ]);
 const groups = computed(() => [
-  { key: 'hotel', title: t('sidebar.hotels'), items: hotels.value },
-  { key: 'restaurant', title: t('sidebar.restaurants'), items: restaurants.value },
-  { key: 'other', title: t('sidebar.businessType.other'), items: other.value },
+  { key: 'hotel', title: t('sidebar.hotels'), items: filteredProperties.value.filter((item) => item.business_type === 'hotel') },
+  { key: 'restaurant', title: t('sidebar.restaurants'), items: filteredProperties.value.filter((item) => item.business_type === 'restaurant') },
+  { key: 'other', title: t('sidebar.businessType.other'), items: filteredProperties.value.filter((item) => !['hotel', 'restaurant'].includes(item.business_type)) },
 ].filter((group) => group.items.length > 0));
 const images = [resortImage, boutiqueImage, villasImage];
 
@@ -81,7 +85,13 @@ function addProperty(): void {
 async function load(): Promise<void> {
   loading.value = true;
   try {
-    properties.value = (await apiPropertyList({ page: 1, pageSize: 200 })).list;
+    const firstPage = await apiPropertyList({ page: 1, pageSize: 200 });
+    const list = [...firstPage.list];
+    // 搜索覆盖全部授权物业,避免只搜索前 200 条。
+    for (let page = 2; page <= Math.ceil(firstPage.total / firstPage.pageSize); page++) {
+      list.push(...(await apiPropertyList({ page, pageSize: firstPage.pageSize })).list);
+    }
+    properties.value = list;
   } finally {
     loading.value = false;
   }
@@ -143,7 +153,7 @@ onMounted(load);
         </div>
       </section>
     </template>
-    <div v-else class="empty-state">{{ t('sidebar.noBusinesses') }}</div>
+    <div v-else class="empty-state" role="status">{{ t(searchKeyword ? 'properties.noSearchResults' : 'sidebar.noBusinesses') }}</div>
   </main>
 </template>
 

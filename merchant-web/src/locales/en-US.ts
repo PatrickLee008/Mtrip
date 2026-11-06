@@ -296,6 +296,8 @@ export default {
   },
   properties: {
     subtitle: 'Manage your hotel and restaurant portfolio from one central view.',
+    searchPlaceholder: 'Search properties, addresses or merchants',
+    noSearchResults: 'No matching properties. Try another keyword.',
     total: 'Total Properties',
     acrossPortfolio: 'Across portfolio',
     hotelSubtitle: 'Hotel businesses',

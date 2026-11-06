@@ -28,6 +28,12 @@ const route = useRoute();
 const router = useRouter();
 const { t } = useI18n();
 const unreadCount = ref(0);
+const propertySearch = computed({
+  get: () => typeof route.query.search === 'string' ? route.query.search : '',
+  set: (value: string) => {
+    void router.replace({ path: route.path, query: { ...route.query, search: value || undefined }, hash: route.hash });
+  },
+});
 
 const displayName = computed(() => userStore.profile?.realName || userStore.profile?.username || '-');
 
@@ -126,10 +132,11 @@ onMounted(() => {
     <div class="header-space" />
     <a-button v-if="!userStore.profile?.impersonation && userStore.hasPerm('mch:support:guides')" type="text" :title="t('support.guides')" @click="router.push('/support/guides')"><BookOutlined /><span class="guide-label">{{ t('support.guides') }}</span></a-button>
 
-    <!-- 搜索框(原型:176px 浅灰底,视觉占位) -->
+    <!-- 搜索框(原型:176px 浅灰底) -->
     <div class="header-search">
       <SearchOutlined class="search-icon" />
-      <input class="search-input" type="text" :placeholder="t('header.searchPlaceholder')" />
+      <input v-if="route.path === '/properties'" v-model="propertySearch" class="search-input" type="search" :placeholder="t('properties.searchPlaceholder')" :aria-label="t('properties.searchPlaceholder')" />
+      <input v-else class="search-input" type="text" :placeholder="t('header.searchPlaceholder')" />
     </div>
 
     <!-- 通知铃铛(原型:32px 按钮 + 右上红点) -->

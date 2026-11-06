@@ -295,6 +295,8 @@ export default {
   },
   properties: {
     subtitle: '在一个页面管理您的酒店和餐厅业务。',
+    searchPlaceholder: '搜索物业名称、地址或商户',
+    noSearchResults: '没有匹配的物业，请尝试其他关键词。',
     total: '物业总数',
     acrossPortfolio: '全部已验证业务',
     hotelSubtitle: '酒店业务',
