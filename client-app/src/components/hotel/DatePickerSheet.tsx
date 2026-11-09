@@ -41,6 +41,7 @@ import {
 import { useTranslation } from 'react-i18next';
 
 import HomeIcon from '@/components/home/HomeIcon';
+import { pickStayRange } from '@/components/hotel/booking/bookingFormat';
 import { colors, radius, shadows } from '@/config/theme';
 import { fonts } from '@/config/typography';
 
@@ -220,14 +221,8 @@ export default function DatePickerSheet({
     setCursor((c) => new Date(c.getFullYear(), c.getMonth() + step, 1));
   };
 
-  /** 先点入住、再点离店;已选满或点到入住日之前,则重新起头 */
-  const pick = (key: string) =>
-    setDraft((d) => {
-      if (!d.checkIn || d.checkOut || key <= d.checkIn) {
-        return { ...d, checkIn: key, checkOut: '' };
-      }
-      return { ...d, checkOut: key };
-    });
+  /** 第一个日期之后或之前都能收尾成区间;已选满再点则重新起头(规则见 pickStayRange) */
+  const pick = (key: string) => setDraft((d) => ({ ...d, ...pickStayRange(d.checkIn, d.checkOut, key) }));
 
   const nights = nightsBetween(draft.checkIn, draft.checkOut);
   const canConfirm = Boolean(draft.checkIn && draft.checkOut);

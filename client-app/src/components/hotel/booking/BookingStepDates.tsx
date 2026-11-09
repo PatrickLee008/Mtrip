@@ -22,6 +22,7 @@ import {
   formatWeekdayDate,
   nightsBetween,
   nightsLabel,
+  pickStayRange,
 } from '@/components/hotel/booking/bookingFormat';
 import type { BookingAddonKey } from '@/screens/hotel/bookingDemo';
 
@@ -65,13 +66,10 @@ export default function BookingStepDates({
 
   const nights = nightsBetween(checkIn, checkOut);
 
-  /** 日历里点日期:已成区间或点到入住日之前 → 重新起头;否则收尾 */
+  /** 日历里点日期:第一个日期之后或之前都能收尾成区间(规则见 pickStayRange) */
   const pickDate = (key: string) => {
-    if (!checkIn || checkOut || key <= checkIn) {
-      onChangeDates(key, '');
-      return;
-    }
-    onChangeDates(checkIn, key);
+    const next = pickStayRange(checkIn, checkOut, key);
+    onChangeDates(next.checkIn, next.checkOut);
   };
 
   return (

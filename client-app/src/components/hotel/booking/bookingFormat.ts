@@ -85,6 +85,21 @@ export function formatMonthDayYear(key: string, locale: string): string {
   });
 }
 
+/**
+ * 日历点选入住 / 离店(搜索页日期浮层与订房第 1 步日历共用):
+ * 还没选或已成区间 → 点的日子作为新的第一个日期;已有第一个日期时,点之后的日子收尾为离店,
+ * 点之前的日子则两者对调(先点的变离店、后点的变入住),点同一天保持不变。
+ */
+export function pickStayRange(
+  checkIn: string,
+  checkOut: string,
+  key: string,
+): { checkIn: string; checkOut: string } {
+  if (!checkIn || checkOut) return { checkIn: key, checkOut: '' };
+  if (key === checkIn) return { checkIn, checkOut: '' };
+  return key < checkIn ? { checkIn: key, checkOut: checkIn } : { checkIn, checkOut: key };
+}
+
 /** 两个日期键之间的晚数 */
 export function nightsBetween(checkIn: string, checkOut: string): number {
   if (!checkIn || !checkOut) return 0;
