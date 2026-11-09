@@ -74,17 +74,21 @@ export default function WalletTxnDetailScreen() {
           <Row label={t('more.wallet.detail.time')}>
             <Text style={styles.value}>{walletDetailTime(log, i18n.language)}</Text>
           </Row>
+          {/* 设计稿退款 / 支付两张详情的类型行都是业务品类「Hotel Stay」+ building(流水类型已在抬头卡);
+              没关联预订的流水(调账、推荐返利等)没有品类,退回显示流水类型 */}
           <Row label={t('more.wallet.detail.type')}>
             <View style={styles.typeChip}>
-              <HomeIcon name={WALLET_KIND_ICON[kind]} size={20} color={colors.primary} />
-              <Text style={styles.value}>{t(`more.wallet.kinds.${kind}`)}</Text>
+              <HomeIcon name={log.booking_no ? 'building' : WALLET_KIND_ICON[kind]} size={20} color={colors.primary} />
+              <Text style={styles.value}>
+                {log.booking_no ? t('more.wallet.detail.hotelStay') : t(`more.wallet.kinds.${kind}`)}
+              </Text>
             </View>
           </Row>
           {log.booking_no ? (
             <>
-              <Row label={t('more.wallet.detail.bookingId')}>
-                {/* 预订号 20+ 位,不截断(用户要照着核对),放不下就折行 */}
-                <Text style={[styles.value, styles.link, styles.alignRight]}>
+              <Row label={t('more.wallet.detail.bookingId')} shrinkLabel>
+                {/* 预订号 20+ 位纯数字,不截断(用户要照着核对)也折不了行,让标签折成两行让位 */}
+                <Text style={[styles.value, styles.link, styles.noShrink]}>
                   {log.booking_no}
                 </Text>
                 <CopyButton label={t('more.wallet.detail.copy')} onPress={() => void copy(log.booking_no)} />
@@ -105,11 +109,22 @@ export default function WalletTxnDetailScreen() {
   );
 }
 
-function Row({ label, top, children }: { label: string; top?: boolean; children: React.ReactNode }) {
+function Row({
+  label,
+  top,
+  shrinkLabel,
+  children,
+}: {
+  label: string;
+  top?: boolean;
+  /** 值是长串不可折行内容时,让标签折行让位 */
+  shrinkLabel?: boolean;
+  children: React.ReactNode;
+}) {
   return (
     <View style={[styles.row, top && styles.rowTop]}>
-      <Text style={styles.label}>{label}</Text>
-      <View style={styles.rowValue}>{children}</View>
+      <Text style={[styles.label, shrinkLabel && styles.labelShrink]}>{label}</Text>
+      <View style={[styles.rowValue, shrinkLabel && styles.noShrink]}>{children}</View>
     </View>
   );
 }
@@ -184,6 +199,8 @@ const styles = StyleSheet.create({
   rowTop: { alignItems: 'flex-start' },
   rowValue: { flexShrink: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 6 },
   label: { flexShrink: 0, fontFamily: fonts.inter, fontSize: 14, lineHeight: 22, color: '#8B8C91' },
+  labelShrink: { flexShrink: 1 },
+  noShrink: { flexShrink: 0 },
   value: { flexShrink: 1, fontFamily: fonts.interSemi, fontSize: 14, lineHeight: 20, color: TEXT_DARK },
   alignRight: { textAlign: 'right' },
   link: { color: '#1F4ED3' },

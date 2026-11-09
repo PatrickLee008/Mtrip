@@ -23,6 +23,8 @@ export const STORAGE_KEYS = {
    * 按用户记、跨退出登录保留:同一台设备换号登录,新号仍会被提示一次。
    */
   PROFILE_PROMPT_LATER: 'mtrip:profile-prompt-later',
+  /** 钱包页首次进入的「Learn about mTrip Wallet」引导点过 Got it(按设备记一次) */
+  WALLET_TIP_SEEN: 'mtrip:wallet-tip-seen',
 } as const;
 
 /** App 版本号(与 app.json / package.json 的 version 保持一致,展示在「更多」页底部) */

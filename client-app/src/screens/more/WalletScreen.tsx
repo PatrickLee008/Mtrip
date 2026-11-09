@@ -5,6 +5,8 @@
  * 自上而下:余额卡(主色斜向渐变 + 右侧 40% 钱包插画)→ 四页签(All / Refunds / Spend / Expired)→
  * 「Transaction History」+ 月份筛选胶囊 → 流水卡列表(View details 进交易详情)。
  * 顶栏右侧「?」打开「How mTrip wallet work」说明弹窗(QA MTW_TC_001)。
+ * 首次进入(First time 3503:9396):80% 黑色遮罩只挖出「?」按钮,下方白色气泡「Learn about mTrip Wallet」+ Got it;
+ *   点 Got it 或点挖空的「?」都算看过(后者顺带打开说明弹窗),按设备记 STORAGE_KEYS.WALLET_TIP_SEEN。
  *
  * 设计稿实测:
  *   余额卡  padding 24 圆角 24;「Available Balance」Inter 600/16 白 75%;币种 Inter 500/16 白 80% + 金额 Inter 700/28;
@@ -14,6 +16,7 @@
  *   流水卡  白底 1px --secondary 圆角 24 p20 gap12;类型 20 图标 + Inter 600/16;View details Inter 700/12 主色;
  *           金额 Inter 700/16(入账绿 / 出账红 / 过期灰);时间 Inter 600/10 --text-2;
  *           底部浅蓝条(主色 10% 圆角 8 px12 py4):物业名 + 预订号(主色),Inter 400/14
+ *   空状态  白卡 1px --secondary 圆角 24 p24 gap16;48 圆底 #ECF5FE + history-32 主色;600/16 --text-2
  *
  * 月份筛选默认「全部月份」:设计稿胶囊写的是具体月份,但默认只看当月会让 QA 看不到历史流水,
  * 选了月份后胶囊显示该月。Expired 页签:钱包余额目前没有过期机制,后端预留 change_type 6,列表恒空。
@@ -21,6 +24,7 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Image, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
@@ -32,6 +36,7 @@ import SelectSheet from '@/components/hotel/booking/SelectSheet';
 import MorePageLayout from '@/components/more/MorePageLayout';
 import { DEEP_PRIMARY, moreShared } from '@/components/more/moreShared';
 import { colors, shadows } from '@/config/theme';
+import { STORAGE_KEYS } from '@/config/global';
 import { fonts } from '@/config/typography';
 import type { RootStackParamList } from '@/navigation/types';
 import {
@@ -45,6 +50,7 @@ import {
 import { useSiteStore } from '@/store/siteStore';
 import { useUserStore } from '@/store/userStore';
 import { formatAmount } from '@/utils/format';
+import { storage } from '@/utils/storage';
 
 const CARD_ART = require('../../../assets/images/wallet/card-bg.png');
 const TABS: BalanceLogType[] = ['all', 'refund', 'spend', 'expired'];
@@ -70,6 +76,31 @@ export default function WalletScreen() {
   const [failed, setFailed] = useState(false);
   /** 切页签 / 月份时丢弃旧请求的返回 */
   const generation = useRef(0);
+  /** 首次进入引导要对准「?」按钮,量它在窗口里的位置 */
+  const helpRef = useRef<View>(null);
+  const [tipAnchor, setTipAnchor] = useState<Anchor | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    void storage.getString(STORAGE_KEYS.WALLET_TIP_SEEN).then((seen) => {
+      if (!alive || seen) return;
+      // 等页壳布局完成再量,否则 web 上拿到 0
+      setTimeout(() => {
+        helpRef.current?.measureInWindow((x, y, width, height) => {
+          if (alive && width > 0) setTipAnchor({ x, y, width, height });
+        });
+      }, 300);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const closeTip = (openGuide: boolean) => {
+    setTipAnchor(null);
+    void storage.setString(STORAGE_KEYS.WALLET_TIP_SEEN, '1');
+    if (openGuide) setGuideOpen(true);
+  };
 
   const months = useMemo(() => recentMonths(i18n.language), [i18n.language]);
   const monthOptions = useMemo(
@@ -120,6 +151,7 @@ export default function WalletScreen() {
       title={t('more.wallet.title')}
       headerRight={
         <Pressable
+          ref={helpRef}
           style={({ pressed }) => pressed && moreShared.pressed}
           onPress={() => setGuideOpen(true)}
           hitSlop={8}
@@ -202,9 +234,11 @@ export default function WalletScreen() {
           </Pressable>
         ) : null}
         {!loading && !failed && list.length === 0 ? (
-          <View style={styles.emptyBox}>
-            <HomeIcon name="wallet20" size={32} color={colors.textSoft} />
-            <Text style={styles.empty}>{t('more.wallet.empty')}</Text>
+          <View style={styles.emptyCard}>
+            <View style={styles.emptyIcon}>
+              <HomeIcon name="history32" size={32} color={colors.primary} />
+            </View>
+            <Text style={styles.emptyText}>{t('more.wallet.empty')}</Text>
           </View>
         ) : null}
         {!loading && list.length < total ? (
@@ -226,6 +260,7 @@ export default function WalletScreen() {
         }}
       />
       <WalletGuide visible={guideOpen} onClose={() => setGuideOpen(false)} />
+      <FirstTimeTip anchor={tipAnchor} onClose={closeTip} />
     </MorePageLayout>
   );
 }
@@ -278,6 +313,59 @@ function TxnCard({
         </View>
       ) : null}
     </View>
+  );
+}
+
+interface Anchor {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/** 设计稿挖空块 67×64(盖住顶栏右端),气泡在挖空块下 24 */
+const SPOT_W = 67;
+const SPOT_H = 64;
+const ARROW_W = 20;
+
+/**
+ * 首次进入引导(3503:9396):遮罩挖出「?」,下方白色气泡带向上小三角对准「?」。
+ * RN 没有挖洞遮罩,做法是整屏 80% 黑 + 在「?」位置叠一块白底小卡重画「?」。
+ */
+function FirstTimeTip({ anchor, onClose }: { anchor: Anchor | null; onClose: (openGuide: boolean) => void }) {
+  const { t } = useTranslation();
+  const insets = useSafeAreaInsets();
+  if (!anchor) return null;
+  const cx = anchor.x + anchor.width / 2;
+  const cy = anchor.y + anchor.height / 2;
+  const spotTop = Math.max(insets.top, cy - SPOT_H / 2);
+  const tipTop = spotTop + SPOT_H + 24;
+  return (
+    <Modal visible transparent animationType="fade" onRequestClose={() => onClose(false)}>
+      <View style={styles.tipRoot}>
+        <View style={[styles.tipCover, { top: insets.top }]} />
+        <Pressable
+          style={[styles.tipSpot, { left: cx - SPOT_W / 2, top: spotTop }]}
+          onPress={() => onClose(true)}
+          accessibilityRole="button"
+          accessibilityLabel={t('more.wallet.guide.title')}
+        >
+          <HomeIcon name="questionCircle" size={24} color={colors.primary} />
+        </Pressable>
+        <View style={[styles.tipCard, { top: tipTop }]}>
+          {/* 向上的小三角,水平对准「?」;卡片 left 16 */}
+          <View style={[styles.tipArrow, { left: cx - 16 - ARROW_W / 2 }]} />
+          <Text style={styles.tipTitle}>{t('more.wallet.tip.title')}</Text>
+          <Text style={styles.tipDesc}>{t('more.wallet.tip.desc')}</Text>
+          <Pressable
+            style={({ pressed }) => [styles.tipBtn, pressed && moreShared.pressed]}
+            onPress={() => onClose(false)}
+          >
+            <Text style={styles.tipBtnText}>{t('more.wallet.tip.ok')}</Text>
+          </Pressable>
+        </View>
+      </View>
+    </Modal>
   );
 }
 
@@ -354,7 +442,7 @@ const styles = StyleSheet.create({
   amountCurrency: { fontFamily: fonts.interMedium, fontSize: 16, lineHeight: 28, color: 'rgba(255,255,255,0.8)' },
   amountValue: { fontFamily: fonts.interBold, fontSize: 28, lineHeight: 28, color: '#FFFFFF' },
   balanceHint: {
-    maxWidth: 220,
+    maxWidth: 180,
     opacity: 0.75,
     fontFamily: fonts.inter,
     fontSize: 10,
@@ -414,9 +502,77 @@ const styles = StyleSheet.create({
   txnBookingNo: { flexShrink: 1, fontFamily: fonts.inter, fontSize: 14, lineHeight: 21, color: colors.primary, textAlign: 'right' },
 
   loading: { paddingVertical: 24 },
-  emptyBox: { alignItems: 'center', gap: 8, paddingVertical: 32 },
+  emptyCard: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 16,
+    padding: 24,
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: colors.softBlue,
+    backgroundColor: colors.surface,
+    ...shadows.card,
+  },
+  emptyIcon: {
+    width: 48,
+    height: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 24,
+    backgroundColor: '#ECF5FE',
+  },
+  emptyText: { textAlign: 'center', fontFamily: fonts.interSemi, fontSize: 16, lineHeight: 22, color: '#8B8C91' },
   empty: { textAlign: 'center', fontFamily: fonts.inter, fontSize: 14, lineHeight: 20, color: '#8B8C91' },
   more: { textAlign: 'center', paddingVertical: 12, fontFamily: fonts.interSemi, fontSize: 14, color: colors.primary },
+
+  tipRoot: { flex: 1 },
+  tipCover: { position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.8)' },
+  tipSpot: {
+    position: 'absolute',
+    width: SPOT_W,
+    height: SPOT_H,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 4,
+    backgroundColor: colors.surface,
+  },
+  tipCard: {
+    position: 'absolute',
+    left: 16,
+    right: 16,
+    gap: 4,
+    padding: 24,
+    borderRadius: 24,
+    backgroundColor: colors.surface,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 2,
+    elevation: 6,
+  },
+  /* 设计稿 Polygon 2:约 17×15 白色三角,用边框三角形画 */
+  tipArrow: {
+    position: 'absolute',
+    top: -13,
+    width: 0,
+    height: 0,
+    borderLeftWidth: ARROW_W / 2,
+    borderRightWidth: ARROW_W / 2,
+    borderBottomWidth: 15,
+    borderLeftColor: 'transparent',
+    borderRightColor: 'transparent',
+    borderBottomColor: colors.surface,
+  },
+  tipTitle: { fontFamily: fonts.outfitSemi, fontSize: 16, lineHeight: 20, letterSpacing: 0.14, color: colors.heading },
+  tipDesc: { fontFamily: fonts.inter, fontSize: 12, lineHeight: 24, color: '#8B8C91' },
+  tipBtn: {
+    alignSelf: 'flex-end',
+    paddingHorizontal: 20,
+    paddingVertical: 6,
+    borderRadius: 9999,
+    backgroundColor: colors.primary,
+  },
+  tipBtnText: { fontFamily: fonts.inter, fontSize: 13, lineHeight: 19.5, color: '#FFFFFF' },
 
   overlay: {
     flex: 1,

@@ -363,11 +363,11 @@
     },
     "loginHint": "Sign in to view your coupons",
     "campaignTypes": {
-      "all": "All",
       "1": "Seasonal",
       "2": "Weekly",
       "3": "Monthly",
       "4": "Special Events",
+      "all": "All",
       "empty": "No campaigns in this category right now"
     }
   },
@@ -900,7 +900,8 @@
         "property": "Property",
         "description": "Description",
         "copy": "Copy",
-        "copied": "Copied"
+        "copied": "Copied",
+        "hotelStay": "Hotel Stay"
       },
       "guide": {
         "title": "How mTrip wallet work",
@@ -917,6 +918,11 @@
           "desc": "Your mTrip Wallet balance is travel credit that can only be used for eligible mTrip services."
         },
         "note": "mTrip Wallet is booking credit, not an e-wallet. Refunds are added to your balance for your next booking.\n1 credit = 1 MMK"
+      },
+      "tip": {
+        "title": "Learn about mTrip Wallet",
+        "desc": "Tap “?” to see how your mTrip Wallet works.",
+        "ok": "Got it"
       }
     },
     "menu": {
