@@ -41,6 +41,7 @@ import { createSSRApp, h } from 'vue';
 import { renderToString } from '@vue/server-renderer';
 import { createI18n } from 'vue-i18n';
 import Antd from 'ant-design-vue';
+import { createRouter, createMemoryHistory } from 'vue-router';
 import enUS from '../../src/locales/en-US.ts';
 import StatCards from '../../src/views/promotions/components/StatCards.vue';
 import PromoCard from '../../src/views/promotions/components/PromoCard.vue';
@@ -52,11 +53,15 @@ import PromotionsPage from '../../src/views/promotions/index.vue';
 import AnalyticsPage from '../../src/views/promotions/analytics/index.vue';
 import CampaignsPage from '../../src/views/campaigns/index.vue';
 import * as promoHelpers from '../../src/views/promotions/helpers.ts';
+import { useUserStore } from '../../src/stores/user.ts';
 
 const noop = { mounted() {}, updated() {} };
 
 async function render(component, props, withAntd = false) {
   const app = createSSRApp({ render: () => h(component, props) });
+  const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/promotions', component: {} }] });
+  app.use(router);
+  await router.push('/promotions');
   app.use(createI18n({ legacy: false, locale: 'en-US', fallbackLocale: ['en-US'], messages: { 'en-US': enUS } }));
   if (withAntd) app.use(Antd);
   app.directive('perm', noop);
@@ -69,7 +74,12 @@ export const renderPromoTable = (props) => render(PromoTable, props);
 export const renderPromoDrawer = (props) => render(PromoDrawer, props, true);
 export const renderPromoIcon = (props) => render(PromoIcon, props);
 export const renderCampaignCard = (props) => render(CampaignCard, props);
-export const renderPromotionsPage = () => render(PromotionsPage, {}, true);
+export const renderPromotionsPage = (canView = true, impersonation = false) => {
+  const user = useUserStore();
+  user.profile.impersonation = impersonation;
+  user.hasPerm = () => canView;
+  return render(PromotionsPage, {}, true);
+};
 export const renderAnalyticsPage = () => render(AnalyticsPage, {}, true);
 export const renderCampaignsPage = () => render(CampaignsPage, {}, true);
 export const helpers = promoHelpers;
@@ -239,7 +249,9 @@ async function main() {
     root: webRoot,
     configFile: false,
     logLevel: 'error',
-    plugins: [vue()],
+    plugins: [vue(), { name: 'fixture-guide-permission', load(id) {
+      if (id === path.join(webRoot, 'src/stores/user.ts')) return 'const user={profile:{},hasPerm:()=>true}; export const useUserStore=()=>user;';
+    } }],
     resolve: { alias: { '@': path.join(webRoot, 'src') } },
     // 必须把 vue / vue-i18n 一并打进产物,否则 Node 侧会拿到两份实例,i18n provide/inject 直接失效
     ssr: { noExternal: true, target: 'node' },
@@ -426,6 +438,9 @@ async function main() {
   console.log('\n页面壳(Figma 2285:21516 Header Block + Tab 条)');
   const page = strip(await bundle.renderPromotionsPage());
   check('页面 H1 `Promotion Tables`', page.includes('>Promotion Tables<'));
+  check('P_TC_008 视频教程按钮可见', page.includes('>Tutorial Videos<') && page.includes('tutorial-btn'));
+  check('无指南权限不渲染视频教程按钮', !(await bundle.renderPromotionsPage(false)).includes('tutorial-btn'));
+  check('代登录不渲染视频教程按钮', !(await bundle.renderPromotionsPage(true, true)).includes('tutorial-btn'));
   check('页面副标题 `Create coupons, manage discounts and coupon code.`', page.includes('>Create coupons, manage discounts and coupon code.<'));
   check('页面按钮 `Add New Promotion`', page.includes('>Add New Promotion<'));
   for (const tab of ['Percentage', 'Fixed Amount', 'Coupon Code', 'Long Stay']) {

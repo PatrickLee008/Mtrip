@@ -11,6 +11,8 @@
 import { computed, onMounted, ref } from 'vue';
 import { Modal, message } from 'ant-design-vue';
 import { useI18n } from 'vue-i18n';
+import { useRouter } from 'vue-router';
+import { useUserStore } from '@/stores/user';
 import PageContainer from '@/components/PageContainer.vue';
 import PromoIcon from './components/PromoIcon.vue';
 import StatCards from './components/StatCards.vue';
@@ -39,6 +41,13 @@ import {
 import { KIND_TABS } from './helpers';
 
 const { t } = useI18n();
+const router = useRouter();
+const userStore = useUserStore();
+const canViewTutorials = computed(() => !userStore.profile?.impersonation && userStore.hasPerm('mch:support:guides'));
+
+function openTutorials(): void {
+  if (canViewTutorials.value) void router.push('/support/guides');
+}
 
 const summary = ref<PromotionSummary>({
   total: 0,
@@ -279,10 +288,16 @@ onMounted(async () => {
           <h1>{{ t('promotions.title') }}</h1>
           <p>{{ t('promotions.subtitle') }}</p>
         </div>
-        <button v-perm="'mch:promotions:add'" type="button" class="add-btn" :disabled="optionsLoading || optionsFailed" @click="openCreate">
-          <PromoIcon name="plus" :size="16" />
-          <span>{{ t('promotions.create') }}</span>
-        </button>
+        <div class="page-actions">
+          <button v-if="canViewTutorials" v-perm="'mch:support:guides'" type="button" class="add-btn tutorial-btn" @click="openTutorials">
+            <PromoIcon name="play" :size="14" />
+            <span>{{ t('promotions.tutorialVideos') }}</span>
+          </button>
+          <button v-perm="'mch:promotions:add'" type="button" class="add-btn" :disabled="optionsLoading || optionsFailed" @click="openCreate">
+            <PromoIcon name="plus" :size="16" />
+            <span>{{ t('promotions.create') }}</span>
+          </button>
+        </div>
       </header>
 
       <StatCards :summary="summary" @pick="pickTab" />
@@ -395,6 +410,18 @@ onMounted(async () => {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
+}
+
+.page-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 16px; }
+.add-btn.tutorial-btn {
+  // Keep Figma's 41px height with its 1px inside stroke.
+  padding: 9px 15px;
+  border: 1px solid @pr-line;
+  background: #fff;
+  color: @pr-ink;
+  font-family: @pr-font-body;
+  white-space: nowrap;
+  &:hover { background: @pr-primary-chip; }
 }
 
 .titles {

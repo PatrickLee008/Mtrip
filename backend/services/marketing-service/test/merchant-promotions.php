@@ -50,6 +50,20 @@ foreach (['2027-01-01 08:59:00', $base['validStart'], '2027-02-30 18:00:00', 'in
 rejects(40001, fn () => createPromotion(['noExpiry' => 1]), 'lifetime promotion cannot bypass mandatory schedule');
 rejects(40001, fn () => createPromotion(['validType' => 2, 'validDays' => 14]), 'relative expiry cannot bypass mandatory schedule');
 rejects(40001, fn () => createPromotion(['discountValue' => 100]), 'free promotions are rejected');
+$couponCount = Db::table('marketing_coupon')->count();
+foreach ([1, 3, 4] as $kind) {
+    foreach ([0, 1] as $enabled) {
+        foreach ([99.99, 100] as $discountValue) {
+            $input = ['promotionKind' => $kind, 'discountUnit' => 1, 'discountValue' => $discountValue,
+                'promoCode' => 'P_TC_016', 'minNights' => 3, 'enabled' => $enabled];
+            rejects(40001, fn () => createPromotion($input), "P_TC_016 rejects {$discountValue}% kind={$kind} enabled={$enabled}");
+            setRequest(array_replace($base, $input, ['id' => $id]));
+            rejects(40001, fn () => $controller->update(), "P_TC_016 rejects editing to {$discountValue}% kind={$kind} enabled={$enabled}");
+        }
+    }
+}
+check(Db::table('marketing_coupon')->count() === $couponCount, 'P_TC_016 rejection creates no promotion');
+check((float) Db::table('marketing_coupon')->where('id', $id)->value('discount_value') === 8.5, 'P_TC_016 rejection leaves existing discount unchanged');
 rejects(40001, fn () => createPromotion(['discountValue' => 81]), 'percentage cap enforced');
 rejects(40001, fn () => createPromotion(['promotionKind' => 2, 'discountValue' => 80001]), 'amount cap enforced');
 Db::table('merchant_info')->where('id', $merchant)->update(['commission_rate' => 30]);
@@ -110,8 +124,21 @@ setRequest(['id' => $entitlement]);
 $controller->toggleStatus();
 setRequest(['couponId' => $entitlement]);
 rejects(40901, fn () => $consumer->claim(), 'disabled promotion stops new claims');
+check((int) Db::table('marketing_coupon')->where('id', $entitlement)->value('status') === 2, 'P_TC_034 fixture is a disabled percentage promotion');
+MerchantContext::set(array_replace($scope, ['property_ids' => [$property + 10000]]));
 setRequest(['id' => $entitlement]);
-$controller->remove();
+rejects(40401, fn () => $controller->remove(), 'P_TC_034 archive cannot cross property scope');
+MerchantContext::set($scope);
+check($controller->remove()['code'] === 0, 'P_TC_034 merchant archives directly without approval');
+$archived = (array) Db::table('marketing_coupon')->find($entitlement);
+check($archived['deleted_at'] !== null && (int) $archived['status'] === 3, 'P_TC_034 archive retains the promotion as a soft-deleted record');
+setRequest([]);
+check(! in_array($entitlement, array_column($controller->index()['data']['list'], 'id')), 'P_TC_034 archived promotion disappears from merchant list');
+$history = (array) Db::table('marketing_coupon_version')->find($archived['current_version_id']);
+check($history['action'] === 'archive' && $history['actor_type'] === 'merchant' && (int) $history['actor_id'] === 99101, 'P_TC_034 archive records the merchant action');
+check((array) Db::table('marketing_coupon_receive')->find($receive) === $original, 'P_TC_034 archive preserves the original receipt and entitlement snapshot');
+setRequest(['couponId' => $entitlement]);
+rejects(40401, fn () => $consumer->claim(), 'P_TC_034 archived promotion stops new claims');
 setRequest(['receiveId' => $receive]);
 $view = $consumer->couponDetail()['data'];
 check($view['coupon_name'] === 'Entitlement original' && $view['discount_value'] === 8.5 && $view['remark'] === 'Original terms', 'claimed view retains original rules after editing and archiving');
@@ -130,6 +157,34 @@ setRequest(['id' => $id]);
 rejects(40301, fn () => $admin->toggleStatus(), 'admin cannot change merchant-funded promotions');
 setRequest(['id' => $entitlement]);
 check(count($admin->detail()['data']['history']) >= 4, 'admin can inspect archived promotion history');
+
+$fixedArchiveId = createPromotion(['couponName' => 'P_TC_038 fixed amount', 'promotionKind' => 2, 'discountValue' => 5000,
+    'validStart' => '2026-01-01 00:00:00', 'validEnd' => '2028-12-31 23:59:59']);
+setRequest(['couponId' => $fixedArchiveId]);
+$fixedReceiveId = $consumer->claim()['data']['receiveId'];
+$fixedReceipt = (array) Db::table('marketing_coupon_receive')->find($fixedReceiveId);
+setRequest(['id' => $fixedArchiveId]);
+$controller->toggleStatus();
+check((int) Db::table('marketing_coupon')->where('id', $fixedArchiveId)->value('status') === 2, 'P_TC_038 fixture is disabled before archiving');
+MerchantContext::set(array_replace($scope, ['property_ids' => [$property + 10000]]));
+rejects(40401, fn () => $controller->remove(), 'P_TC_038 archive cannot cross property scope');
+MerchantContext::set($scope);
+check($controller->remove()['code'] === 0, 'P_TC_038 fixed amount archives directly without approval');
+$fixedArchived = (array) Db::table('marketing_coupon')->find($fixedArchiveId);
+check($fixedArchived['deleted_at'] !== null && (int) $fixedArchived['status'] === 3
+    && (int) $fixedArchived['coupon_type'] === 1 && (float) $fixedArchived['discount_value'] === 5000.0, 'P_TC_038 soft archive preserves the fixed amount pricing');
+setRequest(['promotionKind' => 2]);
+check(! in_array($fixedArchiveId, array_column($controller->index()['data']['list'], 'id')), 'P_TC_038 archived fixed amount disappears from merchant list');
+$fixedHistory = (array) Db::table('marketing_coupon_version')->find($fixedArchived['current_version_id']);
+check($fixedHistory['action'] === 'archive' && $fixedHistory['actor_type'] === 'merchant'
+    && (int) $fixedHistory['actor_id'] === 99101, 'P_TC_038 archive retains merchant audit history');
+check((array) Db::table('marketing_coupon_receive')->find($fixedReceiveId) === $fixedReceipt, 'P_TC_038 original receipt remains unchanged');
+setRequest(['couponId' => $fixedArchiveId]);
+rejects(40401, fn () => $consumer->claim(), 'P_TC_038 archived fixed amount stops new claims');
+setRequest(['receiveId' => $fixedReceiveId]);
+$fixedView = $consumer->couponDetail()['data'];
+check((float) $fixedView['discount_value'] === 5000.0 && $fixedView['status'] === 'available'
+    && $fixedView['valid_end'] === $fixedReceipt['valid_end'], 'P_TC_038 claimed fixed amount remains visible under original terms and validity');
 
 $campaignId = (int) Db::table('marketing_campaign')->insertGetId(['site_id' => 991, 'title' => 'Campaign fixture', 'status' => 1, 'invite_mode' => 1]);
 $participant = (int) Db::table('marketing_campaign_participant')->insertGetId(['site_id' => 991, 'campaign_id' => $campaignId, 'merchant_id' => $merchant, 'status' => 0]);
