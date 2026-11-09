@@ -7,6 +7,7 @@ namespace App\Controller\App;
 use App\Controller\AbstractController;
 
 use App\Service\UserAuthService;
+use App\Service\WalletLogPresenter;
 use Hyperf\DbConnection\Db;
 use Hyperf\Di\Annotation\Inject;
 use Mtrip\Shared\Constants\ErrorCode;
@@ -94,54 +95,7 @@ class UserController extends AbstractController
         $total = (clone $query)->count();
         $list = $query->forPage($page, $pageSize)->get()
             ->map(static fn ($row) => (array) $row)->all();
-        return Result::page($this->withBookingInfo($list), $total, $page, $pageSize);
-    }
-
-    /**
-     * 流水关联的预订:order_id 有两种口径 —— 整单 Trip 钱包支付记的是 order_trip.id(备注含 trip_no),
-     * 其余(单订单支付、退款、推荐返利)记的是 order_main.id。按「备注里出现的单号」判定是哪一种,避免 id 撞号串单。
-     *
-     * @param list<array<string, mixed>> $rows
-     * @return list<array<string, mixed>>
-     */
-    private function withBookingInfo(array $rows): array
-    {
-        $ids = array_values(array_unique(array_filter(array_map(static fn ($r) => (int) $r['order_id'], $rows))));
-        $trips = $orders = $tripHotel = [];
-        if ($ids !== []) {
-            $trips = Db::table('order_trip')->whereIn('id', $ids)->pluck('trip_no', 'id')->all();
-            $orders = Db::table('order_main as o')
-                ->leftJoin('merchant_store as s', 's.id', '=', 'o.property_id')
-                ->whereIn('o.id', $ids)
-                ->get(['o.id', 'o.order_no', 'o.goods_name', 's.store_name'])
-                ->keyBy('id')->all();
-            if ($trips !== []) {
-                foreach (Db::table('order_main as o')
-                    ->leftJoin('merchant_store as s', 's.id', '=', 'o.property_id')
-                    ->whereIn('o.trip_id', array_keys($trips))
-                    ->orderBy('o.id')
-                    ->get(['o.trip_id', 'o.goods_name', 's.store_name']) as $o) {
-                    $tripHotel[(int) $o->trip_id] ??= (string) ($o->store_name ?: $o->goods_name);
-                }
-            }
-        }
-        foreach ($rows as &$row) {
-            $orderId = (int) $row['order_id'];
-            $remark = (string) $row['remark'];
-            $row['booking_no'] = '';
-            $row['property_name'] = '';
-            if (isset($trips[$orderId]) && str_contains($remark, (string) $trips[$orderId])) {
-                $row['booking_no'] = (string) $trips[$orderId];
-                $row['property_name'] = $tripHotel[$orderId] ?? '';
-            } elseif (isset($orders[$orderId])) {
-                $o = $orders[$orderId];
-                $row['booking_no'] = (string) $o->order_no;
-                $row['property_name'] = (string) ($o->store_name ?: $o->goods_name);
-            }
-            $row['txn_no'] = sprintf('WAL-%s-%06d', date('Ymd', strtotime((string) $row['created_at'])), (int) $row['id']);
-        }
-        unset($row);
-        return $rows;
+        return Result::page(WalletLogPresenter::withBookingInfo($list), $total, $page, $pageSize);
     }
 
     /** 积分流水分页 */

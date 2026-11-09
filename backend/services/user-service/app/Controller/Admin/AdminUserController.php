@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Controller\Admin;
 
+use App\Service\WalletLogPresenter;
 use Hyperf\DbConnection\Db;
 use Mtrip\Shared\Annotation\Permission;
 use Mtrip\Shared\Constants\ErrorCode;
@@ -53,6 +54,77 @@ class AdminUserController extends AbstractAdminController
                 return $row;
             })->all();
         return Result::page($list, $total, $page, $pageSize);
+    }
+
+    /**
+     * 钱包流水(全平台 / 本站点):筛选 用户ID / 手机号 / 昵称 / 变动类型 / 预订号 / 日期;
+     * 行带用户昵称与脱敏手机号、关联预订号与物业、调账操作人,并汇总当前筛选下的入账 / 出账合计(对账用)。
+     */
+    #[Permission('user:wallet:list')]
+    public function balanceLogs(): array
+    {
+        [$page, $pageSize] = $this->pageParams();
+        $query = Db::table('user_balance_log');
+        $this->applySiteScope($query);
+        if (($userId = $this->intInput('userId')) > 0) {
+            $query->where('user_id', $userId);
+        }
+        if (($mobile = $this->strInput('mobile')) !== '') {
+            // 手机号加密存储,按 HMAC 哈希精确检索。App 按用户输入原样存(不带国家码,「+95」只是展示前缀),
+            // 运营常粘贴「+95 9xxx」或本地「09xxx」,把去国家码 / 去前导 0 的写法一并当候选
+            $digits = (string) preg_replace('/\D/', '', $mobile);
+            $candidates = [$mobile, $digits, "+{$digits}"];
+            if (str_starts_with($digits, '95')) {
+                $candidates[] = substr($digits, 2);
+            }
+            if (str_starts_with($digits, '0')) {
+                $candidates[] = ltrim($digits, '0');
+            }
+            $hashes = array_map(fn ($m) => hash_hmac('sha256', $m, $this->aesKey()), array_unique(array_filter($candidates)));
+            $query->whereIn('user_id', Db::table('user_info')->whereIn('mobile_hash', $hashes)->select('id'));
+        }
+        if (($nickname = $this->strInput('nickname')) !== '') {
+            $query->whereIn('user_id', Db::table('user_info')->where('nickname', 'like', "%{$nickname}%")->select('id'));
+        }
+        if (($changeType = $this->intInput('changeType')) > 0) {
+            $query->where('change_type', $changeType);
+        }
+        if (($bookingNo = $this->strInput('bookingNo')) !== '') {
+            $query->whereIn('order_id', WalletLogPresenter::orderIdsByBookingNo($bookingNo) ?: [0]);
+        }
+        if (($start = $this->strInput('startDate')) !== '') {
+            $query->where('created_at', '>=', "{$start} 00:00:00");
+        }
+        if (($end = $this->strInput('endDate')) !== '') {
+            $query->where('created_at', '<=', "{$end} 23:59:59");
+        }
+
+        $total = (clone $query)->count();
+        $sums = (clone $query)->selectRaw(
+            'COALESCE(SUM(CASE WHEN amount > 0 THEN amount END), 0) AS credit, COALESCE(SUM(CASE WHEN amount < 0 THEN -amount END), 0) AS debit'
+        )->first();
+        $rows = $query->orderByDesc('id')->forPage($page, $pageSize)->get()
+            ->map(static fn ($row) => (array) $row)->all();
+
+        $users = Db::table('user_info')->whereIn('id', array_unique(array_column($rows, 'user_id')) ?: [0])
+            ->get(['id', 'nickname', 'mobile'])->keyBy('id')->all();
+        $operatorIds = array_values(array_filter(array_unique(array_map('intval', array_column($rows, 'operator_id')))));
+        $operators = $operatorIds === [] ? [] : Db::connection('system')->table('sys_admin')
+            ->whereIn('id', $operatorIds)->pluck('username', 'id')->all();
+        foreach ($rows as &$row) {
+            $user = $users[(int) $row['user_id']] ?? null;
+            $row['nickname'] = $user ? (string) $user->nickname : '';
+            $row['mobile'] = $user ? MaskHelper::mobile($this->decryptField((string) $user->mobile)) : '';
+            $row['operator_name'] = (string) ($operators[(int) $row['operator_id']] ?? '');
+        }
+        unset($row);
+
+        $data = Result::page(WalletLogPresenter::withBookingInfo($rows), $total, $page, $pageSize);
+        $data['data']['summary'] = [
+            'credit' => number_format((float) $sums->credit, 2, '.', ''),
+            'debit' => number_format((float) $sums->debit, 2, '.', ''),
+        ];
+        return $data;
     }
 
     /** 用户详情:含余额/积分流水摘要;超管可见明文手机号 */

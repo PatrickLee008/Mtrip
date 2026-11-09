@@ -19,6 +19,17 @@ export function apiUserAdjustBalance(data: { id: number; amount: string; reason:
   return post('/admin/user/adjust-balance', data);
 }
 
+/**
+ * 钱包流水:筛选 userId / mobile / nickname / changeType / bookingNo / startDate / endDate / siteId;
+ * 行带 nickname、脱敏 mobile、booking_no、property_name、txn_no、operator_name;
+ * summary 为当前筛选下全部流水的入账 / 出账合计。
+ */
+export function apiUserBalanceLogs(
+  params: Record<string, unknown>,
+): Promise<PageData<Row> & { summary: { credit: string; debit: string } }> {
+  return get('/admin/user/balance-logs', params);
+}
+
 /** 冻结/解冻:1正常 ⇄ 2冻结(必填原因,写入备注留痕) */
 export function apiUserToggleStatus(data: { id: number; reason: string }): Promise<{ userStatus: number }> {
   return post('/admin/user/toggle-status', data);

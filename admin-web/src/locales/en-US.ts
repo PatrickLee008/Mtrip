@@ -3237,6 +3237,37 @@ export default {
     },
   },
   user: {
+    // 钱包流水(终端用户管理 → 钱包流水,GET /admin/user/balance-logs)
+    walletPage: {
+      title: 'Wallet Ledger',
+      userId: 'User ID',
+      mobile: 'Mobile',
+      nickname: 'Nickname',
+      changeType: 'Type',
+      bookingNo: 'Booking No.',
+      date: 'Date',
+      txnNo: 'Transaction ID',
+      user: 'User',
+      amount: 'Amount',
+      before: 'Before',
+      after: 'After',
+      booking: 'Booking / Property',
+      remark: 'Remark',
+      operator: 'Operator',
+      time: 'Time',
+      credit: 'Total Credit',
+      debit: 'Total Debit',
+      net: 'Net',
+      summaryHint: 'Totals for all records matching the current filters',
+      types: {
+        1: 'Top Up',
+        2: 'Payment',
+        3: 'Refund',
+        4: 'Adjustment / Reward',
+        5: 'Withdrawal',
+        6: 'Expired',
+      },
+    },
     // 实名审核(App 资料向导第 2 步 Identity Verification 的后台审核)
     realNamePage: {
       pageKicker: 'End User Management',

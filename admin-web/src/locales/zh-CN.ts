@@ -3212,6 +3212,37 @@ export default {
     },
   },
   user: {
+    // 钱包流水(终端用户管理 → 钱包流水,GET /admin/user/balance-logs)
+    walletPage: {
+      title: '钱包流水',
+      userId: '用户ID',
+      mobile: '手机号',
+      nickname: '昵称',
+      changeType: '类型',
+      bookingNo: '预订号',
+      date: '日期',
+      txnNo: '交易编号',
+      user: '用户',
+      amount: '变动金额',
+      before: '变动前',
+      after: '变动后',
+      booking: '预订 / 物业',
+      remark: '备注',
+      operator: '操作人',
+      time: '时间',
+      credit: '入账合计',
+      debit: '出账合计',
+      net: '净额',
+      summaryHint: '当前筛选条件下全部流水的合计',
+      types: {
+        1: '充值',
+        2: '消费',
+        3: '退款',
+        4: '调账 / 奖励',
+        5: '提现',
+        6: '过期',
+      },
+    },
     // 实名审核(App 资料向导第 2 步 Identity Verification 的后台审核)
     realNamePage: {
       pageKicker: '终端用户管理',
