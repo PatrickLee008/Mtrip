@@ -37,3 +37,100 @@ export const REFUND_TIMELINE = [
   { key: 'days7to14', refund: '50%', danger: false },
   { key: 'under7', refund: null, danger: true },
 ] as const;
+
+/* ======================================================================
+ * 以下为「更多」section 支持类子页(FAQ / 联系我们 / 反馈 / 隐私政策 / 关于)的静态数据
+ * ====================================================================== */
+
+/**
+ * FAQ 分类与问题(设计稿 FAQ 1699:7636 / 1793:3969 分类卡 / 1793:4029 问答卡)
+ *
+ * **后端缺口**:user-service 只有 `GET /api/v1/app/chat/faqs`,那是客服聊天里的
+ * 4 条中文快捷提问(只有问题没有答案、没有分类、不分语言),撑不起这一页。
+ * 设计稿要的是「分类 → 问题 → 答案」三级内容,只能先写死在这里,文案走 more.faq.items.<key>.{q,a}。
+ * 等后端有内容接口(或 CMS)后,把这张表换成接口数据即可,页面结构不用动。
+ */
+export const FAQ_CATEGORIES = [
+  { key: 'general', items: ['whatIsMtrip', 'account', 'language'] },
+  { key: 'booking', items: ['howToBook', 'freeCancel', 'payment'] },
+  { key: 'cars', items: ['carArea', 'carDriver'] },
+  { key: 'food', items: ['foodReserve', 'foodPay'] },
+] as const;
+
+/**
+ * 联系方式(设计稿 Contact us 3503:9182 / Hotline Overlay 3578:10243)
+ *
+ * **后端缺口**:平台没有「客服联系方式」配置接口(站点表里也没有热线/邮箱字段),
+ * 值照抄设计稿。等有站点级配置后改成从接口取,注意热线是**站点相关**的。
+ */
+export const SUPPORT_CONTACT = {
+  website: 'https://www.myanmartrip.com/',
+  email: 'support@myanmartrip.com',
+  hotlines: ['09986668882', '09986668883'],
+} as const;
+
+/** 热线弹层的服务时间两行(设计稿 3578:10330),文案走 more.contact.hotline.hours.<key> */
+export const HOTLINE_HOURS = ['carsHotels', 'others'] as const;
+
+/**
+ * 「Report Issue」的问题类型下拉(设计稿 Button 3313:11169 展开态)
+ *
+ * 后端 user_feedback.feedback_type 只有四档(1功能建议 2订单投诉 3商户投诉 4其他),
+ * 这里把设计稿的十个细分类映射到最接近的一档;细分类本身拼进 content 开头(`[Booking Issue] ...`)
+ * 让后台能看到,不新增后端字段。
+ */
+export const FEEDBACK_ISSUE_TYPES = [
+  { key: 'booking', feedbackType: 2 },
+  { key: 'appCrash', feedbackType: 4 },
+  { key: 'login', feedbackType: 4 },
+  { key: 'payment', feedbackType: 2 },
+  { key: 'hotelInfo', feedbackType: 3 },
+  { key: 'transport', feedbackType: 3 },
+  { key: 'food', feedbackType: 3 },
+  { key: 'coupon', feedbackType: 4 },
+  { key: 'notification', feedbackType: 4 },
+  { key: 'other', feedbackType: 4 },
+] as const;
+export type FeedbackIssueKey = (typeof FEEDBACK_ISSUE_TYPES)[number]['key'];
+/** 「Suggestion / Feedback」统一记为 1 功能建议 */
+export const FEEDBACK_TYPE_SUGGESTION = 1;
+
+/**
+ * 隐私政策(设计稿 Privacy Policy 3256:19233)
+ *
+ * 法律文本没有内容接口,与条款页一样照搬设计稿、文案走 more.privacy.*。
+ * 第 1 节两个小节是「说明 + 列表」,1.2 末尾还挂一块灰底提示;2/3 节是两段纯文本;
+ * 第 4 节「联系我们」的卡片单独排版(邮箱 / 网址 / 地址)。
+ */
+export const PRIVACY_UPDATED_AT = '24 October 2026';
+export const PRIVACY_COLLECT_SUBSECTIONS = [
+  {
+    key: 'account',
+    items: ['fullName', 'phone', 'password', 'profile', 'referral', 'thirdParty'],
+    note: false,
+  },
+  {
+    key: 'booking',
+    items: ['guestName', 'contactPhone', 'details', 'service', 'dates', 'guests', 'requests', 'transaction'],
+    note: true,
+  },
+] as const;
+export const PRIVACY_TEXT_SECTIONS = ['thirdParty', 'transfers'] as const;
+export const PRIVACY_CONTACT = {
+  email: 'privacy@mtrip.com',
+  website: 'https://www.mtrip.com',
+} as const;
+
+/** 关于页 Transportation 一节的四个服务标签(设计稿 3256:19446),文案走 more.about.transport.tags.<key> */
+export const ABOUT_TRANSPORT_TAGS = ['airportPickup', 'airportDropoff', 'pointToPoint', 'carRental'] as const;
+
+/**
+ * 商店评分链接(Rate Application Overlay 3282:21342 的「Yes! leave rating」)
+ *
+ * Android 按 app.json 的包名拼 Play 商店链接;**iOS 还没有 App Store 上架 id(运营缺口)**,
+ * 为 null 时按钮只提示「即将开放」。拿到 id 后填 `itms-apps://apps.apple.com/app/id<ID>?action=write-review`。
+ */
+export const STORE_REVIEW_URL: { android: string; ios: string | null } = {
+  android: 'market://details?id=com.mtrip.clientapp',
+  ios: null,
+};

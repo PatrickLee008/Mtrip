@@ -989,8 +989,17 @@
       "site": {
         "desc": "选择站点"
       },
-      "language": {
-        "desc": "应用显示语言"
+      "languages": {
+        "title": "语言",
+        "desc": "更改首选语言"
+      },
+      "contact": {
+        "title": "联系我们",
+        "desc": "联系我们的客服"
+      },
+      "privacy": {
+        "title": "隐私政策",
+        "desc": "mTrip 隐私政策说明"
       }
     },
     "account": {
@@ -1196,6 +1205,245 @@
         "amount": "退款 {{percent}}",
         "none": "不予退款"
       }
+    },
+    "faq": {
+      "title": "常见问题",
+      "help": "有什么可以帮您?",
+      "searchPlaceholder": "搜索答案....",
+      "empty": "没有找到相关答案,换个关键词试试。",
+      "categories": {
+        "general": "综合",
+        "booking": "预订",
+        "cars": "用车",
+        "food": "美食"
+      },
+      "items": {
+        "whatIsMtrip": {
+          "q": "mTrip 是什么?",
+          "a": "mTrip 是面向缅甸的旅行应用,可在一个应用内查找并预订酒店、发现餐厅、安排舒适的包车出行。"
+        },
+        "account": {
+          "q": "预订需要注册账号吗?",
+          "a": "浏览无需账号,但预订、查看行程和使用钱包需要用手机号登录。"
+        },
+        "language": {
+          "q": "如何切换应用语言?",
+          "a": "进入「更多 → 语言」,选择 မြန်မာ、English 或中文,应用会立即切换。"
+        },
+        "howToBook": {
+          "q": "如何预订酒店?",
+          "a": "搜索目的地、选择入住日期,再从精选酒店中挑选房型,按结账流程完成支付即可确认预订。"
+        },
+        "freeCancel": {
+          "q": "预订可以免费取消吗?",
+          "a": "取决于所订房型的取消政策。免费取消截止时间会显示在房型卡片和订单详情中,退款将退回 mTrip 钱包或原支付方式。"
+        },
+        "payment": {
+          "q": "支持哪些支付方式?",
+          "a": "mTrip 支持 KBZPay、MMQR 银行应用等常用本地支付方式,也可使用 mTrip 钱包余额。"
+        },
+        "carArea": {
+          "q": "mTrip 用车在哪些地区可用?",
+          "a": "mTrip 用车目前服务仰光省,提供接机、送机和点到点出行,更多目的地即将开放。"
+        },
+        "carDriver": {
+          "q": "租车包含司机吗?",
+          "a": "包含。所有 mTrip 租车都配有专业司机,您可以安心享受旅程。"
+        },
+        "foodReserve": {
+          "q": "可以预订餐厅座位吗?",
+          "a": "您可以在应用中浏览餐厅与美食;合作餐厅支持订座,范围会逐步扩大。"
+        },
+        "foodPay": {
+          "q": "餐厅可以使用优惠券吗?",
+          "a": "可以,前提是该餐厅参与了活动。请在「优惠」页查看优惠券详情中的适用餐厅。"
+        }
+      }
+    },
+    "rate": {
+      "close": "关闭",
+      "headline": "喜欢 mTrip 吗?给我们评个分吧!",
+      "leaveRating": "好的,去评分",
+      "feedbackInstead": "我要提意见"
+    },
+    "feedback": {
+      "title": "问题反馈 / 建议",
+      "heading": "帮助我们改进 mTrip",
+      "intro": "告诉我们您遇到的问题,帮助我们了解并改善您的旅行体验。",
+      "shareLabel": "您想反馈什么?",
+      "modes": {
+        "report": {
+          "title": "报告问题",
+          "desc": "有功能没有按预期工作。"
+        },
+        "suggestion": {
+          "title": "建议 / 反馈",
+          "desc": "分享想法,或告诉我们可以如何改进。"
+        }
+      },
+      "issueType": "问题类型",
+      "issuePlaceholder": "请选择问题类型",
+      "issues": {
+        "booking": "预订问题",
+        "appCrash": "应用崩溃 / 无响应",
+        "login": "无法登录",
+        "payment": "支付问题",
+        "hotelInfo": "酒店信息问题",
+        "transport": "交通出行问题",
+        "food": "餐厅 / 美食问题",
+        "coupon": "优惠券 / 活动问题",
+        "notification": "通知问题",
+        "other": "其他"
+      },
+      "describeIssue": "描述问题",
+      "describeFeedback": "描述您的反馈",
+      "placeholder": "在此填写更多细节...",
+      "media": "图片/视频({{count}}/{{max}})",
+      "removeMedia": "移除",
+      "submit": "提交",
+      "needIssueType": "请选择问题类型",
+      "needContent": "请填写问题描述",
+      "uploading": "文件仍在上传,请稍候",
+      "uploadFailed": "部分文件上传失败,可点击重试或移除",
+      "permissionDenied": "请允许访问相册",
+      "tooLarge": "图片需小于 10MB,视频需小于 50MB",
+      "submitted": "感谢反馈,已提交成功!"
+    },
+    "contact": {
+      "title": "联系我们",
+      "website": "mTrip 官网",
+      "email": "mTrip 客服邮箱",
+      "hotlineRow": "客服热线",
+      "chat": "在线客服",
+      "chatDesc": "与我们的客服聊天",
+      "openFailed": "当前设备无法打开该链接",
+      "hotline": {
+        "title": "客服热线",
+        "name": "热线 {{index}}",
+        "hoursTitle": "服务时间",
+        "hours": {
+          "carsHotels": "用车与酒店预订:24 小时",
+          "others": "其他预订:09:00 - 22:00(缅甸时间)"
+        }
+      }
+    },
+    "language": {
+      "title": "切换语言"
+    },
+    "privacy": {
+      "title": "隐私政策",
+      "heading": "mTrip 隐私政策",
+      "updated": "最后更新:",
+      "intro": {
+        "brand": "mTrip",
+        "lead": "(以下简称「mTrip」「我们」)尊重您的隐私,并致力于保护您的个人信息。",
+        "scope": "本隐私政策说明您使用 mTrip 移动应用、网站及相关服务(统称「服务」)时,mTrip 如何收集、使用、存储和保护您的信息。",
+        "agree": "使用 mTrip 即表示您同意本隐私政策所述的做法。"
+      },
+      "collect": {
+        "title": "我们收集的信息",
+        "account": {
+          "title": "1.1 账号信息",
+          "body": "当您创建 mTrip 账号时,我们可能收集:",
+          "items": {
+            "fullName": "姓名",
+            "phone": "手机号",
+            "password": "密码",
+            "profile": "个人资料",
+            "referral": "推荐码(如填写)",
+            "thirdParty": "来自 Google、Facebook、Apple、TikTok 或微信等第三方登录服务的登录信息"
+          }
+        },
+        "booking": {
+          "title": "1.2 预订信息",
+          "body": "当您预订时,我们可能收集处理和管理预订所需的信息,例如:",
+          "items": {
+            "guestName": "入住人姓名",
+            "contactPhone": "联系电话",
+            "details": "预订详情",
+            "service": "酒店、房型、车辆或餐厅信息",
+            "dates": "入住与退房日期",
+            "guests": "入住人数",
+            "requests": "特殊要求或偏好",
+            "transaction": "预订与交易信息"
+          },
+          "note": "为完成和管理您的预订,我们可能会与相关酒店、交通服务商、餐厅、支付服务商或其他服务提供方共享必要的预订信息。"
+        }
+      },
+      "sections": {
+        "thirdParty": {
+          "title": "第三方服务",
+          "p1": "mTrip 可能集成或链接第三方服务,包括支付服务商、身份认证服务商、地图服务、酒店合作方、交通服务商、餐厅合作方及其他服务提供方。",
+          "p2": "这些第三方可能有各自的隐私政策和条款,建议您在使用其服务时查阅其隐私政策。"
+        },
+        "transfers": {
+          "title": "跨境数据传输",
+          "p1": "您的信息可能会在您居住国以外的国家被处理或存储。",
+          "p2": "在适用法律要求时,我们会采取适当措施保护跨境传输的信息。"
+        }
+      },
+      "contact": {
+        "title": "联系我们",
+        "body": "如您对本隐私政策或个人信息有任何疑问、意见或请求,请联系我们:",
+        "company": "mTrip – Myanmar Trip",
+        "email": "邮箱:",
+        "website": "网址:",
+        "address": "地址:",
+        "addressValue": "mTrip Travel Technology Co., Ltd.,缅甸仰光"
+      },
+      "end": "隐私政策正文结束",
+      "copyright": "© 2026 mTrip Co., Ltd. 保留所有权利。",
+      "cta": "联系客服咨询法律问题"
+    },
+    "about": {
+      "title": "关于 mTrip",
+      "heading": "关于 mTrip",
+      "tagline": "轻松预订,简单易用。",
+      "intro": {
+        "brand": "mTrip",
+        "p1": "(Myanmar Trip)是一个旅行平台,让在缅甸发现和预订旅行服务更简单、更轻松、更便捷。",
+        "p2": "从找到合适的酒店,到探索美食、安排可靠的出行,mTrip 把必备的旅行服务整合在一个应用里。"
+      },
+      "journey": {
+        "title": "让旅程更轻松",
+        "p1": "我们打造 mTrip 的目标很简单:让每一次旅行都更好规划、更好体验。"
+      },
+      "stay": {
+        "title": "随心入住",
+        "highlight": "通过 mTrip 查找并预订酒店,支持多种面向缅甸用户的支付方式。",
+        "p1": "无论是城市短住、周末出游还是长途旅行,mTrip 都能帮您发现合适的酒店、比较可选方案,并在一处管理预订。"
+      },
+      "food": {
+        "title": "发现美食与餐厅",
+        "p1": "想找个地方吃饭?",
+        "p2": "mTrip 帮您探索餐厅与美食,更容易找到符合行程和口味的去处。",
+        "p3": "从日常餐食到旅途中值得一试的好店,我们希望美食发现成为您旅程中自然的一部分。"
+      },
+      "transport": {
+        "title": "舒适出行",
+        "p1": "mTrip 出行服务从仰光省起步,专注为您的旅程提供可靠、舒适的包车服务。",
+        "tags": {
+          "airportPickup": "接机",
+          "airportDropoff": "送机",
+          "pointToPoint": "点到点出行",
+          "carRental": "包车租车"
+        },
+        "p2": "我们注重提供高标准车辆和舒适的出行体验,精选车辆,让您出行更便捷、更安心。",
+        "p3": "随着 mTrip 的发展,我们计划把出行服务扩展到更多目的地。"
+      },
+      "built": {
+        "title": "为缅甸旅行者打造",
+        "p1": "mTrip 围绕缅甸旅行者的需求而设计。",
+        "p2": "我们致力于让旅行服务更易发现、更易预订、更易使用 —— 提供便捷的支付方式、简洁的体验,以及贴合真实出行需求的服务。",
+        "callout": "立足缅甸,走向东南亚。"
+      },
+      "vision": {
+        "title": "我们的愿景",
+        "p1": "我们相信旅行应该是简单的。",
+        "p2": "无论是预订酒店、发现餐厅还是安排舒适的出行,mTrip 都把这些体验整合在一起,让您少花时间打理行程,多花时间享受旅途。"
+      },
+      "brand": "mTrip",
+      "copyright": "© 2026 mTrip Co., Ltd. 保留所有权利。"
     }
   },
   "notifications": {

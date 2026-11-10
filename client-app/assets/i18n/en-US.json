@@ -989,8 +989,17 @@
       "site": {
         "desc": "Choose a site"
       },
-      "language": {
-        "desc": "App display language"
+      "languages": {
+        "title": "Languages",
+        "desc": "Change preferred language"
+      },
+      "contact": {
+        "title": "Contact Us",
+        "desc": "Contact our services"
+      },
+      "privacy": {
+        "title": "Privacy Policy",
+        "desc": "mTrip Privacy Policy info"
       }
     },
     "account": {
@@ -1196,6 +1205,245 @@
         "amount": "{{percent}} Refund",
         "none": "No Refund"
       }
+    },
+    "faq": {
+      "title": "FAQ",
+      "help": "How can we help?",
+      "searchPlaceholder": "Search for answers....",
+      "empty": "No matching answers. Try another keyword.",
+      "categories": {
+        "general": "General",
+        "booking": "Booking",
+        "cars": "Cars",
+        "food": "Food"
+      },
+      "items": {
+        "whatIsMtrip": {
+          "q": "What is mTrip?",
+          "a": "mTrip is a travel app for Myanmar. You can find and book hotels, discover restaurants and arrange comfortable car rentals in one place."
+        },
+        "account": {
+          "q": "Do I need an account to book?",
+          "a": "You can browse without an account, but you need to sign in with your phone number to make a booking, view your trips and use your wallet."
+        },
+        "language": {
+          "q": "How do I change the app language?",
+          "a": "Go to More → Languages and choose မြန်မာ, English or 中文. The app switches immediately."
+        },
+        "howToBook": {
+          "q": "How do I book a hotel?",
+          "a": "To book a hotel, simply search for your destination, select your dates, and choose from our curated list of properties. Follow the checkout process to confirm your stay."
+        },
+        "freeCancel": {
+          "q": "Can I cancel my booking for free?",
+          "a": "It depends on the cancellation policy of the room you booked. Free cancellation deadlines are shown on the room card and in your booking details. Refunds go back to your mTrip wallet or original payment method."
+        },
+        "payment": {
+          "q": "Which payment methods are supported?",
+          "a": "mTrip supports popular local payment options such as KBZPay and MMQR banking apps, as well as your mTrip wallet balance."
+        },
+        "carArea": {
+          "q": "Where is mTrip car rental available?",
+          "a": "mTrip Transportation currently serves the Yangon Region, including airport pickup, airport drop-off and point-to-point trips. More destinations are coming soon."
+        },
+        "carDriver": {
+          "q": "Does the car come with a driver?",
+          "a": "Yes. All mTrip car rentals include a professional driver, so you can relax and enjoy the ride."
+        },
+        "foodReserve": {
+          "q": "Can I reserve a table at a restaurant?",
+          "a": "You can explore restaurants and food options in the app. Table reservation is available for participating restaurants and will expand over time."
+        },
+        "foodPay": {
+          "q": "Can I use coupons at restaurants?",
+          "a": "Yes, if the restaurant takes part in the promotion. Check the coupon details in the Promotions tab for the participating restaurants."
+        }
+      }
+    },
+    "rate": {
+      "close": "Close",
+      "headline": "Enjoying the mTrip app? Rate your experience!",
+      "leaveRating": "Yes! leave rating",
+      "feedbackInstead": "Provide Feedback Instead"
+    },
+    "feedback": {
+      "title": "Report Issue / Feedback",
+      "heading": "Help us improve mTrip",
+      "intro": "Tell us about an issue you experienced so we can understand and improve your travel journey.",
+      "shareLabel": "What would you like to share?",
+      "modes": {
+        "report": {
+          "title": "Report an Issue",
+          "desc": "Something is not working as expected."
+        },
+        "suggestion": {
+          "title": "Suggestion / Feedback",
+          "desc": "Share an idea or tell us how we can improve."
+        }
+      },
+      "issueType": "Issue Type",
+      "issuePlaceholder": "Select an issue type",
+      "issues": {
+        "booking": "Booking Issue",
+        "appCrash": "App Crash / Not Responding",
+        "login": "Cannot Log In",
+        "payment": "Payment Issue",
+        "hotelInfo": "Hotel Information Issue",
+        "transport": "Transportation Issue",
+        "food": "Restaurant / Food Issue",
+        "coupon": "Coupon / Promotion Issue",
+        "notification": "Notification Issue",
+        "other": "Other"
+      },
+      "describeIssue": "Describe the Issue",
+      "describeFeedback": "Describe the Feedback",
+      "placeholder": "Write any additional details here...",
+      "media": "Photos/Videos ({{count}}/{{max}})",
+      "removeMedia": "Remove",
+      "submit": "Submit Report",
+      "needIssueType": "Please select an issue type",
+      "needContent": "Please describe the issue",
+      "uploading": "Files are still uploading, please wait",
+      "uploadFailed": "Some files failed to upload. Tap them to retry or remove them.",
+      "permissionDenied": "Please allow access to your photos",
+      "tooLarge": "Images must be under 10MB and videos under 50MB",
+      "submitted": "Thank you! Your report has been submitted."
+    },
+    "contact": {
+      "title": "Contact Us",
+      "website": "mTrip Website",
+      "email": "mTrip Support Email",
+      "hotlineRow": "Hotline Phone Number",
+      "chat": "Chat with mTrip",
+      "chatDesc": "Chat with our customer service",
+      "openFailed": "Unable to open this link on your device",
+      "hotline": {
+        "title": "Hotline Phone Number",
+        "name": "Hotline {{index}}",
+        "hoursTitle": "Service hours",
+        "hours": {
+          "carsHotels": "Cars & hotel bookings : 24/7",
+          "others": "Other bookings : 09:00 - 22 :00 (MMT)"
+        }
+      }
+    },
+    "language": {
+      "title": "Change Language"
+    },
+    "privacy": {
+      "title": "Privacy Policy",
+      "heading": "mTrip Privacy Policy",
+      "updated": "Last Updated:",
+      "intro": {
+        "brand": "mTrip",
+        "lead": " (“mTrip”, “we”, “us”, or “our”) respects your privacy and is committed to protecting your personal information.",
+        "scope": "This Privacy Policy explains how mTrip collects, uses, stores, and protects your information when you use the mTrip mobile application, website, and related services (collectively, the “Services”).",
+        "agree": "By using mTrip, you agree to the practices described in this Privacy Policy."
+      },
+      "collect": {
+        "title": "Information We Collect",
+        "account": {
+          "title": "1.1 Account Information",
+          "body": "When you create an mTrip account, we may collect:",
+          "items": {
+            "fullName": "Full name",
+            "phone": "Phone number",
+            "password": "Password",
+            "profile": "Profile information",
+            "referral": "Referral code, if provided",
+            "thirdParty": "Login information from supported third-party services, such as Google, Facebook, Apple, TikTok, or WeChat"
+          }
+        },
+        "booking": {
+          "title": "1.2 Booking Information",
+          "body": "When you make a booking, we may collect information required to process and manage your reservation, such as:",
+          "items": {
+            "guestName": "Guest name",
+            "contactPhone": "Contact phone number",
+            "details": "Booking details",
+            "service": "Hotel, room, car, or restaurant information",
+            "dates": "Check-in and check-out dates",
+            "guests": "Number of guests",
+            "requests": "Special requests or preferences",
+            "transaction": "Booking and transaction information"
+          },
+          "note": "We may share necessary booking information with the relevant hotel, transport provider, restaurant, payment provider, or other service provider to complete and manage your booking."
+        }
+      },
+      "sections": {
+        "thirdParty": {
+          "title": "Third-Party Services",
+          "p1": "mTrip may integrate with or provide links to third-party services, including payment providers, authentication providers, mapping services, hotel partners, transport providers, restaurant partners, and other service providers.",
+          "p2": "These third parties may have their own privacy policies and terms. We recommend reviewing their privacy policies when using their services."
+        },
+        "transfers": {
+          "title": "International Data Transfers",
+          "p1": "Your information may be processed or stored in countries other than the country in which you live.",
+          "p2": "Where required by applicable law, we will take appropriate measures to protect your information when it is transferred across borders."
+        }
+      },
+      "contact": {
+        "title": "Contact Us",
+        "body": "If you have questions, concerns, or requests regarding this Privacy Policy or your personal information, please contact us:",
+        "company": "mTrip – Myanmar Trip",
+        "email": "Email:",
+        "website": "Website:",
+        "address": "Address:",
+        "addressValue": "mTrip Travel Technology Co., Ltd., Yangon, Myanmar"
+      },
+      "end": "End of Privacy Policy",
+      "copyright": "© 2026 mTrip Co., Ltd. All rights reserved.",
+      "cta": "Contact Support for Legal Inquiries"
+    },
+    "about": {
+      "title": "About mTrip",
+      "heading": "About mTrip",
+      "tagline": "Easy to Book. Easy to Use.",
+      "intro": {
+        "brand": "mTrip",
+        "p1": " (Myanmar Trip) is a travel platform built to make discovering and booking travel services in Myanmar simpler, easier, and more convenient.",
+        "p2": "From finding the right hotel to exploring places to eat and getting reliable transportation, mTrip brings essential travel services together in one app."
+      },
+      "journey": {
+        "title": "Your Journey, Made Easier",
+        "p1": "We are building mTrip with a simple goal: to make every trip easier to plan and more enjoyable to experience."
+      },
+      "stay": {
+        "title": "Stay Your Way",
+        "highlight": "Find and book hotels through mTrip with a range of payment options designed for customers in Myanmar.",
+        "p1": "Whether you are planning a short city stay, a weekend getaway, or a longer trip, mTrip helps you discover suitable hotels, compare available options, and manage your booking in one place."
+      },
+      "food": {
+        "title": "Discover Food & Restaurants",
+        "p1": "Looking for somewhere to eat?",
+        "p2": "mTrip helps you explore restaurants and food options, making it easier to discover places that match your plans and preferences.",
+        "p3": "From everyday meals to places worth trying during your trip, we want to make food discovery a natural part of your journey."
+      },
+      "transport": {
+        "title": "Travel with Comfortable Transportation",
+        "p1": "mTrip Transportation starts in the Yangon Region, focusing on reliable and comfortable car rental services for your journey.",
+        "tags": {
+          "airportPickup": "Airport Pickup",
+          "airportDropoff": "Airport Drop-off",
+          "pointToPoint": "Point-to-Point Transportation",
+          "carRental": "Car Rental"
+        },
+        "p2": "We focus on providing high-standard vehicles and a comfortable travel experience, with carefully selected cars to help customers travel with greater convenience and confidence.",
+        "p3": "As mTrip grows, we plan to expand our transportation services and coverage to more destinations."
+      },
+      "built": {
+        "title": "Built for Myanmar Travelers",
+        "p1": "mTrip is designed around the needs of travelers in Myanmar.",
+        "p2": "We focus on making travel services easier to discover, easier to book, and easier to use — with convenient payment options, simple experiences, and services designed for real travel needs.",
+        "callout": "Starting in Myanmar. Growing toward Southeast Asia."
+      },
+      "vision": {
+        "title": "Our Vision",
+        "p1": "We believe travel should feel simple.",
+        "p2": "Whether you are booking a hotel, discovering a restaurant, or arranging a comfortable ride, mTrip brings these experiences together so you can spend less time managing your trip and more time enjoying it."
+      },
+      "brand": "mTrip",
+      "copyright": "© 2026 mTrip Co., Ltd. All rights reserved."
     }
   },
   "notifications": {

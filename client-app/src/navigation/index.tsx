@@ -63,6 +63,12 @@ import WalletScreen from '@/screens/more/WalletScreen';
 import WalletTxnDetailScreen from '@/screens/more/WalletTxnDetailScreen';
 import HowReferralWorksScreen from '@/screens/more/HowReferralWorksScreen';
 import LegalTermsScreen from '@/screens/more/LegalTermsScreen';
+import PrivacyPolicyScreen from '@/screens/more/PrivacyPolicyScreen';
+import AboutUsScreen from '@/screens/more/AboutUsScreen';
+import FaqScreen from '@/screens/more/FaqScreen';
+import FeedbackScreen from '@/screens/more/FeedbackScreen';
+import ContactUsScreen from '@/screens/more/ContactUsScreen';
+import ChangeLanguageScreen from '@/screens/more/ChangeLanguageScreen';
 import ReferralScreen from '@/screens/more/ReferralScreen';
 import ReferralStatusScreen from '@/screens/more/ReferralStatusScreen';
 import TravelersScreen from '@/screens/more/TravelersScreen';
@@ -428,6 +434,32 @@ export default function AppNavigator() {
           name="LegalTerms"
           component={LegalTermsScreen}
           options={{ title: t('more.legal.title'), headerShown: false }}
+        />
+        <Stack.Screen
+          name="PrivacyPolicy"
+          component={PrivacyPolicyScreen}
+          options={{ title: t('more.privacy.title'), headerShown: false }}
+        />
+        <Stack.Screen
+          name="AboutUs"
+          component={AboutUsScreen}
+          options={{ title: t('more.about.title'), headerShown: false }}
+        />
+        <Stack.Screen name="Faq" component={FaqScreen} options={{ title: t('more.faq.title'), headerShown: false }} />
+        <Stack.Screen
+          name="Feedback"
+          component={FeedbackScreen}
+          options={{ title: t('more.feedback.title'), headerShown: false }}
+        />
+        <Stack.Screen
+          name="ContactUs"
+          component={ContactUsScreen}
+          options={{ title: t('more.contact.title'), headerShown: false }}
+        />
+        <Stack.Screen
+          name="ChangeLanguage"
+          component={ChangeLanguageScreen}
+          options={{ title: t('more.language.title'), headerShown: false }}
         />
         {/* 券详情自带设计稿顶部栏(返回 / Coupon Details) */}
         <Stack.Screen
