@@ -307,7 +307,7 @@ MTrip/
 
 | 序号 | 模块计划文件 | 内容 | 状态 | 进度 |
 |------|-------------|------|------|------|
-| 协作规范 | [知识库关联开发规范](../guides/standards/知识库关联开发规范.md) | 项目共享知识库、无库回退、版本核对与需求验收记录 | 2026-10-26 已接入 AGENTS、README 与 HANDOFF；知识库位于 `obsidian/mTrip_obsidian/`，不新增开发/CI 依赖 | 规范与知识库已落地 |
+| 协作规范 | [知识库关联开发规范](../guides/standards/知识库关联开发规范.md) | 项目共享知识库、无库回退、版本核对与需求验收记录 | 2026-11-10 后台知识库更新至 v1.0.14，历史/补充保留；商户/消费者版本不变，不新增开发/CI 依赖 | 规范与知识库已落地；非业务完成声明 |
 | 01 | [01-后端共享组件包.md](./01-后端共享组件包.md) | backend/shared 统一响应/JWT/隔离/审计 | 已完成(单测于模块08-8 补齐) | 100% |
 | 02 | [02-系统服务system-service.md](./02-系统服务system-service.md) | RBAC/站点/日志/配置/客户端鉴权(14底层模块) | 已完成(联调归模块08) | 100% |
 | 03 | [03-数据库设计.md](./03-数据库设计.md) | 全套 DDL + 种子数据 | 已完成 | 100% |
@@ -339,6 +339,7 @@ MTrip/
 
 | 日期 | 变更内容 |
 |------|---------|
+| 2026-11-10 | 后台知识库 v1.0.11 → v1.0.14：先比对原文，再更新 47 个摘录、验收和索引，保留旧快照、图片、导入记录及手动内容。M15 新增现金联盟佣金/最低提现门槛，M20 仅术语更新；商户端/后台静态影响及待验项已记录，未改业务代码、SQL、运行配置或部署。 |
 | 2026-10-26 | 新增知识库关联开发规范，接入项目指令、交接与文档索引；三端知识库迁入 `obsidian/mTrip_obsidian/` 随项目共享，个人配置与回收站忽略，Obsidian 可选。有库关联原文条款，无库按本次需求/仓库资料继续，版本差异不自动改变团队基线。未修改业务代码、运行配置或 CI。 |
 | 2026-09-24 | 邮件 SMTP 渠道连通性实测与修复：后台新增的 163 渠道按表单默认配成 `smtp.163.com:587/tls`，真实投递恒报 `SMTP response timeout`——**163 不提供 587 端口**，该端口 TCP 能建连但服务器不回 `220`，客户端等满 15s 超时；凭据本身正常（AES 用户名/密码解密通过）。同一套凭据换端口实测：`465/ssl`、`994/ssl`、`25/tls` 均 `accepted`，裸 socket 核对三端口均立即返回 `220 … Coremail System` 并通告 `AUTH LOGIN PLAIN XOAUTH2`/`STARTTLS`。已将渠道 #1（site 0，`13768615461@163.com`）改为 `465/ssl`，其余字段未动，并按应用真实调用链（读 status=1 渠道 → AES 解密 → `SmtpClient::send`）实发复验 `250 Mail OK queued`。**2026-09-29 复核更正**：当时写「测试邮件已投递」不成立——收件人始终未收到；163 IMAP 取证显示发送侧完全正常（自收自发 20s 内进收件箱、「已发送」有记录、163 已自动补 `Date`/`Message-Id`、postmaster/mailer-daemon/Undelivered/failure 四类退信 0 条），邮件是在 **QQ 侧被过滤或静默丢弃**（163 免费个人邮箱 + 家宽出口 IP）；另已补发一封纯 ASCII、交易通知样式的探针（无中文）用于排除编码因素，**是否送达待用户确认**。仅改运行时配置，**无代码/迁移/权限键变更**；`02-系统服务system-service.md` 已补记 163 端口约束与「缺自测发送入口」两条。**要投递到 QQ/Gmail 必须换事务性邮件服务 + 自有域名 SPF/DKIM/DMARC。** |
 | 2026-09-23 | merchant-app 入驻流程按 Figma SECTION `2685:22241` 对齐（静态界面收敛）：新增 `RegisterContactScreen`（Step 1/5 Contact Info），注册导航改为 Contact Info → Verify Account → Enter Code → Company Info → Business Details 五步、进度条统一 `current/total`；新增共用件 `RegistrationForm.tsx`（`RegistrationScaffold` + 浮动标签字段），`RegisterScreen`/`RegisterBusinessDetailsScreen` 删除各自重复的壳与图标（-530/+379 行），字段高度统一 54、标签 12px；Business Details 按稿加回 `Business Type *` 并移除稿面没有的条款勾选行；KYC 文档页按 `839:6160`/`839:6192` 重排卡头与虚线文档行，新增 `SignatureCard`/`TermsModal`/`SignatureModal`（`Sign Now → Terms → E-Signature → Confirm Signature`，签后转绿显示 `Signed`），Submit to Admin 增加 `signed` 门禁；Enter Code 帮助行改为「刷新 + 4:58」与下划线 `Resend Code?`；补 `register.contactInfo.*` 等三语言键。**唯一功能位移**：`apiApplicationSave`/`apiApplicationSubmit` 从 OTP 页移到最后一屏 Business Details。已知偏差：后端为申请级统一 KYC 清单，文档卡固定渲染 1 张（Figma 为按业务分组）；`+95` 国家码静态；签名框未实现手写绘制。验证：`tsc --noEmit` + `expo export -p web` 通过（产物已清理），一次性 CDP 脚本 390×844 逐屏截图核对 9 个状态。未修改其他端与后端。 |

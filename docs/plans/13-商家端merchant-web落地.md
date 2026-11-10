@@ -1,5 +1,11 @@
 # 13 - 商家端 merchant-web 落地
 
+## 2026-11-10 后台 PRD v1.0.14 的商户端影响（只读核对）
+
+后台知识库已升级 v1.0.14，商户 PRD 仍为 v1.0.12。新增代理/商户作为联盟参与者赚取的现金佣金及最低提现门槛，与商户 M5 的平台佣金、手续费、到店支付结算分别理解；不改 M8 的促销折扣保护和已领取权益。商户作为联盟参与者的申请/门槛展示入口归属未明确，不能据此给 merchant-web/App 增加未经确认的页面。M20 Consumer 标签调整属于后台客户账号管理，不要求商户员工或 API 改名。
+
+需求引用与待验项见[版本差异与跨端影响](../../obsidian/mTrip_obsidian/mTrip%20超级管理后台知识库/09-导入记录/v1.0.11至v1.0.14差异与跨端影响.md)。本次未改商户业务代码、原文摘录、运行数据或部署；原有模块进度不变。
+
 ## 2026-11-06 促销视频教程按钮按 Figma 对齐
 
 用户指定 [Figma Percentage promotion tables `2285:19350`](https://www.figma.com/design/fsK2rrl2sadcowrxspvGV8/mTrip_Merchant?node-id=2285-19350&m=dev)，本轮仅对齐标题区“视频教程”按钮。通过 Figma Inspect 核对 Tuto video btn 默认主组件 `3153:24718`、悬停 `3153:24720` 及文字/图标属性：白底、1px `#E2E8F0` 内描边、8px 圆角，`#1B1D30` Inter 14px/600/21px 行高，lucide/play 14×14、图文间距 8px；padding 10px/16px、外尺寸约 156×41px，距离新建按钮 16px；悬停底色 `#EBF0FF`。
