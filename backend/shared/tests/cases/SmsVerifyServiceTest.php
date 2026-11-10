@@ -67,6 +67,38 @@ final class SmsTestQuery
         return $this->row;
     }
 
+    public function limit(int $value): static
+    {
+        return $this;
+    }
+
+    public function exists(): bool
+    {
+        return $this->row !== null;
+    }
+
+    /** @return list<mixed> */
+    public function get(array $columns = ['*']): array
+    {
+        return $this->row === null ? [] : [$this->row];
+    }
+
+    /** 已启用站点等 `->pluck('id')->all()`:取命中行的同名属性 */
+    public function pluck(string $column): object
+    {
+        $values = is_object($this->row) && isset($this->row->{$column}) ? [$this->row->{$column}] : [];
+        return new class($values) {
+            public function __construct(private array $values)
+            {
+            }
+
+            public function all(): array
+            {
+                return $this->values;
+            }
+        };
+    }
+
     /** `registerSmsRequired()` 走的是 `->value('config_value')`,这里取命中行的同名属性 */
     public function value(string $column): mixed
     {
@@ -151,6 +183,8 @@ final class SmsTestKit
                 'sys_sms_channel' => new SmsTestQuery($channelRow),
                 'sys_config' => new SmsTestQuery($configRow),
                 'sys_sms_log' => new SmsTestQuery(),
+                // 账号回退 / 注册查重只认已启用站点(UserAuthService::enabledSiteIds);用例都在站点 1
+                'sys_site' => new SmsTestQuery((object) ['id' => 1]),
                 default => new SmsTestQuery($userRow),
             };
         };

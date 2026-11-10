@@ -33,8 +33,13 @@ export async function bootstrapStores(): Promise<void> {
     useSiteStore.getState().hydrate(),
     useCommonStore.getState().hydrate(),
   ]);
-  // 启动即对齐站点配置(登录态跟账号站点,否则默认站点),不等首页挂载 —— 否则「更多」页钱包先显示占位货币
-  void useSiteStore.getState().followUserSite(useUserStore.getState().profile?.siteId);
+  // 启动即对齐站点配置(登录态跟账号站点,否则默认站点),不等首页挂载 —— 否则「更多」页钱包先显示占位货币。
+  // 登录态先刷新一次资料:账号站点被后台迁移过时 /me 回 40102,清登录态让用户重新登录拿新站点的 Token
+  void useUserStore
+    .getState()
+    .refreshProfile()
+    .catch(() => undefined)
+    .then(() => useSiteStore.getState().followUserSite(useUserStore.getState().profile?.siteId));
   const consent = await getGdprConsent();
   useCommonStore.getState().setGdprAccepted(consent?.accepted === true);
 }

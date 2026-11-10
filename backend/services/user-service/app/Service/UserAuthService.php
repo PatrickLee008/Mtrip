@@ -36,15 +36,13 @@ class UserAuthService
     public function register(int $siteId, string $mobile, string $password, string $nickname, int $source, string $ip, string $referralCode = '', string $realName = ''): array
     {
         $mobileHash = $this->mobileHash($mobile);
+        $this->assertSiteEnabled($siteId);
 
         // 同手机号并发注册加 Redis 分布式锁串行,业务完成即释放;
         // 拦截不同设备/客户端同时提交同一手机号导致的"先查后插"竞态
         $lockKey = "mtrip:lock:user:register:{$siteId}:{$mobileHash}";
         return $this->lock->run($lockKey, 10, function () use ($siteId, $mobile, $mobileHash, $password, $nickname, $source, $ip, $referralCode, $realName): array {
-            $exists = Db::table('user_info')
-                ->where('site_id', $siteId)->where('mobile_hash', $mobileHash)
-                ->whereNull('deleted_at')->exists();
-            if ($exists) {
+            if ($this->isRegistered($siteId, $mobileHash)) {
                 throw new BusinessException(ErrorCode::DATA_CONFLICT, '该手机号已注册');
             }
 
@@ -123,10 +121,7 @@ class UserAuthService
 
     public function login(int $siteId, string $mobile, string $password, string $ip): array
     {
-        $user = Db::table('user_info')
-            ->where('site_id', $siteId)->where('mobile_hash', $this->mobileHash($mobile))
-            ->whereNull('deleted_at')->first();
-        $user = $user ? (array) $user : null;
+        $user = $this->findAccount($siteId, $this->mobileHash($mobile));
         if (! $user || ! password_verify($password, (string) $user['password'])) {
             throw new BusinessException(ErrorCode::PARAM_ERROR, '手机号或密码错误');
         }
@@ -141,9 +136,10 @@ class UserAuthService
             'last_login_at' => date('Y-m-d H:i:s'),
             'last_login_ip' => $ip,
         ]);
-        $this->actionLog($siteId, (int) $user['id'], 1, '密码登录', $ip);
+        // Token 用账号自己的站点(回退命中时与请求站点不同);App 登录后按 user.siteId 跟随切站
+        $this->actionLog((int) $user['site_id'], (int) $user['id'], 1, '密码登录', $ip);
 
-        return $this->issueToken((int) $user['id'], $siteId);
+        return $this->issueToken((int) $user['id'], (int) $user['site_id']);
     }
 
     /**
@@ -160,9 +156,9 @@ class UserAuthService
             'last_login_at' => date('Y-m-d H:i:s'),
             'last_login_ip' => $ip,
         ]);
-        $this->actionLog($siteId, (int) $user['id'], 1, '短信验证码登录', $ip);
+        $this->actionLog((int) $user['site_id'], (int) $user['id'], 1, '短信验证码登录', $ip);
 
-        return $this->issueToken((int) $user['id'], $siteId);
+        return $this->issueToken((int) $user['id'], (int) $user['site_id']);
     }
 
     /**
@@ -178,7 +174,7 @@ class UserAuthService
         Db::table('user_info')->where('id', $user['id'])->update([
             'password' => password_hash($password, PASSWORD_BCRYPT),
         ]);
-        $this->actionLog($siteId, (int) $user['id'], 1, '短信验证码重置密码', $ip);
+        $this->actionLog((int) $user['site_id'], (int) $user['id'], 1, '短信验证码重置密码', $ip);
     }
 
     /**
@@ -188,13 +184,10 @@ class UserAuthService
      */
     private function findActiveUser(int $siteId, string $mobile): array
     {
-        $user = Db::table('user_info')
-            ->where('site_id', $siteId)->where('mobile_hash', $this->mobileHash($mobile))
-            ->whereNull('deleted_at')->first();
+        $user = $this->findAccount($siteId, $this->mobileHash($mobile));
         if (! $user) {
             throw new BusinessException(ErrorCode::NOT_FOUND, '该手机号尚未注册');
         }
-        $user = (array) $user;
         if ((int) $user['user_status'] === 2) {
             throw new BusinessException(ErrorCode::FORBIDDEN, '账号已被冻结,请联系客服');
         }
@@ -202,6 +195,60 @@ class UserAuthService
             throw new BusinessException(ErrorCode::FORBIDDEN, '账号已注销');
         }
         return $user;
+    }
+
+    /**
+     * 按手机号定位账号:先查请求站点;没有时回退到其它**已启用**站点里唯一的同号账号。
+     *
+     * 账号按「站点 + 手机号」唯一,而 App 的站点来自客户端(默认站点 / 本地缓存)。默认站点一改
+     * (生产 2026-11 从 1 改为 7),老账号就在新站点查不到、提示「手机号或密码错误」。
+     * 回退只认已启用站点,且必须唯一命中(同号多站点时不猜);密码 / 短信票据照常校验,不放宽认证。
+     *
+     * @return array<string, mixed>|null
+     */
+    public function findAccount(int $siteId, string $mobileHash): ?array
+    {
+        $user = Db::table('user_info')
+            ->where('site_id', $siteId)->where('mobile_hash', $mobileHash)
+            ->whereNull('deleted_at')->first();
+        if ($user) {
+            return (array) $user;
+        }
+        $others = array_values(array_diff($this->enabledSiteIds(), [$siteId]));
+        if ($others === []) {
+            return null;
+        }
+        $rows = Db::table('user_info')
+            ->where('mobile_hash', $mobileHash)->whereIn('site_id', $others)
+            ->whereNull('deleted_at')->limit(2)->get();
+        return count($rows) === 1 ? (array) $rows[0] : null;
+    }
+
+    /**
+     * 手机号是否已注册:本站点,或其它已启用站点已有同号账号(登录会回退找到它,见 findAccount)。
+     * 再注册一个只会让同一个人有两套余额 / 订单 —— 生产 2026-11 默认站点 1 → 7 后就出现过。
+     */
+    public function isRegistered(int $siteId, string $mobileHash): bool
+    {
+        return Db::table('user_info')
+            ->where('mobile_hash', $mobileHash)
+            ->whereIn('site_id', array_values(array_unique([$siteId, ...$this->enabledSiteIds()])))
+            ->whereNull('deleted_at')->exists();
+    }
+
+    /** @return list<int> 已启用站点 */
+    private function enabledSiteIds(): array
+    {
+        return array_map('intval', Db::connection('system')->table('sys_site')
+            ->where('status', 1)->whereNull('deleted_at')->pluck('id')->all());
+    }
+
+    /** 注册只允许落在已启用站点(停用站点的老缓存客户端曾把新账号注册进生产已停用的站点 1) */
+    private function assertSiteEnabled(int $siteId): void
+    {
+        if (! in_array($siteId, $this->enabledSiteIds(), true)) {
+            throw new BusinessException(ErrorCode::PARAM_ERROR, '当前站点已停用,请重新打开 App 后再注册');
+        }
     }
 
     public function logout(int $userId, string $ip): void

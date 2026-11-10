@@ -26,7 +26,13 @@ class UserController extends AbstractController
     /** 我的资料(脱敏) */
     public function me(): array
     {
-        return Result::success($this->authService->profile(UserContext::userId()));
+        $profile = $this->authService->profile(UserContext::userId());
+        // 账号被迁到别的站点后(生产 2026-11 停用站点 1 的用户迁到 7),旧 Token 里的站点已对不上,
+        // 按过期处理:App 收到 40102 清登录态,重新登录拿到带新站点的 Token(App 启动时会先调一次本接口)
+        if ((int) $profile['siteId'] !== UserContext::siteId()) {
+            throw new BusinessException(ErrorCode::TOKEN_EXPIRED);
+        }
+        return Result::success($profile);
     }
 
     /** 修改资料(昵称/头像) */

@@ -49,6 +49,11 @@ final class RegisterTestUserTable
         return $this;
     }
 
+    public function whereIn(string $column, array $values): static
+    {
+        return $this;
+    }
+
     public function exists(): bool
     {
         return $this->exists;
@@ -61,6 +66,30 @@ final class RegisterTestUserTable
             throw $this->insertError;
         }
         return $this->nextId;
+    }
+}
+
+/** sys_site:注册只允许已启用站点,查重也看其它已启用站点;用例都注册在站点 1 */
+final class RegisterTestSiteTable
+{
+    public function where(string $column, mixed $value): static
+    {
+        return $this;
+    }
+
+    public function whereNull(string $column): static
+    {
+        return $this;
+    }
+
+    public function pluck(string $column): object
+    {
+        return new class {
+            public function all(): array
+            {
+                return [1];
+            }
+        };
     }
 }
 
@@ -80,6 +109,7 @@ final class RegisterTestKit
         Hyperf\DbConnection\Db::$tableResolver = static function (string $table) use ($userTable): object {
             return $table === 'user_info' ? $userTable : new RegisterTestLogTable();
         };
+        Hyperf\DbConnection\Db::$connectionResolver = static fn (string $conn, string $table): object => new RegisterTestSiteTable();
         return new App\Service\UserAuthService(new RegisterTestConfig(), new RedisLock($redis));
     }
 

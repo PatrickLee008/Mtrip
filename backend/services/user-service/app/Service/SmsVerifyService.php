@@ -330,20 +330,18 @@ class SmsVerifyService
      */
     private function assertSceneEligible(int $siteId, string $scene, string $mobileHash): void
     {
-        $user = Db::table('user_info')
-            ->where('site_id', $siteId)->where('mobile_hash', $mobileHash)
-            ->whereNull('deleted_at')->first(['id', 'user_status']);
-
+        // 与登录同口径:注册看本站点 + 其它已启用站点;登录 / 重置允许回退到其它已启用站点的唯一同号账号
         if ($scene === 'register') {
-            if ($user) {
+            if ($this->auth->isRegistered($siteId, $mobileHash)) {
                 throw new BusinessException(ErrorCode::DATA_CONFLICT, '该手机号已注册');
             }
             return;
         }
+        $user = $this->auth->findAccount($siteId, $mobileHash);
         if (! $user) {
             throw new BusinessException(ErrorCode::NOT_FOUND, '该手机号尚未注册');
         }
-        $status = (int) ((array) $user)['user_status'];
+        $status = (int) $user['user_status'];
         if ($status === 2) {
             throw new BusinessException(ErrorCode::FORBIDDEN, '账号已被冻结,请联系客服');
         }
