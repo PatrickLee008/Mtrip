@@ -20,21 +20,16 @@
  */
 
 import React, { useState } from 'react';
-import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 
 import HomeIcon from '@/components/home/HomeIcon';
+import LangFlag from '@/components/splash/LangFlag';
 import { SplashLogo, SplashWaves } from '@/components/splash/SplashBackdrop';
 import { PAGE_PADDING, colors, radius } from '@/config/theme';
 import { SUPPORTED_LANGS, type Lang } from '@/config/global';
 import { fonts } from '@/config/typography';
-
-const FLAGS: Record<Lang, number> = {
-  'en-US': require('../../../assets/images/splash/flag-en.png'),
-  'my-MM': require('../../../assets/images/splash/flag-my.png'),
-  'zh-CN': require('../../../assets/images/splash/flag-zh.png'),
-};
 
 /**
  * 每种语言用它自己的文字标注(设计稿原文),不走 i18n ——
@@ -48,9 +43,6 @@ const LANG_LABELS: Record<Lang, string> = {
 
 /** 设计稿 logo 框 */
 const LOGO_BOX = { width: 286, height: 211 };
-/** 国旗圆框 40,内部图片按 275/183 比例撑满高度后左右裁切 */
-const FLAG_SIZE = 40;
-const FLAG_IMAGE_WIDTH = (FLAG_SIZE * 275) / 183;
 
 interface Props {
   /** true = 显示语言选择卡(首次进入);false = 纯开屏 */
@@ -95,9 +87,7 @@ export default function SplashScreen({ picker = false, defaultLang = 'en-US', on
                       style={({ pressed }) => [styles.option, pressed && styles.pressed]}
                       onPress={() => setSelected(l)}
                     >
-                      <View style={styles.flagBox}>
-                        <Image source={FLAGS[l]} style={flagImageStyle(l)} resizeMode="cover" />
-                      </View>
+                      <LangFlag lang={l} />
                       <View style={styles.optionMain}>
                         <Text style={[styles.optionLabel, l === selected && styles.optionLabelOn]}>
                           {LANG_LABELS[l]}
@@ -125,29 +115,6 @@ export default function SplashScreen({ picker = false, defaultLang = 'en-US', on
       </SafeAreaView>
     </View>
   );
-}
-
-/**
- * 国旗图片:英美/缅甸是矩形旗,按 60.11×40 居中裁进圆框;
- * 中国旗导出的是带阴影的方形圆标,设计稿另做了 150.27%/left10.02%/top-11.12% 的二次裁切
- */
-function flagImageStyle(lang: Lang) {
-  if (lang === 'zh-CN') {
-    return {
-      position: 'absolute' as const,
-      width: FLAG_IMAGE_WIDTH,
-      height: FLAG_IMAGE_WIDTH,
-      left: FLAG_IMAGE_WIDTH * 0.1002 - (FLAG_IMAGE_WIDTH - FLAG_SIZE) / 2,
-      top: -FLAG_SIZE * 0.1112,
-    };
-  }
-  return {
-    position: 'absolute' as const,
-    width: FLAG_IMAGE_WIDTH,
-    height: FLAG_SIZE,
-    left: -(FLAG_IMAGE_WIDTH - FLAG_SIZE) / 2,
-    top: 0,
-  };
 }
 
 const styles = StyleSheet.create({
@@ -199,13 +166,6 @@ const styles = StyleSheet.create({
     borderRadius: radius.btn,
     borderWidth: 1,
     borderColor: colors.softBlue,
-  },
-  /* 设计稿圆角 99 = 正圆 */
-  flagBox: {
-    width: FLAG_SIZE,
-    height: FLAG_SIZE,
-    borderRadius: FLAG_SIZE / 2,
-    overflow: 'hidden',
   },
   optionMain: {
     flex: 1,

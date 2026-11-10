@@ -2,8 +2,9 @@
  * 「更多」页(按 Figma M-Trip / More `1690:4642` 重做,原为一张自制的设置页)
  *
  * 设计稿自上而下:mTrip 字标顶部栏 → 资料卡(头像 + 姓名/邮箱 + 编辑按钮 + 会员胶囊行)
- * → 钱包卡(渐变底,余额 + Top Up)→ 菜单卡一(Account / Referral / Accessibility Mode)
- * → 菜单卡二(Guide / About / Terms and Conditions / FAQ / Rate this app)→ 版本号。
+ * → 钱包卡(渐变底,余额 + Top Up)→ 菜单卡一(Account / Referral / Languages / Accessibility Mode)
+ * → 菜单卡二(Guide / About / Contact Us / Terms and Conditions / Privacy Policy / FAQ / Rate this app)→ 版本号。
+ * (Languages / Contact Us / Privacy Policy 三行是设计稿 1690:4642 后来补的,落地页都在 screens/more/)
  *
  * 设计稿实测:
  *   Main   px16 pb20,块间距 24
@@ -14,11 +15,13 @@
  *          币种 Inter 500/16 80% + 金额 Inter 700/28;Top Up 白色胶囊 px24 py4
  *   菜单项 见 components/more/MenuLink.tsx
  *
- * 设计稿没有、但项目必须保留的功能,统一收进第三张「设置」卡(订单 / 站点 / 语言 / GDPR)
+ * 设计稿没有、但项目必须保留的功能,统一收进第三张「设置」卡(订单 / 站点 / GDPR;
+ * 语言已按设计稿挪进菜单卡一,改为跳 Change language 页,不再用弹层)
  * 与其下的退出按钮 —— 这些是设计稿未覆盖的既有需求,不能因为改版丢掉。
  *
  * 未实现的能力(设计稿有、后端没有),一律走 comingSoon:
- *   钱包与 Top Up、会员权益数、编辑资料、About、FAQ、Rate this app。
+ *   Top Up、会员权益数、编辑资料。
+ * Rate this app 弹评分弹窗(RateAppDialog),其「Provide Feedback Instead」进反馈页(需登录)。
  *
  * 关怀模式开关落在 commonStore 的 liteMode(只存本地,后端无此字段),关掉就换回完整版三屏。
  * **关怀模式现在是默认模式**,开屏不再问(见 App.tsx 的 `ASK_MODE_ON_LAUNCH`),
@@ -34,13 +37,12 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTranslation } from 'react-i18next';
 
 import HomeIcon from '@/components/home/HomeIcon';
-import LanguageDialog from '@/components/more/LanguageDialog';
 import MenuLink from '@/components/more/MenuLink';
+import RateAppDialog from '@/components/more/RateAppDialog';
 import { DEEP_PRIMARY, moreShared } from '@/components/more/moreShared';
-import { APP_VERSION, type Lang } from '@/config/global';
+import { APP_VERSION } from '@/config/global';
 import { PAGE_PADDING, colors, radius } from '@/config/theme';
 import { fonts } from '@/config/typography';
-import { changeLanguage } from '@/i18n';
 import type { RootStackParamList } from '@/navigation/types';
 import { useCommonStore } from '@/store/commonStore';
 import { useSiteStore } from '@/store/siteStore';
@@ -59,14 +61,12 @@ export default function MineScreen() {
   const profile = useUserStore((s) => s.profile);
   const logout = useUserStore((s) => s.logout);
   const refreshProfile = useUserStore((s) => s.refreshProfile);
-  const lang = useCommonStore((s) => s.lang);
-  const setLang = useCommonStore((s) => s.setLang);
   const gdprAccepted = useCommonStore((s) => s.gdprAccepted);
   const showToast = useCommonStore((s) => s.showToast);
   const siteName = useSiteStore((s) => s.siteName);
   const currency = useSiteStore((s) => s.currency);
 
-  const [langOpen, setLangOpen] = useState(false);
+  const [rateOpen, setRateOpen] = useState(false);
   /**
    * 关怀模式:与开屏模式选择页(Figma Splash 2485:7324)同一份本地状态,
    * 那一屏的脚注写的就是「You can change this anytime later in Settings」,指的正是这个开关。
@@ -83,15 +83,6 @@ export default function MineScreen() {
   );
 
   const comingSoon = () => showToast(t('home.comingSoon'));
-
-  const pickLang = (next: Lang) => {
-    setLangOpen(false);
-    if (next === lang) return;
-    void (async () => {
-      await setLang(next);
-      changeLanguage(next);
-    })();
-  };
 
   const requireLogin = () => navigation.navigate('Login');
 
@@ -215,6 +206,13 @@ export default function MineScreen() {
               onPress={() => (isLogin ? navigation.navigate('Referral') : requireLogin())}
             />
             <MenuLink
+              icon="localLanguage"
+              title={t('more.menu.languages.title')}
+              desc={t('more.menu.languages.desc')}
+              divider
+              onPress={() => navigation.navigate('ChangeLanguage')}
+            />
+            <MenuLink
               icon="accessibility"
               title={t('more.menu.accessibility.title')}
               desc={t('more.menu.accessibility.desc')}
@@ -245,7 +243,14 @@ export default function MineScreen() {
               title={t('more.menu.about.title')}
               desc={t('more.menu.about.desc')}
               divider
-              onPress={comingSoon}
+              onPress={() => navigation.navigate('AboutUs')}
+            />
+            <MenuLink
+              icon="personSupport"
+              title={t('more.menu.contact.title')}
+              desc={t('more.menu.contact.desc')}
+              divider
+              onPress={() => navigation.navigate('ContactUs')}
             />
             <MenuLink
               icon="shieldTask"
@@ -255,21 +260,28 @@ export default function MineScreen() {
               onPress={() => navigation.navigate('LegalTerms')}
             />
             <MenuLink
+              icon="documentBulletList"
+              title={t('more.menu.privacy.title')}
+              desc={t('more.menu.privacy.desc')}
+              divider
+              onPress={() => navigation.navigate('PrivacyPolicy')}
+            />
+            <MenuLink
               icon="bookQuestion"
               title={t('more.menu.faq.title')}
               desc={t('more.menu.faq.desc')}
               divider
-              onPress={comingSoon}
+              onPress={() => navigation.navigate('Faq')}
             />
             <MenuLink
               icon="star"
               title={t('more.menu.rate.title')}
               desc={t('more.menu.rate.desc')}
-              onPress={comingSoon}
+              onPress={() => setRateOpen(true)}
             />
           </View>
 
-          {/* 设计稿没有这张卡:多站点 / 多语言 / GDPR / 订单是项目既有需求,改版后收在这里 */}
+          {/* 设计稿没有这张卡:多站点 / GDPR / 订单是项目既有需求,改版后收在这里 */}
           <View style={[moreShared.panel, styles.menuPanel]}>
             <MenuLink
               icon="document"
@@ -284,13 +296,6 @@ export default function MineScreen() {
               desc={siteName || t('more.menu.site.desc')}
               divider
               onPress={() => navigation.navigate('SiteSelect')}
-            />
-            <MenuLink
-              icon="chat"
-              title={t('user.language')}
-              desc={t('more.menu.language.desc')}
-              divider
-              onPress={() => setLangOpen(true)}
             />
             <MenuLink
               icon="shieldTask"
@@ -313,11 +318,10 @@ export default function MineScreen() {
         </ScrollView>
       </SafeAreaView>
 
-      <LanguageDialog
-        visible={langOpen}
-        value={lang}
-        onSelect={pickLang}
-        onClose={() => setLangOpen(false)}
+      <RateAppDialog
+        visible={rateOpen}
+        onClose={() => setRateOpen(false)}
+        onFeedback={() => (isLogin ? navigation.navigate('Feedback') : requireLogin())}
       />
     </View>
   );

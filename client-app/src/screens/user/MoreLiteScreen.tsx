@@ -20,8 +20,10 @@
  * 会把人卡死的两项 —— 关怀模式用户没法退出账号、没法改回看得懂的语言,就只能卸载重装。
  * 站点与 GDPR 按设计稿去掉(它们不至于让人无法继续使用)。
  *
- * 未实现的能力(与完整模式一致,一律 comingSoon):钱包与 Top Up、编辑资料、See Reward、
- * About、FAQ、Rate this app。
+ * 未实现的能力(与完整模式一致,一律 comingSoon):Top Up、编辑资料、See Reward。
+ * About / Contact Us / Privacy Policy / FAQ / Rate this app / 语言与完整模式落到同一批子页
+ * (screens/more/ 与 RateAppDialog);关怀稿没画 Contact Us / Privacy Policy 两行,按完整模式补齐,
+ * 否则关怀模式用户找不到客服与隐私政策。
  */
 
 import React, { useCallback, useState } from 'react';
@@ -33,13 +35,12 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTranslation } from 'react-i18next';
 
 import HomeIcon from '@/components/home/HomeIcon';
-import LanguageDialog from '@/components/more/LanguageDialog';
 import MenuLink from '@/components/more/MenuLink';
+import RateAppDialog from '@/components/more/RateAppDialog';
 import { DEEP_PRIMARY, moreShared } from '@/components/more/moreShared';
-import { APP_VERSION, type Lang } from '@/config/global';
+import { APP_VERSION } from '@/config/global';
 import { PAGE_PADDING, colors, radius } from '@/config/theme';
 import { fonts } from '@/config/typography';
-import { changeLanguage } from '@/i18n';
 import type { RootStackParamList } from '@/navigation/types';
 import { useCommonStore } from '@/store/commonStore';
 import { useSiteStore } from '@/store/siteStore';
@@ -58,14 +59,12 @@ export default function MoreLiteScreen() {
   const profile = useUserStore((s) => s.profile);
   const logout = useUserStore((s) => s.logout);
   const refreshProfile = useUserStore((s) => s.refreshProfile);
-  const lang = useCommonStore((s) => s.lang);
-  const setLang = useCommonStore((s) => s.setLang);
   const liteMode = useCommonStore((s) => s.liteMode);
   const setMode = useCommonStore((s) => s.setMode);
   const showToast = useCommonStore((s) => s.showToast);
   const currency = useSiteStore((s) => s.currency);
 
-  const [langOpen, setLangOpen] = useState(false);
+  const [rateOpen, setRateOpen] = useState(false);
 
   // 获焦刷新资料(余额/积分/会员等级变动),与完整模式 MineScreen 同一处理
   useFocusEffect(
@@ -76,15 +75,6 @@ export default function MoreLiteScreen() {
 
   const comingSoon = () => showToast(t('home.comingSoon'));
   const requireLogin = () => navigation.navigate('Login');
-
-  const pickLang = (next: Lang) => {
-    setLangOpen(false);
-    if (next === lang) return;
-    void (async () => {
-      await setLang(next);
-      changeLanguage(next);
-    })();
-  };
 
   return (
     <View style={styles.root}>
@@ -224,7 +214,20 @@ export default function MoreLiteScreen() {
               divider
               onPress={() => navigation.navigate('Guides')}
             />
-            <MenuLink lite icon="bookInfo" title={t('more.menu.about.title')} divider onPress={comingSoon} />
+            <MenuLink
+              lite
+              icon="bookInfo"
+              title={t('more.menu.about.title')}
+              divider
+              onPress={() => navigation.navigate('AboutUs')}
+            />
+            <MenuLink
+              lite
+              icon="personSupport"
+              title={t('more.menu.contact.title')}
+              divider
+              onPress={() => navigation.navigate('ContactUs')}
+            />
             <MenuLink
               lite
               icon="shieldTask"
@@ -232,18 +235,31 @@ export default function MoreLiteScreen() {
               divider
               onPress={() => navigation.navigate('LegalTerms')}
             />
-            <MenuLink lite icon="bookQuestion" title={t('more.menu.faq.title')} divider onPress={comingSoon} />
-            <MenuLink lite icon="star" title={t('more.menu.rate.title')} onPress={comingSoon} />
+            <MenuLink
+              lite
+              icon="documentBulletList"
+              title={t('more.menu.privacy.title')}
+              divider
+              onPress={() => navigation.navigate('PrivacyPolicy')}
+            />
+            <MenuLink
+              lite
+              icon="bookQuestion"
+              title={t('more.menu.faq.title')}
+              divider
+              onPress={() => navigation.navigate('Faq')}
+            />
+            <MenuLink lite icon="star" title={t('more.menu.rate.title')} onPress={() => setRateOpen(true)} />
           </View>
 
           {/* 设计稿没有这张卡:语言与退出登录是「不保留就会把人卡死」的两项,见文件头 */}
           <View style={styles.panel}>
             <MenuLink
               lite
-              icon="chat"
-              title={t('user.language')}
+              icon="localLanguage"
+              title={t('more.menu.languages.title')}
               divider={isLogin}
-              onPress={() => setLangOpen(true)}
+              onPress={() => navigation.navigate('ChangeLanguage')}
             />
             {isLogin ? (
               <MenuLink
@@ -260,11 +276,10 @@ export default function MoreLiteScreen() {
         </ScrollView>
       </SafeAreaView>
 
-      <LanguageDialog
-        visible={langOpen}
-        value={lang}
-        onSelect={pickLang}
-        onClose={() => setLangOpen(false)}
+      <RateAppDialog
+        visible={rateOpen}
+        onClose={() => setRateOpen(false)}
+        onFeedback={() => (isLogin ? navigation.navigate('Feedback') : requireLogin())}
       />
     </View>
   );

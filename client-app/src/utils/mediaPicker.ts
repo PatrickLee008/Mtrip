@@ -1,5 +1,6 @@
 /**
  * 评价页选图 / 选视频(expo-image-picker),产出可直接交给 `uploadReviewMedia` 的 LocalMedia
+ * (「更多 → 问题反馈」页的附件也复用这一套选择 + `/user/review-media` 上传,用 `mixed` 模式)
  *
  * - 相册多选(图片、视频分开选,各自按剩余名额限制);web 没有相机入口,同样走文件选择
  * - 权限被拒返回 'denied' 由调用方提示,取消返回空数组,不抛错
@@ -25,8 +26,12 @@ function extOf(mime: string, kind: 'image' | 'video'): string {
   return sub || (kind === 'video' ? 'mp4' : 'jpg');
 }
 
+/**
+ * `mixed` = 图片与视频一起选(反馈页「Photos/Videos」只有一个入口),每个文件按自身类型归类,
+ * 大小上限仍按各自类型判断
+ */
 export async function pickReviewMedia(
-  kind: 'image' | 'video',
+  pick: 'image' | 'video' | 'mixed',
   remaining: number,
 ): Promise<PickMediaResult | 'denied'> {
   if (remaining <= 0) return { items: [], rejected: 0 };
@@ -34,19 +39,27 @@ export async function pickReviewMedia(
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!perm.granted) return 'denied';
   }
+  const mediaTypes =
+    pick === 'mixed'
+      ? ImagePicker.MediaTypeOptions.All
+      : pick === 'video'
+        ? ImagePicker.MediaTypeOptions.Videos
+        : ImagePicker.MediaTypeOptions.Images;
   const result = await ImagePicker.launchImageLibraryAsync({
-    mediaTypes: kind === 'video' ? ImagePicker.MediaTypeOptions.Videos : ImagePicker.MediaTypeOptions.Images,
+    mediaTypes,
     allowsMultipleSelection: remaining > 1,
     selectionLimit: remaining,
     quality: 0.8,
   });
   if (result.canceled || !result.assets?.length) return { items: [], rejected: 0 };
 
-  const max = kind === 'video' ? MAX_VIDEO_BYTES : MAX_IMAGE_BYTES;
   const items: LocalMedia[] = [];
   let rejected = 0;
   // 浏览器的文件选择不认 selectionLimit,超出名额的多余文件在这里截掉
   for (const asset of result.assets.slice(0, remaining)) {
+    const kind: 'image' | 'video' =
+      pick !== 'mixed' ? pick : asset.type === 'video' || asset.mimeType?.startsWith('video/') ? 'video' : 'image';
+    const max = kind === 'video' ? MAX_VIDEO_BYTES : MAX_IMAGE_BYTES;
     const size = asset.fileSize ?? 0;
     if (size > max) {
       rejected += 1;

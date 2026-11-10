@@ -316,6 +316,17 @@ export type RootStackParamList = {
   /** 钱包交易详情:流水行整条带过来,不再二次请求 */
   WalletTxnDetail: { log: BalanceLog };
   LegalTerms: undefined;
+  /** 隐私政策 / 关于(Figma Legal Content Pages 3256:19233 / 3256:19381) */
+  PrivacyPolicy: undefined;
+  AboutUs: undefined;
+  /** FAQ(Figma 1699:7636) */
+  Faq: undefined;
+  /** 问题反馈 / 建议(Figma 3313:10952 / 3313:11060),需登录 */
+  Feedback: undefined;
+  /** 联系我们(Figma 3503:9182)+ 热线弹层 */
+  ContactUs: undefined;
+  /** 切换语言(Figma 3256:18986) */
+  ChangeLanguage: undefined;
   Login: undefined;
   Register: undefined;
   /**
