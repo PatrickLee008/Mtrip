@@ -155,11 +155,12 @@ class SmsVerifyService
     {
         self::assertScene($scene);
         $this->assertMobileFormat($mobile);
-        $channel = $this->requireChannel($siteId);
         $mobileHash = $this->auth->mobileHash($mobile);
 
-        // 场景前置条件:注册要求号码未占用,登录/重置要求号码已存在且可用
+        // 场景前置条件:注册要求号码未占用,登录/重置要求号码已存在且可用。
+        // 先于渠道检查:否则没配短信渠道的站点里未注册号码只拿到 50021,App 的「号码不可用」弹窗永远出不来
         $this->assertSceneEligible($siteId, $scene, $mobileHash);
+        $channel = $this->requireChannel($siteId);
 
         // 同号同场景串行,防止连点两次拿到两个 requestId(后发的会把先发的覆盖掉,先发的码就废了)
         $lockKey = "mtrip:lock:sms:send:{$siteId}:{$scene}:{$mobileHash}";
