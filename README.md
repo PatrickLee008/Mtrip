@@ -1,5 +1,7 @@
 # Mtrip 海外旅游 SaaS 平台
 
+2026-11-10 商户 iPhone 开发包已用公司团队签名安装，用户确认语言选择后可进入引导/登录页。SDK 51 的 dev-client、LAN 调试、Swift 依赖兼容与 Scene 生命周期适配已落地，日常运行 `npm run start:device --prefix merchant-app`；登录后业务、相机及 Face ID 待单独真机验收。见[模块 17](docs/plans/17-商户移动端merchant-app.md#2026-11-10-iphone-真机开发环境)与[启动指南](docs/guides/setup/启动开发指南.md#61-商户-app-的-iphone-真机开发包)。未提交或推送。
+
 2026-11-10 消费者 Web/H5 Apple 登录已实现：登录/注册入口、独立同意、form_post 回调、ES256/RS256 验签、nonce/浏览器绑定、单次票据及现有登录态；同邮箱不合并。新增加密刷新令牌及邮箱扩容迁移。Apple 62 项、Facebook 51 项、TikTok 54 项隔离 HTTP、shared 249/1721、509 PHP lint、admin build、client typecheck/H5 export、Compose/网关语法通过；390px 入口、HTTP 提示、取消/返回/过期已浏览器验证。默认关闭，真实 Apple/HTTPS 跨站 Cookie 待部署联调；未改常规库、未部署远端、未提交或推送。见[实施记录](docs/plans/24-Apple-Web登录实施记录.md)。
 
 2026-11-06 促销“视频教程”按钮按 Figma `2285:19350` 对齐：白底/浅灰描边、深色 Inter 14px/600、14px 三角播放图标、8px 圆角、41px 高、按钮间距 16px，悬停底色 `#EBF0FF`。英文实测约 156×41px，中英桌面/375px 无横向溢出，指南跳转及原权限保留；类型检查/构建、SSR 212/212、交互 17 项通过。见[模块 13](docs/plans/13-商家端merchant-web落地.md#2026-11-06-促销视频教程按钮按-figma-对齐)。

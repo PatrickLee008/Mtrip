@@ -2,3 +2,5 @@ node_modules/
 dist/
 .expo/
 .env
+# Generated locally by Expo prebuild for native device debugging.
+/ios/

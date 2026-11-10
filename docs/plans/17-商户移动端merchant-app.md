@@ -2,6 +2,14 @@
 
 > 独立计划文件。商户移动端不并入既有 `client-app` 模块 10，目录为 `merchant-app/`，技术栈和工程习惯参考 `client-app`。
 
+## 2026-11-10 iPhone 真机开发环境
+
+已使用用户选择的公司团队完成开发签名，在 iPhone 15 Pro / iOS 27.0.1 安装商户开发包；用户确认语言选择后可进入引导/登录页。SDK 51 新增 `expo-dev-client`、`start:device`（LAN 8083）及 `patch:ios`，修复新 Swift SDK 下 localization calendar switch 与 dev-menu 模拟器宏编译错误。初次启动崩溃报告明确指向 UIKit 的未采用 Scene 检查；`plugins/with-ios-scene.js` / `MtripSceneDelegate.mm` 将已在真机验证的窗口、链接及前后台事件适配固化至 Expo prebuild，生成的 `ios/` 不入库。
+
+本机 API 地址通过忽略的 `.env.local` 指向 Mac 局域网 8081，网关 healthz 正常，未调整认证规则。Xcode 27 的工具布局与旧 Expo CLI 不兼容，使用 `xcodebuild` + `devicectl` 构建安装，最低 iOS 15 仅作为本机参数；未更改产品发布基线。配置插件已验证原生源与已安装包一致、重复执行不追加，以及 Scene manifest 和模板变更拦截；Expo prebuild、原生编译签名、类型检查通过。
+
+日常运行 `npm run start:device --prefix merchant-app`，同一 Wi-Fi 下选择开发服务器即可；原生依赖/权限/插件变化才需重建。完整步骤见[启动开发指南 §6.1](../guides/setup/启动开发指南.md#61-商户-app-的-iphone-真机开发包)。登录后业务、相机及 Face ID 仍待各自真机验收；本次不代表完整业务验收，未提交或推送。
+
 ## 2026-10-26 Menu 菜单与设置页面
 
 依据本模块既定 `PRD/mTrip_Merchant App PRD_v1.0.docx` 第 6.5–6.7 节及用户本轮“页面优先、未确认功能暂不实现”授权，对齐 [Figma Menu 页面组 `7154:30877`](https://www.figma.com/design/fsK2rrl2sadcowrxspvGV8/mTrip_Merchant?node-id=7154-30877&m=dev)。共享知识库为 v1.0.12，仅作关联与差异参考，未自动升级团队基线；新版 6.8 与原型存在注销申请/直接永久删除文案差异，均不接通业务提交。
