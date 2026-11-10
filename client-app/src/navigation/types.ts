@@ -36,6 +36,7 @@ export type MainTabParamList = {
 export type RootStackParamList = {
   FacebookComplete: undefined;
   TikTokComplete: undefined;
+  AppleComplete: undefined;
   Chat: { propertyId?: number; orderId?: number; conversationId?: number; type?: number } | undefined;
   MainTabs: NavigatorScreenParams<MainTabParamList>;
   SiteSelect: undefined;

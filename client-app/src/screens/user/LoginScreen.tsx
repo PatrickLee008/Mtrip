@@ -16,7 +16,7 @@
  * 它管的不是免登录 —— token 本来就无条件持久化(见 `store/userStore.ts` 的 applyAuth / hydrate)。
  *
  * 未实现的能力(设计稿有、后端没有),一律走 comingSoon:
- *   区号选择(固定 +95)、Google/Apple 登录(Facebook 已接 Web)
+ *   区号选择(固定 +95)、Google 登录(Apple 已接 Web)(Facebook 已接 Web)
  *
  * **设计稿之外新增的两个入口**(接入 SMSPoh 短信验证后才有的能力,Onboarding 四张稿都没画):
  *   「忘记密码」—— 与记住我同一行贴右端,去 `ForgotPassword`
@@ -37,6 +37,7 @@ import AuthShell from '@/components/user/AuthShell';
 import SocialIcon, { type SocialProvider } from '@/components/user/SocialIcon';
 import FacebookLoginEntry from '@/components/user/FacebookLoginEntry';
 import TikTokLoginEntry from '@/components/user/TikTokLoginEntry';
+import AppleLoginEntry from '@/components/user/AppleLoginEntry';
 import { STORAGE_KEYS } from '@/config/global';
 import { colors, radius } from '@/config/theme';
 import { fonts } from '@/config/typography';
@@ -240,7 +241,7 @@ export default function LoginScreen() {
         </View>
 
         <View style={styles.socials}>
-          {SOCIALS.map((p) => p === 'facebook' ? <FacebookLoginEntry key={p} /> : (
+          {SOCIALS.map((p) => p === 'facebook' ? <FacebookLoginEntry key={p} /> : p === 'apple' ? <AppleLoginEntry key={p} /> : (
             <Pressable
               key={p}
               style={({ pressed }) => [styles.socialBtn, pressed && styles.pressed]}

@@ -223,7 +223,12 @@ class UserAuthService
         return $this->socialAccount('tiktok', $siteId, $appId, $subject, $name, $consentVersion, $consentAt);
     }
 
-    private function socialAccount(string $provider, int $siteId, string $appId, string $subject, string $name, string $consentVersion, string $consentAt): array
+    public function appleAccount(int $siteId, string $appId, string $subject, string $name, string $consentVersion, string $consentAt, string $email, string $refreshToken): array
+    {
+        return $this->socialAccount('apple', $siteId, $appId, $subject, $name, $consentVersion, $consentAt, $email, $refreshToken);
+    }
+
+    private function socialAccount(string $provider, int $siteId, string $appId, string $subject, string $name, string $consentVersion, string $consentAt, string $email = '', string $refreshToken = ''): array
     {
         $identityQuery = static fn () => Db::table('user_social_identity')
             ->where('site_id', $siteId)->where('provider', $provider)
@@ -231,21 +236,31 @@ class UserAuthService
         $identity = $identityQuery()->first();
         if ($identity) {
             $this->activeSocialUser((int) $identity->user_id, $siteId);
+            if ($refreshToken !== '') {
+                $identityQuery()->update(['provider_refresh_token' => CryptoHelper::encrypt($refreshToken, $this->aesKey())]);
+            }
             return ['userId' => (int) $identity->user_id, 'isNewUser' => false];
         }
         try {
-            $userId = Db::transaction(function () use ($provider, $siteId, $appId, $subject, $name, $consentVersion, $consentAt): int {
+            $userId = Db::transaction(function () use ($provider, $siteId, $appId, $subject, $name, $consentVersion, $consentAt, $email, $refreshToken): int {
                 $userId = (int) Db::table('user_info')->insertGetId([
-                    'site_id' => $siteId, 'nickname' => $name !== '' ? $name : ($provider === 'tiktok' ? 'TikTok User' : 'Facebook User'),
+                    'site_id' => $siteId, 'nickname' => $name !== '' ? $name : match ($provider) {
+                        'apple' => 'Apple User', 'tiktok' => 'TikTok User', default => 'Facebook User',
+                    },
                     'mobile' => '', 'mobile_hash' => null, 'password' => '',
+                    'email' => $email !== '' ? CryptoHelper::encrypt($email, $this->aesKey()) : '',
                     'register_source' => 3, 'register_time' => date('Y-m-d H:i:s'), 'user_status' => 1,
                 ]);
                 $this->setupReferral($siteId, $userId, '');
-                Db::table('user_social_identity')->insert([
+                $identityData = [
                     'site_id' => $siteId, 'user_id' => $userId, 'provider' => $provider,
                     'provider_app_id' => $appId, 'provider_user_id' => $subject,
                     'consent_version' => $consentVersion, 'consent_at' => $consentAt,
-                ]);
+                ];
+                if ($provider === 'apple') {
+                    $identityData['provider_refresh_token'] = $refreshToken !== '' ? CryptoHelper::encrypt($refreshToken, $this->aesKey()) : null;
+                }
+                Db::table('user_social_identity')->insert($identityData);
                 return $userId;
             });
             return ['userId' => $userId, 'isNewUser' => true];
@@ -270,6 +285,11 @@ class UserAuthService
     public function tiktokSession(int $userId, int $siteId, string $ip): array
     {
         return $this->socialSession('TikTok', $userId, $siteId, $ip);
+    }
+
+    public function appleSession(int $userId, int $siteId, string $ip): array
+    {
+        return $this->socialSession('Apple', $userId, $siteId, $ip);
     }
 
     private function socialSession(string $provider, int $userId, int $siteId, string $ip): array

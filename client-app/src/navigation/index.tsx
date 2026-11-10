@@ -16,6 +16,8 @@ import { NavigationContainer } from '@react-navigation/native';
 import FacebookCompleteScreen from '@/screens/user/FacebookCompleteScreen';
 import { isFacebookCompletion } from '@/utils/facebook';
 import TikTokCompleteScreen from '@/screens/user/TikTokCompleteScreen';
+import AppleCompleteScreen from '@/screens/user/AppleCompleteScreen';
+import { isAppleCompletion } from '@/utils/apple';
 import { isTikTokCompletion } from '@/utils/tiktok';
 import { createBottomTabNavigator, type BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -182,7 +184,8 @@ export default function AppNavigator() {
   const { t } = useTranslation();
   return (
     <NavigationContainer ref={navigationRef}>
-      <Stack.Navigator initialRouteName={isTikTokCompletion() ? 'TikTokComplete' : isFacebookCompletion() ? 'FacebookComplete' : 'MainTabs'} screenOptions={{ headerTitleAlign: 'center', headerTintColor: colors.text }}>
+      <Stack.Navigator initialRouteName={isAppleCompletion() ? 'AppleComplete' : isTikTokCompletion() ? 'TikTokComplete' : isFacebookCompletion() ? 'FacebookComplete' : 'MainTabs'} screenOptions={{ headerTitleAlign: 'center', headerTintColor: colors.text }}>
+        <Stack.Screen name="AppleComplete" component={AppleCompleteScreen} options={{ headerShown: false }} />
         <Stack.Screen name="TikTokComplete" component={TikTokCompleteScreen} options={{ headerShown: false }} />
         <Stack.Screen name="FacebookComplete" component={FacebookCompleteScreen} options={{ headerShown: false }} />
         <Stack.Screen name="MainTabs" component={MainTabs} options={{ headerShown: false }} />

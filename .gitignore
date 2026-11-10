@@ -66,3 +66,7 @@ mtrip-ops/nohup.out
 # 前端构建产物：每次发布都会重新生成，不纳入版本管理
 deploy/web/*/*
 !deploy/web/*/blank.html
+
+# Sign in with Apple private keys are server-only secrets.
+/deploy/secrets/
+*.p8

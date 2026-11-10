@@ -35,9 +35,11 @@ import { detectSystemLang } from '@/utils/locale';
 import { applyWebGlobalStyles } from '@/utils/webStyles';
 import { captureFacebookCompletion, isFacebookCompletion } from '@/utils/facebook';
 import { captureTikTokCompletion, isTikTokCompletion } from '@/utils/tiktok';
+import { captureAppleCompletion, isAppleCompletion } from '@/utils/apple';
 
 captureFacebookCompletion();
 captureTikTokCompletion();
+captureAppleCompletion();
 
 // 先以兼容默认语言初始化,避免引导期间 useTranslation 无实例告警
 initI18n('en-US');
@@ -90,7 +92,7 @@ export default function App() {
       if (rest > 0) {
         await new Promise((resolve) => setTimeout(resolve, rest));
       }
-      if (isFacebookCompletion() || isTikTokCompletion()) setPhase('app');
+      if (isFacebookCompletion() || isTikTokCompletion() || isAppleCompletion()) setPhase('app');
       else if (!langChosen) setPhase('language');
       else setPhase(!ASK_MODE_ON_LAUNCH || modeChosen ? 'app' : 'mode');
     })();
