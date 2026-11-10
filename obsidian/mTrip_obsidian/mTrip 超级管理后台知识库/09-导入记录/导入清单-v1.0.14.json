@@ -1,0 +1,1283 @@
+{
+  "version": "1.0.14",
+  "updated_on": "2026-11-10",
+  "previous_version": "1.0.11",
+  "previous_manifest": "09-导入记录/导入清单.json",
+  "source_file": "mTrip_Super_Admin_Portal_PRD_Enterprise_v1.0.14_中文版.md",
+  "source_snapshot": "08-原始资料/mTrip_Super_Admin_Portal_PRD_Enterprise_v1.0.14_中文版.md",
+  "source_sha256": "0bf4e25ae43e1e91b7c2427ab54931d6b4fc6bc8fede331db4e1622a721f80f0",
+  "vault": "obsidian/mTrip_obsidian",
+  "folder": "mTrip 超级管理后台知识库",
+  "sections": [
+    {
+      "path": "01-产品与范围/PRD 文档信息.md",
+      "start": 1,
+      "end": 20
+    },
+    {
+      "path": "01-产品与范围/产品定位、目标与约束.md",
+      "start": 57,
+      "end": 97
+    },
+    {
+      "path": "01-产品与范围/用户画像.md",
+      "start": 98,
+      "end": 105
+    },
+    {
+      "path": "02-业务流程/用户旅程总览.md",
+      "start": 106,
+      "end": 109
+    },
+    {
+      "path": "02-业务流程/场景1-商户认证与审批.md",
+      "start": 110,
+      "end": 136
+    },
+    {
+      "path": "02-业务流程/场景2-商户运营管理.md",
+      "start": 137,
+      "end": 162
+    },
+    {
+      "path": "02-业务流程/场景3-平台管理.md",
+      "start": 163,
+      "end": 176
+    },
+    {
+      "path": "02-业务流程/场景4-终端用户账户支持与高层工作流.md",
+      "start": 177,
+      "end": 199
+    },
+    {
+      "path": "03-功能模块/M11-商户认证与审批.md",
+      "start": 200,
+      "end": 332
+    },
+    {
+      "path": "03-功能模块/M12-商户管理.md",
+      "start": 333,
+      "end": 677
+    },
+    {
+      "path": "03-功能模块/M13-预订管理.md",
+      "start": 678,
+      "end": 767
+    },
+    {
+      "path": "03-功能模块/M14-活动与促销管理.md",
+      "start": 768,
+      "end": 904
+    },
+    {
+      "path": "03-功能模块/M15-联盟与达人管理.md",
+      "start": 905,
+      "end": 1002
+    },
+    {
+      "path": "03-功能模块/M16-用户与角色管理.md",
+      "start": 1003,
+      "end": 1069
+    },
+    {
+      "path": "03-功能模块/M17-报表与分析.md",
+      "start": 1070,
+      "end": 1211
+    },
+    {
+      "path": "03-功能模块/M18-平台配置与管理.md",
+      "start": 1212,
+      "end": 1311
+    },
+    {
+      "path": "03-功能模块/M19-库存与可售量管理（仅监控）.md",
+      "start": 1312,
+      "end": 1355
+    },
+    {
+      "path": "03-功能模块/M20-终端用户管理.md",
+      "start": 1356,
+      "end": 1493
+    },
+    {
+      "path": "03-功能模块/M21-帮助中心管理.md",
+      "start": 1494,
+      "end": 1588
+    },
+    {
+      "path": "03-功能模块/M22-推荐活动.md",
+      "start": 1589,
+      "end": 1634
+    },
+    {
+      "path": "03-功能模块/M23-内容管理.md",
+      "start": 1635,
+      "end": 1684
+    },
+    {
+      "path": "03-功能模块/M24-财务管理.md",
+      "start": 1685,
+      "end": 1808
+    },
+    {
+      "path": "03-功能模块/M25-钱包管理.md",
+      "start": 1809,
+      "end": 1924
+    },
+    {
+      "path": "04-验收标准/验收汇总说明.md",
+      "start": 1925,
+      "end": 1926
+    },
+    {
+      "path": "04-验收标准/AC11-商户认证与审批.md",
+      "start": 1927,
+      "end": 1960
+    },
+    {
+      "path": "04-验收标准/AC12-商户管理.md",
+      "start": 1961,
+      "end": 1978
+    },
+    {
+      "path": "04-验收标准/AC13-预订管理.md",
+      "start": 1979,
+      "end": 1993
+    },
+    {
+      "path": "04-验收标准/AC14-活动与促销管理.md",
+      "start": 1994,
+      "end": 2009
+    },
+    {
+      "path": "04-验收标准/AC15-联盟与达人管理.md",
+      "start": 2010,
+      "end": 2022
+    },
+    {
+      "path": "04-验收标准/AC16-用户与角色管理.md",
+      "start": 2023,
+      "end": 2037
+    },
+    {
+      "path": "04-验收标准/AC17-报表与分析.md",
+      "start": 2038,
+      "end": 2051
+    },
+    {
+      "path": "04-验收标准/AC18-平台配置与管理.md",
+      "start": 2052,
+      "end": 2067
+    },
+    {
+      "path": "04-验收标准/AC19-库存与可售量管理（仅监控）.md",
+      "start": 2068,
+      "end": 2075
+    },
+    {
+      "path": "04-验收标准/AC20-终端用户管理.md",
+      "start": 2076,
+      "end": 2092
+    },
+    {
+      "path": "04-验收标准/AC21-帮助中心管理.md",
+      "start": 2093,
+      "end": 2104
+    },
+    {
+      "path": "04-验收标准/AC22-推荐活动.md",
+      "start": 2105,
+      "end": 2112
+    },
+    {
+      "path": "04-验收标准/AC23-内容管理.md",
+      "start": 2113,
+      "end": 2122
+    },
+    {
+      "path": "04-验收标准/AC24-财务管理.md",
+      "start": 2123,
+      "end": 2143
+    },
+    {
+      "path": "04-验收标准/AC25-钱包管理.md",
+      "start": 2144,
+      "end": 2154
+    },
+    {
+      "path": "05-设计与集成/设计与原型链接.md",
+      "start": 2155,
+      "end": 2161
+    },
+    {
+      "path": "05-设计与集成/技术考量与跨平台集成.md",
+      "start": 2162,
+      "end": 2198
+    },
+    {
+      "path": "06-规划与治理/成功指标.md",
+      "start": 2199,
+      "end": 2213
+    },
+    {
+      "path": "06-规划与治理/版本变更历史.md",
+      "start": 2214,
+      "end": 2234
+    },
+    {
+      "path": "06-规划与治理/原文待解决问题.md",
+      "start": 2235,
+      "end": 2249
+    },
+    {
+      "path": "06-规划与治理/原文问答.md",
+      "start": 2250,
+      "end": 2261
+    },
+    {
+      "path": "06-规划与治理/功能时间线与阶段规划.md",
+      "start": 2262,
+      "end": 2281
+    },
+    {
+      "path": "06-规划与治理/PRD 检查清单.md",
+      "start": 2282,
+      "end": 2301
+    }
+  ],
+  "section_changes": [
+    {
+      "path": "01-产品与范围/PRD 文档信息.md",
+      "old_lines": [
+        1,
+        20
+      ],
+      "new_lines": [
+        1,
+        20
+      ],
+      "text_changed": true
+    },
+    {
+      "path": "01-产品与范围/产品定位、目标与约束.md",
+      "old_lines": [
+        57,
+        97
+      ],
+      "new_lines": [
+        57,
+        97
+      ],
+      "text_changed": true
+    },
+    {
+      "path": "01-产品与范围/用户画像.md",
+      "old_lines": [
+        98,
+        105
+      ],
+      "new_lines": [
+        98,
+        105
+      ],
+      "text_changed": true
+    },
+    {
+      "path": "02-业务流程/用户旅程总览.md",
+      "old_lines": [
+        106,
+        109
+      ],
+      "new_lines": [
+        106,
+        109
+      ],
+      "text_changed": false
+    },
+    {
+      "path": "02-业务流程/场景1-商户认证与审批.md",
+      "old_lines": [
+        110,
+        136
+      ],
+      "new_lines": [
+        110,
+        136
+      ],
+      "text_changed": false
+    },
+    {
+      "path": "02-业务流程/场景2-商户运营管理.md",
+      "old_lines": [
+        137,
+        162
+      ],
+      "new_lines": [
+        137,
+        162
+      ],
+      "text_changed": false
+    },
+    {
+      "path": "02-业务流程/场景3-平台管理.md",
+      "old_lines": [
+        163,
+        176
+      ],
+      "new_lines": [
+        163,
+        176
+      ],
+      "text_changed": false
+    },
+    {
+      "path": "02-业务流程/场景4-终端用户账户支持与高层工作流.md",
+      "old_lines": [
+        177,
+        199
+      ],
+      "new_lines": [
+        177,
+        199
+      ],
+      "text_changed": true
+    },
+    {
+      "path": "03-功能模块/M11-商户认证与审批.md",
+      "old_lines": [
+        200,
+        332
+      ],
+      "new_lines": [
+        200,
+        332
+      ],
+      "text_changed": false
+    },
+    {
+      "path": "03-功能模块/M12-商户管理.md",
+      "old_lines": [
+        333,
+        677
+      ],
+      "new_lines": [
+        333,
+        677
+      ],
+      "text_changed": false
+    },
+    {
+      "path": "03-功能模块/M13-预订管理.md",
+      "old_lines": [
+        678,
+        767
+      ],
+      "new_lines": [
+        678,
+        767
+      ],
+      "text_changed": false
+    },
+    {
+      "path": "03-功能模块/M14-活动与促销管理.md",
+      "old_lines": [
+        768,
+        904
+      ],
+      "new_lines": [
+        768,
+        904
+      ],
+      "text_changed": false
+    },
+    {
+      "path": "03-功能模块/M15-联盟与达人管理.md",
+      "old_lines": [
+        905,
+        996
+      ],
+      "new_lines": [
+        905,
+        1002
+      ],
+      "text_changed": true
+    },
+    {
+      "path": "03-功能模块/M16-用户与角色管理.md",
+      "old_lines": [
+        997,
+        1063
+      ],
+      "new_lines": [
+        1003,
+        1069
+      ],
+      "text_changed": false
+    },
+    {
+      "path": "03-功能模块/M17-报表与分析.md",
+      "old_lines": [
+        1064,
+        1205
+      ],
+      "new_lines": [
+        1070,
+        1211
+      ],
+      "text_changed": false
+    },
+    {
+      "path": "03-功能模块/M18-平台配置与管理.md",
+      "old_lines": [
+        1206,
+        1305
+      ],
+      "new_lines": [
+        1212,
+        1311
+      ],
+      "text_changed": false
+    },
+    {
+      "path": "03-功能模块/M19-库存与可售量管理（仅监控）.md",
+      "old_lines": [
+        1306,
+        1349
+      ],
+      "new_lines": [
+        1312,
+        1355
+      ],
+      "text_changed": false
+    },
+    {
+      "path": "03-功能模块/M20-终端用户管理.md",
+      "old_lines": [
+        1350,
+        1479
+      ],
+      "new_lines": [
+        1356,
+        1493
+      ],
+      "text_changed": true
+    },
+    {
+      "path": "03-功能模块/M21-帮助中心管理.md",
+      "old_lines": [
+        1480,
+        1574
+      ],
+      "new_lines": [
+        1494,
+        1588
+      ],
+      "text_changed": false
+    },
+    {
+      "path": "03-功能模块/M22-推荐活动.md",
+      "old_lines": [
+        1575,
+        1620
+      ],
+      "new_lines": [
+        1589,
+        1634
+      ],
+      "text_changed": false
+    },
+    {
+      "path": "03-功能模块/M23-内容管理.md",
+      "old_lines": [
+        1621,
+        1670
+      ],
+      "new_lines": [
+        1635,
+        1684
+      ],
+      "text_changed": false
+    },
+    {
+      "path": "03-功能模块/M24-财务管理.md",
+      "old_lines": [
+        1671,
+        1794
+      ],
+      "new_lines": [
+        1685,
+        1808
+      ],
+      "text_changed": false
+    },
+    {
+      "path": "03-功能模块/M25-钱包管理.md",
+      "old_lines": [
+        1795,
+        1910
+      ],
+      "new_lines": [
+        1809,
+        1924
+      ],
+      "text_changed": false
+    },
+    {
+      "path": "04-验收标准/验收汇总说明.md",
+      "old_lines": [
+        1911,
+        1912
+      ],
+      "new_lines": [
+        1925,
+        1926
+      ],
+      "text_changed": false
+    },
+    {
+      "path": "04-验收标准/AC11-商户认证与审批.md",
+      "old_lines": [
+        1913,
+        1946
+      ],
+      "new_lines": [
+        1927,
+        1960
+      ],
+      "text_changed": false
+    },
+    {
+      "path": "04-验收标准/AC12-商户管理.md",
+      "old_lines": [
+        1947,
+        1964
+      ],
+      "new_lines": [
+        1961,
+        1978
+      ],
+      "text_changed": false
+    },
+    {
+      "path": "04-验收标准/AC13-预订管理.md",
+      "old_lines": [
+        1965,
+        1979
+      ],
+      "new_lines": [
+        1979,
+        1993
+      ],
+      "text_changed": false
+    },
+    {
+      "path": "04-验收标准/AC14-活动与促销管理.md",
+      "old_lines": [
+        1980,
+        1995
+      ],
+      "new_lines": [
+        1994,
+        2009
+      ],
+      "text_changed": false
+    },
+    {
+      "path": "04-验收标准/AC15-联盟与达人管理.md",
+      "old_lines": [
+        1996,
+        2008
+      ],
+      "new_lines": [
+        2010,
+        2022
+      ],
+      "text_changed": false
+    },
+    {
+      "path": "04-验收标准/AC16-用户与角色管理.md",
+      "old_lines": [
+        2009,
+        2023
+      ],
+      "new_lines": [
+        2023,
+        2037
+      ],
+      "text_changed": false
+    },
+    {
+      "path": "04-验收标准/AC17-报表与分析.md",
+      "old_lines": [
+        2024,
+        2037
+      ],
+      "new_lines": [
+        2038,
+        2051
+      ],
+      "text_changed": false
+    },
+    {
+      "path": "04-验收标准/AC18-平台配置与管理.md",
+      "old_lines": [
+        2038,
+        2053
+      ],
+      "new_lines": [
+        2052,
+        2067
+      ],
+      "text_changed": false
+    },
+    {
+      "path": "04-验收标准/AC19-库存与可售量管理（仅监控）.md",
+      "old_lines": [
+        2054,
+        2061
+      ],
+      "new_lines": [
+        2068,
+        2075
+      ],
+      "text_changed": false
+    },
+    {
+      "path": "04-验收标准/AC20-终端用户管理.md",
+      "old_lines": [
+        2062,
+        2078
+      ],
+      "new_lines": [
+        2076,
+        2092
+      ],
+      "text_changed": true
+    },
+    {
+      "path": "04-验收标准/AC21-帮助中心管理.md",
+      "old_lines": [
+        2079,
+        2090
+      ],
+      "new_lines": [
+        2093,
+        2104
+      ],
+      "text_changed": false
+    },
+    {
+      "path": "04-验收标准/AC22-推荐活动.md",
+      "old_lines": [
+        2091,
+        2098
+      ],
+      "new_lines": [
+        2105,
+        2112
+      ],
+      "text_changed": false
+    },
+    {
+      "path": "04-验收标准/AC23-内容管理.md",
+      "old_lines": [
+        2099,
+        2108
+      ],
+      "new_lines": [
+        2113,
+        2122
+      ],
+      "text_changed": false
+    },
+    {
+      "path": "04-验收标准/AC24-财务管理.md",
+      "old_lines": [
+        2109,
+        2129
+      ],
+      "new_lines": [
+        2123,
+        2143
+      ],
+      "text_changed": false
+    },
+    {
+      "path": "04-验收标准/AC25-钱包管理.md",
+      "old_lines": [
+        2130,
+        2140
+      ],
+      "new_lines": [
+        2144,
+        2154
+      ],
+      "text_changed": false
+    },
+    {
+      "path": "05-设计与集成/设计与原型链接.md",
+      "old_lines": [
+        2141,
+        2148
+      ],
+      "new_lines": [
+        2155,
+        2161
+      ],
+      "text_changed": true
+    },
+    {
+      "path": "05-设计与集成/技术考量与跨平台集成.md",
+      "old_lines": [
+        2149,
+        2185
+      ],
+      "new_lines": [
+        2162,
+        2198
+      ],
+      "text_changed": false
+    },
+    {
+      "path": "06-规划与治理/成功指标.md",
+      "old_lines": [
+        2186,
+        2200
+      ],
+      "new_lines": [
+        2199,
+        2213
+      ],
+      "text_changed": false
+    },
+    {
+      "path": "06-规划与治理/版本变更历史.md",
+      "old_lines": [
+        2201,
+        2218
+      ],
+      "new_lines": [
+        2214,
+        2234
+      ],
+      "text_changed": true
+    },
+    {
+      "path": "06-规划与治理/原文待解决问题.md",
+      "old_lines": [
+        2219,
+        2233
+      ],
+      "new_lines": [
+        2235,
+        2249
+      ],
+      "text_changed": false
+    },
+    {
+      "path": "06-规划与治理/原文问答.md",
+      "old_lines": [
+        2234,
+        2245
+      ],
+      "new_lines": [
+        2250,
+        2261
+      ],
+      "text_changed": false
+    },
+    {
+      "path": "06-规划与治理/功能时间线与阶段规划.md",
+      "old_lines": [
+        2246,
+        2265
+      ],
+      "new_lines": [
+        2262,
+        2281
+      ],
+      "text_changed": true
+    },
+    {
+      "path": "06-规划与治理/PRD 检查清单.md",
+      "old_lines": [
+        2266,
+        2285
+      ],
+      "new_lines": [
+        2282,
+        2301
+      ],
+      "text_changed": false
+    }
+  ],
+  "preservation": {
+    "original_source_and_images": "08-原始资料/*v1.0.11*",
+    "original_import_manifest": "09-导入记录/导入清单.json",
+    "original_import_report": "09-导入记录/导入说明与校验.md",
+    "original_section_map": "09-导入记录/原文章节映射-v1.0.11.md",
+    "original_modified_cross_index": "09-导入记录/更新前-v1.0.11-商户端与管理后台关联.md",
+    "extract_block_footers": "Preserved from pre-update notes; only appended version notes",
+    "merchant_consumer_source_extracts": "Unchanged"
+  },
+  "validation": {
+    "source_sha256": "0bf4e25ae43e1e91b7c2427ab54931d6b4fc6bc8fede331db4e1622a721f80f0",
+    "source_snapshot_identical": true,
+    "source_lines": 2301,
+    "verbatim_extracts_match": 47,
+    "covered_lines": 2265,
+    "toc_only_in_source_lines": "21-56",
+    "coverage_without_overlap": true,
+    "historical_files_unchanged": true,
+    "original_files_deleted": 0,
+    "extract_footers_preserved": 47,
+    "archived_original_files": 2,
+    "new_image_hashes_match": 7,
+    "images_identical_to_previous_version": 7,
+    "vault_markdown_notes": 195,
+    "wiki_links_resolved": 2402,
+    "local_markdown_links_resolved": 149,
+    "image_links_resolved": 145,
+    "table_link_escaping_valid": true,
+    "business_runtime_verified": false,
+    "obsidian_reading_view_smoke_verified": [
+      "v1.0.14 homepage and module navigation table",
+      "homepage link opens version-difference report",
+      "difference report metadata and tables render in Obsidian 1.14.5"
+    ]
+  },
+  "files": [
+    {
+      "path": "00-知识库首页.md",
+      "bytes": 9166,
+      "sha256": "ab2f244a1eeae96e84396c26fdcce638485191fb0d67b98e16007514bfc63ccb"
+    },
+    {
+      "path": "01-产品与范围/PRD 文档信息.md",
+      "bytes": 1871,
+      "sha256": "9fc65faa08c8d9828e2b9461f12b5b04a2c410a990249a78d46ec17ddf589ee0"
+    },
+    {
+      "path": "01-产品与范围/产品定位、目标与约束.md",
+      "bytes": 4998,
+      "sha256": "ff7abacf7ffad9592698a01364e6f65437106632d7f298a31580e4bf290cc23a"
+    },
+    {
+      "path": "01-产品与范围/用户画像.md",
+      "bytes": 1842,
+      "sha256": "f3531c475a34703c855bfcdf7cf993c7719f4274e23777414c0cc8bbcea05bea"
+    },
+    {
+      "path": "02-业务流程/场景1-商户认证与审批.md",
+      "bytes": 2365,
+      "sha256": "9f76677b73b4c2696fb6dc490ae054e7b82b9b88c748b18a82718051a67a6392"
+    },
+    {
+      "path": "02-业务流程/场景2-商户运营管理.md",
+      "bytes": 2028,
+      "sha256": "e006cc63b8b3dfeecb1ea13a9487a0dfecab2ffbf1c9cb022354cd040a9fc357"
+    },
+    {
+      "path": "02-业务流程/场景3-平台管理.md",
+      "bytes": 1663,
+      "sha256": "f9926df6f4b825bd431978db2f22beef035eb7050107ec8281f4adb90d7c8be0"
+    },
+    {
+      "path": "02-业务流程/场景4-终端用户账户支持与高层工作流.md",
+      "bytes": 2561,
+      "sha256": "5d41714f297da5ec06e91503e28d0d3a17ce727d75768829b2d1b114c07cd9ba"
+    },
+    {
+      "path": "02-业务流程/用户旅程总览.md",
+      "bytes": 1859,
+      "sha256": "a6edb550e0f3ce46da7174e07e335f898fa8599abf4a667026ea19068cb3f4da"
+    },
+    {
+      "path": "03-功能模块/M11-商户认证与审批.md",
+      "bytes": 11807,
+      "sha256": "b1090db9473e71c918d2a948b724897462fc195ae280d5640c793fea0401b159"
+    },
+    {
+      "path": "03-功能模块/M12-商户管理.md",
+      "bytes": 24664,
+      "sha256": "e9721fbcee4f2dfca012441a32fe27f163d1c711039477f2e766ac6268d520d0"
+    },
+    {
+      "path": "03-功能模块/M13-预订管理.md",
+      "bytes": 7388,
+      "sha256": "4845112ff08bfb5fe16bbdc24a7ee80cea3eb2e35a189da43dea98aece7e5198"
+    },
+    {
+      "path": "03-功能模块/M14-活动与促销管理.md",
+      "bytes": 16155,
+      "sha256": "e9703446c1a018fea97b18a83d7004a54f63cee2d8f6cf0ecc693f59139a35b0"
+    },
+    {
+      "path": "03-功能模块/M15-联盟与达人管理.md",
+      "bytes": 7613,
+      "sha256": "9c9934d4c69bb579d941e3fb72a41b0e09a4235a4a582345a8914df1e7fafba0"
+    },
+    {
+      "path": "03-功能模块/M16-用户与角色管理.md",
+      "bytes": 4008,
+      "sha256": "c1e150f3a51e98734b0a8fa1c2c5e1398d4a123dcf958b67c8047a1876b13724"
+    },
+    {
+      "path": "03-功能模块/M17-报表与分析.md",
+      "bytes": 5549,
+      "sha256": "dcf2aa580e149c4ff900bcc778aba6cae5cd47a243bc6e0af541e773cb08e10c"
+    },
+    {
+      "path": "03-功能模块/M18-平台配置与管理.md",
+      "bytes": 5942,
+      "sha256": "9090f12dd7315a1dcf7541973c2510071a6df7b11a721b5650ca9ac58da5ffc5"
+    },
+    {
+      "path": "03-功能模块/M19-库存与可售量管理（仅监控）.md",
+      "bytes": 3749,
+      "sha256": "b3769e4784fb9a701b841c910c29ce713aa5a2b151f37fa59063d69b49cdc5b6"
+    },
+    {
+      "path": "03-功能模块/M20-终端用户管理.md",
+      "bytes": 8737,
+      "sha256": "caae1ade1cb48b4e655f66bb0ac0e46bade6441863ca18fa7915e6cf59624ff5"
+    },
+    {
+      "path": "03-功能模块/M21-帮助中心管理.md",
+      "bytes": 7670,
+      "sha256": "2d912e22d0b8d38221be63d5f4af47cc4eddb75809aa9f996568fd8b58de1c07"
+    },
+    {
+      "path": "03-功能模块/M22-推荐活动.md",
+      "bytes": 3770,
+      "sha256": "ff6d44e37661e33fef281dd597bfa4a53164c24032090c88e70db7aefad496cb"
+    },
+    {
+      "path": "03-功能模块/M23-内容管理.md",
+      "bytes": 3642,
+      "sha256": "6dd060fb04e70c45e6154f841edf48d5141858e5a0a752e7a94d85d1808482a8"
+    },
+    {
+      "path": "03-功能模块/M24-财务管理.md",
+      "bytes": 10031,
+      "sha256": "9d5e7071ea21ed2bb627439d59dfcfe448f8351105fe101cc95a9242eaa3e5f7"
+    },
+    {
+      "path": "03-功能模块/M25-钱包管理.md",
+      "bytes": 7033,
+      "sha256": "705c7ce8e6e2bae0de1a85de649b9f4dcff213bbddd921eb4890675c02dfb35f"
+    },
+    {
+      "path": "04-验收标准/AC11-商户认证与审批.md",
+      "bytes": 4021,
+      "sha256": "7b5f98fb7068f9f38a07eb923d866dbb4e4a9fe43e9d3935c3f418ea66c58a78"
+    },
+    {
+      "path": "04-验收标准/AC12-商户管理.md",
+      "bytes": 2599,
+      "sha256": "7b22ea67fada1c3dae4b5bdeb07323eb33fb645dfaec8571facbe39761351b8e"
+    },
+    {
+      "path": "04-验收标准/AC13-预订管理.md",
+      "bytes": 2254,
+      "sha256": "3d317d9e1c4d0e1cc70be52bc641228d0c5ba3fa4c6fecf7a7749efd4ec49867"
+    },
+    {
+      "path": "04-验收标准/AC14-活动与促销管理.md",
+      "bytes": 2758,
+      "sha256": "1f363580fbe0c44547b78039f3cd3af4262ac634a3919f1fa518ca5346c4b3b7"
+    },
+    {
+      "path": "04-验收标准/AC15-联盟与达人管理.md",
+      "bytes": 2675,
+      "sha256": "ca6c4a332ed23e4f3552e0b1a6473064c033342f72d7bc6863b005052b0832ed"
+    },
+    {
+      "path": "04-验收标准/AC16-用户与角色管理.md",
+      "bytes": 2128,
+      "sha256": "43ebb7c0aa62b8d0abbdd7c360c2ad70ce132103229a79a754f3128f6c71cd4f"
+    },
+    {
+      "path": "04-验收标准/AC17-报表与分析.md",
+      "bytes": 2088,
+      "sha256": "36c600bfcc0b61ac60065ef11ca9fd04deffa35dd4acaf5b26d5807a156947fd"
+    },
+    {
+      "path": "04-验收标准/AC18-平台配置与管理.md",
+      "bytes": 2240,
+      "sha256": "f7d463777c71a412d5fed78859566c86fadfd5c21656e3145e2ff34dcf03bc25"
+    },
+    {
+      "path": "04-验收标准/AC19-库存与可售量管理（仅监控）.md",
+      "bytes": 1951,
+      "sha256": "882289d3717806a75ad2b11f0f7c44537e3a18146f777da9aaddaae81474def1"
+    },
+    {
+      "path": "04-验收标准/AC20-终端用户管理.md",
+      "bytes": 2624,
+      "sha256": "5ee61641b369b9c8a11f868ba81f726fa4e3ed160aa3f62e1423057a63dc07e6"
+    },
+    {
+      "path": "04-验收标准/AC21-帮助中心管理.md",
+      "bytes": 2444,
+      "sha256": "f71de275b99ad1fcba2b3701fa2e46a66e30d148c42625738ea18c8169083fc2"
+    },
+    {
+      "path": "04-验收标准/AC22-推荐活动.md",
+      "bytes": 1837,
+      "sha256": "b574b25dd81c630aae2b03c1573c17f7e3736449a336f64aa3fedf13bb18ccb8"
+    },
+    {
+      "path": "04-验收标准/AC23-内容管理.md",
+      "bytes": 1785,
+      "sha256": "4a464c1edd43a4a79b9a8e36bc309ce0496e8871e707208b74dce015aeb27741"
+    },
+    {
+      "path": "04-验收标准/AC24-财务管理.md",
+      "bytes": 2765,
+      "sha256": "51b3720f1a668c356fb406d40d40e1b3f6c0fe62d4c68833d93cf5e92823bece"
+    },
+    {
+      "path": "04-验收标准/AC25-钱包管理.md",
+      "bytes": 2242,
+      "sha256": "a296ac3c49b5ff446a254cf2b622d83fc95805d4605d63bcba3e305be150d720"
+    },
+    {
+      "path": "04-验收标准/验收汇总说明.md",
+      "bytes": 1375,
+      "sha256": "0669f02723eaa4f778bd835ba5c8d288f9762734fab44d077a552fb84e46d7ec"
+    },
+    {
+      "path": "05-设计与集成/技术考量与跨平台集成.md",
+      "bytes": 3442,
+      "sha256": "3d54b337b16a526a941b8dcc1b1aca46da6a4021d40f39a18817d85bcceb4eef"
+    },
+    {
+      "path": "05-设计与集成/设计与原型链接.md",
+      "bytes": 1448,
+      "sha256": "f4f30238b59d90c16aca08ee9f6d4cbea99d18770f809c935f0c382e434304d6"
+    },
+    {
+      "path": "06-规划与治理/PRD 检查清单.md",
+      "bytes": 1858,
+      "sha256": "53a8db8a8431de2e01b7051e5bafe04851b6a03fba81550d34703f5aaedd2eaf"
+    },
+    {
+      "path": "06-规划与治理/功能时间线与阶段规划.md",
+      "bytes": 2056,
+      "sha256": "f7e5440b28dbe163d481f28ce9e85adf65ef5f8bc5c2112f8a101a802648747e"
+    },
+    {
+      "path": "06-规划与治理/原文待解决问题.md",
+      "bytes": 1785,
+      "sha256": "5907c8f761ff36444e4ca9de8a4a9f3aa8381fd033f47f25db18cedefd01840b"
+    },
+    {
+      "path": "06-规划与治理/原文问答.md",
+      "bytes": 1917,
+      "sha256": "67ccb24fc900213de584a1892c5d59e351679e05e43371f1bec437cc9cbac522"
+    },
+    {
+      "path": "06-规划与治理/待澄清事项.md",
+      "bytes": 12393,
+      "sha256": "5adfa8e72949cb419a5ab0a623f138f8521d2ed932b5670b3a58363c01ff7b54"
+    },
+    {
+      "path": "06-规划与治理/成功指标.md",
+      "bytes": 1574,
+      "sha256": "7406b5f3991b019a1d9c24bd88244cf6ac259c3365bcd0b1b0275dd6b8cb5235"
+    },
+    {
+      "path": "06-规划与治理/版本变更历史.md",
+      "bytes": 7911,
+      "sha256": "7dd224c5fe6b2677257d2b4fd2114af2a3371555a857d49bc945017dfe59c23a"
+    },
+    {
+      "path": "07-专题索引/商户入驻、生命周期与账号安全.md",
+      "bytes": 2635,
+      "sha256": "0a7804c56c633302f91ec0cff7e136564086f20d9bd4073beb5130ecf8838435"
+    },
+    {
+      "path": "07-专题索引/商户端与管理后台关联.md",
+      "bytes": 8847,
+      "sha256": "c6f423e8355e7c285ee701e7920e520d5721c4b646ab42ddb3845bef4267583d"
+    },
+    {
+      "path": "07-专题索引/库存同步与平台监控.md",
+      "bytes": 2488,
+      "sha256": "568ed9853d27d240f5516343089d125aada547d1b99d470c8f2ba268fc3d22f4"
+    },
+    {
+      "path": "07-专题索引/术语与图示索引.md",
+      "bytes": 4188,
+      "sha256": "3a326f7824328999ef7cb6fbe82a0b22cf945ec32e187b15e3481897afb6c23d"
+    },
+    {
+      "path": "07-专题索引/活动促销、预算与客户权益.md",
+      "bytes": 2777,
+      "sha256": "6c85f9772b9071c6b37a76e144eceaf5598095af5ff73a241d0fa880d699aabe"
+    },
+    {
+      "path": "07-专题索引/用户支持、权限与审计.md",
+      "bytes": 2497,
+      "sha256": "0fb11b70aa6cd90a5e0b8511137b84a2dd86baa21b46e20a74fa6710424c9f07"
+    },
+    {
+      "path": "07-专题索引/联盟推荐与非现金奖励.md",
+      "bytes": 3145,
+      "sha256": "136c955603a910af0f80250e59e1a037c84d94252036503de778f7e112efac98"
+    },
+    {
+      "path": "07-专题索引/配置内容、排名与报表.md",
+      "bytes": 2618,
+      "sha256": "2bb4bec3acc881e5c8ab7fb8a5262a8cb635f228692c1f03de4cca83b245beb5"
+    },
+    {
+      "path": "07-专题索引/预订支付、结算与钱包.md",
+      "bytes": 3587,
+      "sha256": "16d643611076ce7862197897904df627eb3be7fdd9f2cdef1cddfe1c7d59c58b"
+    },
+    {
+      "path": "08-原始资料/images_super_admin_v1.0.11/image_01.png",
+      "bytes": 250248,
+      "sha256": "2917b225904538ede0f290e9dd61fb6bbbe88d07b97d24714e60b2223880e198"
+    },
+    {
+      "path": "08-原始资料/images_super_admin_v1.0.11/image_02.png",
+      "bytes": 10197,
+      "sha256": "693c98d758215ad87962d7bbb229d369a809efd83fc146d0b431d23ff7855fe2"
+    },
+    {
+      "path": "08-原始资料/images_super_admin_v1.0.11/image_03.png",
+      "bytes": 10687,
+      "sha256": "d3fbbc194a4a98af543e76ed9a93c0e2a236b407f0f32d178c998b3e04821f8d"
+    },
+    {
+      "path": "08-原始资料/images_super_admin_v1.0.11/image_04.png",
+      "bytes": 751600,
+      "sha256": "7ff4b9d642b0b930cd517794399165c9394f1464ac915d28d2b779b5770d2c60"
+    },
+    {
+      "path": "08-原始资料/images_super_admin_v1.0.11/image_05.png",
+      "bytes": 236413,
+      "sha256": "b9798e4ba8fc58128bd20a3aeac968b81f150cbf36cb172276ad8a200596cfd0"
+    },
+    {
+      "path": "08-原始资料/images_super_admin_v1.0.11/image_06.png",
+      "bytes": 93463,
+      "sha256": "48b6d67635a71e189e7c9bfbd0830005979e573c021cc71269a99c9d32647068"
+    },
+    {
+      "path": "08-原始资料/images_super_admin_v1.0.11/image_07.png",
+      "bytes": 1057355,
+      "sha256": "328f888d8fb85deeee8ed0d64969fb4c31695d57bda8c3db9e47ab0faf00227c"
+    },
+    {
+      "path": "08-原始资料/images_super_admin_v1.0.14/image_01.png",
+      "bytes": 250248,
+      "sha256": "2917b225904538ede0f290e9dd61fb6bbbe88d07b97d24714e60b2223880e198"
+    },
+    {
+      "path": "08-原始资料/images_super_admin_v1.0.14/image_02.png",
+      "bytes": 10197,
+      "sha256": "693c98d758215ad87962d7bbb229d369a809efd83fc146d0b431d23ff7855fe2"
+    },
+    {
+      "path": "08-原始资料/images_super_admin_v1.0.14/image_03.png",
+      "bytes": 10687,
+      "sha256": "d3fbbc194a4a98af543e76ed9a93c0e2a236b407f0f32d178c998b3e04821f8d"
+    },
+    {
+      "path": "08-原始资料/images_super_admin_v1.0.14/image_04.png",
+      "bytes": 751600,
+      "sha256": "7ff4b9d642b0b930cd517794399165c9394f1464ac915d28d2b779b5770d2c60"
+    },
+    {
+      "path": "08-原始资料/images_super_admin_v1.0.14/image_05.png",
+      "bytes": 236413,
+      "sha256": "b9798e4ba8fc58128bd20a3aeac968b81f150cbf36cb172276ad8a200596cfd0"
+    },
+    {
+      "path": "08-原始资料/images_super_admin_v1.0.14/image_06.png",
+      "bytes": 93463,
+      "sha256": "48b6d67635a71e189e7c9bfbd0830005979e573c021cc71269a99c9d32647068"
+    },
+    {
+      "path": "08-原始资料/images_super_admin_v1.0.14/image_07.png",
+      "bytes": 1057355,
+      "sha256": "328f888d8fb85deeee8ed0d64969fb4c31695d57bda8c3db9e47ab0faf00227c"
+    },
+    {
+      "path": "08-原始资料/mTrip_Super_Admin_Portal_PRD_Enterprise_v1.0.11_中文版.md",
+      "bytes": 135089,
+      "sha256": "af2c919e78b846cbab6eb2546c2f2cb099dbc45f2862ab7c456a233045dabb0f"
+    },
+    {
+      "path": "08-原始资料/mTrip_Super_Admin_Portal_PRD_Enterprise_v1.0.14_中文版.md",
+      "bytes": 137950,
+      "sha256": "0bf4e25ae43e1e91b7c2427ab54931d6b4fc6bc8fede331db4e1622a721f80f0"
+    },
+    {
+      "path": "09-导入记录/v1.0.11-v1.0.14.diff",
+      "bytes": 17541,
+      "sha256": "cef2d81a5f344c7ef6eb4bd072f6485855a762818c2368a455a9106b1daed30e"
+    },
+    {
+      "path": "09-导入记录/v1.0.11至v1.0.14差异与跨端影响.md",
+      "bytes": 11595,
+      "sha256": "165ba5eb6aa50ccbca8a6ee8f3f206116375446893d9cbd6ad8bbdca536dc066"
+    },
+    {
+      "path": "09-导入记录/v1.0.14-更新说明与校验.md",
+      "bytes": 4366,
+      "sha256": "89add21b818acec79821decb49b3e1d5ab184f263fc428ce659e8520129681a7"
+    },
+    {
+      "path": "09-导入记录/原文章节映射-v1.0.11.md",
+      "bytes": 6513,
+      "sha256": "48879b2f3baccd701e2c5c79eb7cf7e403fbf358e18d520befad3eb5fc25340a"
+    },
+    {
+      "path": "09-导入记录/原文章节映射.md",
+      "bytes": 6531,
+      "sha256": "29e9d28e6399cbf574862837af726303e6215b39d44d4d6a0809763842778522"
+    },
+    {
+      "path": "09-导入记录/导入清单.json",
+      "bytes": 18509,
+      "sha256": "80fbd16bc17a0ad70be4b8c7fb52b2c9032e1b2df556157b7041f3636899242d"
+    },
+    {
+      "path": "09-导入记录/导入说明与校验.md",
+      "bytes": 2752,
+      "sha256": "19d96ca95ffa187531bbd1ed361a8945c6a2a6aa7bc7506447ce7348da2d6d58"
+    },
+    {
+      "path": "09-导入记录/更新前-v1.0.11-商户端与管理后台关联.md",
+      "bytes": 7275,
+      "sha256": "90649f50e58630190c765dc44a37a36799b8c580cdef96156c7d2b523e19d68f"
+    }
+  ],
+  "related_files": [
+    {
+      "path": "obsidian/mTrip_obsidian/00-mTrip 产品知识库.md",
+      "sha256": "c0a4dde24c7ae8a01aa5975e3d667f7a1f22246ddf050caa0f9108a0be998b59"
+    },
+    {
+      "path": "obsidian/mTrip_obsidian/mTrip 商户 App 知识库/00-知识库首页.md",
+      "sha256": "231673b9a11fb6ad08e4e1cb8484fa6c36332c38a7c8cf7dd110cbdf0cd6d4fb"
+    },
+    {
+      "path": "obsidian/mTrip_obsidian/mTrip 消费者 App 知识库/00-知识库首页.md",
+      "sha256": "2e50a86c12f5aaf198959b5e7638470f9b031d4ed057656a961399d62b9f7343"
+    },
+    {
+      "path": "obsidian/mTrip_obsidian/mTrip 消费者 App 知识库/07-专题索引/消费者、商户与管理后台关联.md",
+      "sha256": "c499cb87f8433d4708bf3c891f07b09f4880f05d372186dd350ad81185aba829"
+    },
+    {
+      "path": "obsidian/README.md",
+      "sha256": "0be7f76bfe63b45c8ad3e253651205efc522542abeb7c35ff52d5e9d10ad6f58"
+    }
+  ]
+}
