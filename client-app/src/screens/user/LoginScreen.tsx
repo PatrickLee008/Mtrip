@@ -6,8 +6,9 @@
  * → 登录 → 分隔线 → 三方登录。
  *
  * 设计稿实测(外壳部分的取值见 AuthShell 顶部注释):
- *   表单卡   --tab #FEFEFE,圆角 32,padding 24,gap 8
- *   输入框   #EFF4FF,高 52,圆角 12,padding 16,行内 gap 12;两框之间 gap 16
+ *   表单卡   --tab #FEFEFE,圆角 24,padding 24,gap 8
+ *   输入框   `--secondary` #D9E1FB,高 52,圆角 12,padding 16,行内 gap 12;两框之间 gap 16
+ *   记住我行 左「Remember me」Inter 400/16 `--text`;右「Forgot Password」Inter 400/12(行高 24)`--tertiary` #EC1317
  *   登录按钮 主色,py16,圆角 12,文字 Outfit 400/16;未填完时整体 50% 透明(设计稿即禁用态)
  *   三方按钮 高 48,圆角 12,px31,1px --secondary 描边
  *
@@ -18,8 +19,8 @@
  * 未实现的能力(设计稿有、后端没有),一律走 comingSoon:
  *   区号选择(固定 +95)、Google 登录(Apple 已接 Web)(Facebook 已接 Web)
  *
- * **设计稿之外新增的两个入口**(接入 SMSPoh 短信验证后才有的能力,Onboarding 四张稿都没画):
- *   「忘记密码」—— 与记住我同一行贴右端,去 `ForgotPassword`
+ * 「忘记密码」入口设计稿已补(505:1293 的 `3578:10083`):与记住我同一行贴右端,去 `ForgotPassword`。
+ * **设计稿之外新增的入口**(接入 SMSPoh 短信验证后才有的能力):
  *   「验证码登录」—— 主登录按钮下方的描边次要按钮,复用本页已填的手机号发码(scene=login),
  *                    验证通过后由验证码页直接调 `userStore.loginBySms`,不另开一页填号码
  */
@@ -187,7 +188,7 @@ export default function LoginScreen() {
           </View>
         </View>
 
-        {/* 设计稿这一行只有「记住我」;忘记密码是本次接短信验证后新增的入口,贴右端不挤原有元素 */}
+        {/* 记住我 + 右端忘记密码(505:1293 `3578:10079` / `3578:10083`) */}
         <View style={styles.optionsRow}>
           <Pressable
             style={({ pressed }) => [styles.rememberRow, pressed && styles.pressed]}
@@ -266,7 +267,7 @@ const styles = StyleSheet.create({
   card: {
     width: '100%',
     backgroundColor: colors.surface,
-    borderRadius: radius.card,
+    borderRadius: 24,
     padding: 24,
     gap: 8,
   },
@@ -278,7 +279,7 @@ const styles = StyleSheet.create({
     height: 52,
     paddingHorizontal: 16,
     borderRadius: radius.btn,
-    backgroundColor: colors.tintBg,
+    backgroundColor: colors.softBlue,
   },
   codeBtn: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   codeText: {
@@ -295,8 +296,9 @@ const styles = StyleSheet.create({
 
   optionsRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
   rememberRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  rememberText: { fontFamily: fonts.inter, fontSize: 16, lineHeight: 24, color: colors.muted },
-  linkText: { fontFamily: fonts.inter, fontSize: 14, lineHeight: 20, color: '#204DDA' },
+  rememberText: { fontFamily: fonts.inter, fontSize: 16, lineHeight: 24, color: colors.heading },
+  /* 稿面 --tertiary #EC1317 == theme 的 colors.hot */
+  linkText: { fontFamily: fonts.inter, fontSize: 12, lineHeight: 24, color: colors.hot },
 
   /* 验证码登录:主色描边的次要按钮,与推荐码页的 Skip 同款,避免与主登录按钮抢焦点 */
   smsLoginBtn: {

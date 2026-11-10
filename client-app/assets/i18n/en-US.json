@@ -702,17 +702,27 @@
       "skip": "Skip"
     },
     "forgot": {
-      "entry": "Forgot password?",
+      "entry": "Forgot Password",
       "title": "Forgot Password",
-      "subtitle": "Enter your mobile number and we will send you a verification code to reset your password.",
-      "continue": "Send Code"
+      "subtitle": "Enter your registered phone number and we’ll send you a verification code to reset your password.",
+      "continue": "Send OTP",
+      "heading": "Verify your phone number",
+      "mobilePlaceholder": "enter phone number",
+      "cancel": "Cancel",
+      "notEligibleTitle": "Account not eligible",
+      "notEligibleMessage": "We couldn’t continue with your password reset. Please check your phone number and try again.",
+      "retry": "Retry"
     },
     "reset": {
       "title": "Set New Password",
-      "subtitle": "Choose a new password for your account.",
-      "newPasswordPlaceholder": "Enter new password",
-      "submit": "Reset Password",
-      "success": "Password reset. Please sign in with your new password."
+      "newPasswordPlaceholder": "enter new password",
+      "submit": "Continue",
+      "heading": "Set your new password",
+      "confirmPlaceholder": "confirm new password",
+      "hint": "Password must be 6-32 characters and include at least 1 capital letter and 1 number.",
+      "successTitle": "Password Set",
+      "successMessage": "You have successfully set a new password.",
+      "backToLogin": "Back to login"
     },
     "smsLogin": {
       "entry": "Sign in with verification code"

@@ -291,7 +291,8 @@ const styles = StyleSheet.create({
   card: {
     width: '100%',
     backgroundColor: colors.surface,
-    borderRadius: radius.card,
+    /* 稿面(505:1498 Form Section)圆角 24 */
+    borderRadius: 24,
     padding: 24,
     gap: 8,
   },
@@ -303,7 +304,8 @@ const styles = StyleSheet.create({
     height: 52,
     paddingHorizontal: 16,
     borderRadius: radius.btn,
-    backgroundColor: colors.tintBg,
+    /* 稿面输入框是 `--secondary` #D9E1FB(与登录页、忘记密码页一致) */
+    backgroundColor: colors.softBlue,
   },
   codeBtn: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   codeText: {

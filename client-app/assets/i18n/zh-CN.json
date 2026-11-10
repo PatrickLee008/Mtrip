@@ -702,17 +702,27 @@
       "skip": "跳过"
     },
     "forgot": {
-      "entry": "忘记密码?",
+      "entry": "忘记密码",
       "title": "忘记密码",
-      "subtitle": "输入你的手机号,我们会发送验证码用于重置密码。",
-      "continue": "发送验证码"
+      "subtitle": "输入已注册的手机号,我们会发送验证码用于重置密码。",
+      "continue": "发送验证码",
+      "heading": "验证你的手机号",
+      "mobilePlaceholder": "请输入手机号",
+      "cancel": "取消",
+      "notEligibleTitle": "无法重置该账号",
+      "notEligibleMessage": "暂时无法继续重置密码,请检查手机号后重试。",
+      "retry": "重试"
     },
     "reset": {
       "title": "设置新密码",
-      "subtitle": "请为你的账号设置一个新密码。",
       "newPasswordPlaceholder": "请输入新密码",
-      "submit": "重置密码",
-      "success": "密码已重置,请用新密码登录"
+      "submit": "继续",
+      "heading": "设置新密码",
+      "confirmPlaceholder": "请再次输入新密码",
+      "hint": "密码须为 6-32 位,且至少包含 1 个大写字母和 1 个数字。",
+      "successTitle": "密码已设置",
+      "successMessage": "新密码已设置成功。",
+      "backToLogin": "返回登录"
     },
     "smsLogin": {
       "entry": "使用验证码登录"

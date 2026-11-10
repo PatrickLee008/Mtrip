@@ -8,6 +8,10 @@
  *   logo   框 100x74,内部图片放大后裁切
  *
  * 卡片本身不在这里 —— 登录/注册卡是 gap 8 无描边,验证码/推荐码卡是 gap 24 带 `--secondary` 描边。
+ *
+ * 忘记密码改版稿(`3602:9946` / `3606:10208` / `3606:10672` / `3606:10832`)**没有顶部栏**
+ * (没有返回键、没有右上角入口,退出靠卡片里的 Cancel / Change phone number),
+ * 但 Main 仍是 pt68。所以 `onBack` / `actionLabel` 都不传时只留 68 高的空白占位,不画渐变和按钮。
  */
 
 import React from 'react';
@@ -27,15 +31,17 @@ const LOGO = require('../../../assets/images/login/logo-badge.png');
 const TOP_BAR_HEIGHT = 68;
 
 interface AuthShellProps {
-  /** 顶部栏右侧文字链(登录页是 Sign Up,其余是 Sign In) */
-  actionLabel: string;
-  onAction: () => void;
-  onBack: () => void;
+  /** 顶部栏右侧文字链(登录页是 Sign Up,其余是 Sign In);不传则不显示 */
+  actionLabel?: string;
+  onAction?: () => void;
+  /** 返回键;与 actionLabel 都不传时整条顶部栏只保留占位高度 */
+  onBack?: () => void;
   children: React.ReactNode;
 }
 
 export default function AuthShell({ actionLabel, onAction, onBack, children }: AuthShellProps) {
   const { t } = useTranslation();
+  const hasTopBar = !!onBack || !!actionLabel;
   return (
     <View style={styles.root}>
       {/**
@@ -48,39 +54,49 @@ export default function AuthShell({ actionLabel, onAction, onBack, children }: A
       </View>
 
       <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
-        {/* 顶部栏:自上而下由主色 50% 渐隐到透明 */}
-        <View style={styles.topBar}>
-          <Svg style={StyleSheet.absoluteFill} width="100%" height="100%">
-            <Defs>
-              <LinearGradient id="topBarGrad" x1="0" y1="0" x2="0" y2="1">
-                <Stop offset="0" stopColor={colors.primary} stopOpacity={0.5} />
-                <Stop offset="1" stopColor={colors.primary} stopOpacity={0} />
-              </LinearGradient>
-            </Defs>
-            <Rect x="0" y="0" width="100%" height="100%" fill="url(#topBarGrad)" />
-          </Svg>
+        {/* 顶部栏:自上而下由主色 50% 渐隐到透明;忘记密码改版稿没有顶部栏,只留占位 */}
+        {hasTopBar ? (
+          <View style={styles.topBar}>
+            <Svg style={StyleSheet.absoluteFill} width="100%" height="100%">
+              <Defs>
+                <LinearGradient id="topBarGrad" x1="0" y1="0" x2="0" y2="1">
+                  <Stop offset="0" stopColor={colors.primary} stopOpacity={0.5} />
+                  <Stop offset="1" stopColor={colors.primary} stopOpacity={0} />
+                </LinearGradient>
+              </Defs>
+              <Rect x="0" y="0" width="100%" height="100%" fill="url(#topBarGrad)" />
+            </Svg>
 
-          <Pressable
-            style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]}
-            onPress={onBack}
-            hitSlop={8}
-          >
-            <HomeIcon name="arrowLeft" size={20} color="#FFFFFF" />
-          </Pressable>
+            {onBack ? (
+              <Pressable
+                style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]}
+                onPress={onBack}
+                hitSlop={8}
+              >
+                <HomeIcon name="arrowLeft" size={20} color="#FFFFFF" />
+              </Pressable>
+            ) : (
+              <View />
+            )}
 
-          {/**
-           * 右上角登录/注册入口:改版稿(Figma Onboarding `2540:13083` 的 Login `2540:13084`
-           * 与 Signup `2540:13284`)把原来的纯文字链改成**深色药丸按钮** ——
-           * 黑 25% 底、圆角 20、px12 py8,文字 Inter SemiBold 20/24 白色(原为 16/24 纯文字)。
-           */}
-          <Pressable
-            style={({ pressed }) => [styles.actionPill, pressed && styles.pressed]}
-            onPress={onAction}
-            hitSlop={8}
-          >
-            <Text style={styles.action}>{actionLabel}</Text>
-          </Pressable>
-        </View>
+            {/**
+             * 右上角登录/注册入口:改版稿(Figma Onboarding `2540:13083` 的 Login `2540:13084`
+             * 与 Signup `2540:13284`)把原来的纯文字链改成**深色药丸按钮** ——
+             * 黑 25% 底、圆角 20、px12 py8,文字 Inter SemiBold 20/24 白色(原为 16/24 纯文字)。
+             */}
+            {actionLabel ? (
+              <Pressable
+                style={({ pressed }) => [styles.actionPill, pressed && styles.pressed]}
+                onPress={onAction}
+                hitSlop={8}
+              >
+                <Text style={styles.action}>{actionLabel}</Text>
+              </Pressable>
+            ) : null}
+          </View>
+        ) : (
+          <View style={styles.topBarSpacer} />
+        )}
 
         <ScrollView
           style={styles.flex}
@@ -124,6 +140,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 20,
   },
+  topBarSpacer: { height: TOP_BAR_HEIGHT },
   backBtn: {
     padding: 8,
     borderRadius: 20,

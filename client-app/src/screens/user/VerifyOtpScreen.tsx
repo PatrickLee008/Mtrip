@@ -21,6 +21,11 @@
  * 已经发过一条,这里挂载时再发一次就会连发两条、白烧一条短信,也会把重发冷却直接触发。
  * 所以倒计时按上一屏返回的 `resendAfter` 起跳,只有点「Resend OTP」才真的再发。
  *
+ * **reset 场景按忘记密码改版稿**(`3606:10208` 空态 / `3606:10672` 填满态)换一套外观,
+ * 结构与上面完全相同,只差这些取值(register / login 仍按 Signup 稿):
+ *   外壳无顶部栏(AuthShell 不传 onBack / actionLabel);卡片圆角 24、gap 8、无描边无投影;
+ *   标题 20/32;说明拆成三行(号码单独一行);「Resend OTP」`--text-2`;「Change phone number」主色 #4169ED。
+ *
  * 对设计稿的两处偏离(设计稿只画了注册场景的静态页):
  *   1. 格子数量改为按后端下发的 `pinLength` 渲染(后台可配 4~8,默认 6 与设计稿一致)——
  *      写死 6 格而后台配了 4 位的话,用户永远填不满、Continue 永远点不亮。
@@ -77,6 +82,8 @@ export default function VerifyOtpScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const params = useRoute<RouteProp<RootStackParamList, 'VerifyOtp'>>().params;
   const { scene, mobile, draft, maskedMobile } = params;
+  /** 忘记密码改版稿的外观(见文件头) */
+  const resetLook = scene === 'reset';
   const showToast = useCommonStore((s) => s.showToast);
   const loginBySms = useUserStore((s) => s.loginBySms);
 
@@ -199,17 +206,19 @@ export default function VerifyOtpScreen() {
 
   return (
     <AuthShell
-      actionLabel={t('user.loginTitle')}
-      onAction={() => navigation.navigate('Login')}
-      onBack={() => navigation.goBack()}
+      actionLabel={resetLook ? undefined : t('user.loginTitle')}
+      onAction={resetLook ? undefined : () => navigation.navigate('Login')}
+      onBack={resetLook ? undefined : () => navigation.goBack()}
     >
-      <View style={styles.card}>
+      <View style={[styles.card, resetLook && styles.cardReset]}>
         <View style={styles.header}>
-          <Text style={styles.title}>{t('user.otp.title')}</Text>
+          <Text style={[styles.title, resetLook && styles.titleReset]}>{t('user.otp.title')}</Text>
           <Text style={styles.desc}>
             {t('user.otp.sentTo')}
+            {/* reset 稿(3759:10626)把说明拆成三段:发送对象 / 号码 / 提示,其余场景保持连排 */}
+            {resetLook ? '\n' : null}
             <Text style={styles.descStrong}>{maskedMobile ?? maskMobile(mobile)}</Text>
-            {'. '}
+            {resetLook ? '.\n' : '. '}
             <Text style={styles.descStrong}>{t('user.otp.enterBelow')}</Text>
           </Text>
         </View>
@@ -248,7 +257,9 @@ export default function VerifyOtpScreen() {
               onPress={() => void resend()}
               hitSlop={8}
             >
-              <Text style={styles.resendText}>{t('user.otp.resend')}</Text>
+              <Text style={[styles.resendText, resetLook && styles.resendTextReset]}>
+                {t('user.otp.resend')}
+              </Text>
             </Pressable>
           </View>
 
@@ -270,7 +281,9 @@ export default function VerifyOtpScreen() {
           onPress={() => navigation.goBack()}
           hitSlop={8}
         >
-          <Text style={styles.footerLink}>{t('user.otp.changePhone')}</Text>
+          <Text style={[styles.footerLink, resetLook && styles.footerLinkReset]}>
+            {t('user.otp.changePhone')}
+          </Text>
         </Pressable>
       </View>
     </AuthShell>
@@ -289,6 +302,14 @@ const styles = StyleSheet.create({
     gap: 24,
     ...shadows.card,
   },
+  /* 忘记密码改版稿 3606:10208:圆角 24、gap 8、去掉描边与投影 */
+  cardReset: {
+    borderRadius: 24,
+    borderWidth: 0,
+    gap: 8,
+    shadowOpacity: 0,
+    elevation: 0,
+  },
 
   header: { width: '100%', alignItems: 'center' },
   title: {
@@ -299,6 +320,7 @@ const styles = StyleSheet.create({
     color: colors.heading,
     textAlign: 'center',
   },
+  titleReset: { fontSize: 20 },
   /* 设计稿左右各留 27.81 的内边距,让说明文案折成两行 */
   desc: {
     paddingHorizontal: 27.81,
@@ -339,6 +361,7 @@ const styles = StyleSheet.create({
     color: colors.label,
     textAlign: 'center',
   },
+  resendTextReset: { color: colors.textSoft },
 
   cta: {
     alignItems: 'center',
@@ -357,5 +380,6 @@ const styles = StyleSheet.create({
   },
 
   footerLink: { fontFamily: fonts.inter, fontSize: 16, lineHeight: 24, color: '#204DDA' },
+  footerLinkReset: { color: colors.primary },
   pressed: { opacity: 0.85 },
 });
