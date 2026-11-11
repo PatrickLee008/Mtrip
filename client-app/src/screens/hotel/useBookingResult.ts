@@ -22,13 +22,23 @@
  *      (实测第二次调用返回 `40901 订单不是待支付状态`,余额只动一次)。
  *      但正因为它是报错而不是静默成功,「其实已扣款、只是响应丢了」的情况下用户会看到一句
  *      莫名其妙的错误 —— 所以 `repay` 的 catch 里重读订单,**发现已经是已支付就当成功**。
+ *      钱包部分抵扣(PRD 模块 25,2026-11-11):重付与向导同一规则(`payPendingWithWallet`)——
+ *      钱包够付全额就钱包付;不够且站点开通 MMQR 就钱包先抵扣、剩余进扫码页(此时返回 false,页面已跳走)。
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import { fetchOrderDetail, payOrder } from '@/api/order';
-import { apiTripPay, fetchTripDetail, type TripBookingRow } from '@/api/trip';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { useTranslation } from 'react-i18next';
+
+import { fetchOrderDetail } from '@/api/order';
+import { PAY_METHOD, getPayMethods, isMethodEnabled } from '@/api/pay';
+import { fetchTripDetail, type TripBookingRow } from '@/api/trip';
 import { ORDER_STATUS } from '@/config/global';
+import type { RootStackParamList } from '@/navigation/types';
+import { mmqrRouteParams, payPendingWithWallet } from '@/screens/pay/mmqrPay';
+import { useSiteStore } from '@/store/siteStore';
 import { useUserStore } from '@/store/userStore';
 import type { OrderDetail } from '@/types/models';
 
@@ -83,6 +93,9 @@ function parseServerTime(value: string | null | undefined): number | null {
 
 export function useBookingResult(p: BookingResultParams): BookingResult {
   const refreshProfile = useUserStore((s) => s.refreshProfile);
+  const { t } = useTranslation();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const currency = useSiteStore((s) => s.currency);
 
   const [order, setOrder] = useState<OrderDetail | null>(null);
   const [bookings, setBookings] = useState<TripBookingRow[]>([]);
@@ -175,14 +188,34 @@ export function useBookingResult(p: BookingResultParams): BookingResult {
     setPaying(true);
     try {
       /* 只对已有的单发起支付 —— 这里**没有**也不该有任何 create 调用 */
-      if (p.tripId && p.tripId > 0) {
-        await apiTripPay({ tripId: p.tripId, payMethod: 3 });
-      } else if (p.orderId) {
-        await payOrder(p.orderId);
-      } else {
+      const target = { orderId: p.orderId, tripId: p.tripId && p.tripId > 0 ? p.tripId : undefined };
+      if (!target.tripId && !target.orderId) return false;
+      /* 钱包够不够要按最新余额与后台限额判断:现取资料与渠道表(渠道接口失败按只有钱包处理) */
+      await refreshProfile().catch(() => undefined);
+      const methods = await getPayMethods(currency || undefined).catch(() => null);
+      const list = Array.isArray(methods) ? methods : null;
+      const payable = target.tripId
+        ? (tripPayAmount ?? Number((await fetchTripDetail(target.tripId)).pay_amount)) || 0
+        : Number(order?.pay_amount ?? (await fetchOrderDetail(target.orderId as number)).pay_amount) || 0;
+      const outcome = await payPendingWithWallet(target, {
+        payable,
+        balance: Number(useUserStore.getState().profile?.balance ?? 0),
+        methods: list,
+        mmqrEnabled: isMethodEnabled(list, PAY_METHOD.MMQR, currency || undefined),
+      });
+      void refreshProfile().catch(() => undefined);
+      if (outcome.kind === 'insufficient') {
+        setFailReason(t('order.balanceInsufficient'));
         return false;
       }
-      void refreshProfile().catch(() => undefined);
+      if (outcome.kind === 'mmqr') {
+        /* 钱包已抵扣,剩余进扫码页;付完扫码页回预订详情 */
+        navigation.navigate(
+          'MmqrPay',
+          mmqrRouteParams(outcome.res, { ...target, detailRoute: 'BookingDetail', useWallet: outcome.useWallet }),
+        );
+        return false;
+      }
       setFailReason('');
       setStatus('confirmed');
       /* 重读一次:状态行与金额都改以接口为准,不靠前端猜 */
@@ -210,7 +243,7 @@ export function useBookingResult(p: BookingResultParams): BookingResult {
       inFlight.current = false;
       setPaying(false);
     }
-  }, [p.orderId, p.tripId, refreshProfile, load]);
+  }, [p.orderId, p.tripId, refreshProfile, load, currency, tripPayAmount, order, navigation, t]);
 
   return {
     status,

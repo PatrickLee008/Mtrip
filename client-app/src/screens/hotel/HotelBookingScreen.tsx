@@ -16,6 +16,11 @@
  * 两种模式(真实 / 演示)、只开通钱包余额渠道、加购与多住宿不提交、优惠券由服务端试算,
  * 这些约定的完整说明见该 Hook 的头部注释。本文件只负责完整模式的排版。
  *
+ * 钱包部分抵扣(PRD 模块 25,2026-11-11):钱包卡「Use wallet」开关默认开(后台 autoApply),抵扣
+ * min(余额, 单笔限额, 应付);付不清的剩余由 MMQR 付。核对页 / 支付页的价格汇总显示抵扣额与还需另付,
+ * 开着且抵扣了金额时钱包卡下放「mTrip Wallet Applied」小卡(`3465:9396`)。支付页汇总卡按
+ * 「Hotel Payment - mTrip Wallet」`3465:8719`:付清时合计 MMK 0 +「Zero Out of Pocket」。
+ *
  * 走 comingSoon 的:区号选择、Save Info、优惠券、Pay by other / Share、Payment Summary 展开、
  * 新增卡片、Add Hotel and Homestay 的二次搜索(演示模式下直接把设计稿的第二段住宿加进来)。
  */
@@ -32,6 +37,7 @@ import BookingBottomBar from '@/components/hotel/booking/BookingBottomBar';
 import BookingProgress from '@/components/hotel/booking/BookingProgress';
 import BookingStepDates from '@/components/hotel/booking/BookingStepDates';
 import BookingStepDetails from '@/components/hotel/booking/BookingStepDetails';
+import WalletAppliedPod from '@/components/hotel/booking/WalletAppliedPod';
 import WalletCard from '@/components/hotel/booking/WalletCard';
 import PayAtHotelNotice from '@/components/hotel/PayAtHotelNotice';
 import BookingStepGuests from '@/components/hotel/booking/BookingStepGuests';
@@ -88,9 +94,13 @@ export default function HotelBookingScreen() {
     toggleAddon,
     addSecondStay,
     method,
-    setMethod,
     selectMethod,
     mmqrEnabled,
+    walletOn,
+    setWalletOn,
+    walletCap,
+    walletApplied,
+    remainingDue,
     expanded,
     setExpanded,
     walletBalance,
@@ -128,6 +138,21 @@ export default function HotelBookingScreen() {
   } = useBookingWizard({ params: route.params, successRoute: 'BookingSuccess' });
   /** 多酒店行程:两段及以上住宿(第 2 步 Stay 卡片、第 3 步首卡眉头) */
   const multiHotel = hotelStays.length > 1;
+
+  /* ---------------------------------------------------------------- 钱包部分抵扣 */
+  /** 真实下单态才提示余额问题(演示 / 未登录的余额是设计稿数值) */
+  const realPay = !current.demo && isLogin;
+  /** 开着钱包却一分都抵不了(余额 0):红字「余额不足」 */
+  const walletEmpty = realPay && walletOn && walletApplied <= 0 && payableTotal > 0;
+  /** 付不清:灰字「剩余 X 用其他方式支付」 */
+  const walletNote =
+    walletOn && walletApplied > 0 && remainingDue > 0
+      ? t('hotels.booking.wallet.remainingNote', { amount: formatMoney(remainingDue, currency) })
+      : null;
+  const walletPod =
+    walletOn && walletApplied > 0 ? (
+      <WalletAppliedPod balance={walletBalance} applied={walletApplied} due={remainingDue} cap={walletCap} />
+    ) : null;
 
   const renderStep = () => {
     switch (step) {
@@ -216,7 +241,11 @@ export default function HotelBookingScreen() {
                   ? { name: appliedCoupon.name, discount: appliedCoupon.discount }
                   : null
               }
-              walletCredit={walletCovers ? payableTotal : 0}
+              /**
+               * 钱包抵扣额(部分抵扣也列):明细「Wallet Credit Used」行,合计 = 还需另付。
+               * 只有多房间(钱包与券都在这一步)才列;单房型的券与钱包都在支付步,这里列了合计会对不上。
+               */
+              walletCredit={cartMode && walletOn ? walletApplied : 0}
               walletSlot={
                 cartMode ? (
                   <View style={styles.walletSlot}>
@@ -235,10 +264,12 @@ export default function HotelBookingScreen() {
                   ) : null}
                   <WalletCard
                     balance={walletBalance}
-                    insufficient={!current.demo && isLogin && method === 'wallet' && !walletCovers}
+                    insufficient={walletEmpty}
+                    note={walletNote}
                     onInfo={comingSoon}
-                    toggle={{ on: method === 'wallet', onChange: (on) => setMethod(on ? 'wallet' : null) }}
+                    toggle={{ on: walletOn, onChange: setWalletOn }}
                   />
+                  {walletPod}
                   </View>
                 ) : null
               }
@@ -320,8 +351,34 @@ export default function HotelBookingScreen() {
                 viewDetailsLabel={t('hotels.booking.payment.viewDetails')}
                 onViewDetails={() => navigation.navigate('StayDetail', { index: 0 })}
                 totalLabel={t('hotels.booking.review.totalAmount')}
-                /* 多房间新稿:钱包已挪到第 2 步,这里不再有钱包胶囊;多一行支付时限 */
-                pointsLabel={cartMode ? '' : parts.pointsLabel}
+                /* 用了钱包:主色「Wallet applied」胶囊(3465:9461);否则多房间不显示、单房型显示积分 */
+                pointsLabel={
+                  walletApplied > 0
+                    ? t('hotels.booking.payment.walletApplied')
+                    : cartMode
+                      ? ''
+                      : parts.pointsLabel
+                }
+                pointsAccent={walletApplied > 0}
+                /* 部分抵扣:合计上方列订单总额与钱包抵扣,合计是还需另付的部分 */
+                walletLines={
+                  walletApplied > 0 && remainingDue > 0
+                    ? [
+                        {
+                          key: 'orderTotal',
+                          label: t('hotels.booking.wallet.orderTotal'),
+                          value: formatMoney(payableTotal, currency),
+                        },
+                        {
+                          key: 'wallet',
+                          label: t('hotels.booking.review.walletCredit'),
+                          value: `- ${formatMoney(walletApplied, currency)}`,
+                          accent: true,
+                        },
+                      ]
+                    : null
+                }
+                totalTag={walletCovers && walletApplied > 0 ? t('hotels.booking.wallet.zeroOutOfPocket') : null}
                 payWithin={
                   cartMode
                     ? {
@@ -330,7 +387,7 @@ export default function HotelBookingScreen() {
                       }
                     : null
                 }
-                total={formatMoney(payableTotal, currency)}
+                total={formatMoney(remainingDue, currency)}
                 payByOtherLabel={t('hotels.booking.payment.payByOther')}
                 shareLabel={t('hotels.booking.payment.share')}
                 onShare={comingSoon}
@@ -339,9 +396,13 @@ export default function HotelBookingScreen() {
             method={method}
             expanded={expanded}
             balance={walletBalance}
-            insufficient={!current.demo && isLogin && walletBalance < payableTotal}
-            /* 多房间新稿:钱包挪到第 2 步,第 3 步只剩折叠的其他渠道 */
+            insufficient={walletEmpty}
+            /* 多房间新稿:钱包挪到第 2 步,第 3 步只剩折叠的其他渠道(抵扣小卡仍显示,说明钱包已抵多少) */
             hideWallet={cartMode}
+            walletToggle={cartMode ? undefined : { on: walletOn, onChange: setWalletOn }}
+            walletNote={walletNote}
+            walletPod={walletPod}
+            walletCovers={walletCovers}
             payAtHotel={payAtHotel}
             /* KBZPay MMQR 由 `/app/order/pay/methods` 决定是否可选(失败时只有余额) */
             mmqrEnabled={mmqrEnabled}

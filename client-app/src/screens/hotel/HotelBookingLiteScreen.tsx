@@ -72,6 +72,10 @@ export default function HotelBookingLiteScreen() {
     selectMethod,
     mmqrEnabled,
     walletEnabled,
+    walletOn,
+    walletApplied,
+    remainingDue,
+    walletCovers,
     walletBalance,
     payableTotal,
     addonOptions,
@@ -154,7 +158,12 @@ export default function HotelBookingLiteScreen() {
               longstayDiscount={longstayDiscount}
               method={method}
               balance={walletBalance}
-              insufficient={!current.demo && isLogin && walletBalance < payableTotal}
+              /* 钱包部分抵扣(PRD 模块 25):勾选框是开关,抵扣 min(余额, 单笔限额, 应付),剩余由 MMQR 付 */
+              insufficient={!current.demo && isLogin && walletOn && walletApplied <= 0 && payableTotal > 0}
+              walletOn={walletOn}
+              walletApplied={walletApplied}
+              remainingDue={remainingDue}
+              walletCovers={walletCovers}
               coupon={
                 couponEnabled
                   ? {

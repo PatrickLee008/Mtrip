@@ -10,6 +10,11 @@
  *   分隔线      1px
  *   总额        TOTAL AMOUNT + Earn Points 徽章 / 价格 Inter 700/32 lh40 tracking -.96 主色
  *   代付条      `--secondary` 底、圆角 32、px12 py4:「Pay by other」+「Share」(只有支付页有)
+ *
+ * 钱包部分抵扣(Figma「Hotel Payment - mTrip Wallet」`3465:8719`,PRD 模块 25):
+ *   用了钱包时合计显示**还需另付的部分**,胶囊换成主色「Wallet applied」(`3465:9461`);
+ *   钱包付清全额时合计 MMK 0,金额右侧加绿色「Zero Out of Pocket」标(`3465:9540`,--green #00A66F);
+ *   付不清时合计上方多一行「订单总额 / 钱包抵扣」(`walletLines`,稿面之外补的,说明合计为什么变小)。
  */
 
 import React from 'react';
@@ -25,6 +30,9 @@ import {
 } from '@/components/hotel/booking/bookingShared';
 import { colors, radius } from '@/config/theme';
 import { fonts } from '@/config/typography';
+
+/** 稿面 --green(「Zero Out of Pocket」),主题里没有同值令牌 */
+const ZERO_GREEN = '#00A66F';
 
 interface Props {
   /** 「Stay 1」;不传就不渲染眉头行 */
@@ -45,6 +53,10 @@ interface Props {
   /** 胶囊用主色字(多房间新稿的「Wallet applied」);默认正文色(积分) */
   pointsAccent?: boolean;
   total: string;
+  /** 合计金额右侧的绿色标(钱包付清时的「Zero Out of Pocket」,`3465:9540`);不传不渲染 */
+  totalTag?: string | null;
+  /** 合计上方的明细行(钱包部分抵扣:订单总额 / 钱包抵扣);`accent` 行用主色 */
+  walletLines?: { key: string; label: string; value: string; accent?: boolean }[] | null;
   /** 「Pay Within 00:10:00」行(多房间新稿 2659:13318),前后各一条分隔线;不传不渲染 */
   payWithin?: { label: string; value: string } | null;
   /** 代付条(只有支付页有) */
@@ -67,6 +79,8 @@ export default function StaySummaryCard({
   pointsLabel,
   pointsAccent = false,
   total,
+  totalTag,
+  walletLines,
   payWithin,
   payByOtherLabel,
   shareLabel,
@@ -122,6 +136,16 @@ export default function StaySummaryCard({
       ) : null}
 
       <View>
+        {walletLines && walletLines.length > 0 ? (
+          <View style={styles.walletLines}>
+            {walletLines.map((line) => (
+              <View key={line.key} style={styles.walletLine}>
+                <Text style={[styles.walletLineLabel, line.accent && styles.accentText]}>{line.label}</Text>
+                <Text style={[styles.walletLineValue, line.accent && styles.accentText]}>{line.value}</Text>
+              </View>
+            ))}
+          </View>
+        ) : null}
         <View style={styles.totalHead}>
           <Text style={bookingShared.overline}>{totalLabel}</Text>
           {pointsLabel ? (
@@ -130,7 +154,15 @@ export default function StaySummaryCard({
             </View>
           ) : null}
         </View>
-        <Text style={styles.total}>{total}</Text>
+        <View style={styles.totalRow}>
+          <Text style={styles.total}>{total}</Text>
+          {totalTag ? (
+            <View style={styles.totalTag}>
+              <HomeIcon name="checkmarkCircle" size={18} color={ZERO_GREEN} />
+              <Text style={styles.totalTagText}>{totalTag}</Text>
+            </View>
+          ) : null}
+        </View>
       </View>
 
       {payByOtherLabel ? (
@@ -199,6 +231,29 @@ const styles = StyleSheet.create({
     color: colors.heading,
   },
   pointsTextAccent: { color: colors.primary },
+  walletLines: { gap: 4, marginBottom: 12 },
+  walletLine: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+  walletLineLabel: { flexShrink: 1, fontFamily: fonts.inter, fontSize: 14, lineHeight: 20, color: FORM_TEXT },
+  walletLineValue: { fontFamily: fonts.interMedium, fontSize: 14, lineHeight: 20, color: colors.heading },
+  accentText: { color: colors.primary },
+  totalRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  /* 稿面 3465:9540:px12 py6 全圆角,勾 + Inter 700 12/16 tracking .24 --green */
+  totalTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: colors.surface,
+  },
+  totalTagText: {
+    fontFamily: fonts.interBold,
+    fontSize: 12,
+    lineHeight: 16,
+    letterSpacing: 0.24,
+    color: ZERO_GREEN,
+  },
   total: {
     fontFamily: fonts.interBold,
     fontSize: 32,

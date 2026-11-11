@@ -10,6 +10,12 @@
  *     (见 `screens/pay/MmqrPayScreen`)。重复调用:未过期的码复用;码过期而订单仍在支付窗口内会出新码。
  *   - Stripe(1)/PayPal(2):后端仍是 mock,客户端不调用,界面置灰 Coming soon。
  *
+ * **钱包部分抵扣**(Super Admin PRD v1.0.14 模块 25):结账时钱包默认自动抵扣(`autoApply`,用户可在付款前关掉),
+ * 抵扣额 = min(可用余额, 该交易类型单笔限额 `maxUse`(0 不限), 应付)。钱包不够付全额时剩余部分走其他渠道:
+ * `payMethod=5` + `useWallet=1` → 后端先从钱包扣出抵扣额,二维码只收剩余金额(返回多带 `walletAmount` / `dueAmount`);
+ * 钱包够付全额时客户端直接发 `payMethod=3`(后端对 `useWallet=1` 也会自动改走钱包全额)。
+ * 不传 `useWallet` = 0(旧行为)。未付清就取消 / 超时,后端自动退回已扣的抵扣额。
+ *
  * 可用渠道由 `getPayMethods` 按站点绑定返回,失败时调用方退化为「只有余额可用」。
  * 时间字段(expireAt / orderExpireAt / paidAt)均为 `Y-m-d H:i:s` **UTC** 字符串,
  * 解析一律走 `utils/time.parseUtcTime`,不要直接 `new Date()`(各平台会按本地时区解析)。
@@ -47,6 +53,10 @@ export interface MmqrPayResult {
   expireAt: string;
   /** 订单支付窗口截止(UTC) */
   orderExpireAt: string;
+  /** 钱包已抵扣的金额(`useWallet=1` 时;0 / 缺省 = 未用钱包) */
+  walletAmount?: number | string;
+  /** 二维码实际要付的剩余金额(= amount) */
+  dueAmount?: number | string;
 }
 
 /** Trip 非扫码渠道结果:各预订的核销码 */
@@ -65,42 +75,58 @@ export function isMmqrResult(value: unknown): value is MmqrPayResult {
 
 /**
  * 对已建好的单发起支付。重载保证老调用点(余额,默认参数)仍拿到 `{verifyCode}`。
+ * `useWallet`:钱包部分抵扣(见文件头);MMQR 带上它时码只收剩余金额。
  */
 export function payOrder(orderId: number): Promise<VerifyCodePayResult>;
-export function payOrder(orderId: number, payMethod: typeof PAY_METHOD.MMQR): Promise<MmqrPayResult>;
+export function payOrder(
+  orderId: number,
+  payMethod: typeof PAY_METHOD.MMQR,
+  useWallet?: boolean,
+): Promise<MmqrPayResult | VerifyCodePayResult>;
 export function payOrder(
   orderId: number,
   payMethod: Exclude<PayMethod, typeof PAY_METHOD.MMQR>,
+  useWallet?: boolean,
 ): Promise<VerifyCodePayResult>;
 export function payOrder(
   orderId: number,
   payMethod: PayMethod,
+  useWallet?: boolean,
 ): Promise<VerifyCodePayResult | MmqrPayResult>;
 export function payOrder(
   orderId: number,
   payMethod: PayMethod = PAY_METHOD.BALANCE,
+  useWallet = false,
 ): Promise<VerifyCodePayResult | MmqrPayResult> {
-  return post('/api/v1/app/order/pay', { orderId, payMethod });
+  return post('/api/v1/app/order/pay', { orderId, payMethod, ...(useWallet ? { useWallet: 1 } : {}) });
 }
 
 /**
  * 支付整个 Trip(多房间 / 多酒店一次结账)。余额链路历史上走 `api/trip.apiTripPay`,
- * 那里保持不动;这里补 MMQR 的类型化入口。
+ * 那里保持不动;这里补 MMQR 的类型化入口。`useWallet` 同 `payOrder`。
+ * 注意:`useWallet=1` 且钱包够付全额时后端会改走钱包全额,MMQR 调用也可能拿到 `{codes}`。
  */
-export function payTrip(tripId: number, payMethod: typeof PAY_METHOD.MMQR): Promise<MmqrPayResult>;
+export function payTrip(
+  tripId: number,
+  payMethod: typeof PAY_METHOD.MMQR,
+  useWallet?: boolean,
+): Promise<MmqrPayResult | TripCodesPayResult>;
 export function payTrip(
   tripId: number,
   payMethod: Exclude<PayMethod, typeof PAY_METHOD.MMQR>,
+  useWallet?: boolean,
 ): Promise<TripCodesPayResult>;
 export function payTrip(
   tripId: number,
   payMethod: PayMethod,
+  useWallet?: boolean,
 ): Promise<TripCodesPayResult | MmqrPayResult>;
 export function payTrip(
   tripId: number,
   payMethod: PayMethod,
+  useWallet = false,
 ): Promise<TripCodesPayResult | MmqrPayResult> {
-  return post('/api/v1/app/order/trip/pay', { tripId, payMethod });
+  return post('/api/v1/app/order/trip/pay', { tripId, payMethod, ...(useWallet ? { useWallet: 1 } : {}) });
 }
 
 /** 支付流水状态:late = 订单已超时取消后才收到款(后端自动恢复或原路退款) */
@@ -137,6 +163,10 @@ export interface PayMethodOption {
   name: string;
   currencies: string[];
   enabled: boolean;
+  /** 只有钱包行有:结账时是否默认自动抵扣(用户可关) */
+  autoApply?: boolean;
+  /** 只有钱包行有:各交易类型单笔最多可用钱包金额,0 = 不限(酒店含多预订行程用 `hotel`) */
+  maxUse?: { hotel?: number | string; car?: number | string };
 }
 
 /** 本站点可用的支付渠道(后端按站点绑定返回);静默,失败由调用方退化为写死逻辑 */
@@ -173,4 +203,32 @@ export function isBalanceEnabled(methods: PayMethodOption[] | null): boolean {
   if (!methods) return true;
   const row = methods.find((m) => Number(m.payMethod) === PAY_METHOD.BALANCE);
   return row ? Boolean(row.enabled) : true;
+}
+
+/**
+ * 钱包抵扣规则(取自渠道表的钱包行)。接口失败 / 没给字段时按后端默认:自动抵扣、不限额。
+ */
+export function walletRule(methods: PayMethodOption[] | null): { autoApply: boolean; maxUseHotel: number } {
+  const row = methods?.find((m) => Number(m.payMethod) === PAY_METHOD.BALANCE);
+  return {
+    autoApply: row?.autoApply === undefined ? true : Boolean(row.autoApply),
+    maxUseHotel: Math.max(0, Number(row?.maxUse?.hotel ?? 0) || 0),
+  };
+}
+
+/**
+ * 本次钱包抵扣额 = min(可用余额, 单笔限额(0 不限), 应付),与后端 `WalletHoldService::portion` 同一公式。
+ * `due` 是剩余要用其他渠道付的部分;`covers` = 钱包付清全额(应付为 0 也算,按钱包支付 0 元走)。
+ */
+export function walletSplit(
+  balance: number,
+  cap: number,
+  payable: number,
+): { wallet: number; due: number; covers: boolean } {
+  const amount = Math.max(0, Number(payable) || 0);
+  let wallet = Math.min(Math.max(0, Number(balance) || 0), amount);
+  if (cap > 0) wallet = Math.min(wallet, cap);
+  wallet = Math.round(wallet * 100) / 100;
+  const due = Math.max(0, Math.round((amount - wallet) * 100) / 100);
+  return { wallet, due, covers: due < 0.005 };
 }

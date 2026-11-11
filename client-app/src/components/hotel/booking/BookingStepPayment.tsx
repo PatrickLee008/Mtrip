@@ -11,6 +11,12 @@
  *
  * KBZPay MMQR(方案 22 §8):站点开通时(`mmqrEnabled`,来自 `getPayMethods`)MMQR 行移出折叠区、
  * 放在钱包行下方可单选(payMethod=5,下单后进扫码页);未开通/接口失败时维持在折叠区置灰。
+ *
+ * 钱包部分抵扣(Figma「Hotel Payment - mTrip Wallet」`3465:8719`,PRD 模块 25,2026-11-11):
+ * 钱包不再是渠道列表里的一行单选,而是钱包卡底部的「Use wallet」开关(`walletToggle`,默认开,用户可关),
+ * 开着且抵扣了金额时卡下放「mTrip Wallet Applied」小卡(`walletPod`,`3465:9396`)。
+ * 渠道列表只剩补差额 / 整单用的那些:稿面「Popular Payment Method」= MMQR Pay(`3465:8784`),
+ * 钱包付清全额时(`walletCovers`)列表上方给一句「无需其他支付方式」,渠道选不选都不影响付款。
  */
 
 import React from 'react';
@@ -75,6 +81,14 @@ interface Props {
   payAtHotel?: boolean;
   /** 站点已开通 KBZPay MMQR(可单选);缺省 false */
   mmqrEnabled?: boolean;
+  /** 钱包卡底部「Use wallet」开关;不传则退回旧版(渠道列表里一行「使用 mTrip 钱包支付」) */
+  walletToggle?: { on: boolean; onChange: (on: boolean) => void };
+  /** 钱包卡下方灰字(部分抵扣时「剩余 X 用其他方式支付」) */
+  walletNote?: string | null;
+  /** 钱包卡下方的抵扣小卡(`WalletAppliedPod`);hideWallet 时也显示(多房间第 3 步说明钱包已抵扣多少) */
+  walletPod?: React.ReactNode;
+  /** 钱包已付清全额:渠道列表上方提示不需要其他支付方式 */
+  walletCovers?: boolean;
 }
 
 export default function BookingStepPayment({
@@ -90,6 +104,10 @@ export default function BookingStepPayment({
   hideWallet = false,
   payAtHotel = false,
   mmqrEnabled = false,
+  walletToggle,
+  walletNote = null,
+  walletPod = null,
+  walletCovers = false,
 }: Props) {
   const { t } = useTranslation();
   /**
@@ -121,9 +139,12 @@ export default function BookingStepPayment({
         <WalletCard
           balance={balance}
           insufficient={insufficient}
+          note={walletNote}
           onInfo={onComingSoon}
+          toggle={walletToggle}
         />
       )}
+      {walletPod}
 
       <View style={styles.group}>
         {/**
@@ -131,7 +152,19 @@ export default function BookingStepPayment({
          * 能真扣款的只有 mTrip 钱包,所以钱包常驻在上,其余六个未开放渠道收进下面那个折叠区。
          * 折叠区展开后的内容与顺序仍按稿面(Popular ×3 → 到店付 → 银行卡 → 手机银行)。
          */}
-        {hideWallet ? null : (
+        {walletCovers ? (
+          <Text style={styles.coveredHint}>{t('hotels.booking.wallet.coversAll')}</Text>
+        ) : null}
+        {/* 有钱包开关时钱包不再列成一行渠道;稿面 3465:8779「Popular Payment Method」下只有 MMQR */}
+        {hideWallet || walletToggle ? (
+          mmqrEnabled ? (
+            <Text style={styles.groupTitle}>
+              {!walletCovers && walletNote
+                ? t('hotels.booking.wallet.payRemainingWith')
+                : t('hotels.booking.payment.popular')}
+            </Text>
+          ) : null
+        ) : (
           <>
             <Text style={styles.groupTitle}>{t('hotels.booking.payment.other')}</Text>
             <PaymentMethodRow
@@ -341,6 +374,13 @@ const styles = StyleSheet.create({
   /* ---- 支付方式 ---- */
   group: { gap: 12 },
   groupTitle: { fontFamily: fonts.interBold, fontSize: 16, lineHeight: 24, color: CARD_HEADING },
+  coveredHint: {
+    fontFamily: fonts.interSemi,
+    fontSize: 12,
+    lineHeight: 16,
+    letterSpacing: 0.6,
+    color: colors.statusPaid,
+  },
 
   savedCard: {
     flexDirection: 'row',

@@ -12,8 +12,8 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTranslation } from 'react-i18next';
 
 import { applyRefund, cancelOrder, fetchOrderDetail, fetchVerifyCode } from '@/api/order';
-import { PAY_METHOD, getPayMethods, isMethodEnabled, payOrder } from '@/api/pay';
-import { apiTripPay } from '@/api/trip';
+import { PAY_METHOD, getPayMethods, isMethodEnabled, type PayMethodOption } from '@/api/pay';
+import { fetchTripDetail } from '@/api/trip';
 import PriceText from '@/components/business/PriceText';
 import VerifyCodeView from '@/components/business/VerifyCodeView';
 import CustomButton from '@/components/common/CustomButton';
@@ -23,7 +23,7 @@ import PageLayout from '@/components/layout/PageLayout';
 import { ORDER_STATUS, ORDER_STATUS_I18N } from '@/config/global';
 import { colors, fontSize, radius, spacing } from '@/config/theme';
 import type { RootStackParamList } from '@/navigation/types';
-import { mmqrRouteParams, requestMmqr } from '@/screens/pay/mmqrPay';
+import { isWalletPaid, mmqrRouteParams, payPendingWithWallet, requestMmqr } from '@/screens/pay/mmqrPay';
 import { useCommonStore } from '@/store/commonStore';
 import { useSiteStore } from '@/store/siteStore';
 import { useUserStore } from '@/store/userStore';
@@ -83,16 +83,17 @@ export default function OrderDetailScreen() {
 
   /** 站点是否开通 KBZPay MMQR(渠道接口失败 = 不开,只保留余额支付) */
   const isPending = order?.order_status === ORDER_STATUS.PENDING;
-  const [mmqrEnabled, setMmqrEnabled] = useState(false);
+  const [payMethods, setPayMethods] = useState<PayMethodOption[] | null>(null);
+  const mmqrEnabled = isMethodEnabled(payMethods, PAY_METHOD.MMQR, currency || undefined);
   useEffect(() => {
     if (!isPending) return;
     let alive = true;
     void getPayMethods(currency || undefined)
       .then((rows) => {
-        if (alive) setMmqrEnabled(isMethodEnabled(Array.isArray(rows) ? rows : null, PAY_METHOD.MMQR, currency || undefined));
+        if (alive) setPayMethods(Array.isArray(rows) ? rows : null);
       })
       .catch(() => {
-        if (alive) setMmqrEnabled(false);
+        if (alive) setPayMethods(null);
       });
     return () => {
       alive = false;
@@ -119,22 +120,38 @@ export default function OrderDetailScreen() {
   const comingSoon = () => showToast(t('home.comingSoon'));
 
   /**
-   * 余额支付:前置比一次余额(后端同样会拦),成功后刷新本地余额。
-   * Trip 内的预订后端只收整单支付(`trip/pay`),这里的 `pay_amount` 只是其中一笔,
-   * 拿它比余额不准,所以 Trip 单跳过前置比较、交给后端按整单金额判断。
+   * 钱包支付(PRD 模块 25 部分抵扣,与订房向导同一规则,见 `payPendingWithWallet`):
+   * 钱包够付全额(余额与单笔限额)→ 钱包付;不够且站点开通了 MMQR → 钱包先抵扣、剩余进扫码页;都不行提示余额不足。
+   * Trip 内的预订后端只收整单支付(`trip/pay`),这里的 `pay_amount` 只是其中一笔,应付按整个 Trip 现取。
    */
   const payByBalance = async () => {
     if (acting) return;
     const tripId = Number(order.trip_id) || 0;
-    if (tripId === 0 && balance < Number(order.pay_amount)) {
-      showToast(t('order.balanceInsufficient'));
-      return;
-    }
-    await act(async () => {
-      if (tripId > 0) await apiTripPay({ tripId, payMethod: 3 });
-      else await payOrder(orderId);
+    setActing(true);
+    try {
+      const payable =
+        tripId > 0 ? Number((await fetchTripDetail(tripId)).pay_amount) || 0 : Number(order.pay_amount) || 0;
+      const target = { orderId, tripId: tripId > 0 ? tripId : undefined };
+      const outcome = await payPendingWithWallet(target, { payable, balance, methods: payMethods, mmqrEnabled });
       void refreshProfile().catch(() => undefined);
-    });
+      if (outcome.kind === 'insufficient') {
+        showToast(t('order.balanceInsufficient'));
+        return;
+      }
+      if (outcome.kind === 'mmqr') {
+        navigation.navigate(
+          'MmqrPay',
+          mmqrRouteParams(outcome.res, { ...target, detailRoute: 'OrderDetail', useWallet: outcome.useWallet }),
+        );
+        return;
+      }
+      showToast(t('common.success'));
+      await load();
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : 'Error');
+    } finally {
+      setActing(false);
+    }
   };
 
   /** MMQR 去支付 / 重新支付:拿(或复用,后端负责)二维码后进扫码页 */
@@ -144,8 +161,13 @@ export default function OrderDetailScreen() {
     try {
       const tripId = Number(order.trip_id) || 0;
       const target = { orderId, tripId: tripId > 0 ? tripId : undefined };
+      /* 整单用 KBZPay 付、不用钱包(想先用钱包抵扣的走钱包支付按钮) */
       const res = await requestMmqr(target);
-      navigation.navigate('MmqrPay', mmqrRouteParams(res, { ...target, detailRoute: 'OrderDetail' }));
+      if (isWalletPaid(res)) {
+        await load();
+        return;
+      }
+      navigation.navigate('MmqrPay', mmqrRouteParams(res, { ...target, detailRoute: 'OrderDetail', useWallet: false }));
     } catch {
       /* 请求层已 Toast 原因 */
       await load();
