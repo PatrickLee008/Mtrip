@@ -128,6 +128,10 @@ Router::addGroup('/api/v1/admin/user', static function () {
     Router::get('/detail', [AdminUserController::class, 'detail']);
     Router::post('/adjust-balance', [AdminUserController::class, 'adjustBalance']);
     Router::get('/balance-logs', [AdminUserController::class, 'balanceLogs']);
+    Router::get('/wallet-lots', [AdminUserController::class, 'walletLots']);
+    Router::get('/wallet-adjust/list', [AdminUserController::class, 'walletAdjustList']);
+    Router::post('/wallet-adjust/review', [AdminUserController::class, 'walletAdjustReview']);
+    Router::post('/wallet-adjust/reverse', [AdminUserController::class, 'walletAdjustReverse']);
     Router::post('/toggle-status', [AdminUserController::class, 'toggleStatus']);
     Router::get('/feedback/list', [AdminFeedbackController::class, 'index']);
     Router::post('/feedback/handle', [AdminFeedbackController::class, 'handle']);

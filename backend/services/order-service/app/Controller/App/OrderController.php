@@ -17,6 +17,7 @@ use App\Service\Payment\MmqrCheckoutService;
 use App\Service\PaymentResultHandler;
 use App\Service\PricingService;
 use App\Service\SettlementService;
+use App\Service\WalletHoldService;
 use App\Service\WalletService;
 use Hyperf\Contract\ConfigInterface;
 use Hyperf\DbConnection\Db;
@@ -30,6 +31,7 @@ use Mtrip\Shared\Support\MaskHelper;
 use Mtrip\Shared\Support\OrderNoGenerator;
 use Mtrip\Shared\Support\Result;
 use Mtrip\Shared\Support\UserNotify;
+use Mtrip\Shared\Wallet\WalletConfig;
 
 /**
  * C端订单接口:下单/支付(本期mock)/列表/详情/取消/退款申请/核销码
@@ -42,6 +44,9 @@ class OrderController extends AbstractController
 
     #[Inject]
     protected WalletService $walletService;
+
+    #[Inject]
+    protected WalletHoldService $walletHold;
 
     #[Inject]
     protected FraudService $fraudService;
@@ -245,11 +250,16 @@ class OrderController extends AbstractController
      * 余额支付在同一事务内:行锁扣 user_info.balance → 写 user_balance_log(消费,负数)
      * → 置已支付生成核销码 → 写 finance_flow(1收入/1订单支付)。任一步失败整单回滚。
      * KBZ MMQR 只出码(不改为已支付),到账由支付中心业务通知 → PaymentSettleService::onPaid 落账。
+     *
+     * useWallet=1(Super Admin PRD 模块 25 钱包部分抵扣):钱包先抵扣 min(可用余额, 酒店单笔限额, 应付),
+     * 剩余用 payMethod 付清(KBZ 出差额码 / mock 当场付);钱包够付全额时自动改为钱包支付(payMethod 3)。
+     * 不传 useWallet 按 0 处理(旧客户端行为不变)。payMethod 3 受单笔限额约束,超限需改用部分抵扣。
      */
     public function pay(): array
     {
         $orderId = $this->requireId('orderId');
         $payMethod = $this->intInput('payMethod', 1);
+        $useWallet = $this->intInput('useWallet', 0) === 1;
         if (! in_array($payMethod, [1, 2, 3, BookingConst::PAY_METHOD_KBZ_MMQR], true)) {
             throw new BusinessException(ErrorCode::PARAM_ERROR, '支付方式不正确');
         }
@@ -267,10 +277,20 @@ class OrderController extends AbstractController
         if ((int) ($snapshot['trip_id'] ?? 0) > 0) {
             throw new BusinessException(ErrorCode::DATA_CONFLICT, '该预订属于多预订行程,请整单支付');
         }
-        if ($payMethod === BookingConst::PAY_METHOD_KBZ_MMQR) {
-            return Result::success($this->mmqr->createForOrder($snapshot), '请使用 KBZPay 或 MMQR 银行 App 扫码支付');
+        $cap = WalletConfig::maxUse(WalletHoldService::limitType((int) $snapshot['order_type']));
+        $payable = round((float) $snapshot['pay_amount'], 2);
+        if ($payMethod === 3 && $cap > 0 && $payable - $cap > 0.005) {
+            throw new BusinessException(ErrorCode::DATA_CONFLICT, '超出钱包单笔可用限额,请用其他支付方式补足');
         }
-        $result = Db::transaction(function () use ($orderId, $payMethod, $snapshot) {
+        // 钱包够付全额(余额与限额都够)就直接钱包支付,不出差额为 0 的码
+        if ($useWallet && $payMethod !== 3
+            && WalletHoldService::portion($this->walletBalance(), $cap, $payable) + 0.005 >= $payable) {
+            $payMethod = 3;
+        }
+        if ($payMethod === BookingConst::PAY_METHOD_KBZ_MMQR) {
+            return Result::success($this->mmqr->createForOrder($snapshot, $useWallet), '请使用 KBZPay 或 MMQR 银行 App 扫码支付');
+        }
+        $result = Db::transaction(function () use ($orderId, $payMethod, $snapshot, $useWallet) {
             MerchantAccessGuard::lockBookable([$snapshot], (int) $snapshot['site_id']);
             if ((int) $snapshot['order_type'] === 1) {
                 MerchantAccessGuard::lockProperties([$snapshot], (int) $snapshot['site_id']);
@@ -305,6 +325,10 @@ class OrderController extends AbstractController
                     $orderId,
                     "订单 {$order['order_no']} 钱包支付",
                 );
+                $this->walletHold->recordFullOrder($orderId, $payAmount);
+            } elseif ($useWallet) {
+                // mock 渠道 + 钱包部分抵扣:先扣抵扣额,其余当场由 mock 付清
+                $this->walletHold->holdOrder($order, true);
             }
             // 置已支付 / 资金流水 / 库存 / 销量 / 核销券 / 结算:与 KBZ 业务通知落账同一实现
             $verifyCode = $this->orderPay->settleOrder($order, $payMethod, $tradeNo, $couponRec);
@@ -434,6 +458,7 @@ class OrderController extends AbstractController
                 'version' => Db::raw('version + 1'),
             ]);
             $this->stockService->release($order);
+            $this->walletHold->releaseOrder($order, '用户取消');
             $this->bookingEvents->log($order, 'cancelled', \App\Constants\BookingConst::OPERATOR_GUEST, (int) $order['user_id'], '', 1, [
                 'reason' => '用户主动取消',
             ]);
@@ -596,10 +621,19 @@ class OrderController extends AbstractController
         ];
     }
 
-    /** 退款去向:KBZPay MMQR 支付的订单原路退回(2,后台审核后经支付中心退款),其余入 mTrip 钱包(1) */
+    /**
+     * 退款去向:KBZPay MMQR 支付的订单原路退回(2,后台审核后经支付中心退款),其余入 mTrip 钱包(1)。
+     * 用过钱包部分抵扣的 KBZ 订单整笔退回钱包(原路只能退 KBZ 实付部分,拆两条退款单得不偿失;PRD 退款默认入钱包)。
+     */
     private static function refundChannelOf(array $order): int
     {
-        return (int) ($order['pay_method'] ?? 0) === BookingConst::PAY_METHOD_KBZ_MMQR ? 2 : 1;
+        return (int) ($order['pay_method'] ?? 0) === BookingConst::PAY_METHOD_KBZ_MMQR && ! WalletHoldService::isMixed($order) ? 2 : 1;
+    }
+
+    /** 当前用户可用钱包余额(无锁预判;扣款时 WalletLedger 会先作废到期额度再复核) */
+    private function walletBalance(): float
+    {
+        return round((float) Db::table('user_info')->where('id', UserContext::userId())->value('balance'), 2);
     }
 
     /** 阶梯退款:rules=[{hours_before,refund_rate}],按距入住剩余小时命中可满足的最优档 */

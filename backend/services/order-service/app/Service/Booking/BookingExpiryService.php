@@ -6,6 +6,7 @@ namespace App\Service\Booking;
 
 use App\Constants\BookingConst;
 use App\Service\OrderStockService;
+use App\Service\WalletHoldService;
 use App\Service\Payment\MmqrCheckoutService;
 use App\Service\Payment\PaymentSettleService;
 use Hyperf\DbConnection\Db;
@@ -26,6 +27,9 @@ class BookingExpiryService
 {
     #[Inject]
     protected OrderStockService $stockService;
+
+    #[Inject]
+    protected WalletHoldService $walletHold;
 
     #[Inject]
     protected BookingEventService $events;
@@ -168,6 +172,8 @@ class BookingExpiryService
                 'version' => Db::raw('version + 1'),
             ]);
             $this->stockService->release($order);
+            // 支付超时:已冻结的钱包抵扣额退回(保留金额,迟到到账恢复时据此重新扣回);Trip 的在 closePendingTrip 统一退
+            $this->walletHold->releaseOrder($order, '支付超时');
             $order['booking_status'] = BookingConst::STATUS_CANCELLED;
             $this->events->log($order, 'payment_expired', BookingConst::OPERATOR_SYSTEM, 0, '', 1, [
                 'expiredAt' => date('Y-m-d H:i:s'),

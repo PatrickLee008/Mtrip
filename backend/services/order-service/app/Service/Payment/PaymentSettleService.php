@@ -9,6 +9,7 @@ use App\Service\OrderPayService;
 use App\Service\OrderStockService;
 use App\Service\PaymentResultHandler;
 use App\Service\PricingService;
+use App\Service\WalletHoldService;
 use Hyperf\DbConnection\Db;
 use Hyperf\Di\Annotation\Inject;
 use Hyperf\Logger\LoggerFactory;
@@ -47,6 +48,9 @@ class PaymentSettleService
 
     #[Inject]
     protected RefundSettleService $refunds;
+
+    #[Inject]
+    protected WalletHoldService $walletHold;
 
     #[Inject]
     protected RedisLock $lock;
@@ -121,6 +125,8 @@ class PaymentSettleService
                         foreach ($locked as $o) {
                             $this->stockService->relock($o);
                         }
+                        // 超时取消时退回的钱包抵扣额重新扣回;余额已不够则抛错,走下面的转原路退款
+                        $this->walletHold->rehold($trip, $locked);
                     }
                     $couponRec = $this->pricingService->lockCouponForPay((int) ($trip['coupon_id'] ?? $locked[0]['coupon_id']));
                     if ($trip !== null) {
@@ -207,7 +213,9 @@ class PaymentSettleService
                 'expiryCancelled' => $this->payHandler->isExpiryCancelled($o),
             ];
         }
-        $expected = $trip !== null ? (float) $trip['pay_amount'] : (float) ($orders[0]['pay_amount'] ?? 0);
+        // 用过钱包抵扣的码只收差额(冻结中 / 已付 / 超时退回都按出码时的差额校验)
+        $row = $trip ?? ($orders[0] ?? []);
+        $expected = (float) ($row['pay_amount'] ?? 0) - (float) ($row['wallet_amount'] ?? 0);
         $amountMatches = $orders !== []
             && PaymentRules::amountEquals((string) ($p['amount'] ?? ''), number_format($expected, 2, '.', ''))
             && strtoupper((string) ($p['currency'] ?? '')) === MmqrCheckoutService::CURRENCY;

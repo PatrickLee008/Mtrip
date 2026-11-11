@@ -21,5 +21,9 @@ return [
         (new Crontab())->setName('kbz-refund-batch')->setRule('* * * * *')
             ->setSingleton(true)->setOnOneServer(true)->setMutexExpires(300)
             ->setCallback([\App\Service\Payment\RefundSettleService::class, 'processQueue']),
+        // Super Admin PRD 模块 25:钱包额度按笔到期作废并记「过期」流水(扣款时也会先作废本人到期额度,这里兜底全量)
+        (new Crontab())->setName('wallet-credit-expiry')->setRule('*/10 * * * *')
+            ->setSingleton(true)->setOnOneServer(true)->setMutexExpires(600)
+            ->setCallback([\App\Service\WalletService::class, 'expireDue']),
     ],
 ];

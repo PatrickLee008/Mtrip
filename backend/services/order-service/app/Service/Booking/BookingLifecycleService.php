@@ -9,6 +9,7 @@ use App\Service\OrderStockService;
 use App\Service\Payment\PaymentWindow;
 use App\Service\PricingService;
 use App\Service\ReferralService;
+use App\Service\WalletHoldService;
 use Hyperf\Context\Context;
 use Hyperf\DbConnection\Db;
 use Hyperf\Di\Annotation\Inject;
@@ -43,6 +44,9 @@ class BookingLifecycleService
 
     #[Inject]
     protected ReferralService $referralService;
+
+    #[Inject]
+    protected WalletHoldService $walletHold;
 
     /** 可配置支付窗口(替换写死的 BookingConst::PAYMENT_WINDOW_MINUTES) */
     #[Inject]
@@ -297,6 +301,8 @@ class BookingLifecycleService
                 'paid' => $paid,
             ]);
             if (! $paid) {
+                // 未付清就取消:已冻结的钱包抵扣额退回(独立单在此退;Trip 的在 closePendingTrip 统一退)
+                $this->walletHold->releaseOrder($order, '预订已取消');
                 $closedSiblings = $this->closePendingTrip($trip, $order, '同行程预订已取消,整单关闭', $operatorType, $operatorId, $operatorName);
             }
             return $order;
@@ -373,6 +379,7 @@ class BookingLifecycleService
             $closed[] = $sibling;
         }
         Db::table('order_trip')->where('id', (int) $trip['id'])->update(['pay_status' => 2]);
+        $this->walletHold->releaseTrip($trip, '行程已关闭');
         return $closed;
     }
 

@@ -6,6 +6,7 @@ namespace App\Service\Payment;
 
 use App\Constants\BookingConst;
 use App\Service\PricingService;
+use App\Service\WalletHoldService;
 use Hyperf\DbConnection\Db;
 use Hyperf\Di\Annotation\Inject;
 use Hyperf\Logger\LoggerFactory;
@@ -13,6 +14,7 @@ use Mtrip\Shared\Constants\ErrorCode;
 use Mtrip\Shared\Exception\BusinessException;
 use Mtrip\Shared\Payment\PaymentCenterClient;
 use Mtrip\Shared\Payment\PaymentRules;
+use Mtrip\Shared\Wallet\WalletConfig;
 use Psr\Log\LoggerInterface;
 
 /**
@@ -38,6 +40,9 @@ class MmqrCheckoutService
     protected PaymentSettleService $settle;
 
     #[Inject]
+    protected WalletHoldService $walletHold;
+
+    #[Inject]
     protected LoggerFactory $loggerFactory;
 
     protected ?PaymentCenterClient $center = null;
@@ -49,13 +54,16 @@ class MmqrCheckoutService
 
     // ------------------------------------------------------------------ 出码
 
-    /** 独立单出码;$snapshot 为已校验归属(本人、本站点、非 Trip)的订单行 */
-    public function createForOrder(array $snapshot): array
+    /**
+     * 独立单出码;$snapshot 为已校验归属(本人、本站点、非 Trip)的订单行。
+     * $useWallet:先冻结钱包抵扣额(WalletHoldService),码只收剩余金额;钱包够付全额时由调用方改走钱包支付,不到这里。
+     */
+    public function createForOrder(array $snapshot, bool $useWallet = false): array
     {
         $orderId = (int) $snapshot['id'];
         $currency = $this->orderCurrency($snapshot);
         $this->assertCurrency($currency);
-        $order = Db::transaction(function () use ($orderId, $snapshot) {
+        $order = Db::transaction(function () use ($orderId, $snapshot, $useWallet) {
             $order = Db::table('order_main')->where('id', $orderId)->where('user_id', (int) $snapshot['user_id'])
                 ->whereNull('deleted_at')->lockForUpdate()->first();
             if (! $order) {
@@ -65,32 +73,47 @@ class MmqrCheckoutService
             $this->assertPayable([$order]);
             // 券已被别的订单用掉就不出码(否则付了款也只能退)
             $this->pricingService->lockCouponForPay((int) $order['coupon_id']);
+            $order['_wallet_was_held'] = (int) $order['wallet_hold_status'] === WalletHoldService::HELD;
+            $order['wallet_amount'] = $this->walletHold->holdOrder($order, $useWallet);
             Db::table('order_main')->where('id', $orderId)->update(['pay_method' => BookingConst::PAY_METHOD_KBZ_MMQR]);
             return $order;
         });
+        $due = WalletHoldService::remainder((float) $order['pay_amount'], (float) $order['wallet_amount']);
 
-        $res = $this->center()->createPayment([
-            'siteId' => (int) $order['site_id'],
-            'bizType' => BookingConst::PAY_BIZ_ORDER,
-            'bizNo' => (string) $order['order_no'],
-            'userId' => (int) $order['user_id'],
-            'amount' => $this->amountOf((float) $order['pay_amount']),
-            'currency' => self::CURRENCY,
-            'channel' => self::CHANNEL,
-            'subject' => 'mTrip Booking ' . $order['order_no'],
-            'expireAt' => self::toUtc((string) $order['payment_expires_at']),
-            'notifyUrl' => RefundSettleService::notifyUrl(),
-        ]);
+        try {
+            $res = $this->center()->createPayment([
+                'siteId' => (int) $order['site_id'],
+                'bizType' => BookingConst::PAY_BIZ_ORDER,
+                'bizNo' => (string) $order['order_no'],
+                'userId' => (int) $order['user_id'],
+                'amount' => $this->amountOf($due),
+                'currency' => self::CURRENCY,
+                'channel' => self::CHANNEL,
+                'subject' => 'mTrip Booking ' . $order['order_no'],
+                'expireAt' => self::toUtc((string) $order['payment_expires_at']),
+                'notifyUrl' => RefundSettleService::notifyUrl(),
+            ]);
+        } catch (\Throwable $e) {
+            // 出码失败:本次刚冻结的钱包抵扣额立即退回(之前已冻结的沿用,旧码可能仍有效)
+            if (! $order['_wallet_was_held'] && (float) $order['wallet_amount'] > 0) {
+                Db::transaction(function () use ($orderId, $order) {
+                    $locked = (array) Db::table('order_main')->where('id', $orderId)->lockForUpdate()->first();
+                    $this->walletHold->releaseOrder($locked, '出码失败', false);
+                });
+            }
+            throw $e;
+        }
         $payNo = (string) ($res['payNo'] ?? '');
         Db::table('order_main')->where('id', $orderId)->where('order_status', 0)
             ->where('booking_status', BookingConst::STATUS_PENDING_PAYMENT)
             ->update(['pay_trade_no' => $payNo]);
         $this->logger()->info('mmqr_created', ['payNo' => $payNo, 'bizType' => 'order', 'bizNo' => $order['order_no']]);
-        return $this->present($res, (string) $order['payment_expires_at']);
+        return $this->present($res, (string) $order['payment_expires_at'])
+            + ['walletAmount' => round((float) $order['wallet_amount'], 2), 'dueAmount' => $due];
     }
 
-    /** Trip 整单出码:金额为 Trip 应付总额,bizNo = trip_no;订单过期取各预订最早的 payment_expires_at */
-    public function createForTrip(array $tripSnapshot, array $snapshots): array
+    /** Trip 整单出码:金额为 Trip 应付总额(扣掉钱包抵扣额),bizNo = trip_no;订单过期取各预订最早的 payment_expires_at */
+    public function createForTrip(array $tripSnapshot, array $snapshots, bool $useWallet = false): array
     {
         $tripId = (int) $tripSnapshot['id'];
         if ($snapshots === []) {
@@ -99,7 +122,7 @@ class MmqrCheckoutService
         foreach ($snapshots as $s) {
             $this->assertCurrency($this->orderCurrency($s));
         }
-        [$trip, $bookings] = Db::transaction(function () use ($tripId, $tripSnapshot, $snapshots) {
+        [$trip, $bookings] = Db::transaction(function () use ($tripId, $tripSnapshot, $snapshots, $useWallet) {
             $trip = Db::table('order_trip')->where('id', $tripId)->where('user_id', (int) $tripSnapshot['user_id'])
                 ->whereNull('deleted_at')->lockForUpdate()->first();
             if (! $trip) {
@@ -116,6 +139,8 @@ class MmqrCheckoutService
             }
             $this->assertPayable($bookings);
             $this->pricingService->lockCouponForPay((int) $trip['coupon_id']);
+            $trip['_wallet_was_held'] = (int) $trip['wallet_hold_status'] === WalletHoldService::HELD;
+            $trip['wallet_amount'] = $this->walletHold->holdTrip($trip, $bookings, $useWallet);
             Db::table('order_trip')->where('id', $tripId)->update(['pay_method' => BookingConst::PAY_METHOD_KBZ_MMQR]);
             Db::table('order_main')->where('trip_id', $tripId)->where('order_status', 0)
                 ->update(['pay_method' => BookingConst::PAY_METHOD_KBZ_MMQR]);
@@ -123,24 +148,36 @@ class MmqrCheckoutService
         });
 
         $expiresAt = min(array_map(static fn ($b) => (string) $b['payment_expires_at'], $bookings));
-        $res = $this->center()->createPayment([
-            'siteId' => (int) $trip['site_id'],
-            'bizType' => BookingConst::PAY_BIZ_TRIP,
-            'bizNo' => (string) $trip['trip_no'],
-            'userId' => (int) $trip['user_id'],
-            'amount' => $this->amountOf((float) $trip['pay_amount']),
-            'currency' => self::CURRENCY,
-            'channel' => self::CHANNEL,
-            'subject' => 'mTrip Trip ' . $trip['trip_no'],
-            'expireAt' => self::toUtc($expiresAt),
-            'notifyUrl' => RefundSettleService::notifyUrl(),
-        ]);
+        try {
+            $res = $this->center()->createPayment([
+                'siteId' => (int) $trip['site_id'],
+                'bizType' => BookingConst::PAY_BIZ_TRIP,
+                'bizNo' => (string) $trip['trip_no'],
+                'userId' => (int) $trip['user_id'],
+                'amount' => $this->amountOf(WalletHoldService::remainder((float) $trip['pay_amount'], (float) $trip['wallet_amount'])),
+                'currency' => self::CURRENCY,
+                'channel' => self::CHANNEL,
+                'subject' => 'mTrip Trip ' . $trip['trip_no'],
+                'expireAt' => self::toUtc($expiresAt),
+                'notifyUrl' => RefundSettleService::notifyUrl(),
+            ]);
+        } catch (\Throwable $e) {
+            if (! $trip['_wallet_was_held'] && (float) $trip['wallet_amount'] > 0) {
+                Db::transaction(function () use ($tripId) {
+                    $locked = (array) Db::table('order_trip')->where('id', $tripId)->lockForUpdate()->first();
+                    $this->walletHold->releaseTrip($locked, '出码失败', false);
+                });
+            }
+            throw $e;
+        }
         $payNo = (string) ($res['payNo'] ?? '');
         Db::table('order_trip')->where('id', $tripId)->where('pay_status', 0)->update(['pay_trade_no' => $payNo]);
         Db::table('order_main')->where('trip_id', $tripId)->where('order_status', 0)
             ->where('booking_status', BookingConst::STATUS_PENDING_PAYMENT)->update(['pay_trade_no' => $payNo]);
         $this->logger()->info('mmqr_created', ['payNo' => $payNo, 'bizType' => 'trip', 'bizNo' => $trip['trip_no']]);
-        return $this->present($res, $expiresAt);
+        $walletAmount = round((float) $trip['wallet_amount'], 2);
+        return $this->present($res, $expiresAt)
+            + ['walletAmount' => $walletAmount, 'dueAmount' => WalletHoldService::remainder((float) $trip['pay_amount'], $walletAmount)];
     }
 
     // ------------------------------------------------------------------ 状态轮询
@@ -212,7 +249,10 @@ class MmqrCheckoutService
             $this->logger()->warning('mmqr_methods_center_unavailable', ['siteId' => $siteId, 'exception' => $e::class]);
         }
         return [
-            ['payMethod' => 3, 'code' => 'wallet', 'name' => 'mTrip Wallet', 'currencies' => [], 'enabled' => true],
+            // 钱包抵扣规则(Super Admin PRD 模块 25):结账默认是否自动抵扣、各交易类型单笔最高可用(0 不限)
+            ['payMethod' => 3, 'code' => 'wallet', 'name' => 'mTrip Wallet', 'currencies' => [], 'enabled' => true,
+                'autoApply' => WalletConfig::autoApply(),
+                'maxUse' => ['hotel' => WalletConfig::maxUse('hotel'), 'car' => WalletConfig::maxUse('car')]],
             ['payMethod' => BookingConst::PAY_METHOD_KBZ_MMQR, 'code' => self::CHANNEL, 'name' => 'KBZPay MMQR', 'currencies' => $kbzCurrencies, 'enabled' => $kbzEnabled],
             ['payMethod' => 1, 'code' => 'stripe', 'name' => 'Stripe', 'currencies' => [], 'enabled' => false],
             ['payMethod' => 2, 'code' => 'paypal', 'name' => 'PayPal', 'currencies' => [], 'enabled' => false],

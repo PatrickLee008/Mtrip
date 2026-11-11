@@ -15,6 +15,7 @@ use App\Service\Payment\MmqrCheckoutService;
 use App\Service\PaymentResultHandler;
 use App\Service\PricingService;
 use App\Service\SettlementService;
+use App\Service\WalletHoldService;
 use App\Service\WalletService;
 use Hyperf\Contract\ConfigInterface;
 use Hyperf\DbConnection\Db;
@@ -26,6 +27,7 @@ use Mtrip\Shared\Merchant\MerchantAccessGuard;
 use Mtrip\Shared\Support\CryptoHelper;
 use Mtrip\Shared\Support\OrderNoGenerator;
 use Mtrip\Shared\Support\Result;
+use Mtrip\Shared\Wallet\WalletConfig;
 use Mtrip\Shared\Support\UserNotify;
 
 /**
@@ -53,6 +55,9 @@ class TripController extends AbstractController
     /** 余额支付(payMethod=3)扣款用,与 OrderController 同一个服务 */
     #[Inject]
     protected WalletService $walletService;
+
+    #[Inject]
+    protected WalletHoldService $walletHold;
 
     #[Inject]
     protected PaymentResultHandler $payHandler;
@@ -198,12 +203,16 @@ class TripController extends AbstractController
         return Result::success($result, 'Trip 已创建,请在支付截止时间前完成支付');
     }
 
-    /** 支付整个 Trip(单笔支付):确认其下所有预订,券消耗一次 */
+    /**
+     * 支付整个 Trip(单笔支付):确认其下所有预订,券消耗一次。
+     * useWallet=1 钱包部分抵扣,口径同 OrderController::pay(Trip 只含酒店,按酒店单笔限额;抵扣额按预订应付比例分摊)。
+     */
     public function pay(): array
     {
         $tripId = $this->requireId('tripId');
         // 1 Stripe / 2 PayPal(均为 mock)/ 3 余额(真扣 user_info.balance,与 order/pay 同口径)/ 5 KBZPay MMQR(只出码)
         $payMethod = $this->intInput('payMethod', 1);
+        $useWallet = $this->intInput('useWallet', 0) === 1;
         if (! in_array($payMethod, [1, 2, 3, BookingConst::PAY_METHOD_KBZ_MMQR], true)) {
             throw new BusinessException(ErrorCode::PARAM_ERROR, '支付方式不正确');
         }
@@ -217,10 +226,21 @@ class TripController extends AbstractController
         $snapshots = Db::table('order_main')->where('trip_id', $tripId)->where('site_id', $siteId)
             ->where('user_id', UserContext::userId())->whereNull('deleted_at')->orderBy('id')->get()
             ->map(static fn ($row) => (array) $row)->all();
-        if ($payMethod === BookingConst::PAY_METHOD_KBZ_MMQR) {
-            return Result::success($this->mmqr->createForTrip((array) $tripSnapshot, $snapshots), '请使用 KBZPay 或 MMQR 银行 App 扫码支付');
+        $cap = WalletConfig::maxUse('hotel');
+        $payable = round((float) $tripSnapshot->pay_amount, 2);
+        if ($payMethod === 3 && $cap > 0 && $payable - $cap > 0.005) {
+            throw new BusinessException(ErrorCode::DATA_CONFLICT, '超出钱包单笔可用限额,请用其他支付方式补足');
         }
-        $snap = Db::transaction(function () use ($tripId, $payMethod, $siteId, $snapshots) {
+        if ($useWallet && $payMethod !== 3) {
+            $balance = round((float) Db::table('user_info')->where('id', UserContext::userId())->value('balance'), 2);
+            if (WalletHoldService::portion($balance, $cap, $payable) + 0.005 >= $payable) {
+                $payMethod = 3; // 钱包够付全额就直接钱包支付
+            }
+        }
+        if ($payMethod === BookingConst::PAY_METHOD_KBZ_MMQR) {
+            return Result::success($this->mmqr->createForTrip((array) $tripSnapshot, $snapshots, $useWallet), '请使用 KBZPay 或 MMQR 银行 App 扫码支付');
+        }
+        $snap = Db::transaction(function () use ($tripId, $payMethod, $siteId, $snapshots, $useWallet) {
             MerchantAccessGuard::lockBookable($snapshots, $siteId);
             MerchantAccessGuard::lockProperties($snapshots, $siteId);
             $trip = Db::table('order_trip')->where('id', $tripId)->where('site_id', $siteId)
@@ -255,6 +275,7 @@ class TripController extends AbstractController
             // 先锁整单券再扣款:券已被别的订单用掉就在这里拒绝,不产生任何扣款
             $couponRec = $this->pricingService->lockCouponForPay((int) $trip['coupon_id']);
             $tripPayAmount = round((float) $trip['pay_amount'], 2);
+            $orders = array_map(static fn ($x) => (array) $x, $bookings->all());
             if ($payMethod === 3 && $tripPayAmount > 0) {
                 $this->walletService->debit(
                     $siteId,
@@ -264,10 +285,13 @@ class TripController extends AbstractController
                     $tripId,
                     "行程 {$trip['trip_no']} 钱包支付",
                 );
+                $this->walletHold->recordFullTrip($trip, $orders);
+            } elseif ($useWallet) {
+                // mock 渠道 + 钱包部分抵扣:先扣抵扣额(按预订分摊),其余当场由 mock 付清
+                $this->walletHold->holdTrip($trip, $orders, true);
             }
             // 置 Trip 已付 + 各预订已支付 / 库存 / 结算 + 整单券核销一次:与 KBZ 业务通知落账同一实现
             // 推荐返利不在支付时发放:Trip 下各酒店订单各自入住核销时由 BookingLifecycleService::checkIn 发放(PRD 模块14)
-            $orders = array_map(static fn ($x) => (array) $x, $bookings->all());
             $codes = $this->orderPay->settleTrip(
                 $trip,
                 $orders,

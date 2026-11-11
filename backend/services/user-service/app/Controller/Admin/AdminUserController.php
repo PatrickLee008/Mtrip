@@ -4,14 +4,17 @@ declare(strict_types=1);
 
 namespace App\Controller\Admin;
 
+use App\Service\WalletAdjustService;
 use App\Service\WalletLogPresenter;
 use Hyperf\DbConnection\Db;
+use Hyperf\Di\Annotation\Inject;
 use Mtrip\Shared\Annotation\Permission;
 use Mtrip\Shared\Constants\ErrorCode;
 use Mtrip\Shared\Context\AdminContext;
 use Mtrip\Shared\Exception\BusinessException;
 use Mtrip\Shared\Support\MaskHelper;
 use Mtrip\Shared\Support\Result;
+use Mtrip\Shared\Wallet\WalletLedger;
 
 /**
  * C端用户管理(文档 6.4.4)
@@ -19,6 +22,9 @@ use Mtrip\Shared\Support\Result;
  */
 class AdminUserController extends AbstractAdminController
 {
+    #[Inject]
+    protected WalletAdjustService $walletAdjust;
+
     /** 用户列表:筛选 昵称/状态/实名状态/注册来源/注册日期;手机号脱敏 */
     public function index(): array
     {
@@ -127,6 +133,31 @@ class AdminUserController extends AbstractAdminController
         return $data;
     }
 
+    /**
+     * 某用户的钱包额度批次(PRD 模块 25「查看用户钱包余额及各笔退款额度的到期信息」):
+     * 每笔入账一行,含入账金额、剩余、到期时间、状态(1有效 2已用完 3已过期),并汇总可用 / 已过期金额。
+     */
+    #[Permission('user:wallet:list')]
+    public function walletLots(): array
+    {
+        $userId = $this->requireId('userId');
+        $user = $this->findScoped($userId);
+        $rows = Db::table('user_wallet_lot')->where('user_id', $userId)
+            ->orderByRaw('status = 1 DESC, expires_at IS NULL, expires_at, id')
+            ->limit(200)->get()->map(static fn ($r) => (array) $r)->all();
+        $sum = static fn (int $status, string $col) => WalletLedger::money(array_sum(array_map(
+            static fn ($r) => (int) $r['status'] === $status ? WalletLedger::cents($r[$col]) : 0,
+            $rows,
+        )));
+        return Result::success([
+            'balance' => WalletLedger::money(WalletLedger::cents($user['balance'])),
+            'activeAmount' => $sum(WalletLedger::LOT_ACTIVE, 'remaining'),
+            'expiredAmount' => WalletLedger::money(WalletLedger::cents(Db::table('user_balance_log')
+                ->where('user_id', $userId)->where('change_type', WalletLedger::TYPE_EXPIRED)->sum('amount')) * -1),
+            'lots' => $rows,
+        ]);
+    }
+
     /** 用户详情:含余额/积分流水摘要;超管可见明文手机号 */
     public function detail(): array
     {
@@ -152,7 +183,11 @@ class AdminUserController extends AbstractAdminController
         ]);
     }
 
-    /** 手动调账:正数增加、负数扣减,余额与流水原子写入。 */
+    /**
+     * 手动调账(经办):正数增加、负数扣减。提交后进入「待复核」,**不直接改余额**;
+     * 由另一位有 user:wallet:approve 权限的管理员在「钱包流水 → 调账申请」复核通过后才记账(WalletAdjustService)。
+     * relatedNo 选填:关联预订号 / 退款单号,便于对账。
+     */
     #[Permission('user:list:adjust-balance')]
     public function adjustBalance(): array
     {
@@ -171,39 +206,72 @@ class AdminUserController extends AbstractAdminController
         if (mb_strlen($reason) > 200) {
             throw new BusinessException(ErrorCode::PARAM_ERROR, '调整原因不能超过200字');
         }
+        $user = $this->findScoped($id);
+        // 提交时先做一次可行性预判(复核记账时还会按当时可用余额再判一次)
+        if (WalletLedger::cents($user['balance']) + $cents < 0) {
+            throw new BusinessException(ErrorCode::DATA_CONFLICT, '扣减金额不能超过当前余额');
+        }
+        if (WalletLedger::cents($user['balance']) + $cents > 999999999999) {
+            throw new BusinessException(ErrorCode::DATA_CONFLICT, '调整后余额超出允许范围');
+        }
+        $data = $this->walletAdjust->submit($user, $cents, $reason, $this->strInput('relatedNo'),
+            AdminContext::adminId(), AdminContext::adminName());
+        return Result::success($data, '调账申请已提交,待另一位管理员复核后入账');
+    }
 
-        $data = Db::transaction(function () use ($id, $cents, $reason): array {
-            $user = Db::table('user_info')->where('id', $id)->whereNull('deleted_at')
-                ->lockForUpdate()->first();
-            if (! $user) {
-                throw new BusinessException(ErrorCode::NOT_FOUND, '用户不存在');
-            }
-            $user = (array) $user;
-            $this->assertSiteScope((int) $user['site_id']);
-            $before = (int) round((float) $user['balance'] * 100);
-            $after = $before + $cents;
-            if ($after < 0) {
-                throw new BusinessException(ErrorCode::DATA_CONFLICT, '扣减金额不能超过当前余额');
-            }
-            if ($after > 999999999999) {
-                throw new BusinessException(ErrorCode::DATA_CONFLICT, '调整后余额超出允许范围');
-            }
-            $balance = number_format($after / 100, 2, '.', '');
-            Db::table('user_info')->where('id', $id)->update(['balance' => $balance]);
-            Db::table('user_balance_log')->insert([
-                'site_id' => (int) $user['site_id'],
-                'user_id' => $id,
-                'change_type' => 4,
-                'amount' => number_format($cents / 100, 2, '.', ''),
-                'before_balance' => number_format($before / 100, 2, '.', ''),
-                'after_balance' => $balance,
-                'order_id' => 0,
-                'operator_id' => AdminContext::adminId(),
-                'remark' => $reason,
-            ]);
-            return ['balance' => $balance];
-        });
-        return Result::success($data, '余额调整成功');
+    /** 调账申请列表:筛选 状态 / 用户ID / 申请单号;带用户昵称与脱敏手机号 */
+    #[Permission('user:wallet:list')]
+    public function walletAdjustList(): array
+    {
+        [$page, $pageSize] = $this->pageParams();
+        $query = Db::table('user_wallet_adjust_request');
+        $this->applySiteScope($query);
+        $status = $this->input('status');
+        if ($status !== null && $status !== '') {
+            $query->where('status', (int) $status);
+        }
+        if (($userId = $this->intInput('userId')) > 0) {
+            $query->where('user_id', $userId);
+        }
+        if (($no = $this->strInput('requestNo')) !== '') {
+            $query->where('request_no', $no);
+        }
+        $total = (clone $query)->count();
+        $rows = $query->orderByDesc('id')->forPage($page, $pageSize)->get()->map(static fn ($r) => (array) $r)->all();
+        $users = Db::table('user_info')->whereIn('id', array_unique(array_column($rows, 'user_id')) ?: [0])
+            ->get(['id', 'nickname', 'mobile', 'balance'])->keyBy('id')->all();
+        foreach ($rows as &$row) {
+            $u = $users[(int) $row['user_id']] ?? null;
+            $row['nickname'] = $u ? (string) $u->nickname : '';
+            $row['mobile'] = $u ? MaskHelper::mobile($this->decryptField((string) $u->mobile)) : '';
+            $row['balance'] = $u ? (string) $u->balance : '';
+        }
+        unset($row);
+        return Result::page($rows, $total, $page, $pageSize);
+    }
+
+    /** 复核调账申请:approve=1 通过并记账 / 0 驳回(驳回须填意见);经办人不能复核自己的申请 */
+    #[Permission('user:wallet:approve')]
+    public function walletAdjustReview(): array
+    {
+        $approve = $this->intInput('approve') === 1;
+        $remark = $this->strInput('remark');
+        if (! $approve && $remark === '') {
+            throw new BusinessException(ErrorCode::PARAM_ERROR, '驳回请填写复核意见');
+        }
+        $data = $this->walletAdjust->review($this->requireId(), $approve, $remark, AdminContext::adminId(),
+            AdminContext::adminName(), fn (int $siteId) => $this->assertSiteScope($siteId));
+        return Result::success($data, $data['message']);
+    }
+
+    /** 冲正已入账的调账申请:生成反向金额的新申请,同样需要复核 */
+    #[Permission('user:list:adjust-balance')]
+    public function walletAdjustReverse(): array
+    {
+        $reason = $this->requireStr('reason');
+        $data = $this->walletAdjust->reverse($this->requireId(), mb_substr($reason, 0, 150), AdminContext::adminId(),
+            AdminContext::adminName(), fn (int $siteId) => $this->assertSiteScope($siteId));
+        return Result::success($data, '冲正申请已提交,待复核后入账');
     }
 
     /** 冻结/解冻:1正常 ⇄ 2冻结(必填原因,写入备注前缀留痕) */

@@ -110,10 +110,14 @@ class RefundSettleService
         );
     }
 
-    /** 订单是否 KBZ 支付(退款应原路退回) */
+    /**
+     * 订单是否 KBZ 支付且应原路退回。用过钱包部分抵扣的 KBZ 订单不算:原路只能退 KBZ 实付部分,
+     * 整笔改退钱包(与 App OrderController::refundChannelOf 同口径)。
+     */
     public static function isKbzOrder(array $order): bool
     {
-        return (int) ($order['pay_method'] ?? 0) === BookingConst::PAY_METHOD_KBZ_MMQR;
+        return (int) ($order['pay_method'] ?? 0) === BookingConst::PAY_METHOD_KBZ_MMQR
+            && ! \App\Service\WalletHoldService::isMixed($order);
     }
 
     /**

@@ -31,6 +31,9 @@ class OrderPayService
     #[Inject]
     protected SettlementService $settlementService;
 
+    #[Inject]
+    protected WalletHoldService $walletHold;
+
     /**
      * 独立单支付成功(须在已持有订单行锁的事务内调用)
      *
@@ -47,11 +50,18 @@ class OrderPayService
         $verifyCode = $afterExpiry
             ? $this->payHandler->markPaidAfterExpiry($order, $payMethod, $tradeNo, $verifyCode)
             : $this->payHandler->markPaid($order, $payMethod, $tradeNo, $verifyCode);
-        // 资金流水:余额 / KBZ 是平台真实收到的钱,记 finance_flow(mock 渠道无真实资金,不记)
-        if (self::isRealMoney($payMethod)) {
-            $this->recordIncome($order, round((float) $order['pay_amount'], 2), $payMethod, $tradeNo,
-                "订单 {$order['order_no']} " . self::methodText($payMethod));
+        // 资金流水:余额 / KBZ 是平台真实收到的钱,记 finance_flow(mock 渠道无真实资金,不记)。
+        // 钱包部分抵扣时按渠道拆两条:钱包抵扣额记钱包,其余记本次支付方式
+        $payAmount = round((float) $order['pay_amount'], 2);
+        $walletAmount = $payMethod === 3 ? $payAmount : WalletHoldService::walletAmountOf($this->walletColumns('order_main', $orderId));
+        if ($walletAmount > 0 && $payMethod !== 3) {
+            $this->recordIncome($order, $walletAmount, 3, $tradeNo, "订单 {$order['order_no']} 钱包抵扣");
         }
+        $rest = $payMethod === 3 ? $payAmount : WalletHoldService::remainder($payAmount, $walletAmount);
+        if (self::isRealMoney($payMethod) && $rest > 0) {
+            $this->recordIncome($order, $rest, $payMethod, $tradeNo, "订单 {$order['order_no']} " . self::methodText($payMethod));
+        }
+        $this->walletHold->markPaid([$orderId]);
         $this->stockService->deduct($order);
         if ((int) $order['order_type'] === 2) {
             Db::table('goods_info')->where('id', (int) $order['goods_id'])
@@ -88,10 +98,16 @@ class OrderPayService
             $verifyCode = $afterExpiry
                 ? $this->payHandler->markPaidAfterExpiry($b, $payMethod, $tradeNo, $verifyCode)
                 : $this->payHandler->markPaid($b, $payMethod, $tradeNo, $verifyCode);
-            // KBZ 为真实收款:按预订各记一条收入流水(余额 Trip 维持原口径不记)
+            // KBZ 为真实收款:按预订各记一条收入流水,金额扣掉分摊的钱包抵扣额(余额 Trip 维持原口径不记)
             if ($payMethod === BookingConst::PAY_METHOD_KBZ_MMQR) {
-                $this->recordIncome($b, round((float) $b['pay_amount'], 2), $payMethod, $tradeNo,
-                    "行程 {$trip['trip_no']} 预订 {$b['order_no']} " . self::methodText($payMethod));
+                $kbz = WalletHoldService::remainder(
+                    round((float) $b['pay_amount'], 2),
+                    WalletHoldService::walletAmountOf($this->walletColumns('order_main', (int) $b['id'])),
+                );
+                if ($kbz > 0) {
+                    $this->recordIncome($b, $kbz, $payMethod, $tradeNo,
+                        "行程 {$trip['trip_no']} 预订 {$b['order_no']} " . self::methodText($payMethod));
+                }
             }
             $this->stockService->deduct($b);
             $this->settlementService->recordBooking($b);
@@ -99,6 +115,7 @@ class OrderPayService
         }
         // 整单券核销一次(已在扣款前锁定并确认可用)
         $this->pricingService->consumeCoupon($couponRec, (int) $trip['id']);
+        $this->walletHold->markPaid(array_map(static fn ($b) => (int) $b['id'], $bookings), (int) $trip['id']);
         return $codes;
     }
 
@@ -135,6 +152,12 @@ class OrderPayService
             'remark' => mb_substr($remark, 0, 255),
             'operator_id' => 0,
         ]);
+    }
+
+    /** 读订单 / Trip 的钱包抵扣列(调用方传入的行可能是加锁前的快照) */
+    private function walletColumns(string $table, int $id): array
+    {
+        return (array) Db::table($table)->where('id', $id)->first(['wallet_amount', 'wallet_hold_status']);
     }
 
     public static function isRealMoney(int $payMethod): bool

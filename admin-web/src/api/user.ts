@@ -14,8 +14,8 @@ export function apiUserDetail(id: number): Promise<{ user: Row; balanceLogs: Row
   return get('/admin/user/detail', { id });
 }
 
-/** 手动调账:amount 正数增加、负数扣减,原因必填。 */
-export function apiUserAdjustBalance(data: { id: number; amount: string; reason: string }): Promise<{ balance: string }> {
+/** 手动调账(经办):amount 正数增加、负数扣减,原因必填;只生成待复核申请,复核通过后才入账。 */
+export function apiUserAdjustBalance(data: { id: number; amount: string; reason: string; relatedNo?: string }): Promise<{ id: number; requestNo: string; status: number }> {
   return post('/admin/user/adjust-balance', data);
 }
 
@@ -28,6 +28,26 @@ export function apiUserBalanceLogs(
   params: Record<string, unknown>,
 ): Promise<PageData<Row> & { summary: { credit: string; debit: string } }> {
   return get('/admin/user/balance-logs', params);
+}
+
+/** 某用户的钱包额度批次(每笔入账一行,含剩余与到期;status 1有效 2已用完 3已过期) */
+export function apiWalletLots(userId: number): Promise<{ balance: string; activeAmount: string; expiredAmount: string; lots: Row[] }> {
+  return get('/admin/user/wallet-lots', { userId });
+}
+
+/** 钱包人工调账申请列表(经办 + 复核):status 0待复核 1已入账 2已驳回 3记账失败 */
+export function apiWalletAdjustList(params: Record<string, unknown>): Promise<PageData<Row>> {
+  return get<PageData<Row>>('/admin/user/wallet-adjust/list', params);
+}
+
+/** 复核:approve 1 通过并记账 / 0 驳回(必填 remark);经办人不能复核自己的申请 */
+export function apiWalletAdjustReview(data: { id: number; approve: 0 | 1; remark?: string }): Promise<{ status: number; balance: string | null; message: string }> {
+  return post('/admin/user/wallet-adjust/review', data);
+}
+
+/** 冲正已入账的申请:生成反向金额的新申请,同样需要复核 */
+export function apiWalletAdjustReverse(data: { id: number; reason: string }): Promise<{ id: number; requestNo: string }> {
+  return post('/admin/user/wallet-adjust/reverse', data);
 }
 
 /** 冻结/解冻:1正常 ⇄ 2冻结(必填原因,写入备注留痕) */
