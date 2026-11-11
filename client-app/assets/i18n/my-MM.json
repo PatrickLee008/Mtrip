@@ -25,7 +25,10 @@
       "viewBooking": "ဘိုကင် ကြည့်ရန်",
       "paidToast": "ငွေပေးချေမှု အောင်မြင်ပါသည်",
       "invalid": "Unable to load the payment QR code",
-      "payWithMmqr": "Pay with KBZPay / MMQR"
+      "payWithMmqr": "Pay with KBZPay / MMQR",
+      "walletPaid": "mTrip ပိုက်ဆံအိတ်ဖြင့် ပေးချေပြီး",
+      "orderTotal": "ဘိုကင် စုစုပေါင်း",
+      "walletHint": "ဤ QR ကုဒ်သည် ကျန်ငွေအတွက်သာ ဖြစ်သည်။ ဘိုကင် ပယ်ဖျက်ခြင်း သို့မဟုတ် သက်တမ်းကုန်ပါက ပိုက်ဆံအိတ်ငွေကို ပြန်အမ်းပါမည်။"
     }
   },
   "chat": {
@@ -2148,7 +2151,8 @@
         "cancel": "ပယ်ဖျက်ရန်",
         "retry": "ထပ်ကြိုးစားရန်",
         "moreMethods": "အခြား ငွေပေးချေနည်းများ",
-        "moreMethodsDesc": "မကြာမီ ရရှိမည်"
+        "moreMethodsDesc": "မကြာမီ ရရှိမည်",
+        "remainingMethodRequired": "ပိုက်ဆံအိတ်ဖြင့် ပမာဏအပြည့် မလုံလောက်ပါ။ ကျန်ငွေအတွက် ငွေပေးချေမှုနည်းလမ်း ရွေးချယ်ပါ။"
       },
       "success": {
         "title": "ဘွတ်ကင် အတည်ပြုပြီး",
@@ -2278,6 +2282,20 @@
         "night": "night",
         "room": "room",
         "once": "booking"
+      },
+      "wallet": {
+        "appliedTitle": "mTrip ပိုက်ဆံအိတ် အသုံးပြုထားသည်",
+        "appliedBadge": "အသုံးပြုပြီး",
+        "availableBalance": "အသုံးပြုနိုင်သော လက်ကျန်",
+        "remainingDue": "ကျန်ရှိ ပေးချေရန်",
+        "capNote": "ဘိုကင်တစ်ခုလျှင် ပိုက်ဆံအိတ်မှ {{amount}} အထိသာ အသုံးပြုနိုင်သည်။",
+        "balanceAfter": "တည်းခိုပြီးနောက် ကျန်ရှိမည့် လက်ကျန်",
+        "coversAll": "mTrip ပိုက်ဆံအိတ်ဖြင့် ပမာဏအပြည့် ပေးချေနိုင်ပါသည်။ အခြားငွေပေးချေမှု မလိုအပ်ပါ။",
+        "payRemainingWith": "ကျန်ငွေကို ပေးချေမည့်နည်းလမ်း",
+        "remainingNote": "ကျန်ရှိသော {{amount}} ကို အခြားငွေပေးချေမှုနည်းလမ်းဖြင့် ပေးချေပါမည်။",
+        "orderTotal": "ဘိုကင် စုစုပေါင်း",
+        "zeroOutOfPocket": "ထပ်မံပေးချေရန် မလို",
+        "liteUsing": "{{amount}} အသုံးပြုမည် · ကျန် {{due}} ပေးချေရန်"
       }
     },
     "reviewsPage": {

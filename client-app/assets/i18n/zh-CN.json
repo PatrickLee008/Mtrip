@@ -25,7 +25,10 @@
       "viewBooking": "查看预订",
       "paidToast": "支付成功",
       "invalid": "无法加载支付二维码",
-      "payWithMmqr": "KBZPay / MMQR 扫码支付"
+      "payWithMmqr": "KBZPay / MMQR 扫码支付",
+      "walletPaid": "mTrip 钱包已抵扣",
+      "orderTotal": "订单总额",
+      "walletHint": "此二维码只收取剩余金额。预订取消或超时未付,钱包抵扣额将自动退回钱包。"
     }
   },
   "chat": {
@@ -2148,7 +2151,8 @@
         "cancel": "取消",
         "retry": "重试",
         "moreMethods": "更多支付方式",
-        "moreMethodsDesc": "即将开放"
+        "moreMethodsDesc": "即将开放",
+        "remainingMethodRequired": "钱包余额不足以支付全部金额,请为剩余部分选择支付方式。"
       },
       "success": {
         "title": "预订成功",
@@ -2278,6 +2282,20 @@
         "night": "每晚",
         "room": "每间",
         "once": "每次"
+      },
+      "wallet": {
+        "appliedTitle": "已使用 mTrip 钱包",
+        "appliedBadge": "已抵扣",
+        "availableBalance": "可用余额",
+        "remainingDue": "还需支付",
+        "capNote": "每笔预订最多可用钱包 {{amount}}。",
+        "balanceAfter": "抵扣后钱包余额",
+        "coversAll": "mTrip 钱包已抵扣全部金额,无需其他支付方式。",
+        "payRemainingWith": "剩余金额支付方式",
+        "remainingNote": "剩余 {{amount}} 将使用其他支付方式支付。",
+        "orderTotal": "订单总额",
+        "zeroOutOfPocket": "无需另付",
+        "liteUsing": "本次使用 {{amount}} · 还需支付 {{due}}"
       }
     },
     "reviewsPage": {

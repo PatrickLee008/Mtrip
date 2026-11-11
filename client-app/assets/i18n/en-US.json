@@ -25,7 +25,10 @@
       "viewBooking": "View Booking",
       "paidToast": "Payment successful",
       "invalid": "Unable to load the payment QR code",
-      "payWithMmqr": "Pay with KBZPay / MMQR"
+      "payWithMmqr": "Pay with KBZPay / MMQR",
+      "walletPaid": "Paid with mTrip Wallet",
+      "orderTotal": "Booking total",
+      "walletHint": "This QR code is for the remaining amount only. If the booking is cancelled or expires, the wallet amount is returned to your wallet."
     }
   },
   "chat": {
@@ -2148,7 +2151,8 @@
         "cancel": "Cancel",
         "retry": "Retry",
         "moreMethods": "More payment methods",
-        "moreMethodsDesc": "Coming soon"
+        "moreMethodsDesc": "Coming soon",
+        "remainingMethodRequired": "Your wallet does not cover the full amount. Please choose a payment method for the rest."
       },
       "success": {
         "title": "Booking Confirmed",
@@ -2278,6 +2282,20 @@
         "night": "night",
         "room": "room",
         "once": "booking"
+      },
+      "wallet": {
+        "appliedTitle": "mTrip Wallet Applied",
+        "appliedBadge": "Applied",
+        "availableBalance": "Available Balance",
+        "remainingDue": "Remaining to Pay",
+        "capNote": "Wallet use is limited to {{amount}} per booking.",
+        "balanceAfter": "Balance Remaining After Stay",
+        "coversAll": "Your mTrip Wallet covers the full amount. No other payment is needed.",
+        "payRemainingWith": "Pay the Remaining Amount With",
+        "remainingNote": "Remaining {{amount}} will be paid with another payment method.",
+        "orderTotal": "Booking Total",
+        "zeroOutOfPocket": "Zero Out of Pocket",
+        "liteUsing": "Using {{amount}} · {{due}} left to pay"
       }
     },
     "reviewsPage": {

@@ -238,6 +238,10 @@ export type RootStackParamList = {
     orderExpireAt: string;
     orderId?: number;
     tripId?: number;
+    /** 钱包已抵扣的金额(部分抵扣时 > 0;`amount` 是码上要付的剩余部分) */
+    walletAmount?: number;
+    /** 拿码时是否带了 useWallet=1;刷新二维码必须带同一个值(否则后端会退回冻结的抵扣额) */
+    useWallet?: boolean;
     /** 支付成功后进哪一页结果页(订房向导进来时给);不传则回预订详情 */
     successRoute?: 'BookingSuccess' | 'BookingSuccessLite';
     /** 透传给结果页的展示字段(订房向导带过来,成功页会再按 orderId 读一次订单) */

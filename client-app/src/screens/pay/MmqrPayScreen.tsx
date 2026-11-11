@@ -11,6 +11,8 @@
  *     码过期/关闭而订单仍在窗口内 → 「刷新二维码」(重新调 pay 接口出新码);
  *     订单窗口已过 → 提示并回订单详情;late(超时后到账)→ 说明后端会恢复或自动退款。
  *   - 时间一律按 UTC 解析(`utils/time.parseUtcTime`)。卸载时清理所有定时器与监听。
+ *   - 钱包部分抵扣(PRD 模块 25):码上只收剩余金额(`amount` = `dueAmount`),卡片里注明「mTrip 钱包已抵扣 X / 订单总额 Y」;
+ *     刷新二维码必须带同一个 `useWallet`(否则后端退回冻结额改为整单扫码)。
  */
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
@@ -36,7 +38,7 @@ import { PAGE_PADDING, colors, radius, shadows } from '@/config/theme';
 import { fonts } from '@/config/typography';
 import type { RootStackParamList } from '@/navigation/types';
 import { formatCountdown } from '@/screens/hotel/useBookingResult';
-import { requestMmqr } from '@/screens/pay/mmqrPay';
+import { isWalletPaid, requestMmqr } from '@/screens/pay/mmqrPay';
 import { useCommonStore } from '@/store/commonStore';
 import { formatMoney } from '@/utils/format';
 import { secondsUntilUtc } from '@/utils/time';
@@ -58,6 +60,8 @@ interface CodeState {
   currency: string;
   expireAt: string;
   orderExpireAt: string;
+  /** 钱包已抵扣的金额(0 = 未用钱包) */
+  walletAmount: number;
 }
 
 /**
@@ -126,6 +130,7 @@ export default function MmqrPayScreen() {
     currency: p.currency,
     expireAt: p.expireAt,
     orderExpireAt: p.orderExpireAt,
+    walletAmount: Number(p.walletAmount ?? 0) || 0,
   });
   const [status, setStatus] = useState<PayTxStatus | null>(null);
   const [now, setNow] = useState(() => Date.now());
@@ -213,7 +218,8 @@ export default function MmqrPayScreen() {
         ...(p.result ?? {}),
         orderId: p.orderId,
         tripId: p.tripId,
-        paidTotal: Number(code.amount) || undefined,
+        /* 实付总额 = 码上金额 + 钱包抵扣额 */
+        paidTotal: Number(code.amount) + code.walletAmount || undefined,
         status: 'confirmed' as const,
       };
       if (p.successRoute === 'BookingSuccessLite') {
@@ -264,8 +270,13 @@ export default function MmqrPayScreen() {
     if (refreshing) return;
     setRefreshing(true);
     try {
-      const res = await requestMmqr({ orderId: p.orderId, tripId: p.tripId });
+      const res = await requestMmqr({ orderId: p.orderId, tripId: p.tripId, useWallet: p.useWallet });
       if (!mounted.current) return;
+      /* 极少见:钱包余额此间够付全额,后端直接改走钱包付清 —— 按已支付处理 */
+      if (isWalletPaid(res)) {
+        setStatus('paid');
+        return;
+      }
       setCode({
         payNo: res.payNo,
         qrCode: res.qrCode,
@@ -273,6 +284,7 @@ export default function MmqrPayScreen() {
         currency: res.currency,
         expireAt: res.expireAt,
         orderExpireAt: res.orderExpireAt,
+        walletAmount: Number(res.walletAmount ?? 0) || 0,
       });
       setStatus(null);
     } catch {
@@ -316,6 +328,24 @@ export default function MmqrPayScreen() {
           <Text style={styles.amount} numberOfLines={1} adjustsFontSizeToFit>
             {formatMoney(code.amount, code.currency)}
           </Text>
+          {/* 钱包部分抵扣:码上只是剩余金额,注明钱包已付多少与订单总额 */}
+          {code.walletAmount > 0 ? (
+            <View style={styles.walletNote}>
+              <View style={styles.walletNoteRow}>
+                <Text style={styles.walletNoteLabel}>{t('pay.mmqr.walletPaid')}</Text>
+                <Text style={styles.walletNoteValue}>
+                  - {formatMoney(code.walletAmount, code.currency)}
+                </Text>
+              </View>
+              <View style={styles.walletNoteRow}>
+                <Text style={styles.walletNoteLabel}>{t('pay.mmqr.orderTotal')}</Text>
+                <Text style={styles.walletNoteTotal}>
+                  {formatMoney(Number(code.amount) + code.walletAmount, code.currency)}
+                </Text>
+              </View>
+              <Text style={styles.desc}>{t('pay.mmqr.walletHint')}</Text>
+            </View>
+          ) : null}
 
           <View style={styles.qrBox} nativeID={QR_DOM_ID}>
             {code.qrCode ? (
@@ -502,6 +532,19 @@ const styles = StyleSheet.create({
     lineHeight: 44,
     color: colors.primary,
   },
+  /* 钱包抵扣说明:浅蓝底小卡,两行「标签 — 金额」+ 一行说明 */
+  walletNote: {
+    alignSelf: 'stretch',
+    gap: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: radius.tile,
+    backgroundColor: colors.tintBg,
+  },
+  walletNoteRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+  walletNoteLabel: { fontFamily: fonts.inter, fontSize: 14, lineHeight: 20, color: colors.muted },
+  walletNoteValue: { fontFamily: fonts.interBold, fontSize: 14, lineHeight: 20, color: colors.primary },
+  walletNoteTotal: { fontFamily: fonts.interSemi, fontSize: 14, lineHeight: 20, color: colors.heading },
   qrBox: {
     marginTop: 8,
     padding: 16,

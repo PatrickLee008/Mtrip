@@ -58,10 +58,10 @@ import { useTranslation } from 'react-i18next';
 import * as Clipboard from 'expo-clipboard';
 
 import { fetchHotelDetail } from '@/api/goods';
-import { fetchOrderDetail, payOrder } from '@/api/order';
-import { PAY_METHOD, getPayMethods, isMethodEnabled } from '@/api/pay';
+import { fetchOrderDetail } from '@/api/order';
+import { PAY_METHOD, getPayMethods, isMethodEnabled, type PayMethodOption } from '@/api/pay';
 import { fetchReviewContext } from '@/api/review';
-import { apiTripPay, fetchTripDetail, type TripBookingRow } from '@/api/trip';
+import { fetchTripDetail, type TripBookingRow } from '@/api/trip';
 import { TEMP_HOTEL_GALLERY, tempCoverFor } from '@/assets/tempImages';
 import { ErrorView, LoadingView } from '@/components/common/StateViews';
 import HomeIcon from '@/components/home/HomeIcon';
@@ -75,7 +75,7 @@ import { fonts } from '@/config/typography';
 import type { RootStackParamList } from '@/navigation/types';
 import { ROOM_FACILITY_ICONS } from '@/screens/hotel/detailDemo';
 import { orderStatusColor } from '@/screens/mypick/useMyPickData';
-import { mmqrRouteParams, requestMmqr } from '@/screens/pay/mmqrPay';
+import { isWalletPaid, mmqrRouteParams, payPendingWithWallet, requestMmqr } from '@/screens/pay/mmqrPay';
 import { useCommonStore } from '@/store/commonStore';
 import { useSiteStore } from '@/store/siteStore';
 import { useUserStore } from '@/store/userStore';
@@ -97,6 +97,7 @@ export default function BookingDetailScreen() {
   const currency = useSiteStore((s) => s.currency);
   const showToast = useCommonStore((s) => s.showToast);
   const refreshProfile = useUserStore((s) => s.refreshProfile);
+  const profile = useUserStore((s) => s.profile);
   const comingSoon = () => showToast(t('home.comingSoon'));
 
   const { orderId, tripId } = route.params;
@@ -105,6 +106,8 @@ export default function BookingDetailScreen() {
   const [bookings, setBookings] = useState<TripBookingRow[]>([]);
   /** Trip 主单的实付(多房间要显示整单金额,不是代表单的) */
   const [tripPayAmount, setTripPayAmount] = useState<number | null>(null);
+  /** 整个 Trip 的应付(多酒店时 `tripPayAmount` 只是这一段;支付按整车,钱包抵扣要按整车算) */
+  const [tripTotal, setTripTotal] = useState<number | null>(null);
   const [hotel, setHotel] = useState<GoodsDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -128,6 +131,7 @@ export default function BookingDetailScreen() {
         const sameStay = all.filter((row) => stayKeyOf(row) === key);
         const single = groupStays(all).length <= 1;
         setBookings(sameStay);
+        setTripTotal(Number(trip.pay_amount) || 0);
         setTripPayAmount(
           single
             ? Number(trip.pay_amount) || 0
@@ -136,6 +140,7 @@ export default function BookingDetailScreen() {
       } else {
         setBookings([]);
         setTripPayAmount(null);
+        setTripTotal(null);
       }
       /* 图库 / 地址 / 房型属性只有商品详情有,订单快照里没有 */
       if (detail.property_id > 0) {
@@ -168,15 +173,35 @@ export default function BookingDetailScreen() {
     void load();
   }, [load]);
 
-  /** 待支付:多房间付整车(`trip/pay`),单房型付这一单(`order/pay`)。付完重读,不新建单 */
+  /**
+   * 待支付:多房间付整车(`trip/pay`),单房型付这一单(`order/pay`)。付完重读,不新建单。
+   * 钱包部分抵扣(PRD 模块 25,与订房向导同一规则,见 `payPendingWithWallet`):钱包够付全额(余额与单笔限额)→ 钱包付;
+   * 不够且站点开通了 MMQR → 钱包先抵扣、剩余进扫码页;都不行才提示余额不足。
+   */
   const pending = order?.order_status === ORDER_STATUS.PENDING;
   const payPending = async () => {
     if (paying || !order) return;
     setPaying(true);
     try {
-      if (tripId && tripId > 0) await apiTripPay({ tripId, payMethod: 3 });
-      else await payOrder(order.id);
+      const target = { orderId: order.id, tripId: tripId && tripId > 0 ? tripId : undefined };
+      const outcome = await payPendingWithWallet(target, {
+        payable: target.tripId ? (tripTotal ?? 0) : Number(order.pay_amount) || 0,
+        balance: Number(profile?.balance ?? 0),
+        methods: payMethods,
+        mmqrEnabled,
+      });
       void refreshProfile().catch(() => undefined);
+      if (outcome.kind === 'insufficient') {
+        showToast(t('order.balanceInsufficient'));
+        return;
+      }
+      if (outcome.kind === 'mmqr') {
+        navigation.navigate(
+          'MmqrPay',
+          mmqrRouteParams(outcome.res, { ...target, detailRoute: 'BookingDetail', useWallet: outcome.useWallet }),
+        );
+        return;
+      }
       showToast(t('hotels.booking.success.paidToast'));
       await load();
     } catch (e) {
@@ -188,31 +213,44 @@ export default function BookingDetailScreen() {
     }
   };
 
-  /** 站点是否开通 KBZPay MMQR(渠道接口失败 = 不开,只保留余额支付) */
-  const [mmqrEnabled, setMmqrEnabled] = useState(false);
+  /**
+   * 站点渠道表(渠道接口失败 = null:不开 MMQR,只保留余额支付;钱包规则按默认 自动抵扣 / 不限额)。
+   * 待支付时顺手刷一次本地余额,钱包够不够要按最新余额判断。
+   */
+  const [payMethods, setPayMethods] = useState<PayMethodOption[] | null>(null);
+  const mmqrEnabled = isMethodEnabled(payMethods, PAY_METHOD.MMQR, currency || undefined);
   useEffect(() => {
     if (!pending) return;
     let alive = true;
+    void refreshProfile().catch(() => undefined);
     void getPayMethods(currency || undefined)
       .then((rows) => {
-        if (alive) setMmqrEnabled(isMethodEnabled(Array.isArray(rows) ? rows : null, PAY_METHOD.MMQR, currency || undefined));
+        if (alive) setPayMethods(Array.isArray(rows) ? rows : null);
       })
       .catch(() => {
-        if (alive) setMmqrEnabled(false);
+        if (alive) setPayMethods(null);
       });
     return () => {
       alive = false;
     };
-  }, [pending, currency]);
+  }, [pending, currency, refreshProfile]);
 
-  /** MMQR 去支付 / 重新支付:拿(或复用)二维码后进扫码页;付完由扫码页回到本页 */
+  /**
+   * MMQR 去支付 / 重新支付:拿(或复用)二维码后进扫码页;付完由扫码页回到本页。
+   * 这枚按钮是「整单用 KBZPay 付、不用钱包」(useWallet=0;之前冻结过的钱包抵扣额后端会退回);
+   * 想先用钱包抵扣的走「立即支付」。
+   */
   const payMmqr = async () => {
     if (paying || !order) return;
     setPaying(true);
     try {
       const target = { orderId: order.id, tripId: tripId && tripId > 0 ? tripId : undefined };
       const res = await requestMmqr(target);
-      navigation.navigate('MmqrPay', mmqrRouteParams(res, { ...target, detailRoute: 'BookingDetail' }));
+      if (isWalletPaid(res)) {
+        await load();
+        return;
+      }
+      navigation.navigate('MmqrPay', mmqrRouteParams(res, { ...target, detailRoute: 'BookingDetail', useWallet: false }));
     } catch {
       /* 请求层已 Toast 原因;重读一次,单若已失效页面会跟着变 */
       await load();

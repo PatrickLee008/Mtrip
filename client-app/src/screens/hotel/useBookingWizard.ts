@@ -12,6 +12,11 @@
  *   - 渠道:mTrip 钱包余额(`payMethod=3`)+ KBZPay MMQR(`payMethod=5`,由 `getPayMethods`
  *     按站点绑定决定是否可用;接口失败时退化为只有余额可用)。其余置灰 + Coming soon。
  *     选 MMQR 下单后进 `MmqrPayScreen` 扫码,支付结果在那一页轮询。
+ *   - **钱包部分抵扣**(Super Admin PRD v1.0.14 模块 25,2026-11-11):钱包不再是与 MMQR 互斥的「一种渠道」,
+ *     而是一枚开关 `walletOn`(默认取渠道表钱包行的 `autoApply`,用户付款前可关)。
+ *     抵扣额 `walletApplied` = min(余额, 酒店单笔限额 `maxUse.hotel`(0 不限), 应付),剩余 `remainingDue` 由
+ *     `method`(实际只有 MMQR 可选)付清:钱包够付全额 → `payMethod=3`;不够 → MMQR + `useWallet=1`(码只收剩余);
+ *     关掉钱包 → 整单 MMQR。`method` 从此只表示「补差额 / 整单」的那个渠道,不再取 `'wallet'`。
  *   - 优惠券抵扣额一律由服务端 `/marketing/coupon/match-list` 给出,前端不自己算。
  *
  * 关怀模式传 `enableMultiStay: false`:步骤序列恒为 dates → guests → review → payment,
@@ -31,6 +36,8 @@ import {
   getPayMethods,
   isBalanceEnabled,
   isMethodEnabled,
+  walletRule,
+  walletSplit,
   type PayMethodOption,
 } from '@/api/pay';
 import { ApiError } from '@/api/request';
@@ -59,7 +66,7 @@ import { useCommonStore } from '@/store/commonStore';
 import { useRoomCartStore, type TripStay } from '@/store/roomCartStore';
 import { useSiteStore } from '@/store/siteStore';
 import { useUserStore } from '@/store/userStore';
-import { mmqrRouteParams, requestMmqr } from '@/screens/pay/mmqrPay';
+import { isWalletPaid, mmqrRouteParams, requestMmqr } from '@/screens/pay/mmqrPay';
 import type { CouponView, RefundRule } from '@/types/models';
 import { formatMoney } from '@/utils/format';
 import { isContactMobile, isEmail } from '@/utils/validate';
@@ -161,7 +168,13 @@ export function useBookingWizard({
 
   const comingSoon = () => showToast(t('home.comingSoon'));
   /** 钱包可用余额:登录后取 `/app/user/me` 的 balance(字符串),演示模式回落设计稿数值 */
-  const walletBalance = isLogin ? Number(profile?.balance ?? 0) : BOOKING_DEMO.walletBalance;
+  const liveBalance = isLogin ? Number(profile?.balance ?? 0) : BOOKING_DEMO.walletBalance;
+  /**
+   * 提交那一刻的余额。扣款成功后会刷新资料(「更多」页要看到新余额),但成功弹窗背后的钱包卡与抵扣小卡
+   * 仍应显示付款前的数(否则会闪成「可用 86,000 / 抵扣后 71,000」);建单失败 / 价格变动时清掉,回到实时余额。
+   */
+  const [balanceAtSubmit, setBalanceAtSubmit] = useState<number | null>(null);
+  const walletBalance = balanceAtSubmit ?? liveBalance;
 
   /**
    * 从「Add Hotel and Homestay」挑完下一家回来:向导是新挂载的,**从第 1 步开始** ——
@@ -196,8 +209,15 @@ export function useBookingWizard({
       saveInfo: false,
     },
   );
-  /** 默认预选钱包余额;MMQR 可用时可切换(其余渠道点了只弹 Coming soon) */
-  const [method, setMethod] = useState<PaymentMethodKey | null>('wallet');
+  /**
+   * 补差额 / 整单的渠道(钱包是独立开关 `walletOn`,见文件头)。初始未选;渠道表回来后 MMQR 可用就默认预选它,
+   * 其余渠道点了只弹 Coming soon。
+   */
+  const [method, setMethod] = useState<PaymentMethodKey | null>(null);
+  /** 用户动过渠道之后不再自动预选 */
+  const methodTouched = useRef(false);
+  /** 钱包开关:null = 用户没动过,跟随后台的 `autoApply` */
+  const [walletPick, setWalletPick] = useState<boolean | null>(null);
   /**
    * 站点可用渠道(`/app/order/pay/methods`)。null = 未登录 / 请求失败 → 退化为原写死逻辑:
    * 只有余额可用,MMQR 灰显。
@@ -222,15 +242,34 @@ export function useBookingWizard({
   }, [isLogin, currency]);
   const mmqrEnabled = isMethodEnabled(payMethods, PAY_METHOD.MMQR, currency || undefined);
   const walletEnabled = isBalanceEnabled(payMethods);
-  /* 渠道表回来后纠正预选:余额被站点关掉而 MMQR 可用时改选 MMQR;MMQR 不可用时不能停在 MMQR 上 */
+  /** 后台钱包规则:是否默认自动抵扣、酒店单笔限额(0 不限) */
+  const { autoApply: walletAutoApply, maxUseHotel: walletCap } = walletRule(payMethods);
+  /** 钱包开关的实际值:站点关掉余额时恒为关 */
+  const walletOn = walletEnabled && (walletPick ?? walletAutoApply);
+  const setWalletOn = (on: boolean) => {
+    if (on && !walletEnabled) {
+      comingSoon();
+      return;
+    }
+    setWalletPick(on);
+  };
+  /* 渠道表回来后纠正预选:MMQR 可用且用户没动过 → 默认选 MMQR;MMQR 不可用时不能停在 MMQR 上 */
   useEffect(() => {
-    if (method === 'wallet' && !walletEnabled && mmqrEnabled) setMethod('mmqr');
-    else if (method === 'mmqr' && !mmqrEnabled) setMethod(walletEnabled ? 'wallet' : null);
-  }, [method, walletEnabled, mmqrEnabled]);
-  /** 渠道选择:只放行可用的(钱包 / MMQR),其余弹 Coming soon */
+    if (method === 'mmqr' && !mmqrEnabled) setMethod(null);
+    else if (method === null && mmqrEnabled && !methodTouched.current) setMethod('mmqr');
+  }, [method, mmqrEnabled]);
+  /**
+   * 渠道选择:`'wallet'` 切换钱包开关(关怀模式与旧版支付页的钱包行仍按「行」点);
+   * MMQR 可用时单选(再点一次取消);其余弹 Coming soon。
+   */
   const selectMethod = (key: PaymentMethodKey | null) => {
-    if (key === null || (key === 'wallet' && walletEnabled) || (key === 'mmqr' && mmqrEnabled)) {
-      setMethod(key);
+    if (key === 'wallet') {
+      setWalletOn(!walletOn);
+      return;
+    }
+    if (key === null || (key === 'mmqr' && mmqrEnabled)) {
+      methodTouched.current = true;
+      setMethod((prev) => (key !== null && prev === key ? null : key));
       return;
     }
     comingSoon();
@@ -276,6 +315,8 @@ export function useBookingWizard({
     longstay: number;
     /** 建单时是否由钱包全额覆盖(决定步骤数,建单后余额变了也不跳) */
     walletCovers: boolean;
+    /** 建单时的钱包抵扣额(扣款后余额变了,页面仍按这个数显示) */
+    walletApplied: number;
     /** 建单时的各段住宿与小计(第 2 步 Stay 卡片;车清空后仍按它显示) */
     stays: TripStay[];
     stayTotals: number[];
@@ -706,13 +747,22 @@ export function useBookingWizard({
       : Math.max(0, roomsTotal - longstayDiscount - couponDiscount) + addonTotal;
 
   /**
-   * 多房间新稿(2659:13152):钱包放在第 2 步。开着钱包且余额够付全款 → 第 2 步直接 Pay Now,流程只有两步;
-   * 余额不够(或关了钱包)才进第 3 步选其他渠道。后端没有「钱包付一部分 + 其他渠道」的组合支付,
-   * 所以只认「全额覆盖」。建单后余额已扣、车已清空,改读快照里当时的判定,序列不在成功弹窗背后跳变。
+   * 钱包部分抵扣(PRD 模块 25):开关开着时抵扣 min(余额, 酒店单笔限额, 应付),剩余 `remainingDue` 用其他渠道付。
+   * 未登录(演示余额)同样按这个公式算,点支付时才跳登录。
+   */
+  const split = walletSplit(walletOn ? walletBalance : 0, walletCap, payableTotal);
+  const walletApplied = priceSnapshot ? priceSnapshot.walletApplied : split.wallet;
+  const remainingDue = priceSnapshot
+    ? Math.max(0, Math.round((priceSnapshot.payable - priceSnapshot.walletApplied) * 100) / 100)
+    : split.due;
+  /**
+   * 钱包付清全额(开着钱包且余额与单笔限额都够)。多房间新稿(2659:13152)钱包在第 2 步:
+   * 付清 → 第 2 步直接 Pay Now,流程只有两步;付不清(或关了钱包)才进第 3 步选补差额的渠道。
+   * 建单后余额已扣、车已清空,改读快照里当时的判定,序列不在成功弹窗背后跳变。
    */
   const walletCovers = priceSnapshot
     ? priceSnapshot.walletCovers
-    : cartMode && isLogin && method === 'wallet' && walletBalance >= payableTotal;
+    : walletOn && split.covers && (split.wallet > 0 || payableTotal <= 0);
 
   /** 步骤序列:调用方给了 `steps` 就用它;否则多住宿才插入 trip */
   const sequence = useMemo<BookingStepKey[]>(
@@ -813,15 +863,25 @@ export function useBookingWizard({
    */
   const [priceChange, setPriceChange] = useState<PriceChangeDetail | null>(null);
 
+  /** 按某个应付金额(建单 / 价格变动后的服务端金额)重新分一次钱包与剩余 */
+  const payPlan = (amount: number) => walletSplit(walletOn ? walletBalance : 0, walletCap, amount);
+
   /**
    * MMQR:单已建好 → 调 pay(payMethod=5)拿二维码 → reset 到扫码页(栈底垫「我的预订」,
    * 返回不会回到向导再建一单)。拿码失败(请求层已 Toast 原因)→ 进这张单的预订详情,
    * 在那里可以重新选 MMQR 或余额支付同一张单。
    */
-  const startMmqr = async (target: { orderId: number; tripId?: number; orderNo: string }) => {
+  const startMmqr = async (target: { orderId: number; tripId?: number; orderNo: string; useWallet: boolean }) => {
     const base = { name: 'MainTabs' as const, params: { screen: 'MyPickTab' as const } };
     try {
-      const res = await requestMmqr({ orderId: target.orderId, tripId: target.tripId });
+      const res = await requestMmqr({ orderId: target.orderId, tripId: target.tripId, useWallet: target.useWallet });
+      /* 钱包已扣了抵扣额(或此间够付全额、后端直接改走钱包付清),本地余额刷一次 */
+      void refreshProfile().catch(() => undefined);
+      if (isWalletPaid(res)) {
+        /* 进成功结果页(那一页会按单号重读金额与核销码) */
+        goResult('confirmed', { orderId: target.orderId, orderNo: target.orderNo, tripId: target.tripId });
+        return;
+      }
       navigation.reset({
         index: 1,
         routes: [
@@ -831,6 +891,7 @@ export function useBookingWizard({
             params: mmqrRouteParams(res, {
               orderId: target.orderId || undefined,
               tripId: target.tripId,
+              useWallet: target.useWallet,
               successRoute: successRoute === 'BookingSuccessLite' ? 'BookingSuccessLite' : 'BookingSuccess',
               result: {
                 orderNo: target.orderNo,
@@ -875,6 +936,7 @@ export function useBookingWizard({
       return;
     }
     setSubmitting(true);
+    setBalanceAtSubmit(walletBalance);
     /* 上一次失败的原因不能留到这一次(本来一直没清,失败弹窗会显示过期信息) */
     setFailReason('');
     const expectedPayAmount = Math.round((confirmedAmount ?? payableTotal) * 100) / 100;
@@ -908,30 +970,32 @@ export function useBookingWizard({
           expectedPayAmount,
         });
         /* 单已落库:先冻结页面金额,再把房型转存为快照并清空购物车,免得留在车里诱发重复下单 */
+        /* 钱包怎么分以服务端建单金额为准(与页面显示的应付一致,价格变动已在建单时拦过) */
+        const tripSplit = payPlan(trip.payAmount);
         setPriceSnapshot({
           payable: trip.payAmount,
           roomTotal: reviewRoomTotal,
           longstay: longstayDiscount,
           walletCovers,
+          walletApplied: tripSplit.wallet,
           stays: hotelStays,
           stayTotals,
         });
         checkoutCart();
         const first = trip.bookings[0];
-        if (method === 'mmqr') {
-          await startMmqr({ orderId: first?.orderId ?? 0, tripId: trip.tripId, orderNo: trip.tripNo });
+        if (!tripSplit.covers) {
+          /* 钱包付不清 / 关了钱包:MMQR 付剩余或整单(开着钱包带 useWallet=1,后端先扣抵扣额,码只收剩余) */
+          await startMmqr({
+            orderId: first?.orderId ?? 0,
+            tripId: trip.tripId,
+            orderNo: trip.tripNo,
+            useWallet: walletOn,
+          });
           return;
         }
         try {
-          /**
-           * 钱包余额 → 3(后端真扣 `user_info.balance`,整单扣一次);MMQR(5)在上面已分流到扫码页。
-           * 其余渠道(card / kbzpay / wavepay / mobileBanking)本期都是 mock,统一走 1。
-           * 本项目没有 PayPal 这个选项,所以不映射 2。
-           */
-          const paidTrip = await apiTripPay({
-            tripId: trip.tripId,
-            payMethod: method === 'wallet' ? 3 : 1,
-          });
+          /** 钱包付清全额 → 3(后端真扣 `user_info.balance`,整单扣一次) */
+          const paidTrip = await apiTripPay({ tripId: trip.tripId, payMethod: PAY_METHOD.BALANCE });
           void refreshProfile().catch(() => undefined);
           setPaid({
             orderId: first?.orderId ?? 0,
@@ -978,12 +1042,13 @@ export function useBookingWizard({
       });
       /* 单房型链路车本就是空的;仍要走一次,把上一单的快照清掉,成功页不会串到上次的房型 */
       checkoutCart();
-      if (method === 'mmqr') {
-        await startMmqr({ orderId: order.orderId, orderNo: order.orderNo });
+      if (!payPlan(order.priceDetail.payAmount).covers) {
+        /* 钱包付不清 / 关了钱包:MMQR 付剩余或整单 */
+        await startMmqr({ orderId: order.orderId, orderNo: order.orderNo, useWallet: walletOn });
         return;
       }
       try {
-        /* 余额支付(payOrder 默认 PAY_METHOD.BALANCE):后端真扣 user_info.balance 并落流水 */
+        /* 钱包付清全额(payOrder 默认 PAY_METHOD.BALANCE):后端真扣 user_info.balance 并落流水 */
         const paidResult = await payOrder(order.orderId);
         /* 余额变了,把本地资料刷一次,钱包卡与「我的」页不至于还显示扣款前的数 */
         void refreshProfile().catch(() => undefined);
@@ -1011,23 +1076,28 @@ export function useBookingWizard({
        */
       /* 价格变了:没建单,弹确认框而不是失败弹窗 */
       if (e instanceof ApiError && e.code === API_CODE.PRICE_CHANGED && e.data) {
+        setBalanceAtSubmit(null);
         setPriceChange(e.data as PriceChangeDetail);
         return;
       }
       setFailReason(e instanceof Error ? e.message : '');
+      setBalanceAtSubmit(null);
       setPayResult('error');
     } finally {
       setSubmitting(false);
     }
   };
 
-  /** 「价格已变动」确认:按服务端最新金额重提。新金额超过钱包余额时先拦下,免得建出一张付不了的单 */
+  /**
+   * 「价格已变动」确认:按服务端最新金额重提。新金额钱包付不清、又没选补差额的渠道时先拦下,
+   * 免得建出一张付不了的单。
+   */
   const confirmPriceChange = () => {
     if (!priceChange) return;
     const next = priceChange.payAmount;
     setPriceChange(null);
-    if (method === 'wallet' && walletBalance < next) {
-      showToast(t('order.balanceInsufficient'));
+    if (!payPlan(next).covers && !(method === 'mmqr' && mmqrEnabled)) {
+      showToast(t('hotels.booking.payment.remainingMethodRequired'));
       return;
     }
     void submit(next);
@@ -1081,8 +1151,13 @@ export function useBookingWizard({
      * 继续即视为同意),所以这里不再拦截。`agreed` 仍保留导出给关怀模式等旧调用方。
      */
     if (isPayStep) {
-      if (!method) {
-        showToast(t('hotels.booking.payment.methodRequired'));
+      /* 钱包付清全额时不需要再选渠道;付不清(或关了钱包)必须选一个补差额 / 整单的渠道 */
+      if (!walletCovers && !method) {
+        showToast(
+          walletApplied > 0
+            ? t('hotels.booking.payment.remainingMethodRequired')
+            : t('hotels.booking.payment.methodRequired'),
+        );
         return;
       }
       if (current.demo) {
@@ -1096,14 +1171,9 @@ export function useBookingWizard({
         else navigation.navigate('Login');
         return;
       }
-      /* 只有钱包与(站点已开通的)MMQR 是真渠道;其余渠道后端仍是 mock,不能放行建单 */
-      if ((method !== 'wallet' && method !== 'mmqr') || (method === 'mmqr' && !mmqrEnabled)) {
+      /* 钱包付不清时只有(站点已开通的)MMQR 能补;其余渠道后端仍是 mock,不能放行建单 */
+      if (!walletCovers && (method !== 'mmqr' || !mmqrEnabled)) {
         comingSoon();
-        return;
-      }
-      /* 余额渠道:不够就别去创建订单,免得留一单到支付窗口结束才过期的待支付(MMQR 不受余额限制) */
-      if (method === 'wallet' && walletBalance < payableTotal) {
-        showToast(t('hotels.booking.payment.insufficient'));
         return;
       }
       void submit();
@@ -1286,6 +1356,12 @@ export function useBookingWizard({
     selectMethod,
     mmqrEnabled,
     walletEnabled,
+    /* 钱包部分抵扣:开关、单笔限额、抵扣额与剩余应付 */
+    walletOn,
+    setWalletOn,
+    walletCap,
+    walletApplied,
+    remainingDue,
     expanded,
     setExpanded,
     walletBalance,

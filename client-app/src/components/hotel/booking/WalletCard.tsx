@@ -4,6 +4,9 @@
  * 设计稿是 149.5° 的 #204DDA → #4169ED 渐变,RN 无原生线性渐变,用 svg 画。
  * 传 `toggle` 时底部换成「Use wallet」开关(开 = 用钱包支付)。
  * 返回卡片 + 余额不足红字两个兄弟节点,红字用负 margin 贴近卡片,间距由父容器的 gap(24)决定。
+ *
+ * 钱包部分抵扣(PRD 模块 25,2026-11-11)后余额不够不再是死路:开关开着也照样抵扣能抵的部分,
+ * 页面改传 `note`(灰字「剩余 X 将用其他方式支付」),`insufficient` 红字只留给钱包一分都用不上的情况。
  */
 
 import React from 'react';
@@ -25,11 +28,13 @@ interface Props {
   insufficient?: boolean;
   /** 右上角 i */
   onInfo: () => void;
+  /** 卡片下方的灰色说明(部分抵扣时「剩余 X 用其他方式支付」);与 `insufficient` 二选一,红字优先 */
+  note?: string | null;
   /** 「Use wallet」开关;不传则底部显示「可用余额」 */
   toggle?: { on: boolean; onChange: (on: boolean) => void };
 }
 
-export default function WalletCard({ balance, insufficient = false, onInfo, toggle }: Props) {
+export default function WalletCard({ balance, insufficient = false, note = null, onInfo, toggle }: Props) {
   const { t } = useTranslation();
   const currency = useSiteStore((s) => s.currency);
 
@@ -80,6 +85,8 @@ export default function WalletCard({ balance, insufficient = false, onInfo, togg
 
       {insufficient ? (
         <Text style={styles.insufficient}>{t('hotels.booking.payment.insufficient')}</Text>
+      ) : note ? (
+        <Text style={[styles.insufficient, styles.note]}>{note}</Text>
       ) : null}
     </>
   );
@@ -145,4 +152,5 @@ const styles = StyleSheet.create({
     letterSpacing: 0.6,
     color: colors.danger,
   },
+  note: { color: colors.muted },
 });

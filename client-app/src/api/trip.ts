@@ -114,6 +114,8 @@ export function apiTripPay(params: {
   tripId: number;
   /** 1 Stripe / 2 PayPal / 3 余额 */
   payMethod: number;
+  /** 钱包部分抵扣(见 `api/pay` 文件头);不传 = 0 */
+  useWallet?: 0 | 1;
 }): Promise<{ codes: { orderNo: string; verifyCode: string }[] }> {
   return post('/api/v1/app/order/trip/pay', params);
 }

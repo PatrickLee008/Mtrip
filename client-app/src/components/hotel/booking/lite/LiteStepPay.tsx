@@ -26,6 +26,11 @@
  * KBZPay MMQR 接入后(方案 22 §8):站点开通了 MMQR(`getPayMethods`,由 `mmqrEnabled` 传入)时,
  * MMQR 卡挪到钱包卡下方可单选(payMethod=5,下单后进扫码页),折叠区不再列它;
  * 没开通 / 渠道接口失败时维持原样(折叠区里置灰)。站点明确关掉余额时钱包卡灰显。
+ *
+ * 钱包部分抵扣(Figma「Lite Booking step 3」`3465:9124`,PRD 模块 25,2026-11-11):
+ * 钱包卡的勾选框从「单选渠道」改为**独立开关**(默认勾上 = 后台 autoApply,可取消),与 MMQR 可以同时勾:
+ * 钱包抵扣 min(余额, 单笔限额, 应付),剩余由 MMQR 付。价格明细多一行「Wallet Credit Used」(主色),
+ * 合计改为还需另付的部分、胶囊换成「Wallet applied」;钱包卡副标题写明本次用多少、还剩多少要付。
  */
 
 import React, { useState } from 'react';
@@ -67,7 +72,16 @@ interface Props {
   longstayDiscount?: number;
   method: PaymentMethodKey | null;
   balance: number;
+  /** 开着钱包却一分都抵不了(余额 0):副标题红字 */
   insufficient: boolean;
+  /** 钱包开关(勾选框) */
+  walletOn: boolean;
+  /** 本次钱包抵扣额 */
+  walletApplied: number;
+  /** 抵扣后还需用其他渠道付的金额 */
+  remainingDue: number;
+  /** 钱包付清全额 */
+  walletCovers: boolean;
   coupon?: CouponState;
   /** 站点已开通 KBZPay MMQR(可单选);缺省 false = 维持折叠区置灰 */
   mmqrEnabled?: boolean;
@@ -85,6 +99,10 @@ export default function LiteStepPay({
   method,
   balance,
   insufficient,
+  walletOn,
+  walletApplied,
+  remainingDue,
+  walletCovers,
   coupon,
   mmqrEnabled = false,
   walletEnabled = true,
@@ -99,7 +117,7 @@ export default function LiteStepPay({
 
   const nightsText = nightsLowerLabel(t, nightsBetween(stay.checkIn, stay.checkOut));
 
-  type PriceRow = { key: string; label: string; value: string; strike?: boolean };
+  type PriceRow = { key: string; label: string; value: string; strike?: boolean; accent?: boolean };
 
   /**
    * 真实商品只有房费一行:后端 `create` 的价钱来自锁库存的日历价,没有税费与原价概念,
@@ -149,6 +167,24 @@ export default function LiteStepPay({
       value: `- ${formatAmount(coupon.applied.discount, currency)}`,
     });
   }
+  /* 钱包抵扣(稿面 3465:9427「Wallet Credit Used」行,主色):合计随之变成还需另付的部分 */
+  const walletUsed = walletOn && walletApplied > 0;
+  if (walletUsed) {
+    rows.push({
+      key: 'walletCredit',
+      label: t('hotels.booking.review.walletCredit'),
+      value: `- ${formatAmount(walletApplied, currency)}`,
+      accent: true,
+    });
+  }
+  const walletDesc = insufficient
+    ? t('hotels.booking.payment.insufficient')
+    : walletUsed && remainingDue > 0
+      ? t('hotels.booking.wallet.liteUsing', {
+          amount: formatMoney(walletApplied, currency),
+          due: formatMoney(remainingDue, currency),
+        })
+      : t('hotels.booking.payment.methods.wallet.desc', { amount: formatMoney(balance, currency) });
 
   return (
     <View style={styles.root}>
@@ -160,10 +196,12 @@ export default function LiteStepPay({
             {rows.map((row) => (
               <View key={row.key} style={styles.tableRow}>
                 <View style={styles.cellLeft}>
-                  <Text style={styles.rowLabel}>{row.label}</Text>
+                  <Text style={[styles.rowLabel, row.accent && styles.accent]}>{row.label}</Text>
                 </View>
                 <View style={styles.cellRight}>
-                  <Text style={[styles.rowValue, row.strike && styles.strike]}>{row.value}</Text>
+                  <Text style={[styles.rowValue, row.strike && styles.strike, row.accent && styles.accent]}>
+                    {row.value}
+                  </Text>
                 </View>
               </View>
             ))}
@@ -172,7 +210,13 @@ export default function LiteStepPay({
           <View style={styles.totalBlock}>
             <View style={liteBooking.rowBetween}>
               <Text style={liteBooking.overline}>{t('hotels.booking.review.totalAmount')}</Text>
-              {stay.points > 0 ? (
+              {walletUsed ? (
+                <View style={styles.pointsPill}>
+                  <Text style={[styles.pointsText, styles.accent]}>
+                    {t('hotels.booking.payment.walletApplied')}
+                  </Text>
+                </View>
+              ) : stay.points > 0 ? (
                 <View style={styles.pointsPill}>
                   <Text style={styles.pointsText}>
                     {t('hotels.booking.review.earnPoints', {
@@ -183,7 +227,7 @@ export default function LiteStepPay({
               ) : null}
             </View>
             <Text style={styles.totalValue} numberOfLines={1} adjustsFontSizeToFit>
-              {formatMoney(total, currency)}
+              {formatMoney(walletUsed ? remainingDue : total, currency)}
             </Text>
           </View>
         </View>
@@ -227,6 +271,7 @@ export default function LiteStepPay({
       {/* -------------------------------------------------------------- 支付渠道 */}
       <View style={styles.methods}>
         <Text style={styles.methodsTitle}>{t('hotels.booking.lite.choosePayment')}</Text>
+        {walletCovers ? <Text style={styles.coveredHint}>{t('hotels.booking.wallet.coversAll')}</Text> : null}
 
         {/* 主位:钱包余额 */}
         <Pressable
@@ -245,19 +290,13 @@ export default function LiteStepPay({
               <Text style={liteBooking.itemTitle}>
                 {t('hotels.booking.payment.methods.wallet.title')}
               </Text>
-              <Text style={[styles.methodDesc, insufficient && styles.methodDescWarn]}>
-                {insufficient
-                  ? t('hotels.booking.payment.insufficient')
-                  : t('hotels.booking.payment.methods.wallet.desc', {
-                      amount: formatMoney(balance, currency),
-                    })}
-              </Text>
+              <Text style={[styles.methodDesc, insufficient && styles.methodDescWarn]}>{walletDesc}</Text>
             </View>
           </View>
           <HomeIcon
-            name={method === 'wallet' ? 'checkboxIndeterminate' : 'checkbox'}
+            name={walletOn ? 'checkboxIndeterminate' : 'checkbox'}
             size={24}
-            color={method === 'wallet' ? colors.primary : colors.softBlue}
+            color={walletOn ? colors.primary : colors.softBlue}
           />
         </Pressable>
 
@@ -357,6 +396,13 @@ const styles = StyleSheet.create({
   rowLabel: { fontFamily: fonts.inter, fontSize: 16, lineHeight: 24, color: colors.heading },
   rowValue: { fontFamily: fonts.interMedium, fontSize: 16, lineHeight: 24, color: colors.heading },
   strike: { textDecorationLine: 'line-through' },
+  accent: { color: colors.primary },
+  coveredHint: {
+    fontFamily: fonts.interSemi,
+    fontSize: 14,
+    lineHeight: 20,
+    color: colors.statusPaid,
+  },
 
   totalBlock: { paddingHorizontal: 16, paddingVertical: 8 },
   pointsPill: {
