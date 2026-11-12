@@ -25,8 +25,8 @@ Execute: bash scripts/reset-merchant-test-data.sh --execute --confirm DELETE_ALL
 
 All sites, including soft-deleted records. Requires the current migrated schema.
 Execution pauses running containers connected to either target database, backs up
-both databases, deletes in one transaction, clears registration OTPs and removed
-accounts' pairing codes, then restarts only those containers.
+both databases, deletes in one transaction, clears registration OTPs, credential
+claim limits and removed accounts' pairing codes, then restarts those containers.
 Keeps platform/admin/customer/supplier/group accounts, built-in roles, templates,
 channels, shared storage files, wallet balances/points, and ID/code sequences.
 Does not refund payments or delete files from disk/object storage.
@@ -120,6 +120,12 @@ merchant_admin_role|admin_id IN (SELECT id FROM reset_admins) OR role_id IN (SEL
 merchant_role_menu|role_id IN (SELECT id FROM reset_roles)
 merchant_employee_property|admin_id IN (SELECT id FROM reset_admins) OR property_id>0
 merchant_auth_challenge|account_id IN (SELECT id FROM reset_admins)
+merchant_contact_identity_history|account_id IN (SELECT id FROM reset_admins)
+merchant_support_attachment|merchant_id>0 OR property_id>0 OR ticket_id IN (SELECT id FROM reset_support_tickets) OR (actor_type='merchant' AND actor_id IN (SELECT id FROM reset_admins))
+merchant_support_request|ticket_id IN (SELECT id FROM reset_support_tickets) OR (actor_type='merchant' AND actor_id IN (SELECT id FROM reset_admins))
+merchant_support_event|ticket_id IN (SELECT id FROM reset_support_tickets) OR (actor_type='merchant' AND actor_id IN (SELECT id FROM reset_admins))
+merchant_support_reply|ticket_id IN (SELECT id FROM reset_support_tickets) OR (actor_type='merchant' AND actor_id IN (SELECT id FROM reset_admins))
+merchant_support_ticket|id IN (SELECT id FROM reset_support_tickets)
 merchant_credential_delivery|1=1
 merchant_impersonation_session|merchant_id>0 OR target_account_id IN (SELECT id FROM reset_admins)
 merchant_document_event|1=1
@@ -144,6 +150,13 @@ merchant_blacklist|merchant_id>0
 merchant_account|merchant_id>0
 merchant_module_grant|merchant_id>0
 merchant_store_goods|merchant_id>0 OR store_id>0 OR goods_id IN (SELECT id FROM reset_goods)
+chat_attachment|conversation_id IN (SELECT id FROM reset_conversations)
+chat_audit|conversation_id IN (SELECT id FROM reset_conversations)
+chat_note_history|conversation_id IN (SELECT id FROM reset_conversations)
+chat_note|conversation_id IN (SELECT id FROM reset_conversations)
+chat_receipt|conversation_id IN (SELECT id FROM reset_conversations) OR (actor_role='merchant' AND actor_id IN (SELECT id FROM reset_admins))
+chat_preferences|admin_id IN (SELECT id FROM reset_admins)
+chat_quick_reply|property_id>0 OR editor_id IN (SELECT id FROM reset_admins)
 chat_message|conversation_id IN (SELECT id FROM reset_conversations)
 chat_conversation|id IN (SELECT id FROM reset_conversations)
 notify_record|biz_type=1 AND biz_id IN (SELECT id FROM reset_orders)
@@ -152,12 +165,14 @@ order_sync_task|merchant_id>0 OR order_id IN (SELECT id FROM reset_orders)
 order_booking_event|merchant_id>0 OR order_id IN (SELECT id FROM reset_orders)
 order_internal_note|merchant_id>0 OR order_id IN (SELECT id FROM reset_orders)
 order_verify_log|merchant_id>0 OR order_id IN (SELECT id FROM reset_orders)
+pay_refund|pay_no IN (SELECT pay_no FROM reset_payments) OR refund_no IN (SELECT refund_no FROM reset_refunds)
+pay_transaction|pay_no IN (SELECT pay_no FROM reset_payments)
 order_refund|merchant_id>0 OR property_id>0 OR order_id IN (SELECT id FROM reset_orders)
 finance_account_entry|merchant_id>0 OR property_id>0 OR order_id IN (SELECT id FROM reset_orders)
 finance_flow|merchant_id>0 OR property_id>0 OR order_id IN (SELECT id FROM reset_orders)
 finance_merchant_settle|merchant_id>0 OR property_id>0
 finance_withdraw|merchant_id>0
-user_balance_log|(change_type=2 AND remark LIKE '行程 %' AND order_id IN (SELECT id FROM reset_trips)) OR ((change_type<>2 OR remark NOT LIKE '行程 %') AND order_id IN (SELECT id FROM reset_orders))
+user_balance_log|id IN (SELECT id FROM reset_balance_logs) AND id NOT IN (SELECT id FROM reset_protected_balance_logs)
 user_points_log|order_id IN (SELECT id FROM reset_orders)
 user_feedback|order_id IN (SELECT id FROM reset_orders)
 user_referral|reward_order_id IN (SELECT id FROM reset_orders)
@@ -181,7 +196,9 @@ marketing_promo_code_redeem|promo_code_id IN (SELECT id FROM reset_promos) OR co
 marketing_promo_code|id IN (SELECT id FROM reset_promos)
 marketing_promotion_impression|coupon_id IN (SELECT id FROM reset_coupons)
 marketing_coupon_receive|id IN (SELECT id FROM reset_receives)
+marketing_coupon_version|coupon_id IN (SELECT id FROM reset_coupons)
 marketing_coupon|id IN (SELECT id FROM reset_coupons)
+marketing_campaign_withdrawal|merchant_id>0 OR participant_id IN (SELECT id FROM marketing_campaign_participant WHERE merchant_id>0)
 marketing_campaign_participant|merchant_id>0
 ranking_history|entity_type='listing'
 ranking_listing|1=1
@@ -195,10 +212,11 @@ merchant_info|1=1
 PLAN
 
 # Refuse new merchant tables until their ownership and cleanup rules are reviewed.
-known="'merchant_menu','merchant_group','merchant_kyc_template','merchant_onboarding_agreement','merchant_code_sequence','merchant_email_identity_lock'"
+known="'merchant_menu','merchant_group','merchant_kyc_template','merchant_onboarding_agreement','merchant_code_sequence','merchant_email_identity_lock','merchant_phone_identity_lock'"
 while IFS='|' read -r table predicate; do known="$known,'$table'"; done < "$WORK_DIR/plan"
 unknown="$(printf "SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA='%s' AND TABLE_NAME LIKE 'merchant\\_%%' AND TABLE_NAME NOT IN (%s);\n" "$BUSINESS_DB" "$known" | mysql_exec)"
 [ -z "$unknown" ] || fail "Unmapped merchant tables: $unknown"
+wallet_tables="$(printf "SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA='%s' AND TABLE_NAME IN ('user_wallet_lot','user_wallet_adjust_request');\n" "$BUSINESS_DB" | mysql_exec)"
 
 build_sql() {
     cat <<SQL
@@ -207,6 +225,7 @@ USE \`$BUSINESS_DB\`;
 START TRANSACTION;
 CREATE TEMPORARY TABLE reset_admins AS SELECT id FROM merchant_admin WHERE merchant_id>0 OR account_type IN (2,3) OR store_id>0;
 CREATE TEMPORARY TABLE reset_actors AS SELECT id FROM reset_admins;
+CREATE TEMPORARY TABLE reset_support_tickets AS SELECT id FROM merchant_support_ticket WHERE merchant_id>0 OR property_id>0 OR created_by IN (SELECT id FROM reset_admins);
 CREATE TEMPORARY TABLE reset_roles AS SELECT id FROM merchant_role WHERE is_builtin=0 AND (merchant_id>0 OR account_type IN (2,3));
 CREATE TEMPORARY TABLE reset_rooms AS SELECT id FROM hotel_room_type;
 CREATE TEMPORARY TABLE reset_goods AS SELECT id FROM goods_info WHERE merchant_id>0 UNION SELECT id FROM hotel_goods_archive WHERE merchant_id>0 UNION SELECT goods_id FROM hotel_property_legacy_map;
@@ -216,6 +235,20 @@ CREATE TEMPORARY TABLE reset_trips AS SELECT DISTINCT trip_id AS id FROM order_m
 -- Mixed trips must be reviewed rather than deleting unrelated supplier orders.
 CREATE TEMPORARY TABLE reset_guard (unrelated_orders BIGINT CHECK (unrelated_orders=0));
 INSERT INTO reset_guard SELECT COUNT(*) FROM order_main WHERE trip_id IN (SELECT id FROM reset_trips) AND id NOT IN (SELECT id FROM reset_orders);
+CREATE TEMPORARY TABLE reset_refunds AS SELECT refund_no,pay_no FROM order_refund WHERE merchant_id>0 OR property_id>0 OR order_id IN (SELECT id FROM reset_orders);
+CREATE TEMPORARY TABLE reset_payments AS SELECT pay_no FROM pay_transaction WHERE (biz_type='order' AND biz_no IN (SELECT order_no FROM order_main WHERE id IN (SELECT id FROM reset_orders))) OR (biz_type='trip' AND biz_no IN (SELECT trip_no FROM order_trip WHERE id IN (SELECT id FROM reset_trips))) UNION SELECT pay_no FROM reset_refunds WHERE pay_no<>'';
+-- Trip refunds also use trip IDs; change_type alone cannot distinguish them.
+CREATE TEMPORARY TABLE reset_balance_logs AS SELECT id FROM user_balance_log WHERE (remark LIKE '行程 %' AND order_id IN (SELECT id FROM reset_trips)) OR (remark NOT LIKE '行程 %' AND order_id IN (SELECT id FROM reset_orders));
+CREATE TEMPORARY TABLE reset_protected_balance_logs (id BIGINT PRIMARY KEY);
+SQL
+    # Wallet migrations may not yet be applied; preserve their ledger references.
+    for table in $wallet_tables; do
+        case "$table" in
+            user_wallet_lot) printf 'INSERT IGNORE INTO reset_protected_balance_logs SELECT source_log_id FROM user_wallet_lot WHERE source_log_id>0;\n' ;;
+            user_wallet_adjust_request) printf 'INSERT IGNORE INTO reset_protected_balance_logs SELECT posted_log_id FROM user_wallet_adjust_request WHERE posted_log_id>0;\n' ;;
+        esac
+    done
+    cat <<SQL
 SET @reset_goods=(SELECT COALESCE(JSON_ARRAYAGG(id),JSON_ARRAY()) FROM reset_goods);
 SET @reset_rooms=(SELECT COALESCE(JSON_ARRAYAGG(id),JSON_ARRAY()) FROM reset_rooms);
 SET @reset_tickets=(SELECT COALESCE(JSON_ARRAYAGG(id),JSON_ARRAY()) FROM reset_tickets);
@@ -224,8 +257,9 @@ SET @reset_coupons=(SELECT COALESCE(JSON_ARRAYAGG(id),JSON_ARRAY()) FROM reset_c
 CREATE TEMPORARY TABLE reset_receives AS SELECT id FROM marketing_coupon_receive WHERE coupon_id IN (SELECT id FROM reset_coupons) UNION SELECT coupon_id FROM order_main WHERE id IN (SELECT id FROM reset_orders) AND coupon_id>0 UNION SELECT coupon_id FROM order_trip WHERE id IN (SELECT id FROM reset_trips) AND coupon_id>0;
 CREATE TEMPORARY TABLE reset_coupon_counts AS SELECT coupon_id,COUNT(*) AS received,SUM(status=1) AS used FROM marketing_coupon_receive WHERE id IN (SELECT id FROM reset_receives) AND deleted_at IS NULL GROUP BY coupon_id;
 CREATE TEMPORARY TABLE reset_promos AS SELECT id FROM marketing_promo_code WHERE coupon_id IN (SELECT id FROM reset_coupons);
-CREATE TEMPORARY TABLE reset_notifies AS SELECT id FROM merchant_notify WHERE merchant_id>0 OR property_id>0;
-CREATE TEMPORARY TABLE reset_conversations AS SELECT id FROM chat_conversation WHERE order_id IN (SELECT id FROM reset_orders) OR (type=1 AND (target_id IN (SELECT id FROM reset_goods) OR target_id IN (SELECT id FROM merchant_store)));
+CREATE TEMPORARY TABLE reset_notifies AS SELECT id FROM merchant_notify WHERE merchant_id>0 OR property_id>0 OR recipient_id IN (SELECT id FROM reset_admins);
+CREATE TEMPORARY TABLE reset_conversations AS SELECT id FROM chat_conversation WHERE property_id>0 OR order_id IN (SELECT id FROM reset_orders) OR (type=1 AND (target_id IN (SELECT id FROM reset_goods) OR target_id IN (SELECT id FROM merchant_store)));
+SELECT 'user_balance_log (detach preserved wallet references)',COUNT(*) FROM user_balance_log WHERE id IN (SELECT id FROM reset_balance_logs) AND id IN (SELECT id FROM reset_protected_balance_logs);
 SELECT 'marketing_campaign (remove coupon references)',COUNT(*) FROM marketing_campaign WHERE JSON_OVERLAPS(coupon_ids,@reset_coupons);
 SELECT IF(ENGINE='InnoDB',1,0) INTO @reset_engine FROM information_schema.TABLES WHERE TABLE_SCHEMA='$BUSINESS_DB' AND TABLE_NAME='marketing_campaign';
 INSERT INTO reset_guard VALUES (1-COALESCE(@reset_engine,0));
@@ -241,6 +275,7 @@ SQL
     done
     if [ "$1" = execute ]; then
         cat <<'SQL'
+UPDATE user_balance_log l JOIN reset_balance_logs r ON r.id=l.id JOIN reset_protected_balance_logs p ON p.id=l.id SET l.order_id=0;
 UPDATE marketing_coupon c JOIN reset_coupon_counts n ON n.coupon_id=c.id SET c.received_count=GREATEST(0,c.received_count-n.received),c.used_count=GREATEST(0,c.used_count-n.used);
 UPDATE marketing_campaign SET coupon_ids=(SELECT COALESCE(JSON_ARRAYAGG(j.id),JSON_ARRAY()) FROM JSON_TABLE(coupon_ids,'$[*]' COLUMNS(id BIGINT PATH '$')) j WHERE j.id NOT IN (SELECT id FROM reset_coupons)) WHERE JSON_OVERLAPS(coupon_ids,@reset_coupons);
 SQL
@@ -286,11 +321,11 @@ mysql_exec < "$WORK_DIR/delete.sql" || fail "SQL failed; disconnected transactio
 echo "Database transaction committed."
 
 # SCAN and bounded per-key DEL; preserve unrelated Redis databases and sessions.
-for pattern in 'mtrip:merchant:registration:*' 'mtrip:merchant:2fa:pairing:*'; do
+for pattern in 'mtrip:merchant:registration:*' "mtrip:merchant:credential-claim:$BUSINESS_DB:*" 'mtrip:merchant:2fa:pairing:*'; do
     redis_exec --scan --pattern "$pattern" > "$WORK_DIR/redis-keys"
     while IFS= read -r key; do
         [ -n "$key" ] || continue
-        if [[ "$key" = mtrip:merchant:registration:* ]]; then
+        if [[ "$key" != mtrip:merchant:2fa:pairing:* ]]; then
             result="$(redis_exec DEL "$key")"
             case "$result" in 0|1) ;; *) fail "Database committed but Redis cleanup failed: $result. Backup: $BACKUP" ;; esac
         else

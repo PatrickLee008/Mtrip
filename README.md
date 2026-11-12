@@ -1,5 +1,7 @@
 # Mtrip 海外旅游 SaaS 平台
 
+2026-11-12 商户测试数据清理脚本已适配最新联系方式、Support、聊天、支付、营销及钱包结构；保留手机号互斥锁、集团记录及钱包账本引用，兼容钱包迁移前后的库，继续拦截未知商户表。13 组隔离回归与当前库只读预览通过，未清空开发库。见[模块 08](docs/plans/08-部署与网关.md#2026-11-12-商户测试数据清理适配最新表结构)和[使用指南](docs/guides/setup/开发期商户测试数据清理.md)。
+
 2026-11-10 商户 iPhone 开发包已用公司团队签名安装，用户确认语言选择后可进入引导/登录页。SDK 51 的 dev-client、LAN 调试、Swift 依赖兼容与 Scene 生命周期适配已落地，日常运行 `npm run start:device --prefix merchant-app`；登录后业务、相机及 Face ID 待单独真机验收。见[模块 17](docs/plans/17-商户移动端merchant-app.md#2026-11-10-iphone-真机开发环境)与[启动指南](docs/guides/setup/启动开发指南.md#61-商户-app-的-iphone-真机开发包)。未提交或推送。
 
 2026-11-10 消费者 Web/H5 Apple 登录已实现：登录/注册入口、独立同意、form_post 回调、ES256/RS256 验签、nonce/浏览器绑定、单次票据及现有登录态；同邮箱不合并。新增加密刷新令牌及邮箱扩容迁移。Apple 62 项、Facebook 51 项、TikTok 54 项隔离 HTTP、shared 249/1721、509 PHP lint、admin build、client typecheck/H5 export、Compose/网关语法通过；390px 入口、HTTP 提示、取消/返回/过期已浏览器验证。默认关闭，真实 Apple/HTTPS 跨站 Cookie 待部署联调；未改常规库、未部署远端、未提交或推送。见[实施记录](docs/plans/24-Apple-Web登录实施记录.md)。
