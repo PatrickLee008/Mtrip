@@ -1,5 +1,7 @@
 # 模块10:移动端 client-app(Expo 51 + RN + TS)
 
+2026-11-12 CA 失败项复测：当前测试表中 CA 47 条 `Not Pass`、4 条 `Need enhancement`（排除误放在 Guest Mode 的后台用例）。本地完整模式复现 `H_TC_115` 支付页固定 `00:10:00`，并发现已建单截止时间的 UTC / 设备本地时区解析偏差；`H_TC_058` 地图与 `GM_TC_045/046` Food/Cars 仍只提示 Coming soon，旅行保障仍为不可选入口。登录站点错误、钱包币种/过期流水本地未复现，双酒店三房间报价在页面间一致。外部授权/短信/应用商店、QA 原生包及具体钱包 UI 差异待验；本轮只复测和记录，未修改业务代码或测试表。详见[复测记录](./audits/2026-11-12-consumer-app-qa-retest.md)。
+
 2026-10-30 按 Figma `505:1293` 与既有 Facebook Web 规则实现消费者 TikTok 登录：登录/注册第二行入口、同意提示、授权/回调/短票据/登录态，复用身份表，无新迁移。TikTok 54 项、Facebook 51 项隔离 HTTP、shared 221/1647、493 PHP lint、admin build、client typecheck/H5 export、Compose/网关语法通过；390/320px 入口、HTTP 提示、取消/返回/刷新过期已验。已补发本机 8093；默认关闭，真实 TikTok/HTTPS 与原生待验，未提交或推送。见[实施记录](./23-TikTok-Web登录实施记录.md)。
 
 2026-10-22 最新只读确认：用户新增开关后 Facebook 双池 true、App ID/Secret 已生效；实际 settings 返回政策配置错误，条款/隐私 URL 和来源白名单仍缺失。当前复验浏览器 site=7，未修改站点选择；此前确认构建默认站点1已停用，默认值调整仍待执行。本轮未修改远端。[排查记录](./audits/2026-10-22-facebook-online-config.md)。
