@@ -4,7 +4,8 @@ import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { message } from 'ant-design-vue';
-import { CheckCircleOutlined, CloseCircleOutlined, EyeOutlined, SyncOutlined, DownloadOutlined, FileTextOutlined, MenuOutlined, DownOutlined, UserOutlined, PaperClipOutlined, ClockCircleOutlined, KeyOutlined, CopyOutlined, MailOutlined, MessageOutlined, BellOutlined } from '@ant-design/icons-vue';
+import { CheckCircleOutlined, CloseCircleOutlined, CloseOutlined, EyeOutlined, SyncOutlined, DownloadOutlined, FileTextOutlined, MenuOutlined, DownOutlined, UserOutlined, PaperClipOutlined, ClockCircleOutlined, KeyOutlined, CopyOutlined, MailOutlined, MessageOutlined, BellOutlined } from '@ant-design/icons-vue';
+import MerchantDocumentPreview from '@/views/merchant/onboarding/components/MerchantDocumentPreview.vue';
 import PageContainer from '@/components/PageContainer.vue';
 import StatusTag from '@/components/StatusTag.vue';
 import MerchantVerifyNav from '@/components/MerchantVerifyNav.vue';
@@ -72,10 +73,10 @@ async function doExport(): Promise<void> {
     { key: 'merchant_name', label: 'Merchant' },
     { key: 'merchant_short_name', label: 'Business' },
     { key: 'credit_code', label: 'Reg. Number' },
-    { key: 'created_at', label: 'Submitted' },
+    { key: 'created_at', label: activeTab.value === 'approved' ? VP('colSubmittedDate') : VP('colSubmitted') },
     { key: 'status', label: 'Status' },
-    { key: 'audit_by', label: 'Assigned Ops' },
-  ], data.list);
+    { key: 'assigned_ops_name', label: VP('colAssignedOps') },
+  ], data.list.map((row) => ({ ...row, created_at: activeTab.value === 'approved' ? submittedDate(row) : row.created_at, assigned_ops_name: assignedOpsName(row) })));
 }
 
 // merchant_info.status 语义(含 Phase 1 扩展 6=待重新提交)
@@ -154,11 +155,11 @@ watch(
 );
 
 const columns = computed(() => [
-  { title: VP('colLeadId'), dataIndex: 'application_no', width: 140 },
+  { title: VP('colLeadId'), dataIndex: 'application_no', width: 210 },
   { title: VP('colMerchant'), dataIndex: 'merchant_name', width: 220 },
   { title: VP('colBusiness'), dataIndex: 'merchant_short_name', width: 160 },
   { title: VP('colRegNumber'), dataIndex: 'credit_code', width: 150 },
-  { title: VP('colSubmitted'), dataIndex: 'created_at', width: 165 },
+  { title: VP(activeTab.value === 'approved' ? 'colSubmittedDate' : 'colSubmitted'), dataIndex: 'created_at', width: 165 },
   { title: VP('colVerifStatus'), dataIndex: 'status', width: 120 },
   { title: VP('colAssignedOps'), dataIndex: 'audit_by', width: 140 },
   { title: t('common.action'), key: 'action_col', width: 150, fixed: 'right' as const },
@@ -179,14 +180,73 @@ const VERIF_BADGE = computed<Record<number, StatusItem>>(() => ({
 const drawerOpen = ref(false);
 const detailLoading = ref(false);
 const detail = ref<TableRow | null>(null);
+const approvedPreview = ref<InstanceType<typeof MerchantDocumentPreview> | null>(null);
+function submittedDate(row: TableRow): string { return formatUploadDate(row.application_submitted_at || row.created_at); }
+function assignedOpsName(row: TableRow): string { return String(row.assigned_ops_name || '').trim() || '-'; }
 const documents = ref<TableRow[]>([]);
 const timeline = ref<TableRow[]>([]);
+const historyExpanded = ref(false);
 const businesses = ref<TableRow[]>([]);
 const kycSubmission = ref<{ method: string; submitted_by: string; confirmation: string; confirmed_at?: string | null } | null>(null);
 type ResubmissionInfo = { requested_by: string; requested_at: string; note: string; total: number; resubmitted: number };
 const resubmission = ref<ResubmissionInfo | null>(null);
-type AccessGrant = { access_code: string; generated_at?: string | null; generated_by: string; delivery_status: string; channels: string[] };
+type DeliveryReceipt = { channel: string; status: string; attempts?: number };
+type AccessGrant = { access_code_configured?: boolean; generated_at?: string | null; generated_by: string; delivery_status: string; channels: string[]; delivery_test_mode?: boolean; receipts?: DeliveryReceipt[] | null };
 const accessGrant = ref<AccessGrant | null>(null);
+const approvedAccountLabel = computed(() => {
+  const key: Record<number, string> = { 1: 'pendingActivation', 2: 'accountActivated' };
+  const status = detail.value?.approval_account_status;
+  if (Number(status) === 3) return VP('statusSuspended');
+  if (Number(status) === 4) return VP('statusClosed');
+  if (key[status]) return t(`merchant.onboardingPage.${key[status]}`);
+  return Number(detail.value?.access_status) === 1 ? t('merchant.onboardingPage.accountActivated') : '-';
+});
+const approvedKycComplete = computed(() => {
+  if (detail.value?.final_approved_at) return true;
+  const uploaded = documents.value.filter(doc => Boolean(doc.file_url));
+  return uploaded.length > 0 && uploaded.every(doc => Number(doc.status) === 1);
+});
+function deliveryReceiptState(receipt: DeliveryReceipt): string {
+  if (accessGrant.value?.delivery_test_mode && receipt.channel !== 'inapp'
+    && receipt.status === 'pending' && receipt.attempts === 0) return 'testPaused';
+  return receipt.status;
+}
+const approvedDeliveryState = computed(() => {
+  const grant = accessGrant.value;
+  if (!grant) return 'none';
+  if (Array.isArray(grant.receipts)) {
+    const states = grant.receipts.map(deliveryReceiptState);
+    if (!states.length) return 'generated';
+    if (states.every(state => state === 'delivered')) return 'delivered';
+    if (states.includes('failed')) return states.every(state => state === 'failed') ? 'failed' : 'partiallyFailed';
+    if (states.includes('processing')) return 'processing';
+    if (states.includes('pending')) return states.every(state => state === 'pending') ? 'pending' : 'partiallyPending';
+    if (states.includes('testPaused')) return 'testPaused';
+    if (states.every(state => ['delivered', 'accepted'].includes(state))) return 'submitted';
+    return 'unknown';
+  }
+  return grant.delivery_status === 'sent' ? 'legacySent' : 'generated';
+});
+const approvedDeliveryLabel = computed(() => {
+  const keys: Record<string, string> = { generated: 'accessGenerated', delivered: 'credentialsDelivered', submitted: 'deliverySubmitted',
+    failed: 'deliveryFailed', partiallyFailed: 'deliveryPartiallyFailed', processing: 'deliveryProcessing', pending: 'deliveryPending',
+    partiallyPending: 'deliveryPartiallyPending', testPaused: 'deliveryTestPaused', unknown: 'deliveryUnknown', legacySent: 'accessGeneratedSent' };
+  return keys[approvedDeliveryState.value] ? VP(keys[approvedDeliveryState.value]) : '-';
+});
+const approvedDeliveryTone = computed(() => {
+  if (['failed', 'partiallyFailed'].includes(approvedDeliveryState.value)) return 'error';
+  if (['delivered', 'submitted', 'legacySent'].includes(approvedDeliveryState.value)) return 'success';
+  return 'warning';
+});
+function deliveryReceiptLabel(receipt: DeliveryReceipt): string {
+  const keys: Record<string, string> = { pending: 'deliveryPending', processing: 'deliveryProcessing', failed: 'deliveryFailed',
+    accepted: 'deliveryChannelAccepted', delivered: 'deliveryChannelDelivered', testPaused: 'deliveryTestPaused' };
+  return VP(keys[deliveryReceiptState(receipt)] || 'deliveryUnknown');
+}
+function deliveryReceiptTone(receipt: DeliveryReceipt): string {
+  const state = deliveryReceiptState(receipt);
+  return state === 'failed' ? 'error' : ['delivered', 'accepted'].includes(state) ? 'success' : 'warning';
+}
 
 // ---------- 注册商家表格(原型:点击切换,联动下方该商家的上传文件) ----------
 const BUSINESS_TYPES = computed(() => [
@@ -219,6 +279,23 @@ const verifyDocs = computed<TableRow[]>(() => {
   const bizId = String(verifyBizId.value || '');
   if (!bizId) return documents.value;
   return documents.value.filter((d) => String((d as TableRow).biz_unit || '') === bizId);
+});
+const approvedDocumentGroups = computed(() => {
+  const merchant = documents.value.filter(doc => doc.scope_type === 'merchant' && !Number(doc.application_business_id) && !doc.biz_unit);
+  const business = documents.value.filter(doc => Number(verifyBizId.value) > 0 &&
+    (Number(doc.application_business_id) > 0
+      ? Number(doc.application_business_id) === Number(verifyBizId.value)
+      : String(doc.biz_unit || '') === String(verifyBizId.value)));
+  const groups = [
+    { title: t('merchant.onboardingPage.merchantKycScope'), documents: merchant },
+    { title: verifyCurrentBiz.value?.business_name || t('merchant.onboardingPage.propertyKycScope'), documents: business },
+  ];
+  const known = new Set([...merchant, ...business].map(doc => doc.id));
+  const businessIds = new Set(businesses.value.map(biz => String(biz.id)));
+  const unscoped = documents.value.filter(doc => !known.has(doc.id)
+    && !businessIds.has(String(doc.application_business_id || doc.biz_unit || '')));
+  if (unscoped.length) groups.push({ title: VP('otherDocuments'), documents: unscoped });
+  return groups.filter(group => group.documents.length);
 });
 type VerifyDocumentRow = {
   key: string;
@@ -297,6 +374,7 @@ const finalDecisionSubtitle = computed(() => {
 });
 
 async function openDetail(row: TableRow): Promise<void> {
+  historyExpanded.value = false;
   drawerOpen.value = true;
   detailLoading.value = true;
   try {
@@ -331,6 +409,14 @@ function documentFileName(doc: TableRow | null): string {
   const path = String(doc.file_url || '').split('?')[0];
   const name = path.split('/').pop();
   return name ? decodeURIComponent(name) : '-';
+}
+function approvedDocumentName(doc: TableRow): string {
+  const key = `merchant.documentsPage.docTypes.${doc.doc_type}`;
+  const label = t(key);
+  if (label !== key) return label;
+  const template = verifyCurrentBiz.value?.kyc_template_docs;
+  const requirement = Array.isArray(template) ? template.find(item => item.doc_type === doc.doc_type) : null;
+  return String(requirement?.name || doc.name || doc.doc_type || '-');
 }
 
 // ---------- 审核动作 ----------
@@ -569,11 +655,11 @@ onMounted(() => {
       :pagination="tablePagination"
       row-key="id"
       size="middle"
-      :scroll="{ x: 1340 }"
+      :scroll="{ x: 1410 }"
     >
         <template #bodyCell="{ column, record }">
           <template v-if="column.dataIndex === 'application_no'">
-            <span style="font-weight: 500; font-family: monospace; color: #2563eb">{{ record.application_no || '-' }}</span>
+            <span class="verify-lead-id">{{ record.application_no || '-' }}</span>
           </template>
           <template v-else-if="column.dataIndex === 'merchant_name'">
             <div style="font-weight: 600">{{ record.merchant_name }}</div>
@@ -583,16 +669,16 @@ onMounted(() => {
             <span style="display: inline-block; max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom">{{ record.merchant_short_name || '-' }}</span>
           </template>
           <template v-else-if="column.dataIndex === 'credit_code'">
-            <span style="font-family: monospace; font-size: 12px">{{ record.credit_code ? String(record.credit_code).slice(0, 12) + (String(record.credit_code).length > 12 ? '…' : '') : '-' }}</span>
+            <span class="verify-mono-value">{{ record.credit_code ? String(record.credit_code).slice(0, 12) + (String(record.credit_code).length > 12 ? '…' : '') : '-' }}</span>
           </template>
           <template v-else-if="column.dataIndex === 'created_at'">
-            <span style="font-family: monospace; font-size: 12px; color: #475569">{{ record.created_at || '-' }}</span>
+            <span style="font-family: monospace; font-size: 12px; color: #475569">{{ activeTab === 'approved' ? submittedDate(record) : record.created_at || '-' }}</span>
           </template>
           <template v-else-if="column.dataIndex === 'status'">
             <StatusTag :value="record.status" :map="VERIF_BADGE" />
           </template>
           <template v-else-if="column.dataIndex === 'audit_by'">
-            <span :style="record.audit_by ? undefined : 'color: var(--sap-muted)'">{{ record.audit_by || t('merchant.verifyPage.unassigned') }}</span>
+            <span :class="{ 'verify-mono-value': assignedOpsName(record) === '-' }">{{ assignedOpsName(record) }}</span>
           </template>
           <template v-else-if="column.key === 'action_col'">
             <a-space :size="0">
@@ -619,7 +705,8 @@ onMounted(() => {
       </a-table>
 
     <!-- 验证详情抽屉 -->
-    <a-drawer v-model:open="drawerOpen" :width="760" :class="{ 'resubmission-drawer': activeTab === 'resubmission' }">
+    <a-drawer v-model:open="drawerOpen" :width="activeTab === 'approved' ? 'min(760px, 100vw)' : 760" :closable="activeTab !== 'approved'" :class="{ 'resubmission-drawer': activeTab === 'resubmission', 'approved-drawer': activeTab === 'approved' }">
+      <template v-if="activeTab === 'approved'" #extra><a-button type="text" :aria-label="t('common.close')" @click="drawerOpen = false"><CloseOutlined /></a-button></template>
       <template #title>
         <div class="verify-drawer-title">
           <div>{{ t('merchant.verifyPage.drawerTitle') }}</div>
@@ -628,6 +715,19 @@ onMounted(() => {
       </template>
       <a-spin :spinning="detailLoading">
         <template v-if="detail">
+          <div v-if="activeTab === 'approved'" class="approved-summary">
+            <div class="approved-summary__head">
+              <span class="approved-summary__icon"><CheckCircleOutlined /></span>
+              <div><strong>{{ VP('approvedSummaryTitle') }}</strong><span>{{ VP('approvedSummarySubtitle') }}</span></div>
+            </div>
+            <div class="approved-summary__stats">
+              <div><span>{{ VP('approvedBy') }}</span><strong>{{ detail.approved_by_name || '-' }}</strong></div>
+              <div><span>{{ VP('approvedDate') }}</span><strong class="approved-mono">{{ formatUploadDate(detail.final_approved_at || detail.audit_time) }}</strong></div>
+              <div><span>{{ VP('verificationLevel') }}</span><strong>{{ approvedKycComplete ? VP('fullKyc') : '-' }}</strong></div>
+              <div><span>{{ VP('accountStatus') }}</span><strong>{{ approvedAccountLabel }}</strong></div>
+            </div>
+            <div class="approved-summary__access"><KeyOutlined /><span>{{ VP('merchantAccessCode') }}</span><strong>{{ accessGrant ? t('merchantDirectory.configured') : '-' }}</strong><small :class="'delivery-text--' + approvedDeliveryTone">{{ approvedDeliveryLabel }}</small></div>
+          </div>
           <div v-if="activeTab === 'resubmission' && resubmission" class="resub-request-card">
             <div class="resub-request-card__head">
               <span class="resub-request-card__icon"><SyncOutlined /></span>
@@ -645,7 +745,7 @@ onMounted(() => {
             <div class="resub-request-card__reason"><strong>{{ t('merchant.verifyPage.resubReason') }}：</strong>{{ resubmission.note || '-' }}</div>
           </div>
 
-          <div v-if="activeTab !== 'resubmission'" class="fd-review-mode vd-review-mode">
+          <div v-if="activeTab !== 'resubmission' && activeTab !== 'approved'" class="fd-review-mode vd-review-mode">
             <div class="fd-review-mode__title">{{ t('merchant.verifyPage.reviewModeTitle') }}</div>
             <div class="fd-review-mode__desc">{{ t('merchant.verifyPage.reviewModeDesc') }}</div>
           </div>
@@ -658,10 +758,10 @@ onMounted(() => {
           </div>
           <div class="verify-info-stack">
             <div class="verify-info-grid verify-info-grid--2">
-              <div class="verify-info-cell"><span>{{ t('merchant.verifyPage.detailCompanyName') }}</span><strong>{{ detail.merchant_short_name || detail.merchant_name }}</strong></div>
+              <div class="verify-info-cell"><span>{{ t('merchant.verifyPage.detailCompanyName') }}</span><strong>{{ detail.company_name || detail.merchant_short_name || detail.merchant_name }}</strong></div>
               <div class="verify-info-cell"><span>{{ t('merchant.verifyPage.detailCreditCode') }}</span><strong>{{ detail.credit_code || '-' }}</strong></div>
               <div class="verify-info-cell"><span>{{ t('merchant.verifyPage.detailCountry') }}</span><strong>{{ detail.country || '-' }}</strong></div>
-              <div class="verify-info-cell"><span>{{ t('merchant.verifyPage.colSubmitted') }}</span><strong>{{ formatUploadDate(detail.application_submitted_at || detail.created_at) }}</strong></div>
+              <div class="verify-info-cell"><span>{{ VP(activeTab === 'approved' ? 'colSubmittedDate' : 'colSubmitted') }}</span><strong>{{ submittedDate(detail) }}</strong></div>
             </div>
             <div class="verify-info-grid verify-info-grid--3">
               <div class="verify-info-cell"><span>{{ t('merchant.verifyPage.detailBusinessCount') }}</span><strong>{{ businesses.length }}</strong></div>
@@ -789,6 +889,25 @@ onMounted(() => {
           </template>
 
           <template v-if="activeTab !== 'resubmission'">
+          <template v-if="activeTab === 'approved'">
+            <div class="co-section-heading"><PaperClipOutlined class="co-heading-icon" /><h4 class="co-heading-text">{{ VP('approvedDocuments') }}</h4><div class="co-heading-line" /></div>
+            <div v-for="group in approvedDocumentGroups" :key="group.title" class="approved-doc-group">
+              <div class="approved-doc-group__title">{{ group.title }}</div>
+              <div class="approved-doc-scroll">
+                <table class="approved-doc-table">
+                  <thead><tr><th>{{ VP('colDoc') }}</th><th>{{ VP('colDocStatus') }}</th><th>{{ VP('colDocUploaded') }}</th><th>{{ t('common.action') }}</th></tr></thead>
+                  <tbody><tr v-for="doc in group.documents" :key="doc.id">
+                    <td><div class="approved-doc-name"><span class="sap-document-icon"><FileTextOutlined /></span><div><strong>{{ approvedDocumentName(doc) }}</strong><small>{{ documentFileName(doc) }}</small></div></div></td>
+                    <td><StatusTag :value="Number(doc.status)" :map="DOC_STATUS" variant="pill" /></td>
+                    <td class="approved-mono">{{ formatUploadDate(doc.uploaded_at) }}</td>
+                    <td><a-button class="verify-doc-action verify-doc-action--preview" size="small" :disabled="!doc.file_url" @click="approvedPreview?.show(doc.id)"><template #icon><EyeOutlined /></template>{{ VP('docActionView') }}</a-button></td>
+                  </tr></tbody>
+                </table>
+              </div>
+            </div>
+            <a-empty v-if="!approvedDocumentGroups.length" :description="VP('emptyNoDocs')" :image="undefined" style="margin: 12px 0" />
+          </template>
+          <template v-else>
           <!-- §3 KYC 提交详情 -->
           <div v-if="kycSubmission" class="co-section-heading">
             <h4 class="co-heading-text">{{ t('merchant.verifyPage.kycSubmissionDetails') }}</h4>
@@ -809,13 +928,13 @@ onMounted(() => {
             <template #bodyCell="{ column, record }">
               <template v-if="column.dataIndex === 'required_name'">
                 <div class="verify-document-name">
-                  <span class="verify-document-icon"><FileTextOutlined /></span>
+                  <span class="sap-document-icon"><FileTextOutlined /></span>
                   <span><strong>{{ record.required_name }}</strong><small>{{ record.doc_type }}</small></span>
                 </div>
               </template>
               <template v-else-if="column.dataIndex === 'status'">
                 <template v-if="record.upload">
-                  <div><StatusTag :value="record.upload.status" :map="DOC_STATUS" /></div>
+                  <div><StatusTag :value="record.upload.status" :map="DOC_STATUS" variant="pill" /></div>
                   <div v-if="record.upload.status === 2" class="verify-doc-awaiting">{{ t('merchant.verifyPage.docAwaitingReview') }}</div>
                 </template>
                 <span v-else class="verify-doc-missing">{{ t('merchant.verifyPage.docNotUploaded') }}</span>
@@ -840,12 +959,21 @@ onMounted(() => {
             </div>
             <span class="fd-count">{{ reviewedCount }}/{{ requiredDocumentRows.length }}</span>
           </div>
+          </template>
 
           <!-- §4 时间线(原型样式) -->
-          <div class="co-section-heading">
-            <h4 class="co-heading-text">{{ t('merchant.verifyPage.timelineHeader') }}</h4>
+          <button v-if="activeTab === 'approved'" type="button" class="co-section-heading history-toggle" :aria-expanded="historyExpanded" aria-controls="verification-history" @click="historyExpanded = !historyExpanded">
+            <ClockCircleOutlined class="co-heading-icon" />
+            <span class="co-heading-text">{{ VP('verificationHistory') }} ({{ timeline.length }})</span>
+            <span class="co-heading-line" />
+            <span class="history-toggle-label">{{ t(historyExpanded ? 'common.collapse' : 'common.expand') }}</span>
+            <DownOutlined class="history-toggle-arrow" :class="{ 'is-expanded': historyExpanded }" />
+          </button>
+          <div v-else class="co-section-heading">
+            <h4 class="co-heading-text">{{ VP('timelineHeader') }}</h4>
             <div class="co-heading-line" />
           </div>
+          <div id="verification-history" v-show="activeTab !== 'approved' || historyExpanded" :class="{ 'history-scroll': activeTab === 'approved' }">
           <div v-if="timeline.length" class="onb-tl">
             <div v-for="ev in timeline" :key="ev.id" class="onb-tl-item">
               <div class="onb-tl-dot" :style="ev.is_exception === 1 ? 'background:#dc2626;box-shadow:0 0 0 2px #dc2626' : 'background:#1664ff;box-shadow:0 0 0 2px #1664ff'" />
@@ -858,6 +986,7 @@ onMounted(() => {
             </div>
           </div>
           <a-empty v-if="!timeline.length" :description="t('merchant.verifyPage.emptyNoTimeline')" :image="undefined" style="margin: 12px 0" />
+          </div>
 
           <template v-if="accessGrant">
             <div class="co-section-heading merchant-access-heading">
@@ -870,20 +999,27 @@ onMounted(() => {
 
               <a-button v-perm="'merchant:verify:regencode'" :loading="regenerateSaving" @click="regenerateAccessCode"><template #icon><SyncOutlined /></template>{{ t('merchant.verifyPage.accessCodeRegenerate') }}</a-button>
             </div>
-            <div class="merchant-access-grant-card">
-              <div class="merchant-access-grant-card__title"><CheckCircleOutlined />{{ t('merchant.verifyPage.credentialsDelivered') }}</div>
+            <div class="merchant-access-grant-card" :class="activeTab === 'approved' ? 'merchant-access-grant-card--' + approvedDeliveryTone : ''">
+              <div class="merchant-access-grant-card__title"><CloseCircleOutlined v-if="activeTab === 'approved' && approvedDeliveryTone === 'error'" /><ClockCircleOutlined v-else-if="activeTab === 'approved' && approvedDeliveryTone === 'warning'" /><CheckCircleOutlined v-else />{{ activeTab === 'approved' ? approvedDeliveryLabel : t('merchant.verifyPage.credentialsDelivered') }}</div>
               <div class="merchant-access-grant-card__grid">
                 <div><span>{{ t('merchant.verifyPage.accessGeneratedDate') }}</span><strong>{{ formatUploadDate(accessGrant.generated_at) }}</strong></div>
                 <div><span>{{ t('merchant.verifyPage.accessGeneratedBy') }}</span><strong>{{ accessGrant.generated_by || '-' }}</strong></div>
-                <div><span>{{ t('merchant.verifyPage.accessDeliveryStatus') }}</span><strong>{{ accessGrant.delivery_status === 'sent' ? t('merchant.verifyPage.accessGeneratedSent') : t('merchant.verifyPage.accessGenerated') }}</strong></div>
+                <div><span>{{ t('merchant.verifyPage.accessDeliveryStatus') }}</span><strong>{{ activeTab === 'approved' ? approvedDeliveryLabel : accessGrant.delivery_status === 'sent' ? t('merchant.verifyPage.accessGeneratedSent') : t('merchant.verifyPage.accessGenerated') }}</strong></div>
                 <div><span>{{ t('merchant.verifyPage.accessDeliveredVia') }}</span><strong>{{ accessGrant.channels.map(deliveryChannelLabel).join('、') || '-' }}</strong></div>
+              </div>
+              <div v-if="activeTab === 'approved' && accessGrant.receipts?.length" class="delivery-channels">
+                <div v-for="receipt in accessGrant.receipts" :key="receipt.channel" class="delivery-channel">
+                  <span>{{ deliveryChannelLabel(receipt.channel) }}</span>
+                  <strong :class="'delivery-text--' + deliveryReceiptTone(receipt)">{{ deliveryReceiptLabel(receipt) }}</strong>
+                </div>
+                <p v-if="accessGrant.receipts.some(receipt => receipt.status === 'accepted')" class="delivery-channel-note">{{ VP('deliveryAcceptedHint') }}</p>
               </div>
             </div>
           </template>
           </template>
         </template>
       </a-spin>
-      <template #footer>
+      <template v-if="canAct" #footer>
         <div v-if="detail && activeTab === 'pending' && Number(detail.status) === 0" class="fd-actions">
           <a-button v-perm="'merchant:verify:resubmit'" @click="openResub(detail)">{{ t('merchant.verifyPage.footerRequestResubmission') }}</a-button>
           <a-button v-perm="'merchant:verify:reject'" danger @click="openReject(detail)">{{ t('merchant.verifyPage.footerReject') }}</a-button>
@@ -896,6 +1032,7 @@ onMounted(() => {
         </div>
       </template>
     </a-drawer>
+    <MerchantDocumentPreview ref="approvedPreview" />
 
     <!-- 批准商户（原型：访问码 + 一次性初始密码 + 交付渠道 + 通知预览） -->
     <a-modal v-model:open="approveOpen" width="780px" wrap-class-name="approve-merchant-modal" :mask-closable="false" :closable="false">
@@ -969,6 +1106,65 @@ onMounted(() => {
 </template>
 
 <style scoped lang="less">
+.verify-lead-id { white-space: nowrap; font-weight: 500; font-family: monospace; color: #2563eb; }
+.verify-mono-value { font-family: monospace; font-size: 12px; }
+.delivery-channels { margin-top: 12px; padding-top: 10px; border-top: 1px solid #d1e7d7; }
+.delivery-channel { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 4px 0; font-size: 11px; }
+.delivery-channel > span { flex-shrink: 0; color: #64748b; }
+.delivery-channel > strong { font-size: 11px; font-weight: 500; text-align: right; overflow-wrap: anywhere; }
+.delivery-channel-note { margin: 6px 0 0; font-size: 10px; line-height: 1.6; color: #64748b; }
+.approved-summary__access small.delivery-text--success, .delivery-text--success { color: #15803d; }
+.approved-summary__access small.delivery-text--error, .delivery-text--error { color: #b42318; }
+.approved-summary__access small.delivery-text--warning, .delivery-text--warning { color: #b54708; }
+.approved-drawer .merchant-access-grant-card.merchant-access-grant-card--error { background: #fff5f4; border-color: #fecaca; .merchant-access-grant-card__title { color: #b42318; } .delivery-channels { border-color: #fecaca; } }
+.approved-drawer .merchant-access-grant-card.merchant-access-grant-card--warning { background: #fffbeb; border-color: #fde68a; .merchant-access-grant-card__title { color: #b54708; } .delivery-channels { border-color: #fde68a; } }
+:global(.approved-drawer .ant-drawer-header) { padding: 10px 24px; min-height: 60px; }
+:global(.approved-drawer .ant-drawer-body) { padding: 20px 24px; }
+.approved-drawer {
+  .verify-info-cell > strong { white-space: normal; overflow-wrap: anywhere; }
+  .co-section-heading { margin-top: 22px; }
+  .merchant-access-code-row { grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; }
+  .merchant-access-code { height: 36px; padding: 0 13px; }
+  .merchant-access-code strong { font-size: 13px; letter-spacing: 0; }
+  .merchant-access-code-row > .ant-btn { height: 36px; font-size: 12px; }
+  .merchant-access-grant-card { padding: 12px 14px; background: #f0fdf4; border-color: #bbf7d0; }
+  .merchant-access-grant-card__title { margin-bottom: 6px; font-size: 11px; color: #15803d; }
+  .merchant-access-grant-card__grid { gap: 4px 12px; }
+}
+.approved-mono { font-family: monospace; }
+.approved-summary { border: 1px solid #bbf7d0; border-radius: 10px; background: #f0fdf4; overflow: hidden; }
+.approved-summary__head { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-bottom: 1px solid #bbf7d0; }
+.approved-summary__icon { display: grid; place-items: center; width: 32px; height: 32px; flex: 0 0 32px; border-radius: 8px; background: #dcfce7; color: #15803d; font-size: 16px; }
+.approved-summary__head strong { display: block; font-size: 13px; font-weight: 700; color: #15803d; }
+.approved-summary__head div > span { display: block; font-size: 11px; color: #16a34a; }
+.approved-summary__stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; padding: 12px 16px; }
+.approved-summary__stats span { display: block; margin-bottom: 2px; font-size: 10px; font-weight: 600; color: #16a34a; }
+.approved-summary__stats strong { display: block; color: #14532d; font-size: 12px; font-weight: 600; overflow-wrap: anywhere; }
+.approved-summary__access { display: flex; align-items: center; gap: 8px; padding: 10px 16px; border-top: 1px solid #bbf7d0; color: #15803d; font-size: 11px; }
+.approved-summary__access strong { color: #14532d; font-size: 13px; }
+.approved-summary__access small { margin-left: auto; color: #16a34a; font-size: 11px; }
+.approved-doc-group + .approved-doc-group { margin-top: 12px; }
+.approved-doc-group__title { margin-bottom: 6px; color: #64748b; font-size: 11px; font-weight: 600; }
+.approved-doc-scroll { overflow-x: auto; border: 1px solid #e3e8f0; border-radius: 8px; }
+.approved-doc-table { width: 100%; min-width: 530px; border-collapse: collapse; font-size: 11px; }
+.approved-doc-table th { padding: 8px 12px; background: #f8fafc; color: #94a3b8; font-size: 10px; font-weight: 600; text-align: left; white-space: nowrap; }
+.approved-doc-table td { padding: 10px 12px; border-top: 1px solid #f1f5f9; color: #475569; }
+.approved-doc-table td:not(:first-child) { white-space: nowrap; }
+.approved-doc-name { display: flex; align-items: center; gap: 8px; min-width: 140px; max-width: 260px; }
+.approved-doc-name strong, .approved-doc-name small { display: block; overflow-wrap: anywhere; }
+.approved-doc-name strong { color: #1a2332; font-size: 12px; font-weight: 500; }
+.approved-doc-name small { color: #94a3b8; font-size: 10px; }
+@media (max-width: 600px) {
+  :global(.approved-drawer .ant-drawer-header) { padding: 10px 16px; }
+  :global(.approved-drawer .ant-drawer-body) { padding: 16px; }
+  .approved-drawer {
+    .verify-info-grid--3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .rb-table { overflow-x: auto; }
+    .rb-head, .rb-row { min-width: 620px; }
+  }
+  .approved-summary__stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .approved-summary__access { flex-wrap: wrap; }
+}
 /* 页头标题区(原型 2026-08-25 figma.site 实测,与 Onboarding 页 ob-* 完全一致) */
 .verify-eyebrow {
   margin-bottom: 4px;
@@ -1051,6 +1247,35 @@ onMounted(() => {
   height: 1px;
   background: #f1f5f9;
 }
+.history-toggle {
+  width: 100%;
+  padding: 8px 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.history-toggle:focus-visible {
+  outline: 2px solid #1664ff;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+.history-toggle-label,
+.history-toggle-arrow {
+  flex-shrink: 0;
+  color: #64748b;
+  font-size: 12px;
+}
+.history-toggle-arrow.is-expanded {
+  transform: rotate(180deg);
+}
+.history-scroll {
+  max-height: 320px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 4px 8px 4px 2px;
+}
 
 .vd-review-mode {
   margin-top: 0;
@@ -1130,17 +1355,6 @@ onMounted(() => {
 .verify-doc-missing {
   color: #94a3b8;
   font-size: 11px;
-}
-.verify-document-icon {
-  display: grid;
-  width: 40px;
-  height: 40px;
-  flex: 0 0 40px;
-  place-items: center;
-  border-radius: 8px;
-  background: #eff6ff;
-  color: #1664ff;
-  font-size: 17px;
 }
 .verify-doc-action {
   display: inline-flex;

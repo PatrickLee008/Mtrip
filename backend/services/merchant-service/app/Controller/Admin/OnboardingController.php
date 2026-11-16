@@ -131,9 +131,11 @@ class OnboardingController extends AbstractController
         $ids = array_column($rows, 'id');
         $businessNames = [];
         $firstBizCity = [];
+        $propertyKycStatuses = [];
         if ($ids !== []) {
             foreach (Db::table('merchant_application_business')->whereIn('application_id', $ids)->orderBy('id')->get() as $biz) {
                 $applicationId = (int) $biz->application_id;
+                $propertyKycStatuses[$applicationId][] = (int) $biz->kyc_status;
                 $businessName = trim((string) $biz->business_name);
                 if ($businessName !== '') {
                     $businessNames[$applicationId][] = $businessName;
@@ -144,6 +146,7 @@ class OnboardingController extends AbstractController
         foreach ($rows as &$row) {
             $row['business_names'] = implode(', ', $businessNames[(int) $row['id']] ?? []);
             $row['business_city'] = $firstBizCity[(int) $row['id']] ?? '';
+            $row['initial_property_kyc_statuses'] = $propertyKycStatuses[(int) $row['id']] ?? [];
         }
         return Result::page($rows, $total, $page, $pageSize);
     }

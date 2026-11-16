@@ -7,6 +7,7 @@ namespace App\Controller\Admin;
 use App\Controller\AbstractController;
 
 use App\Service\MerchantService;
+use App\Service\MerchantAuthTestMode;
 use Hyperf\DbConnection\Db;
 use Hyperf\Di\Annotation\Inject;
 use Mtrip\Shared\Annotation\Permission;
@@ -106,18 +107,21 @@ class VerifyController extends AbstractController
                 return $row;
             })->all();
         $merchantIds = array_column($list, 'id');
-        $applicationNos = [];
+        $applications = [];
         if ($merchantIds !== []) {
             foreach (Db::table('merchant_application')
                 ->whereIn('merchant_id', $merchantIds)
                 ->whereNull('deleted_at')
                 ->orderByDesc('id')
-                ->get(['merchant_id', 'app_no']) as $application) {
-                $applicationNos[(int) $application->merchant_id] ??= (string) $application->app_no;
+                ->get(['merchant_id', 'site_id', 'app_no', 'submitted_at', 'assigned_ops_id', 'assigned_ops_name']) as $application) {
+                $applications[(int) $application->merchant_id . ':' . (int) $application->site_id] ??= $application;
             }
         }
         foreach ($list as &$row) {
-            $row['application_no'] = $applicationNos[(int) $row['id']] ?? '';
+            $application = $applications[(int) $row['id'] . ':' . (int) $row['site_id']] ?? null;
+            $row['application_no'] = (string) ($application->app_no ?? '');
+            $row['application_submitted_at'] = $application->submitted_at ?? null;
+            $row['assigned_ops_name'] = (int) ($application->assigned_ops_id ?? 0) > 0 ? (string) $application->assigned_ops_name : '';
         }
         unset($row);
         return Result::page($list, $total, $page, $pageSize);
@@ -163,7 +167,7 @@ class VerifyController extends AbstractController
         $merchant['access_status'] = (int) ($merchant['access_status'] ?? 0);
 
         $documents = Db::table('merchant_verify_document')
-            ->where('merchant_id', $merchant['id'])->whereNull('deleted_at')
+            ->where('merchant_id', $merchant['id'])->where('site_id', $merchant['site_id'])->whereNull('deleted_at')
             ->orderBy('id')->get()
             ->map(static fn ($r) => (array) $r)->all();
         // 逐文档挂载重交版本(Original vs Resubmitted 对比视图)
@@ -204,11 +208,14 @@ class VerifyController extends AbstractController
         $businesses = [];
         $rejectedDocIds = [];
         $application = Db::table('merchant_application')
-            ->where('merchant_id', $merchant['id'])->whereNull('deleted_at')->first();
+            ->where('merchant_id', $merchant['id'])->where('site_id', $merchant['site_id'])->whereNull('deleted_at')->orderByDesc('id')->first();
         if ($application !== null) {
             $merchant['application_no'] = (string) $application->app_no;
             $merchant['application_submitted_at'] = $application->submitted_at ?? null;
             $merchant['country'] = (string) ($application->country ?? '');
+            $merchant['company_name'] = (string) $application->company_name;
+            $merchant['approval_account_status'] = (int) $application->account_status;
+            $merchant['final_approved_at'] = $application->final_approved_at;
             $selfService = (int) $application->submission_method === 1;
             $uploaded = array_filter($documents, static fn ($d) => $d['file_url'] !== '');
             // 确认状态优先取显式确认位(整改 B4);兼容旧数据按文档上传齐全推导
@@ -222,7 +229,7 @@ class VerifyController extends AbstractController
             ];
             // 业务单元(PRD:公司级信息 + 业务级联系/城市/KYC 状态)
             $businesses = Db::table('merchant_application_business')
-                ->where('application_id', $application->id)->orderBy('id')->get()
+                ->where('application_id', $application->id)->where('site_id', $merchant['site_id'])->orderBy('id')->get()
                 ->map(function ($r) {
                     $r = (array) $r;
                     $r['contact_phone'] = MaskHelper::mobile($this->decryptField((string) ($r['contact_phone'] ?? '')));
@@ -245,7 +252,9 @@ class VerifyController extends AbstractController
                 $templateDocs = $template ? json_decode((string) ($template['docs'] ?? '[]'), true) : [];
                 $business['kyc_template_docs'] = is_array($templateDocs) ? $templateDocs : [];
                 $businessDocs = array_values(array_filter($documents, static fn ($doc) =>
-                    (string) ($doc['biz_unit'] ?? '') === (string) $business['id']));
+                    (int) ($doc['scope_model_version'] ?? 0) === 1
+                        ? (int) $doc['application_business_id'] === (int) $business['id'] && (int) ($doc['scope_resolution_status'] ?? 1) !== 2
+                        : (string) ($doc['biz_unit'] ?? '') === (string) $business['id']));
                 $uploadedDocs = array_values(array_filter($businessDocs, static fn ($doc) =>
                     (string) ($doc['file_url'] ?? '') !== ''));
                 $requiredTypes = array_values(array_filter(array_map(static fn ($doc) =>
@@ -277,12 +286,17 @@ class VerifyController extends AbstractController
 
         $timeline = Db::table('merchant_verify_timeline')
             ->where('merchant_id', $merchant['id'])
+            ->where('site_id', $merchant['site_id'])
             ->orderByDesc('id')->limit(100)->get()
             ->map(static function ($row) {
                 $row = (array) $row;
                 if (in_array($row['action'], ['access_code_generated', 'code_regenerated'], true)) $row['note'] = 'Access code configured';
                 return $row;
             })->all();
+
+        $merchant['approved_by_name'] = (string) (Db::table('merchant_verify_timeline')->where('merchant_id', $merchant['id'])
+            ->where('site_id', $merchant['site_id'])->whereIn('action', ['approved', 'final_approved'])
+            ->orderByDesc('id')->value('operator_name') ?? '');
 
         $accessGrant = null;
         if ((string) ($merchant['access_code'] ?? '') !== '') {
@@ -302,6 +316,12 @@ class VerifyController extends AbstractController
                 'generated_by' => (string) ($generationLog->operator_name ?? ''),
                 'delivery_status' => $deliveryLog !== null ? 'sent' : 'generated',
                 'channels' => array_values(array_filter(explode(',', $channelText))),
+                'delivery_test_mode' => $application !== null && (int) $application->state_model_version === 1 && MerchantAuthTestMode::enabled(),
+                'receipts' => $application !== null && (int) $application->state_model_version === 1
+                    ? Db::table('merchant_credential_delivery')->where('application_id', $application->id)
+                        ->where('site_id', $merchant['site_id'])->where('merchant_id', $merchant['id'])
+                        ->get(['channel', 'status', 'attempts'])->map(static fn ($row) => (array) $row)->all()
+                    : null,
             ];
         }
 

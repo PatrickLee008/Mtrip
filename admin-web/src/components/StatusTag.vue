@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { CheckCircleOutlined, ClockCircleOutlined, CloseCircleOutlined, InfoCircleOutlined } from '@ant-design/icons-vue';
 
 /**
  * 状态标签:全平台统一语义色(UI 方案 2.1 状态色)
@@ -15,6 +16,7 @@ const props = defineProps<{
   value: number | string;
   /** 自定义映射:{ 1: {text:'启用', color:'success'} } */
   map?: Record<string | number, StatusItem>;
+  variant?: 'pill';
 }>();
 
 const { t } = useI18n();
@@ -28,8 +30,14 @@ const item = computed<StatusItem>(() => {
   const source = props.map ?? DEFAULT_MAP;
   return source[props.value] ?? { text: String(props.value), color: 'default' };
 });
+const statusIcon = computed(() => {
+  if (item.value.color === 'success') return CheckCircleOutlined;
+  if (item.value.color === 'error') return CloseCircleOutlined;
+  if (item.value.color === 'warning' || item.value.color === 'processing') return ClockCircleOutlined;
+  return InfoCircleOutlined;
+});
 </script>
 
 <template>
-  <a-tag :color="item.color">{{ item.text }}</a-tag>
+  <a-tag :color="item.color" :class="{ 'sap-status-pill': variant === 'pill' }"><component :is="statusIcon" v-if="variant === 'pill'" />{{ item.text }}</a-tag>
 </template>

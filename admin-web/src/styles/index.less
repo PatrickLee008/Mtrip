@@ -103,6 +103,40 @@ body {
   border-color: transparent !important;
 }
 
+// 原型中的紧凑圆角状态与文件图标，按需使用。
+.ant-tag.sap-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 20px;
+  padding: 0 7px;
+  margin: 0;
+  border: 0 !important;
+  border-radius: 999px;
+  font-size: 10px !important;
+  font-weight: 600 !important;
+  line-height: 20px;
+  white-space: nowrap;
+}
+.ant-tag.sap-status-pill > .anticon {
+  font-size: 10px;
+}
+.ant-tag.sap-status-pill > .anticon + span {
+  margin-left: 0;
+}
+.sap-document-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 28px;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  background: #eef4ff;
+  color: var(--sap-brand);
+  font-size: 13px;
+}
+
 // ===== 抽屉底部操作栏 =====
 // 使用 a-drawer #footer 的操作栏脱离 body 滚动区，绝对固定在抽屉底部。
 .ant-drawer .ant-drawer-content {

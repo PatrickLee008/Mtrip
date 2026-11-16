@@ -201,6 +201,24 @@ try {
     check($queues['approved'] === 1 && $queues['rejected'] === 1 && $queues['pending'] === 0 && $queues['resubmission'] === 0,
         'admin onboarding queues are driven by registration status');
 
+    $progressRows = onboardingRequest($admin, 'index', ['registrationStatus' => 3])['list'];
+    check(count($progressRows) === 1 && $progressRows[0]['initial_property_kyc_statuses'] === [1, 1],
+        'list includes both initial property KYC statuses after base approval');
+    Db::table('merchant_application_business')->where('id', $businessId)->update(['kyc_status' => 5]);
+    $progressRows = onboardingRequest($admin, 'index', ['registrationStatus' => 3])['list'];
+    check($progressRows[0]['initial_property_kyc_statuses'] === [5, 1]
+        && (int) $progressRows[0]['registration_status'] === 3,
+        'list tracks partial property approval without overwriting base registration status');
+    Db::table('merchant_application_business')->where('id', $businessId)->update(['kyc_status' => 1]);
+    $rejectedRows = onboardingRequest($admin, 'index', ['registrationStatus' => 5])['list'];
+    check(count($rejectedRows) === 1 && $rejectedRows[0]['initial_property_kyc_statuses'] === [],
+        'property progress is grouped by application without borrowing another application scopes');
+    AdminContext::set(['admin_id' => 92002, 'admin_name' => 'Wrong Site', 'site_id' => 992, 'is_super' => false,
+        'permissions' => $reviewPermissions]);
+    check(onboardingRequest($admin, 'index', [])['list'] === [], 'property progress list preserves site isolation');
+    AdminContext::set(['admin_id' => 92001, 'admin_name' => 'Stage 2 Reviewer', 'site_id' => 991, 'is_super' => false,
+        'permissions' => $reviewPermissions]);
+
     $claims = JwtHelper::verify($token, (string) Hyperf\Config\config('mtrip.jwt_secret'));
     check((int) $claims['application_id'] === $applicationId && isset($claims['phone_hash'], $claims['email_hash']),
         'registration token binds application and both contact hashes');

@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { openMerchantDocument } from '@/utils/merchantDocument';
 import { genUUID } from '@/utils/uuid';
 import { computed, onMounted, reactive, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
@@ -8,9 +7,11 @@ import {
   BankOutlined,
   CheckCircleOutlined,
   CloseCircleOutlined,
+  CloseOutlined,
   ClockCircleOutlined,
   DeleteOutlined,
   DownloadOutlined,
+  DownOutlined,
   EditOutlined,
   EyeOutlined,
   FileImageOutlined,
@@ -30,6 +31,8 @@ import SiteTreeSelect from '@/components/SiteTreeSelect.vue';
 import StageSteps from '@/components/StageSteps.vue';
 import StatusTag from '@/components/StatusTag.vue';
 import MerchantVerifyNav from '@/components/MerchantVerifyNav.vue';
+import KycScopeDocuments from './components/KycScopeDocuments.vue';
+import MerchantDocumentPreview from './components/MerchantDocumentPreview.vue';
 import { useTable, type TableRow } from '@/composables/useTable';
 import type { StatusItem } from '@/components/StatusTag.vue';
 import { useUserStore } from '@/stores/user';
@@ -55,6 +58,7 @@ import {
   apiOnboardingSendKyc,
   apiOnboardingSendReminder,
   apiOnboardingUpdateStage,
+  apiVerifyDocReview,
 } from '@/api/merchant';
 import { apiAdminList } from '@/api/system';
 import { exportCsv } from '@/utils/exportCsv';
@@ -100,8 +104,12 @@ const STAGE_CARD_STYLE = computed<Record<number, { bg: string; border: string }>
   6: { bg: '#FFF1F3', border: '#FECDD3' },
 }));
 const stageCardStyle = computed(() => {
-  const status = Number(app.value?.registration_status ?? 0);
-  const s = STAGE_CARD_STYLE.value[status + 1] ?? STAGE_CARD_STYLE.value[1];
+  if (!isLegacy.value) {
+    const colors: Record<string, string> = { error: '#fff1f3', orange: '#fffbeb', warning: '#fffbeb', cyan: '#ecfeff', processing: '#eff6ff', success: '#ecfdf5' };
+    const bg = colors[currentProgress.value.status.color] || '#f1f5f9';
+    return { background: bg, borderBottom: '1px solid #e3e8f0' };
+  }
+  const s = STAGE_CARD_STYLE.value[Number(app.value?.stage)] ?? STAGE_CARD_STYLE.value[1];
   return { background: s.bg, borderBottom: `1px solid ${s.border}` };
 });
 const OPERATOR_TYPES = computed(() => [
@@ -154,7 +162,7 @@ const SEARCH_FILTERS = computed<FilterConfig[]>(() => [
     key: 'registrationStatus',
     label: t('merchant.onboardingPage.filterStage'),
     allLabel: t('merchant.onboardingPage.allStages'),
-    options: [1, 2, 3, 4, 5].map((value) => ({ value, label: REGISTRATION_STATUS_MAP.value[value].text })),
+    options: [0, 1, 2, 3, 4, 5].map((value) => ({ value, label: REGISTRATION_STATUS_MAP.value[value].text })),
   },
   {
     key: 'category',
@@ -164,8 +172,8 @@ const SEARCH_FILTERS = computed<FilterConfig[]>(() => [
   },
   {
     key: 'country',
-    label: 'Country',
-    allLabel: 'All Countries',
+    label: t('merchant.onboardingPage.labelCountry'),
+    allLabel: t('merchant.onboardingPage.allCountries'),
     options: COUNTRY_OPTIONS.map((c) => ({ label: c, value: c })),
   },
 ]);
@@ -201,11 +209,13 @@ async function exportList(): Promise<void> {
     { key: 'reg_number', label: 'Reg. Number' },
     { key: 'country', label: 'Country' },
     { key: 'submitted_at', label: 'Submitted' },
+    { key: 'onboarding_progress', label: t('merchant.onboardingPage.colProgress') },
     { key: 'registration_status', label: 'Registration Status' },
     { key: 'assigned_ops_name', label: 'Assigned Ops' },
   ], data.list.map((row) => ({
     ...row,
     submitted_at: formatDate(row.submitted_at),
+    onboarding_progress: onboardingProgress(row).status.text,
     registration_status: REGISTRATION_STATUS_MAP.value[row.registration_status]?.text ?? row.registration_status,
   })));
 }
@@ -216,14 +226,14 @@ function formatDate(value: unknown): string {
 }
 
 const columns = computed(() => [
-  { title: t('merchant.onboardingPage.colLeadId'), dataIndex: 'app_no', width: 140 },
-  { title: t('merchant.onboardingPage.colMerchantName'), dataIndex: 'merchant_name', width: 200, ellipsis: true },
-  { title: t('merchant.onboardingPage.colBusinessName'), dataIndex: 'business_names', width: 220, ellipsis: true },
-  { title: t('merchant.onboardingPage.colRegNumber'), dataIndex: 'reg_number', width: 140, ellipsis: true },
-  { title: t('merchant.onboardingPage.colSubmitted'), dataIndex: 'submitted_at', width: 120 },
-  { title: t('merchant.onboardingPage.colStage'), dataIndex: 'registration_status', width: 160 },
-  { title: t('merchant.onboardingPage.colAssignedOps'), dataIndex: 'assigned_ops_name', width: 130 },
-  { title: t('common.action'), key: 'action_col', width: 72, fixed: 'right' as const },
+  { title: t('merchant.onboardingPage.colLeadId'), dataIndex: 'app_no', width: 210 },
+  { title: t('merchant.onboardingPage.colMerchantName'), dataIndex: 'merchant_name', ellipsis: true },
+  { title: t('merchant.onboardingPage.colBusinessName'), dataIndex: 'business_names', ellipsis: true },
+  { title: t('merchant.onboardingPage.colRegNumber'), dataIndex: 'reg_number', width: 112, ellipsis: true },
+  { title: t('merchant.onboardingPage.colSubmitted'), dataIndex: 'submitted_at', width: 100 },
+  { title: t('merchant.onboardingPage.colProgress'), key: 'progress', width: 150 },
+  { title: t('merchant.onboardingPage.colAssignedOps'), dataIndex: 'assigned_ops_name', width: 110, ellipsis: true },
+  { title: t('common.action'), key: 'action_col', width: 150, fixed: 'right' as const },
 ]);
 
 // ---------- 运营专员候选(系统管理员) ----------
@@ -241,6 +251,11 @@ async function loadOps(): Promise<void> {
 }
 
 // ---------- 详情抽屉 ----------
+const documentPreview = ref<InstanceType<typeof MerchantDocumentPreview> | null>(null);
+function openDocumentPreview(docId: number): void {
+  documentPreview.value?.show(docId);
+}
+
 const drawerOpen = ref(false);
 const assistOpen = ref(false);
 const detailLoading = ref(false);
@@ -248,9 +263,14 @@ const app = ref<TableRow | null>(null);
 const businesses = ref<TableRow[]>([]);
 const documents = ref<TableRow[]>([]);
 const timeline = ref<TableRow[]>([]);
+const timelineExpanded = ref(false);
 const notes = ref<TableRow[]>([]);
 const kyc = ref<TableRow | null>(null);
 const finalApprovalResult = ref<TableRow | null>(null);
+const merchantKycOpen = ref(false);
+const merchantUploadedCount = computed(() => (kyc.value?.merchantKyc?.documents || []).filter((doc: TableRow) => doc.hasFile).length);
+const scopedAssistOpen = ref(false);
+const requirementsOpen = ref(false);
 
 const KYC_STATUS_MAP = computed<Record<string, StatusItem>>(() => ({
   locked: { text: t('merchant.onboardingPage.kycLocked'), color: 'default' },
@@ -262,10 +282,65 @@ const KYC_STATUS_MAP = computed<Record<string, StatusItem>>(() => ({
   rejected: { text: t('merchant.onboardingPage.kycRejected'), color: 'error' },
 }));
 
-function kycDocStatus(status: unknown): string {
-  const key = `merchant.onboardingPage.kycDoc${String(status || 'missing').replace(/(^|_)([a-z])/g, (_, __, letter) => letter.toUpperCase())}`;
-  const label = t(key);
-  return label === key ? String(status || '-') : label;
+function businessKycBadge(biz: TableRow): StatusItem {
+  if (isLegacy.value) {
+    const badge = RB_KYC_BADGE.value[Number(biz.kyc_status)];
+    const colors: Record<number, StatusItem['color']> = { 0: 'warning', 1: 'success', 2: 'processing', 3: 'orange', 4: 'error' };
+    return { text: badge?.text || '-', color: colors[Number(biz.kyc_status)] || 'default' };
+  }
+  const statuses = ['locked', 'draft', 'submitted', 'under_review', 'resubmit_required', 'approved', 'rejected'];
+  return KYC_STATUS_MAP.value[statuses[Number(biz.kyc_status)]] || { text: '-', color: 'default' };
+}
+
+const progressLabels = computed(() => ['progressRegistration', 'progressDocuments', 'progressReview', 'progressFinal']
+  .map((key) => t(`merchant.onboardingPage.${key}`)));
+function onboardingProgress(row: TableRow, scopes?: string[], finalResult?: TableRow | null): { step: number; status: StatusItem } {
+  if (Number(row.state_model_version ?? 0) === 0) {
+    return { step: 0, status: STAGE_MAP.value[Number(row.stage)] || { text: '-', color: 'default' } };
+  }
+  const progress = (step: number, key: string, color: StatusItem['color']) => ({
+    step, status: { text: t(`merchant.onboardingPage.${key}`), color },
+  });
+  if (finalResult || Number(row.merchant_id) > 0 || Number(row.account_status) > 0) {
+    const accountStatus = Number(row.account_status);
+    const key = accountStatus === 3 || accountStatus === 4 ? 'progressApproved'
+      : accountStatus === 2 || (accountStatus === 0 && finalResult?.accountStatus === 'active')
+        ? 'progressActivated' : 'progressPendingActivation';
+    return progress(5, key, 'success');
+  }
+  if (Number(row.registration_status) !== 3) {
+    return { step: 1, status: REGISTRATION_STATUS_MAP.value[Number(row.registration_status)] || { text: '-', color: 'default' } };
+  }
+  const names = ['locked', 'draft', 'submitted', 'under_review', 'resubmit_required', 'approved', 'rejected'];
+  const statuses = scopes ?? [row.merchant_kyc_status, ...(row.initial_property_kyc_statuses || [])]
+    .map((status) => names[Number(status)] || 'locked');
+  if (statuses.includes('resubmit_required')) return progress(2, 'progressCorrection', 'orange');
+  if (statuses.includes('rejected')) return progress(3, 'progressRejected', 'error');
+  if (statuses.length < 2 || statuses.some((status) => ['locked', 'draft'].includes(status))) {
+    return progress(2, 'progressPreparingDocuments', 'cyan');
+  }
+  if (statuses.every((status) => status === 'approved')) return progress(4, 'progressAwaitingFinal', 'processing');
+  return progress(3, 'progressReviewing', 'warning');
+}
+const currentProgress = computed(() => onboardingProgress(app.value || {}, kyc.value
+  ? [kyc.value.merchantKyc?.status, ...(kyc.value.initialProperties || []).map((p: TableRow) => p.kycStatus)]
+  : undefined, finalApprovalResult.value));
+const registrationProgress = computed(() => currentProgress.value.step);
+
+const currentProperty = computed<TableRow | null>(() => (kyc.value?.initialProperties || [])
+  .find((property: TableRow) => Number(property.applicationBusinessId) === Number(kycBizId.value)) ?? null);
+const propertyOptions = computed(() => (kyc.value?.initialProperties || []).map((property: TableRow) => ({
+  value: property.applicationBusinessId,
+  label: property.businessName,
+})));
+
+function openScopedAssist(): void {
+  if (canAssistNewKyc.value) scopedAssistOpen.value = true;
+}
+
+function selectBusinessId(id: number): void {
+  const business = businesses.value.find((item) => item.id === id);
+  if (business) void selectBiz(business);
 }
 
 /**
@@ -300,6 +375,12 @@ function toggleBiz(id: number, biz: TableRow): void {
 }
 
 async function openDetail(row: TableRow): Promise<void> {
+  timelineExpanded.value = false;
+  scopedAssistOpen.value = false;
+  requirementsOpen.value = false;
+  merchantKycOpen.value = false;
+  openBizId.value = 0;
+  noteText.value = '';
   drawerOpen.value = true;
   detailLoading.value = true;
   try {
@@ -314,7 +395,9 @@ async function openDetail(row: TableRow): Promise<void> {
     // KYC Management 默认选中第一个业务单元(无业务单元时回退申请级配置)
     const firstB = businesses.value[0];
     kycBizId.value = firstB?.id ?? 0;
+    openBizId.value = firstB?.id ?? 0;
     kycSetup.templateId = Number(app.value?.kyc_template_id) || undefined;
+    if (!isLegacy.value) return;
     await loadTemplates();
     if (!kycSetup.templateId) {
       kycSetup.templateId = templates.value[0]?.id;
@@ -334,6 +417,12 @@ async function loadDetail(id: number): Promise<void> {
   notes.value = data.notes;
   kyc.value = data.kyc;
   finalApprovalResult.value = data.finalApproval;
+  // Opening or refreshing a detail also refreshes that visible row's progress snapshot.
+  list.value = list.value.map((row) => Number(row.id) === Number(app.value?.id) ? {
+    ...row,
+    ...data.application,
+    initial_property_kyc_statuses: data.businesses.map((business: TableRow) => Number(business.kyc_status)),
+  } : row);
 }
 
 const isLegacy = computed(() => Number(app.value?.state_model_version ?? 0) === 0);
@@ -347,6 +436,78 @@ const canSubmitNewKyc = computed(() => canAssistNewKyc.value && kyc.value?.agree
 
 function canUploadScopedDoc(status: string, doc: TableRow): boolean {
   return canAssistNewKyc.value && (status === 'draft' || (status === 'resubmit_required' && ['missing', 'rejected', 'expired', 'resubmit_required'].includes(doc.status)));
+}
+
+function canReviewScopedDoc(status: string, doc: TableRow): boolean {
+  return canAssistNewKyc.value && Number(app.value?.registration_status) === 3 && !scopedKycBusy.value
+    && ['submitted', 'under_review'].includes(status) && doc.status === 'pending_review'
+    && !!doc.hasFile && Number(doc.id) > 0 && Number(doc.documentVersion) > 0;
+}
+
+function reviewDocumentScope(docId: number): { doc: TableRow; status: string; label: string } | undefined {
+  const scopes = [
+    { status: kyc.value?.merchantKyc?.status, label: t('merchant.onboardingPage.merchantKycScope'), documents: kyc.value?.merchantKyc?.documents },
+    ...(kyc.value?.initialProperties || []).map((property: TableRow) => ({ status: property.kycStatus, label: property.businessName, documents: property.documents })),
+  ];
+  for (const scope of scopes) {
+    const doc = scope.documents?.find((item: TableRow) => item.id === docId);
+    if (doc) return { doc, status: scope.status, label: scope.label };
+  }
+}
+
+type KycReviewTarget = { id: number; applicationId: number; documentVersion: number; name: string; scope: string };
+const kycRejectOpen = ref(false);
+const kycRejectReason = ref('');
+const kycReviewTarget = ref<KycReviewTarget | null>(null);
+
+function openKycReview(doc: TableRow, action: 'verify' | 'reject'): void {
+  const scope = reviewDocumentScope(doc.id);
+  if (!scope || !canReviewScopedDoc(scope.status, scope.doc)) return;
+  const target = { id: doc.id, applicationId: Number(app.value?.id), documentVersion: scope.doc.documentVersion, name: scope.doc.name, scope: scope.label };
+  if (action === 'reject') {
+    kycReviewTarget.value = target;
+    kycRejectReason.value = '';
+    kycRejectOpen.value = true;
+    return;
+  }
+  Modal.confirm({
+    zIndex: 1200,
+    title: t('merchant.documentsPage.verify'),
+    content: `${target.scope} · ${t('merchant.documentsPage.verifyConfirm', { doc: target.name })}`,
+    okText: t('merchant.documentsPage.verify'),
+    cancelText: t('common.cancel'),
+    onOk: () => reviewScopedDocument(target, 'verify'),
+  });
+}
+
+async function reviewScopedDocument(target: KycReviewTarget, action: 'verify' | 'reject', reason?: string): Promise<boolean> {
+  const current = reviewDocumentScope(target.id);
+  if (Number(app.value?.id) !== target.applicationId || !current || !canReviewScopedDoc(current.status, current.doc)
+    || current.doc.documentVersion !== target.documentVersion) {
+    message.warning(t('merchant.onboardingPage.reviewChangedHint'));
+    return false;
+  }
+  scopedKycBusy.value = true;
+  try {
+    await apiVerifyDocReview({ docId: target.id, action, expectedVersion: target.documentVersion, ...(reason ? { reason } : {}) });
+    message.success(t(action === 'verify' ? 'merchant.documentsPage.verifySuccess' : 'merchant.verifyPage.docRejectSuccess'));
+    return true;
+  } finally {
+    try {
+      if (Number(app.value?.id) === target.applicationId) await loadDetail(target.applicationId);
+    } finally {
+      scopedKycBusy.value = false;
+    }
+  }
+}
+
+async function rejectScopedDocument(): Promise<void> {
+  const reason = kycRejectReason.value.trim();
+  if (!reason) {
+    message.warning(t('merchant.verifyPage.docRejectRequiredWarn'));
+    return;
+  }
+  if (kycReviewTarget.value && await reviewScopedDocument(kycReviewTarget.value, 'reject', reason)) kycRejectOpen.value = false;
 }
 
 function uploadScopedDoc(file: File, scope: string, businessId: number, doc: TableRow): false {
@@ -365,16 +526,13 @@ function uploadScopedDoc(file: File, scope: string, businessId: number, doc: Tab
   return false;
 }
 
-function scopedUploadHandler(scope: string, businessId: number, doc: TableRow): (file: File) => false {
-  return (file) => uploadScopedDoc(file, scope, businessId, doc);
-}
-
 function submitNewKyc(): void {
   if (!app.value) return;
   const id = app.value.id;
   Modal.confirm({
     title: t('merchant.onboardingPage.assistSubmitConfirmTitle'),
     content: t('merchant.onboardingPage.assistNewSubmitHint'),
+    zIndex: 1200,
     async onOk() {
       scopedKycBusy.value = true;
       try {
@@ -613,6 +771,8 @@ function submitAssistVerification(): void {
 /** Legacy assistant flow still selects one registration business at a time. */
 async function selectBiz(biz: TableRow): Promise<void> {
   kycBizId.value = biz.id;
+  openBizId.value = biz.id;
+  if (!isLegacy.value) return;
   await loadTemplates();
   kycSetup.templateId = Number(app.value?.kyc_template_id) || templates.value[0]?.id || undefined;
   selectedTemplate.value = templates.value.find((x) => x.id === kycSetup.templateId) ?? templates.value[0] ?? null;
@@ -957,12 +1117,12 @@ onMounted(() => {
 </script>
 
 <template>
-  <PageContainer>
+  <PageContainer class="onboarding-page">
     <!-- 页面标题区(eyebrow + 主标题 + 描述) -->
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px">
+    <div class="ob-header">
       <div>
         <div class="ob-eyebrow">{{ t('merchant.onboardingPage.subtitle') }}</div>
-        <div class="ob-title">{{ t('merchant.onboardingPage.title') }}</div>
+        <h1 class="ob-title">{{ t('merchant.onboardingPage.title') }}</h1>
         <div class="ob-desc">{{ t('merchant.onboardingPage.pageDesc') }}</div>
       </div>
       <a-space>
@@ -975,11 +1135,12 @@ onMounted(() => {
       </a-space>
     </div>
     <!-- 五状态卡片导航(原型:Onboarding/Pending Verification/Approved/Rejected/Resubmission) -->
-    <MerchantVerifyNav :active="'onboarding'" />
+    <MerchantVerifyNav class="ob-queue-nav" :active="'onboarding'" />
     <!-- 搜索筛选条(SearchFilterBar:关键词 + 业态/国家筛选 + 结果数摘要) -->
     <SearchFilterBar
       v-model="query.keyword"
-      v-model:filter-values="sfbFilters"
+      :filter-values="sfbFilters"
+      @update:filter-values="Object.assign(sfbFilters, $event)"
       :filters="SEARCH_FILTERS"
       :placeholder="t('merchant.onboardingPage.keywordPlaceholder')"
       :total="pagination.total"
@@ -995,28 +1156,28 @@ onMounted(() => {
       :pagination="tablePagination"
       row-key="id"
       size="middle"
-      :scroll="{ x: 1340 }"
+      :scroll="{ x: 1152 }"
     >
       <template #bodyCell="{ column, record }">
         <template v-if="column.dataIndex === 'app_no'">
-          <span style="color: var(--sap-primary, #2563eb); font-family: monospace">{{ record.app_no }}</span>
+          <a href="#" class="ob-lead-link" :title="record.app_no" @click.prevent="openDetail(record)">{{ record.app_no }}</a>
         </template>
         <template v-else-if="column.dataIndex === 'merchant_name'">
-          <div style="font-weight: 500">{{ record.merchant_name || record.company_name || '-' }}</div>
-          <div style="font-size: 12px; color: var(--sap-muted)">{{ record.country || '-' }}</div>
+          <div class="ob-merchant-name" :title="record.merchant_name || record.company_name">{{ record.merchant_name || record.company_name || '-' }}</div>
+          <div class="ob-merchant-city">{{ record.business_city || '-' }}</div>
         </template>
         <template v-else-if="column.dataIndex === 'business_names'">{{ record.business_names || '-' }}</template>
-        <template v-else-if="column.dataIndex === 'reg_number'">{{ record.reg_number || '-' }}</template>
+        <template v-else-if="column.dataIndex === 'reg_number'"><span class="ob-mono-value">{{ record.reg_number || '-' }}</span></template>
         <template v-else-if="column.dataIndex === 'submitted_at'">{{ formatDate(record.submitted_at) }}</template>
-          <template v-else-if="column.dataIndex === 'registration_status'">
-            <StatusTag :value="record.registration_status" :map="REGISTRATION_STATUS_MAP" />
-          </template>
+        <template v-else-if="column.key === 'progress'">
+          <div class="ob-progress-badge"><StatusTag :value="0" :map="{ 0: onboardingProgress(record).status }" /></div>
+        </template>
         <template v-else-if="column.dataIndex === 'assigned_ops_name'">
           <span :style="{ color: record.assigned_ops_name ? undefined : 'var(--sap-muted)' }">{{ record.assigned_ops_name || t('merchant.onboardingPage.unassigned') }}</span>
         </template>
         <template v-else-if="column.key === 'action_col'">
           <a-tooltip :title="t('common.detail')">
-            <a-button class="row-action-btn" size="small" @click="openDetail(record)">
+            <a-button type="link" size="small" @click="openDetail(record)">
               <EyeOutlined />
             </a-button>
           </a-tooltip>
@@ -1025,15 +1186,21 @@ onMounted(() => {
     </a-table>
 
     <!-- 详情抽屉:7 分区审核工作台 -->
-    <a-drawer v-model:open="drawerOpen" :title="t('merchant.onboardingPage.drawerTitle')" width="760">
+    <a-drawer v-model:open="drawerOpen" root-class-name="onboarding-drawer" width="760" :closable="false" :mask-closable="!scopedKycBusy" :keyboard="!scopedKycBusy">
+      <template #title>
+        <div class="ob-drawer-heading ob-detail-heading">
+          <div><strong>{{ t('merchant.onboardingPage.drawerTitle') }}</strong><span v-if="app">{{ app.app_no }} · {{ app.merchant_name || app.company_name }}</span></div>
+          <a-button type="text" :disabled="scopedKycBusy" :aria-label="t('common.close')" @click="drawerOpen = false"><CloseOutlined /></a-button>
+        </div>
+      </template>
       <a-spin :spinning="detailLoading">
         <template v-if="app">
           <!-- §1 入驻状态卡(原型三段式:状态行随阶段配色 + 步骤条/拒绝提示 + 信息行) -->
           <div class="onboarding-stage-card">
             <div class="stage-card__status" :style="stageCardStyle">
-              <StatusTag v-if="isLegacy" :value="app.stage" :map="STAGE_MAP" />
-              <StatusTag v-else :value="app.registration_status" :map="REGISTRATION_STATUS_MAP" />
-              <span class="stage-card__stage-text">{{ t('merchant.onboardingPage.colStage') }}</span>
+              <StatusTag :value="0" :map="{ 0: currentProgress.status }" />
+              <span class="stage-card__stage-text">{{ t('merchant.onboardingPage.colProgress') }}</span>
+              <span v-if="!isLegacy && Number(app.registration_status) === 3" class="ob-registration-caption">{{ REGISTRATION_STATUS_MAP[3].text }}</span>
               <div v-if="editable && isLegacy" class="stage-card__change">
                 <span class="stage-card__change-label">{{ t('merchant.onboardingPage.change') }}</span>
                 <a-select
@@ -1057,9 +1224,18 @@ onMounted(() => {
             <div v-else-if="isLegacy" class="stage-card__steps">
               <StageSteps :stage="app.stage" />
             </div>
+            <div v-if="!isLegacy" class="ob-progress" :aria-label="t('merchant.onboardingPage.progressTitle')">
+              <div v-for="(label, index) in progressLabels" :key="label" class="ob-progress__item" :class="{ 'is-active': registrationProgress === index + 1, 'is-done': registrationProgress > index + 1 }" :aria-current="registrationProgress === index + 1 ? 'step' : undefined">
+                <div class="ob-progress__step">
+                  <span class="ob-progress__node"><CheckCircleOutlined v-if="registrationProgress > index + 1" /><span v-else /></span>
+                  <span>{{ label }}</span>
+                </div>
+                <span v-if="index < progressLabels.length - 1" class="ob-progress__connector" />
+              </div>
+            </div>
             <div class="stage-card__info">
               <div><div class="stage-card__info-label">{{ t('merchant.onboardingPage.leadId') }}</div><div class="stage-card__info-value" style="font-family: monospace">{{ app.app_no }}</div></div>
-              <div><div class="stage-card__info-label">{{ t('merchant.onboardingPage.registrationDate') }}</div><div class="stage-card__info-value">{{ app.submitted_at || '-' }}</div></div>
+              <div><div class="stage-card__info-label">{{ t('merchant.onboardingPage.registrationDate') }}</div><div class="stage-card__info-value">{{ formatDate(app.created_at) }}</div></div>
               <div>
                 <div class="stage-card__info-label">{{ t('merchant.onboardingPage.assignedOps') }}</div>
                 <a-select
@@ -1073,7 +1249,7 @@ onMounted(() => {
                 />
                 <div v-else class="stage-card__info-value">{{ app.assigned_ops_name || t('merchant.onboardingPage.unassigned') }}</div>
               </div>
-              <div><div class="stage-card__info-label">{{ t('merchant.onboardingPage.lastUpdated') }}</div><div class="stage-card__info-value">{{ app.last_updated_at || '-' }}</div></div>
+              <div><div class="stage-card__info-label">{{ t('merchant.onboardingPage.lastUpdated') }}</div><div class="stage-card__info-value" :title="app.last_updated_at">{{ formatDate(app.last_updated_at) }}</div></div>
             </div>
           </div>
 
@@ -1100,7 +1276,7 @@ onMounted(() => {
                 </div>
                 <div class="co-cell">
                   <div class="co-cell-label">{{ t('merchant.onboardingPage.labelSubmitted') }}</div>
-                  <div class="co-cell-value">{{ app.submitted_at || '-' }}</div>
+                  <div class="co-cell-value" :title="app.submitted_at">{{ formatDate(app.submitted_at) }}</div>
                 </div>
               </div>
               <div class="co-grid co-grid--3col">
@@ -1110,7 +1286,7 @@ onMounted(() => {
                 </div>
                 <div class="co-cell">
                   <div class="co-cell-label">{{ t('merchant.onboardingPage.labelBusinessTypes') }}</div>
-                  <div class="co-cell-value">{{ parsedTypes.join(', ') || '-' }}</div>
+                  <div class="co-cell-value">{{ parsedTypes.map(bizTypeText).join(', ') || '-' }}</div>
                 </div>
                 <div class="co-cell">
                   <div class="co-cell-label">{{ t('merchant.onboardingPage.labelMerchantId') }}</div>
@@ -1120,13 +1296,31 @@ onMounted(() => {
             </div>
           </div>
 
-          <div v-if="app.contact_verification?.length" class="co-info-section">
-            <h4>{{ t('merchant.onboardingPage.contactVerification') }}</h4>
-            <div v-for="contact in app.contact_verification" :key="contact.channel" class="kyc-scope-doc">
-              <span>{{ contact.channel }} · {{ contact.recipient }} · {{ t(`merchant.onboardingPage.contactStates.${contact.status}`) }}</span>
-              <span>{{ t(`merchant.onboardingPage.contactSources.${contact.source}`, contact.source) }} {{ contact.verifiedAt || '' }}</span>
+          <div v-if="app.contact_verification?.length" class="co-info-section ob-contacts">
+            <div class="co-section-heading"><SafetyCertificateOutlined class="co-heading-icon" /><h4 class="co-heading-text">{{ t('merchant.onboardingPage.contactVerification') }}</h4><div class="co-heading-line" /></div>
+            <div class="ob-contacts__grid">
+              <div v-for="contact in app.contact_verification" :key="contact.channel" class="co-cell">
+                <div class="ob-contacts__label"><span>{{ t(`merchant.onboardingPage.contactChannels.${contact.channel}`) }}</span><span class="ob-contact-state" :class="{ 'is-verified': contact.status === 'verified' }">{{ t(`merchant.onboardingPage.contactStates.${contact.status}`) }}</span></div>
+                <div class="co-cell-value">{{ contact.recipient }}</div>
+                <div class="ob-contact-source">{{ t(`merchant.onboardingPage.contactSources.${contact.source}`, contact.source) }}<span v-if="contact.verifiedAt"> · {{ formatDate(contact.verifiedAt) }}</span></div>
+              </div>
             </div>
           </div>
+
+          <section v-if="!isLegacy && kyc" class="ob-merchant-kyc">
+            <button type="button" class="ob-merchant-kyc__toggle" :aria-expanded="merchantKycOpen" aria-controls="merchant-kyc-documents" @click="merchantKycOpen = !merchantKycOpen">
+              <SafetyCertificateOutlined class="co-heading-icon" />
+              <span class="ob-merchant-kyc__title"><strong>{{ t('merchant.onboardingPage.merchantKycScope') }}</strong><span>{{ t('merchant.onboardingPage.merchantKycSharedHint') }}</span></span>
+              <span class="ob-merchant-kyc__count">{{ t('merchant.onboardingPage.uploadedCount', { done: merchantUploadedCount, total: (kyc.merchantKyc.documents || []).length }) }}</span>
+              <StatusTag :value="kyc.merchantKyc.status" :map="KYC_STATUS_MAP" />
+              <DownOutlined class="rb-chevron" :class="{ 'is-open': merchantKycOpen }" />
+            </button>
+            <div v-if="merchantKycOpen" id="merchant-kyc-documents" class="ob-merchant-kyc__body">
+              <KycScopeDocuments :title="t('merchant.onboardingPage.merchantKycScope')" :subtitle="app.company_name || ''" :status="kyc.merchantKyc.status" :documents="kyc.merchantKyc.documents || []" scope-type="merchant" :business-id="0" :formal-merchant="!!app.merchant_id" :busy="scopedKycBusy" :can-review="canReviewScopedDoc" @review="openKycReview" @preview="openDocumentPreview" />
+              <div v-if="kyc.merchantKyc.reviewReason" class="kyc-scope-reason">{{ kyc.merchantKyc.reviewReason }}</div>
+              <a-button v-if="canAssistNewKyc" v-perm="'merchant:onboarding:kyc'" class="ob-merchant-kyc__assist" @click="openScopedAssist"><SafetyCertificateOutlined />{{ t('merchant.onboardingPage.methodAssist') }}</a-button>
+            </div>
+          </section>
 
           <!-- §3 注册企业(手风琴表格:点击行展开业务提交详情) -->
           <div class="co-info-section">
@@ -1138,14 +1332,14 @@ onMounted(() => {
             <div v-if="businesses.length" class="rb-table">
               <div class="rb-head">
                 <span class="rb-th rb-c-index">#</span>
-                <span class="rb-th rb-c-name">{{ t('merchant.onboardingPage.labelCompanyGroupName') }}</span>
+                <span class="rb-th rb-c-name">{{ t('merchant.onboardingPage.labelRegisteredBusinessName') }}</span>
                 <span class="rb-th rb-c-type">{{ t('merchant.onboardingPage.bizDetailBusinessType') }}</span>
                 <span class="rb-th rb-c-city">{{ t('merchant.onboardingPage.bizColCity') }}</span>
                 <span class="rb-th rb-c-kyc">{{ t('merchant.onboardingPage.bizColKyc') }}</span>
                 <span class="rb-th rb-c-exp" />
               </div>
               <template v-for="(biz, idx) in businesses" :key="biz.id">
-                <div class="rb-row" :class="{ 'is-open': openBizId === biz.id }" @click="toggleBiz(biz.id, biz)">
+                <div class="rb-row" role="button" tabindex="0" :aria-expanded="openBizId === biz.id" :class="{ 'is-open': openBizId === biz.id, 'is-selected': kycBizId === biz.id }" @click="toggleBiz(biz.id, biz)" @keydown.enter.prevent="toggleBiz(biz.id, biz)" @keydown.space.prevent="toggleBiz(biz.id, biz)">
                   <span class="rb-td rb-c-index">{{ idx + 1 }}</span>
                   <span class="rb-td rb-c-name">
                     <span class="rb-emoji">{{ BIZ_TYPE_EMOJI[biz.business_type] || '🏢' }}</span>
@@ -1154,12 +1348,7 @@ onMounted(() => {
                   <span class="rb-td rb-c-type">{{ bizTypeText(biz.business_type) || '-' }}</span>
                   <span class="rb-td rb-c-city">{{ biz.city || '-' }}</span>
                   <span class="rb-td rb-c-kyc">
-                    <span
-                      v-if="RB_KYC_BADGE[biz.kyc_status]"
-                      class="rb-badge"
-                      :style="{ background: RB_KYC_BADGE[biz.kyc_status].bg, color: RB_KYC_BADGE[biz.kyc_status].color, borderColor: RB_KYC_BADGE[biz.kyc_status].border }"
-                    >{{ RB_KYC_BADGE[biz.kyc_status].text }}</span>
-                    <span v-else>-</span>
+                    <StatusTag :value="0" :map="{ 0: businessKycBadge(biz) }" />
                   </span>
                   <span class="rb-td rb-c-exp">
                     <DownOutlined class="rb-chevron" :class="{ 'is-open': openBizId === biz.id }" />
@@ -1355,19 +1544,41 @@ onMounted(() => {
           </a-modal>
           </template>
 
-          <template v-if="!isLegacy && kyc">
-            <div class="co-section-heading">
-              <SafetyCertificateOutlined class="co-heading-icon" />
-              <h4 class="co-heading-text">{{ t('merchant.onboardingPage.kycReview') }}</h4>
-              <div class="co-heading-line" />
+          <template v-if="!isLegacy">
+            <div class="co-section-heading"><SafetyCertificateOutlined class="co-heading-icon" /><h4 class="co-heading-text">{{ t('merchant.onboardingPage.kycSetup') }}</h4><div class="co-heading-line" /></div>
+            <a-alert v-if="!kyc" class="ob-kyc-locked-hint" type="info" show-icon :message="t('merchant.onboardingPage.kycLockedHint')" />
+            <template v-else>
+              <div v-if="currentBiz" class="ob-business-kyc-summary">
+                <span class="ob-business-kyc-summary__icon">{{ BIZ_TYPE_EMOJI[currentBiz.business_type] || '🏢' }}</span>
+                <div><strong>{{ currentBiz.business_name }}</strong><p>{{ t('merchant.onboardingPage.businessKycSwitchHint') }}</p></div>
+                <StatusTag v-if="currentProperty" :value="currentProperty.kycStatus" :map="KYC_STATUS_MAP" />
+              </div>
+            <p v-if="canAssistNewKyc" class="ob-helper">{{ t('merchant.onboardingPage.reviewScopeHint') }}</p>
+            <div v-if="currentBiz" class="ob-business-kyc-context">
+              <div><span class="kyc-label">{{ t('merchant.onboardingPage.verificationScope') }}</span><a-tag color="blue">{{ t('merchant.onboardingPage.propertyKycScope') }}</a-tag></div>
+              <div><span class="kyc-label">{{ t('merchant.onboardingPage.businessType') }}</span><a-tag>{{ bizTypeText(currentBiz.business_type) }}</a-tag></div>
             </div>
-            <a-alert
-              :type="kyc.finalApproval?.ready ? 'success' : 'info'"
-              :message="t(kyc.finalApproval?.ready ? 'merchant.onboardingPage.finalApprovalReady' : 'merchant.onboardingPage.finalApprovalBlocked')"
-              :description="kyc.finalApproval?.ready ? t('merchant.onboardingPage.finalApprovalReadyDesc') : finalApprovalBlockReasons"
-              show-icon
-              class="kyc-readiness"
-            />
+            <KycScopeDocuments v-if="currentProperty" :title="t('merchant.onboardingPage.propertyKycScope')" :subtitle="currentProperty.businessName" :status="currentProperty.kycStatus" :documents="currentProperty.documents || []" scope-type="property" :business-id="currentProperty.applicationBusinessId" :formal-merchant="!!app?.merchant_id"  :busy="scopedKycBusy" :can-review="canReviewScopedDoc" @review="openKycReview" @preview="openDocumentPreview" />
+            <div v-if="currentProperty?.reviewReason" class="kyc-scope-reason">{{ currentProperty.reviewReason }}</div>
+            <a-button class="ob-preview-requirements" @click="requirementsOpen = true"><EyeOutlined />{{ t('merchant.onboardingPage.previewRequirements') }}</a-button>
+            <div class="kyc-submit-card">
+              <div class="kyc-submit-card__method">
+                <div><div class="kyc-submit-card__title">{{ t('merchant.onboardingPage.kycSubmissionMethod') }}</div><span class="kyc-submit-card__tag">{{ t(Number(app.submission_method) === 2 ? 'merchant.onboardingPage.methodAssist' : 'merchant.onboardingPage.methodSelfService') }}</span></div>
+                <button v-if="canAssistNewKyc" v-perm="'merchant:onboarding:kyc'" type="button" class="kyc-submit-card__assist" @click="openScopedAssist"><SafetyCertificateOutlined />{{ t('merchant.onboardingPage.methodAssist') }}</button>
+                <span v-else class="ob-helper">{{ t('merchant.onboardingPage.assistCompletedHint') }}</span>
+              </div>
+            </div>
+            <div class="kyc-agreement-row">
+              <span>{{ t('merchant.onboardingPage.currentAgreement') }}</span>
+              <strong>{{ kyc.agreement?.title }} · v{{ kyc.agreement?.version }}</strong>
+              <StatusTag :value="kyc.agreement?.status" :map="{
+                signed: { text: t('merchant.onboardingPage.agreementSigned'), color: 'success' },
+                test_confirmed: { text: t('merchant.onboardingPage.testAgreementConfirmed'), color: 'orange' },
+                unsigned: { text: t('merchant.onboardingPage.agreementUnsigned'), color: 'warning' },
+                resign_required: { text: t('merchant.onboardingPage.agreementResign'), color: 'orange' },
+              }" />
+            </div>
+            <a-alert v-if="!finalApprovalResult" :type="kyc.finalApproval?.ready ? 'success' : 'info'" :message="t(kyc.finalApproval?.ready ? 'merchant.onboardingPage.finalApprovalReady' : 'merchant.onboardingPage.finalApprovalBlocked')" :description="kyc.finalApproval?.ready ? t('merchant.onboardingPage.finalApprovalReadyDesc') : finalApprovalBlockReasons" show-icon class="kyc-readiness" />
             <div v-if="finalApprovalResult" class="kyc-scope-card">
               <div class="kyc-scope-card__head">
                 <div>
@@ -1397,75 +1608,18 @@ onMounted(() => {
               </div>
               </template>
             </div>
-            <div v-else-if="finalApprovable" style="margin-bottom: 12px">
-              <a-button v-perm="'merchant:onboarding:final-approve'" type="primary" :disabled="!kyc.finalApproval?.ready" @click="openFinalApprove">
-                <template #icon><CheckCircleOutlined /></template>{{ t('merchant.onboardingPage.finalApproveAction') }}
-              </a-button>
-            </div>
-            <a-alert v-if="app?.registration_channel === 'admin'" type="info" show-icon :message="t('merchant.onboardingPage.adminContactsConfirmed')" style="margin-bottom: 12px" />
-            <div class="kyc-agreement-row">
-              <span>{{ t('merchant.onboardingPage.currentAgreement') }}</span>
-              <strong>{{ kyc.agreement?.title }} · v{{ kyc.agreement?.version }}</strong>
-              <StatusTag :value="kyc.agreement?.status" :map="{
-                signed: { text: t('merchant.onboardingPage.agreementSigned'), color: 'success' },
-                test_confirmed: { text: t('merchant.onboardingPage.testAgreementConfirmed'), color: 'orange' },
-                unsigned: { text: t('merchant.onboardingPage.agreementUnsigned'), color: 'warning' },
-                resign_required: { text: t('merchant.onboardingPage.agreementResign'), color: 'orange' },
-              }" />
-            </div>
-            <a-space v-if="canAssistNewKyc" wrap style="margin-bottom: 12px">
-              <a-button v-if="kyc.testAgreementAvailable && !kyc.agreement?.satisfied" v-perm="'merchant:onboarding:kyc'" :disabled="scopedKycBusy" @click="openTestAgreement">
-                {{ t('merchant.onboardingPage.testAgreementAction') }}
-              </a-button>
-              <a-button v-perm="'merchant:onboarding:kyc'" type="primary" :disabled="!canSubmitNewKyc" :loading="scopedKycBusy" @click="submitNewKyc">
-                {{ t('merchant.onboardingPage.assistSubmitVerification') }}
-              </a-button>
-              <span>{{ t('merchant.onboardingPage.assistNewSubmitHint') }}</span>
-            </a-space>
-            <div class="kyc-scope-card">
-              <div class="kyc-scope-card__head">
-                <div>
-                  <strong>{{ t('merchant.onboardingPage.merchantKycScope') }}</strong>
-                  <span>{{ app?.company_name }}</span>
-                </div>
-                <StatusTag :value="kyc.merchantKyc?.status" :map="KYC_STATUS_MAP" />
-              </div>
-              <div v-if="kyc.merchantKyc?.reviewReason" class="kyc-scope-reason">{{ kyc.merchantKyc.reviewReason }}</div>
-              <div v-for="doc in kyc.merchantKyc?.documents || []" :key="doc.id || doc.docType" class="kyc-scope-doc">
-                <span>{{ doc.name }}</span><span>{{ kycDocStatus(doc.status) }}</span>
-                <span>{{ doc.fileName }}</span>
-                <a-upload v-if="canUploadScopedDoc(kyc.merchantKyc.status, doc)" v-perm="'merchant:onboarding:kyc'" accept=".pdf,.jpg,.jpeg,.png,.webp" :show-upload-list="false" :disabled="scopedKycBusy" :before-upload="scopedUploadHandler('merchant', 0, doc)">
-                  <a-button size="small" :disabled="scopedKycBusy"><UploadOutlined />{{ t('merchant.onboardingPage.assistUploadDocument') }}</a-button>
-                </a-upload>
-                <span v-if="doc.rejectReason">{{ doc.rejectReason }}</span>
-              </div>
-            </div>
-            <div v-for="property in kyc.initialProperties || []" :key="property.applicationBusinessId" class="kyc-scope-card">
-              <div class="kyc-scope-card__head">
-                <div>
-                  <strong>{{ t('merchant.onboardingPage.propertyKycScope') }}</strong>
-                  <span>{{ property.businessName }} · #{{ property.applicationBusinessId }}</span>
-                </div>
-                <StatusTag :value="property.kycStatus" :map="KYC_STATUS_MAP" />
-              </div>
-              <div v-if="property.reviewReason" class="kyc-scope-reason">{{ property.reviewReason }}</div>
-              <div v-for="doc in property.documents || []" :key="doc.id || doc.docType" class="kyc-scope-doc">
-                <span>{{ doc.name }}</span><span>{{ kycDocStatus(doc.status) }}</span>
-                <span>{{ doc.fileName }}</span>
-                <a-upload v-if="canUploadScopedDoc(property.kycStatus, doc)" v-perm="'merchant:onboarding:kyc'" accept=".pdf,.jpg,.jpeg,.png,.webp" :show-upload-list="false" :disabled="scopedKycBusy" :before-upload="scopedUploadHandler('property', property.applicationBusinessId, doc)">
-                  <a-button size="small" :disabled="scopedKycBusy"><UploadOutlined />{{ t('merchant.onboardingPage.assistUploadDocument') }}</a-button>
-                </a-upload>
-                <span v-if="doc.rejectReason">{{ doc.rejectReason }}</span>
-              </div>
-            </div>
+            </template>
           </template>
 
           <!-- §6 Activity Timeline(标题复用 co-section-heading:灰色图标 + 大写标题 + 右侧延伸线;时间线本体对齐原型左边框竖线/圆点/日期/type标签/action/by) -->
-          <div class="co-section-heading">
+          <button type="button" class="co-section-heading timeline-toggle" :aria-expanded="timelineExpanded" aria-controls="onboarding-timeline" @click="timelineExpanded = !timelineExpanded">
             <ClockCircleOutlined class="co-heading-icon" />
-            <h4 class="co-heading-text">{{ t('merchant.onboardingPage.activityTimeline') }}</h4>
-            <div class="co-heading-line" />
-          </div>
+            <span class="co-heading-text">{{ t('merchant.onboardingPage.activityTimeline') }} ({{ timeline.length }})</span>
+            <span class="co-heading-line" />
+            <span class="timeline-toggle-label">{{ t(timelineExpanded ? 'common.collapse' : 'common.expand') }}</span>
+            <DownOutlined class="timeline-toggle-arrow" :class="{ 'is-expanded': timelineExpanded }" />
+          </button>
+          <div id="onboarding-timeline" v-show="timelineExpanded" class="timeline-scroll">
           <div v-if="timeline.length" class="onb-tl">
             <div v-for="ev in timeline" :key="ev.id" class="onb-tl-item">
               <div class="onb-tl-dot" :style="{ background: tlSource(ev.actor_type).dot, boxShadow: `0 0 0 2px ${tlSource(ev.actor_type).dot}` }" />
@@ -1478,10 +1632,11 @@ onMounted(() => {
             </div>
           </div>
           <a-empty v-else :description="t('merchant.onboardingPage.noTimeline')" :image="undefined" style="margin: 12px 0" />
+          </div>
 
           <!-- §7 Internal Notes -->
           <!-- §7 内部笔记(标题复用 co-section-heading + 图标;列表卡片与多行输入对齐原型 ci 组件) -->
-          <div class="co-section-heading">
+          <div class="co-section-heading internal-notes-heading">
             <EditOutlined class="co-heading-icon" />
             <h4 class="co-heading-text">{{ t('merchant.onboardingPage.internalNotes') }}</h4>
             <div class="co-heading-line" />
@@ -1511,7 +1666,7 @@ onMounted(() => {
         </template>
       </a-spin>
       <template #footer>
-        <div v-if="editable && app" class="drawer-footer">
+        <div v-if="app && (editable || (!isLegacy && kyc))" class="drawer-footer">
           <template v-if="isLegacy">
             <a-button v-perm="'merchant:onboarding:kyc'" class="drawer-footer-btn drawer-footer-btn--ghost" @click="sendReminder">{{ t('merchant.onboardingPage.sendReminder') }}</a-button>
             <a-button v-perm="'merchant:onboarding:registration-approve'" class="drawer-footer-btn drawer-footer-btn--primary" @click="openApprove(app)">{{ t('merchant.onboardingPage.approveOnboarding') }}</a-button>
@@ -1523,12 +1678,73 @@ onMounted(() => {
             <a-button v-perm="'merchant:onboarding:update'" class="drawer-footer-btn drawer-footer-btn--ghost" @click="resubmitReason = ''; resubmitOpen = true">{{ t('merchant.onboardingPage.requestCorrection') }}</a-button>
             <a-button v-perm="'merchant:onboarding:reject'" class="drawer-footer-btn drawer-footer-btn--danger" @click="openReject(app)">{{ t('merchant.onboardingPage.rejectRegistration') }}</a-button>
           </template>
+          <template v-if="!isLegacy && kyc">
+            <a-button v-if="canAssistNewKyc" v-perm="'merchant:onboarding:kyc'" class="drawer-footer-btn drawer-footer-btn--ghost" @click="openScopedAssist">{{ t('merchant.onboardingPage.methodAssist') }}</a-button>
+            <a-button v-if="!finalApprovalResult && finalApprovable" v-perm="'merchant:onboarding:final-approve'" class="drawer-footer-btn drawer-footer-btn--primary" :disabled="!kyc.finalApproval?.ready" @click="openFinalApprove"><CheckCircleOutlined />{{ t('merchant.onboardingPage.finalApproveAction') }}</a-button>
+          </template>
         </div>
       </template>
     </a-drawer>
 
-    <!-- 协助商户完成 KYC：当前仅对齐原型界面，提交与上传逻辑后续接入 -->
-    <a-modal v-model:open="testAgreementOpen" :title="t('merchant.onboardingPage.testAgreementAction')" :confirm-loading="scopedKycBusy" @ok="confirmTestAgreement">
+    <a-modal v-model:open="requirementsOpen" :title="t('merchant.onboardingPage.previewRequirements')" :footer="null" width="720">
+      <template v-if="kyc">
+        <p class="ob-helper">{{ t('merchant.onboardingPage.scopeReadOnlyHint') }}</p>
+            <KycScopeDocuments :title="t('merchant.onboardingPage.merchantKycScope')" :subtitle="app?.company_name || ''" :status="kyc.merchantKyc.status" :documents="kyc.merchantKyc.documents || []" scope-type="merchant" :business-id="0" :formal-merchant="!!app?.merchant_id"  @preview="openDocumentPreview" />
+            <div v-if="kyc.merchantKyc.reviewReason" class="kyc-scope-reason">{{ kyc.merchantKyc.reviewReason }}</div>
+            <div class="ob-scope-toolbar">
+              <label>{{ t('merchant.onboardingPage.selectedProperty') }}</label>
+              <a-select :value="kycBizId" :options="propertyOptions" :disabled="scopedKycBusy" @change="selectBusinessId" />
+              <StatusTag v-if="currentProperty" :value="currentProperty.kycStatus" :map="KYC_STATUS_MAP" />
+            </div>
+            <KycScopeDocuments v-if="currentProperty" :title="t('merchant.onboardingPage.propertyKycScope')" :subtitle="currentProperty.businessName" :status="currentProperty.kycStatus" :documents="currentProperty.documents || []" scope-type="property" :business-id="currentProperty.applicationBusinessId" :formal-merchant="!!app?.merchant_id"  @preview="openDocumentPreview" />
+            <div v-if="currentProperty?.reviewReason" class="kyc-scope-reason">{{ currentProperty.reviewReason }}</div>
+      </template>
+    </a-modal>
+    <a-drawer v-model:open="scopedAssistOpen" root-class-name="onboarding-assist-drawer" width="720" :z-index="1100" :closable="false" :mask-closable="!scopedKycBusy" :keyboard="!scopedKycBusy">
+      <template #title>
+        <div class="ob-drawer-heading ob-detail-heading"><div><strong>{{ t('merchant.onboardingPage.assistDrawerTitle') }}</strong><span>{{ t('merchant.onboardingPage.assistDrawerSubtitle', { name: currentBiz?.business_name || app?.company_name, operator: user.profile?.realName || user.profile?.username || '-' }) }}</span></div><a-button type="text" :disabled="scopedKycBusy" :aria-label="t('common.close')" @click="scopedAssistOpen = false"><CloseOutlined /></a-button></div>
+      </template>
+      <template v-if="kyc">
+        <p class="ob-assist-guidance">{{ t('merchant.onboardingPage.assistSavedHint') }}</p>
+        <div class="assist-kyc-notice"><SafetyCertificateOutlined class="assist-kyc-notice__icon" /><div><div class="assist-kyc-notice__title">{{ t('merchant.onboardingPage.assistNoticeTitle') }}</div><div class="assist-kyc-notice__text">{{ t('merchant.onboardingPage.assistNoticeText') }}</div></div></div>
+        <div v-if="currentBiz" class="ob-assist-business">
+          <div class="co-section-heading"><UserOutlined class="co-heading-icon" /><h4 class="co-heading-text">{{ t('merchant.onboardingPage.assistBusinessInfo') }}</h4><div class="co-heading-line" /></div>
+          <div class="co-grid co-grid--2col">
+            <div class="co-cell"><div class="co-cell-label">{{ t('merchant.onboardingPage.assistBusinessName') }}</div><div class="co-cell-value">{{ currentBiz.business_name }}</div></div>
+            <div class="co-cell"><div class="co-cell-label">{{ t('merchant.onboardingPage.assistContactPerson') }}</div><div class="co-cell-value">{{ currentBiz.contact_name || '-' }}</div></div>
+            <div class="co-cell"><div class="co-cell-label">{{ t('merchant.onboardingPage.assistPhone') }}</div><div class="co-cell-value">{{ currentBiz.contact_phone || '-' }}</div></div>
+            <div class="co-cell"><div class="co-cell-label">{{ t('merchant.onboardingPage.assistEmail') }}</div><div class="co-cell-value">{{ currentBiz.contact_email || '-' }}</div></div>
+          </div>
+        </div>
+            <KycScopeDocuments :title="t('merchant.onboardingPage.merchantKycScope')" :subtitle="app?.company_name || ''" :status="kyc.merchantKyc.status" :documents="kyc.merchantKyc.documents || []" scope-type="merchant" :business-id="0" :formal-merchant="!!app?.merchant_id" :busy="scopedKycBusy" :can-upload="canUploadScopedDoc" @upload="uploadScopedDoc" @preview="openDocumentPreview" />
+            <div v-if="kyc.merchantKyc.reviewReason" class="kyc-scope-reason">{{ kyc.merchantKyc.reviewReason }}</div>
+            <div class="ob-scope-toolbar">
+              <label>{{ t('merchant.onboardingPage.selectedProperty') }}</label>
+              <a-select :value="kycBizId" :options="propertyOptions" :disabled="scopedKycBusy" @change="selectBusinessId" />
+              <StatusTag v-if="currentProperty" :value="currentProperty.kycStatus" :map="KYC_STATUS_MAP" />
+            </div>
+            <KycScopeDocuments v-if="currentProperty" :title="t('merchant.onboardingPage.propertyKycScope')" :subtitle="currentProperty.businessName" :status="currentProperty.kycStatus" :documents="currentProperty.documents || []" scope-type="property" :business-id="currentProperty.applicationBusinessId" :formal-merchant="!!app?.merchant_id" :busy="scopedKycBusy" :can-upload="canUploadScopedDoc" @upload="uploadScopedDoc" @preview="openDocumentPreview" />
+            <div v-if="currentProperty?.reviewReason" class="kyc-scope-reason">{{ currentProperty.reviewReason }}</div>
+            <div class="kyc-agreement-row ob-assist-agreement">
+              <span>{{ t('merchant.onboardingPage.currentAgreement') }}</span>
+              <strong>{{ kyc.agreement?.title }} · v{{ kyc.agreement?.version }}</strong>
+              <StatusTag :value="kyc.agreement?.status" :map="{
+                signed: { text: t('merchant.onboardingPage.agreementSigned'), color: 'success' },
+                test_confirmed: { text: t('merchant.onboardingPage.testAgreementConfirmed'), color: 'orange' },
+                unsigned: { text: t('merchant.onboardingPage.agreementUnsigned'), color: 'warning' },
+                resign_required: { text: t('merchant.onboardingPage.agreementResign'), color: 'orange' },
+              }" />
+            </div>
+        <p class="ob-helper">{{ t('merchant.onboardingPage.assistNewSubmitHint') }}</p>
+        <a-button v-if="canAssistNewKyc && kyc.testAgreementAvailable && !kyc.agreement?.satisfied" v-perm="'merchant:onboarding:kyc'" :disabled="scopedKycBusy" @click="openTestAgreement">{{ t('merchant.onboardingPage.testAgreementAction') }}</a-button>
+      </template>
+      <template #footer>
+        <div class="ob-assist-footer"><a-button :disabled="scopedKycBusy" @click="scopedAssistOpen = false">{{ t('merchant.onboardingPage.assistContinueLater') }}</a-button><a-button v-perm="'merchant:onboarding:kyc'" type="primary" :disabled="!canSubmitNewKyc" :loading="scopedKycBusy" @click="submitNewKyc">{{ t('merchant.onboardingPage.assistSubmitVerification') }}</a-button></div>
+      </template>
+    </a-drawer>
+
+    <!-- 旧流程协助入口保留原交互。 -->
+    <a-modal v-model:open="testAgreementOpen" :z-index="1200" :title="t('merchant.onboardingPage.testAgreementAction')" :confirm-loading="scopedKycBusy" @ok="confirmTestAgreement">
       <a-alert type="warning" show-icon :message="t('merchant.onboardingPage.testAgreementWarning')" style="margin-bottom: 16px" />
       <a-form layout="vertical">
         <a-form-item :label="t('merchant.onboardingPage.testAgreementReason')" required>
@@ -1622,7 +1838,7 @@ onMounted(() => {
               <span>{{ assistUploads[doc.doc_type].file_name || assistUploads[doc.doc_type].name }}</span>
             </div>
             <a-space :size="4">
-              <a-button v-if="assistUploads[doc.doc_type].file_url" size="small" type="link" @click="openMerchantDocument(assistUploads[doc.doc_type].id)">
+              <a-button v-if="assistUploads[doc.doc_type].file_url" size="small" type="link" @click="openDocumentPreview(assistUploads[doc.doc_type].id)">
                 <template #icon><EyeOutlined /></template>{{ t('merchant.documentsPage.preview') }}
               </a-button>
               <a-button size="small" type="link" danger class="assist-kyc-document__remove" @click="removeAssistDoc(doc)">
@@ -1814,10 +2030,92 @@ onMounted(() => {
         </a-form-item>
       </a-form>
     </a-modal>
+    <a-modal v-model:open="kycRejectOpen" :z-index="1200" :title="t('merchant.verifyPage.docRejectModalTitle')" :ok-text="t('common.confirm')" :cancel-text="t('common.cancel')" :confirm-loading="scopedKycBusy" :closable="!scopedKycBusy" :mask-closable="!scopedKycBusy" :keyboard="!scopedKycBusy" :cancel-button-props="{ disabled: scopedKycBusy }" @ok="rejectScopedDocument">
+      <p class="ob-review-document">{{ kycReviewTarget?.scope }} · {{ kycReviewTarget?.name }}</p>
+      <a-form layout="vertical">
+        <a-form-item :label="t('merchant.verifyPage.rejectReasonLabel')" required>
+          <a-textarea v-model:value="kycRejectReason" :rows="3" :maxlength="500" show-count :placeholder="t('merchant.verifyPage.docRejectPlaceholder')" :disabled="scopedKycBusy" />
+        </a-form-item>
+      </a-form>
+    </a-modal>
+    <MerchantDocumentPreview ref="documentPreview" />
   </PageContainer>
 </template>
 
 <style scoped>
+.ob-header { display: flex; justify-content: space-between; align-items: center; gap: 20px; margin-bottom: 20px; }
+.ob-lead-link { white-space: nowrap; font-weight: 500; font-family: monospace; color: #2563eb; }
+.ob-mono-value { font-family: monospace; font-size: 12px; }
+.ob-merchant-name { font-weight: 500; color: #1a2332; }
+.ob-progress-badge :deep(.ant-tag) { max-width: 100%; white-space: normal; }
+.ob-registration-caption { margin-top: 3px; color: #94a3b8; font-size: 10px; }
+.ob-kyc-locked-hint { margin: 12px 0 16px; }
+.ob-drawer-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.ob-drawer-heading strong { display: block; font-size: 16px; color: #1a2332; }
+.ob-drawer-heading > div > span { display: block; margin-top: 4px; font-size: 11px; color: #94a3b8; font-weight: 400; overflow-wrap: anywhere; }
+.ob-drawer-heading > .ant-btn { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 32px; width: 32px; height: 32px; padding: 0; border-radius: 6px; }
+.ob-drawer-heading > .ant-btn :deep(.anticon) { margin: 0; font-size: 14px; }
+.ob-detail-heading strong { font-size: 15px; line-height: 20px; }
+.ob-detail-heading > div > span { margin-top: 2px; line-height: 16px; }
+.ob-progress { display: flex; align-items: center; gap: 0; padding: 14px 16px 10px; }
+.ob-progress__item { flex: 1 1 0; min-width: 0; display: flex; align-items: center; color: #94a3b8; font-size: 9px; font-weight: 500; letter-spacing: 0.01em; white-space: nowrap; }
+.ob-progress__item:last-child { flex: none; }
+.ob-progress__step { display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 0; }
+.ob-progress__node { width: 24px; height: 24px; flex-shrink: 0; border: 2px solid #cbd5e1; border-radius: 50%; background: #f1f5f9; display: flex; align-items: center; justify-content: center; font-size: 12px; }
+.ob-progress__node > span:empty { width: 6px; height: 6px; border-radius: 50%; background: #cbd5e1; }
+.ob-progress__connector { flex: 1; height: 2px; margin: 0 2px 14px; background: #e3e8f0; }
+.ob-progress__item.is-active { color: #1664ff; font-weight: 700; }
+.ob-progress__item.is-active .ob-progress__node { border-color: #1664ff; background: #1664ff; }
+.ob-progress__item.is-active .ob-progress__node > span:empty { width: 8px; height: 8px; background: #fff; }
+.ob-progress__item.is-done { color: #059669; }
+.ob-progress__item.is-done .ob-progress__node { background: #059669; border-color: #059669; color: white; }
+.ob-progress__item.is-done .ob-progress__connector { background: #059669; }
+.timeline-toggle { width: 100%; padding: 8px 0; border: 0; background: transparent; font: inherit; text-align: left; cursor: pointer; }
+.timeline-toggle:focus-visible { outline: 2px solid #1664ff; outline-offset: 2px; border-radius: 4px; }
+.timeline-toggle-label, .timeline-toggle-arrow { flex-shrink: 0; color: #64748b; font-size: 12px; }
+.timeline-toggle-arrow.is-expanded { transform: rotate(180deg); }
+.timeline-scroll { max-height: 320px; overflow-y: auto; overscroll-behavior: contain; margin-top: 8px; padding: 4px 8px 12px 2px; }
+.internal-notes-heading { margin: 24px 0 12px; }
+.ob-contacts__grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border: 1px solid #e3e8f0; border-radius: 8px; overflow: hidden; }
+.ob-contacts__grid .co-cell { padding: 12px; background: #fafbfc; min-width: 0; overflow-wrap: anywhere; }
+.ob-contacts__label { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: #64748b; font-size: 11px; }
+.ob-contact-state { font-size: 10px; color: #b54708; }
+.ob-contact-state.is-verified { color: #059669; }
+.ob-contact-source { color: #94a3b8; font-size: 10px; margin-top: 4px; }
+.ob-merchant-kyc { margin: 18px 0 20px; border: 1px solid #e3e8f0; border-radius: 8px; overflow: hidden; }
+.ob-merchant-kyc__toggle { display: flex; align-items: center; gap: 10px; width: 100%; border: 0; padding: 12px 14px; background: #f8fafc; text-align: left; cursor: pointer; }
+.ob-merchant-kyc__title { flex: 1; min-width: 0; }
+.ob-merchant-kyc__title strong { display: block; color: #334155; font-size: 12px; }
+.ob-merchant-kyc__title > span { display: block; margin-top: 3px; font-size: 10px; color: #94a3b8; }
+.ob-merchant-kyc__count { color: #64748b; font-size: 11px; white-space: nowrap; }
+.ob-merchant-kyc__body { padding: 0 12px 12px; }
+.ob-merchant-kyc__assist { margin-top: 12px; }
+.ob-business-kyc-summary { display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: #f0f6ff; border: 1px solid #bfdbfe; border-radius: 7px; margin: 10px 0; }
+.ob-business-kyc-summary > div { flex: 1; min-width: 0; }
+.ob-business-kyc-summary__icon { font-size: 20px; }
+.ob-business-kyc-summary strong { color: #1a2332; font-size: 12px; }
+.ob-business-kyc-summary p { color: #1664ff; font-size: 10px; margin: 3px 0 0; }
+.ob-business-kyc-context { display: flex; gap: 24px; margin: 14px 0; }
+.ob-business-kyc-context .kyc-label { display: block; font-size: 10px; color: #94a3b8; }
+.ob-preview-requirements { margin-top: 12px; }
+.ob-assist-business { margin: 20px 0; }
+.ob-helper { font-size: 11px; color: #64748b; line-height: 1.7; margin: 5px 0 0; }
+.ob-scope-toolbar { display: flex; align-items: center; gap: 10px; margin-top: 16px; flex-wrap: wrap; }
+.ob-scope-toolbar label { font-size: 11px; color: #64748b; }
+.ob-scope-toolbar :deep(.ant-select) { flex: 1; min-width: 140px; }
+.ob-assist-guidance { margin: 0 0 12px; color: #64748b; font-size: 11px; line-height: 1.7; }
+.ob-assist-agreement { margin-top: 16px; flex-wrap: wrap; font-size: 12px; }
+.ob-review-document { font-size: 12px; color: #64748b; overflow-wrap: anywhere; }
+:global(.onboarding-assist-drawer .ant-drawer-footer) { padding: 14px 24px calc(16px + env(safe-area-inset-bottom, 0px)); }
+.ob-assist-footer { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px; }
+.ob-assist-footer :deep(.ant-btn) { height: 34px; padding: 0 14px; border-radius: 7px; font-size: 12px; }
+.drawer-footer-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.rb-row.is-selected { background: #f0f9ff; }
+.rb-row:focus-visible { outline: 2px solid #1664ff; outline-offset: -2px; }
+:global(.onboarding-drawer .ant-drawer-content-wrapper), :global(.onboarding-assist-drawer .ant-drawer-content-wrapper) { max-width: 100vw; }
+:global(.onboarding-drawer .ant-drawer-header), :global(.onboarding-assist-drawer .ant-drawer-header) { padding: 10px 24px; min-height: 60px; border-color: #e3e8f0; }
+:global(.onboarding-drawer .ant-drawer-body), :global(.onboarding-assist-drawer .ant-drawer-body) { padding: 20px 24px; }
+
 /* §1 入驻状态卡(实测值对齐原型 stir-long:1px #E3E8F0 边框 + 10px 圆角,三段各自 padding) */
 .onboarding-stage-card {
   border: 1px solid #e3e8f0;
@@ -1998,7 +2296,7 @@ onMounted(() => {
 .rb-head,
 .rb-row {
   display: grid;
-  grid-template-columns: 24px 1fr 110px 100px 96px 20px;
+  grid-template-columns: 24px 1fr 110px 100px 96px 40px;
   align-items: center;
 }
 
@@ -2059,6 +2357,7 @@ onMounted(() => {
   transition: transform 0.2s ease;
   color: #94a3b8;
 }
+.rb-c-exp { display: flex; align-items: center; justify-content: center; padding: 8px 12px; }
 
 .rb-chevron.is-open {
   transform: rotate(180deg);
@@ -2324,27 +2623,6 @@ onMounted(() => {
 .ob-pagination :deep(.ant-pagination-item-active a) {
   color: #fff;
   font-weight: 600;
-}
-
-/* 操作列图标按钮(原型 28×28 灰图标,悬停变色) */
-.row-action-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  border: 1px solid transparent;
-  border-radius: 6px;
-  background: transparent;
-  color: #94a3b8;
-  font-size: 14px;
-}
-
-.row-action-btn:hover {
-  color: var(--sap-primary, #2563eb);
-  background: rgba(37, 99, 235, 0.08);
-  border-color: rgba(37, 99, 235, 0.28);
 }
 
 .row-action-btn--approve:hover {
@@ -3572,5 +3850,17 @@ onMounted(() => {
   font-size: 12px;
   background: #fff1f3;
   border-radius: 6px;
+}
+@media (max-width: 700px) {
+  .ob-queue-nav.mv-nav { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ob-header { align-items: flex-start; flex-direction: column; gap: 12px; }
+  .ob-contacts__grid { grid-template-columns: 1fr; }
+  .rb-table { overflow-x: auto; }
+  .rb-head, .rb-row, .rb-expand { min-width: 590px; }
+  .stage-card__info { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .co-grid--3col, .co-grid--2col { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .co-cell-value { word-break: normal; overflow-wrap: anywhere; }
+  .drawer-footer { flex-wrap: wrap; }
+  :global(.onboarding-drawer .ant-drawer-body), :global(.onboarding-assist-drawer .ant-drawer-body) { padding: 16px; }
 }
 </style>
