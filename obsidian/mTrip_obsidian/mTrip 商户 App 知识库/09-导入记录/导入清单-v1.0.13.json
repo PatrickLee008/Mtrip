@@ -1,0 +1,275 @@
+{
+  "version": "1.0.13",
+  "updated_on": "2026-11-16",
+  "source_file": "mTrip_Merchant App PRD_v1.0.13_中文版.md",
+  "source_sha256": "814fc247caaa2cd7d36a3794d474ab85bd839b7ad4ef41211a2a85020fdd8797",
+  "source_lines": 1543,
+  "historical_manifest": "导入清单.json",
+  "historical_source": "mTrip_Merchant App PRD_v1.0.12_中文版.md",
+  "sections": [
+    {
+      "path": "01-产品与范围/PRD 文档信息.md",
+      "start": 1,
+      "end": 18
+    },
+    {
+      "path": "01-产品与范围/产品定位、目标与约束.md",
+      "start": 23,
+      "end": 72
+    },
+    {
+      "path": "01-产品与范围/用户画像.md",
+      "start": 73,
+      "end": 80
+    },
+    {
+      "path": "02-业务流程/用户旅程总览.md",
+      "start": 81,
+      "end": 98
+    },
+    {
+      "path": "02-业务流程/场景1-注册与两阶段审批.md",
+      "start": 99,
+      "end": 158
+    },
+    {
+      "path": "02-业务流程/场景1-账号激活与登录.md",
+      "start": 159,
+      "end": 274
+    },
+    {
+      "path": "02-业务流程/场景2-酒店配置与发布.md",
+      "start": 275,
+      "end": 298
+    },
+    {
+      "path": "02-业务流程/场景3-预订管理与支付.md",
+      "start": 299,
+      "end": 346
+    },
+    {
+      "path": "02-业务流程/端到端平台工作流.md",
+      "start": 347,
+      "end": 358
+    },
+    {
+      "path": "01-产品与范围/组合与业务领域管理.md",
+      "start": 359,
+      "end": 373
+    },
+    {
+      "path": "03-功能模块/M00-商户工作台.md",
+      "start": 374,
+      "end": 442
+    },
+    {
+      "path": "03-功能模块/M01-注册、认证与管理员审批.md",
+      "start": 443,
+      "end": 514
+    },
+    {
+      "path": "03-功能模块/M02-酒店与客房管理.md",
+      "start": 515,
+      "end": 548
+    },
+    {
+      "path": "03-功能模块/M03-供应、库存与定价.md",
+      "start": 549,
+      "end": 653
+    },
+    {
+      "path": "03-功能模块/M04-预订管理.md",
+      "start": 654,
+      "end": 797
+    },
+    {
+      "path": "03-功能模块/M05-经营工作台、收益与结算.md",
+      "start": 798,
+      "end": 855
+    },
+    {
+      "path": "03-功能模块/M06-通知与设置.md",
+      "start": 856,
+      "end": 940
+    },
+    {
+      "path": "03-功能模块/M07-RBAC 与员工管理.md",
+      "start": 941,
+      "end": 1015
+    },
+    {
+      "path": "03-功能模块/M08-促销与活动管理.md",
+      "start": 1016,
+      "end": 1046
+    },
+    {
+      "path": "03-功能模块/M09-评价与评分管理.md",
+      "start": 1047,
+      "end": 1060
+    },
+    {
+      "path": "03-功能模块/M10-商户支持与帮助中心.md",
+      "start": 1061,
+      "end": 1138
+    },
+    {
+      "path": "04-验收标准/AC00-验收说明与商户工作台.md",
+      "start": 1139,
+      "end": 1149
+    },
+    {
+      "path": "04-验收标准/AC01-注册、认证与管理员审批.md",
+      "start": 1150,
+      "end": 1164
+    },
+    {
+      "path": "04-验收标准/AC02-酒店与客房管理.md",
+      "start": 1165,
+      "end": 1181
+    },
+    {
+      "path": "04-验收标准/AC03-供应、库存与定价.md",
+      "start": 1182,
+      "end": 1218
+    },
+    {
+      "path": "04-验收标准/AC04-预订管理.md",
+      "start": 1219,
+      "end": 1227
+    },
+    {
+      "path": "04-验收标准/AC05-经营工作台、收益与结算.md",
+      "start": 1228,
+      "end": 1234
+    },
+    {
+      "path": "04-验收标准/AC06-通知与设置.md",
+      "start": 1235,
+      "end": 1253
+    },
+    {
+      "path": "04-验收标准/AC07-RBAC 与员工管理.md",
+      "start": 1254,
+      "end": 1262
+    },
+    {
+      "path": "04-验收标准/AC08-促销与活动管理.md",
+      "start": 1263,
+      "end": 1283
+    },
+    {
+      "path": "04-验收标准/AC09-评价与评分管理.md",
+      "start": 1284,
+      "end": 1291
+    },
+    {
+      "path": "04-验收标准/AC10-商户支持与帮助中心.md",
+      "start": 1292,
+      "end": 1322
+    },
+    {
+      "path": "05-设计与集成/设计、信息架构与权限矩阵.md",
+      "start": 1323,
+      "end": 1340
+    },
+    {
+      "path": "05-设计与集成/技术考量与同步原则.md",
+      "start": 1341,
+      "end": 1362
+    },
+    {
+      "path": "05-设计与集成/PMS 与 Channel Manager 集成.md",
+      "start": 1363,
+      "end": 1424
+    },
+    {
+      "path": "05-设计与集成/实时通知、配额与扩展性.md",
+      "start": 1425,
+      "end": 1445
+    },
+    {
+      "path": "06-规划与治理/成功指标.md",
+      "start": 1446,
+      "end": 1457
+    },
+    {
+      "path": "06-规划与治理/原文待决问题.md",
+      "start": 1458,
+      "end": 1467
+    },
+    {
+      "path": "06-规划与治理/原文问答.md",
+      "start": 1468,
+      "end": 1482
+    },
+    {
+      "path": "06-规划与治理/功能时间线与阶段划分.md",
+      "start": 1483,
+      "end": 1498
+    },
+    {
+      "path": "06-规划与治理/参考范围与 PRD 检查清单.md",
+      "start": 1499,
+      "end": 1526
+    },
+    {
+      "path": "06-规划与治理/版本变更历史.md",
+      "start": 1527,
+      "end": 1543
+    }
+  ],
+  "images": [
+    {
+      "path": "08-原始资料/images/img_001.png",
+      "sha256": "97f3959caf44375594a88747b1105a787d8d9e37bd21672cde68a3d7121a20d1"
+    },
+    {
+      "path": "08-原始资料/images/img_002.png",
+      "sha256": "89f02ea5746c076e351e776d2fdfba0279d91e2b07fddc6934c470ae3a1db671"
+    },
+    {
+      "path": "08-原始资料/images/img_003.png",
+      "sha256": "14b1a3cff1ffe134e7d7e9d0afa8c42d17737b51322643691be78d6af97fbba4"
+    },
+    {
+      "path": "08-原始资料/images/img_004.png",
+      "sha256": "20d2297858c2c5eedaaed792b6ebfe48f24313e4220ea1f6be1956db88249df3"
+    },
+    {
+      "path": "08-原始资料/images/img_005.png",
+      "sha256": "49d1cfbee37f6036f96f122b48ac279ba6d87976a1f4c2755e8d1a66dbb8f130"
+    },
+    {
+      "path": "08-原始资料/images/img_006.png",
+      "sha256": "ef08908b4b5ccc77d49a6e3925177e9c6a0f58a7baa31af9a6b824de12653cae"
+    },
+    {
+      "path": "08-原始资料/images/img_007.png",
+      "sha256": "ecbb891fd9b35beeda421ff4a42fe871a9f71a5c06c8f08c1066a63f0d44ecdb"
+    },
+    {
+      "path": "08-原始资料/images/img_008.png",
+      "sha256": "6fad3231c087b5581125a09abb146d3dfcc82802d13a4d3b340d6f9d74a17e5d"
+    },
+    {
+      "path": "08-原始资料/images/img_009.png",
+      "sha256": "4223732a17f98853b99fda2c4e19cdd50fe234cc9fba595ade0701d7e7593231"
+    },
+    {
+      "path": "08-原始资料/images/img_010.png",
+      "sha256": "fd8d1c79a7560344d121abc6ceb9534f90b67a15f482dc456de75115999d38cd"
+    }
+  ],
+  "validation": {
+    "new_source_hash_match": true,
+    "verbatim_extracts_match": 42,
+    "covered_lines": 1539,
+    "toc_only_in_source_lines": "19-22",
+    "coverage_without_overlap": true,
+    "original_note_supplements_preserved": 42,
+    "image_byte_matches": 10,
+    "local_links_resolved": true,
+    "historical_source_hash_rechecked": false,
+    "historical_snapshot_sha256": "676aae142df77bea9b9355611cacc6aa56de0b38d7d819ffda01cc1fb4f94511"
+  }
+}
