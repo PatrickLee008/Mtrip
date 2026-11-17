@@ -530,6 +530,8 @@
       "guestsRooms": "住客与房间",
       "roomsValue": "{{rooms}} 间",
       "totalAmount": "订单总额",
+      "prepayAmount": "当前预付",
+      "hotelBalance": "到店应付",
       "roomAmenities": "房型设施",
       "breakfastTitle": "含早餐",
       "breakfastDesc": "该房型已包含早餐。",
@@ -560,8 +562,16 @@
       "cancellationFee": "取消手续费",
       "platformFee": "平台服务费",
       "refundAmount": "退款金额",
+      "hotelBalance": "到店应付（未收取）",
+      "refundCommission": "佣金退款",
+      "refundDeposit": "酒店预收退款",
+      "refundTransactionFee": "交易手续费退款",
+      "refundAddon": "附加服务退款",
       "refundMethod": "退款方式",
+      "refundWallet": "mTrip 钱包",
+      "refundOriginal": "KBZPay 原路退回",
       "refundMethodDesc": "退款将退回你的 mTrip 钱包。",
+      "refundOriginalDesc": "退款将原路退回你的 KBZPay 支付账户。",
       "refundTimeline": "预计到账时间",
       "refundTimelineDesc": "款项将在 3-5 个工作日内到账。",
       "proceed": "继续取消",
@@ -578,6 +588,7 @@
       },
       "policyTitle": "取消政策提醒",
       "policyDesc": "退款将在 3-5 个工作日内退回你的 mTrip 钱包。",
+      "policyOriginalDesc": "审核通过后，退款将原路退回你的 KBZPay 支付账户。",
       "back": "上一步",
       "continue": "确认取消",
       "commentsLabel": "补充说明(选填)",
@@ -585,6 +596,7 @@
       "reviewTitle": "确认取消",
       "reviewDesc": "很遗憾你要取消。提交前请再核对一下取消详情。",
       "refundNote": "退款将在 3-5 个工作日内退回你的 mTrip 钱包。",
+      "refundOriginalNote": "审核通过后，退款将原路退回你的 KBZPay 支付账户。",
       "finalNoticeTitle": "最后提醒",
       "finalNoticeDesc": "此操作不可撤销,其中 {{fee}} 手续费不予退还。",
       "confirm": "确认取消预订",
@@ -2152,7 +2164,9 @@
         "retry": "重试",
         "moreMethods": "更多支付方式",
         "moreMethodsDesc": "即将开放",
-        "remainingMethodRequired": "钱包余额不足以支付全部金额,请为剩余部分选择支付方式。"
+        "remainingMethodRequired": "钱包余额不足以支付全部金额,请为剩余部分选择支付方式。",
+        "hotelUnavailable": "此预订暂不可使用到店支付，请刷新后重试。",
+        "hotelBalance": "到店应付"
       },
       "success": {
         "title": "预订成功",
@@ -2418,7 +2432,7 @@
     },
     "payAtHotel": {
       "title": "本酒店支持到店付款",
-      "desc": "App 内到店付款即将开放,目前请使用 mTrip 钱包支付。"
+      "desc": "现在支付显示的预付款，剩余金额到店支付。请在结账时核对明细。"
     },
     "reviewLabel": {
       "exceptional": "极佳",

@@ -226,6 +226,9 @@ export default function OrderDetailScreen() {
           <Text style={styles.amountLabel}>{t('order.totalAmount')}</Text>
           <PriceText amount={order.pay_amount} />
         </View>
+        {order.pay_at_hotel ? (
+          <Row label={t('order.bookingDetail.hotelBalance')} value={formatMoney(Number(order.hotel_balance) || 0, currency)} />
+        ) : null}
       </View>
 
       {status === ORDER_STATUS.PENDING ? (

@@ -137,7 +137,29 @@ export default function BookingDetailScreen({ navigation, route }: NativeStackSc
         </View>
         <View style={ui.card}><Text style={styles.sectionHeading}>{t('bookings.stayDetails')}</Text><Text style={ui.strong}>{order.sku_name || order.goods_name}</Text><Text style={[ui.text, { marginVertical: 10, color: '#0284C7' }]}>{t('bookings.staySummary', { nights: detail.stay.nights, rooms: detail.stay.quantity })}</Text><View style={ui.row}><View style={{ flex: 1 }}><Text style={ui.text}>{t('bookings.checkInDate')}</Text><Text style={ui.strong}>{bookingDate(detail.stay.useDate, i18n.language)}</Text></View><View style={{ flex: 1 }}><Text style={ui.text}>{t('bookings.checkOutDate')}</Text><Text style={ui.strong}>{bookingDate(detail.stay.endDate, i18n.language)}</Text></View></View>{detail.stay.roomNo ? <InfoRow title={t('bookings.roomNo')} value={detail.stay.roomNo} /> : null}</View>
         {detail.stay.specialRequests ? <View style={ui.card}><Text style={styles.sectionHeading}>{t('bookings.specialRequest')}</Text><Text style={[ui.text, { color: '#D97706' }]}>{detail.stay.specialRequests}</Text></View> : null}
-        {status !== 1 ? <View style={[ui.card, payment === 'hotel' && status === 3 && styles.hotelPayment]}><Text style={styles.sectionHeading}>{t('bookings.billing')}</Text><InfoRow title={t('bookings.subtotal')} value={money(detail.payment.totalAmount)} /><InfoRow title={t('bookings.discount')} value={`− ${money(detail.payment.discountAmount)}`} /><View style={styles.divider} /><InfoRow title={t('bookings.total')} value={money(detail.payment.payAmount)} /><InfoRow title={t('bookings.paymentMethod')} value={t(Number(detail.payment.payMethod) === 4 ? 'bookings.payment.hotel' : `bookings.method.${Number(detail.payment.payMethod)}` , { defaultValue: t('bookings.payment.unknown') })} /><View style={ui.row}><Text style={ui.text}>{t('bookings.paymentStatus')}</Text><BookingBadges order={order} paymentOnly /></View>{status === 3 && can('mark-paid') ? <View style={ui.actions}><BookingButton title={t('bookings.action.mark-paid')} onPress={() => openDialog('mark-paid')} /></View> : null}</View> : null}
+        {status !== 1 ? (
+          <View style={[ui.card, payment === 'hotel' && status === 3 && styles.hotelPayment]}>
+            <Text style={styles.sectionHeading}>{t('bookings.billing')}</Text>
+            <InfoRow title={t('bookings.subtotal')} value={money(detail.payment.totalAmount)} />
+            <InfoRow title={t('bookings.discount')} value={`− ${money(detail.payment.discountAmount)}`} />
+            <View style={styles.divider} />
+            <InfoRow title={t(detail.payment.payAtHotel ? 'bookings.hotelTerms.prepay' : 'bookings.total')} value={money(detail.payment.payAmount)} />
+            {detail.payment.payAtHotel ? (
+              <>
+                <InfoRow title={t('bookings.hotelTerms.balance')} value={money(detail.payment.hotelBalance ?? 0)} />
+                <InfoRow title={t('bookings.hotelTerms.commission')} value={money(detail.payment.commission ?? 0)} />
+                <InfoRow title={t('bookings.hotelTerms.deposit')} value={money(detail.payment.merchantDeposit ?? 0)} />
+                <InfoRow title={t('bookings.hotelTerms.fee')} value={money(detail.payment.transactionFee ?? 0)} />
+                <InfoRow title={t('bookings.hotelTerms.noShow')} value={detail.payment.terms?.noShowEnabled ? t('bookings.hotelTerms.enabled') : t('bookings.hotelTerms.disabled')} />
+                <InfoRow title={t('bookings.hotelTerms.version')} value={String(detail.payment.terms?.version ?? '-')} />
+                <InfoRow title={t('bookings.hotelTerms.settlement')} value={t(detail.payment.operationalSettlementStatus === 1 ? 'bookings.hotelTerms.completed' : 'bookings.hotelTerms.pending')} />
+              </>
+            ) : null}
+            <InfoRow title={t('bookings.paymentMethod')} value={t(Number(detail.payment.payMethod) === 4 ? 'bookings.payment.hotel' : `bookings.method.${Number(detail.payment.payMethod)}`, { defaultValue: t('bookings.payment.unknown') })} />
+            <View style={ui.row}><Text style={ui.text}>{t('bookings.paymentStatus')}</Text><BookingBadges order={order} paymentOnly /></View>
+            {status === 3 && can('mark-paid') ? <View style={ui.actions}><BookingButton title={t('bookings.action.mark-paid')} onPress={() => openDialog('mark-paid')} /></View> : null}
+          </View>
+        ) : null}
       </ScrollView>
       <View style={styles.footer}>
         {can('check-in') ? <View style={styles.footerRow}><BookingButton title={t('bookings.action.check-in')} onPress={() => openDialog('check-in')} /></View> : null}

@@ -93,6 +93,14 @@ export default {
   "portalMissing": "Configure a trusted HTTPS VITE_MERCHANT_PORTAL_URL before starting support sessions.",
   "popupBlocked": "Allow the merchant portal popup and try again."
 },
+  hotelTerms: {
+    title: 'Pay at Hotel terms', enabled: 'Allow Pay at Hotel', noShow: 'Allow merchant no-show fee',
+    commission: 'Commission rate', fee: 'Transaction fee on commission', cap: 'Merchant deposit cap (room rate)',
+    effectiveAt: 'Effective time (UTC)', reason: 'Change reason', history: 'Version history',
+    required: 'Effective time and reason are required', balance: 'Pay at hotel', deposit: 'Merchant prepayment',
+    settlement: 'Operational settlement', completed: 'Completed after check-in', pending: 'Pending check-in',
+    version: 'Terms version',
+  },
   merchantDirectory: {
     title: 'All Merchants', subtitle: 'Manage platform merchants, commissions, and account access',
     merchantName: 'Merchant Name', allMerchants: 'Total Merchants', accountStatus: 'Account Status', allStatuses: 'All Account Statuses', allTypes: 'All Types',

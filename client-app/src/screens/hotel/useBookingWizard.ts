@@ -267,7 +267,7 @@ export function useBookingWizard({
       setWalletOn(!walletOn);
       return;
     }
-    if (key === null || (key === 'mmqr' && mmqrEnabled)) {
+    if (key === null || (key === 'mmqr' && mmqrEnabled) || (key === 'hotel' && cartQuote?.payAtHotelAvailable)) {
       methodTouched.current = true;
       setMethod((prev) => (key !== null && prev === key ? null : key));
       return;
@@ -590,6 +590,7 @@ export function useBookingWizard({
     quoteItems,
     couponId,
     isLogin && Boolean(current.checkIn && current.checkOut),
+    method === 'hotel',
   );
   /**
    * 各段住宿的小计(第 2 步 Stay 卡片的 TOTAL AMOUNT):试算行按下标对上各段(日历价 − 长住优惠,不含券),
@@ -740,11 +741,9 @@ export function useBookingWizard({
   const addonTotal =
     cartQuote?.addonAmount ??
     addonsEstimate(addonOptions, selectedAddons, guestCount, nightsBetween(current.checkIn, current.checkOut), activeRoomCount);
-  const payableTotal = multi
-    ? tripTotal
-    : tripQuote
-      ? tripQuote.payAmount
-      : Math.max(0, roomsTotal - longstayDiscount - couponDiscount) + addonTotal;
+  const payableTotal = tripQuote
+    ? tripQuote.payAmount
+    : multi ? tripTotal : Math.max(0, roomsTotal - longstayDiscount - couponDiscount) + addonTotal;
 
   /**
    * 钱包部分抵扣(PRD 模块 25):开关开着时抵扣 min(余额, 酒店单笔限额, 应付),剩余 `remainingDue` 用其他渠道付。
@@ -773,11 +772,11 @@ export function useBookingWizard({
         : /* 多房间新稿(2659:12508)四步收成三步:日期与住客信息合并为 details。
              建单后车已清空,靠金额快照认出这仍是多房间单,序列不跟着变回四步 */
           cartMode || priceSnapshot !== null
-          ? walletCovers
+          ? walletCovers && !cartQuote?.payAtHotelAvailable
             ? ['details', 'review']
             : ['details', 'review', 'payment']
           : ['dates', 'guests', 'review', 'payment']),
-    [steps, multi, enableMultiStay, cartMode, priceSnapshot, walletCovers],
+    [steps, multi, enableMultiStay, cartMode, priceSnapshot, walletCovers, cartQuote?.payAtHotelAvailable],
   );
   /**
    * 初始步骤在 useState 里只能按默认序列给(`dates`),此时购物车模式还没算出来;
@@ -968,6 +967,7 @@ export function useBookingWizard({
           items: tripItems,
           couponId: appliedCoupon?.receiveId,
           expectedPayAmount,
+          payAtHotel: method === 'hotel' ? 1 : 0,
         });
         /* 单已落库:先冻结页面金额,再把房型转存为快照并清空购物车,免得留在车里诱发重复下单 */
         /* 钱包怎么分以服务端建单金额为准(与页面显示的应付一致,价格变动已在建单时拦过) */
@@ -1030,6 +1030,7 @@ export function useBookingWizard({
            所以这里提交的是领券记录 id,不是前端算好的金额 */
         couponId: appliedCoupon?.receiveId,
         expectedPayAmount,
+        payAtHotel: method === 'hotel' ? 1 : 0,
         ...(selectedAddons.length > 0 ? { addons: selectedAddons, guestCount } : {}),
         travelers: [
           {
@@ -1151,6 +1152,10 @@ export function useBookingWizard({
      * 继续即视为同意),所以这里不再拦截。`agreed` 仍保留导出给关怀模式等旧调用方。
      */
     if (isPayStep) {
+      if (method === 'hotel' && (!tripQuote || !tripQuote.payAtHotelAvailable)) {
+        showToast(t('hotels.booking.payment.hotelUnavailable'));
+        return;
+      }
       /* 钱包付清全额时不需要再选渠道;付不清(或关了钱包)必须选一个补差额 / 整单的渠道 */
       if (!walletCovers && !method) {
         showToast(
@@ -1172,7 +1177,7 @@ export function useBookingWizard({
         return;
       }
       /* 钱包付不清时只有(站点已开通的)MMQR 能补;其余渠道后端仍是 mock,不能放行建单 */
-      if (!walletCovers && (method !== 'mmqr' || !mmqrEnabled)) {
+      if (!walletCovers && (!mmqrEnabled || (method !== 'mmqr' && method !== 'hotel'))) {
         comingSoon();
         return;
       }
@@ -1306,6 +1311,8 @@ export function useBookingWizard({
 
   return {
     payAtHotel,
+    payAtHotelAvailable: Boolean(cartQuote?.payAtHotelAvailable),
+    hotelBalance: tripQuote?.hotelBalance ?? 0,
     addonOptions,
     addonTotal,
     /* 环境 */

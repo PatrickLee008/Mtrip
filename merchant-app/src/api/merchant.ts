@@ -1,5 +1,5 @@
 import { get, post, postEncrypted, postForm, request } from '@/api/request';
-import type { BookingAction, BookingDetail, BookingPage, PaymentFilter } from '@/api/types';
+import type { BookingAction, BookingDetail, BookingPage, PaymentFilter, PayAtHotelTerms } from '@/api/types';
 import type { ActivationIdentity, AgreementDetail, ApplicationDetail, ApplicationStatus, AuthOtpChallenge, ChallengeResult, DashboardBookingDetail, DashboardEarnings, DashboardProperty, DashboardStats, GuestThread, KycRequirements, KycSubmitResult, LoginResult, MenusResult, MerchantProfile, NotificationBookingDetail, NotificationPage, NotificationSummary, RegistrationChannel, RegistrationConfig, RegistrationOtpResult, RegistrationVerifyResult, TwoFaSetupResult } from '@/api/types';
 
 export function apiLogin(username: string, password: string): Promise<ChallengeResult> {
@@ -19,6 +19,10 @@ export function apiMe(): Promise<MerchantProfile> {
 }
 
 export const apiMerchantContacts = () => get<{ contacts: { channel: 'email' | 'sms'; recipient: string }[] }>('/auth/contacts');
+
+export const apiPayAtHotelTerms = () => get<PayAtHotelTerms>('/pay-at-hotel/terms');
+export const apiSavePayAtHotelTerms = (noShowEnabled: boolean, depositRate: number) =>
+  post<PayAtHotelTerms>('/pay-at-hotel/terms', { noShowEnabled, depositRate });
 
 export function apiMenus(): Promise<MenusResult> {
   return get<MenusResult>('/auth/menus');

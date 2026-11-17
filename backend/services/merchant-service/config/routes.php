@@ -135,6 +135,8 @@ Router::addGroup('/api/v1/admin', static function () {
     Router::get('/merchant/notification/list', [NotificationController::class, 'list']);
     Router::get('/merchant/notification/templates', [NotificationController::class, 'templates']);
     Router::post('/merchant/commission', [MerchantController::class, 'commission']);
+    Router::get('/merchant/pay-at-hotel/terms', [MerchantController::class, 'payAtHotelTerms']);
+    Router::post('/merchant/pay-at-hotel/terms', [MerchantController::class, 'savePayAtHotelTerms']);
     Router::get('/merchant/account', [MerchantController::class, 'accounts']);
     Router::post('/merchant/account-save', [MerchantController::class, 'saveAccount']);
     // 功能模块授权(酒店/餐饮…):决定商户端 merchant-web 可见的业务菜单
@@ -287,6 +289,8 @@ Router::post('/api/v1/merchant/auth/credential-claim/email', [\App\Controller\Me
 Router::post('/api/v1/merchant/auth/credential-claim/finish', [\App\Controller\MerchantContactSecurityController::class, 'claimFinish']);
 
 Router::addGroup('/api/v1/merchant', static function () {
+    Router::get('/pay-at-hotel/terms', [\App\Controller\Merchant\PayAtHotelTermsController::class, 'show']);
+    Router::post('/pay-at-hotel/terms', [\App\Controller\Merchant\PayAtHotelTermsController::class, 'save']);
     Router::addGroup('/support', static function () {
         $controller = \App\Controller\Merchant\SupportController::class;
         foreach (['options' => 'options', 'tickets' => 'index', 'summary' => 'summary', 'ticket' => 'detail', 'replies' => 'replies', 'events' => 'events', 'attachments/download' => 'download'] as $path => $method) Router::get('/' . $path, [$controller, $method]);

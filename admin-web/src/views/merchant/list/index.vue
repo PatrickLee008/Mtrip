@@ -23,6 +23,9 @@ import {
   apiMerchantAudit,
   apiMerchantClose,
   apiMerchantCommission,
+  apiPayAtHotelTerms,
+  apiSavePayAtHotelTerms,
+  type PayAtHotelTerms,
   apiMerchantDetail,
   apiMerchantList,
   apiMerchantModuleGrant,
@@ -350,6 +353,40 @@ const commissionOpen = ref(false);
 const commissionSaving = ref(false);
 const commissionTarget = ref<TableRow | null>(null);
 const commissionForm = reactive({ commissionRate: 0, settlementCycle: 15, commissionPlan: 'standard' });
+const hotelTermsOpen = ref(false);
+const hotelTermsSaving = ref(false);
+const hotelTermsTarget = ref<TableRow | null>(null);
+const hotelTermsHistory = ref<PayAtHotelTerms[]>([]);
+const hotelTermsForm = reactive({ enabled: false, noShowEnabled: false, depositCapRate: 0, commissionRate: 0, transactionFeeRate: 0, effectiveAt: '', reason: '' });
+
+async function openHotelTerms(row: TableRow): Promise<void> {
+  hotelTermsTarget.value = row;
+  const data = await apiPayAtHotelTerms(Number(row.id));
+  const current = data.current;
+  hotelTermsHistory.value = data.history;
+  Object.assign(hotelTermsForm, {
+    enabled: Boolean(current.enabled), noShowEnabled: Boolean(current.no_show_enabled),
+    depositCapRate: Number(current.deposit_cap_rate), commissionRate: Number(current.commission_rate),
+    transactionFeeRate: Number(current.transaction_fee_rate),
+    effectiveAt: new Date().toISOString().slice(0, 19).replace('T', ' '), reason: '',
+  });
+  hotelTermsOpen.value = true;
+}
+
+async function saveHotelTerms(): Promise<void> {
+  if (!hotelTermsTarget.value || !hotelTermsForm.reason.trim() || !hotelTermsForm.effectiveAt.trim()) {
+    message.warning(t('hotelTerms.required'));
+    return;
+  }
+  hotelTermsSaving.value = true;
+  try {
+    await apiSavePayAtHotelTerms({ merchantId: Number(hotelTermsTarget.value.id), ...hotelTermsForm });
+    message.success(t('tip.saveSuccess'));
+    hotelTermsOpen.value = false;
+  } finally {
+    hotelTermsSaving.value = false;
+  }
+}
 
 function openCommission(row: TableRow): void {
   commissionTarget.value = row;
@@ -534,6 +571,7 @@ onMounted(() => {
             <a-button v-if="detail.status !== 5" v-perm="'merchant:list:edit'" @click="openEdit(detail)">{{ t('common.edit') }}</a-button>
             <a-button v-if="detail.status === 0" v-perm="'merchant:list:audit'" @click="openAudit(detail)">{{ t('goods.audit.columns.pass') }}</a-button>
             <a-button v-if="[3, 4].includes(detail.status)" v-perm="'merchant:list:edit'" @click="openCommission(detail)">{{ t('merchant.profile.commissionPlan') }}</a-button>
+            <a-button v-if="[3, 4].includes(detail.status)" v-perm="'merchant:list:edit'" @click="openHotelTerms(detail)">{{ t('hotelTerms.title') }}</a-button>
             <a-button v-if="detail.status !== 5" v-perm="'merchant:list:delete'" danger @click="openClose(detail)">{{ t('common.delete') }}</a-button>
             <MerchantStatusActions :merchant="detail" @changed="statusChanged" />
             <a-button v-perm="'merchant:list:notify'" @click="openNotify(detail)">{{ t('merchant.notifyPage.title') }}</a-button>
@@ -742,6 +780,22 @@ onMounted(() => {
     </a-modal>
 
     <!-- 注销(高危) -->
+    <a-modal v-model:open="hotelTermsOpen" :title="t('hotelTerms.title')" :confirm-loading="hotelTermsSaving" width="580px" @ok="saveHotelTerms">
+      <a-form layout="vertical">
+        <a-form-item :label="t('hotelTerms.enabled')"><a-switch v-model:checked="hotelTermsForm.enabled" /></a-form-item>
+        <a-form-item :label="t('hotelTerms.noShow')"><a-switch v-model:checked="hotelTermsForm.noShowEnabled" :disabled="!hotelTermsForm.enabled" /></a-form-item>
+        <a-form-item :label="t('hotelTerms.commission')"><a-input-number v-model:value="hotelTermsForm.commissionRate" :min="0" :max="100" :step="0.1" addon-after="%" style="width: 100%" /></a-form-item>
+        <a-form-item :label="t('hotelTerms.fee')"><a-input-number v-model:value="hotelTermsForm.transactionFeeRate" :min="0" :max="100" :step="0.1" addon-after="%" style="width: 100%" /></a-form-item>
+        <a-form-item :label="t('hotelTerms.cap')"><a-input-number v-model:value="hotelTermsForm.depositCapRate" :min="0" :max="30" :step="0.1" addon-after="%" style="width: 100%" /></a-form-item>
+        <a-form-item :label="t('hotelTerms.effectiveAt')" required><a-input v-model:value="hotelTermsForm.effectiveAt" placeholder="YYYY-MM-DD HH:mm:ss UTC" /></a-form-item>
+        <a-form-item :label="t('hotelTerms.reason')" required><a-textarea v-model:value="hotelTermsForm.reason" :maxlength="500" :rows="2" /></a-form-item>
+      </a-form>
+      <a-divider>{{ t('hotelTerms.history') }}</a-divider>
+      <div v-for="item in hotelTermsHistory" :key="item.version" style="margin: 6px 0; font-size: 12px">
+        v{{ item.version }} · {{ item.effective_at }} · {{ item.actor_type }} #{{ item.actor_id }} · {{ item.reason }}
+      </div>
+    </a-modal>
+
     <a-modal
       v-model:open="closeOpen"
       :title="`${t('common.delete')}:${closeTarget?.merchant_name ?? ''}`"

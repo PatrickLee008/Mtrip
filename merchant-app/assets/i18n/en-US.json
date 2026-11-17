@@ -22,7 +22,8 @@
       "profile": "Merchant Profile",
       "notifications": "Notification Preferences",
       "security": "Security & Login",
-      "localization": "Localization"
+      "localization": "Localization",
+      "hotelTerms": "Business & Payment Terms"
     },
     "items": {
       "allProperties": "All Properties",
@@ -37,10 +38,24 @@
       "security": "Security & Login",
       "notifications": "Notification Preferences",
       "localization": "Localization",
+      "hotelTerms": "Business & Payment Terms",
       "support": "Support Center",
       "rules": "Compliance & Platform Rules",
       "faq": "FAQs",
       "guide": "User Guide"
+    },
+    "hotelTerms": {
+      "status": "Pay at hotel",
+      "enabled": "Enabled",
+      "disabled": "Not enabled",
+      "commission": "mTrip commission rate",
+      "transactionFee": "Transaction fee rate",
+      "version": "Terms version",
+      "noShow": "Charge a no-show fee",
+      "depositRate": "Hotel room prepayment (max {{max}}%)",
+      "invalidRate": "Enter a prepayment rate within the permitted range.",
+      "loadFailed": "Unable to load payment terms.",
+      "saved": "Payment terms saved."
     },
     "profile": {
       "changeLogo": "Change Logo",
@@ -122,6 +137,12 @@
     "staySummary": "{{nights}} night(s) · {{rooms}} room(s)", "checkInDate": "Check-in", "checkOutDate": "Check-out",
     "roomNo": "Room Number", "specialRequest": "Special Request", "billing": "Billing & Payment",
     "subtotal": "Subtotal", "discount": "Discount / Promo", "total": "Total", "paymentMethod": "Method",
+    "hotelTerms": {
+      "prepay": "Pay now", "balance": "Pay at hotel", "commission": "mTrip commission",
+      "deposit": "Hotel deposit", "fee": "Transaction fee", "noShow": "No-show fee",
+      "enabled": "Enabled", "disabled": "Waived", "version": "Terms version",
+      "settlement": "Operational settlement", "completed": "Completed after check-in", "pending": "Pending check-in"
+    },
     "paymentHold": "The room is temporarily held while payment is pending. If payment is not received within the payment window, the server will cancel the booking automatically.",
     "checkingPayment": "Checking payment status…", "cancelledTitle": "Booking Cancelled",
     "cancelledCopy": "The booking is cancelled. Any eligible refund is handled separately under the booking's cancellation policy.",

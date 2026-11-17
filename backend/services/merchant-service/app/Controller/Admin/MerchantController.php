@@ -8,6 +8,7 @@ use App\Controller\AbstractController;
 
 use App\Service\MerchantService;
 use App\Service\MerchantStatusService;
+use App\Service\PayAtHotelTermsService;
 use App\Support\MerchantModule;
 use Hyperf\DbConnection\Db;
 use Hyperf\Di\Annotation\Inject;
@@ -32,6 +33,25 @@ class MerchantController extends AbstractController
 
     #[Inject]
     protected MerchantStatusService $statusService;
+
+    #[Inject]
+    protected PayAtHotelTermsService $payAtHotelTerms;
+
+    public function payAtHotelTerms(): array
+    {
+        $merchant = $this->findScoped($this->requireId('merchantId'));
+        return Result::success([
+            'current' => $this->payAtHotelTerms->current($merchant),
+            'history' => $this->payAtHotelTerms->history($merchant),
+        ]);
+    }
+
+    #[Permission('merchant:list:edit')]
+    public function savePayAtHotelTerms(): array
+    {
+        $merchant = $this->findScoped($this->requireId('merchantId'));
+        return Result::success($this->payAtHotelTerms->saveAdmin($merchant, $this->request->all(), AdminContext::adminId()));
+    }
 
     /** M12目录：稳定分页、精确电话索引、同一物业的位置过滤；不返回登录凭证。 */
     public function index(): array
@@ -457,11 +477,25 @@ class MerchantController extends AbstractController
         if (! in_array($cycle, [7, 15, 30], true)) {
             throw new BusinessException(ErrorCode::PARAM_ERROR, '结算周期仅支持 T+7 / T+15 / 30(月结)');
         }
-        Db::table('merchant_info')->where('id', $merchant['id'])->update([
-            'commission_rate' => $rate,
-            'commission_plan' => $plan,
-            'settlement_cycle' => $cycle,
-        ]);
+        Db::transaction(function () use ($merchant, $rate, $plan, $cycle) {
+            Db::table('merchant_info')->where('id', $merchant['id'])->update([
+                'commission_rate' => $rate,
+                'commission_plan' => $plan,
+                'settlement_cycle' => $cycle,
+            ]);
+            $terms = $this->payAtHotelTerms->current($merchant);
+            if ((int) $terms['version'] > 0) {
+                $this->payAtHotelTerms->saveAdmin($merchant, [
+                    'enabled' => (int) $terms['enabled'] === 1,
+                    'noShowEnabled' => (int) $terms['no_show_enabled'] === 1,
+                    'depositCapRate' => (float) $terms['deposit_cap_rate'],
+                    'commissionRate' => $rate,
+                    'transactionFeeRate' => (float) $terms['transaction_fee_rate'],
+                    'effectiveAt' => gmdate('Y-m-d H:i:s'),
+                    'reason' => '佣金设置同步更新',
+                ], AdminContext::adminId());
+            }
+        });
         return Result::success(null, '佣金设置已更新');
     }
 

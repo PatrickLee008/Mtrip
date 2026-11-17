@@ -32,6 +32,7 @@ export interface CreateOrderParams {
   /** 1=按缅甸公民价 */
   isCitizen?: number;
   couponId?: number;
+  payAtHotel?: 0 | 1;
   /**
    * 用户在页面上看到的应付(金额确认)。与服务端计价差超过 0.01 时不建单,
    * 抛 `API_CODE.PRICE_CHANGED`,`error.data` 为 `PriceChangeDetail`。不传不校验。
@@ -54,6 +55,8 @@ export interface CreateOrderResult {
     couponDiscount: number;
     addonAmount?: number;
     payAmount: number;
+    payAtHotel?: boolean;
+    hotelBalance?: number;
   };
 }
 
@@ -93,9 +96,15 @@ export interface RefundQuote {
   platformFee: number;
   /** 实际到账 = refundable − platformFee */
   refundAmount: number;
-  /** 1 = mTrip 钱包(目前只有这一种) */
+  hotelBalance?: number;
+  refund_hotel_commission?: number;
+  refund_hotel_deposit?: number;
+  refund_transaction_fee?: number;
+  refund_addon?: number;
+  /** 1 = mTrip 钱包, 2 = KBZPay 原路 */
   refundChannel: number;
   refundChannelText: string;
+  availableRefundChannels?: number[];
 }
 
 export function fetchRefundQuote(orderId: number): Promise<RefundQuote> {
@@ -106,6 +115,7 @@ export function applyRefund(params: {
   orderId: number;
   reason: string;
   images?: string[];
+  refundChannel?: number;
 }): Promise<{ refundNo: string }> {
   return post('/api/v1/app/order/refund/apply', params);
 }

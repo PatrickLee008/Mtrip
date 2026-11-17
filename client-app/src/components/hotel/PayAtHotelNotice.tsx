@@ -1,12 +1,4 @@
-/**
- * 「支持到店付款 · 即将开放」提示条
- *
- * 物业在商户端政策里打开「支持到店付款」后(`hotel_policies.booking.payAtHotel`,接口下发 `payAtHotel`),
- * App 筛选能筛出它,但到店付款下单本期未开放 —— 在酒店详情、核对页钱包卡上方、支付页三处给出同一句提示,
- * 免得用户以为能直接到店付。支付流程上线后删掉本组件的调用即可。
- *
- * 样式沿用订房向导里的浅主色提示块(主色 10% 底、圆角 12、信息图标)。
- */
+/** Hotel detail notice for properties that offer pay at hotel. */
 
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';

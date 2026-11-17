@@ -40,6 +40,7 @@ export function cartTripItems(
 interface QuoteState {
   itemsKey: string;
   couponId: number;
+  payAtHotel: boolean;
   quote: TripQuoteResult;
 }
 
@@ -48,16 +49,16 @@ interface QuoteState {
  * @param couponId 领券记录 id,0 = 不用券
  * @param enabled  未登录 / 日期没选全 / 车里没有真实房型时传 false,两种口径都返回 null
  */
-export function useTripQuote(items: TripQuoteItem[], couponId: number, enabled: boolean) {
+export function useTripQuote(items: TripQuoteItem[], couponId: number, enabled: boolean, payAtHotel = false) {
   const itemsKey = enabled && items.length > 0 ? JSON.stringify(items) : '';
   const [state, setState] = useState<QuoteState | null>(null);
 
   useEffect(() => {
     if (!itemsKey) return;
     let alive = true;
-    void apiTripQuote({ items, couponId: couponId || undefined })
+    void apiTripQuote({ items, couponId: couponId || undefined, payAtHotel: payAtHotel ? 1 : 0 })
       .then((quote) => {
-        if (alive) setState({ itemsKey, couponId, quote });
+        if (alive) setState({ itemsKey, couponId, payAtHotel, quote });
       })
       .catch(() => {
         /* 静默失败:调用方退回预估值,真正的错误由提交时的 trip/create 报出 */
@@ -68,9 +69,9 @@ export function useTripQuote(items: TripQuoteItem[], couponId: number, enabled: 
     };
     // itemsKey 已是 items 的内容序列化,不再单独依赖 items 的引用
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [itemsKey, couponId]);
+  }, [itemsKey, couponId, payAtHotel]);
 
   const itemsQuote = state && itemsKey && state.itemsKey === itemsKey ? state.quote : null;
-  const quote = itemsQuote && state!.couponId === couponId ? itemsQuote : null;
+  const quote = itemsQuote && state!.couponId === couponId && state!.payAtHotel === payAtHotel ? itemsQuote : null;
   return { itemsQuote, quote };
 }

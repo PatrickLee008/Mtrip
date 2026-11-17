@@ -1,0 +1,3 @@
+database/migrations/V20260923100000__add-user-profile-setup-kyc.sql text eol=lf
+database/migrations/V20260923110000__add-user-real-name-review.sql text eol=lf
+database/migrations/V20261116100000__pay-at-hotel-terms-and-booking.sql text eol=lf

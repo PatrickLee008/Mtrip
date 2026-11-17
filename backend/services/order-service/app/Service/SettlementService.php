@@ -51,6 +51,20 @@ class SettlementService
 
         $merchantSettlement = round($orderAmount - $commission - $merchant, 2);
         $platformRevenue = round($commission - $mtrip, 2);
+        $atHotel = (int) ($order['pay_at_hotel'] ?? 0) === 1;
+        $hotelBalance = 0.0;
+        $hotelDeposit = 0.0;
+        $transactionFee = 0.0;
+        if ($atHotel) {
+            $orderAmount = round((float) $order['pay_amount'], 2);
+            $commission = round((float) $order['hotel_commission'], 2);
+            $hotelBalance = round((float) $order['hotel_balance'], 2);
+            $hotelDeposit = round((float) $order['hotel_deposit'], 2);
+            $transactionFee = round((float) $order['hotel_transaction_fee'], 2);
+            // 酒店直接收取的余额不进入平台结算；附加服务随预付归商户。
+            $merchantSettlement = round($hotelDeposit + (float) ($order['addon_amount'] ?? 0), 2);
+            $platformRevenue = round($commission + $transactionFee, 2);
+        }
 
         Db::table('finance_account_entry')->insert([
             'site_id' => $siteId,
@@ -61,6 +75,9 @@ class SettlementService
             'room_type_id' => (int) ($order['room_type_id'] ?? 0),
             'coupon_id' => (int) $order['coupon_id'],
             'order_amount' => $orderAmount,
+            'hotel_balance' => $hotelBalance,
+            'hotel_deposit' => $hotelDeposit,
+            'transaction_fee' => $transactionFee,
             'commission' => $commission,
             'discount_amount' => $discount,
             'funding_source' => $fundingSource,

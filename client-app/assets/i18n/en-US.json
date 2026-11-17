@@ -530,6 +530,8 @@
       "guestsRooms": "Guests & Rooms",
       "roomsValue": "{{rooms}} Rooms",
       "totalAmount": "Total Amount",
+      "prepayAmount": "Pay now",
+      "hotelBalance": "Pay at hotel",
       "roomAmenities": "Room Amenities",
       "breakfastTitle": "Breakfast Included",
       "breakfastDesc": "A complimentary breakfast is included with this room.",
@@ -560,8 +562,16 @@
       "cancellationFee": "Cancellation Fee",
       "platformFee": "Platform Fee",
       "refundAmount": "Refund Amount",
+      "hotelBalance": "Amount payable at hotel (not charged)",
+      "refundCommission": "Commission refund",
+      "refundDeposit": "Hotel deposit refund",
+      "refundTransactionFee": "Transaction fee refund",
+      "refundAddon": "Add-on refund",
       "refundMethod": "Refund Method",
+      "refundWallet": "mTrip Wallet",
+      "refundOriginal": "Original KBZPay method",
       "refundMethodDesc": "The refund will be processed to your mTrip wallet.",
+      "refundOriginalDesc": "The refund will be returned to your original KBZPay payment method.",
       "refundTimeline": "Estimated Refund Timeline",
       "refundTimelineDesc": "Funds will arrive in 3-5 business days.",
       "proceed": "Proceed With Cancellation",
@@ -578,6 +588,7 @@
       },
       "policyTitle": "Cancellation Policy Reminder",
       "policyDesc": "Your refund will be processed within 3-5 business days to your mTrip wallet.",
+      "policyOriginalDesc": "Your refund will be returned to your original KBZPay payment method after approval.",
       "back": "Back",
       "continue": "Continue",
       "commentsLabel": "Additional Comments (Optional)",
@@ -585,6 +596,7 @@
       "reviewTitle": "Review Cancellation",
       "reviewDesc": "We're sorry to see you go. Please review your cancellation details below.",
       "refundNote": "The refund will be processed to your mTrip wallet within 3-5 business days.",
+      "refundOriginalNote": "The refund will be returned to your original KBZPay payment method after approval.",
       "finalNoticeTitle": "Final Notice",
       "finalNoticeDesc": "This action cannot be undone. Your {{fee}} penalty fee is non-refundable.",
       "confirm": "Confirm Cancellation",
@@ -2152,7 +2164,9 @@
         "retry": "Retry",
         "moreMethods": "More payment methods",
         "moreMethodsDesc": "Coming soon",
-        "remainingMethodRequired": "Your wallet does not cover the full amount. Please choose a payment method for the rest."
+        "remainingMethodRequired": "Your wallet does not cover the full amount. Please choose a payment method for the rest.",
+        "hotelUnavailable": "Pay at Hotel is unavailable for this booking. Please refresh and try again.",
+        "hotelBalance": "Pay at hotel"
       },
       "success": {
         "title": "Booking Confirmed",
@@ -2418,7 +2432,7 @@
     },
     "payAtHotel": {
       "title": "Pay at Hotel accepted",
-      "desc": "Pay at Hotel booking in the app is coming soon. Please pay with your mTrip Wallet for now."
+      "desc": "Pay the displayed deposit now and the remaining balance at the hotel. Review the amounts at checkout."
     },
     "reviewLabel": {
       "exceptional": "Exceptional",

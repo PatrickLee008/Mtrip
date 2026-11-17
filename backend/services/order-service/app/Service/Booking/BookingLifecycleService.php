@@ -156,15 +156,24 @@ class BookingLifecycleService
             if ((int) $order['booking_status'] !== BookingConst::STATUS_CONFIRMED) {
                 throw new BusinessException(ErrorCode::DATA_CONFLICT, '仅已确认预订可办理入住');
             }
+            $atHotel = (int) ($order['pay_at_hotel'] ?? 0) === 1;
             $this->transition($order, array_merge([
                 'booking_status' => BookingConst::STATUS_CHECKED_IN,
                 'order_status' => 2,
                 'checked_in_at' => date('Y-m-d H:i:s'),
+                'hotel_settlement_status' => $atHotel ? 1 : (int) ($order['hotel_settlement_status'] ?? 0),
+                'hotel_settled_at' => $atHotel ? date('Y-m-d H:i:s') : ($order['hotel_settled_at'] ?? null),
             ], $roomNo !== '' ? ['assigned_room_no' => mb_substr($roomNo, 0, 50)] : []));
             $order = $this->lockOrder($orderId);
             $this->events->log($order, 'checked_in', $operatorType, $operatorId, $operatorName, 1, [
                 'roomNo' => (string) $order['assigned_room_no'],
             ]);
+            if ($atHotel) {
+                $this->events->log($order, 'hotel_settlement_completed', $operatorType, $operatorId, $operatorName, 1, [
+                    'hotelBalance' => (float) $order['hotel_balance'],
+                    'hotelPaymentVerified' => false,
+                ]);
+            }
             // 推荐返利:被推荐人首个「已入住」酒店订单达成 → 奖励入推荐人+新人钱包(PRD 模块14)。
             // 在本事务内发放,reward_status 0→1 + lockForUpdate 保证仅首单一次;幂等重复入住走上面的提前返回,到不了这里。
             if ((int) $order['order_type'] === 1) {
@@ -198,6 +207,8 @@ class BookingLifecycleService
                 'booking_status' => BookingConst::STATUS_CONFIRMED,
                 'order_status' => 1,
                 'checked_in_at' => null,
+                'hotel_settlement_status' => 0,
+                'hotel_settled_at' => null,
                 'assigned_room_no' => '',
             ]);
             $order = $this->lockOrder($orderId);
@@ -389,10 +400,10 @@ class BookingLifecycleService
      */
     public function markNoShow(int $orderId, int $operatorId, string $operatorName, bool $waiveFee = false, string $waiveReason = ''): array
     {
-        $order = Db::transaction(function () use ($orderId, $operatorId, $operatorName, $waiveFee, $waiveReason) {
+        [$order, $changed] = Db::transaction(function () use ($orderId, $operatorId, $operatorName, $waiveFee, $waiveReason) {
             $order = $this->lockOrder($orderId);
             if ((int) $order['booking_status'] === BookingConst::STATUS_NO_SHOW) {
-                return $order; // 幂等
+                return [$order, false]; // 幂等重试仍在事务后补处理未完成退款
             }
             if ((int) $order['booking_status'] !== BookingConst::STATUS_CONFIRMED) {
                 throw new BusinessException(ErrorCode::DATA_CONFLICT, '仅已确认预订可标记 No-show');
@@ -401,7 +412,16 @@ class BookingLifecycleService
             if ($deadline->getTimestamp() >= time()) {
                 throw new BusinessException(ErrorCode::DATA_CONFLICT, "未到入住截止时间({$deadline->format('Y-m-d H:i:s P')}),不能标记 No-show");
             }
-            $fee = $waiveFee ? 0.0 : $this->noShowFee($order);
+            $fee = $this->noShowFee($order);
+            if ((int) ($order['pay_at_hotel'] ?? 0) === 1) {
+                $refundedDeposit = (float) Db::table('order_refund')->where('order_id', $orderId)
+                    ->where('status', 3)->where('late_pay', 0)->whereNull('deleted_at')
+                    ->sum('refund_hotel_deposit');
+                $fee = min($fee, max(0.0, round((float) $order['hotel_deposit'] - $refundedDeposit, 2)));
+            }
+            if ($waiveFee) {
+                $fee = 0.0;
+            }
             $this->transition($order, [
                 'booking_status' => BookingConst::STATUS_NO_SHOW,
                 'no_show_at' => date('Y-m-d H:i:s'),
@@ -414,9 +434,19 @@ class BookingLifecycleService
                 'waived' => $waiveFee,
                 'waiveReason' => $waiveFee ? mb_substr($waiveReason, 0, 500) : '',
             ]);
-            return $order;
+            return [$order, true];
         });
-        $this->notifyQuietly($order, '预订标记为 No-show', "预订「{$order['goods_name']}」(订单 {$order['order_no']})住客未到店,已标记 No-show。");
+        if ((int) ($order['pay_at_hotel'] ?? 0) === 1
+            && in_array((int) $order['payment_status'], [BookingConst::PAY_PAID, BookingConst::PAY_PARTIAL_REFUNDED], true)
+            && ! Db::table('order_refund')->where('order_id', (int) $order['id'])
+                ->where('status', 2)->where('late_pay', 0)->whereNull('deleted_at')->exists()
+            && $this->refunds->quote($order)['refundable'] > 0) {
+            $this->refunds->apply($order, $operatorId, $operatorName, null, 'No-show 预收差额及附加服务退款');
+            $order = (array) Db::table('order_main')->where('id', (int) $order['id'])->first();
+        }
+        if ($changed) {
+            $this->notifyQuietly($order, '预订标记为 No-show', "预订「{$order['goods_name']}」(订单 {$order['order_no']})住客未到店,已标记 No-show。");
+        }
         return $order;
     }
 

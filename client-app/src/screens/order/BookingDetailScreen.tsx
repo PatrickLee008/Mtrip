@@ -359,6 +359,7 @@ export default function BookingDetailScreen() {
   const nights = Math.max(1, nightsBetween(lead.use_date ?? '', lead.end_date ?? ''));
   const totalAmount =
     tripPayAmount ?? rows.reduce((sum, row) => sum + (Number(row.pay_amount) || 0), 0);
+  const hotelBalance = rows.reduce((sum, row) => sum + (Number(row.hotel_balance) || 0), 0);
   /** 住客数:订单快照里没有,只能显示间数(稿面是「2 travelers, 2 rooms」两个字段) */
   const guestRoomLabel = t('order.bookingDetail.roomsValue', { rooms: roomCount });
 
@@ -469,9 +470,15 @@ export default function BookingDetailScreen() {
             ) : null}
             <View style={styles.gridDivider} />
             <View style={styles.totalRow}>
-              <Text style={styles.totalLabel}>{t('order.bookingDetail.totalAmount')}</Text>
+              <Text style={styles.totalLabel}>{order.pay_at_hotel ? t('order.bookingDetail.prepayAmount') : t('order.bookingDetail.totalAmount')}</Text>
               <Text style={styles.totalValue}>{formatMoney(totalAmount, currency)}</Text>
             </View>
+            {order.pay_at_hotel ? (
+              <View style={styles.totalRow}>
+                <Text style={styles.totalLabel}>{t('order.bookingDetail.hotelBalance')}</Text>
+                <Text style={styles.totalValue}>{formatMoney(hotelBalance || Number(order.hotel_balance) || 0, currency)}</Text>
+              </View>
+            ) : null}
           </View>
 
           {/* 已选房型 2659:16386 —— 复用复核页那张卡,订单已成立故不给 Edit 入口 */}

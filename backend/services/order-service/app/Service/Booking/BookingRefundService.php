@@ -77,6 +77,11 @@ class BookingRefundService
             ->where('late_pay', 0)
             ->whereNull('deleted_at')
             ->sum('refund_amount'), 2);
+        $completed = $this->completedComponents($order);
+        $noShow = $this->isPayAtHotelNoShow($order);
+        if ($noShow) {
+            $policyRefundable = round($refundedAlready + PayAtHotelRefundBreakdown::noShowRefundable($order, $completed), 2);
+        }
         $remainingPaid = max(0.0, round($pay - $refundedAlready, 2));
         $remainingRefundable = max(0.0, round($policyRefundable - $refundedAlready, 2));
         $refundable = min($remainingPaid, $remainingRefundable);
@@ -88,7 +93,12 @@ class BookingRefundService
             'refundedAlready' => $refundedAlready,
             'remainingPaid' => $remainingPaid,
             'remainingRefundable' => round($refundable, 2),
-        ];
+        ] + $this->breakdown($order, $refundable, $completed);
+    }
+
+    public function breakdownFor(array $order, float $amount): array
+    {
+        return $this->breakdown($order, $amount, $this->completedComponents($order));
     }
 
     /**
@@ -135,7 +145,7 @@ class BookingRefundService
                 'merchant_audit_by' => $operatorId,
                 'merchant_audit_time' => date('Y-m-d H:i:s'),
                 'refund_time' => date('Y-m-d H:i:s'),
-            ]);
+            ] + $this->breakdown($order, $refundAmount, $this->completedComponents($order)));
 
             $bookingStatus = (int) $order['booking_status'];
             $update = [
@@ -242,7 +252,7 @@ class BookingRefundService
                 'status' => 2,
                 'merchant_audit_by' => $operatorId,
                 'merchant_audit_time' => $now,
-            ], RefundSettleService::queueFields($order)));
+            ], RefundSettleService::queueFields($order), $this->breakdown($order, $refundAmount, $this->completedComponents($order))));
 
             // 订单进入「退款中」;到账时 completeRow 再写 部分退款 / 已退款、回补库存、返券
             $update = ['refund_status' => 1, 'version' => Db::raw('version + 1')];
@@ -322,6 +332,36 @@ class BookingRefundService
         $refundAmount = min($refundAmount, $quote['refundable']);
         $fullRefund = $quote['refundedAlready'] + $refundAmount >= $quote['payAmount'] - 0.001;
         return [$quote, $refundAmount, $fullRefund];
+    }
+
+    private function completedComponents(array $order): array
+    {
+        if ((int) ($order['pay_at_hotel'] ?? 0) !== 1) {
+            return [];
+        }
+        $rows = Db::table('order_refund')->where('order_id', (int) $order['id'])
+            ->where('status', 3)->where('late_pay', 0)->whereNull('deleted_at')
+            ->get(['refund_hotel_commission', 'refund_hotel_deposit', 'refund_transaction_fee', 'refund_addon']);
+        $totals = array_fill_keys(['refund_hotel_commission', 'refund_hotel_deposit', 'refund_transaction_fee', 'refund_addon'], 0.0);
+        foreach ($rows as $row) {
+            foreach ($totals as $key => $_) {
+                $totals[$key] = round($totals[$key] + (float) $row->{$key}, 2);
+            }
+        }
+        return $totals;
+    }
+
+    private function isPayAtHotelNoShow(array $order): bool
+    {
+        return (int) ($order['pay_at_hotel'] ?? 0) === 1
+            && (int) ($order['booking_status'] ?? 0) === BookingConst::STATUS_NO_SHOW;
+    }
+
+    private function breakdown(array $order, float $amount, array $completed): array
+    {
+        return $this->isPayAtHotelNoShow($order)
+            ? PayAtHotelRefundBreakdown::noShow($order, $amount, $completed)
+            : PayAtHotelRefundBreakdown::of($order, $amount, $completed);
     }
 
     /** 阶梯退款:按政策快照规则,距入住(当日14:00)剩余小时命中可满足的最优档 */

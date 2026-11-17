@@ -10,6 +10,7 @@ use App\Controller\AbstractController;
 use App\Service\Booking\BookingEventService;
 use App\Service\Booking\BookingLifecycleService;
 use App\Service\OrderPayService;
+use App\Service\PayAtHotelPricingService;
 use App\Service\OrderStockService;
 use App\Service\Payment\MmqrCheckoutService;
 use App\Service\PaymentResultHandler;
@@ -69,6 +70,9 @@ class TripController extends AbstractController
     #[Inject]
     protected OrderPayService $orderPay;
 
+    #[Inject]
+    protected PayAtHotelPricingService $hotelPricing;
+
     /** KBZPay MMQR 出码 */
     #[Inject]
     protected MmqrCheckoutService $mmqr;
@@ -83,6 +87,7 @@ class TripController extends AbstractController
             throw new BusinessException(ErrorCode::PARAM_ERROR, 'Trip 须包含 1-10 个酒店预订');
         }
         $couponId = $this->intInput('couponId', 0);
+        $payAtHotel = $this->intInput('payAtHotel', 0) === 1;
 
         // 先做无副作用的校验与取数(商品/房型/日期),事务内再锁库存计价
         $prepared = [];
@@ -91,7 +96,7 @@ class TripController extends AbstractController
         }
 
         $tripNo = OrderNoGenerator::orderNo($siteId);
-        $result = Db::transaction(function () use ($siteId, $userId, $prepared, $couponId, $tripNo) {
+        $result = Db::transaction(function () use ($siteId, $userId, $prepared, $couponId, $tripNo, $payAtHotel) {
             $properties = array_column($prepared, 'property');
             MerchantAccessGuard::lockBookable($properties, $siteId);
             MerchantAccessGuard::lockProperties($properties, $siteId);
@@ -109,6 +114,20 @@ class TripController extends AbstractController
             ['legs' => $legs, 'tripTotal' => $tripTotal, 'addonTotal' => $addonTotal, 'couponRefId' => $couponRefId, 'couponDiscount' => $couponDiscount,
                 'couponSnapshot' => $couponSnapshot, 'allocs' => $allocs] = $this->priceTrip($siteId, $userId, $prepared, $couponId, false);
             $tripPay = round(max(0.0, round($tripTotal - $couponDiscount, 2)) + $addonTotal, 2);
+            $hotelBalance = 0.0;
+            if ($payAtHotel) {
+                $tripPay = 0.0;
+                foreach ($legs as $i => &$leg) {
+                    $option = $this->hotelPricing->requireAvailable($this->hotelPricing->option(
+                        $siteId, (int) $leg['property']['merchant_id'], $leg['propertyId'],
+                        max(0.0, round($leg['net'] - $allocs[$i], 2)), $leg['addonAmount']
+                    ));
+                    $leg['hotelOption'] = $option;
+                    $tripPay = round($tripPay + $option['prepayAmount'], 2);
+                    $hotelBalance = round($hotelBalance + $option['hotelBalance'], 2);
+                }
+                unset($leg);
+            }
             // 金额确认:与用户看到的应付(trip/quote 给的 payAmount)不一致就不建单,抛错回滚已锁库存
             $this->pricingService->assertExpectedPay($this->input('expectedPayAmount'), [
                 'original' => round(array_sum(array_column($legs, 'original')), 2),
@@ -127,6 +146,8 @@ class TripController extends AbstractController
                 'coupon_id' => $couponRefId,
                 'coupon_discount' => $couponDiscount,
                 'pay_amount' => $tripPay,
+                'pay_at_hotel' => (int) $payAtHotel,
+                'hotel_balance' => $hotelBalance,
                 'booking_count' => count($legs),
                 'pay_status' => 0,
             ]);
@@ -136,6 +157,9 @@ class TripController extends AbstractController
             foreach ($legs as $i => $leg) {
                 $alloc = $allocs[$i];
                 $payAmount = round(max(0.0, round($leg['net'] - $alloc, 2)) + $leg['addonAmount'], 2);
+                if ($payAtHotel) {
+                    $payAmount = $leg['hotelOption']['prepayAmount'];
+                }
                 $orderNo = OrderNoGenerator::orderNo($siteId);
                 $unitPrice = round($leg['original'] / max(1, count($leg['dates'])) / $leg['quantity'], 2);
                 // M4:预订字段(10分钟支付截止/政策快照),Trip 均为酒店单
@@ -177,7 +201,8 @@ class TripController extends AbstractController
                     'guests' => $leg['guests'] !== [] ? CryptoHelper::encrypt(json_encode($leg['guests'], JSON_UNESCAPED_UNICODE), $this->aesKey()) : null,
                     'remark' => $leg['remark'],
                     'meal_plan_snapshot' => mb_substr((string) ($leg['room']['meal_plan'] ?? ''), 0, 255),
-                ] + $this->bookingLifecycle->buildCreateFields(1, $leg['propertyId'], $leg['roomTypeId'], (string) $leg['remark'], $siteId));
+                ] + ($payAtHotel ? $this->hotelPricing->bookingFields($leg['hotelOption']) : [])
+                    + $this->bookingLifecycle->buildCreateFields(1, $leg['propertyId'], $leg['roomTypeId'], (string) $leg['remark'], $siteId));
                 $this->stockService->logChanges($orderId, $leg['changes']);
                 $this->bookingEvents->log([
                     'id' => $orderId, 'order_no' => $orderNo, 'site_id' => $siteId,
@@ -186,7 +211,8 @@ class TripController extends AbstractController
                     'trip' => true,
                     'payAmount' => $payAmount,
                 ]);
-                $bookings[] = ['orderId' => $orderId, 'orderNo' => $orderNo, 'propertyName' => $leg['property']['store_name'], 'payAmount' => $payAmount];
+                $bookings[] = ['orderId' => $orderId, 'orderNo' => $orderNo, 'propertyName' => $leg['property']['store_name'],
+                    'payAmount' => $payAmount, 'hotelBalance' => $leg['hotelOption']['hotelBalance'] ?? 0];
             }
 
             return [
@@ -196,6 +222,8 @@ class TripController extends AbstractController
                 'couponDiscount' => $couponDiscount,
                 'addonAmount' => $addonTotal,
                 'payAmount' => $tripPay,
+                'payAtHotel' => $payAtHotel,
+                'hotelBalance' => $hotelBalance,
                 'bookings' => $bookings,
             ];
         });
@@ -228,6 +256,10 @@ class TripController extends AbstractController
             ->map(static fn ($row) => (array) $row)->all();
         $cap = WalletConfig::maxUse('hotel');
         $payable = round((float) $tripSnapshot->pay_amount, 2);
+        if ($payable <= 0) {
+            $payMethod = 3;
+            $useWallet = false;
+        }
         if ($payMethod === 3 && $cap > 0 && $payable - $cap > 0.005) {
             throw new BusinessException(ErrorCode::DATA_CONFLICT, '超出钱包单笔可用限额,请用其他支付方式补足');
         }
@@ -327,14 +359,27 @@ class TripController extends AbstractController
             $prepared[] = $this->prepareItem($siteId, (array) $item, $idx, true);
         }
         $priced = $this->priceTrip($siteId, $userId, $prepared, $this->intInput('couponId', 0), true);
+        $payAtHotel = $this->intInput('payAtHotel', 0) === 1;
 
         $lines = [];
         $original = 0.0;
         $longstay = 0.0;
+        $hotelBalance = 0.0;
+        $payAmount = 0.0;
+        $hotelAvailable = true;
         foreach ($priced['legs'] as $i => $leg) {
             $alloc = $priced['allocs'][$i];
             $original = round($original + $leg['original'], 2);
             $longstay = round($longstay + $leg['longstay'], 2);
+            $option = $this->hotelPricing->option($siteId, (int) $leg['property']['merchant_id'], $leg['propertyId'],
+                max(0.0, round($leg['net'] - $alloc, 2)), $leg['addonAmount']);
+            $hotelAvailable = $hotelAvailable && $option['available'];
+            if ($payAtHotel) {
+                $this->hotelPricing->requireAvailable($option);
+            }
+            $linePay = $payAtHotel ? $option['prepayAmount'] : round(max(0.0, round($leg['net'] - $alloc, 2)) + $leg['addonAmount'], 2);
+            $payAmount = round($payAmount + $linePay, 2);
+            $hotelBalance = round($hotelBalance + ($payAtHotel ? $option['hotelBalance'] : 0), 2);
             $lines[] = [
                 'propertyId' => $leg['propertyId'],
                 'roomTypeId' => $leg['roomTypeId'],
@@ -344,8 +389,12 @@ class TripController extends AbstractController
                 'longstayDiscount' => $leg['longstay'],
                 'couponDiscount' => $alloc,
                 'addonAmount' => $leg['addonAmount'],
-                'payAmount' => round(max(0.0, round($leg['net'] - $alloc, 2)) + $leg['addonAmount'], 2),
+                'payAmount' => $linePay,
+                'hotelOption' => $option,
             ];
+        }
+        if (! $payAtHotel) {
+            $payAmount = round(max(0.0, round($priced['tripTotal'] - $priced['couponDiscount'], 2)) + $priced['addonTotal'], 2);
         }
         return Result::success([
             'original' => $original,
@@ -354,7 +403,10 @@ class TripController extends AbstractController
             'couponDiscount' => $priced['couponDiscount'],
             'couponError' => $priced['couponError'],
             'addonAmount' => $priced['addonTotal'],
-            'payAmount' => round(max(0.0, round($priced['tripTotal'] - $priced['couponDiscount'], 2)) + $priced['addonTotal'], 2),
+            'payAmount' => $payAmount,
+            'payAtHotel' => $payAtHotel,
+            'payAtHotelAvailable' => $hotelAvailable,
+            'hotelBalance' => $hotelBalance,
             'items' => $lines,
         ]);
     }
@@ -465,7 +517,7 @@ class TripController extends AbstractController
             /* payment_expires_at:C 端支付失败页要显示「剩余可支付时间」。
                过期时间只在 order_main 上(order_trip 没有这一列),整车取各预订里最早的那个。 */
             ->get(['id', 'order_no', 'property_id', 'room_type_id', 'goods_name', 'goods_image', 'sku_name', 'quantity',
-                'pay_amount', 'alloc_coupon_discount', 'order_status', 'refund_status', 'use_date', 'end_date',
+                'pay_amount', 'pay_at_hotel', 'hotel_balance', 'alloc_coupon_discount', 'order_status', 'refund_status', 'use_date', 'end_date',
                 'payment_expires_at'])
             ->map(static fn ($row) => (array) $row)->all();
         $trip['bookings'] = $bookings;

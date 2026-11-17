@@ -128,6 +128,16 @@ const detail = ref<TableRow | null>(null);
 const detailRefunds = ref<TableRow[]>([]);
 const detailVerifyLogs = ref<TableRow[]>([]);
 
+function hotelTermsVersion(snapshot: unknown): string {
+  try {
+    const terms = typeof snapshot === 'string' ? JSON.parse(snapshot) : snapshot;
+    return terms && typeof terms === 'object' && 'version' in terms
+      ? String(terms.version) : '-';
+  } catch {
+    return '-';
+  }
+}
+
 async function openDetail(row: TableRow): Promise<void> {
   drawerOpen.value = true;
   detailLoading.value = true;
@@ -355,7 +365,7 @@ const pageTitle = computed(() => {
             <a-space :size="0">
               <a-button type="link" size="small" @click="openDetail(record)">{{ t('order.actions.detail') }}</a-button>
               <a-button
-                v-if="record.order_status === 0"
+                v-if="record.order_status === 0 && Number(record.pay_at_hotel) !== 1"
                 v-perm="'order:all:cancel'"
                 type="link"
                 size="small"
@@ -387,6 +397,14 @@ const pageTitle = computed(() => {
             <a-descriptions-item :label="t('order.goods')" :span="2">{{ detail.goods_name }} / {{ detail.sku_name }} × {{ detail.quantity }}</a-descriptions-item>
             <a-descriptions-item :label="t('order.totalAmount', 'Total Amount')">{{ formatAmount(detail.total_amount) }}</a-descriptions-item>
             <a-descriptions-item :label="t('order.amount', 'Pay Amount')">{{ formatAmount(detail.pay_amount) }}</a-descriptions-item>
+            <template v-if="Number(detail.pay_at_hotel) === 1">
+              <a-descriptions-item :label="t('hotelTerms.balance')">{{ formatAmount(detail.hotel_balance) }}</a-descriptions-item>
+              <a-descriptions-item :label="t('hotelTerms.commission')">{{ formatAmount(detail.hotel_commission) }}</a-descriptions-item>
+              <a-descriptions-item :label="t('hotelTerms.deposit')">{{ formatAmount(detail.hotel_deposit) }}</a-descriptions-item>
+              <a-descriptions-item :label="t('hotelTerms.fee')">{{ formatAmount(detail.hotel_transaction_fee) }}</a-descriptions-item>
+              <a-descriptions-item :label="t('hotelTerms.settlement')">{{ Number(detail.hotel_settlement_status) === 1 ? t('hotelTerms.completed') : t('hotelTerms.pending') }}</a-descriptions-item>
+              <a-descriptions-item :label="t('hotelTerms.version')">{{ hotelTermsVersion(detail.hotel_terms_snapshot) }}</a-descriptions-item>
+            </template>
             <a-descriptions-item :label="t('order.discountAmount', 'Discount Amount')">{{ formatAmount(detail.discount_amount) }}</a-descriptions-item>
             <a-descriptions-item :label="t('order.platformCommission', 'Platform Commission')">{{ formatAmount(detail.platform_commission) }}</a-descriptions-item>
             <a-descriptions-item :label="t('order.contact')">{{ detail.contact_name }}</a-descriptions-item>

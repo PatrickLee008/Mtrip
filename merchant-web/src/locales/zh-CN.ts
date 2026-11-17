@@ -550,6 +550,11 @@ export default {
     },
   },
   booking: {
+    hotelTerms: {
+      commission: 'mTrip 佣金', deposit: '商户房费预收', fee: '交易手续费',
+      balance: '到店应付余额', version: '条款版本', settlement: '运营结算',
+      completed: '实际入住后已完成', pending: '待实际入住',
+    },
     closeDetail: '关闭预订详情',
     title: '预订管理',
     subtitle: '集中管理酒店预订、房态与住客偏好。',
@@ -1249,6 +1254,12 @@ export default {
     },
   },
   settings: {
+    hotelTerms: {
+      title: '到店支付条款', version: '版本', commission: 'mTrip 佣金',
+      fee: '按佣金计算的手续费', status: '到店支付', enabled: '已开通', disabled: '未开通',
+      noShow: '收取未到店费用', deposit: '房费预收比例', cap: '上限',
+      save: '保存条款', saved: '到店支付条款已保存',
+    },
     title: '设置与安全',
     subtitle: '管理账号资料、通知偏好、安全设置与本地化偏好。',
     navigation: '设置与偏好',

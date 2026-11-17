@@ -4,7 +4,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useTranslation } from 'react-i18next';
-import { apiMerchantContacts } from '@/api/merchant';
+import { apiMerchantContacts, apiPayAtHotelTerms, apiSavePayAtHotelTerms } from '@/api/merchant';
+import type { PayAtHotelTerms } from '@/api/types';
 import type { RootStackParamList } from '@/navigation/types';
 import type { Lang } from '@/config/global';
 import { colors } from '@/config/theme';
@@ -31,6 +32,10 @@ export default function MenuSettingsScreen({ navigation, route }: NativeStackScr
   const [contacts, setContacts] = useState({ email: '', sms: '' });
   const [contactsFailed, setContactsFailed] = useState(false);
   const [contactsLoading, setContactsLoading] = useState(section === 'profile');
+  const [hotelTerms, setHotelTerms] = useState<PayAtHotelTerms | null>(null);
+  const [hotelTermsLoading, setHotelTermsLoading] = useState(section === 'hotelTerms');
+  const [noShowEnabled, setNoShowEnabled] = useState(false);
+  const [depositRate, setDepositRate] = useState('0');
   const [alerts, setAlerts] = useState<Record<string, boolean>>({ booking: true, cancellation: true, finance: false, security: true });
   const unavailable = () => showToast(t('menu.unavailable'));
   useEffect(() => {
@@ -41,6 +46,33 @@ export default function MenuSettingsScreen({ navigation, route }: NativeStackScr
     }).catch(() => { if (active) setContactsFailed(true); }).finally(() => { if (active) setContactsLoading(false); });
     return () => { active = false; };
   }, [section]);
+  useEffect(() => {
+    if (section !== 'hotelTerms') return;
+    let active = true;
+    apiPayAtHotelTerms().then((terms) => {
+      if (!active) return;
+      setHotelTerms(terms);
+      setNoShowEnabled(Boolean(terms.no_show_enabled));
+      setDepositRate(String(terms.deposit_rate));
+    }).catch(() => { if (active) showToast(t('menu.hotelTerms.loadFailed')); })
+      .finally(() => { if (active) setHotelTermsLoading(false); });
+    return () => { active = false; };
+  }, [section, showToast, t]);
+  const saveHotelTerms = async () => {
+    const rate = noShowEnabled ? Number(depositRate) : 0;
+    if (!hotelTerms || saving || !Number.isFinite(rate) || rate < 0 || rate > Math.min(30, Number(hotelTerms.deposit_cap_rate))) {
+      showToast(t('menu.hotelTerms.invalidRate'));
+      return;
+    }
+    setSaving(true);
+    try {
+      const terms = await apiSavePayAtHotelTerms(noShowEnabled, rate);
+      setHotelTerms(terms);
+      setDepositRate(String(terms.deposit_rate));
+      showToast(t('menu.hotelTerms.saved'));
+    } catch { showToast(t('menu.saveFailed')); }
+    finally { setSaving(false); }
+  };
   const saveLanguage = async () => {
     if (saving || language === lang) return;
     setSaving(true);
@@ -86,6 +118,23 @@ export default function MenuSettingsScreen({ navigation, route }: NativeStackScr
         <View style={ui.card}><Text style={ui.title}>{t('menu.locale.dateTime')}</Text><Text style={[ui.body, styles.description]}>{t('menu.locale.dateTimeCopy')}</Text><View style={styles.formatGroup}><Text style={ui.title}>{t('menu.locale.date')}</Text>{['DD/MM/YYYY', 'MM/DD/YYYY', 'YYYY-MM-DD'].map((format) => <View style={styles.format} key={format}><Text style={ui.body}>{format}</Text></View>)}</View><Text style={ui.title}>{t('menu.locale.time')}</Text>{['24', '12'].map((format) => <View style={styles.format} key={format}><Text style={ui.body}>{t(`menu.locale.hour${format}`)}</Text></View>)}</View>
         <View style={ui.footer}><Pressable style={[ui.button, ui.outline, styles.copy]} disabled={saving} onPress={() => setLanguage(lang)} accessibilityRole="button"><Text style={[ui.buttonText, ui.outlineText]}>{t('menu.reset')}</Text></Pressable><Pressable style={[ui.button, styles.copy, (saving || language === lang) && ui.disabled]} disabled={saving || language === lang} onPress={() => void saveLanguage()} accessibilityRole="button" accessibilityState={{ disabled: saving || language === lang }}><Text style={ui.buttonText}>{t(saving ? 'menu.saving' : 'menu.save')}</Text></Pressable></View>
         <Text style={[ui.body, styles.notice]}>{t('menu.locale.languageOnly')}</Text>
+      </> : null}
+      {section === 'hotelTerms' ? <>
+        {hotelTermsLoading ? <ActivityIndicator color={colors.primary} /> : null}
+        {hotelTerms ? <>
+          <View style={ui.card}>
+            <Text style={ui.title}>{t('menu.hotelTerms.status')}</Text>
+            <Text style={[ui.body, styles.description]}>{t(hotelTerms.enabled ? 'menu.hotelTerms.enabled' : 'menu.hotelTerms.disabled')}</Text>
+            <Text style={[ui.body, styles.description]}>{t('menu.hotelTerms.commission')}: {hotelTerms.commission_rate}%</Text>
+            <Text style={[ui.body, styles.description]}>{t('menu.hotelTerms.transactionFee')}: {hotelTerms.transaction_fee_rate}%</Text>
+            <Text style={[ui.body, styles.description]}>{t('menu.hotelTerms.version')}: {hotelTerms.version}</Text>
+          </View>
+          {Boolean(hotelTerms.enabled) ? <View style={ui.card}>
+            <View style={styles.alertRow}><Text style={[ui.title, styles.copy]}>{t('menu.hotelTerms.noShow')}</Text><Switch value={noShowEnabled} onValueChange={setNoShowEnabled} disabled={!profile?.isOwner || profile.accountType !== 2} trackColor={{ false: '#E2E8F0', true: colors.primary }} /></View>
+            {noShowEnabled ? <View style={styles.field}><Text style={styles.fieldLabel}>{t('menu.hotelTerms.depositRate', { max: Math.min(30, Number(hotelTerms.deposit_cap_rate)) })}</Text><TextInput style={styles.input} value={depositRate} onChangeText={setDepositRate} keyboardType="decimal-pad" editable={profile?.isOwner && profile.accountType === 2} accessibilityLabel={t('menu.hotelTerms.depositRate', { max: Math.min(30, Number(hotelTerms.deposit_cap_rate)) })} /></View> : null}
+            {profile?.isOwner && profile.accountType === 2 ? <Pressable style={[ui.button, saving && ui.disabled]} disabled={saving} onPress={() => void saveHotelTerms()}><Text style={ui.buttonText}>{t(saving ? 'menu.saving' : 'menu.save')}</Text></Pressable> : null}
+          </View> : null}
+        </> : null}
       </> : null}
     </ScrollView>
   </View>

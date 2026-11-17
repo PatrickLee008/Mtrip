@@ -10,8 +10,10 @@ use App\Controller\AbstractController;
 use App\Service\Booking\BookingEventService;
 use App\Service\Booking\BookingLifecycleService;
 use App\Service\Booking\BookingNotificationService;
+use App\Service\Booking\BookingRefundService;
 use App\Service\FraudService;
 use App\Service\OrderPayService;
+use App\Service\PayAtHotelPricingService;
 use App\Service\OrderStockService;
 use App\Service\Payment\MmqrCheckoutService;
 use App\Service\PaymentResultHandler;
@@ -67,6 +69,9 @@ class OrderController extends AbstractController
     protected BookingNotificationService $bookingNotifications;
 
     #[Inject]
+    protected BookingRefundService $bookingRefunds;
+
+    #[Inject]
     protected PaymentResultHandler $payHandler;
 
     #[Inject]
@@ -75,6 +80,9 @@ class OrderController extends AbstractController
     /** 支付成功统一落账(与 KBZ 业务通知共用) */
     #[Inject]
     protected OrderPayService $orderPay;
+
+    #[Inject]
+    protected PayAtHotelPricingService $hotelPricing;
 
     /** KBZPay MMQR 出码 / 状态 / 可用支付方式 */
     #[Inject]
@@ -112,6 +120,10 @@ class OrderController extends AbstractController
 
         $isCitizen = $this->intInput('isCitizen', 0) === 1;
         $couponId = $this->intInput('couponId', 0);
+        $payAtHotel = $this->intInput('payAtHotel', 0) === 1;
+        if ($payAtHotel && $orderType !== 1) {
+            throw new BusinessException(ErrorCode::PARAM_ERROR, '仅酒店预订支持到店支付');
+        }
         $guests = $this->pricingService->normalizeGuests($this->input('travelers'), $quantity);
         $remark = mb_substr($this->strInput('remark'), 0, 500);
         /* 附加服务(仅酒店):所选服务键 + 入住人数(「按人」计价用,缺省按间数) */
@@ -123,7 +135,7 @@ class OrderController extends AbstractController
         $priced = Db::transaction(function () use (
             $siteId, $userId, $target, $sku, $orderType, $propertyId, $roomTypeId, $goodsId, $skuId,
             $quantity, $dates, $useDate, $endDate, $orderNo, $contactName, $contactPhone,
-            $isCitizen, $couponId, $guests, $remark, $addonKeys, $guestCount
+            $isCitizen, $couponId, $guests, $remark, $addonKeys, $guestCount, $payAtHotel
         ) {
             MerchantAccessGuard::lockBookable([$target['owner']], $siteId);
             if ($orderType === 1) {
@@ -154,6 +166,14 @@ class OrderController extends AbstractController
             // 附加服务:不进券/长住基数,按原价加在实付上
             [$addonAmount, $addonSnapshot] = $this->pricingService->addonCharge($propertyId, $addonKeys, $guestCount, count($dates), $quantity);
             $payAmount = max(0.0, round($totalAmount - $longstay - $couponDiscount, 2)) + $addonAmount;
+            $hotelOption = null;
+            if ($payAtHotel) {
+                $hotelOption = $this->hotelPricing->requireAvailable($this->hotelPricing->option(
+                    $siteId, (int) $target['merchantId'], $propertyId,
+                    max(0.0, round($totalAmount - $longstay - $couponDiscount, 2)), $addonAmount
+                ));
+                $payAmount = $hotelOption['prepayAmount'];
+            }
             // 金额确认:与用户看到的应付不一致就不建单(抛错回滚已锁库存),返回最新明细
             $this->pricingService->assertExpectedPay($this->input('expectedPayAmount'), [
                 'original' => round($totalAmount, 2),
@@ -200,7 +220,7 @@ class OrderController extends AbstractController
                 'guests' => $guests !== [] ? CryptoHelper::encrypt(json_encode($guests, JSON_UNESCAPED_UNICODE), $this->aesKey()) : null,
                 'remark' => $remark,
                 'meal_plan_snapshot' => $orderType === 1 ? mb_substr((string) ($sku['meal_plan'] ?? ''), 0, 255) : '',
-            ] + $bookingFields);
+            ] + ($hotelOption ? $this->hotelPricing->bookingFields($hotelOption) : []) + $bookingFields);
             $this->stockService->logChanges($orderId, $changes);
             $newBooking = [
                 'id' => $orderId,
@@ -225,6 +245,7 @@ class OrderController extends AbstractController
                 'coupon' => $couponDiscount,
                 'addon' => $addonAmount,
                 'payAmount' => $payAmount,
+                'hotelOption' => $hotelOption,
                 'newBooking' => $newBooking,
             ];
         });
@@ -241,6 +262,9 @@ class OrderController extends AbstractController
                 'couponDiscount' => $priced['coupon'],
                 'addonAmount' => $priced['addon'],
                 'payAmount' => $priced['payAmount'],
+                'payAtHotel' => $priced['hotelOption'] !== null,
+                'hotelBalance' => $priced['hotelOption']['hotelBalance'] ?? 0,
+                'hotelOption' => $priced['hotelOption'],
             ],
         ], '下单成功,请在支付截止时间前完成支付');
     }
@@ -279,6 +303,10 @@ class OrderController extends AbstractController
         }
         $cap = WalletConfig::maxUse(WalletHoldService::limitType((int) $snapshot['order_type']));
         $payable = round((float) $snapshot['pay_amount'], 2);
+        if ($payable <= 0) {
+            $payMethod = 3;
+            $useWallet = false;
+        }
         if ($payMethod === 3 && $cap > 0 && $payable - $cap > 0.005) {
             throw new BusinessException(ErrorCode::DATA_CONFLICT, '超出钱包单笔可用限额,请用其他支付方式补足');
         }
@@ -385,7 +413,7 @@ class OrderController extends AbstractController
             /* trip_id:同一 Trip 下的多个预订要在 C 端「我的预订」归并成一张卡(Figma 289:1112),
                客户端按它分组;0 = 独立单。列早已存在(M0 预留),这里只是补进 select */
             ->get(['id', 'order_no', 'order_type', 'trip_id', 'property_id', 'goods_id', 'goods_name', 'goods_image',
-                'room_type_id', 'sku_id', 'sku_name', 'quantity', 'pay_amount', 'order_status', 'refund_status',
+                'room_type_id', 'sku_id', 'sku_name', 'quantity', 'pay_amount', 'pay_at_hotel', 'hotel_balance', 'order_status', 'refund_status',
                 'use_date', 'end_date', 'created_at'])
             ->map(static fn ($row) => (array) $row)->all();
         return Result::page($list, $total, $page, $pageSize);
@@ -400,7 +428,7 @@ class OrderController extends AbstractController
         if (! in_array((int) $order['order_status'], [1, 2], true)) {
             $order['verify_code'] = '';
         }
-        unset($order['platform_commission'], $order['merchant_receivable'], $order['supplier_cost'], $order['coupon_snapshot'], $order['deleted_at']);
+        unset($order['platform_commission'], $order['merchant_receivable'], $order['supplier_cost'], $order['coupon_snapshot'], $order['hotel_terms_snapshot'], $order['deleted_at']);
         /**
          * 已取消/退款中/已退款的单,补一段 `cancelInfo` 给 C 端取消详情页
          * (Figma `1685:3429`「Booking Cancelled by Merchant」要区分是谁取消的):
@@ -485,10 +513,12 @@ class OrderController extends AbstractController
             'addonRefund' => $q['addonRefund'],
             'platformFee' => $q['platformFee'],
             'refundAmount' => $q['refundAmount'],
+            'hotelBalance' => (int) ($order['pay_at_hotel'] ?? 0) === 1 ? (float) $order['hotel_balance'] : 0.0,
             // KBZPay MMQR 支付的订单原路退回 KBZ(2);其余退入 mTrip 钱包(1)
             'refundChannel' => self::refundChannelOf($order),
             'refundChannelText' => self::refundChannelOf($order) === 2 ? 'KBZPay 原路退回' : 'mTrip 钱包',
-        ]);
+            'availableRefundChannels' => self::refundChannelOf($order) === 2 ? [2, 1] : [1],
+        ] + $this->bookingRefunds->breakdownFor($order, $q['refundAmount']));
     }
 
     /** 申请退款:已支付未使用订单,按退改规则+平台费核算净退款额,进入商户审核流 */
@@ -507,6 +537,10 @@ class OrderController extends AbstractController
             if ($q['refundAmount'] <= 0) {
                 throw new BusinessException(ErrorCode::DATA_CONFLICT, '按退改规则该订单不可退款');
             }
+            $refundChannel = $this->intInput('refundChannel', self::refundChannelOf($order));
+            if (! in_array($refundChannel, self::refundChannelOf($order) === 2 ? [1, 2] : [1], true)) {
+                throw new BusinessException(ErrorCode::PARAM_ERROR, '该订单不支持选择此退款方式');
+            }
             $images = $this->input('images');
             Db::table('order_refund')->insert([
                 'refund_no' => $refundNo,
@@ -519,14 +553,14 @@ class OrderController extends AbstractController
                 'room_type_id' => (int) $order['room_type_id'],
                 'refund_type' => $q['refundAmount'] >= (float) $order['pay_amount'] ? 1 : 2,
                 'apply_amount' => $q['refundAmount'],
-                'refund_channel' => self::refundChannelOf($order),
+                'refund_channel' => $refundChannel,
                 // KBZ 原路退款记原支付单号(平台审核通过后排队 / 合并提交支付中心)
-                'pay_no' => self::refundChannelOf($order) === 2 ? (string) $order['pay_trade_no'] : '',
+                'pay_no' => $refundChannel === 2 ? (string) $order['pay_trade_no'] : '',
                 'reason' => mb_substr($reason, 0, 500),
                 'images' => is_array($images) ? json_encode($images, JSON_UNESCAPED_UNICODE) : null,
                 'status' => 0,
-            ]);
-            // 记录本单平台便民费(用于对账);退款目的地为 mTrip 钱包(refund_channel=1)
+            ] + $this->bookingRefunds->breakdownFor($order, $q['refundAmount']));
+            // 记录本单平台便民费及住客选定的退款渠道,供审核和对账使用。
             Db::table('order_main')->where('id', $orderId)->update([
                 'order_status' => 5,
                 'refund_status' => 1,
@@ -536,6 +570,7 @@ class OrderController extends AbstractController
             $this->bookingEvents->log($order, 'refund_applied', \App\Constants\BookingConst::OPERATOR_GUEST, (int) $order['user_id'], '', 1, [
                 'refundNo' => $refundNo,
                 'refundAmount' => $q['refundAmount'],
+                'refundChannel' => $refundChannel,
             ], 'refund');
             return [
                 'order' => $order,
@@ -545,12 +580,13 @@ class OrderController extends AbstractController
                 'goodsName' => (string) $order['goods_name'],
                 'orderNo' => (string) $order['order_no'],
                 'refundAmount' => $q['refundAmount'],
+                'refundChannel' => $refundChannel,
             ];
         });
 
         // 住客取消(申请退款)站内通知(事件后置,失败不影响退款申请);KBZ 订单原路退回用 refund_requested_original
         try {
-            UserNotify::order($snap['order'], self::refundChannelOf($snap['order']) === 2 ? 'refund_requested_original' : 'refund_requested',
+            UserNotify::order($snap['order'], $snap['refundChannel'] === 2 ? 'refund_requested_original' : 'refund_requested',
                 ['amount' => $snap['refundAmount']]);
         } catch (\Throwable) {
         }
@@ -580,6 +616,16 @@ class OrderController extends AbstractController
      */
     private function computeRefund(array $order): array
     {
+        if ((int) ($order['pay_at_hotel'] ?? 0) === 1) {
+            $quote = $this->bookingRefunds->quote($order);
+            $addon = (float) ($quote['refund_addon'] ?? 0);
+            $fee = round(max(0.0, $quote['refundable'] - $addon) * $this->platformFeeRate((int) $order['site_id']), 2);
+            return [
+                'payAmount' => $quote['payAmount'], 'addonRefund' => $addon,
+                'refundable' => $quote['refundable'], 'platformFee' => $fee,
+                'refundAmount' => max(0.0, round($quote['refundable'] - $fee, 2)),
+            ];
+        }
         /* 附加服务全额退,不受取消政策影响,也不收平台便民费;下面的规则只作用于房费部分 */
         $total = (float) $order['pay_amount'];
         $addon = min($total, max(0.0, (float) ($order['addon_amount'] ?? 0)));

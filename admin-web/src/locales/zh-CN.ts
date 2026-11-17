@@ -91,6 +91,14 @@ export default {
   "portalMissing": "请先配置可信HTTPS商户门户地址 VITE_MERCHANT_PORTAL_URL。",
   "popupBlocked": "请允许打开商户门户弹窗后重试。"
 },
+  hotelTerms: {
+    title: '到店支付条款', enabled: '开通到店支付', noShow: '允许商户收取未到店费用',
+    commission: '佣金比例', fee: '按佣金计算的交易手续费率', cap: '商户房费预收上限',
+    effectiveAt: '生效时间（UTC）', reason: '变更原因', history: '版本记录',
+    required: '请填写生效时间和变更原因', balance: '到店应付余额', deposit: '商户房费预收',
+    settlement: '运营结算', completed: '实际入住后已完成', pending: '待实际入住',
+    version: '条款版本',
+  },
   merchantDirectory: {
     title: '所有商户', subtitle: '管理平台商户、佣金计划和账户访问权限',
     merchantName: '商户名称', allMerchants: '全部商户', accountStatus: '账户状态', allStatuses: '全部账户状态', allTypes: '全部类型',

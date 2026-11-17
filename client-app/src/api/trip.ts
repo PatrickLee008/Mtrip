@@ -36,6 +36,7 @@ export interface TripBooking {
   orderNo: string;
   propertyName: string;
   payAmount: number;
+  hotelBalance?: number;
 }
 
 export interface TripCreateResult {
@@ -44,6 +45,8 @@ export interface TripCreateResult {
   totalAmount: number;
   couponDiscount: number;
   payAmount: number;
+  payAtHotel?: boolean;
+  hotelBalance?: number;
   bookings: TripBooking[];
 }
 
@@ -56,6 +59,7 @@ export function apiTripCreate(params: {
   items: TripCreateItem[];
   couponId?: number;
   expectedPayAmount?: number;
+  payAtHotel?: 0 | 1;
 }): Promise<TripCreateResult> {
   return post<TripCreateResult>('/api/v1/app/order/trip/create', params, {
     silentCodes: [API_CODE.PRICE_CHANGED],
@@ -78,6 +82,14 @@ export interface TripQuoteLine {
   /** 整单券按净额占比分摊到本行的金额 */
   couponDiscount: number;
   payAmount: number;
+  hotelOption?: {
+    available: boolean;
+    commission: number;
+    merchantDeposit: number;
+    transactionFee: number;
+    prepayAmount: number;
+    hotelBalance: number;
+  };
 }
 
 export interface TripQuoteResult {
@@ -92,6 +104,9 @@ export interface TripQuoteResult {
   /** 附加服务合计(不参与券与长住折扣,已含在 payAmount 里) */
   addonAmount?: number;
   payAmount: number;
+  payAtHotel?: boolean;
+  payAtHotelAvailable?: boolean;
+  hotelBalance?: number;
   items: TripQuoteLine[];
 }
 
@@ -105,6 +120,7 @@ export interface TripQuoteResult {
 export function apiTripQuote(params: {
   items: TripQuoteItem[];
   couponId?: number;
+  payAtHotel?: 0 | 1;
 }): Promise<TripQuoteResult> {
   return post<TripQuoteResult>('/api/v1/app/order/trip/quote', params, { silent: true });
 }
@@ -126,6 +142,8 @@ export function apiTripPay(params: {
  * (订单快照里没有人数/床型/含早)。
  */
 export interface TripBookingRow {
+  pay_at_hotel?: number;
+  hotel_balance?: string | number;
   id: number;
   order_no: string;
   property_id: number;

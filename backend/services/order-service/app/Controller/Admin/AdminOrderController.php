@@ -152,6 +152,9 @@ class AdminOrderController extends AbstractAdminController
         if ((int) $order['order_status'] !== 0) {
             throw new BusinessException(ErrorCode::DATA_CONFLICT, '仅待支付订单可改价');
         }
+        if ((int) ($order['pay_at_hotel'] ?? 0) === 1) {
+            throw new BusinessException(ErrorCode::DATA_CONFLICT, '到店支付须重新报价,不可直接改线上预付金额');
+        }
         $newAmount = round($this->floatInput('payAmount', -1), 2);
         if ($newAmount < 0 || $newAmount > (float) $order['total_amount']) {
             throw new BusinessException(ErrorCode::PARAM_ERROR, '实付金额须在 0 与订单总额之间');

@@ -551,6 +551,11 @@ export default {
     },
   },
   booking: {
+    hotelTerms: {
+      commission: 'mTrip commission', deposit: 'Merchant room prepayment', fee: 'Transaction fee',
+      balance: 'Pay at hotel', version: 'Terms version', settlement: 'Operational settlement',
+      completed: 'Completed after check-in', pending: 'Pending actual check-in',
+    },
     closeDetail: 'Close Detail Panel',
     title: 'Booking Management',
     subtitle: "Track and manage your hotel's reservations, room availability, and guest preferences all in one place.",
@@ -1250,6 +1255,12 @@ export default {
     },
   },
   settings: {
+    hotelTerms: {
+      title: 'Pay at Hotel terms', version: 'Version', commission: 'mTrip commission',
+      fee: 'Transaction fee on commission', status: 'Pay at Hotel', enabled: 'Enabled', disabled: 'Disabled',
+      noShow: 'Charge a no-show fee', deposit: 'Room rate prepayment', cap: 'Maximum',
+      save: 'Save terms', saved: 'Pay at Hotel terms saved',
+    },
     title: 'Settings & Security',
     subtitle: 'Manage account profile, notification preferences, security, and localization.',
     navigation: 'Settings & Preferences',

@@ -19,7 +19,7 @@ import type { MenuIconName } from './MenuUi';
 type Section = RootStackParamList['MenuSettings']['section'];
 const management: [string, MenuIconName][] = [['allProperties', 'property'], ['hotelProfile', 'property'], ['roomTypes', 'bed']];
 const business: [string, MenuIconName][] = [['earnings', 'chart'], ['budget', 'budget'], ['promotions', 'tag'], ['campaigns', 'campaign'], ['staff', 'staff'], ['reviews', 'star']];
-const settings: [string, MenuIconName, Section?][] = [['security', 'shield', 'security'], ['notifications', 'bell', 'notifications'], ['localization', 'globe', 'localization'], ['support', 'support'], ['rules', 'rules'], ['faq', 'faq'], ['guide', 'book']];
+const settings: [string, MenuIconName, Section?][] = [['hotelTerms', 'property', 'hotelTerms'], ['security', 'shield', 'security'], ['notifications', 'bell', 'notifications'], ['localization', 'globe', 'localization'], ['support', 'support'], ['rules', 'rules'], ['faq', 'faq'], ['guide', 'book']];
 
 export default function MenuScreen({ navigation }: NativeStackScreenProps<RootStackParamList, 'Menu'>) {
   const { t } = useTranslation();

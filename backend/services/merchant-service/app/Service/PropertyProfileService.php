@@ -481,7 +481,7 @@ class PropertyProfileService
                 'cancellation' => $this->policyText($booking['cancellation'] ?? ''),
                 'prepayment' => $this->policyText($booking['prepayment'] ?? ''),
                 'taxesFees' => $this->policyText($booking['taxesFees'] ?? ''),
-                // 是否支持到店付款(随物业资料审核发布;C 端筛选 payAtHotel=1 读它,支付流程本期未接)
+                // 物业选择加入;C 端还须叠加商户商务条款是否已开通。
                 'payAtHotel' => filter_var($booking['payAtHotel'] ?? false, FILTER_VALIDATE_BOOLEAN),
             ],
             'checkIn' => [

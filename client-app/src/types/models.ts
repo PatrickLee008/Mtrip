@@ -238,6 +238,11 @@ export interface OrderItemData {
   sku_name: string;
   quantity: number;
   pay_amount: string;
+  pay_at_hotel?: number;
+  hotel_balance?: string;
+  hotel_commission?: string;
+  hotel_deposit?: string;
+  hotel_transaction_fee?: string;
   order_status: number;
   refund_status: number;
   use_date: string | null;

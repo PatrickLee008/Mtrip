@@ -22,7 +22,15 @@ class AccountEntryController extends AbstractController
         $query = $this->baseQuery();
         $total = (clone $query)->count();
         $list = $query->orderByDesc('id')->forPage($page, $pageSize)
-            ->get()->map(static fn ($row) => (array) $row)->all();
+            ->get([
+                'finance_account_entry.*',
+                Db::raw('COALESCE(refunds.refund_hotel_commission,0) AS refunded_commission'),
+                Db::raw('COALESCE(refunds.refund_hotel_deposit,0) AS refunded_deposit'),
+                Db::raw('COALESCE(refunds.refund_transaction_fee,0) AS refunded_transaction_fee'),
+                Db::raw('COALESCE(refunds.refund_addon,0) AS refunded_addon'),
+                Db::raw('merchant_settlement - COALESCE(refunds.refund_hotel_deposit,0) - COALESCE(refunds.refund_addon,0) AS net_merchant_settlement'),
+                Db::raw('platform_revenue - COALESCE(refunds.refund_hotel_commission,0) - COALESCE(refunds.refund_transaction_fee,0) AS net_platform_revenue'),
+            ])->map(static fn ($row) => (array) $row)->all();
         return Result::page($list, $total, $page, $pageSize);
     }
 
@@ -39,6 +47,12 @@ class AccountEntryController extends AbstractController
             Db::raw('COALESCE(SUM(partner_pays),0) as partner_pays'),
             Db::raw('COALESCE(SUM(merchant_settlement),0) as merchant_settlement'),
             Db::raw('COALESCE(SUM(platform_revenue),0) as platform_revenue'),
+            Db::raw('COALESCE(SUM(refunds.refund_hotel_commission),0) as refunded_commission'),
+            Db::raw('COALESCE(SUM(refunds.refund_hotel_deposit),0) as refunded_deposit'),
+            Db::raw('COALESCE(SUM(refunds.refund_transaction_fee),0) as refunded_transaction_fee'),
+            Db::raw('COALESCE(SUM(refunds.refund_addon),0) as refunded_addon'),
+            Db::raw('COALESCE(SUM(merchant_settlement - COALESCE(refunds.refund_hotel_deposit,0) - COALESCE(refunds.refund_addon,0)),0) as net_merchant_settlement'),
+            Db::raw('COALESCE(SUM(platform_revenue - COALESCE(refunds.refund_hotel_commission,0) - COALESCE(refunds.refund_transaction_fee,0)),0) as net_platform_revenue'),
         ]);
         return Result::success($row);
     }
@@ -46,7 +60,10 @@ class AccountEntryController extends AbstractController
     /** 公共筛选:站点隔离 + 商户 + 日期区间 */
     private function baseQuery()
     {
-        $query = Db::table('finance_account_entry');
+        $refunds = Db::table('order_refund')->where('status', 3)->where('late_pay', 0)->whereNull('deleted_at')
+            ->groupBy('order_id')->select('order_id')
+            ->selectRaw('SUM(refund_hotel_commission) AS refund_hotel_commission, SUM(refund_hotel_deposit) AS refund_hotel_deposit, SUM(refund_transaction_fee) AS refund_transaction_fee, SUM(refund_addon) AS refund_addon');
+        $query = Db::table('finance_account_entry')->leftJoinSub($refunds, 'refunds', 'finance_account_entry.order_id', '=', 'refunds.order_id');
         $this->applySiteScope($query);
         if (($merchantId = $this->intInput('merchantId')) > 0) {
             $query->where('merchant_id', $merchantId);

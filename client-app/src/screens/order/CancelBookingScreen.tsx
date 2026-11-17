@@ -83,6 +83,7 @@ export default function CancelBookingScreen() {
   const [step, setStep] = useState<'summary' | 'reason' | 'review'>('summary');
   const [order, setOrder] = useState<OrderDetail | null>(null);
   const [quote, setQuote] = useState<RefundQuote | null>(null);
+  const [refundChannel, setRefundChannel] = useState(1);
   const [reason, setReason] = useState<string>('');
   /** 稿面 `1205:2378`「Additional Comments (Optional)」;提交时拼在原因后面一起发 */
   const [comments, setComments] = useState('');
@@ -96,6 +97,7 @@ export default function CancelBookingScreen() {
       const [detail, q] = await Promise.all([fetchOrderDetail(orderId), fetchRefundQuote(orderId)]);
       setOrder(detail);
       setQuote(q);
+      setRefundChannel(q.refundChannel);
       setError('');
     } catch (e) {
       /* 后端会明确告诉为什么不能退(如「仅已支付且未使用的订单可预览退款」),原样展示 */
@@ -115,7 +117,7 @@ export default function CancelBookingScreen() {
     try {
       /* 备注拼在原因后面 —— 后端 `reason` 是一段自由文本(500 字上限),没有单独的备注字段 */
       const text = comments.trim() ? `${reason} - ${comments.trim()}` : reason;
-      const { refundNo } = await applyRefund({ orderId, reason: text });
+      const { refundNo } = await applyRefund({ orderId, reason: text, refundChannel });
       /* 取消成功页(`1205:2679`);用 replace,免得返回又回到取消流程里 */
       navigation.replace('BookingCancelled', {
         orderId,
@@ -137,6 +139,9 @@ export default function CancelBookingScreen() {
   const dateRange = order.use_date
     ? `${formatDate(order.use_date)}${order.end_date ? ` - ${formatDate(order.end_date)}` : ''}`
     : '-';
+  const atHotel = Number(order.pay_at_hotel) === 1;
+  const refundMethodDesc = refundChannel === 2
+    ? t('order.cancel.refundOriginalDesc') : t('order.cancel.refundMethodDesc');
 
   return (
     <View style={styles.root}>
@@ -176,6 +181,7 @@ export default function CancelBookingScreen() {
               <Text style={styles.refundTitle}>{t('order.cancel.refundSummary')}</Text>
               <View style={styles.refundRows}>
                 <Row label={t('order.cancel.originalAmount')} value={formatMoney(quote.payAmount, currency)} />
+                {atHotel ? <PayAtHotelRefundRows quote={quote} currency={currency} /> : null}
                 <Row
                   label={t('order.cancel.cancellationFee')}
                   value={`-${formatMoney(quote.cancellationFee, currency)}`}
@@ -195,11 +201,14 @@ export default function CancelBookingScreen() {
                 </View>
               </View>
 
-              <Note
-                icon="wallet"
-                title={t('order.cancel.refundMethod')}
-                desc={t('order.cancel.refundMethodDesc')}
-              />
+              {(quote.availableRefundChannels?.length ?? 1) > 1 ? <View style={styles.refundOptions}>
+                <Text style={styles.noteTitle}>{t('order.cancel.refundMethod')}</Text>
+                {quote.availableRefundChannels?.map((channel) => <Pressable key={channel} style={styles.refundOption} accessibilityRole="radio" accessibilityState={{ checked: refundChannel === channel }} onPress={() => setRefundChannel(channel)}>
+                  <View style={[styles.refundRadio, refundChannel === channel && styles.refundRadioOn]} />
+                  <Text style={styles.refundOptionText}>{t(channel === 2 ? 'order.cancel.refundOriginal' : 'order.cancel.refundWallet')}</Text>
+                </Pressable>)}
+                <Text style={styles.noteDesc}>{refundMethodDesc}</Text>
+              </View> : <Note icon="wallet" title={t('order.cancel.refundMethod')} desc={refundMethodDesc} />}
               <Note
                 icon="clock"
                 title={t('order.cancel.refundTimeline')}
@@ -229,7 +238,7 @@ export default function CancelBookingScreen() {
               </Text>
             </Text>
           </>
-        ) : (
+        ) : step === 'reason' ? (
           <>
             {/* 取消原因 1205:2480 —— PRD 要求提交前必须选一条 */}
             <Text style={styles.reasonTitle}>{t('order.cancel.reasonTitle')}</Text>
@@ -272,11 +281,12 @@ export default function CancelBookingScreen() {
               </View>
               <View style={styles.flexCol}>
                 <Text style={styles.policyTitle}>{t('order.cancel.policyTitle')}</Text>
-                <Text style={styles.policyDesc}>{t('order.cancel.policyDesc')}</Text>
+                <Text style={styles.policyDesc}>{refundChannel === 2
+                  ? t('order.cancel.policyOriginalDesc') : t('order.cancel.policyDesc')}</Text>
               </View>
             </View>
           </>
-        )}
+        ) : null}
 
         {step === 'review' ? (
           <>
@@ -303,6 +313,7 @@ export default function CancelBookingScreen() {
               <Text style={styles.refundTitle}>{t('order.cancel.refundSummary')}</Text>
               <View style={styles.refundRows}>
                 <Row label={t('order.cancel.originalAmount')} value={formatMoney(quote.payAmount, currency)} />
+                {atHotel ? <PayAtHotelRefundRows quote={quote} currency={currency} /> : null}
                 <Row
                   label={t('order.cancel.cancellationFee')}
                   value={`-${formatMoney(quote.cancellationFee, currency)}`}
@@ -315,7 +326,8 @@ export default function CancelBookingScreen() {
                 </View>
               </View>
               {/* 稿面这一页把退款去向与时效并成一条(`1205:2404`) */}
-              <Note icon="wallet" title={t('order.cancel.refundMethod')} desc={t('order.cancel.refundNote')} />
+              <Note icon="wallet" title={t('order.cancel.refundMethod')} desc={quote.refundChannel === 2
+                ? t('order.cancel.refundOriginalNote') : t('order.cancel.refundNote')} />
             </View>
 
             {/* Final Notice 1205:2663 —— 这句「不可撤销 + 罚金不退」是这一页存在的理由 */}
@@ -405,6 +417,19 @@ function Row({ label, value, danger }: { label: string; value: string; danger?: 
       <Text style={styles.rowLabel}>{label}</Text>
       <Text style={[styles.rowValue, danger && styles.rowValueDanger]}>{value}</Text>
     </View>
+  );
+}
+
+function PayAtHotelRefundRows({ quote, currency }: { quote: RefundQuote; currency: string }) {
+  const { t } = useTranslation();
+  return (
+    <>
+      <Row label={t('order.cancel.hotelBalance')} value={formatMoney(quote.hotelBalance ?? 0, currency)} />
+      <Row label={t('order.cancel.refundCommission')} value={formatMoney(quote.refund_hotel_commission ?? 0, currency)} />
+      <Row label={t('order.cancel.refundDeposit')} value={formatMoney(quote.refund_hotel_deposit ?? 0, currency)} />
+      <Row label={t('order.cancel.refundTransactionFee')} value={formatMoney(quote.refund_transaction_fee ?? 0, currency)} />
+      {(quote.refund_addon ?? 0) > 0 ? <Row label={t('order.cancel.refundAddon')} value={formatMoney(quote.refund_addon ?? 0, currency)} /> : null}
+    </>
   );
 }
 
@@ -531,6 +556,11 @@ const styles = StyleSheet.create({
     color: colors.heading,
   },
   noteDesc: { fontFamily: fonts.inter, fontSize: 12, lineHeight: 24, color: colors.textSoft },
+  refundOptions: { gap: 10, padding: 16, borderRadius: 8, backgroundColor: '#ECF5FE' },
+  refundOption: { minHeight: 42, flexDirection: 'row', alignItems: 'center', gap: 10 },
+  refundRadio: { width: 18, height: 18, borderRadius: 9, borderWidth: 2, borderColor: colors.textSoft },
+  refundRadioOn: { borderColor: colors.primary, backgroundColor: colors.primary },
+  refundOptionText: { flex: 1, fontFamily: fonts.interMedium, fontSize: 14, lineHeight: 20, color: colors.heading },
 
   /* ---- 摘要步的按钮 ---- */
   actions: { width: '100%', gap: 16 },

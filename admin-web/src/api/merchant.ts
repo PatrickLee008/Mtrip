@@ -156,6 +156,37 @@ export function apiMerchantCommission(data: {
   return post('/admin/merchant/commission', data);
 }
 
+export interface PayAtHotelTerms {
+  version: number;
+  enabled: number;
+  no_show_enabled: number;
+  deposit_cap_rate: number;
+  deposit_rate: number;
+  commission_rate: number;
+  transaction_fee_rate: number;
+  effective_at: string | null;
+  reason?: string;
+  actor_type?: string;
+  actor_id?: number;
+}
+
+export function apiPayAtHotelTerms(merchantId: number): Promise<{ current: PayAtHotelTerms; history: PayAtHotelTerms[] }> {
+  return get('/admin/merchant/pay-at-hotel/terms', { merchantId });
+}
+
+export function apiSavePayAtHotelTerms(data: {
+  merchantId: number;
+  enabled: boolean;
+  noShowEnabled: boolean;
+  depositCapRate: number;
+  commissionRate: number;
+  transactionFeeRate: number;
+  effectiveAt: string;
+  reason: string;
+}): Promise<PayAtHotelTerms> {
+  return post('/admin/merchant/pay-at-hotel/terms', data);
+}
+
 /** 功能模块授权现状:available 全部可选,granted 已开通,unmanaged=从未授权(当前按全开通) */
 export function apiMerchantModules(merchantId: number): Promise<{
   available: { key: string; name: string }[];

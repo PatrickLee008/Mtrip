@@ -22,7 +22,8 @@
       "profile": "商户资料",
       "notifications": "通知偏好",
       "security": "安全与登录",
-      "localization": "本地化设置"
+      "localization": "本地化设置",
+      "hotelTerms": "商务与支付条款"
     },
     "items": {
       "allProperties": "全部物业",
@@ -37,10 +38,24 @@
       "security": "安全与登录",
       "notifications": "通知偏好",
       "localization": "本地化设置",
+      "hotelTerms": "商务与支付条款",
       "support": "支持中心",
       "rules": "合规与平台规则",
       "faq": "常见问题",
       "guide": "使用指南"
+    },
+    "hotelTerms": {
+      "status": "到店支付",
+      "enabled": "已开通",
+      "disabled": "未开通",
+      "commission": "mTrip 佣金比例",
+      "transactionFee": "交易手续费比例",
+      "version": "条款版本",
+      "noShow": "收取未入住费用",
+      "depositRate": "商户房费预收比例（上限 {{max}}%）",
+      "invalidRate": "请输入授权范围内的预收比例。",
+      "loadFailed": "支付条款加载失败。",
+      "saved": "支付条款已保存。"
     },
     "profile": {
       "changeLogo": "更换标志",
@@ -122,6 +137,12 @@
     "staySummary": "{{nights}} 晚 · {{rooms}} 间", "checkInDate": "入住日期", "checkOutDate": "离店日期",
     "roomNo": "房号", "specialRequest": "特殊要求", "billing": "账单与付款",
     "subtotal": "小计", "discount": "优惠 / 折扣", "total": "合计", "paymentMethod": "付款方式",
+    "hotelTerms": {
+      "prepay": "线上预付", "balance": "到店应付", "commission": "mTrip 佣金",
+      "deposit": "商户预收", "fee": "交易手续费", "noShow": "未到店费用",
+      "enabled": "启用", "disabled": "免收", "version": "条款版本",
+      "settlement": "运营结算", "completed": "入住后已完成", "pending": "待入住"
+    },
     "paymentHold": "等待付款期间暂时保留房间。如果付款时限内仍未收到付款，服务器将自动取消预订。",
     "checkingPayment": "正在确认付款状态…", "cancelledTitle": "预订已取消",
     "cancelledCopy": "预订已取消。符合条件的退款将根据该预订的取消政策另行处理。",

@@ -39,6 +39,9 @@ const columns = [
   { title: '商户ID', dataIndex: 'merchant_id', width: 90 },
   { title: '订单额', dataIndex: 'order_amount', width: 100 },
   { title: '佣金', dataIndex: 'commission', width: 90 },
+  { title: '到店余额', dataIndex: 'hotel_balance', width: 105 },
+  { title: '商户预收', dataIndex: 'hotel_deposit', width: 105 },
+  { title: '交易手续费', dataIndex: 'transaction_fee', width: 110 },
   { title: '折扣', dataIndex: 'discount_amount', width: 90 },
   { title: '出资方', dataIndex: 'funding_source', width: 90 },
   { title: 'mTrip', dataIndex: 'mtrip_pays', width: 90 },
@@ -46,9 +49,15 @@ const columns = [
   { title: '合作方', dataIndex: 'partner_pays', width: 90 },
   { title: '应结商户', dataIndex: 'merchant_settlement', width: 110 },
   { title: '平台净收', dataIndex: 'platform_revenue', width: 110 },
+  { title: '已退商户预收', dataIndex: 'refunded_deposit', width: 120 },
+  { title: '已退附加服务', dataIndex: 'refunded_addon', width: 120 },
+  { title: '已退佣金', dataIndex: 'refunded_commission', width: 105 },
+  { title: '已退手续费', dataIndex: 'refunded_transaction_fee', width: 110 },
+  { title: '商户净应结', dataIndex: 'net_merchant_settlement', width: 115 },
+  { title: '平台净实收', dataIndex: 'net_platform_revenue', width: 115 },
   { title: '时间', dataIndex: 'created_at', width: 170 },
 ];
-const AMT = ['order_amount', 'commission', 'discount_amount', 'mtrip_pays', 'merchant_pays', 'partner_pays', 'merchant_settlement', 'platform_revenue'];
+const AMT = ['order_amount', 'commission', 'hotel_balance', 'hotel_deposit', 'transaction_fee', 'discount_amount', 'mtrip_pays', 'merchant_pays', 'partner_pays', 'merchant_settlement', 'platform_revenue', 'refunded_deposit', 'refunded_addon', 'refunded_commission', 'refunded_transaction_fee', 'net_merchant_settlement', 'net_platform_revenue'];
 function isAmt(d: unknown): boolean {
   return typeof d === 'string' && AMT.includes(d);
 }
@@ -70,8 +79,8 @@ onMounted(() => void loadAll());
       <a-col :span="4"><a-card :bordered="false" class="mtrip-card-shadow"><a-statistic title="订单数" :value="summary?.order_count ?? 0" /></a-card></a-col>
       <a-col :span="5"><a-card :bordered="false" class="mtrip-card-shadow"><a-statistic title="订单额" :value="Number(summary?.order_amount ?? 0)" :precision="2" /></a-card></a-col>
       <a-col :span="5"><a-card :bordered="false" class="mtrip-card-shadow"><a-statistic title="平台佣金" :value="Number(summary?.commission ?? 0)" :precision="2" /></a-card></a-col>
-      <a-col :span="5"><a-card :bordered="false" class="mtrip-card-shadow"><a-statistic title="应结商户" :value="Number(summary?.merchant_settlement ?? 0)" :precision="2" /></a-card></a-col>
-      <a-col :span="5"><a-card :bordered="false" class="mtrip-card-shadow"><a-statistic title="平台净收入" :value="Number(summary?.platform_revenue ?? 0)" :precision="2" /></a-card></a-col>
+      <a-col :span="5"><a-card :bordered="false" class="mtrip-card-shadow"><a-statistic title="商户净应结" :value="Number(summary?.net_merchant_settlement ?? 0)" :precision="2" /></a-card></a-col>
+      <a-col :span="5"><a-card :bordered="false" class="mtrip-card-shadow"><a-statistic title="平台净实收" :value="Number(summary?.net_platform_revenue ?? 0)" :precision="2" /></a-card></a-col>
     </a-row>
 
     <a-card :bordered="false" class="mtrip-card-shadow" style="margin-bottom: 16px">
@@ -95,7 +104,7 @@ onMounted(() => void loadAll());
     </a-card>
 
     <a-card :bordered="false" class="mtrip-card-shadow" title="分账明细">
-      <a-table :columns="columns" :data-source="list" :loading="loading" :pagination="pagination" row-key="id" size="middle" :scroll="{ x: 1400 }">
+      <a-table :columns="columns" :data-source="list" :loading="loading" :pagination="pagination" row-key="id" size="middle" :scroll="{ x: 2250 }">
         <template #bodyCell="{ column, record }">
           <template v-if="isAmt(column.dataIndex)">{{ fmt(record, column.dataIndex) }}</template>
           <template v-else-if="column.dataIndex === 'funding_source'">

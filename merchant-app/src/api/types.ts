@@ -25,6 +25,17 @@ export interface MerchantProfile {
   bookingRestricted?: boolean;
 }
 
+export interface PayAtHotelTerms {
+  version: number;
+  enabled: number;
+  no_show_enabled: number;
+  deposit_cap_rate: number;
+  deposit_rate: number;
+  commission_rate: number;
+  transaction_fee_rate: number;
+  effective_at: string | null;
+}
+
 export interface ChallengeResult {
   challengeToken: string;
   requiresEnrollment: boolean;
@@ -172,6 +183,10 @@ export interface BookingDetail {
   nights: number;
   payment: {
     totalAmount: string | number; discountAmount: string | number; payAmount: string | number;
+    payAtHotel?: boolean; hotelBalance?: number; commission?: number;
+    merchantDeposit?: number; transactionFee?: number;
+    terms?: { version?: number; noShowEnabled?: boolean; depositRate?: number } | null;
+    operationalSettlementStatus?: number; operationalSettledAt?: string | null;
     payMethod: number; paymentStatus: number; paymentExpiresAt: string | null;
   };
   stay: {

@@ -813,6 +813,14 @@ onBeforeUnmount(() => {
                   <div class="bm-field"><span class="bm-label">{{ t('booking.pay.discount') }}</span><AmountText class="bm-value" :value="detail.payment.discountAmount" /></div>
                   <div v-if="Number(detail.payment.addonAmount) > 0" class="bm-field"><span class="bm-label">{{ t('booking.stay.addons') }}</span><AmountText class="bm-value" :value="detail.payment.addonAmount ?? 0" /></div>
                   <div class="bm-field bm-field-strong"><span class="bm-label">{{ t('booking.pay.payAmount') }}</span><AmountText class="bm-value" :value="detail.payment.payAmount" /></div>
+                  <template v-if="detail.payment.payAtHotel">
+                    <div class="bm-field"><span class="bm-label">{{ t('booking.hotelTerms.commission') }}</span><AmountText class="bm-value" :value="detail.payment.commission ?? 0" /></div>
+                    <div class="bm-field"><span class="bm-label">{{ t('booking.hotelTerms.deposit') }}</span><AmountText class="bm-value" :value="detail.payment.merchantDeposit ?? 0" /></div>
+                    <div class="bm-field"><span class="bm-label">{{ t('booking.hotelTerms.fee') }}</span><AmountText class="bm-value" :value="detail.payment.transactionFee ?? 0" /></div>
+                    <div class="bm-field"><span class="bm-label">{{ t('booking.hotelTerms.balance') }}</span><AmountText class="bm-value" :value="detail.payment.hotelBalance ?? 0" /></div>
+                    <div class="bm-field"><span class="bm-label">{{ t('booking.hotelTerms.version') }}</span><span class="bm-value">{{ detail.payment.terms?.version ?? '-' }}</span></div>
+                    <div class="bm-field"><span class="bm-label">{{ t('booking.hotelTerms.settlement') }}</span><span class="bm-value">{{ detail.payment.operationalSettlementStatus === 1 ? t('booking.hotelTerms.completed') : t('booking.hotelTerms.pending') }}</span></div>
+                  </template>
                   <div class="bm-field"><span class="bm-label">{{ t('booking.pay.method') }}</span><span class="bm-value">{{ paymentMethodText(detail.payment.payMethod) }}</span></div>
                   <div v-if="detail.payment.payTime" class="bm-field"><span class="bm-label">{{ t('booking.pay.payTime') }}</span><span class="bm-value">{{ detail.payment.payTime }}</span></div>
                   <div v-if="detail.payment.payTradeNo" class="bm-field"><span class="bm-label">{{ t('booking.pay.tradeNo') }}</span><span class="bm-value">{{ detail.payment.payTradeNo }}</span></div>

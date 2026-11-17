@@ -9,6 +9,7 @@ import { apiUpdatePassword, apiContacts, apiContactSend, apiContactVerify, apiRe
 import { useUserStore } from '@/stores/user';
 import { SUPPORTED_LOCALES, type SupportedLocale } from '@/locales';
 import { LOCALE_KEY } from '@/locales/preferences';
+import { getPayAtHotelTerms, savePayAtHotelTerms, type PayAtHotelTerms } from '@/api/payAtHotel';
 
 const userStore = useUserStore();
 const { t, locale } = useI18n();
@@ -18,6 +19,31 @@ const contactDialog = ref(false);
 const contactForm = reactive({ mode: 'verify', channel: 'email' as 'email' | 'sms', verifiedChannel: 'email' as 'email' | 'sms', step: 0, value: '', code: '', totp: '', token: '' });
 const verifiedContacts = computed(() => contacts.value.contacts.filter(item => item.status === 'verified'));
 const canManageContacts = computed(() => userStore.isOwner && userStore.accountType === 2 && !userStore.profile?.impersonation);
+const hotelTerms = ref<PayAtHotelTerms | null>(null);
+const hotelTermsSaving = ref(false);
+const hotelNoShow = ref(false);
+const hotelDepositRate = ref(0);
+async function loadHotelTerms(): Promise<void> {
+  try {
+    const terms = await getPayAtHotelTerms();
+    hotelTerms.value = terms;
+    hotelNoShow.value = Boolean(terms.no_show_enabled);
+    hotelDepositRate.value = Number(terms.deposit_rate);
+  } catch {
+    hotelTerms.value = null;
+  }
+}
+onMounted(loadHotelTerms);
+
+async function saveHotelTerms(): Promise<void> {
+  hotelTermsSaving.value = true;
+  try {
+    hotelTerms.value = await savePayAtHotelTerms(hotelNoShow.value, hotelNoShow.value ? hotelDepositRate.value : 0);
+    message.success(t('settings.hotelTerms.saved'));
+  } finally {
+    hotelTermsSaving.value = false;
+  }
+}
 const contactsLoading = ref(false);
 const contactsFailed = ref(false);
 async function loadContacts(): Promise<void> {
@@ -176,6 +202,23 @@ async function submitPassword(): Promise<void> {
         </header>
 
         <section v-show="activeTab === 'profile'" :aria-label="t('settings.profile.title')">
+          <div v-if="hotelTerms" class="settings-card">
+            <h2>{{ t('settings.hotelTerms.title') }}</h2>
+            <p class="muted">{{ t('settings.hotelTerms.version') }} {{ hotelTerms.version }}</p>
+            <div class="form-grid">
+              <a-form-item :label="t('settings.hotelTerms.commission')"><a-input :value="`${hotelTerms.commission_rate}%`" readonly /></a-form-item>
+              <a-form-item :label="t('settings.hotelTerms.fee')"><a-input :value="`${hotelTerms.transaction_fee_rate}%`" readonly /></a-form-item>
+              <a-form-item :label="t('settings.hotelTerms.status')"><a-input :value="hotelTerms.enabled ? t('settings.hotelTerms.enabled') : t('settings.hotelTerms.disabled')" readonly /></a-form-item>
+            </div>
+            <template v-if="hotelTerms.enabled">
+              <a-form-item :label="t('settings.hotelTerms.noShow')"><a-switch v-model:checked="hotelNoShow" :disabled="!canManageContacts" /></a-form-item>
+              <a-form-item :label="t('settings.hotelTerms.deposit')">
+                <a-input-number v-model:value="hotelDepositRate" :min="0" :max="Math.min(30, Number(hotelTerms.deposit_cap_rate))" :step="0.1" :disabled="!hotelNoShow || !canManageContacts" addon-after="%" />
+                <p class="muted">{{ t('settings.hotelTerms.cap') }} {{ hotelTerms.deposit_cap_rate }}%</p>
+              </a-form-item>
+              <a-button v-if="canManageContacts" type="primary" :loading="hotelTermsSaving" @click="saveHotelTerms">{{ t('settings.hotelTerms.save') }}</a-button>
+            </template>
+          </div>
           <div class="settings-card">
             <div class="logo-row">
               <span class="company-avatar"><UserOutlined /></span>

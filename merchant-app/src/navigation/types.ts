@@ -17,7 +17,7 @@ export type RootStackParamList = {
   BiometricOptIn: undefined;
   Dashboard: undefined;
   Menu: undefined;
-  MenuSettings: { section: 'profile' | 'notifications' | 'security' | 'localization' };
+  MenuSettings: { section: 'profile' | 'notifications' | 'security' | 'localization' | 'hotelTerms' };
   Notifications: undefined;
   Bookings: undefined;
   BookingDetail: { orderId: number; propertyId: number; action?: 'check-in' | 'check-out' };

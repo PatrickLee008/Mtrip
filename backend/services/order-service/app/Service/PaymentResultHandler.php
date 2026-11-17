@@ -41,17 +41,22 @@ class PaymentResultHandler
             // 已被超时任务取消或其他终态:迟到支付不得直接确认
             throw new BusinessException(ErrorCode::DATA_CONFLICT, '订单不是待支付状态');
         }
-        Db::table('order_main')->where('id', (int) $order['id'])->update([
+        $confirmedAt = date('Y-m-d H:i:s');
+        $fields = [
             'order_status' => 1,
             'booking_status' => BookingConst::STATUS_CONFIRMED,
             'payment_status' => BookingConst::PAY_PAID,
             'pay_method' => $payMethod,
             'pay_trade_no' => $tradeNo,
-            'pay_time' => date('Y-m-d H:i:s'),
-            'confirmed_at' => date('Y-m-d H:i:s'),
+            'pay_time' => $confirmedAt,
+            'confirmed_at' => $confirmedAt,
             'verify_code' => $verifyCode,
             'version' => Db::raw('version + 1'),
-        ]);
+        ];
+        if ($snapshot = self::confirmedHotelTerms($order, $confirmedAt)) {
+            $fields['hotel_terms_snapshot'] = $snapshot;
+        }
+        Db::table('order_main')->where('id', (int) $order['id'])->update($fields);
         $order['booking_status'] = BookingConst::STATUS_CONFIRMED;
         $this->events->log($order, 'payment_success', BookingConst::OPERATOR_GUEST, (int) $order['user_id'], '', 1, [
             'payMethod' => $payMethod,
@@ -93,22 +98,27 @@ class PaymentResultHandler
         if (! $this->isExpiryCancelled($order)) {
             throw new BusinessException(ErrorCode::DATA_CONFLICT, '仅系统超时取消的预订可恢复');
         }
+        $confirmedAt = date('Y-m-d H:i:s');
+        $fields = [
+            'order_status' => 1,
+            'booking_status' => BookingConst::STATUS_CONFIRMED,
+            'payment_status' => BookingConst::PAY_PAID,
+            'pay_method' => $payMethod,
+            'pay_trade_no' => $tradeNo,
+            'pay_time' => $confirmedAt,
+            'confirmed_at' => $confirmedAt,
+            'verify_code' => $verifyCode,
+            'cancel_reason' => '',
+            'cancel_time' => null,
+            'version' => Db::raw('version + 1'),
+        ];
+        if ($snapshot = self::confirmedHotelTerms($order, $confirmedAt)) {
+            $fields['hotel_terms_snapshot'] = $snapshot;
+        }
         $affected = Db::table('order_main')->where('id', (int) $order['id'])
             ->where('booking_status', BookingConst::STATUS_CANCELLED)
             ->where('order_status', 4)
-            ->update([
-                'order_status' => 1,
-                'booking_status' => BookingConst::STATUS_CONFIRMED,
-                'payment_status' => BookingConst::PAY_PAID,
-                'pay_method' => $payMethod,
-                'pay_trade_no' => $tradeNo,
-                'pay_time' => date('Y-m-d H:i:s'),
-                'confirmed_at' => date('Y-m-d H:i:s'),
-                'verify_code' => $verifyCode,
-                'cancel_reason' => '',
-                'cancel_time' => null,
-                'version' => Db::raw('version + 1'),
-            ]);
+            ->update($fields);
         if ($affected !== 1) {
             throw new BusinessException(ErrorCode::DATA_CONFLICT, '预订已被其他操作更新');
         }
@@ -129,6 +139,20 @@ class PaymentResultHandler
         $this->events->log($order, 'payment_failed', BookingConst::OPERATOR_GUEST, (int) $order['user_id'], '', 2, [
             'reason' => mb_substr($reason, 0, 200),
         ], 'payment');
+    }
+
+    private static function confirmedHotelTerms(array $order, string $confirmedAt): ?string
+    {
+        if ((int) ($order['pay_at_hotel'] ?? 0) !== 1) {
+            return null;
+        }
+        $snapshot = $order['hotel_terms_snapshot'] ?? null;
+        $snapshot = is_string($snapshot) ? json_decode($snapshot, true) : $snapshot;
+        if (! is_array($snapshot)) {
+            return null;
+        }
+        $snapshot['confirmedAt'] = $confirmedAt;
+        return json_encode($snapshot, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
     }
 
     /** 支付成功后的商户通知(事件后置容错,不影响支付主流程) */

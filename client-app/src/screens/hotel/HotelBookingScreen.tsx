@@ -39,7 +39,6 @@ import BookingStepDates from '@/components/hotel/booking/BookingStepDates';
 import BookingStepDetails from '@/components/hotel/booking/BookingStepDetails';
 import WalletAppliedPod from '@/components/hotel/booking/WalletAppliedPod';
 import WalletCard from '@/components/hotel/booking/WalletCard';
-import PayAtHotelNotice from '@/components/hotel/PayAtHotelNotice';
 import BookingStepGuests from '@/components/hotel/booking/BookingStepGuests';
 import BookingStepPayment from '@/components/hotel/booking/BookingStepPayment';
 import CouponPickerSheet from '@/components/hotel/booking/CouponPickerSheet';
@@ -104,7 +103,8 @@ export default function HotelBookingScreen() {
     expanded,
     setExpanded,
     walletBalance,
-    payAtHotel,
+    payAtHotelAvailable,
+    hotelBalance,
     addonOptions,
     addonTotal,
     payableTotal,
@@ -250,7 +250,6 @@ export default function HotelBookingScreen() {
                 cartMode ? (
                   <View style={styles.walletSlot}>
                     {/* 支持到店付款的酒店:钱包这一步就可能直接付款,提示得放在这里而不是只放支付页 */}
-                    {payAtHotel ? <PayAtHotelNotice /> : null}
                   {couponEnabled ? (
                     <CouponSelectCard
                       coupon={{
@@ -403,7 +402,8 @@ export default function HotelBookingScreen() {
             walletNote={walletNote}
             walletPod={walletPod}
             walletCovers={walletCovers}
-            payAtHotel={payAtHotel}
+            payAtHotel={payAtHotelAvailable}
+            hotelBalance={hotelBalance}
             /* KBZPay MMQR 由 `/app/order/pay/methods` 决定是否可选(失败时只有余额) */
             mmqrEnabled={mmqrEnabled}
             onSelect={selectMethod}

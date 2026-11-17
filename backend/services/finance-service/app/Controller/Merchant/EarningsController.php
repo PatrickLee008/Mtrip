@@ -24,7 +24,11 @@ class EarningsController extends AbstractController
         [$startDate, $endDate] = $this->dateRange(true);
         $propertyIds = $this->scopePropertyIds();
 
+        $refunded = Db::table('order_refund')->where('status', 3)->where('late_pay', 0)->whereNull('deleted_at')
+            ->groupBy('order_id')->select('order_id')
+            ->selectRaw('SUM(refund_hotel_deposit + refund_addon) AS merchant_refund');
         $entry = (array) Db::table('finance_account_entry')
+            ->leftJoinSub($refunded, 'hotel_refunds', 'finance_account_entry.order_id', '=', 'hotel_refunds.order_id')
             ->where('site_id', MerchantContext::siteId())
             ->whereIn('property_id', $propertyIds)
             ->whereBetween('created_at', ["{$startDate} 00:00:00", "{$endDate} 23:59:59"])
@@ -35,7 +39,7 @@ class EarningsController extends AbstractController
                 Db::raw('COALESCE(SUM(discount_amount),0) AS discount_amount'),
                 Db::raw('COALESCE(SUM(mtrip_pays),0) AS mtrip_pays'),
                 Db::raw('COALESCE(SUM(merchant_pays),0) AS merchant_pays'),
-                Db::raw('COALESCE(SUM(merchant_settlement),0) AS net_settlement'),
+                Db::raw('COALESCE(SUM(merchant_settlement - COALESCE(hotel_refunds.merchant_refund,0)),0) AS net_settlement'),
             ]);
 
         $settleRows = Db::table('finance_merchant_settle')

@@ -149,7 +149,17 @@ final class HotelController extends AbstractController
         if ($ids === []) return [];
 
         $stores = Db::table('merchant_store')->where('site_id', $siteId)->whereIn('id', $ids)
-            ->get(['id', 'amenities', 'hotel_policies'])->keyBy('id')->all();
+            ->get(['id', 'merchant_id', 'amenities', 'hotel_policies'])->keyBy('id')->all();
+        $merchantIds = array_values(array_unique(array_map(static fn ($store) => (int) $store->merchant_id, $stores)));
+        $enabledMerchants = [];
+        if ($merchantIds !== []) {
+            $terms = Db::table('merchant_pay_at_hotel_terms')->where('site_id', $siteId)
+                ->whereIn('merchant_id', $merchantIds)->where('effective_at', '<=', gmdate('Y-m-d H:i:s'))
+                ->orderByDesc('effective_at')->orderByDesc('version')->get(['merchant_id', 'enabled']);
+            foreach ($terms as $term) {
+                $enabledMerchants[(int) $term->merchant_id] ??= (int) $term->enabled === 1;
+            }
+        }
         $rooms = Db::table('hotel_room_type')->where('site_id', $siteId)->whereIn('property_id', $ids)
             ->where('status', 1)->where('publish_status', 2)->where('approved_version', '>', 0)->whereNull('deleted_at')
             ->get(['property_id', 'bed_type', 'bedding', 'bedroom_count', 'room_view', 'facilities']);
@@ -181,7 +191,8 @@ final class HotelController extends AbstractController
                 'beds' => $roomTags[$pid]['beds'] ?? [],
                 'features' => $roomTags[$pid]['features'] ?? [],
                 'bedrooms' => array_values($roomTags[$pid]['bedrooms'] ?? []),
-                'payAtHotel' => self::payAtHotel($store->hotel_policies ?? null),
+                'payAtHotel' => self::payAtHotel($store->hotel_policies ?? null)
+                    && ($enabledMerchants[(int) ($store->merchant_id ?? 0)] ?? false),
             ];
         }
         unset($row);
@@ -363,7 +374,12 @@ final class HotelController extends AbstractController
         $detail['reviewSummary'] = ['rating' => $summary['rating'], 'count' => $summary['reviewCount'], 'dimensions' => $this->reviewDimensions($propertyId)];
         /* 附加服务:只下发已发布配置里启用的项(Enhance Your Stay),计价规则见 shared HotelAddons */
         $detail['addons'] = HotelAddons::enabled($property['addons'] ?? null);
-        $detail['payAtHotel'] = self::payAtHotel(Db::table('merchant_store')->where('id', $propertyId)->value('hotel_policies'));
+        $store = Db::table('merchant_store')->where('id', $propertyId)->where('site_id', $siteId)
+            ->first(['merchant_id', 'hotel_policies']);
+        $enabled = $store ? Db::table('merchant_pay_at_hotel_terms')->where('merchant_id', (int) $store->merchant_id)
+            ->where('site_id', $siteId)->where('effective_at', '<=', gmdate('Y-m-d H:i:s'))
+            ->orderByDesc('effective_at')->orderByDesc('version')->value('enabled') : 0;
+        $detail['payAtHotel'] = $store && self::payAtHotel($store->hotel_policies) && (int) $enabled === 1;
         $detail['goods_detail'] = $property['description'];
         $detail['open_time'] = $property['checkin_time'];
         $detail['close_time'] = $property['checkout_time'];

@@ -72,6 +72,14 @@ export interface BookingDetail {
     /** 附加服务金额(已含在实付里,取消时全额退) */
     addonAmount?: number;
     payAmount: string | number;
+    payAtHotel?: boolean;
+    hotelBalance?: number;
+    commission?: number;
+    merchantDeposit?: number;
+    transactionFee?: number;
+    terms?: { version: number; roomBase: number; depositRate: number; noShowEnabled: boolean } | null;
+    operationalSettlementStatus?: number;
+    operationalSettledAt?: string | null;
     payMethod: number;
     payTradeNo: string;
     payTime: string | null;

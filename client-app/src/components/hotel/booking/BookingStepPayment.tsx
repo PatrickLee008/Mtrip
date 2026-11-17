@@ -30,7 +30,6 @@ import {
   TEMP_PAY_MOBILE_BANKING_LOGO,
 } from '@/assets/tempImages';
 import HomeIcon from '@/components/home/HomeIcon';
-import PayAtHotelNotice from '@/components/hotel/PayAtHotelNotice';
 import CouponSelectCard, { type PaymentCouponState } from '@/components/hotel/booking/CouponSelectCard';
 import PaymentMethodRow from '@/components/hotel/booking/PaymentMethodRow';
 import WalletCard from '@/components/hotel/booking/WalletCard';
@@ -79,6 +78,7 @@ interface Props {
   hideWallet?: boolean;
   /** 物业支持到店付款:在未开放渠道折叠头上方给「即将开放」提示(到店支付行本身仍在折叠区内置灰) */
   payAtHotel?: boolean;
+  hotelBalance?: number;
   /** 站点已开通 KBZPay MMQR(可单选);缺省 false */
   mmqrEnabled?: boolean;
   /** 钱包卡底部「Use wallet」开关;不传则退回旧版(渠道列表里一行「使用 mTrip 钱包支付」) */
@@ -103,6 +103,7 @@ export default function BookingStepPayment({
   coupon,
   hideWallet = false,
   payAtHotel = false,
+  hotelBalance = 0,
   mmqrEnabled = false,
   walletToggle,
   walletNote = null,
@@ -191,7 +192,11 @@ export default function BookingStepPayment({
           />
         ) : null}
 
-        {payAtHotel ? <PayAtHotelNotice /> : null}
+        {method === 'hotel' ? (
+          <View style={styles.hotelBalance}>
+            <Text style={styles.hotelBalanceText}>{t('hotels.booking.payment.hotelBalance')}: {formatMoney(hotelBalance, currency)}</Text>
+          </View>
+        ) : null}
 
         {/* 未开放渠道的折叠头:点一下展开/收起,不参与选中 */}
         <Pressable
@@ -231,9 +236,10 @@ export default function BookingStepPayment({
                 icon={TEMP_PAY_ICONS[key]}
                 title={t('hotels.booking.payment.methods.hotel.title')}
                 desc={t('hotels.booking.payment.methods.hotel.desc')}
-                disabled
-                badge={comingSoonBadge}
-                onPress={onComingSoon}
+                checked={method === 'hotel'}
+                disabled={!payAtHotel}
+                badge={payAtHotel ? undefined : comingSoonBadge}
+                onPress={payAtHotel ? () => onSelect('hotel') : onComingSoon}
               />
             ))}
 
@@ -366,6 +372,8 @@ export default function BookingStepPayment({
 }
 
 const styles = StyleSheet.create({
+  hotelBalance: { paddingHorizontal: 14, paddingVertical: 10, borderRadius: 10, backgroundColor: '#E9F6F1', marginTop: 8 },
+  hotelBalanceText: { fontFamily: fonts.interMedium, fontSize: 13, color: '#156A51' },
   root: { gap: 24 },
   flex: { flex: 1, minWidth: 0 },
   /** 未开通渠道展开后的内容,与 PaymentMethodRow 的置灰口径一致 */
