@@ -52,6 +52,7 @@ import { useSiteStore } from '@/store/siteStore';
 import { useUserStore } from '@/store/userStore';
 import type { GoodsDetail, GoodsSku } from '@/types/models';
 import { formatMoney } from '@/utils/format';
+import { recordRecentHotel } from '@/utils/recentHotels';
 
 /** 合计栏高(pt17 + pb16 + 按钮 56),滚动区据此留白 */
 const BAR_HEIGHT = 89;
@@ -93,6 +94,12 @@ export default function HotelDetailLiteScreen() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  /* 最近浏览(平台客服聊天里快速参考) */
+  useEffect(() => {
+    if (!params.id || !detail?.goods_name) return;
+    void recordRecentHotel({ propertyId: params.id, name: detail.goods_name, image: detail.cover_image || detail.images?.[0] || '', address: detail.address || '' });
+  }, [params.id, detail?.goods_name, detail?.cover_image, detail?.images, detail?.address]);
 
   /** 换了酒店 setContext 会清空车(跨物业没法下一单),同一家保留已选;购物车页的酒店名与日期也从这里来 */
   useEffect(() => {

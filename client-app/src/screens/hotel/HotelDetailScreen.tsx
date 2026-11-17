@@ -60,6 +60,7 @@ import { useUserStore } from '@/store/userStore';
 import type { GoodsDetail, GoodsSku } from '@/types/models';
 import { formatMoney } from '@/utils/format';
 import { resolveMediaUri } from '@/utils/media';
+import { recordRecentHotel } from '@/utils/recentHotels';
 
 /** 设计稿图库 402x300 */
 const GALLERY_HEIGHT = 300;
@@ -111,6 +112,12 @@ export default function HotelDetailScreen() {
   useEffect(() => {
     void loadDetail();
   }, [loadDetail]);
+
+  /* 最近浏览(平台客服聊天里快速参考) */
+  useEffect(() => {
+    if (!propertyId || !detail?.goods_name) return;
+    void recordRecentHotel({ propertyId, name: detail.goods_name, image: detail.cover_image || detail.images?.[0] || '', address: detail.address || '' });
+  }, [propertyId, detail?.goods_name, detail?.cover_image, detail?.images, detail?.address]);
 
   /**
    * 评价整页底栏的「Choose my room」会带 `tab: 'rooms'` 回跳本页。

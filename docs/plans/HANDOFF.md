@@ -2,6 +2,8 @@
 
 2026-11-17 Consumer App PRD 19.1 App 更新与强制更新：迁移 `V20261117160000__app-version-control.sql` 新增全局配置 `app_version` 组(Android/iOS 各自最低支持版本、最新版本、商店地址 + 共用更新说明，版本留空=不启用)，后台「全局配置 → App Version」维护、保存校验版本格式；公开接口 `GET /api/v1/app/site/version-check?platform=android|ios&version=x.y.z` 返回 forceUpdate/hasUpdate/latestVersion/minVersion/storeUrl/notes，比较逻辑为 shared `AppVersion`(单测 5 例)。client-app `AppUpdateGate` 启动与回前台检查(仅原生端)：强更不可关闭弹窗跳商店，可选更新 Update/Later 并按版本记住稍后；已装版本取 `expo-constants` 的 `expoConfig.version`(发版须同步递增 app.json `expo.version`)。跟进：Android Google Play 立即更新需原生模块 + prebuild，当前回落打开 Play 应用页；iOS 商店地址待上架 id 后在后台填写；接口与弹窗未在运行环境/真机实测。
 
+2026-11-17 消费者 App 模块 13 mTrip 平台客服(type 2)补齐:预订详情带预订打开、首页 / Hotel 页「Chat with us」悬浮按钮、欢迎卡、预订选择(当前 / 历史 / 一般咨询)、按预订场景的推荐问题、FAQ 关键词机器人(`chat_support_faq` + `App\Chat\SupportBot`)、随时转人工(投诉 / 未命中时建议,要人工直接转)、结束会话与 1-5 星 + 备注评价、本地最近浏览酒店;标题本地化,「消息」列表含客服会话。新接口 `/app/chat/support/{bookings,context,handoff}`,迁移 `V20261117130000__consumer-support-chat.sql`(本机开发库已用 db-apply 执行,未入迁移账本)。后台沿用 `cops/chat` 工作台,只加转人工 / 星级列。shared 261/261、PHP lint、client typecheck 通过,临时容器挂本分支代码 curl 实测全流程;App 界面未走查。见[模块 10](./10-移动端App框架.md)。
+
 2026-11-17 商户侧到店支付实测：站点 7/商户 4 临时子账号 5 使用内置管理员角色与物业 9005 授权，真实密码登录、2FA 注册及验证通过；条款 GET 返回版本 0，订单列表 7 条，订单 83 详情显示到店支付，退款试算可退 18,000。测试账号已停用，2FA 密钥、角色与物业授权已清理，主账号未重置。主账号 `m000004` 备注中的旧凭据也无效，停止尝试以免锁定；主账号条款保存、真实 No-show/退款及财务对账仍待专项验收。见[模块 06](./06-业务微服务.md#2026-11-17-商户账号与订单读取实测)。
 
 2026-11-17 协助 KYC 抽屉顶部与外层详情共用 60px 高度、10px/24px 内距和标题行高；后台构建及 8090 双层实际测量通过。见[模块 19](./19-商户入驻审批整改计划.md#2026-11-17-协助-kyc-顶部高度统一)。

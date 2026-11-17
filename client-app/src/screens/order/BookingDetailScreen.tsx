@@ -580,7 +580,7 @@ export default function BookingDetailScreen() {
             </Pressable>
             <Pressable
               style={({ pressed }) => [styles.chatBtn, pressed && styles.pressed]}
-              onPress={() => navigation.navigate('Chat', { type: 2 })}
+              onPress={() => navigation.navigate('Chat', { type: 2, orderId })}
             >
               <HomeIcon name="headset" size={20} color={colors.primary} />
               <Text style={styles.chatBtnText}>{t('order.bookingDetail.liveChat')}</Text>

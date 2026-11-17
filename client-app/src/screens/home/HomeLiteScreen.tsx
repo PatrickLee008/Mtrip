@@ -34,6 +34,7 @@ import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTranslation } from 'react-i18next';
 
+import SupportChatFab from '@/components/chat/SupportChatFab';
 import HomeHeader from '@/components/home/HomeHeader';
 import { PAGE_PADDING, SECTION_GAP, colors, shadows } from '@/config/theme';
 import { fonts } from '@/config/typography';
@@ -106,6 +107,8 @@ export default function HomeLiteScreen() {
           </View>
         </ScrollView>
       </SafeAreaView>
+      {/* 平台客服入口「Chat with us」(PRD 模块 13) */}
+      <SupportChatFab />
     </View>
   );
 }

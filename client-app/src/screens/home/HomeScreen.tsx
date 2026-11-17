@@ -22,6 +22,7 @@ import {
   TEMP_MAGAZINE_COVERS,
   TEMP_SPECIAL_DEAL_COVER,
 } from '@/assets/tempImages';
+import SupportChatFab from '@/components/chat/SupportChatFab';
 import { LoadingView, EmptyView } from '@/components/common/StateViews';
 import DestinationCard, { DESTINATION_CARD_WIDTH } from '@/components/home/DestinationCard';
 import DiningCard, { DINING_CARD_WIDTH } from '@/components/home/DiningCard';
@@ -284,6 +285,8 @@ export default function HomeScreen() {
           </View>
         </View>
       </ScrollView>
+      {/* 平台客服入口「Chat with us」(PRD 模块 13) */}
+      <SupportChatFab />
     </SafeAreaView>
   );
 }

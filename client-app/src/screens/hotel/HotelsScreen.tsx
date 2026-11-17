@@ -31,6 +31,7 @@ import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTranslation } from 'react-i18next';
 
+import SupportChatFab from '@/components/chat/SupportChatFab';
 import HomeIcon from '@/components/home/HomeIcon';
 import PromoCard from '@/components/home/PromoCard';
 import DatePickerSheet, {
@@ -250,6 +251,9 @@ export default function HotelsScreen() {
           </View>
         </View>
       </SafeAreaView>
+
+      {/* 平台客服入口「Chat with us」(PRD 模块 13;QA Home_TC_001 从 Hotel 页进入) */}
+      <SupportChatFab bottom={28} />
 
       <HotelGuideOverlay visible={guideOpen} onClose={() => setGuideOpen(false)} />
 
