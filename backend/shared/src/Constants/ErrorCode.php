@@ -71,6 +71,17 @@ class ErrorCode
      */
     public const PRICE_CHANGED = 40921;
 
+    /*
+     * 关联邮箱 / 手机号与账户注销(Consumer App PRD 模块 19 / 19.2):App 要按码给出行内提示,
+     * 不能只靠 40001 / 40901 区分「与当前相同」「已被其他账号占用」「注销被拦截」。
+     */
+    /** 提交的邮箱 / 手机号与当前已关联的相同(不发验证码,App 行内提示) (HTTP 400) */
+    public const CONTACT_UNCHANGED = 40931;
+    /** 邮箱 / 手机号已关联到另一个 mTrip 账号 (HTTP 409) */
+    public const CONTACT_IN_USE = 40932;
+    /** 账户注销被拦截(进行中预订 / 钱包余额);`data.blockers` 列出原因 (HTTP 409) */
+    public const ACCOUNT_DELETION_BLOCKED = 40933;
+
     /** 请求过于频繁(限流) (HTTP 429) */
     public const TOO_MANY_REQUESTS = 42901;
     /** 重复提交(并发锁/FormId 幂等拦截) (HTTP 429) */
@@ -118,6 +129,9 @@ class ErrorCode
         self::PROMO_CODE_DUPLICATED => 409,
         self::PROMO_CODE_INELIGIBLE => 409,
         self::PRICE_CHANGED => 409,
+        self::CONTACT_UNCHANGED => 400,
+        self::CONTACT_IN_USE => 409,
+        self::ACCOUNT_DELETION_BLOCKED => 409,
         self::TOO_MANY_REQUESTS => 429,
         self::REPEAT_SUBMIT => 429,
         self::SMS_SEND_TOO_FREQUENT => 429,
@@ -150,6 +164,9 @@ class ErrorCode
         self::PROMO_CODE_DUPLICATED => '该促销码已兑换过',
         self::PROMO_CODE_INELIGIBLE => '不符合该促销码的兑换资格',
         self::PRICE_CHANGED => '价格已变动,请确认最新金额后重新提交',
+        self::CONTACT_UNCHANGED => 'This is already your linked contact',
+        self::CONTACT_IN_USE => 'This contact is already linked to another mTrip account',
+        self::ACCOUNT_DELETION_BLOCKED => 'Your account cannot be deleted right now',
         self::TOO_MANY_REQUESTS => '请求过于频繁',
         self::REPEAT_SUBMIT => '请求正在处理中,请勿重复提交',
         self::SMS_SEND_TOO_FREQUENT => '验证码发送过于频繁,请稍后再试',

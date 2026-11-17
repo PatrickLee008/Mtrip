@@ -14,6 +14,7 @@ use App\Controller\Admin\AdminFeedbackController;
 use App\Controller\Admin\AdminRiskController;
 use App\Controller\Admin\AdminReferralController;
 use App\Controller\Admin\AdminUserController;
+use App\Controller\App\AccountController;
 use App\Controller\App\AppealController;
 use App\Controller\App\AuthController;
 use App\Controller\App\FacebookAuthController;
@@ -67,6 +68,12 @@ Router::addGroup('/api/v1/app', static function () {
     Router::get('/user/me', [UserController::class, 'me']);
     Router::post('/user/update', [UserController::class, 'update']);
     Router::post('/user/change-password', [UserController::class, 'changePassword']);
+    // 账户安全:关联邮箱 / 关联手机号(先发码,验码通过才保存)+ 账户注销(Consumer App PRD 模块 19 / 19.2)
+    Router::post('/user/email/send-code', [AccountController::class, 'emailSendCode']);
+    Router::post('/user/email/bind', [AccountController::class, 'emailBind']);
+    Router::post('/user/phone/send-code', [AccountController::class, 'phoneSendCode']);
+    Router::post('/user/phone/bind', [AccountController::class, 'phoneBind']);
+    Router::post('/user/account/delete', [AccountController::class, 'delete']);
     Router::get('/user/balance-logs', [UserController::class, 'balanceLogs']);
     Router::get('/user/points-logs', [UserController::class, 'pointsLogs']);
     Router::post('/user/feedback/add', [UserController::class, 'addFeedback']);
@@ -137,6 +144,9 @@ Router::addGroup('/api/v1/admin/user', static function () {
     Router::post('/wallet-adjust/review', [AdminUserController::class, 'walletAdjustReview']);
     Router::post('/wallet-adjust/reverse', [AdminUserController::class, 'walletAdjustReverse']);
     Router::post('/toggle-status', [AdminUserController::class, 'toggleStatus']);
+    // 账户注销:客服批准「有余额时注销」(余额届时没收)/ 撤销批准(Consumer App PRD 模块 19)
+    Router::post('/deletion/approve', [AdminUserController::class, 'deletionApprove']);
+    Router::post('/deletion/revoke', [AdminUserController::class, 'deletionRevoke']);
     Router::get('/feedback/list', [AdminFeedbackController::class, 'index']);
     Router::post('/feedback/handle', [AdminFeedbackController::class, 'handle']);
     // 风控与申诉(PRD 模块10.1)

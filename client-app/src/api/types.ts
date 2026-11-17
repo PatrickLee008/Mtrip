@@ -68,4 +68,11 @@ export const API_CODE = {
    * 50022 **不能** —— 此时注册这条路走不通,要停在注册页把后端文案说给用户。
    */
   SMS_REQUIRED_UNAVAILABLE: 50022,
+  /* 关联邮箱 / 手机号与账户注销(Consumer App PRD 模块 19 / 19.2) */
+  /** 提交的邮箱 / 手机号与当前已关联的相同:行内提示,不发验证码 */
+  CONTACT_UNCHANGED: 40931,
+  /** 已关联到另一个 mTrip 账号 */
+  CONTACT_IN_USE: 40932,
+  /** 注销被拦截;ApiError.data = AccountDeletionBlocked */
+  ACCOUNT_DELETION_BLOCKED: 40933,
 } as const;

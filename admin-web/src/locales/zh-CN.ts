@@ -3304,7 +3304,7 @@ export default {
       lotRemaining: '剩余',
       lotStatus: '状态',
       lotSource: '来源',
-      lotStatuses: { 1: '有效', 2: '已用完', 3: '已过期' },
+      lotStatuses: { 1: '有效', 2: '已用完', 3: '已过期', 4: '已没收' },
       lotSources: { 0: '期初余额', 1: '充值', 3: '退款', 4: '调账 / 奖励' },
       neverExpires: '永不过期',
       activeAmount: '可用',
@@ -3353,6 +3353,7 @@ export default {
         4: '调账 / 奖励',
         5: '提现',
         6: '过期',
+        7: '注销没收',
       },
     },
     // 实名审核(App 资料向导第 2 步 Identity Verification 的后台审核)

@@ -13,7 +13,10 @@ import {
   apiEndUserToggleStatus,
   apiEndUserBlacklist,
   apiEndUserUnblacklist,
+  apiEndUserDeletionApprove,
+  apiEndUserDeletionRevoke,
 } from '@/api/enduser';
+import type { AccountDeletionSummary } from '@/api/enduser';
 
 /** Customer 360:选中用户后聚合展示其全景(Super Admin Portal 模块 07) */
 const { t } = useI18n();
@@ -38,6 +41,7 @@ const data = reactive({
   coupons: [] as TableRow[],
   transactions: [] as TableRow[],
   referralCount: 0,
+  deletion: null as AccountDeletionSummary | null,
 });
 
 async function loadUser(id: number): Promise<void> {
@@ -53,6 +57,7 @@ async function loadUser(id: number): Promise<void> {
     data.coupons = res.coupons;
     data.transactions = res.transactions;
     data.referralCount = res.referralCount;
+    data.deletion = res.deletion ?? null;
     loaded.value = true;
   } finally {
     loading.value = false;
@@ -105,6 +110,39 @@ async function unfreeze(): Promise<void> {
 async function unblacklist(): Promise<void> {
   if (!data.user) return;
   await apiEndUserUnblacklist(data.user.id);
+  message.success(t('tip.saveSuccess'));
+  await loadUser(data.user.id);
+}
+
+// ---------- 账户注销:批准有余额时注销(余额没收,Consumer App PRD 模块 19) ----------
+const balance = computed(() => Number(data.user?.balance ?? 0));
+const canApproveDeletion = computed(() => status.value === 1 && balance.value > 0 && !data.deletion?.approval);
+const deletionOpen = ref(false);
+const deletionSaving = ref(false);
+const deletionReason = ref('');
+function openDeletion(): void {
+  deletionReason.value = '';
+  deletionOpen.value = true;
+}
+async function approveDeletion(): Promise<void> {
+  if (!data.user) return;
+  if (!deletionReason.value.trim()) {
+    message.warning('Verification note is required');
+    return;
+  }
+  deletionSaving.value = true;
+  try {
+    await apiEndUserDeletionApprove(data.user.id, deletionReason.value.trim());
+    message.success(t('tip.saveSuccess'));
+    deletionOpen.value = false;
+    await loadUser(data.user.id);
+  } finally {
+    deletionSaving.value = false;
+  }
+}
+async function revokeDeletion(): Promise<void> {
+  if (!data.user) return;
+  await apiEndUserDeletionRevoke(data.user.id);
   message.success(t('tip.saveSuccess'));
   await loadUser(data.user.id);
 }
@@ -170,8 +208,26 @@ onMounted(() => {
               <a-button v-if="status === 2" v-perm="'user:list:status'" type="primary" @click="unfreeze">Reactivate</a-button>
               <a-button v-if="status !== 4 && status !== 3" v-perm="'user:list:status'" danger @click="openAction('blacklist')">Blacklist</a-button>
               <a-button v-if="status === 4" v-perm="'user:list:status'" @click="unblacklist">Remove Blacklist</a-button>
+              <a-button v-if="canApproveDeletion" v-perm="'user:list:approve-deletion'" danger @click="openDeletion">Approve Deletion</a-button>
+              <a-popconfirm v-if="data.deletion?.approval" title="Revoke the deletion approval?" @confirm="revokeDeletion">
+                <a-button v-perm="'user:list:approve-deletion'">Revoke Deletion Approval</a-button>
+              </a-popconfirm>
             </a-space>
           </div>
+          <a-alert
+            v-if="data.deletion?.approval"
+            type="warning"
+            show-icon
+            style="margin-top: 16px"
+            :message="`Deletion approved by ${data.deletion.approval.approvedName} on ${data.deletion.approval.approvedAt}: wallet balance up to ${data.deletion.approval.approvedBalance} will be forfeited when the customer confirms deletion in the app (valid until ${data.deletion.approval.expiresAt}).`"
+          />
+          <a-alert
+            v-if="data.deletion?.closed"
+            type="info"
+            show-icon
+            style="margin-top: 16px"
+            :message="`Account deleted on ${data.deletion.closed.closed_at}. Forfeited wallet balance: ${data.deletion.closed.forfeited_amount}. Data retained until ${data.deletion.closed.purge_after}.`"
+          />
           <a-row :gutter="16" style="margin-top: 16px">
             <a-col :span="6"><a-statistic title="Balance" :value="Number(data.user.balance || 0)" :precision="2" /></a-col>
             <a-col :span="6"><a-statistic title="Points" :value="Number(data.user.points || 0)" /></a-col>
@@ -227,6 +283,25 @@ onMounted(() => {
     >
       <a-textarea v-model:value="actionReason" :rows="3" placeholder="Reason (required)" style="margin-bottom: 12px" />
       <a-textarea v-if="actionKind === 'blacklist'" v-model:value="actionEvidence" :rows="2" placeholder="Evidence (optional)" />
+    </a-modal>
+
+    <a-modal
+      v-model:open="deletionOpen"
+      title="Approve Account Deletion"
+      ok-text="Approve"
+      :confirm-loading="deletionSaving"
+      :ok-button-props="{ danger: true }"
+      @ok="approveDeletion"
+    >
+      <p style="margin-bottom: 8px">
+        The customer's wallet balance of <b>{{ balance.toFixed(2) }}</b> will be <b>forfeited</b> (non-refundable) and recorded in the
+        forfeited wallet balance ledger when the customer confirms deletion in the app. The approval is valid for 7 days; if the balance
+        increases afterwards, a new approval is required.
+      </p>
+      <p v-if="data.deletion && data.deletion.ongoingBookings > 0" style="color: var(--sap-error, #ff4d4f); margin-bottom: 8px">
+        The customer still has {{ data.deletion.ongoingBookings }} ongoing or pending booking(s); deletion stays blocked until they are completed or cancelled.
+      </p>
+      <a-textarea v-model:value="deletionReason" :rows="3" :maxlength="200" placeholder="Verification note (required)" />
     </a-modal>
   </PageContainer>
 </template>

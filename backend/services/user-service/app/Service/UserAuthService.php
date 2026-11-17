@@ -236,6 +236,16 @@ class UserAuthService
             ->whereNull('deleted_at')->exists();
     }
 
+    /**
+     * 联系方式查重的站点范围:请求站点 + 所有已启用站点(与 isRegistered 同口径;关联邮箱 / 手机号用)
+     *
+     * @return list<int>
+     */
+    public function lookupSiteIds(int $siteId): array
+    {
+        return array_values(array_unique([$siteId, ...$this->enabledSiteIds()]));
+    }
+
     /** @return list<int> 已启用站点 */
     private function enabledSiteIds(): array
     {
@@ -360,7 +370,8 @@ class UserAuthService
     public function refresh(int $userId): array
     {
         $user = Db::table('user_info')->where('id', $userId)->whereNull('deleted_at')->first();
-        if (! $user) {
+        // 已注销账号不再续签(正常情况下 UserAuthMiddleware 的吊销标记已先拦下,这里兜底 Redis 不可用)
+        if (! $user || (int) $user->user_status === 3) {
             throw new BusinessException(ErrorCode::UNAUTHORIZED);
         }
         return $this->issueToken($userId, (int) ((array) $user)['site_id']);
@@ -404,6 +415,8 @@ class UserAuthService
             'mobile' => MaskHelper::mobile($this->decryptSafe((string) $user['mobile'])),
             'email' => MaskHelper::email($this->decryptSafe((string) $user['email'])),
             'mobileBound' => (string) $user['mobile'] !== '',
+            // 邮箱经验证码验证过才算「已关联」(Apple 登录带回的历史邮箱没有 email_hash)
+            'emailVerified' => (string) ($user['email_hash'] ?? '') !== '',
             'hasPassword' => (string) $user['password'] !== '',
             'memberLevelId' => (int) $user['member_level_id'],
             'memberLevelName' => $levelName,

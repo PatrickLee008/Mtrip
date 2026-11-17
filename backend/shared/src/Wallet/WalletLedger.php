@@ -15,7 +15,7 @@ use Mtrip\Shared\Exception\BusinessException;
  * user_wallet_lot —— 每笔入账开一个批次并按「全局配置 → wallet」的有效天数定到期日,扣款按到期日最早的批次
  * 先扣(FIFO),到期任务把批次剩余额度作废并记一笔「过期」流水(change_type 6)。
  *
- * change_type:1 充值 2 消费 3 退款 4 调账 / 推荐返利 5 提现 6 过期。
+ * change_type:1 充值 2 消费 3 退款 4 调账 / 推荐返利 5 提现 6 过期 7 注销没收(Consumer App PRD 模块 19)。
  * 调用方必须在事务内调用 credit / debit(内部行锁 user_info);expireDue 自带事务,给定时任务用。
  * 金额一律换成整数分计算,避免 DECIMAL ↔ float 的尾差。
  */
@@ -27,10 +27,13 @@ final class WalletLedger
     public const TYPE_ADJUST = 4;
     public const TYPE_WITHDRAW = 5;
     public const TYPE_EXPIRED = 6;
+    /** 账户注销时经客服批准没收的余额(另记 user_wallet_forfeit 台账) */
+    public const TYPE_FORFEITED = 7;
 
     public const LOT_ACTIVE = 1;
     public const LOT_USED = 2;
     public const LOT_EXPIRED = 3;
+    public const LOT_FORFEITED = 4;
 
     /**
      * 入账:开一个额度批次(到期日按配置),余额增加,写流水(带 expires_at)。
@@ -115,6 +118,38 @@ final class WalletLedger
             'remark' => mb_substr($remark, 0, 255),
         ]);
         return $after / 100;
+    }
+
+    /**
+     * 没收全部余额(账户注销,须在事务内调用):先作废到期批次,再把剩余有效批次全部置为「已没收」,
+     * 余额清零并记一笔 change_type 7 流水。余额为 0 时什么都不写,返回 cents=0。
+     *
+     * @return array{cents: int, logId: int}
+     */
+    public static function forfeitAll(int $siteId, int $userId, int $operatorId, string $remark): array
+    {
+        self::lockBalanceCents($userId);
+        self::expireLocked($userId);
+        $before = self::lockBalanceCents($userId);
+        if ($before <= 0) {
+            return ['cents' => 0, 'logId' => 0];
+        }
+        Db::table('user_wallet_lot')
+            ->where('user_id', $userId)->where('status', self::LOT_ACTIVE)
+            ->update(['remaining' => '0.00', 'status' => self::LOT_FORFEITED]);
+        Db::table('user_info')->where('id', $userId)->update(['balance' => self::money(0)]);
+        $logId = (int) Db::table('user_balance_log')->insertGetId([
+            'site_id' => $siteId,
+            'user_id' => $userId,
+            'change_type' => self::TYPE_FORFEITED,
+            'amount' => self::money(-$before),
+            'before_balance' => self::money($before),
+            'after_balance' => self::money(0),
+            'order_id' => 0,
+            'operator_id' => $operatorId,
+            'remark' => mb_substr($remark, 0, 255),
+        ]);
+        return ['cents' => $before, 'logId' => $logId];
     }
 
     /** 当前可用余额(读之前先作废已到期批次;须在事务内) */
