@@ -16,7 +16,7 @@ const { t } = useI18n();
 const loading = ref(false);
 const summary = ref({ balance: '0.00', activeAmount: '0.00', expiredAmount: '0.00' });
 const lots = ref<TableRow[]>([]);
-const STATUS_COLORS: Record<number, string> = { 1: 'success', 2: 'default', 3: 'error' };
+const STATUS_COLORS: Record<number, string> = { 1: 'success', 2: 'default', 3: 'error', 4: 'warning' };
 
 function onOpenChange(v: boolean): void {
   emit('update:open', v);

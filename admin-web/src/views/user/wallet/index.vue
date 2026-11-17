@@ -15,7 +15,7 @@ import WalletLotsDrawer from './WalletLotsDrawer.vue';
 /**
  * 钱包流水(终端用户管理 → 钱包流水,菜单 1016 / user:wallet:list)
  * 全平台(超管可按站点筛)/ 本站点的 C 端钱包流水:按用户ID / 手机号 / 昵称 / 类型 / 预订号 / 日期筛选,
- * 顶部汇总当前筛选下的入账、出账与净额(对账用)。change_type:1充值 2消费 3退款 4调账/奖励 5提现 6过期。
+ * 顶部汇总当前筛选下的入账、出账与净额(对账用)。change_type:1充值 2消费 3退款 4调账/奖励 5提现 6过期 7注销没收。
  * 支持 ?userId= 直达某个用户的流水(用户画像等页面跳转用)。
  * Super Admin PRD 模块 25:入账流水带到期时间;每个用户可打开「额度明细」看各笔额度的剩余与到期;
  * 第二个页签「调账申请」是人工调账的经办 + 复核(AdjustRequests)。
@@ -24,8 +24,8 @@ const { t } = useI18n();
 const route = useRoute();
 const isSuper = useUserStore().profile?.isSuper === true;
 
-const TYPE_KEYS = [1, 2, 3, 4, 5, 6];
-const TYPE_COLORS: Record<number, string> = { 1: 'blue', 2: 'orange', 3: 'green', 4: 'purple', 5: 'cyan', 6: 'default' };
+const TYPE_KEYS = [1, 2, 3, 4, 5, 6, 7];
+const TYPE_COLORS: Record<number, string> = { 1: 'blue', 2: 'orange', 3: 'green', 4: 'purple', 5: 'cyan', 6: 'default', 7: 'red' };
 
 const activeTab = ref<'ledger' | 'requests'>('ledger');
 const lotsOpen = ref(false);

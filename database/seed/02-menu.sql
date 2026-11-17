@@ -263,6 +263,7 @@ INSERT IGNORE INTO `sys_menu` (`id`,`parent_id`,`menu_name`,`menu_name_en`,`perm
 (100102,1001,'余额调整','Adjust Balance','user:list:adjust-balance',3,2),
 (101601,1016,'复核调账','Approve Adjustment','user:wallet:approve',3,1),
 (100103,1001,'积分调整','Adjust Points','user:list:adjust-points',3,3),
+(100104,1001,'批准注销(没收余额)','Approve Deletion (Forfeit Wallet)','user:list:approve-deletion',3,4),
 (100201,1002,'回复消息','Reply','user:chat:reply',3,1),
 (100801,1008,'处理反馈','Handle','user:feedback:handle',3,1),
 (101301,1013,'新增等级','Add Level','user:level:add',3,1),

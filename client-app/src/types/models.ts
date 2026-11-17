@@ -32,6 +32,8 @@ export interface UserProfile {
   mobile: string;
   email: string;
   mobileBound?: boolean;
+  /** 邮箱经验证码验证过(关联邮箱流程写入);Apple 登录带回的历史邮箱为 false */
+  emailVerified?: boolean;
   hasPassword?: boolean;
   memberLevelId: number;
   memberLevelName: string;

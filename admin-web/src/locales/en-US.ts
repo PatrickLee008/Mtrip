@@ -3314,7 +3314,7 @@ export default {
       lotRemaining: 'Remaining',
       lotStatus: 'Status',
       lotSource: 'Source',
-      lotStatuses: { 1: 'Active', 2: 'Used up', 3: 'Expired' },
+      lotStatuses: { 1: 'Active', 2: 'Used up', 3: 'Expired', 4: 'Forfeited' },
       lotSources: { 0: 'Opening balance', 1: 'Top Up', 3: 'Refund', 4: 'Adjustment / Reward' },
       neverExpires: 'Never',
       activeAmount: 'Available',
@@ -3363,6 +3363,7 @@ export default {
         4: 'Adjustment / Reward',
         5: 'Withdrawal',
         6: 'Expired',
+        7: 'Forfeited (Account Deletion)',
       },
     },
     // 实名审核(App 资料向导第 2 步 Identity Verification 的后台审核)

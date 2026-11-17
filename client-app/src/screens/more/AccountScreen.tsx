@@ -5,8 +5,9 @@
  * + 若干菜单项(样式同「更多」页),尾部一行版本号。
  *
  * 后端现状:`/app/user/update` 只支持改昵称与头像,`/app/user/change-password` 支持改密码,
- * 其余字段(性别 / 常住城市 / 换绑邮箱手机 / 常用旅客 / 钱包 / 银行卡 / 支付 PIN)都没有接口。
- * 因此本页当前只做**展示与跳转**:Save Traveler 进已实现的旅客列表页,其余一律 comingSoon。
+ * 关联邮箱 / 关联手机号走 `/app/user/{email|phone}/*`(PRD 模块 19.2,LinkContact 页),
+ * 末尾「Manage your account → Delete account」进账户注销(PRD 模块 19,DeleteAccount 页);
+ * 其余字段(性别 / 常住城市 / 钱包 / 银行卡 / 支付 PIN)仍无接口,一律 comingSoon。
  */
 
 import React from 'react';
@@ -74,14 +75,14 @@ export default function AccountScreen() {
           title={t('more.account.security.email')}
           desc={maskEmail(profile?.email) || notSet}
           divider
-          onPress={() => navigation.navigate('EditEmail')}
+          onPress={() => navigation.navigate('LinkContact', { kind: 'email' })}
         />
         <MenuLink
           icon="phone"
           title={t('more.account.security.phone')}
           desc={maskMobile(profile?.mobile) || notSet}
           divider
-          onPress={comingSoon}
+          onPress={() => navigation.navigate('LinkContact', { kind: 'phone' })}
         />
         <MenuLink
           icon="lock"
@@ -112,6 +113,17 @@ export default function AccountScreen() {
           title={t('more.account.payment.pin')}
           desc={notSet}
           onPress={comingSoon}
+        />
+      </View>
+
+      {/* PRD 模块 19 入口:更多 → 账户 → 管理您的账户 → 账户删除(设计稿未出,沿用本页分组卡样式) */}
+      <View style={[moreShared.panel, styles.panel]}>
+        <Text style={styles.groupTitle}>{t('more.account.manageAccount.title')}</Text>
+        <MenuLink
+          icon="delete"
+          title={t('more.account.manageAccount.delete')}
+          desc={t('more.account.manageAccount.deleteDesc')}
+          onPress={() => navigation.navigate('DeleteAccount')}
         />
       </View>
     </MorePageLayout>

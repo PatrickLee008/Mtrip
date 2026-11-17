@@ -36,6 +36,12 @@ class SmsVerifyService
     /** 支持的场景:注册 / 验证码登录 / 重置密码 */
     public const SCENES = ['register', 'login', 'reset'];
 
+    /**
+     * 登录态「关联手机号」(Consumer App PRD 模块 19.2)。**不在公开 SCENES 里**:
+     * 公开的 `/app/auth/sms/*` 不接受它,只由 `/app/user/phone/*`(要 JWT)调用,站点取 Token 里的站点。
+     */
+    public const SCENE_BIND = 'bind';
+
     /** 验码成功后签发的一次性票据有效期(秒) */
     private const TICKET_TTL = 600;
 
@@ -63,6 +69,14 @@ class SmsVerifyService
             throw new BusinessException(ErrorCode::PARAM_ERROR, '参数 scene 只能是 register/login/reset');
         }
         return $scene;
+    }
+
+    /** 服务内部可用的场景:公开三场景 + 登录态的 bind */
+    private static function assertInternalScene(string $scene): void
+    {
+        if ($scene !== self::SCENE_BIND) {
+            self::assertScene($scene);
+        }
     }
 
     /**
@@ -153,7 +167,7 @@ class SmsVerifyService
      */
     public function send(int $siteId, string $mobile, string $scene, string $ip): array
     {
-        self::assertScene($scene);
+        self::assertInternalScene($scene);
         $this->assertMobileFormat($mobile);
         $mobileHash = $this->auth->mobileHash($mobile);
 
@@ -204,7 +218,7 @@ class SmsVerifyService
      */
     public function verify(int $siteId, string $mobile, string $scene, string $code): array
     {
-        self::assertScene($scene);
+        self::assertInternalScene($scene);
         $this->assertMobileFormat($mobile);
         if (! preg_match('/^\d{4,8}$/', $code)) {
             throw new BusinessException(ErrorCode::SMS_CODE_INVALID);
@@ -335,6 +349,13 @@ class SmsVerifyService
         if ($scene === 'register') {
             if ($this->auth->isRegistered($siteId, $mobileHash)) {
                 throw new BusinessException(ErrorCode::DATA_CONFLICT, '该手机号已注册');
+            }
+            return;
+        }
+        if ($scene === self::SCENE_BIND) {
+            // 关联手机号:号码不能已属于任何账号(含本人 —— 与当前相同的情况调用方已先行内拦截,不会走到发码)
+            if ($this->auth->isRegistered($siteId, $mobileHash)) {
+                throw new BusinessException(ErrorCode::CONTACT_IN_USE);
             }
             return;
         }

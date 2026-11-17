@@ -25,5 +25,9 @@ return [
         (new Crontab())->setName('wallet-credit-expiry')->setRule('*/10 * * * *')
             ->setSingleton(true)->setOnOneServer(true)->setMutexExpires(600)
             ->setCallback([\App\Service\WalletService::class, 'expireDue']),
+        // Consumer App PRD 模块 19:注销账户保留 90 天后匿名化(逻辑在 shared AccountPurge;user-service 没有 crontab 进程)
+        (new Crontab())->setName('account-deletion-purge')->setRule('35 3 * * *')
+            ->setSingleton(true)->setOnOneServer(true)->setMutexExpires(3600)
+            ->setCallback([\Mtrip\Shared\Account\AccountPurge::class, 'purgeDue']),
     ],
 ];

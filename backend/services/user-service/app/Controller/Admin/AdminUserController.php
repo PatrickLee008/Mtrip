@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Controller\Admin;
 
+use App\Service\AccountDeletionService;
 use App\Service\WalletAdjustService;
 use App\Service\WalletLogPresenter;
 use Hyperf\DbConnection\Db;
@@ -24,6 +25,9 @@ class AdminUserController extends AbstractAdminController
 {
     #[Inject]
     protected WalletAdjustService $walletAdjust;
+
+    #[Inject]
+    protected AccountDeletionService $deletion;
 
     /** 用户列表:筛选 昵称/状态/实名状态/注册来源/注册日期;手机号脱敏 */
     public function index(): array
@@ -56,7 +60,7 @@ class AdminUserController extends AbstractAdminController
                 $row = (array) $row;
                 $row['mobile'] = MaskHelper::mobile($this->decryptField((string) $row['mobile']));
                 // 密码与加密身份信息列表不下发
-                unset($row['password'], $row['email'], $row['real_name'], $row['id_card'], $row['deleted_at']);
+                unset($row['password'], $row['email'], $row['email_hash'], $row['mobile_hash'], $row['real_name'], $row['id_card'], $row['deleted_at']);
                 return $row;
             })->all();
         return Result::page($list, $total, $page, $pageSize);
@@ -167,7 +171,7 @@ class AdminUserController extends AbstractAdminController
         $user['email'] = MaskHelper::email($this->decryptField((string) $user['email']));
         $user['real_name'] = $this->decryptField((string) $user['real_name']);
         $user['id_card'] = MaskHelper::idCard($this->decryptField((string) $user['id_card']));
-        unset($user['password'], $user['deleted_at']);
+        unset($user['password'], $user['deleted_at'], $user['email_hash'], $user['mobile_hash']);
 
         $balanceLogs = Db::table('user_balance_log')
             ->where('user_id', $user['id'])->orderByDesc('id')->limit(10)->get()
@@ -302,7 +306,7 @@ class AdminUserController extends AbstractAdminController
         $user['email'] = MaskHelper::email($this->decryptField((string) $user['email']));
         $user['real_name'] = $this->decryptField((string) $user['real_name']);
         $user['id_card'] = MaskHelper::idCard($this->decryptField((string) $user['id_card']));
-        unset($user['password'], $user['deleted_at']);
+        unset($user['password'], $user['deleted_at'], $user['email_hash'], $user['mobile_hash']);
         $uid = (int) $user['id'];
 
         $level = null;
@@ -320,7 +324,58 @@ class AdminUserController extends AbstractAdminController
             'coupons' => $this->safeRows('marketing_coupon_receive', $uid, 50),
             'transactions' => $this->safeRows('finance_account_entry', $uid, 30),
             'referralCount' => $this->safeCount('user_referral', 'inviter_user_id', $uid),
+            'deletion' => $this->deletionSummary($uid),
         ]);
+    }
+
+    /**
+     * 批准「有余额时注销」(Consumer App PRD 模块 19 第 8 条):客服核实后批准,记下当前余额作为没收上限,7 天内有效;
+     * 用户仍须自己在 App 内输入 DELETE 完成注销,届时余额经 WalletLedger 没收并记入「已没收钱包余额台账」。
+     * 余额之后若增加,旧批准不再覆盖,需重新批准。必填核实原因。
+     */
+    #[Permission('user:list:approve-deletion')]
+    public function deletionApprove(): array
+    {
+        $user = $this->findScoped($this->requireId());
+        $reason = $this->requireStr('reason');
+        if (mb_strlen($reason) > 200) {
+            throw new BusinessException(ErrorCode::PARAM_ERROR, '原因不能超过200字');
+        }
+        $data = $this->deletion->approve($user, $reason, AdminContext::adminId(), AdminContext::adminName());
+        return Result::success($data, '已批准:用户在 App 内确认注销时余额将被没收');
+    }
+
+    /** 撤销尚未使用的注销批准 */
+    #[Permission('user:list:approve-deletion')]
+    public function deletionRevoke(): array
+    {
+        $user = $this->findScoped($this->requireId());
+        $count = $this->deletion->revoke((int) $user['id']);
+        return Result::success(['revoked' => $count], $count > 0 ? '已撤销注销批准' : '没有待使用的注销批准');
+    }
+
+    /** Customer 360 的注销信息:有效批准 / 已注销记录(含没收金额与保留截止);表缺失时降级为 null */
+    private function deletionSummary(int $uid): ?array
+    {
+        try {
+            $approval = $this->deletion->validApproval($uid);
+            $closed = Db::table('user_account_deletion')->where('user_id', $uid)
+                ->where('status', AccountDeletionService::STATUS_CLOSED)->orderByDesc('id')
+                ->first(['closed_at', 'purge_after', 'purged_at', 'forfeited_amount']);
+            return [
+                'approval' => $approval ? [
+                    'approvedBalance' => (string) $approval['approved_balance'],
+                    'approvedName' => (string) $approval['approved_name'],
+                    'approvedAt' => (string) $approval['approved_at'],
+                    'expiresAt' => (string) $approval['approval_expires_at'],
+                    'reason' => (string) $approval['approve_reason'],
+                ] : null,
+                'closed' => $closed ? (array) $closed : null,
+                'ongoingBookings' => $this->deletion->ongoingBookingCount($uid),
+            ];
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     /** 拉黑用户:记录黑名单 + user_status=4(拉黑),区分「冻结」与「拉黑」 */

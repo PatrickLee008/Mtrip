@@ -56,7 +56,8 @@ import HotelsScreen from '@/screens/hotel/HotelsScreen';
 import InsuranceScreen from '@/screens/hotel/InsuranceScreen';
 import StayDetailScreen from '@/screens/hotel/StayDetailScreen';
 import AccountScreen from '@/screens/more/AccountScreen';
-import EditEmailScreen from '@/screens/more/EditEmailScreen';
+import DeleteAccountScreen from '@/screens/more/DeleteAccountScreen';
+import LinkContactScreen from '@/screens/more/LinkContactScreen';
 import GuidesScreen from '@/screens/more/GuidesScreen';
 import TutorialVideoScreen from '@/screens/more/TutorialVideoScreen';
 import WalletScreen from '@/screens/more/WalletScreen';
@@ -391,9 +392,14 @@ export default function AppNavigator() {
           options={{ title: t('more.travelers.title'), headerShown: false }}
         />
         <Stack.Screen
-          name="EditEmail"
-          component={EditEmailScreen}
-          options={{ title: t('more.editEmail.title'), headerShown: false }}
+          name="LinkContact"
+          component={LinkContactScreen}
+          options={{ title: t('more.account.security.email'), headerShown: false }}
+        />
+        <Stack.Screen
+          name="DeleteAccount"
+          component={DeleteAccountScreen}
+          options={{ title: t('more.deleteAccount.title'), headerShown: false }}
         />
         <Stack.Screen
           name="Referral"

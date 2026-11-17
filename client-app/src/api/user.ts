@@ -181,6 +181,54 @@ export function changePassword(params: {
   return post<null>('/api/v1/app/user/change-password', params);
 }
 
+/* ---- 账户安全:关联邮箱 / 关联手机号(Consumer App PRD 模块 19.2) ---- */
+
+/** 发码结果:email / mobile 是后端脱敏后的目标,验证码页「已发送到 …」用 */
+export interface ContactCodeResult {
+  expiresIn: number;
+  resendAfter: number;
+  pinLength: number;
+  email?: string;
+  mobile?: string;
+}
+
+/**
+ * 关联邮箱第 1 步:发邮箱验证码。与当前相同 → 40931(行内提示,不发码);
+ * 已被其他账号关联 → 40932;未配置邮件渠道 → 50021。
+ */
+export function apiEmailSendCode(email: string, options?: RequestOptions): Promise<ContactCodeResult> {
+  return post<ContactCodeResult>('/api/v1/app/user/email/send-code', { email }, options);
+}
+
+/** 关联邮箱第 2 步:验码通过后才保存,返回最新资料 */
+export function apiEmailBind(email: string, code: string, options?: RequestOptions): Promise<UserProfile> {
+  return post<UserProfile>('/api/v1/app/user/email/bind', { email, code }, options);
+}
+
+/** 关联手机号第 1 步:后端先校验 +95 缅甸号码格式,再发短信验证码(错误码同邮箱) */
+export function apiPhoneSendCode(mobile: string, options?: RequestOptions): Promise<ContactCodeResult> {
+  return post<ContactCodeResult>('/api/v1/app/user/phone/send-code', { mobile }, options);
+}
+
+/** 关联手机号第 2 步:验码通过后才保存,返回最新资料 */
+export function apiPhoneBind(mobile: string, code: string, options?: RequestOptions): Promise<UserProfile> {
+  return post<UserProfile>('/api/v1/app/user/phone/bind', { mobile, code }, options);
+}
+
+/* ---- 账户注销(Consumer App PRD 模块 19) ---- */
+
+/** 注销被拦截时 ApiError.data 的形状(code 40933) */
+export interface AccountDeletionBlocked {
+  blockers: Array<'ongoing_booking' | 'wallet_balance'>;
+  ongoingBookings: number;
+  walletBalance: string;
+}
+
+/** 注销账户:confirm 必须一字不差为 DELETE;成功后旧 Token 立即失效,App 本地登出 */
+export function apiDeleteAccount(confirm: string, options?: RequestOptions): Promise<null> {
+  return post<null>('/api/v1/app/user/account/delete', { confirm }, options);
+}
+
 /** 钱包流水一行(user-service `/app/user/balance-logs`,snake_case 直出 + 后端补的展示字段) */
 export interface BalanceLog {
   id: number;
