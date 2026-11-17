@@ -24,6 +24,7 @@ import {
   Inter_700Bold,
 } from '@expo-google-fonts/inter';
 
+import AppUpdateGate from '@/components/common/AppUpdateGate';
 import ToastHost from '@/components/common/ToastHost';
 import type { Lang } from '@/config/global';
 import { changeLanguage, initI18n } from '@/i18n';
@@ -130,6 +131,8 @@ export default function App() {
       {!showApp && !showMode ? (
         <SplashScreen picker={showPicker} defaultLang={systemLang} onConfirm={onPickLanguage} />
       ) : null}
+      {/* 版本检查:强制更新阻断 / 可选更新提示(PRD 19.1,仅原生端),盖在所有阶段之上 */}
+      {fontsLoaded ? <AppUpdateGate /> : null}
       <ToastHost />
     </SafeAreaProvider>
   );

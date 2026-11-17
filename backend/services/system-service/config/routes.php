@@ -45,6 +45,8 @@ Router::post('/api/v1/admin/auth/refresh', [AuthController::class, 'refresh']);
 // C端公开站点接口(模块09 移动端微服务,无需登录)
 Router::get('/api/v1/app/site/list', [AppSiteController::class, 'list']);
 Router::get('/api/v1/app/site/config', [AppSiteController::class, 'config']);
+// C端 App 版本检查:强制 / 可选更新(Consumer App PRD 19.1,无需登录)
+Router::get('/api/v1/app/site/version-check', [AppSiteController::class, 'versionCheck']);
 // C端动态主题(无需登录,PRD 模块15)
 Router::get('/api/v1/app/theme/active', [ThemeController::class, 'active']);
 // C端教程视频列表(使用指南,无需登录)

@@ -12,6 +12,7 @@ use Mtrip\Shared\Annotation\Permission;
 use Mtrip\Shared\Constants\ErrorCode;
 use Mtrip\Shared\Context\AdminContext;
 use Mtrip\Shared\Exception\BusinessException;
+use Mtrip\Shared\Support\AppVersion;
 use Mtrip\Shared\Support\Result;
 
 use function Hyperf\Config\config;
@@ -22,6 +23,10 @@ use function Hyperf\Config\config;
 class GlobalConfigController extends AbstractController
 {
     private const MERCHANT_AUTH_TEST_MODE = 'merchant_auth_test_mode';
+
+    private const APP_VERSION_KEYS = [
+        'app_android_min_version', 'app_android_latest_version', 'app_ios_min_version', 'app_ios_latest_version',
+    ];
 
     public function index(): array
     {
@@ -62,6 +67,13 @@ class GlobalConfigController extends AbstractController
             }
             if ($key === self::MERCHANT_AUTH_TEST_MODE) {
                 $this->validateMerchantAuthTestMode((string) ($item['value'] ?? ''));
+            }
+            // App 版本号(Consumer App PRD 19.1):留空 = 不启用,否则须为 1~4 段数字
+            if (in_array($key, self::APP_VERSION_KEYS, true)) {
+                $value = trim((string) ($item['value'] ?? ''));
+                if ($value !== '' && ! AppVersion::isValid($value)) {
+                    throw new BusinessException(ErrorCode::PARAM_VALIDATE_FAIL, "{$key}: 版本号格式须如 1.2.3");
+                }
             }
             if ($key === '' || ! array_key_exists('value', (array) $item)) {
                 continue;

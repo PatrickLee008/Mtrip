@@ -1549,6 +1549,15 @@
     },
     "modeFootnote": "You can change this anytime later in Settings"
   },
+  "appUpdate": {
+    "forceTitle": "Update Required",
+    "forceMessage": "This version of mTrip is no longer supported. Please update to version {{version}} or later to continue.",
+    "optionalTitle": "New Version Available",
+    "optionalMessage": "mTrip {{version}} is available with the latest improvements. Update now?",
+    "update": "Update",
+    "later": "Later",
+    "openFailed": "Unable to open the app store. Please update mTrip from the store manually."
+  },
   "hotels": {
     "title": "Hotel & Homestay",
     "searchPlaceholder": "Search",
