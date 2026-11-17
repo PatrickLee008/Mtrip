@@ -118,6 +118,10 @@ Router::addGroup('/api/v1/app', static function () {
     Router::post('/chat/send', [ChatController::class, 'send']);
     Router::post('/chat/finish', [ChatController::class, 'finish']);
     Router::post('/chat/rate', [ChatController::class, 'rate']);
+    // mTrip 平台客服(PRD 模块 13):预订上下文 / 转人工
+    Router::get('/chat/support/bookings', [ChatController::class, 'supportBookings']);
+    Router::post('/chat/support/context', [ChatController::class, 'supportContext']);
+    Router::post('/chat/support/handoff', [ChatController::class, 'supportHandoff']);
 }, [
     'middleware' => [UserAuthMiddleware::class],
 ]);

@@ -1,5 +1,11 @@
 # 模块10:移动端 client-app(Expo 51 + RN + TS)
 
+2026-11-17 PRD v1.0.6 模块 13「Live Chat & Customer Support」(mTrip 平台客服,`chat_conversation.type=2`,不是酒店聊天):
+- **入口**:预订详情「Live support chat」带 `orderId` 打开并预选该预订;首页(完整 / 关怀模式)与 Hotel 搜索页右下「Chat with us」悬浮按钮(`components/chat/SupportChatFab`);更多 > 联系我们原入口不变。
+- **聊天页**(`ChatScreen` 在 type 2 时插入 `components/chat/SupportChatParts`):本地化欢迎卡;预订上下文卡(当前 / 历史预订或一般咨询,底部弹层切换);按预订场景(待支付 / 待入住 / 入住中 / 已完成 / 已取消 / 一般)的推荐问题,点一下直接发出并带 `faqKey`;机器人自动回复;常驻「Contact customer support」转人工,机器人回复无法回答 / 投诉争议时消息下也带该按钮;顶栏「End chat」结束会话,结束后 1-5 星 + 选填备注评价、「Start a new chat」;最近浏览的酒店横排(酒店详情页加载即记本地 `mtrip:recent-hotels`,最多 10 家,点一下把酒店名带进输入框)。标题按 type 本地化,不再显示后端写死的「在线客服」;「消息」列表同时列出酒店与客服会话,可从列表继续。
+- **后端**(user-service):`POST /app/chat/start` type 2 可带 `orderId`(复用进行中会话并切换上下文);新增 `GET /app/chat/support/bookings`、`POST /app/chat/support/context`、`POST /app/chat/support/handoff`;`/chat/detail` 对 type 2 返回 `support{booking,scene,suggestions}`;type 2 发消息改走共享 `ChatService::send`(请求号幂等 / 实时推送),未转人工时 `App\Chat\SupportBot` 按 `chat_support_faq`(站点 / 语言 / 场景 / 关键词,种子 en-US + zh-CN,my-MM 回退英文)应答;handoff=2 关键词(agent / human / 人工…)直接转人工,handoff=1(投诉 / 重复扣款…)及未命中回复带 `action=suggest_agent`;`rate` 只允许已结束且未评价的会话,新增 `comment`。后台客服工作台(`cops/chat`)复用原页面,列表加「已转人工 / 星级」列;坐席回复带 admin 身份并自动视为已转人工。迁移 `V20261117130000__consumer-support-chat.sql`。
+- **验证**:shared 单测 261/261(新增 `SupportBotTest`)、改动 PHP lint、client typecheck、admin-web vue-tsc(自身无错);迁移在本机开发库执行两次(幂等);用临时容器挂载本分支 user-service 代码实测 bookings / context / detail 推荐问题(中英)/ FAQ 精确命中 / 关键词 / 回退建议转人工 / 重复请求号 / 关键词直接转人工 / 转人工后机器人静默 / 后台坐席回复 / 结束 / 评价一次性 / 结束后发消息被拒 / 新会话带预订 / 他人或不存在订单 404,测试数据已清理。**未验**:App 界面未在浏览器或真机走查(本机网关挂的是主检出代码);FAQ 内容由运营后续在表中维护(本期无后台编辑页)。
+
 2026-11-17 到店支付联调补充：后端对线上应付为 0 的单订/Trip 直接确认，不生成 0 金额 MMQR；取消页附加服务退款额与已完成退款组成同步扣减。纯 KBZPay 订单可在原路退款和 mTrip 钱包间选择，其他支付组合只显示可履约的钱包渠道；服务端校验所选渠道并写入退款单。客户端类型检查通过，真实钱包/MMQR 到账及原生页面仍待验。
 
 2026-11-16 到店支付消费者入口（联调中）：单订/Trip 结账可选到店支付、传入后端报价/建单并展示线上预付与到店余额；取消页展示预付退款拆分和实际退款渠道，复核页不再重复原因表单。酒店详情移除过期的“即将开放”提示。`npm run typecheck` 通过；真实支付、退款、原生界面及数据库联调尚未验。商户联盟链接/现金钱包/提现是独立需求，本轮未接入，也不复用普通消费者钱包。

@@ -63,16 +63,23 @@ class AdminChatController extends AbstractAdminController
             throw new BusinessException(ErrorCode::DATA_CONFLICT, '会话已结束');
         }
         $content = $this->requireStr('content');
-        $now = date('Y-m-d H:i:s');
+        $now = gmdate('Y-m-d H:i:s');
+        // 平台客服(type 2):坐席消息带 admin 身份(App 显示「mTrip 客服」);坐席一回复即视为已转人工,机器人不再抢答
         Db::table('chat_message')->insert([
             'site_id' => (int) $conv['site_id'],
             'conversation_id' => (int) $conv['id'],
             'sender_type' => 2,
+            'sender_role' => 'admin',
+            'sender_id' => \Mtrip\Shared\Context\AdminContext::adminId(),
+            'sender_name' => mb_substr((string) \Mtrip\Shared\Context\AdminContext::adminName(), 0, 100),
             'content' => mb_substr($content, 0, 2000),
             'msg_type' => 1,
         ]);
-        Db::table('chat_conversation')->where('id', $conv['id'])
-            ->update(['last_message' => mb_substr($content, 0, 500), 'last_time' => $now]);
+        $update = ['last_message' => mb_substr($content, 0, 500), 'last_time' => $now, 'last_sender_type' => 2, 'version' => Db::raw('version + 1')];
+        if ((int) $conv['type'] === 2 && ($conv['handoff_at'] ?? null) === null) {
+            $update['handoff_at'] = $now;
+        }
+        Db::table('chat_conversation')->where('id', $conv['id'])->update($update);
         (new \Mtrip\Shared\Chat\ChatService())->publish((int) $conv['id'], 'message');
         return Result::success(null, '已回复');
     }

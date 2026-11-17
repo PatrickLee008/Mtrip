@@ -28,6 +28,7 @@ const columns = [
   { title: '用户ID', dataIndex: 'user_id', width: 90 },
   { title: '最后消息', dataIndex: 'last_message', width: 220, ellipsis: true },
   { title: '状态', dataIndex: 'status', width: 90 },
+  { title: '人工 / 评价', dataIndex: 'rating', width: 150 },
   { title: '操作', key: 'action_col', width: 90, fixed: 'right' as const },
 ];
 
@@ -116,6 +117,12 @@ onMounted(() => void load());
           </template>
           <template v-else-if="column.dataIndex === 'status'">
             <a-tag :color="record.status === 0 ? 'processing' : 'default'">{{ record.status === 0 ? '进行中' : '已结束' }}</a-tag>
+          </template>
+          <template v-else-if="column.dataIndex === 'rating'">
+            <a-tag v-if="record.type === 2 && record.handoff_at" color="orange">已转人工</a-tag>
+            <a-tooltip v-if="record.rating > 0" :title="record.rating_comment || ''">
+              <span>{{ '★'.repeat(record.rating) }}</span>
+            </a-tooltip>
           </template>
           <template v-else-if="column.key === 'action_col'">
             <a-button v-perm="'user:chat:reply'" type="link" size="small" @click="openChat(record)">进入</a-button>

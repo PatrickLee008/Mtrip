@@ -25,6 +25,8 @@ export const STORAGE_KEYS = {
   PROFILE_PROMPT_LATER: 'mtrip:profile-prompt-later',
   /** 钱包页首次进入的「Learn about mTrip Wallet」引导点过 Got it(按设备记一次) */
   WALLET_TIP_SEEN: 'mtrip:wallet-tip-seen',
+  /** 最近浏览的酒店(详情页打开即记,最多 10 家),平台客服聊天里展示供快速参考(PRD 模块 13) */
+  RECENT_HOTELS: 'mtrip:recent-hotels',
 } as const;
 
 /** App 版本号(与 app.json / package.json 的 version 保持一致,展示在「更多」页底部) */
