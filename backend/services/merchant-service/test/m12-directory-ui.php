@@ -73,14 +73,19 @@ try {
     check($profile['last_login_at'] === '2026-08-02 11:00:00', 'directory profile and list use same last login');
     Db::table('merchant_info')->where('id', $ids[3])->update(['remark' => 'Preserve existing note']);
     check(directoryCall('detail', ['id' => $ids[3]])['data']['merchant']['remark'] === 'Preserve existing note', 'directory drawer editing receives existing remark');
-    foreach (['vip', 'premium', 'standard'] as $plan) {
-        directoryCall('commission', ['id' => $ids[3], 'commissionPlan' => $plan, 'commissionRate' => 12.5, 'settlementCycle' => 15]);
+    foreach (['vip', 'premium', 'standard'] as $index => $plan) {
+        directoryCall('saveCommercialSettings', [
+            'id' => $ids[3], 'commissionPlan' => $plan, 'commissionRate' => 12.5,
+            'transactionFeeRate' => 0, 'payAtHotelEnabled' => false, 'noShowFeeEnabled' => false,
+            'merchantUpfrontRate' => 0, 'effectiveAt' => '2020-01-01T00:00:00Z',
+            'reason' => 'Directory integration terms', 'requestId' => 'directory-ui-' . $plan, 'expectedVersion' => $index,
+        ]);
         $saved = directoryCall('detail', ['id' => $ids[3]])['data']['merchant'];
         check($saved['commission_plan'] === $plan && (float) $saved['commission_rate'] === 12.5, 'directory saves independent plan ' . $plan);
     }
-    rejects(40001, fn () => directoryCall('commission', ['id' => $ids[3], 'commissionPlan' => 'invalid', 'commissionRate' => 12.5]), 'directory rejects invalid plan');
-    directoryCall('commission', ['id' => $ids[4], 'commissionRate' => 10]);
-    check(Db::table('merchant_info')->where('id', $ids[4])->value('commission_plan') === null, 'directory old rate-only API preserves unset plan');
+    rejects(40001, fn () => directoryCall('commission', ['id' => $ids[3], 'commissionPlan' => 'invalid', 'commissionRate' => 12.5]), 'directory rejects deprecated direct writes');
+    rejects(40001, fn () => directoryCall('commission', ['id' => $ids[4], 'commissionRate' => 10]), 'directory old rate-only API cannot bypass history');
+    check(Db::table('merchant_info')->where('id', $ids[4])->value('commission_plan') === null, 'directory rejected old rate-only API preserves unset plan');
     $credit = (string) Db::table('merchant_info')->where('id', $ids[3])->value('credit_code');
     check(directoryCall('index', ['keyword' => $credit])['data']['total'] === 1, 'directory registration search');
     AdminContext::set(['admin_id' => 902, 'site_id' => 991, 'is_super' => false, 'permissions' => ['merchant:list:list']]);

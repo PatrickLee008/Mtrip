@@ -3,6 +3,7 @@ import { computed, reactive, ref } from 'vue';
 import { message } from 'ant-design-vue';
 import { useI18n } from 'vue-i18n';
 import type { TableRow } from '@/composables/useTable';
+import type { StatusItem } from '@/components/StatusTag.vue';
 import { apiMerchantPropertyBind, apiMerchantPropertyHistory } from '@/api/merchant';
 import { useTable } from '@/composables/useTable';
 
@@ -41,6 +42,16 @@ const choices = computed(() => [
 function linked(business: TableRow): TableRow | undefined {
   return props.properties.find(s => Number(s.source_business_id) === Number(business.id));
 }
+function businessKycBadge(business: TableRow): StatusItem {
+  const application = props.applications.find(app => Number(app.id) === Number(business.application_id));
+  const status = Number(business.kyc_status);
+  if (Number(application?.state_model_version) === 1) {
+    const keys = ['kycLocked', 'kycDraft', 'kycSubmitted', 'kycUnderReview', 'kycResubmitRequired', 'kycVerified', 'kycRejected'];
+    const colors: StatusItem['color'][] = ['default', 'default', 'warning', 'processing', 'orange', 'success', 'error'];
+    return { text: keys[status] ? t(`merchant.onboardingPage.${keys[status]}`) : t('merchantDirectory.unknown'), color: colors[status] || 'default' };
+  }
+  return { text: status >= 0 && status <= 4 ? t(`merchantDirectory.kyc${status}`) : t('merchantDirectory.unknown'), color: status === 1 ? 'success' : 'warning' };
+}
 function edit(business: TableRow): void {
   target.value = business;
   const store = linked(business);
@@ -75,48 +86,63 @@ const businessColumns = computed(() => [
 </script>
 
 <template>
-  <a-divider orientation="left">{{ t('merchantDirectory.businessDetails') }}</a-divider>
-  <a-descriptions :column="1" size="small" bordered>
-    <a-descriptions-item :label="t('merchantDirectory.group')">{{ group?.group_name || '-' }}</a-descriptions-item>
-    <a-descriptions-item v-for="app in applications" :key="app.id" :label="app.app_no">
-      {{ app.company_name }} · {{ app.reg_number || '-' }} · {{ app.country || '-' }}
-    </a-descriptions-item>
-  </a-descriptions>
-  <a-alert v-if="!applications.length" type="info" show-icon :message="t('merchantDirectory.noApplication')" style="margin-top: 12px" />
-  <a-divider orientation="left">{{ t('merchantDirectory.businessProperties') }}</a-divider>
-  <a-button type="link" @click="showHistory">{{ t('merchantDirectory.history') }}</a-button>
-  <a-alert type="info" show-icon :message="t('merchantDirectory.mappingHint')" style="margin-bottom: 12px" />
-  <a-table :columns="businessColumns" :data-source="businesses" row-key="id" size="small" :pagination="false" :scroll="{ x: 670 }">
-    <template #bodyCell="{ column, record }">
-      <template v-if="column.key === 'kyc'">
-        <a-tag :color="record.kyc_status === 1 ? 'success' : 'warning'">{{ t('merchantDirectory.kyc' + record.kyc_status) }}</a-tag>
-      </template>
-      <template v-else-if="column.dataIndex === 'business_type'">{{ businessTypes[record.business_type] || record.business_type || '-' }}</template>
-      <template v-else-if="column.dataIndex === 'business_name'">
-        <div>{{ record.business_name }}</div>
-        <div class="property-muted">{{ record.city || '-' }} · {{ record.contact_name || '-' }}</div>
-        <div class="property-muted">{{ record.contact_phone || '-' }} · {{ record.contact_email || '-' }}</div>
-      </template>
-      <template v-else-if="column.key === 'property'">
-        <template v-if="linked(record)">
-          <div>#{{ linked(record)?.id }} {{ linked(record)?.store_name }}</div>
-          <a-tag v-if="linked(record)?.deleted_at">{{ t('merchantDirectory.archived') }}</a-tag>
-          <div class="property-muted">{{ linked(record)?.country_code }} / {{ linked(record)?.city_key }}</div>
+  <section class="property-section">
+    <h4>{{ t('merchant.profile.properties') }} <span>{{ properties.length }}</span></h4>
+    <div class="property-cards">
+      <article v-for="store in properties" :key="store.id" class="property-card">
+        <div class="property-card-heading">
+          <div><strong>{{ store.store_name }}</strong><span class="property-id">#{{ store.id }}</span></div>
+          <a-tag v-if="store.deleted_at">{{ t('merchantDirectory.archived') }}</a-tag>
+          <a-tag v-else>{{ businessTypes[store.business_type] || store.business_type || '—' }}</a-tag>
+        </div>
+        <div class="property-muted">{{ [store.city_key, store.country_code].filter(Boolean).join(', ') || '—' }}</div>
+        <template v-for="business in businesses.filter(business => Number(business.id) === Number(store.source_business_id))" :key="business.id">
+          <div v-if="business.contact_name" class="property-contact">{{ business.contact_name }}</div>
+          <div v-if="business.contact_phone || business.contact_email" class="property-muted">{{ [business.contact_phone, business.contact_email].filter(Boolean).join(' · ') }}</div>
         </template>
-        <a-tag v-else-if="record.business_type === 'hotel'" color="warning">{{ t('merchantDirectory.unmapped') }}</a-tag>
-        <span v-else class="property-muted">{{ t('merchantDirectory.notApplicable') }}</span>
-      </template>
-      <template v-else-if="column.key === 'action'">
-        <a-button v-if="record.business_type === 'hotel' && record.kyc_status === 1 && !linked(record)?.deleted_at && [3, 4].includes(Number(merchant.status))" v-perm="'merchant:property:bind'" size="small" type="link" @click="edit(record)">
-          {{ linked(record) ? t('common.edit') : t('merchantDirectory.bind') }}
-        </a-button>
-      </template>
-    </template>
-  </a-table>
-  <div v-if="unlinkedStores.length" style="margin-top: 12px">
-    <div>{{ t('merchantDirectory.legacyStores') }}</div>
-    <a-tag v-for="store in unlinkedStores" :key="store.id" style="margin-top: 8px">#{{ store.id }} {{ store.store_name }}</a-tag>
-  </div>
+      </article>
+      <div v-if="!properties.length" class="property-empty">{{ t('merchant.profile.noProperties') }}</div>
+    </div>
+    <details class="property-management">
+      <summary>{{ t('merchantDirectory.businessProperties') }}</summary>
+      <div class="property-management-body">
+        <dl class="property-company">
+          <div><dt>{{ t('merchantDirectory.group') }}</dt><dd>{{ group?.group_name || '—' }}</dd></div>
+          <div v-for="app in applications" :key="app.id"><dt>{{ app.app_no }}</dt><dd>{{ app.company_name }} · {{ app.reg_number || '—' }} · {{ app.country || '—' }}</dd></div>
+        </dl>
+        <a-alert v-if="!applications.length" type="info" show-icon :message="t('merchantDirectory.noApplication')" />
+        <a-button type="link" @click="showHistory">{{ t('merchantDirectory.history') }}</a-button>
+        <p class="property-muted">{{ t('merchantDirectory.mappingHint') }}</p>
+        <a-table :columns="businessColumns" :data-source="businesses" row-key="id" size="small" :pagination="false" :scroll="{ x: 670 }">
+          <template #bodyCell="{ column, record }">
+            <template v-if="column.key === 'kyc'">
+              <a-tag :color="businessKycBadge(record).color">{{ businessKycBadge(record).text }}</a-tag>
+            </template>
+            <template v-else-if="column.dataIndex === 'business_type'">{{ businessTypes[record.business_type] || record.business_type || '—' }}</template>
+            <template v-else-if="column.dataIndex === 'business_name'">
+              <div>{{ record.business_name }}</div>
+              <div class="property-muted">{{ record.city || '—' }} · {{ record.contact_name || '—' }}</div>
+              <div class="property-muted">{{ record.contact_phone || '—' }} · {{ record.contact_email || '—' }}</div>
+            </template>
+            <template v-else-if="column.key === 'property'">
+              <template v-if="linked(record)">
+                <div>#{{ linked(record)?.id }} {{ linked(record)?.store_name }}</div>
+                <a-tag v-if="linked(record)?.deleted_at">{{ t('merchantDirectory.archived') }}</a-tag>
+                <div class="property-muted">{{ linked(record)?.country_code }} / {{ linked(record)?.city_key }}</div>
+              </template>
+              <a-tag v-else-if="record.business_type === 'hotel'" color="warning">{{ t('merchantDirectory.unmapped') }}</a-tag>
+              <span v-else class="property-muted">{{ t('merchantDirectory.notApplicable') }}</span>
+            </template>
+            <template v-else-if="column.key === 'action'">
+              <a-button v-if="record.business_type === 'hotel' && record.kyc_status === 1 && !linked(record)?.deleted_at && [3, 4].includes(Number(merchant.status))" v-perm="'merchant:property:bind'" size="small" type="link" @click="edit(record)">
+                {{ linked(record) ? t('common.edit') : t('merchantDirectory.bind') }}
+              </a-button>
+            </template>
+          </template>
+        </a-table>
+      </div>
+    </details>
+  </section>
   <a-drawer v-model:open="historyOpen" :title="t('merchantDirectory.history')" width="720">
     <a-table :columns="historyColumns" :data-source="history.list.value" :loading="history.loading.value"
       :pagination="history.pagination.value" row-key="id" :scroll="{ x: 630 }">
@@ -142,5 +168,24 @@ const businessColumns = computed(() => [
 </template>
 
 <style scoped>
-.property-muted { font-size: 12px; color: #64748b; overflow-wrap: anywhere; }
+.property-section h4 { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; font-size: 12px; line-height: 18px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: #64748b; }
+.property-section h4 > span { padding: 0 6px; border-radius: 10px; background: #f1f5f9; color: #64748b; font-size: 11px; letter-spacing: 0; }
+.property-cards { display: flex; flex-direction: column; gap: 8px; }
+.property-card { padding: 12px 14px; border: 1px solid #e3e8f0; border-radius: 8px; background: #f8fafc; }
+.property-card-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; margin-bottom: 4px; }
+.property-card-heading > div { min-width: 0; }
+.property-card-heading strong { color: #1a2332; font-size: 13px; line-height: 20px; overflow-wrap: anywhere; }
+.property-card-heading :deep(.ant-tag) { flex-shrink: 0; margin: 0; font-size: 11px; }
+.property-id { margin-left: 8px; color: #94a3b8; font: 11px monospace; }
+.property-muted { margin: 4px 0 0; font-size: 12px; line-height: 18px; color: #94a3b8; overflow-wrap: anywhere; }
+.property-contact { margin-top: 8px; font-size: 12px; color: #64748b; overflow-wrap: anywhere; }
+.property-empty { padding: 16px; border: 1px dashed #e3e8f0; border-radius: 8px; text-align: center; color: #94a3b8; font-size: 12px; }
+.property-management { margin-top: 12px; border: 1px solid #e3e8f0; border-radius: 8px; }
+.property-management > summary { padding: 12px 14px; color: #64748b; font-size: 12px; font-weight: 500; cursor: pointer; }
+.property-management-body { padding: 0 14px 14px; min-width: 0; }
+.property-management-body > p { margin: 0 0 12px; }
+.property-company { margin: 0 0 8px; }
+.property-company > div { margin-bottom: 8px; }
+.property-company dt { font-size: 11px; color: #94a3b8; }
+.property-company dd { margin: 2px 0 0; font-size: 12px; color: #1a2332; overflow-wrap: anywhere; }
 </style>

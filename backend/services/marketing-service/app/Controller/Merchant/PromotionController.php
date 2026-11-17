@@ -10,6 +10,7 @@ use Mtrip\Shared\Annotation\Permission;
 use Mtrip\Shared\Constants\ErrorCode;
 use Mtrip\Shared\Context\MerchantContext;
 use Mtrip\Shared\Exception\BusinessException;
+use Mtrip\Shared\Merchant\MerchantCommercialSettings;
 use Mtrip\Shared\Support\CouponEligibility;
 use Mtrip\Shared\Support\CouponVersion;
 use App\Service\MerchantPromotionPolicy;
@@ -154,16 +155,24 @@ class PromotionController extends AbstractController
             ->whereIn('s.id', $this->scopePropertyIds())
             ->whereNull('s.deleted_at')
             ->orderBy('s.id')
-            ->get(['s.id', 's.merchant_id', 's.store_name', 's.city_key', 'm.merchant_name', 'm.commission_rate'])
-            ->map(static fn ($row) => [
-                'id' => (int) $row->id,
-                'merchant_id' => (int) $row->merchant_id,
-                'merchant_name' => (string) ($row->merchant_name ?? ''),
-                'property_name' => (string) $row->store_name,
-                'commission_rate' => (float) $row->commission_rate,
-                'city_key' => (string) ($row->city_key ?? ''),
-            ])
-            ->all();
+            ->get(['s.id', 's.merchant_id', 's.site_id', 's.store_name', 's.city_key', 'm.merchant_name', 'm.commission_plan', 'm.commission_rate'])
+            ->map(static fn ($row) => (array) $row)->all();
+        $merchants = [];
+        foreach ($properties as $property) {
+            $merchants[(int) $property['merchant_id']] = [
+                'id' => (int) $property['merchant_id'], 'site_id' => (int) $property['site_id'],
+                'commission_plan' => $property['commission_plan'], 'commission_rate' => $property['commission_rate'],
+            ];
+        }
+        $terms = MerchantCommercialSettings::effectiveMany(array_values($merchants));
+        $properties = array_map(static fn ($row) => [
+            'id' => (int) $row['id'],
+            'merchant_id' => (int) $row['merchant_id'],
+            'merchant_name' => (string) ($row['merchant_name'] ?? ''),
+            'property_name' => (string) $row['store_name'],
+            'commission_rate' => (float) $terms[(int) $row['merchant_id']]['commission_rate'],
+            'city_key' => (string) ($row['city_key'] ?? ''),
+        ], $properties);
 
         $propertyIds = array_column($properties, 'id');
         $roomTypes = $propertyIds === [] ? [] : Db::table('hotel_room_type')

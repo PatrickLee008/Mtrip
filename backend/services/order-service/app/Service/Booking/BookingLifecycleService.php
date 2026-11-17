@@ -15,6 +15,7 @@ use Hyperf\DbConnection\Db;
 use Hyperf\Di\Annotation\Inject;
 use Mtrip\Shared\Constants\ErrorCode;
 use Mtrip\Shared\Exception\BusinessException;
+use Mtrip\Shared\Merchant\MerchantCommercialSettings;
 use Mtrip\Shared\Support\UserNotify;
 
 /**
@@ -105,8 +106,18 @@ class BookingLifecycleService
      */
     public function confirm(int $orderId, int $operatorId, string $operatorName): array
     {
-        return Db::transaction(function () use ($orderId, $operatorId, $operatorName) {
+        $identity = Db::table('order_main')->where('id', $orderId)->whereNull('deleted_at')
+            ->first(['merchant_id', 'site_id', 'order_type', 'booking_status', 'merchant_commercial_snapshot']);
+        if (! $identity) throw new BusinessException(ErrorCode::NOT_FOUND, '预订不存在');
+        return Db::transaction(function () use ($orderId, $operatorId, $operatorName, $identity) {
+            // Online payment also locks merchant before order; manual confirmation must keep that order.
+            if ((int) $identity->booking_status === BookingConst::STATUS_PENDING_PAYMENT && $identity->merchant_commercial_snapshot === null) {
+                MerchantCommercialSettings::lockMerchantForOrder((array) $identity);
+            }
             $order = $this->lockOrder($orderId);
+            foreach (['merchant_id', 'site_id', 'order_type'] as $field) {
+                if ((int) $order[$field] !== (int) $identity->{$field}) throw new BusinessException(ErrorCode::DATA_CONFLICT, '订单归属已变更');
+            }
             // 渠道校验优先于幂等返回:任何状态的 mTrip 在线单都不允许人工确认入口
             if ((string) $order['booking_channel'] === BookingConst::CHANNEL_MTRIP) {
                 throw new BusinessException(ErrorCode::DATA_CONFLICT, 'mTrip 在线预订须由支付确认,不允许人工确认');
@@ -123,6 +134,7 @@ class BookingLifecycleService
                 'confirmed_at' => date('Y-m-d H:i:s'),
                 'cancel_reason' => '',
             ]);
+            MerchantCommercialSettings::captureOrder($order);
             // 到店付/外部渠道占用库存同样锁定转已售
             $this->stockService->deduct($order);
             $order = $this->lockOrder($orderId);

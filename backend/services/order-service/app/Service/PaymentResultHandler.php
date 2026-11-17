@@ -11,6 +11,7 @@ use Hyperf\DbConnection\Db;
 use Hyperf\Di\Annotation\Inject;
 use Mtrip\Shared\Constants\ErrorCode;
 use Mtrip\Shared\Exception\BusinessException;
+use Mtrip\Shared\Merchant\MerchantCommercialSettings;
 
 /**
  * 支付结果统一入口(实现方案 §3.3/§7.1):
@@ -57,6 +58,7 @@ class PaymentResultHandler
             $fields['hotel_terms_snapshot'] = $snapshot;
         }
         Db::table('order_main')->where('id', (int) $order['id'])->update($fields);
+        MerchantCommercialSettings::captureOrder($order);
         $order['booking_status'] = BookingConst::STATUS_CONFIRMED;
         $this->events->log($order, 'payment_success', BookingConst::OPERATOR_GUEST, (int) $order['user_id'], '', 1, [
             'payMethod' => $payMethod,
@@ -122,6 +124,7 @@ class PaymentResultHandler
         if ($affected !== 1) {
             throw new BusinessException(ErrorCode::DATA_CONFLICT, '预订已被其他操作更新');
         }
+        MerchantCommercialSettings::captureOrder($order);
         $this->events->log($order, 'payment_late_recovered', BookingConst::OPERATOR_SYSTEM, 0, '', 1, [
             'payMethod' => $payMethod,
             'tradeNo' => $tradeNo,

@@ -7,6 +7,7 @@ namespace App\Service;
 use Hyperf\DbConnection\Db;
 use Mtrip\Shared\Constants\ErrorCode;
 use Mtrip\Shared\Exception\BusinessException;
+use Mtrip\Shared\Merchant\MerchantCommercialSettings;
 use Mtrip\Shared\Support\CouponEligibility;
 
 final class MerchantPromotionPolicy
@@ -37,7 +38,9 @@ final class MerchantPromotionPolicy
         if (! $policy['configured']) {
             throw new BusinessException(ErrorCode::DATA_CONFLICT, 'Merchant promotion limits are not configured. Contact the platform administrator.');
         }
-        $commission = (float) Db::table('merchant_info')->where('id', $merchantId)->value('commission_rate');
+        $merchant = Db::table('merchant_info')->where('id', $merchantId)->where('site_id', $siteId)->whereNull('deleted_at')->first();
+        if (! $merchant) throw new BusinessException(ErrorCode::NOT_FOUND, 'Merchant not found.');
+        $commission = (float) MerchantCommercialSettings::effectiveMany([(array) $merchant])[$merchantId]['commission_rate'];
         $policy['protectedPercent'] = max($commission, $policy['minPayablePercent']);
         $percentOff = (10 - (float) $coupon['discount_value']) * 10;
         if (((int) $coupon['coupon_type'] === 2 && $percentOff > $policy['maxPercent'])

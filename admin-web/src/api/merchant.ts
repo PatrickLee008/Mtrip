@@ -43,6 +43,49 @@ export function apiMerchantDetail(id: number): Promise<{ merchant: Row; accounts
   return get('/admin/merchant/detail', { id });
 }
 
+export type CommissionPlan = 'vip' | 'premium' | 'standard';
+export interface CommercialTerms {
+  version: number;
+  commission_plan: CommissionPlan | null;
+  commission_rate: string;
+  transaction_fee_rate: string;
+  pay_at_hotel_enabled: boolean;
+  no_show_fee_enabled: boolean;
+  merchant_upfront_rate: string;
+  effective_at: string | null;
+  created_at: string | null;
+  created_by_name: string;
+  reason: string;
+}
+export interface MerchantCommercialSettings {
+  merchant_id: number;
+  latest_version: number;
+  current: CommercialTerms;
+  next: CommercialTerms | null;
+}
+export interface SaveCommercialSettings {
+  id: number;
+  expectedVersion: number;
+  commissionPlan: CommissionPlan;
+  commissionRate: number;
+  transactionFeeRate: number;
+  payAtHotelEnabled: boolean;
+  noShowFeeEnabled: boolean;
+  merchantUpfrontRate: number;
+  effectiveAt: string;
+  reason: string;
+  requestId: string;
+}
+export function apiMerchantCommercialSettings(id: number): Promise<MerchantCommercialSettings> {
+  return get('/admin/merchant/commercial-settings', { id });
+}
+export function apiMerchantCommercialSave(data: SaveCommercialSettings): Promise<MerchantCommercialSettings> {
+  return post('/admin/merchant/commercial-settings', { ...data });
+}
+export function apiMerchantCommercialHistory(params: Record<string, unknown>): Promise<PageData<CommercialTerms>> {
+  return get('/admin/merchant/commercial-settings/history', params);
+}
+
 export function apiMerchantAdd(data: Record<string, unknown>): Promise<{ id: number }> {
   return post('/admin/merchant/add', data);
 }
@@ -146,46 +189,6 @@ export function apiOnboardingTestConfirmAgreement(data: { id: number; agreementI
 
 // ---------- Marketplace Ranking(整改 Phase C) ----------
 
-
-export function apiMerchantCommission(data: {
-  id: number;
-  commissionPlan?: string;
-  commissionRate: number;
-  settlementCycle: number;
-}): Promise<null> {
-  return post('/admin/merchant/commission', data);
-}
-
-export interface PayAtHotelTerms {
-  version: number;
-  enabled: number;
-  no_show_enabled: number;
-  deposit_cap_rate: number;
-  deposit_rate: number;
-  commission_rate: number;
-  transaction_fee_rate: number;
-  effective_at: string | null;
-  reason?: string;
-  actor_type?: string;
-  actor_id?: number;
-}
-
-export function apiPayAtHotelTerms(merchantId: number): Promise<{ current: PayAtHotelTerms; history: PayAtHotelTerms[] }> {
-  return get('/admin/merchant/pay-at-hotel/terms', { merchantId });
-}
-
-export function apiSavePayAtHotelTerms(data: {
-  merchantId: number;
-  enabled: boolean;
-  noShowEnabled: boolean;
-  depositCapRate: number;
-  commissionRate: number;
-  transactionFeeRate: number;
-  effectiveAt: string;
-  reason: string;
-}): Promise<PayAtHotelTerms> {
-  return post('/admin/merchant/pay-at-hotel/terms', data);
-}
 
 /** 功能模块授权现状:available 全部可选,granted 已开通,unmanaged=从未授权(当前按全开通) */
 export function apiMerchantModules(merchantId: number): Promise<{

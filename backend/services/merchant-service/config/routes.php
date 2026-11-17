@@ -134,6 +134,9 @@ Router::addGroup('/api/v1/admin', static function () {
     Router::post('/merchant/notification/send', [NotificationController::class, 'send']);
     Router::get('/merchant/notification/list', [NotificationController::class, 'list']);
     Router::get('/merchant/notification/templates', [NotificationController::class, 'templates']);
+    Router::get('/merchant/commercial-settings', [MerchantController::class, 'commercialSettings']);
+    Router::post('/merchant/commercial-settings', [MerchantController::class, 'saveCommercialSettings']);
+    Router::get('/merchant/commercial-settings/history', [MerchantController::class, 'commercialSettingsHistory']);
     Router::post('/merchant/commission', [MerchantController::class, 'commission']);
     Router::get('/merchant/pay-at-hotel/terms', [MerchantController::class, 'payAtHotelTerms']);
     Router::post('/merchant/pay-at-hotel/terms', [MerchantController::class, 'savePayAtHotelTerms']);

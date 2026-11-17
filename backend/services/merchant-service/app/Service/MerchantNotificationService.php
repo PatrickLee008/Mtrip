@@ -29,6 +29,7 @@ class MerchantNotificationService
         $title = trim((string) ($input['title'] ?? ''));
         $message = trim((string) ($input['message'] ?? ''));
         if ($title === '' || $message === '' || mb_strlen($title) > 200 || mb_strlen($message) > 1000) throw new BusinessException(ErrorCode::PARAM_ERROR, '标题或正文为空或超长');
+        if (str_contains($title . $message, '{{') || str_contains($title . $message, '}}')) throw new BusinessException(ErrorCode::PARAM_ERROR, '请先将模板变量替换为实际内容');
         $sendType = (int) ($input['sendType'] ?? 1);
         if (! in_array($sendType, [1, 2], true)) throw new BusinessException(ErrorCode::PARAM_ERROR);
         $sendAt = null;

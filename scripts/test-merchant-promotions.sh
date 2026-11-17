@@ -30,6 +30,8 @@ for pass in 1 2; do
     sed -e "s/\`mtrip_business\`/\`$TEST_DB\`/g" -e "s/\`mtrip_system\`/\`$TEST_DB\`/g" "$migration" | mysql_exec >/dev/null
   done
 done
+# Promotion protection/options now share effective commercial terms; clone upgrades stay in TEST_DB.
+sed "s/mtrip_business/$TEST_DB/g" "$REPO_ROOT/database/migrations/V20261117100000__merchant-commercial-settings.sql" | mysql_exec >/dev/null
 sed -e "s/mtrip_m12_s1_test/$TEST_DB/g" -e 's/SCAN_CACHEABLE=true/SCAN_CACHEABLE=false/' \
   "$REPO_ROOT/backend/shared/tests/integration/M12Bootstrap.php" > "$TEST_FILES/M12Bootstrap.php"
 cp "$REPO_ROOT/backend/services/marketing-service/test/merchant-promotions.php" "$TEST_FILES/merchant-promotions.php"

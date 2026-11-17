@@ -40,6 +40,10 @@ Assert-Exit 'S6 test schema migration'
 $directoryMigration = (Get-Content (Join-Path $repo 'database/merchant/33-merchant-directory-plan.sql') -Raw -Encoding utf8).Replace('mtrip_business', 'mtrip_m12_s1_test').Replace('mtrip_system', 'mtrip_m12_s1_test')
 $directoryMigration | docker exec -i $mysqlContainer sh -c 'MYSQL_PWD=$MYSQL_ROOT_PASSWORD exec mysql -uroot --batch --default-character-set=utf8mb4'
 Assert-Exit 'directory commission plan migration'
+# Commercial resolver is shared by directory reads; upgrade even pre-existing isolated test databases.
+$commercialMigration = (Get-Content (Join-Path $repo 'database/migrations/V20261117100000__merchant-commercial-settings.sql') -Raw -Encoding utf8).Replace('mtrip_business', 'mtrip_m12_s1_test')
+$commercialMigration | docker exec -i $mysqlContainer sh -c 'MYSQL_PWD=$MYSQL_ROOT_PASSWORD exec mysql -uroot --batch --default-character-set=utf8mb4'
+Assert-Exit 'commercial settings test schema migration'
 foreach ($entry in @(@('merchant', 'm12-status.php'), @('order', 'm12-orders.php'), @('order', 'm12-dashboard.php'), @('merchant', 'm12-directory.php'), @('merchant', 'm12-directory-ui.php'), @('merchant', 'm12-s3.php'), @('merchant', 'm12-s4.php'), @('merchant', 'm12-s5.php'), @('goods', 'm12-marketplace.php'), @('merchant', 'm12-s6.php'))) {
     $service = $entry[0]
     $file = $entry[1]

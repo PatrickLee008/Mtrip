@@ -3,9 +3,10 @@ import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { Modal, message } from 'ant-design-vue';
-import { BellOutlined, LoginOutlined, EyeOutlined, DownloadOutlined, ExclamationCircleOutlined } from '@ant-design/icons-vue';
+import { BellOutlined, LoginOutlined, EyeOutlined, DownloadOutlined, ExclamationCircleOutlined, CloseOutlined } from '@ant-design/icons-vue';
 import SearchFilterBar, { type FilterConfig } from '@/components/SearchFilterBar.vue';
 import AccountSecurityPanel from '@/components/merchant/AccountSecurityPanel.vue';
+import CommercialSettingsDrawer from '@/components/merchant/CommercialSettingsDrawer.vue';
 import ComplianceLinks from '@/components/merchant/ComplianceLinks.vue';
 import MerchantPropertyPanel from '@/components/merchant/MerchantPropertyPanel.vue';
 import PageContainer from '@/components/PageContainer.vue';
@@ -16,16 +17,11 @@ import ImpersonateModal from '@/components/merchant/ImpersonateModal.vue';
 import MerchantStatusActions from '@/components/merchant/MerchantStatusActions.vue';
 import { useTable, type TableRow } from '@/composables/useTable';
 import { useUserStore } from '@/stores/user';
-import type { StatusItem } from '@/components/StatusTag.vue';
 import {
   apiMerchantAdd,
 
   apiMerchantAudit,
   apiMerchantClose,
-  apiMerchantCommission,
-  apiPayAtHotelTerms,
-  apiSavePayAtHotelTerms,
-  type PayAtHotelTerms,
   apiMerchantDetail,
   apiMerchantList,
   apiMerchantModuleGrant,
@@ -48,15 +44,6 @@ const isSuper = userStore.profile?.isSuper === true;
 
 const TYPE_TEXT = computed<Record<number, string>>(() => ({
   1: t('goods.common.typeHotel'), 2: t('goods.common.typeTicket'), 3: t('merchant.title'),
-}));
-const STATUS_MAP = computed<Record<number, StatusItem>>(() => ({
-  0: { text: t('merchantDirectory.pending'), color: 'warning' },
-  1: { text: t('merchantDirectory.inactive'), color: 'default' },
-  2: { text: t('merchantDirectory.rejected'), color: 'error' },
-  3: { text: t('merchantDirectory.active'), color: 'success' },
-  4: { text: t('merchantDirectory.suspended'), color: 'error' },
-  5: { text: t('merchantDirectory.closed'), color: 'default' },
-  6: { text: t('merchantDirectory.resubmission'), color: 'processing' },
 }));
 const businessOptions = computed(() => [
   { value: 'hotel', label: t('merchant.onboardingPage.bizHotel') },
@@ -142,12 +129,36 @@ const detailBusinesses = ref<TableRow[]>([]);
 const detailProperties = ref<TableRow[]>([]);
 const detailGroup = ref<TableRow | null>(null);
 const detailModules = ref<string[]>([]);
+const profileFields = computed(() => {
+  const merchant = detail.value;
+  if (!merchant) return [];
+  return [
+    { key: 'merchantId', label: t('merchant.profile.merchantId'), value: merchant.merchant_code || '#' + merchant.id, mono: true },
+    { key: 'regNo', label: t('merchant.profile.regNo'), value: merchant.credit_code || '—', mono: true },
+    { key: 'owner', label: t('merchant.profile.owner'), value: merchant.legal_person || '—' },
+    { key: 'commissionPlan', label: t('merchant.profile.commissionPlan'), value: `${planText(merchant.commission_plan)} (${merchant.commission_rate ?? '—'}%)` },
+    { key: 'email', label: t('merchant.listPage.email'), value: merchant.contact_email || '—' },
+    { key: 'phone', label: t('merchant.listPage.phone'), value: merchant.contact_phone || '—', mono: true },
+    { key: 'bankName', label: t('merchant.profile.bankName'), value: detailAccounts.value[0]?.bank_name || '—' },
+    { key: 'bankAccount', label: t('merchant.profile.bankAccount'), value: detailAccounts.value[0]?.account_no || '—', mono: true },
+    { key: 'joinDate', label: t('merchant.profile.joinDate'), value: merchant.created_at?.slice(0, 10) || '—', mono: true },
+    { key: 'lastLogin', label: t('merchant.profile.lastLogin'), value: merchant.last_login_at || '—', mono: true },
+  ];
+});
+const profileCompany = computed(() => detailApplications.value[0]?.company_name || detail.value?.merchant_short_name);
+function performanceValue(value: number | string | null | undefined, money = false): string {
+  return value == null ? '—' : `${money ? '¥' : ''}${Number(value).toLocaleString()}`;
+}
+let detailRequest = 0;
 
 async function openDetail(row: TableRow): Promise<void> {
+  const request = ++detailRequest;
   drawerOpen.value = true;
   detailLoading.value = true;
+  detail.value = null;
   try {
     const data = await apiMerchantDetail(row.id);
+    if (request !== detailRequest) return;
     detail.value = data.merchant;
     detailAccounts.value = data.accounts;
     detailAdmins.value = data.admins;
@@ -157,7 +168,7 @@ async function openDetail(row: TableRow): Promise<void> {
     detailGroup.value = data.group;
     detailModules.value = data.modules ?? [];
   } finally {
-    detailLoading.value = false;
+    if (request === detailRequest) detailLoading.value = false;
   }
 }
 
@@ -348,71 +359,6 @@ async function doAudit(): Promise<void> {
   }
 }
 
-// ---------- 费率配置 ----------
-const commissionOpen = ref(false);
-const commissionSaving = ref(false);
-const commissionTarget = ref<TableRow | null>(null);
-const commissionForm = reactive({ commissionRate: 0, settlementCycle: 15, commissionPlan: 'standard' });
-const hotelTermsOpen = ref(false);
-const hotelTermsSaving = ref(false);
-const hotelTermsTarget = ref<TableRow | null>(null);
-const hotelTermsHistory = ref<PayAtHotelTerms[]>([]);
-const hotelTermsForm = reactive({ enabled: false, noShowEnabled: false, depositCapRate: 0, commissionRate: 0, transactionFeeRate: 0, effectiveAt: '', reason: '' });
-
-async function openHotelTerms(row: TableRow): Promise<void> {
-  hotelTermsTarget.value = row;
-  const data = await apiPayAtHotelTerms(Number(row.id));
-  const current = data.current;
-  hotelTermsHistory.value = data.history;
-  Object.assign(hotelTermsForm, {
-    enabled: Boolean(current.enabled), noShowEnabled: Boolean(current.no_show_enabled),
-    depositCapRate: Number(current.deposit_cap_rate), commissionRate: Number(current.commission_rate),
-    transactionFeeRate: Number(current.transaction_fee_rate),
-    effectiveAt: new Date().toISOString().slice(0, 19).replace('T', ' '), reason: '',
-  });
-  hotelTermsOpen.value = true;
-}
-
-async function saveHotelTerms(): Promise<void> {
-  if (!hotelTermsTarget.value || !hotelTermsForm.reason.trim() || !hotelTermsForm.effectiveAt.trim()) {
-    message.warning(t('hotelTerms.required'));
-    return;
-  }
-  hotelTermsSaving.value = true;
-  try {
-    await apiSavePayAtHotelTerms({ merchantId: Number(hotelTermsTarget.value.id), ...hotelTermsForm });
-    message.success(t('tip.saveSuccess'));
-    hotelTermsOpen.value = false;
-  } finally {
-    hotelTermsSaving.value = false;
-  }
-}
-
-function openCommission(row: TableRow): void {
-  commissionTarget.value = row;
-  Object.assign(commissionForm, {
-    commissionPlan: row.commission_plan || 'standard',
-    commissionRate: Number(row.commission_rate ?? 0),
-    settlementCycle: Number(row.settlement_cycle ?? 15),
-  });
-  commissionOpen.value = true;
-}
-
-async function saveCommission(): Promise<void> {
-  if (!commissionTarget.value) {
-    return;
-  }
-  commissionSaving.value = true;
-  try {
-    await apiMerchantCommission({ id: commissionTarget.value.id, ...commissionForm });
-    message.success(t('tip.saveSuccess'));
-    commissionOpen.value = false;
-    await statusChanged();
-  } finally {
-    commissionSaving.value = false;
-  }
-}
-
 // ---------- 注销 ----------
 
 const closeOpen = ref(false);
@@ -502,124 +448,112 @@ onMounted(() => {
     </a-table>
 
     <!-- 详情抽屉 -->
-    <a-drawer v-model:open="drawerOpen" :title="detail ? `${t('merchant.profile.merchantId')}: ${detail.merchant_name}` : t('common.detail')" width="1100">
+    <a-drawer v-model:open="drawerOpen" root-class-name="merchant-profile-drawer" :width="600" :closable="false" :destroy-on-close="true">
+      <template #title>
+        <div class="profile-heading">
+          <div>
+            <h2>{{ detail?.merchant_name || t('common.detail') }}</h2>
+            <p>{{ detail ? `${detail.merchant_code || '#' + detail.id} · ${businessText(detail)}` : '—' }}</p>
+          </div>
+          <a-button type="text" :aria-label="t('common.close')" @click="drawerOpen = false"><CloseOutlined /></a-button>
+        </div>
+      </template>
       <a-spin :spinning="detailLoading">
-        <template v-if="detail">
-          <!-- 头部卡(整改 A3,原型 §3.5.5) -->
-          <div style="display: flex; gap: 14px; padding: 14px; border: 1px solid #e3e8f0; border-radius: 10px; margin-bottom: 16px; background: #fff">
-            <div style="width: 48px; height: 48px; border-radius: 8px; background: #1664ff; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: 700; flex-shrink: 0">
-              {{ (detail.merchant_name || 'M').slice(0, 1) }}
-            </div>
-            <div style="flex: 1; min-width: 0">
-              <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap">
-                <span style="font-size: 16px; font-weight: 700; color: #1a2332">{{ detail.merchant_name }}</span>
-                <a-tag v-if="detail.is_vip === 1" color="gold">VIP</a-tag>
-                <a-tag v-if="detail.is_blacklisted" color="error">{{ t('merchantStatus.blacklisted') }}</a-tag>
-                <StatusTag v-else :value="detail.status" :map="STATUS_MAP" />
+        <div v-if="detail" class="profile-content">
+          <div class="profile-summary">
+            <div class="profile-summary-main">
+              <div class="profile-name">
+                <h3>{{ detail.merchant_name }}</h3>
+                <a-tag v-if="detail.commission_plan" :color="planColors[detail.commission_plan]">{{ planText(detail.commission_plan) }}</a-tag>
               </div>
-              <div style="font-size: 12px; color: #64748b; margin-top: 4px">{{ detail.merchant_short_name || detail.credit_code }}</div>
-              <div style="font-size: 11px; color: #94a3b8; margin-top: 4px">{{ businessText(detail) }}</div>
+              <p v-if="profileCompany && profileCompany !== detail.merchant_name">{{ profileCompany }}</p>
+              <div class="profile-summary-meta">{{ businessText(detail) }}</div>
+              <div v-if="detail.address" class="profile-summary-meta">{{ detail.address }}</div>
+            </div>
+            <div class="profile-statuses">
+              <a-tag :color="statusColors[detail.account_status] || 'default'">{{ t(`merchantDirectory.${detail.account_status}`) }}</a-tag>
+              <a-tag :color="statusColors[detail.verification_status] || 'default'">{{ t(`merchantDirectory.${detail.verification_status}`) }}</a-tag>
             </div>
           </div>
 
-          <!-- 字段网格 -->
-          <a-descriptions :column="3" size="small" bordered style="margin-bottom: 16px">
-            <a-descriptions-item :label="t('merchant.profile.merchantId')">{{ detail.merchant_code || '#' + detail.id }}</a-descriptions-item>
-            <a-descriptions-item :label="t('merchant.profile.regNo')">{{ detail.credit_code || '-' }}</a-descriptions-item>
-            <a-descriptions-item :label="t('merchant.profile.owner')">{{ detail.legal_person || '-' }}</a-descriptions-item>
-            <a-descriptions-item :label="t('merchant.profile.commissionPlan')">
-              {{ planText(detail.commission_plan) }}
-            </a-descriptions-item>
-            <a-descriptions-item :label="t('merchantDirectory.commission')">{{ detail.commission_rate }}%</a-descriptions-item>
-            <a-descriptions-item :label="t('merchantDirectory.verification')">{{ t(`merchantDirectory.${detail.verification_status}`) }}</a-descriptions-item>
-            <a-descriptions-item :label="t('merchantDirectory.accountStatus')">{{ t(`merchantDirectory.${detail.account_status}`) }}</a-descriptions-item>
-            <a-descriptions-item :label="t('merchant.listPage.email')">{{ detail.contact_email || '-' }}</a-descriptions-item>
-            <a-descriptions-item :label="t('merchant.listPage.phone')">{{ detail.contact_phone || '-' }}</a-descriptions-item>
-            <a-descriptions-item :label="t('merchant.profile.bankName')">{{ detailAccounts[0]?.bank_name || '-' }}</a-descriptions-item>
-            <a-descriptions-item :label="t('merchant.profile.bankAccount')">{{ detailAccounts[0]?.account_no || '-' }}</a-descriptions-item>
-            <a-descriptions-item :label="t('merchant.profile.joinDate')">{{ detail.created_at || '-' }}</a-descriptions-item>
-            <a-descriptions-item :label="t('merchant.profile.lastLogin')">{{ detail.last_login_at || '-' }}</a-descriptions-item>
-          </a-descriptions>
+          <dl class="profile-fields">
+            <div v-for="field in profileFields" :key="field.key" class="profile-field">
+              <dt>{{ field.label }}</dt>
+              <dd :class="{ 'profile-mono': field.mono }">{{ field.value }}</dd>
+            </div>
+          </dl>
 
-          <MerchantPropertyPanel :merchant="detail" :applications="detailApplications" :businesses="detailBusinesses"
+          <CommercialSettingsDrawer :key="detail.id" :merchant="detail" @changed="statusChanged" />
+
+          <AccountSecurityPanel :key="detail.id" :merchant-id="detail.id" :access-configured="!!detail.access_code_configured" />
+
+          <section>
+            <h4 class="profile-section-title">{{ t('merchant.profile.monthlyPerformance') }}</h4>
+            <div class="profile-performance">
+              <div class="profile-metric profile-metric-revenue">
+                <div>{{ t('merchant.profile.revenueMtd') }}</div>
+                <strong>{{ performanceValue(detail.revenue_mtd, true) }}</strong>
+              </div>
+              <div class="profile-metric profile-metric-bookings">
+                <div>{{ t('merchant.profile.bookingsMtd') }}</div>
+                <strong>{{ performanceValue(detail.bookings_mtd) }}</strong>
+              </div>
+            </div>
+          </section>
+
+          <div class="profile-actions">
+            <a-button v-if="isSuper" v-perm="'merchant:list:impersonate'" class="profile-action-impersonate" @click="openImpersonate(detail)"><LoginOutlined />{{ t('merchant.impersonate.start') }}</a-button>
+            <a-button v-perm="'merchant:list:notify'" class="profile-action-notify" @click="openNotify(detail)"><BellOutlined />{{ t('merchant.notifyPage.title') }}</a-button>
+            <MerchantStatusActions :merchant="detail" @changed="statusChanged" />
+          </div>
+
+          <MerchantPropertyPanel :key="detail.id" :merchant="detail" :applications="detailApplications" :businesses="detailBusinesses"
             :properties="detailProperties" :group="detailGroup" @changed="statusChanged" />
 
-          <AccountSecurityPanel :merchant-id="detail.id" :access-configured="!!detail.access_code_configured" />
-          <ComplianceLinks :merchant-id="detail.id" />
-
-          <!-- 月度绩效(整改 A3) -->
-          <a-divider orientation="left">{{ t('merchant.profile.monthlyPerformance') }}</a-divider>
-          <a-row :gutter="12">
-            <a-col :span="12">
-              <div style="border: 1px solid #e3e8f0; border-radius: 8px; padding: 12px 14px; background: #f8fafc">
-                <div style="font-size: 11px; color: #94a3b8">{{ t('merchant.profile.revenueMtd') }}</div>
-                <div style="font-size: 18px; font-weight: 700; color: #1a2332; margin-top: 2px">
-                  {{ detail.revenue_mtd != null ? `¥${Number(detail.revenue_mtd).toLocaleString()}` : '-' }}
-                </div>
+          <details class="profile-more">
+            <summary>{{ t('merchant.profile.moreManagement') }}</summary>
+            <div class="profile-more-body">
+              <div class="directory-detail-actions">
+                <a-button v-if="detail.status !== 5" v-perm="'merchant:list:edit'" @click="openEdit(detail)">{{ t('common.edit') }}</a-button>
+                <a-button v-if="detail.status === 0" v-perm="'merchant:list:audit'" @click="openAudit(detail)">{{ t('goods.audit.columns.pass') }}</a-button>
+                <a-button v-if="detail.status !== 5" v-perm="'merchant:list:delete'" danger @click="openClose(detail)">{{ t('common.delete') }}</a-button>
+                <a-button v-perm="'merchant:list:module'" @click="openModules(detail)">{{ t('merchant.modulePage.title') }}</a-button>
               </div>
-            </a-col>
-            <a-col :span="12">
-              <div style="border: 1px solid #e3e8f0; border-radius: 8px; padding: 12px 14px; background: #f8fafc">
-                <div style="font-size: 11px; color: #94a3b8">{{ t('merchant.profile.bookingsMtd') }}</div>
-                <div style="font-size: 18px; font-weight: 700; color: #1a2332; margin-top: 2px">{{ detail.bookings_mtd ?? '-' }}</div>
-              </div>
-            </a-col>
-          </a-row>
-
-          <!-- 完整操作放在详情中；列表仅保留四个图标入口。 -->
-          <div class="directory-detail-actions">
-            <a-button v-if="detail.status !== 5" v-perm="'merchant:list:edit'" @click="openEdit(detail)">{{ t('common.edit') }}</a-button>
-            <a-button v-if="detail.status === 0" v-perm="'merchant:list:audit'" @click="openAudit(detail)">{{ t('goods.audit.columns.pass') }}</a-button>
-            <a-button v-if="[3, 4].includes(detail.status)" v-perm="'merchant:list:edit'" @click="openCommission(detail)">{{ t('merchant.profile.commissionPlan') }}</a-button>
-            <a-button v-if="[3, 4].includes(detail.status)" v-perm="'merchant:list:edit'" @click="openHotelTerms(detail)">{{ t('hotelTerms.title') }}</a-button>
-            <a-button v-if="detail.status !== 5" v-perm="'merchant:list:delete'" danger @click="openClose(detail)">{{ t('common.delete') }}</a-button>
-            <MerchantStatusActions :merchant="detail" @changed="statusChanged" />
-            <a-button v-perm="'merchant:list:notify'" @click="openNotify(detail)">{{ t('merchant.notifyPage.title') }}</a-button>
-            <a-button v-if="isSuper" v-perm="'merchant:list:impersonate'" @click="openImpersonate(detail)">{{ t('merchant.impersonate.start') }}</a-button>
-            <a-button v-perm="'merchant:list:module'" @click="openModules(detail)">{{ t('merchant.modulePage.title') }}</a-button>
-          </div>
-
-          <a-divider orientation="left">{{ t('merchant.modulePage.title') }}</a-divider>
-          <a-descriptions :column="2" size="small" bordered>
-            <a-descriptions-item :label="t('merchant.modulePage.granted')">
+              <ComplianceLinks :merchant-id="detail.id" />
+              <h4 class="profile-section-title">{{ t('merchant.modulePage.title') }}</h4>
               <a-space v-if="detailModules.length" wrap>
                 <a-tag v-for="key in detailModules" :key="key" color="processing">{{ moduleLabel(key) }}</a-tag>
               </a-space>
               <a-tag v-else color="default">{{ t('merchant.modulePage.unmanaged') }}</a-tag>
-            </a-descriptions-item>
-            <a-descriptions-item :label="t('merchant.listPage.subAccountLimit')">
-              {{ detail.sub_account_limit ?? 3 }}
-            </a-descriptions-item>
-          </a-descriptions>
-
-          <template v-if="detail.legal_id_images?.length">
-            <a-divider orientation="left">{{ t('goods.common.images') }}</a-divider>
-            <a-image-preview-group>
-              <a-space wrap>
-                <a-image v-for="(img, idx) in detail.legal_id_images" :key="idx" :src="img" :width="96" />
-              </a-space>
-            </a-image-preview-group>
-          </template>
-
-          <a-divider orientation="left">{{ t('finance.msettlePage.withdraw.account') }}</a-divider>
-          <a-table :columns="accountColumns" :data-source="detailAccounts" row-key="id" size="small" :pagination="false">
-            <template #bodyCell="{ column, record }">
-              <template v-if="column.dataIndex === 'is_default'">
-                <a-tag v-if="record.is_default === 1" color="success">{{ t('common.confirm') }}</a-tag>
-                <span v-else>-</span>
+              <p class="profile-summary-meta">{{ t('merchant.listPage.subAccountLimit') }}: {{ detail.sub_account_limit ?? 3 }}</p>
+              <template v-if="detail.legal_id_images?.length">
+                <h4 class="profile-section-title">{{ t('goods.common.images') }}</h4>
+                <a-image-preview-group>
+                  <a-space wrap>
+                    <a-image v-for="(img, idx) in detail.legal_id_images" :key="idx" :src="img" :width="96" />
+                  </a-space>
+                </a-image-preview-group>
               </template>
-            </template>
-          </a-table>
-
-          <a-divider orientation="left">{{ t('system.admin.title') }}</a-divider>
-          <a-table :columns="adminColumns" :data-source="detailAdmins" row-key="id" size="small" :pagination="false">
-            <template #bodyCell="{ column, record }">
-              <template v-if="column.dataIndex === 'is_owner'">{{ record.is_owner === 1 ? t('common.yes') : t('common.no') }}</template>
-              <template v-else-if="column.dataIndex === 'account_type'">{{ t(`merchant.accountType.t${record.account_type}`) }}</template>
-              <template v-else-if="column.dataIndex === 'status'"><StatusTag :value="record.status" /></template>
-            </template>
-          </a-table>
-        </template>
+              <h4 class="profile-section-title">{{ t('finance.msettlePage.withdraw.account') }}</h4>
+              <a-table :columns="accountColumns" :data-source="detailAccounts" row-key="id" size="small" :pagination="false" :scroll="{ x: 500 }">
+                <template #bodyCell="{ column, record }">
+                  <template v-if="column.dataIndex === 'is_default'">
+                    <a-tag v-if="record.is_default === 1" color="success">{{ t('common.confirm') }}</a-tag>
+                    <span v-else>—</span>
+                  </template>
+                </template>
+              </a-table>
+              <h4 class="profile-section-title">{{ t('system.admin.title') }}</h4>
+              <a-table :columns="adminColumns" :data-source="detailAdmins" row-key="id" size="small" :pagination="false" :scroll="{ x: 650 }">
+                <template #bodyCell="{ column, record }">
+                  <template v-if="column.dataIndex === 'is_owner'">{{ record.is_owner === 1 ? t('common.yes') : t('common.no') }}</template>
+                  <template v-else-if="column.dataIndex === 'account_type'">{{ t(`merchant.accountType.t${record.account_type}`) }}</template>
+                  <template v-else-if="column.dataIndex === 'status'"><StatusTag :value="record.status" /></template>
+                </template>
+              </a-table>
+            </div>
+          </details>
+        </div>
       </a-spin>
     </a-drawer>
 
@@ -752,50 +686,7 @@ onMounted(() => {
       </a-form>
     </a-modal>
 
-    <!-- 费率配置 -->
-    <a-modal
-      v-model:open="commissionOpen"
-      :title="`${t('merchant.profile.commissionPlan')}:${commissionTarget?.merchant_name ?? ''}`"
-      width="420px"
-      :confirm-loading="commissionSaving"
-      @ok="saveCommission"
-    >
-      <a-form :label-col="{ style: { width: '90px' } }" style="margin-top: 16px">
-        <a-form-item :label="t('merchant.profile.commissionPlan')" required>
-          <a-select v-model:value="commissionForm.commissionPlan">
-            <a-select-option v-for="plan in ['vip', 'premium', 'standard']" :key="plan" :value="plan">{{ planText(plan) }}</a-select-option>
-          </a-select>
-        </a-form-item>
-        <a-form-item :label="t('config.pay.feeRate')" required>
-          <a-input-number v-model:value="commissionForm.commissionRate" :min="0" :max="100" :step="0.1" addon-after="%" style="width: 100%" />
-        </a-form-item>
-        <a-form-item :label="t('merchantDirectory.settlement')" required>
-          <a-radio-group v-model:value="commissionForm.settlementCycle">
-            <a-radio :value="7">T+7</a-radio>
-            <a-radio :value="15">T+15</a-radio>
-            <a-radio :value="30">{{ t('merchantDirectory.monthly') }}</a-radio>
-          </a-radio-group>
-        </a-form-item>
-      </a-form>
-    </a-modal>
-
     <!-- 注销(高危) -->
-    <a-modal v-model:open="hotelTermsOpen" :title="t('hotelTerms.title')" :confirm-loading="hotelTermsSaving" width="580px" @ok="saveHotelTerms">
-      <a-form layout="vertical">
-        <a-form-item :label="t('hotelTerms.enabled')"><a-switch v-model:checked="hotelTermsForm.enabled" /></a-form-item>
-        <a-form-item :label="t('hotelTerms.noShow')"><a-switch v-model:checked="hotelTermsForm.noShowEnabled" :disabled="!hotelTermsForm.enabled" /></a-form-item>
-        <a-form-item :label="t('hotelTerms.commission')"><a-input-number v-model:value="hotelTermsForm.commissionRate" :min="0" :max="100" :step="0.1" addon-after="%" style="width: 100%" /></a-form-item>
-        <a-form-item :label="t('hotelTerms.fee')"><a-input-number v-model:value="hotelTermsForm.transactionFeeRate" :min="0" :max="100" :step="0.1" addon-after="%" style="width: 100%" /></a-form-item>
-        <a-form-item :label="t('hotelTerms.cap')"><a-input-number v-model:value="hotelTermsForm.depositCapRate" :min="0" :max="30" :step="0.1" addon-after="%" style="width: 100%" /></a-form-item>
-        <a-form-item :label="t('hotelTerms.effectiveAt')" required><a-input v-model:value="hotelTermsForm.effectiveAt" placeholder="YYYY-MM-DD HH:mm:ss UTC" /></a-form-item>
-        <a-form-item :label="t('hotelTerms.reason')" required><a-textarea v-model:value="hotelTermsForm.reason" :maxlength="500" :rows="2" /></a-form-item>
-      </a-form>
-      <a-divider>{{ t('hotelTerms.history') }}</a-divider>
-      <div v-for="item in hotelTermsHistory" :key="item.version" style="margin: 6px 0; font-size: 12px">
-        v{{ item.version }} · {{ item.effective_at }} · {{ item.actor_type }} #{{ item.actor_id }} · {{ item.reason }}
-      </div>
-    </a-modal>
-
     <a-modal
       v-model:open="closeOpen"
       :title="`${t('common.delete')}:${closeTarget?.merchant_name ?? ''}`"
@@ -843,8 +734,55 @@ onMounted(() => {
 .directory-actions :deep(.ant-btn:hover:not(:disabled)) { color: #2563eb; background: #eff6ff; }
 .directory-actions :deep(.ant-btn:disabled) { color: #cbd5e1; }
 .directory-detail-actions { display: flex; gap: 8px; margin-top: 16px; flex-wrap: wrap; }
+.profile-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.profile-heading > div { min-width: 0; }
+.profile-heading h2 { margin: 0; color: #1a2332; font-size: 15px; line-height: 21px; font-weight: 700; overflow-wrap: anywhere; }
+.profile-heading p { margin: 1px 0 0; color: #94a3b8; font-size: 12px; line-height: 18px; font-weight: 400; overflow-wrap: anywhere; }
+.profile-heading > .ant-btn { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 32px; width: 32px; height: 32px; padding: 0; color: #64748b; }
+.profile-heading > .ant-btn :deep(.anticon) { font-size: 14px; }
+.profile-content { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+.profile-summary { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 16px; border: 1px solid #e3e8f0; border-radius: 8px; background: #f8fafc; }
+.profile-summary-main { min-width: 0; }
+.profile-name { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.profile-name h3 { margin: 0; color: #1a2332; font-size: 16px; line-height: 24px; font-weight: 700; overflow-wrap: anywhere; }
+.profile-summary p { margin: 4px 0 0; font-size: 13px; color: #64748b; overflow-wrap: anywhere; }
+.profile-summary-meta { margin-top: 4px; color: #94a3b8; font-size: 12px; line-height: 18px; overflow-wrap: anywhere; }
+.profile-statuses { display: flex; align-items: flex-end; flex-direction: column; gap: 8px; flex-shrink: 0; }
+.profile-summary :deep(.ant-tag) { margin: 0; font-size: 11px; line-height: 20px; border: 0; }
+.profile-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 0; }
+.profile-field { padding: 8px 12px; border: 1px solid #f1f5f9; border-radius: 6px; background: #f8fafc; min-width: 0; }
+.profile-field dt { margin-bottom: 2px; font-size: 11px; line-height: 17px; color: #94a3b8; }
+.profile-field dd { margin: 0; font-size: 13px; line-height: 20px; font-weight: 500; color: #1a2332; overflow-wrap: anywhere; }
+.profile-mono { font-family: monospace; }
+.profile-section-title { margin: 0 0 10px; color: #64748b; font-size: 12px; line-height: 18px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
+.profile-performance { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.profile-metric { padding: 12px; border: 1px solid; border-radius: 8px; text-align: center; min-width: 0; }
+.profile-metric > div { font-size: 11px; margin-bottom: 4px; }
+.profile-metric strong { display: block; font: 700 20px/28px monospace; overflow-wrap: anywhere; }
+.profile-metric-revenue { background: #eef4ff; border-color: #bfdbfe; color: #2563eb; }
+.profile-metric-revenue strong { color: #1e40af; }
+.profile-metric-bookings { background: #ecfdf3; border-color: #a7f3d0; color: #059669; }
+.profile-metric-bookings strong { color: #065f46; }
+.profile-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding-top: 2px; }
+.profile-actions > .ant-btn { height: 36px; font-size: 13px; font-weight: 500; border-radius: 6px; }
+.profile-action-impersonate { border-color: #fde68a; background: #fef3c7; color: #92400e; }
+.profile-action-notify { border-color: #c7d2fe; background: #eef2ff; color: #4f46e5; }
+.profile-more { border: 1px solid #e3e8f0; border-radius: 8px; }
+.profile-more > summary { padding: 12px 14px; font-size: 12px; font-weight: 600; color: #64748b; cursor: pointer; }
+.profile-more-body { display: flex; flex-direction: column; gap: 12px; min-width: 0; padding: 0 14px 14px; }
+.profile-more-body .directory-detail-actions { margin-top: 0; }
+.profile-more-body .profile-section-title { margin: 4px 0 0; }
+:global(.merchant-profile-drawer .ant-drawer-content-wrapper) { max-width: 100vw; }
+:global(.merchant-profile-drawer .ant-drawer-header) { padding: 10px 24px; min-height: 60px; border-color: #e3e8f0; }
+:global(.merchant-profile-drawer .ant-drawer-body) { padding: 20px 24px; }
 .directory-table :deep(.ant-table) { border: 1px solid #e3e8f0; border-radius: 8px; overflow: hidden; }
 .directory-table :deep(.ant-table-thead > tr > th) { font-size: 12px; color: #64748b; background: #f8fafc; }
-.directory-table :deep(.ant-pagination-total-text) { margin-right: auto; color: #94a3b8; }
+.directory-table :deep(.ant-pagination-total-text) { margin-right: auto; color: #94a3b8; font-size: 12px; }
 @media (max-width: 900px) { .directory-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 480px) {
+  :global(.merchant-profile-drawer .ant-drawer-header) { padding: 10px 16px; }
+  :global(.merchant-profile-drawer .ant-drawer-body) { padding: 16px; }
+  .profile-summary { padding: 12px; }
+  .profile-name h3 { font-size: 15px; }
+}
 </style>

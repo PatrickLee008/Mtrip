@@ -18,6 +18,7 @@ use Mtrip\Shared\Context\AdminContext;
 use Mtrip\Shared\Exception\BusinessException;
 use Mtrip\Shared\Support\MaskHelper;
 use Mtrip\Shared\Support\Result;
+use Mtrip\Shared\Merchant\MerchantCommercialSettings;
 
 /**
  * 商户管理(文档 6.4.2,11 接口)
@@ -201,6 +202,7 @@ class MerchantController extends AbstractController
             ->leftJoin('merchant_application_business as b', function ($join) {
                 $join->on('b.application_id', '=', 'a.id')->on('b.site_id', '=', 'a.site_id');
             })->get(['a.merchant_id', 'a.business_types', 'b.business_type']);
+        $effectiveTerms = MerchantCommercialSettings::effectiveMany($rows);
         $types = [];
         foreach ($applications as $app) {
             $types[$app->merchant_id] ??= [];
@@ -209,6 +211,8 @@ class MerchantController extends AbstractController
             }
         }
         foreach ($rows as &$row) {
+            $row['commission_plan'] = $effectiveTerms[(int) $row['id']]['commission_plan'];
+            $row['commission_rate'] = $effectiveTerms[(int) $row['id']]['commission_rate'];
             $row['business_types'] = isset($types[$row['id']]) ? array_keys($types[$row['id']])
                 : match ((int) $row['merchant_type']) { 1 => ['hotel'], 2 => ['attraction'], default => [] };
             sort($row['business_types']);
@@ -275,7 +279,7 @@ class MerchantController extends AbstractController
 
         $applications = Db::table('merchant_application')->where('merchant_id', $merchant['id'])
             ->where('site_id', $merchant['site_id'])->whereNull('deleted_at')->orderBy('id')
-            ->get(['id', 'app_no', 'company_name', 'company_group_name', 'reg_number', 'country', 'submitted_at'])
+            ->get(['id', 'app_no', 'company_name', 'company_group_name', 'reg_number', 'country', 'submitted_at', 'state_model_version'])
             ->map(static fn ($row) => (array) $row)->all();
         $loginTimes = array_filter(array_merge([$merchant['last_login_at']], array_column($admins, 'last_login_at')));
         $merchant['last_login_at'] = $loginTimes === [] ? null : max($loginTimes);
@@ -460,43 +464,37 @@ class MerchantController extends AbstractController
         return Result::page($list, $total, $page, $pageSize);
     }
 
-    /** 设置抽佣比例与结算周期 */
+    #[Permission('merchant:list:list')]
+    public function commercialSettings(): array
+    {
+        return Result::success(MerchantCommercialSettings::read($this->requireId()));
+    }
+
+    #[Permission('merchant:list:edit')]
+    public function saveCommercialSettings(): array
+    {
+        $input = [];
+        foreach (['expectedVersion', 'commissionPlan', 'commissionRate', 'transactionFeeRate', 'payAtHotelEnabled',
+            'noShowFeeEnabled', 'merchantUpfrontRate', 'effectiveAt', 'reason', 'requestId'] as $key) {
+            $input[$key] = $this->input($key);
+        }
+        return Result::success(MerchantCommercialSettings::save($this->requireId(), $input));
+    }
+
+    #[Permission('merchant:list:list')]
+    public function commercialSettingsHistory(): array
+    {
+        [$page, $pageSize] = $this->pageParams();
+        return Result::success(MerchantCommercialSettings::history($this->requireId(), $page, $pageSize));
+    }
+
+    /** 旧直写入口停用，防止绕过生效时间、原因及版本审计。 */
     #[Permission('merchant:list:edit')]
     public function commission(): array
     {
-        $merchant = $this->findScoped($this->requireId());
-        $rate = $this->floatInput('commissionRate', -1);
-        if ($rate < 0 || $rate > 100) {
-            throw new BusinessException(ErrorCode::PARAM_ERROR, '抽佣比例须为 0-100');
-        }
-        $cycle = $this->intInput('settlementCycle', (int) $merchant['settlement_cycle']);
-        $plan = $this->input('commissionPlan') === null ? $merchant['commission_plan'] : $this->strInput('commissionPlan');
-        if ($plan !== null && ! in_array($plan, ['vip', 'premium', 'standard'], true)) {
-            throw new BusinessException(ErrorCode::PARAM_ERROR, '佣金计划仅支持VIP、Premium、Standard');
-        }
-        if (! in_array($cycle, [7, 15, 30], true)) {
-            throw new BusinessException(ErrorCode::PARAM_ERROR, '结算周期仅支持 T+7 / T+15 / 30(月结)');
-        }
-        Db::transaction(function () use ($merchant, $rate, $plan, $cycle) {
-            Db::table('merchant_info')->where('id', $merchant['id'])->update([
-                'commission_rate' => $rate,
-                'commission_plan' => $plan,
-                'settlement_cycle' => $cycle,
-            ]);
-            $terms = $this->payAtHotelTerms->current($merchant);
-            if ((int) $terms['version'] > 0) {
-                $this->payAtHotelTerms->saveAdmin($merchant, [
-                    'enabled' => (int) $terms['enabled'] === 1,
-                    'noShowEnabled' => (int) $terms['no_show_enabled'] === 1,
-                    'depositCapRate' => (float) $terms['deposit_cap_rate'],
-                    'commissionRate' => $rate,
-                    'transactionFeeRate' => (float) $terms['transaction_fee_rate'],
-                    'effectiveAt' => gmdate('Y-m-d H:i:s'),
-                    'reason' => '佣金设置同步更新',
-                ], AdminContext::adminId());
-            }
-        });
-        return Result::success(null, '佣金设置已更新');
+        if (! AdminContext::hasPermission('merchant:list:edit')) throw new BusinessException(ErrorCode::FORBIDDEN);
+        $this->findScoped($this->requireId());
+        throw new BusinessException(ErrorCode::PARAM_ERROR, '请使用商务与支付设置接口，提供生效时间、变更原因及版本');
     }
 
     /** 功能模块授权现状:全部可选模块 + 该商户已开通模块 */

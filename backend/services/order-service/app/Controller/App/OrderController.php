@@ -428,7 +428,7 @@ class OrderController extends AbstractController
         if (! in_array((int) $order['order_status'], [1, 2], true)) {
             $order['verify_code'] = '';
         }
-        unset($order['platform_commission'], $order['merchant_receivable'], $order['supplier_cost'], $order['coupon_snapshot'], $order['hotel_terms_snapshot'], $order['deleted_at']);
+        unset($order['merchant_commercial_snapshot'], $order['platform_commission'], $order['merchant_receivable'], $order['supplier_cost'], $order['coupon_snapshot'], $order['hotel_terms_snapshot'], $order['deleted_at']);
         /**
          * 已取消/退款中/已退款的单,补一段 `cancelInfo` 给 C 端取消详情页
          * (Figma `1685:3429`「Booking Cancelled by Merchant」要区分是谁取消的):
