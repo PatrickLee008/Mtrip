@@ -1159,7 +1159,6 @@ onMounted(() => {
             <div class="stage-card__status" :style="stageCardStyle">
               <StatusTag :value="0" :map="{ 0: currentProgress.status }" />
               <span class="stage-card__stage-text">{{ t('merchant.onboardingPage.colProgress') }}</span>
-              <span v-if="!isLegacy && Number(app.registration_status) === 3" class="ob-registration-caption">{{ REGISTRATION_STATUS_MAP[3].text }}</span>
               <div v-if="editable && isLegacy" class="stage-card__change">
                 <span class="stage-card__change-label">{{ t('merchant.onboardingPage.change') }}</span>
                 <a-select
@@ -1985,7 +1984,6 @@ onMounted(() => {
 .ob-mono-value { font-family: monospace; font-size: 12px; }
 .ob-merchant-name { font-weight: 500; color: #1a2332; }
 .ob-progress-badge :deep(.ant-tag) { max-width: 100%; white-space: normal; }
-.ob-registration-caption { margin-top: 3px; color: #94a3b8; font-size: 10px; }
 .ob-kyc-locked-hint { margin: 12px 0 16px; }
 .ob-drawer-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .ob-drawer-heading strong { display: block; font-size: 16px; color: #1a2332; }
