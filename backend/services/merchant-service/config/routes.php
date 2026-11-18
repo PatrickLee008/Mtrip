@@ -96,6 +96,11 @@ Router::addGroup('/api/v1/admin', static function () {
         foreach (['reply', 'assign', 'priority', 'status', 'reopen'] as $method) Router::post('/' . $method, [$controller, $method]);
         Router::post('/attachments/upload', [$controller, 'upload']);
     });
+    Router::get('/merchant/kyc-template/list', [\App\Controller\Admin\KycTemplateController::class, 'index']);
+    Router::get('/merchant/kyc-template/history', [\App\Controller\Admin\KycTemplateController::class, 'history']);
+    Router::post('/merchant/kyc-template/create', [\App\Controller\Admin\KycTemplateController::class, 'create']);
+    Router::post('/merchant/kyc-template/update', [\App\Controller\Admin\KycTemplateController::class, 'update']);
+    Router::post('/merchant/kyc-template/status', [\App\Controller\Admin\KycTemplateController::class, 'status']);
     // ---------- 商户管理(11 接口,文档 6.4.2) ----------
     Router::get('/merchant/list', [MerchantController::class, 'index']);
     Router::get('/merchant/detail', [MerchantController::class, 'detail']);
@@ -180,6 +185,8 @@ Router::addGroup('/api/v1/admin', static function () {
     Router::get('/merchant/onboarding/detail', [OnboardingController::class, 'detail']);
     Router::get('/merchant/onboarding/kyc-templates', [OnboardingController::class, 'kycTemplates']);
     Router::post('/merchant/onboarding/kyc-template-update', [OnboardingController::class, 'kycTemplateUpdate']);
+    Router::get('/merchant/onboarding/property-kyc-templates', [OnboardingController::class, 'propertyKycTemplates']);
+    Router::post('/merchant/onboarding/property-kyc-configure', [OnboardingController::class, 'propertyKycConfigure']);
     Router::post('/merchant/onboarding/add', [OnboardingController::class, 'create']);
     Router::post('/merchant/onboarding/update-stage', [OnboardingController::class, 'updateStage']);
     Router::post('/merchant/onboarding/assign-ops', [OnboardingController::class, 'assignOps']);

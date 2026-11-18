@@ -27,7 +27,7 @@ All sites, including soft-deleted records. Requires the current migrated schema.
 Execution pauses running containers connected to either target database, backs up
 both databases, deletes in one transaction, clears registration OTPs, credential
 claim limits and removed accounts' pairing codes, then restarts those containers.
-Keeps platform/admin/customer/supplier/group accounts, built-in roles, templates,
+Keeps platform/admin/customer/supplier/group accounts, built-in roles, public templates,
 channels, shared storage files, wallet balances/points, and ID/code sequences.
 Does not refund payments or delete files from disk/object storage.
 ENV: MYSQL_CONTAINER, MYSQL_ROOT_PASSWORD, REDIS_CONTAINER, DB_BUSINESS_DATABASE,
@@ -211,6 +211,20 @@ merchant_store|1=1
 merchant_info|1=1
 PLAN
 
+# These merchant-owned tables may not exist until their respective feature migrations run.
+optional_tables="$(printf "SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA='%s' AND TABLE_NAME IN ('merchant_commercial_config','merchant_pay_at_hotel_terms');\n" "$BUSINESS_DB" | mysql_exec)"
+for table in $optional_tables; do
+    printf '%s|merchant_id>0\n' "$table" >> "$WORK_DIR/optional-plan"
+done
+private_templates="$(printf "SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA='%s' AND TABLE_NAME='merchant_kyc_template' AND COLUMN_NAME='application_business_id';\n" "$BUSINESS_DB" | mysql_exec)"
+if [ "$private_templates" = 1 ]; then
+    printf 'merchant_kyc_template|application_business_id>0\n' >> "$WORK_DIR/optional-plan"
+fi
+if [ -f "$WORK_DIR/optional-plan" ]; then
+    cat "$WORK_DIR/plan" >> "$WORK_DIR/optional-plan"
+    mv "$WORK_DIR/optional-plan" "$WORK_DIR/plan"
+fi
+
 # Refuse new merchant tables until their ownership and cleanup rules are reviewed.
 known="'merchant_menu','merchant_group','merchant_kyc_template','merchant_onboarding_agreement','merchant_code_sequence','merchant_email_identity_lock','merchant_phone_identity_lock'"
 while IFS='|' read -r table predicate; do known="$known,'$table'"; done < "$WORK_DIR/plan"
@@ -294,7 +308,7 @@ SQL
 echo "[$MODE] $MYSQL_CONTAINER: $BUSINESS_DB + $SYSTEM_DB (ALL sites)"
 build_sql preview > "$WORK_DIR/preview.sql"
 mysql_exec < "$WORK_DIR/preview.sql"
-echo "Preserved: platform/customer/supplier/group accounts, templates, channels, wallet balances/points, shared files, ID/code sequences."
+echo "Preserved: platform/customer/supplier/group accounts, public templates, channels, wallet balances/points, shared files, ID/code sequences."
 [ "$MODE" = execute ] || { echo "Preview only; no persistent data changed."; exit 0; }
 
 echo "Pausing writers..."

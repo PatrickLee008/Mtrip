@@ -2,6 +2,7 @@
 import { genUUID } from '@/utils/uuid';
 import { computed, onMounted, reactive, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { useRouter } from 'vue-router';
 import { message, Modal, type TablePaginationConfig } from 'ant-design-vue';
 import {
   BankOutlined,
@@ -33,6 +34,7 @@ import StatusTag from '@/components/StatusTag.vue';
 import MerchantVerifyNav from '@/components/MerchantVerifyNav.vue';
 import KycScopeDocuments from './components/KycScopeDocuments.vue';
 import MerchantDocumentPreview from './components/MerchantDocumentPreview.vue';
+import PropertyKycTemplate from './components/PropertyKycTemplate.vue';
 import { useTable, type TableRow } from '@/composables/useTable';
 import type { StatusItem } from '@/components/StatusTag.vue';
 import { useUserStore } from '@/stores/user';
@@ -48,7 +50,6 @@ import {
   apiOnboardingCredentialRetry,
   apiOnboardingTestCredentials,
   apiOnboardingKycTemplates,
-  apiOnboardingKycTemplateUpdate,
   apiOnboardingKycUpload,
   apiOnboardingList,
   apiOnboardingRegistrationResubmit,
@@ -329,6 +330,15 @@ const registrationProgress = computed(() => currentProgress.value.step);
 
 const currentProperty = computed<TableRow | null>(() => (kyc.value?.initialProperties || [])
   .find((property: TableRow) => Number(property.applicationBusinessId) === Number(kycBizId.value)) ?? null);
+async function refreshPropertyTemplate(applicationId: number): Promise<void> {
+  if (Number(app.value?.id) !== applicationId) return;
+  scopedKycBusy.value = true;
+  try {
+    await loadDetail(applicationId, true);
+  } finally {
+    scopedKycBusy.value = false;
+  }
+}
 const propertyOptions = computed(() => (kyc.value?.initialProperties || []).map((property: TableRow) => ({
   value: property.applicationBusinessId,
   label: property.businessName,
@@ -408,8 +418,9 @@ async function openDetail(row: TableRow): Promise<void> {
   }
 }
 
-async function loadDetail(id: number): Promise<void> {
+async function loadDetail(id: number, onlyIfCurrent = false): Promise<void> {
   const data = await apiOnboardingDetail(id);
+  if (onlyIfCurrent && Number(app.value?.id) !== id) return;
   app.value = data.application;
   businesses.value = data.businesses;
   documents.value = data.documents;
@@ -793,63 +804,11 @@ function templateDocs(tpl: TableRow | null): { name: string; doc_type: string; r
   }
 }
 
-// ---------- 编辑验证模板(名称/业态/所需文档清单) ----------
-const editTplOpen = ref(false);
-const editTplSaving = ref(false);
-const editTplForm = reactive<{
-  id: number;
-  name: string;
-  docs: { name: string; doc_type: string; required: boolean }[];
-}>({
-  id: 0,
-  name: '',
-  docs: [],
-});
+// 公共模板统一在平台配置中管理，避免旧入口覆盖申请正在引用的版本。
+const router = useRouter();
 function openEditTemplate(): void {
-  if (!selectedTemplate.value) {
-    message.warning(t('merchant.onboardingPage.selectTemplateWarning'));
-    return;
-  }
-  editTplForm.id = Number(selectedTemplate.value.id);
-  editTplForm.name = String(selectedTemplate.value.name || '');
-  editTplForm.docs = templateDocs(selectedTemplate.value).map((d) => ({ ...d }));
-  editTplOpen.value = true;
-}
-
-function addTplDocRow(): void {
-  editTplForm.docs.push({ name: '', doc_type: '', required: true });
-}
-
-function removeTplDocRow(index: number): void {
-  editTplForm.docs.splice(index, 1);
-}
-
-async function saveEditTemplate(): Promise<void> {
-  if (!editTplForm.name.trim()) {
-    message.warning(t('merchant.onboardingPage.tplNameRequired'));
-    return;
-  }
-  const docs = editTplForm.docs.filter((d) => d.name.trim());
-  if (!docs.length) {
-    message.warning(t('merchant.onboardingPage.tplDocRequired'));
-    return;
-  }
-  editTplSaving.value = true;
-  try {
-    await apiOnboardingKycTemplateUpdate({
-      id: editTplForm.id,
-      name: editTplForm.name,
-      docs,
-    });
-    message.success(t('merchant.onboardingPage.tplSaved'));
-    editTplOpen.value = false;
-    await loadTemplates();
-    if (kycSetup.templateId) {
-      selectedTemplate.value = templates.value.find((x) => x.id === kycSetup.templateId) ?? null;
-    }
-  } finally {
-    editTplSaving.value = false;
-  }
+  if (!user.hasPerm('config:kyc:edit')) return;
+  void router.push({ path: '/config/overview', query: { section: 'onboarding' } });
 }
 
 async function sendKyc(): Promise<void> {
@@ -1460,8 +1419,8 @@ onMounted(() => {
             <button type="button" class="kyc-btn kyc-btn--preview" :disabled="!selectedTemplate" @click="previewOpen = true">
               <EyeOutlined />{{ t('merchant.onboardingPage.previewRequirements') }}
             </button>
-            <button type="button" class="kyc-btn kyc-btn--edit" @click="openEditTemplate">
-              <EditOutlined />{{ t('merchant.onboardingPage.editTemplate') }}
+            <button v-perm="'config:kyc:edit'" type="button" class="kyc-btn kyc-btn--edit" @click="openEditTemplate">
+              <EditOutlined />{{ t('kycTemplate.title') }}
             </button>
             <a-button
               v-perm="'merchant:onboarding:kyc'"
@@ -1516,32 +1475,6 @@ onMounted(() => {
               </ul>
             </div>
           </a-modal>
-          <!-- 编辑验证模板(名称/业态/所需文档清单) -->
-          <a-modal
-            v-model:open="editTplOpen"
-            :title="t('merchant.onboardingPage.editTemplateTitle')"
-            :confirm-loading="editTplSaving"
-            :ok-text="t('merchant.onboardingPage.tplSave')"
-            @ok="saveEditTemplate"
-          >
-            <a-form layout="vertical">
-              <a-form-item :label="t('merchant.onboardingPage.tplName')">
-                <a-input v-model:value="editTplForm.name" />
-              </a-form-item>
-              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px">
-                <span style="font-size: 12px; font-weight: 600; color: #475569">{{ t('merchant.onboardingPage.requiredDocuments') }}</span>
-                <a-button type="link" size="small" style="padding: 0" @click="addTplDocRow">
-                  <template #icon><PlusOutlined /></template>{{ t('merchant.onboardingPage.tplAddDoc') }}
-                </a-button>
-              </div>
-              <div v-for="(doc, idx) in editTplForm.docs" :key="idx" style="display: flex; gap: 8px; align-items: center; margin-bottom: 8px">
-                <a-input v-model:value="doc.name" :placeholder="t('merchant.onboardingPage.tplDocName')" style="flex: 1.4" />
-                <a-input v-model:value="doc.doc_type" :placeholder="t('merchant.onboardingPage.tplDocType')" style="flex: 1" />
-                <a-checkbox v-model:checked="doc.required">{{ t('merchant.onboardingPage.tplDocRequiredLabel') }}</a-checkbox>
-                <a-button type="text" danger size="small" @click="removeTplDocRow(idx)"><template #icon><DeleteOutlined /></template></a-button>
-              </div>
-            </a-form>
-          </a-modal>
           </template>
 
           <template v-if="!isLegacy">
@@ -1558,9 +1491,13 @@ onMounted(() => {
               <div><span class="kyc-label">{{ t('merchant.onboardingPage.verificationScope') }}</span><a-tag color="blue">{{ t('merchant.onboardingPage.propertyKycScope') }}</a-tag></div>
               <div><span class="kyc-label">{{ t('merchant.onboardingPage.businessType') }}</span><a-tag>{{ bizTypeText(currentBiz.business_type) }}</a-tag></div>
             </div>
-            <KycScopeDocuments v-if="currentProperty" :title="t('merchant.onboardingPage.propertyKycScope')" :subtitle="currentProperty.businessName" :status="currentProperty.kycStatus" :documents="currentProperty.documents || []" scope-type="property" :business-id="currentProperty.applicationBusinessId" :formal-merchant="!!app?.merchant_id"  :busy="scopedKycBusy" :can-review="canReviewScopedDoc" @review="openKycReview" @preview="openDocumentPreview" />
-            <div v-if="currentProperty?.reviewReason" class="kyc-scope-reason">{{ currentProperty.reviewReason }}</div>
-            <a-button class="ob-preview-requirements" @click="requirementsOpen = true"><EyeOutlined />{{ t('merchant.onboardingPage.previewRequirements') }}</a-button>
+            <PropertyKycTemplate v-if="currentProperty" :key="`${app.id}:${currentProperty.applicationBusinessId}`" :application-id="Number(app.id)" :property="currentProperty" :busy="scopedKycBusy" @saved="refreshPropertyTemplate">
+              <KycScopeDocuments v-if="currentProperty" :title="t('merchant.onboardingPage.propertyKycScope')" :subtitle="currentProperty.businessName" :status="currentProperty.kycStatus" :documents="currentProperty.documents || []" scope-type="property" :business-id="currentProperty.applicationBusinessId" :formal-merchant="!!app?.merchant_id"  :busy="scopedKycBusy" :can-review="canReviewScopedDoc" @review="openKycReview" @preview="openDocumentPreview" />
+              <div v-if="currentProperty?.reviewReason" class="kyc-scope-reason">{{ currentProperty.reviewReason }}</div>
+              <template #actions>
+                <a-button class="ob-preview-requirements" @click="requirementsOpen = true"><EyeOutlined />{{ t('merchant.onboardingPage.previewRequirements') }}</a-button>
+              </template>
+            </PropertyKycTemplate>
             <div class="kyc-submit-card">
               <div class="kyc-submit-card__method">
                 <div><div class="kyc-submit-card__title">{{ t('merchant.onboardingPage.kycSubmissionMethod') }}</div><span class="kyc-submit-card__tag">{{ t(Number(app.submission_method) === 2 ? 'merchant.onboardingPage.methodAssist' : 'merchant.onboardingPage.methodSelfService') }}</span></div>

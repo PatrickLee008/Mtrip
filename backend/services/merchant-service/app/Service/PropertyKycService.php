@@ -256,8 +256,9 @@ class PropertyKycService
     private function template(int $siteId): object
     {
         $template = Db::table('merchant_kyc_template')->where('scope_type', 'property')
+            ->where('application_business_id', 0)->where('is_current', 1)
             ->where('business_type', 'hotel')->where('status', 1)
-            ->whereIn('site_id', [0, $siteId])->orderByDesc('site_id')->orderBy('sort')->first();
+            ->whereIn('site_id', [0, $siteId])->orderByDesc('site_id')->orderBy('sort')->orderBy('template_group_id')->first();
         if (! $template) {
             throw new BusinessException(ErrorCode::DATA_CONFLICT, '平台未配置酒店物业 KYC 模板');
         }
@@ -267,7 +268,7 @@ class PropertyKycService
     private function templateForProperty(array $property): object
     {
         $template = Db::table('merchant_kyc_template')->where('id', $property['kyc_template_id'])
-            ->where('scope_type', 'property')->where('status', 1)->first();
+            ->where('scope_type', 'property')->first();
         return $template ?: $this->template((int) $property['site_id']);
     }
 

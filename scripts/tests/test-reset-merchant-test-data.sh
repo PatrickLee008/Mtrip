@@ -38,6 +38,18 @@ for migration in V20261111100000__wallet-credit-expiry.sql V20261111120000__wall
     sed -e "s/mtrip_business/$TEST_DB/g" -e "s/mtrip_system/$TEST_SYSTEM/g" \
         "$REPO_ROOT/database/migrations/$migration" | mysql_exec >/dev/null
 done
+# Cover optional merchant-owned configuration and private KYC template versions.
+for migration in V20261117100000__merchant-commercial-settings.sql V20261118090000__onboarding-property-kyc-templates.sql; do
+    sed -e "s/mtrip_business/$TEST_DB/g" -e "s/mtrip_system/$TEST_SYSTEM/g" \
+        "$REPO_ROOT/database/migrations/$migration" | mysql_exec >/dev/null
+done
+sed '/^ALTER TABLE/,$d' "$REPO_ROOT/database/migrations/V20261116100000__pay-at-hotel-terms-and-booking.sql" \
+    | sed "s/mtrip_business/$TEST_DB/g" | mysql_exec >/dev/null
+sql "USE $TEST_DB; DELETE FROM merchant_kyc_template WHERE application_business_id>0;
+INSERT INTO merchant_commercial_config(merchant_id,site_id,version,commission_plan,commission_rate,effective_at,reason,created_by,created_at,request_id,payload_hash)
+VALUES(999999,0,1,'standard',10,NOW(),'reset fixture',1,NOW(),'reset-commercial',REPEAT('a',64));
+INSERT INTO merchant_pay_at_hotel_terms(merchant_id,site_id,version,effective_at,reason,actor_type,actor_id)
+VALUES(999999,0,1,NOW(),'reset fixture','admin',1);" >/dev/null
 sql "USE $TEST_DB;
 INSERT INTO merchant_group(id,group_name,contact_name,contact_phone) VALUES(900000,'keep-group','Tester','test');
 INSERT INTO merchant_admin(id,account_type,merchant_id,group_id,username,password) VALUES(900000,1,0,900000,'reset-keep-group','test'),(900001,3,0,0,'reset-orphan-store','test');
@@ -118,6 +130,10 @@ preserved_checksums() {
     sql "CHECKSUM TABLE $TEST_DB.user_info,$TEST_DB.user_social_identity,$TEST_DB.user_wallet_lot,$TEST_DB.user_wallet_adjust_request,$TEST_DB.merchant_group,$TEST_DB.merchant_menu,$TEST_DB.merchant_phone_identity_lock,$TEST_DB.merchant_kyc_template,$TEST_DB.merchant_onboarding_agreement,$TEST_DB.merchant_code_sequence,$TEST_DB.supplier_info,$TEST_DB.ranking_destination,$TEST_SYSTEM.sys_admin,$TEST_SYSTEM.sys_sms_channel,$TEST_SYSTEM.sys_email_channel,$TEST_SYSTEM.sys_pay_channel,$TEST_SYSTEM.sys_pay_account,$TEST_SYSTEM.schema_migrations;"
 }
 preserved_checksums > "$TEST_DIR/before"
+sql "USE $TEST_DB;
+INSERT INTO merchant_kyc_template(site_id,scope_type,name,business_type,docs,status,application_business_id)
+VALUES(0,'property','reset-private-template','hotel','[]',1,900000);" >/dev/null
+
 run_reset --dry-run > "$TEST_DIR/preview"
 assert_sql 'SELECT COUNT(*)>0 FROM merchant_info;' 1
 [ "$($DOCKER inspect --format '{{.State.Running}}' "$TEST_WRITER")" = true ]
@@ -168,6 +184,11 @@ assert_sql 'SELECT COUNT(*) FROM merchant_info;' 0
 assert_sql 'SELECT COUNT(*) FROM merchant_application;' 0
 assert_sql 'SELECT COUNT(*) FROM merchant_store;' 0
 assert_sql 'SELECT COUNT(*) FROM merchant_verify_document;' 0
+assert_sql 'SELECT COUNT(*) FROM merchant_commercial_config WHERE merchant_id>0;' 0
+assert_sql 'SELECT COUNT(*) FROM merchant_pay_at_hotel_terms WHERE merchant_id>0;' 0
+assert_sql 'SELECT COUNT(*) FROM merchant_kyc_template WHERE application_business_id>0;' 0
+echo 'PASS merchant commercial/payment versions and private KYC templates removed; public templates preserved'
+
 assert_sql 'SELECT COUNT(*) FROM merchant_admin WHERE id IN(900000,900001);' 1
 assert_sql 'SELECT COUNT(*) FROM merchant_role WHERE id IN(900000,900001,900002);' 2
 assert_sql 'SELECT COUNT(*) FROM merchant_admin_role WHERE admin_id=900000;' 1
@@ -231,7 +252,9 @@ assert_sql 'SELECT CONCAT(received_count,":",used_count) FROM marketing_coupon W
 echo 'PASS repeated execution is idempotent'
 
 # Existing dev databases may not have applied the optional wallet migrations yet.
-sql "DROP TABLE $TEST_DB.user_wallet_lot; DROP TABLE $TEST_DB.user_wallet_adjust_request;" >/dev/null
+sql "DROP TABLE $TEST_DB.user_wallet_lot; DROP TABLE $TEST_DB.user_wallet_adjust_request;
+DROP TABLE $TEST_DB.merchant_commercial_config; DROP TABLE $TEST_DB.merchant_pay_at_hotel_terms;
+ALTER TABLE $TEST_DB.merchant_kyc_template DROP INDEX idx_template_business, DROP COLUMN application_business_id, DROP COLUMN source_template_id;" >/dev/null
 sql "USE $TEST_DB;
 INSERT INTO order_main(id,order_no,merchant_id,goods_name,sku_name,contact_name,contact_phone) VALUES(900030,'reset-without-wallet',999999,'test','test','test','test');
 INSERT INTO user_balance_log(id,user_id,order_id,change_type,remark) VALUES(900030,900000,900030,3,'订单 reset-without-wallet 退款');" >/dev/null

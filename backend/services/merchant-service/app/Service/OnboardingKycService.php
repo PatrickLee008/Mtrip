@@ -77,6 +77,11 @@ class OnboardingKycService
                 'businessType' => (string) $business['business_type'],
                 'kycStatus' => $this->kycStatus((int) $business['kyc_status'], true),
                 'reviewReason' => (string) ($business['kyc_reject_reason'] ?? ''),
+                'template' => ['id' => (int) $template['id'], 'name' => (string) $template['name'],
+                    'sourceTemplateId' => (int) ($template['source_template_id'] ?? 0) ?: (int) $template['id']],
+                'templateEditable' => $this->propertyTemplateEditable($app, $business),
+                'templateChangeable' => (int) $app['merchant_id'] === 0 && (int) $app['account_status'] === 0
+                    && in_array((int) $business['kyc_status'], [1, 2, 3, 4, 5], true),
                 'documents' => $this->documents((int) $app['id'], (int) $business['id'], $template),
             ];
         }
@@ -91,6 +96,133 @@ class OnboardingKycService
             'agreement' => $this->agreementState($app),
             'finalApproval' => $this->readiness($app),
         ];
+    }
+
+    public function propertyTemplateOptions(array $app, int $businessId): array
+    {
+        $business = $this->propertyTemplateBusiness($app, $businessId);
+        return Db::table('merchant_kyc_template')->where('scope_type', 'property')
+            ->where('business_type', $business['business_type'])->where('application_business_id', 0)->where('is_current', 1)
+            ->whereIn('site_id', [0, (int) $app['site_id']])->where('status', 1)
+            ->orderByDesc('site_id')->orderBy('sort')->orderBy('template_group_id')->orderBy('id')->get()
+            ->map(fn ($row) => ['id' => (int) $row->id, 'name' => (string) $row->name,
+                'documents' => $this->templateDocuments((array) $row)])->all();
+    }
+
+    /** Each save creates an immutable property-specific version; public templates are never mutated. */
+    public function configurePropertyTemplate(array $app, int $businessId, array $input): array
+    {
+        return Db::transaction(function () use ($app, $businessId, $input): array {
+            $locked = Db::table('merchant_application')->where('id', $app['id'])->where('site_id', $app['site_id'])
+                ->whereNull('deleted_at')->lockForUpdate()->first();
+            if (! $locked) throw new BusinessException(ErrorCode::NO_DATA_PERMISSION, '申请不存在或无访问权限');
+            $app = (array) $locked;
+            $business = $this->propertyTemplateBusiness($app, $businessId, true);
+            if ((int) $app['merchant_id'] > 0 || (int) $app['account_status'] > 0
+                || ! in_array((int) $business['kyc_status'], [1, 2, 3, 4, 5], true)) {
+                throw new BusinessException(ErrorCode::DATA_CONFLICT, '当前申请不能变更物业 KYC 要求');
+            }
+            $previousId = (int) $business['kyc_template_id'];
+            if ((int) ($input['expectedTemplateId'] ?? 0) !== $previousId) {
+                throw new BusinessException(ErrorCode::DATA_CONFLICT, '物业 KYC 要求已更新，请刷新后重试');
+            }
+            $amendment = ($input['amendment'] ?? false) === true;
+            if (! $this->propertyTemplateEditable($app, $business) && ! $amendment) {
+                throw new BusinessException(ErrorCode::DATA_CONFLICT, '已提交的 KYC 要求已锁定，请使用变更要求并填写原因');
+            }
+            $reason = trim((string) ($input['reason'] ?? ''));
+            if ($amendment && ($reason === '' || mb_strlen($reason) > 300)) {
+                throw new BusinessException(ErrorCode::PARAM_ERROR, '请填写不超过 300 字的变更原因');
+            }
+            $template = Db::table('merchant_kyc_template')->where('id', (int) ($input['templateId'] ?? 0))
+                ->where('scope_type', 'property')->where('business_type', $business['business_type'])
+                ->whereIn('site_id', [0, (int) $app['site_id']])->first();
+            if (! $template || ((int) $template->id !== $previousId && ((int) $template->is_current !== 1 || (int) $template->status !== 1)) || ((int) $template->application_business_id !== 0
+                && ((int) $template->application_business_id !== $businessId || (int) $template->id !== $previousId))) {
+                throw new BusinessException(ErrorCode::NO_DATA_PERMISSION, '模板不可用或不适用于当前物业');
+            }
+            $name = trim((string) ($input['name'] ?? $template->name));
+            if ($name === '' || mb_strlen($name) > 100) {
+                throw new BusinessException(ErrorCode::PARAM_ERROR, '模板名称必填且不能超过 100 字');
+            }
+            $items = $input['documents'] ?? $this->templateDocuments((array) $template);
+            if (! is_array($items) || $items === [] || count($items) > 50) {
+                throw new BusinessException(ErrorCode::PARAM_ERROR, '请配置 1 至 50 项 KYC 文件要求');
+            }
+            $docs = [];
+            foreach ($items as $item) {
+                if (! is_array($item)) throw new BusinessException(ErrorCode::PARAM_ERROR, 'KYC 文件要求格式不正确');
+                $type = trim((string) ($item['docType'] ?? ''));
+                $label = trim((string) ($item['name'] ?? ''));
+                if (! preg_match('/^[a-z][a-z0-9_]{0,49}$/D', $type) || isset($docs[$type])
+                    || $label === '' || mb_strlen($label) > 100 || ! is_bool($item['required'] ?? null)) {
+                    throw new BusinessException(ErrorCode::PARAM_ERROR, '文件名称必填，类型须为唯一的小写字母、数字或下划线标识，并指定是否必填');
+                }
+                $docs[$type] = ['doc_type' => $type, 'name' => $label, 'required' => $item['required']];
+            }
+            if (! array_filter($docs, static fn ($doc) => $doc['required'])) {
+                throw new BusinessException(ErrorCode::PARAM_ERROR, '至少需要一项必填 KYC 文件');
+            }
+            $versionId = (int) Db::table('merchant_kyc_template')->insertGetId([
+                'site_id' => $app['site_id'], 'scope_type' => 'property', 'business_type' => $business['business_type'],
+                'name' => $name, 'docs' => json_encode(array_values($docs), JSON_UNESCAPED_UNICODE),
+                'status' => 1, 'sort' => 0, 'application_business_id' => $businessId,
+                'source_template_id' => (int) $template->source_template_id ?: (int) $template->id,
+            ]);
+            $now = gmdate('Y-m-d H:i:s');
+            // Archive, rather than delete, documents no longer in the active checklist.
+            Db::table('merchant_verify_document')->where('application_id', $app['id'])
+                ->where('scope_type', 'property')->where('application_business_id', $businessId)
+                ->whereNotIn('doc_type', array_keys($docs))->whereNull('deleted_at')->update(['deleted_at' => $now]);
+            Db::table('merchant_application_business')->where('id', $businessId)->update([
+                'kyc_template_id' => $versionId, 'kyc_status' => 1, 'kyc_approved_at' => null, 'kyc_reject_reason' => '',
+            ]);
+            Db::table('merchant_application')->where('id', $app['id'])->update(['last_updated_at' => $now]);
+            $this->ensureDocuments($app, ['docs' => json_encode(array_values($docs))], $businessId);
+            if ($amendment) {
+                $documentService = new MerchantDocumentService();
+                $retained = Db::table('merchant_verify_document')->where('application_id', $app['id'])
+                    ->where('scope_type', 'property')->where('application_business_id', $businessId)
+                    ->where('file_url', '<>', '')->whereIn('status', [1, 2])->whereNull('deleted_at')->lockForUpdate()->get();
+                foreach ($retained as $row) {
+                    $doc = (array) $row;
+                    $documentService->snapshot($doc);
+                    $digest = Db::table('merchant_verify_document_revision')->where('doc_id', $doc['id'])
+                        ->where('lifecycle_version', $doc['document_version'])->value('file_sha256');
+                    $changes = ['document_version' => (int) $doc['document_version'] + 1, 'status' => 2,
+                        'reviewer_id' => 0, 'reviewer_name' => '', 'last_verified_at' => null, 'reject_reason' => ''];
+                    Db::table('merchant_verify_document')->where('id', $doc['id'])->update($changes);
+                    $doc = array_replace($doc, $changes);
+                    $documentService->snapshot($doc, 'requirements_changed', $digest);
+                    $documentService->event($doc, 'requirements_changed', $reason);
+                }
+            }
+            $this->timeline($app, 'kyc_requirements_changed', 'property:' . $businessId
+                . '; template:' . $previousId . '->' . $versionId
+                . ($amendment ? '; reason=' . $reason . '; resubmission required' : '; initial configuration')
+                . '; ' . $business['business_name'] . '; ' . $name, $amendment, true);
+            return $this->requirements($app);
+        });
+    }
+
+    private function propertyTemplateBusiness(array $app, int $businessId, bool $lock = false): array
+    {
+        $this->assertReadable($app);
+        if ((int) ($app['state_model_version'] ?? 0) < 1) {
+            throw new BusinessException(ErrorCode::DATA_CONFLICT, '此操作仅适用于新入驻流程');
+        }
+        $query = Db::table('merchant_application_business')->where('id', $businessId)
+            ->where('application_id', $app['id'])->where('site_id', $app['site_id']);
+        if ($lock) $query->lockForUpdate();
+        $business = $query->first();
+        if (! $business) throw new BusinessException(ErrorCode::NO_DATA_PERMISSION, '物业不属于当前申请');
+        return (array) $business;
+    }
+
+    private function propertyTemplateEditable(array $app, array $business): bool
+    {
+        return (int) $app['merchant_id'] === 0 && (int) $app['account_status'] === 0
+            && (int) $business['kyc_status'] === 1 && empty($business['kyc_submitted_at']);
     }
 
     public function agreement(array $app): array
@@ -251,11 +383,17 @@ class OnboardingKycService
         $url = rtrim((string) config('storage.url_prefix', '/uploads'), '/') . $path;
         try {
             return Db::transaction(function () use ($app, $doc, $file, $mime, $ext, $path, $url, $root, $adminAssisted): array {
-                $locked = (array) Db::table('merchant_verify_document')->where('id', $doc->id)->lockForUpdate()->first();
                 $currentApp = Db::table('merchant_application')->where('id', $app['id'])
                     ->where('site_id', $app['site_id'])->whereNull('deleted_at')->lockForUpdate()->first();
                 if (! $currentApp) {
                     throw new BusinessException(ErrorCode::NO_DATA_PERMISSION, '申请不存在或无访问权限');
+                }
+                if ((string) $doc->scope_type === 'property') {
+                    $this->propertyTemplateBusiness((array) $currentApp, (int) $doc->application_business_id, true);
+                }
+                $locked = (array) Db::table('merchant_verify_document')->where('id', $doc->id)->lockForUpdate()->first();
+                if ($locked['deleted_at'] !== null) {
+                    throw new BusinessException(ErrorCode::DATA_CONFLICT, 'KYC 文件要求已变更，请刷新后重试');
                 }
                 $this->assertEditable((array) $currentApp, (string) $locked['scope_type'], (int) $locked['application_business_id']);
                 if ((int) $locked['document_version'] > 0 || (string) $locked['file_url'] !== '') {
@@ -390,7 +528,7 @@ class OnboardingKycService
         if ((int) ($doc['scope_resolution_status'] ?? 0) === 2) {
             throw new BusinessException(ErrorCode::DATA_CONFLICT, '文档范围待人工处理，不能自动更新 KYC 状态');
         }
-        $app = Db::table('merchant_application')->where('id', $doc['application_id'])->where('site_id', $doc['site_id'])->first();
+        $app = Db::table('merchant_application')->where('id', $doc['application_id'])->where('site_id', $doc['site_id'])->lockForUpdate()->first();
         if (! $app || (int) $app->registration_status !== 3) {
             throw new BusinessException(ErrorCode::DATA_CONFLICT, '文档不属于可审核的入驻申请');
         }
@@ -477,6 +615,13 @@ class OnboardingKycService
             if ($exists) {
                 continue;
             }
+            $archived = Db::table('merchant_verify_document')->where('application_id', $app['id'])
+                ->where('scope_type', $scopeType)->where('application_business_id', $businessId)
+                ->where('doc_type', $required['docType'])->whereNotNull('deleted_at')->orderByDesc('id')->first();
+            if ($archived) {
+                Db::table('merchant_verify_document')->where('id', $archived->id)->update(['deleted_at' => null]);
+                continue;
+            }
             Db::table('merchant_verify_document')->insert([
                 'site_id' => (int) $app['site_id'], 'merchant_id' => 0, 'scope_type' => $scopeType,
                 'property_id' => 0, 'application_id' => (int) $app['id'], 'application_business_id' => $businessId,
@@ -528,9 +673,10 @@ class OnboardingKycService
     private function reviewedScopeStatus(int $applicationId, int $businessId, int $templateId): array
     {
         $template = $this->templateById($templateId, $businessId === 0 ? 'merchant' : 'property');
+        // A review may have waited behind another request after establishing a repeatable-read snapshot.
         $rows = Db::table('merchant_verify_document')->where('application_id', $applicationId)
             ->where('scope_type', $businessId === 0 ? 'merchant' : 'property')
-            ->where('application_business_id', $businessId)->whereNull('deleted_at')->get()->keyBy('doc_type');
+            ->where('application_business_id', $businessId)->whereNull('deleted_at')->lockForUpdate()->get()->keyBy('doc_type');
         $complete = true;
         foreach ($rows as $row) {
             if (in_array((int) $row->status, [3, 4, 5], true)) {
@@ -652,16 +798,17 @@ class OnboardingKycService
     private function template(int $siteId, string $scopeType, string $businessType): ?array
     {
         $row = Db::table('merchant_kyc_template')->whereIn('site_id', [0, $siteId])
+            ->where('application_business_id', 0)->where('is_current', 1)
             ->where('scope_type', $scopeType)->where('business_type', $businessType)->where('status', 1)
-            ->orderByDesc('site_id')->orderBy('sort')->orderBy('id')->first();
+            ->orderByDesc('site_id')->orderBy('sort')->orderBy('template_group_id')->orderBy('id')->first();
         return $row ? (array) $row : null;
     }
 
     private function templateById(int $id, string $scopeType): array
     {
-        $row = Db::table('merchant_kyc_template')->where('id', $id)->where('scope_type', $scopeType)->where('status', 1)->first();
+        $row = Db::table('merchant_kyc_template')->where('id', $id)->where('scope_type', $scopeType)->first();
         if (! $row) {
-            throw new BusinessException(ErrorCode::DATA_CONFLICT, 'KYC 模板不存在或已停用');
+            throw new BusinessException(ErrorCode::DATA_CONFLICT, 'KYC 模板不存在');
         }
         return (array) $row;
     }

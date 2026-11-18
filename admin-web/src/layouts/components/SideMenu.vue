@@ -62,6 +62,7 @@ interface MenuGroup {
   label: string;
   icon?: string;
   children: MenuItem[];
+  ownedPaths?: string[];
 }
 
 /** 将后端菜单树转为侧边栏分组结构 */
@@ -90,6 +91,7 @@ const groups = computed<MenuGroup[]>(() => {
         label: menuTitle(node),
         icon: node.icon || undefined,
         children: [],
+        ownedPaths: (node.children ?? []).filter(child => child.menu_type === 2).map(child => child.route_path),
       });
     }
   }
@@ -117,7 +119,7 @@ watch(
 
 /** 分组是否处于激活状态(自身或子项匹配) */
 function isGroupActive(group: MenuGroup): boolean {
-  if (group.children.length === 0) return group.key === activeKey.value;
+  if (group.children.length === 0) return group.key === activeKey.value || !!group.ownedPaths?.includes(activeKey.value);
   return group.key === activeKey.value || group.children.some((c) => c.key === activeKey.value);
 }
 

@@ -104,6 +104,8 @@ try {
     check(Db::table('merchant_verify_document')->where('application_id', $applicationId)->count() === 3,
         'merchant and two property scopes receive separate document rows');
 
+    require __DIR__ . '/onboarding-kyc-template.php';
+
     rejects(ErrorCode::DATA_CONFLICT, fn () => $kyc->submit($app), 'signature is required before KYC submission');
     rejects(ErrorCode::PARAM_ERROR, fn () => $kyc->confirmAgreementRead($app, 1, '1.0', false), 'scroll confirmation is required');
     $agreement = $kyc->agreement($app);

@@ -17,13 +17,30 @@ class MerchantDocumentService
     public function document(int $id, bool $lock = false): array
     {
         $q = Db::table('merchant_verify_document')->where('id', $id)->whereNull('deleted_at');
-        $row = ($lock ? $q->lockForUpdate() : $q)->first();
+        $row = $q->first();
         if (! $row) throw new BusinessException(ErrorCode::NOT_FOUND, '文档不存在');
         $doc = (array) $row;
         if (! AdminContext::isSuper() && (int) $doc['site_id'] !== AdminContext::siteId()) {
             throw new BusinessException(ErrorCode::NO_DATA_PERMISSION);
         }
+        if ($lock) {
+            $this->lockOnboardingScope($row);
+            $row = $q->lockForUpdate()->first();
+            if (! $row) throw new BusinessException(ErrorCode::NOT_FOUND, '文档不存在');
+            $doc = (array) $row;
+        }
         return $doc;
+    }
+
+    /** Keep the same application -> property -> document lock order as KYC configuration and upload. */
+    private function lockOnboardingScope(object $doc): void
+    {
+        if ((int) $doc->application_id <= 0 || (int) $doc->merchant_id !== 0) return;
+        Db::table('merchant_application')->where('id', $doc->application_id)->where('site_id', $doc->site_id)->lockForUpdate()->first();
+        if ((string) $doc->scope_type === 'property' && (int) $doc->application_business_id > 0) {
+            Db::table('merchant_application_business')->where('id', $doc->application_business_id)
+                ->where('application_id', $doc->application_id)->where('site_id', $doc->site_id)->lockForUpdate()->first();
+        }
     }
 
     public function permission(string $key): void
@@ -196,6 +213,9 @@ class MerchantDocumentService
         $count = 0;
         $ids = Db::table('merchant_verify_document')->where('status', 1)->where('expiry_date', '<', gmdate('Y-m-d'))->whereNull('deleted_at')->orderBy('id')->limit(200)->pluck('id');
         foreach ($ids as $id) $count += Db::transaction(function () use ($id) {
+            $scope = Db::table('merchant_verify_document')->where('id', $id)->first();
+            if (! $scope) return 0;
+            $this->lockOnboardingScope($scope);
             $row = Db::table('merchant_verify_document')->where('id', $id)->lockForUpdate()->first();
             if (! $row || $row->deleted_at !== null || (int) $row->status !== 1 || ! $row->expiry_date || $row->expiry_date >= gmdate('Y-m-d')) return 0;
             $doc = (array) $row;
@@ -237,8 +257,8 @@ class MerchantDocumentService
         $business = Db::table('merchant_application_business')->where('id', (int) $doc['biz_unit'])->where('application_id', $doc['application_id'])->where('site_id', $doc['site_id'])->first();
         if (! $app || ! $business || (int) $app->stage < 5) return;
         $template = (int) $business->kyc_template_id > 0
-            ? Db::table('merchant_kyc_template')->where('id', $business->kyc_template_id)->where('status', 1)->first()
-            : Db::table('merchant_kyc_template')->where('business_type', $business->business_type)->where('status', 1)->orderBy('sort')->first();
+            ? Db::table('merchant_kyc_template')->where('id', $business->kyc_template_id)->first()
+            : Db::table('merchant_kyc_template')->where('business_type', $business->business_type)->where('application_business_id', 0)->where('is_current', 1)->whereIn('site_id', [0, (int) $app->site_id])->where('status', 1)->orderByDesc('site_id')->orderBy('sort')->orderBy('template_group_id')->first();
         $requirements = $template ? json_decode((string) $template->docs, true) : [];
         $required = [];
         foreach (is_array($requirements) ? $requirements : [] as $item) if (($item['required'] ?? true) !== false) $required[] = (string) ($item['doc_type'] ?? '');
@@ -257,9 +277,9 @@ class MerchantDocumentService
             throw new BusinessException(ErrorCode::DATA_CONFLICT, '物业 KYC 文档与物业归属不一致');
         }
         $template = Db::table('merchant_kyc_template')->where('id', $property->kyc_template_id)
-            ->where('scope_type', 'property')->where('status', 1)->first();
+            ->where('scope_type', 'property')->first();
         if (! $template) {
-            throw new BusinessException(ErrorCode::DATA_CONFLICT, '物业 KYC 模板不存在或已停用');
+            throw new BusinessException(ErrorCode::DATA_CONFLICT, '物业 KYC 模板不存在');
         }
         $requirements = json_decode((string) $template->docs, true);
         $required = [];

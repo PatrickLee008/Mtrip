@@ -44,7 +44,7 @@ INSERT IGNORE INTO `sys_menu` (`id`,`parent_id`,`menu_name`,`menu_name_en`,`i18n
 (1000,0,'终端用户管理','End User Management','menu.user','user',1,'/user','','UserOutlined',10),
 (1100,0,'帮助中心','Help Center','','helpcenter',1,'/helpcenter','','QuestionCircleOutlined',11),
 (1200,0,'内容管理','Content Management','','content',1,'/content','','LayoutOutlined',12),
-(1300,0,'平台配置','Platform Configuration','menu.config','config',1,'/config','','ToolOutlined',13),
+(1314,0,'平台配置','Platform Configuration','platformConfig.menuTitle','config:overview:list',2,'/config/overview','config/overview/index','SettingOutlined',12),
 -- ---- 遗留模块(保留为独立分组)----
 (1400,0,'供应商管理','Supplier','menu.supplier','supplier',1,'/supplier','','ApartmentOutlined',14),
 (1500,0,'商品(门票/分类)','Goods (legacy)','menu.goods','goods',1,'/goods','','GoldOutlined',15),
@@ -305,21 +305,21 @@ INSERT IGNORE INTO `sys_menu` (`id`,`parent_id`,`menu_name`,`menu_name_en`,`perm
 (120301,1203,'保存教程','Save','config:tutorial:save',3,1),
 (120302,1203,'删除教程','Delete','config:tutorial:delete',3,2);
 
--- ================= 1300 平台配置(= 现系统配置 + 特性开关 + 筛选/税费)=================
+-- ================= 1314 平台配置子页面(由总览卡片进入，保留原路由与权限)=================
 INSERT IGNORE INTO `sys_menu` (`id`,`parent_id`,`menu_name`,`menu_name_en`,`i18n_key`,`perm_key`,`menu_type`,`route_path`,`component`,`icon`,`sort`) VALUES
-(1301,1300,'全局参数','Global Config','menu.configGlobal','config:global:list',2,'/config/global','config/global/index','',1),
-(1302,1300,'站点管理','Site Management','menu.configSite','config:site:list',2,'/config/site','config/site/index','',2),
-(1303,1300,'存储配置','Storage','menu.configStorage','config:storage:list',2,'/config/storage','config/storage/index','',3),
-(1304,1300,'支付配置','Payment','menu.configPay','config:pay:list',2,'/config/pay','config/pay/index','',4),
-(1305,1300,'短信配置','SMS','menu.configSms','config:sms:list',2,'/config/sms','config/sms/index','',5),
-(1306,1300,'地图配置','Map','menu.configMap','config:map:list',2,'/config/map','config/map/index','',6),
-(1307,1300,'客户端密钥','Client','menu.configClient','config:client:list',2,'/config/client','config/client/index','',7),
-(1308,1300,'接口权限模板','Permission Templates','menu.configPermTpl','config:permtpl:list',2,'/config/permtpl','config/permtpl/index','',8),
-(1309,1300,'特性开关','Feature Toggles','','config:feature:list',2,'/config/features','config/features/index','',9),
-(1310,1300,'筛选排序配置','Filter & Sort','','goods:filter:list',2,'/cops/filter','cops/filter/index','',10),
-(1311,1300,'税费配置','Tax Config','menu.financeTax','finance:tax:list',2,'/finance/tax','finance/tax/index','',11),
-(1312,1300,'邮件配置','Email','menu.configEmail','config:email:list',2,'/config/email','config/email/index','',6),
-(1313,1300,'收款账户','Payment Accounts','menu.configPayAccount','config:payAccount:list',2,'/config/pay-account','config/pay-account/index','',4);
+(1301,1314,'全局参数','Global Config','menu.configGlobal','config:global:list',2,'/config/global','config/global/index','',1),
+(1302,1314,'站点管理','Site Management','menu.configSite','config:site:list',2,'/config/site','config/site/index','',2),
+(1303,1314,'存储配置','Storage','menu.configStorage','config:storage:list',2,'/config/storage','config/storage/index','',3),
+(1304,1314,'支付配置','Payment','menu.configPay','config:pay:list',2,'/config/pay','config/pay/index','',4),
+(1305,1314,'短信配置','SMS','menu.configSms','config:sms:list',2,'/config/sms','config/sms/index','',5),
+(1306,1314,'地图配置','Map','menu.configMap','config:map:list',2,'/config/map','config/map/index','',6),
+(1307,1314,'客户端密钥','Client','menu.configClient','config:client:list',2,'/config/client','config/client/index','',7),
+(1308,1314,'接口权限模板','Permission Templates','menu.configPermTpl','config:permtpl:list',2,'/config/permtpl','config/permtpl/index','',8),
+(1309,1314,'特性开关','Feature Toggles','','config:feature:list',2,'/config/features','config/features/index','',9),
+(1310,1314,'筛选排序配置','Filter & Sort','','goods:filter:list',2,'/cops/filter','cops/filter/index','',10),
+(1311,1314,'税费配置','Tax Config','menu.financeTax','finance:tax:list',2,'/finance/tax','finance/tax/index','',11),
+(1312,1314,'邮件配置','Email','menu.configEmail','config:email:list',2,'/config/email','config/email/index','',6),
+(1313,1314,'收款账户','Payment Accounts','menu.configPayAccount','config:payAccount:list',2,'/config/pay-account','config/pay-account/index','',4);
 INSERT IGNORE INTO `sys_menu` (`id`,`parent_id`,`menu_name`,`menu_name_en`,`perm_key`,`menu_type`,`sort`) VALUES
 (130101,1301,'编辑参数','Edit','config:global:edit',3,1),
 (130102,1301,'恢复默认','Reset','config:global:reset',3,2),
@@ -342,6 +342,14 @@ INSERT IGNORE INTO `sys_menu` (`id`,`parent_id`,`menu_name`,`menu_name_en`,`perm
 (131305,1313,'测试收款账户连通性','Test Payment Account','config:payAccount:test',3,5),
 (130901,1309,'保存开关','Save','config:feature:save',3,1),
 (131001,1310,'保存配置','Save','goods:filter:save',3,1);
+
+-- 公共 KYC 模板管理（独立配置权限，与入驻审核权限分离）
+INSERT IGNORE INTO `sys_menu` (`id`,`parent_id`,`menu_name`,`menu_name_en`,`i18n_key`,`perm_key`,`menu_type`,`route_path`,`component`,`icon`,`sort`) VALUES
+(1315,1314,'KYC 模板管理','KYC Templates','kycTemplate.title','config:kyc:list',2,'/config/kyc-template','config/kyc-template/index','',14);
+INSERT IGNORE INTO `sys_menu` (`id`,`parent_id`,`menu_name`,`menu_name_en`,`perm_key`,`menu_type`,`sort`) VALUES
+(131501,1315,'新建复制 KYC 模板','Create/Copy KYC Template','config:kyc:add',3,1),
+(131502,1315,'编辑 KYC 模板','Edit KYC Template','config:kyc:edit',3,2),
+(131503,1315,'启停 KYC 模板','Enable/Disable KYC Template','config:kyc:status',3,3);
 
 -- ================= 遗留:1400 供应商 =================
 INSERT IGNORE INTO `sys_menu` (`id`,`parent_id`,`menu_name`,`menu_name_en`,`i18n_key`,`perm_key`,`menu_type`,`route_path`,`component`,`icon`,`sort`) VALUES

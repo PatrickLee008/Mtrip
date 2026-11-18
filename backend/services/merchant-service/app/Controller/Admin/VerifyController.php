@@ -237,13 +237,16 @@ class VerifyController extends AbstractController
                     return $r;
                 })->all();
             // 核验侧边栏需要展示所选业务单元的完整应交文件清单，不能仅依赖已创建的上传记录。
-            $templates = Db::table('merchant_kyc_template')->where('status', 1)->orderBy('sort')->get()
+            $templates = Db::table('merchant_kyc_template')->whereIn('site_id', [0, (int) $application->site_id])
+                ->orderByDesc('site_id')->orderBy('sort')->orderBy('template_group_id')->get()
                 ->map(static fn ($r) => (array) $r)->all();
             $templatesById = [];
             $templatesByType = [];
             foreach ($templates as $template) {
                 $templatesById[(int) $template['id']] = $template;
-                $templatesByType[$template['business_type']] ??= $template;
+                if ((int) ($template['application_business_id'] ?? 0) === 0 && (int) $template['is_current'] === 1 && (int) $template['status'] === 1) {
+                    $templatesByType[$template['business_type']] ??= $template;
+                }
             }
             foreach ($businesses as &$business) {
                 $template = $templatesById[(int) ($business['kyc_template_id'] ?? 0)]
@@ -854,9 +857,10 @@ class VerifyController extends AbstractController
             return;
         } else {
             $template = (int) ($business->kyc_template_id ?? 0) > 0
-                ? Db::table('merchant_kyc_template')->where('id', $business->kyc_template_id)->where('status', 1)->first()
+                ? Db::table('merchant_kyc_template')->where('id', $business->kyc_template_id)->first()
                 : Db::table('merchant_kyc_template')
-                    ->where('business_type', $business->business_type)->where('status', 1)->orderBy('sort')->first();
+                    ->where('application_business_id', 0)->where('is_current', 1)->whereIn('site_id', [0, (int) $application->site_id])
+                    ->where('business_type', $business->business_type)->where('status', 1)->orderByDesc('site_id')->orderBy('sort')->orderBy('template_group_id')->first();
             $templateDocs = $template ? json_decode((string) ($template->docs ?? '[]'), true) : [];
             $requiredTypes = array_values(array_filter(array_map(static fn ($doc) =>
                 ($doc['required'] ?? true) !== false ? (string) ($doc['doc_type'] ?? '') : '', is_array($templateDocs) ? $templateDocs : [])));

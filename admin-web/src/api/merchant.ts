@@ -457,6 +457,14 @@ export function apiOnboardingKycTemplateUpdate(data: Record<string, unknown>): P
   return post('/admin/merchant/onboarding/kyc-template-update', data);
 }
 
+export function apiOnboardingPropertyKycTemplates(id: number, applicationBusinessId: number): Promise<Row[]> {
+  return get('/admin/merchant/onboarding/property-kyc-templates', { id, applicationBusinessId });
+}
+
+export function apiOnboardingPropertyKycConfigure(data: Record<string, unknown>): Promise<Row> {
+  return post('/admin/merchant/onboarding/property-kyc-configure', data);
+}
+
 export function apiOnboardingAdd(data: Record<string, unknown>): Promise<Row> {
   return post('/admin/merchant/onboarding/add', data);
 }

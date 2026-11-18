@@ -1,3 +1,5 @@
+import { platformZh } from './platform';
+import { kycTemplateZh } from './kyc-template';
 import { supportZh } from './support';
 /**
  * 中文语言包
@@ -6,6 +8,8 @@ import { supportZh } from './support';
  */
 import complianceS6 from './compliance/zh-CN';
 export default {
+  platformConfig: platformZh,
+  kycTemplate: kycTemplateZh,
   support: supportZh,
   merchantContactRecovery: {"title": "核验后更正登录联系方式", "hint": "仅限已完成人工身份核验时使用。更换的旧身份会释放，所有会话失效，变更的联系方式重置为未验证。此操作不代表 OTP 已验证；待激活账号需重新领取凭证。", "phone": "新的注册手机号（含国际区号）", "email": "新的注册邮箱", "reason": "身份核验依据和换绑原因（至少 10 字）", "confirm": "确认已核验身份并更正", "done": "联系方式已更正，商户需完成真实 OTP 验证。"},
   complianceS6,
@@ -2758,6 +2762,20 @@ export default {
       previewUnavailable: '暂不支持预览此文件，请下载后查看。',
       previewRequirements: '预览要求',
       editTemplate: '编辑模板',
+      propertyTemplateLocalHint: '仅对当前物业生效，不修改公共模板或其他物业的要求。',
+      propertyTemplateLockedHint: '提交后要求已锁定。如需调整，请通过“变更要求”记录原因并要求该物业重新提交。',
+      propertyTemplateFinalHint: '最终批准已完成，核验要求仅供查看。',
+      propertyTemplateAmend: '变更要求',
+      propertyTemplateAmendWarning: '保存后仅此物业恢复资料准备状态，并需重新提交核验。已有文件及审核历史保留，保留的有效文件需重新审核，移出的文件归档，其他范围不受影响。',
+      propertyTemplateChangeReason: '变更原因',
+      propertyTemplateAmendSave: '保存并要求重新提交',
+      propertyTemplateSave: '保存物业要求',
+      propertyTemplateSaved: '物业 KYC 要求已保存',
+      propertyTemplateRequired: '请填写模板名称、各项文档名称并保留至少一项必填文件；提交后的变更须填写原因。',
+      propertyTemplateStale: 'KYC 要求已更新，请刷新申请后再保存。',
+      propertyTemplateLoadFailed: '可选模板加载失败。',
+      propertyTemplateRemoveDoc: '移除文件要求',
+      propertyTemplateRetry: '重试',
       editTemplateTitle: '编辑验证模板',
       tplName: '模板名称',
       tplNameRequired: '请填写模板名称',

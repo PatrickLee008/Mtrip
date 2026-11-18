@@ -43,13 +43,24 @@ printf '%s\n' "$create_sql" | mysql_exec
 sed "s/USE \`mtrip_business\`;/USE \`$TEST_DB\`;/" "$MIGRATION" | mysql_exec
 sed "s/USE \`mtrip_business\`;/USE \`$TEST_DB\`;/" "$MIGRATION" | mysql_exec
 
+template_migration="$REPO_ROOT/database/migrations/V20261118090000__onboarding-property-kyc-templates.sql"
+for pass in 1 2; do
+  sed "s/USE \`mtrip_business\`;/USE \`$TEST_DB\`;/" "$template_migration" | mysql_exec
+done
+
 for email_migration in "$REPO_ROOT/database/migrations/V20261012130000__add-merchant-email-identity-lock.sql" "$REPO_ROOT/database/migrations/V20261012130100__enforce-merchant-email-uniqueness.sql" "$REPO_ROOT/database/migrations/V20261013130000__add-merchant-phone-identity-and-proofs.sql" "$REPO_ROOT/database/migrations/V20261013130100__enforce-merchant-phone-uniqueness.sql"; do
   sed "s/USE \`mtrip_business\`;/USE \`$TEST_DB\`;/" "$email_migration" | mysql_exec
+done
+
+management_migration="$REPO_ROOT/database/migrations/V20261118130000__public-kyc-template-management.sql"
+for pass in 1 2; do
+  sed -e "s/USE \`mtrip_business\`;/USE \`$TEST_DB\`;/" -e "s/USE \`mtrip_system\`;/USE \`$TEST_DB\`;/" "$management_migration" | mysql_exec
 done
 
 sed "s/mtrip_m12_s1_test/$TEST_DB/g" "$REPO_ROOT/backend/shared/tests/integration/M12Bootstrap.php" \
   | $DOCKER exec -i "$SERVICE_CONTAINER" sh -c 'cat > /tmp/M12Bootstrap.php'
 $DOCKER cp "$REPO_ROOT/backend/services/merchant-service/test/onboarding-kyc.php" "$SERVICE_CONTAINER:/tmp/onboarding-kyc.php"
+$DOCKER cp "$REPO_ROOT/backend/services/merchant-service/test/onboarding-kyc-template.php" "$SERVICE_CONTAINER:/tmp/onboarding-kyc-template.php"
 $DOCKER exec \
   -e DB_BUSINESS_DATABASE="$TEST_DB" \
   -e DB_SYSTEM_DATABASE="$TEST_DB" \

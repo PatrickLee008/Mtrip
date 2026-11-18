@@ -9,6 +9,7 @@ use App\Service\OnboardingFinalApprovalService;
 use App\Service\OnboardingKycService;
 use App\Service\OnboardingAdminContactService;
 use App\Service\MerchantAuthTestMode;
+use App\Service\MerchantDocumentService;
 use Hyperf\DbConnection\Db;
 use Mtrip\Shared\Constants\ErrorCode;
 use Mtrip\Shared\Context\AdminContext;
@@ -135,12 +136,62 @@ Db::connection('system')->table('sys_email_channel')->update(['status' => 2]);
         'access_code' => 'haaaaa', 'status' => 1,
     ]);
     $seed = seedReadyStage4($siteId, '001', 'hotel', 2, '+95940000001', 'stage4-one@example.test', $merchantTemplate, $hotelTemplate);
+    if (! is_dir('/opt/www/uploads/kyc')) mkdir('/opt/www/uploads/kyc', 0775, true);
+    $reviewPath = '/opt/www/uploads/kyc/template-review-' . bin2hex(random_bytes(8)) . '.pdf';
+    file_put_contents($reviewPath, "%PDF-1.4\n%%EOF");
+    register_shutdown_function(static function () use ($reviewPath): void { if (is_file($reviewPath)) unlink($reviewPath); });
+    Db::table('merchant_verify_document')->where('application_business_id', $seed['businessIds'][0])->update([
+        'file_url' => '/uploads/kyc/' . basename($reviewPath), 'document_version' => 1,
+    ]);
+    $templateApp = (array) Db::table('merchant_application')->where('id', $seed['applicationId'])->first();
+    $kyc->configurePropertyTemplate($templateApp, $seed['businessIds'][0], [
+        'expectedTemplateId' => $hotelTemplate, 'templateId' => $hotelTemplate,
+        'documents' => [['docType' => 'property_license', 'name' => 'Property License', 'required' => true], ['docType' => 'safety_cert', 'name' => 'Safety Certificate', 'required' => true]],
+        'name' => 'First Property Custom Requirements', 'amendment' => true, 'reason' => 'Confirm property-specific requirements',
+    ]);
+    check($kyc->readiness($templateApp)['ready'] === false, 'requirement amendment blocks final approval until the property resubmits');
+    $customTemplateId = (int) Db::table('merchant_application_business')->where('id', $seed['businessIds'][0])->value('kyc_template_id');
+    stage4Rejects(ErrorCode::DATA_CONFLICT, fn () => $kyc->submit($templateApp, true), 'new required documents must be uploaded before resubmission');
+    Db::table('merchant_verify_document')->where('application_business_id', $seed['businessIds'][0])->where('doc_type', 'safety_cert')->update([
+        'file_url' => '/uploads/kyc/' . basename($reviewPath), 'document_version' => 1, 'status' => 2,
+    ]);
+    $kyc->submit($templateApp, true);
+    $customDoc = (array) Db::table('merchant_verify_document')->where('application_business_id', $seed['businessIds'][0])->first();
+    check((int) $customDoc['status'] === 2 && (int) $customDoc['document_version'] === 2,
+        'amendment reopens retained approved files with a new lifecycle version');
+    $reviewer = new MerchantDocumentService();
+    stage4Rejects(ErrorCode::DATA_CONFLICT, fn () => $reviewer->review((int) $customDoc['id'], ['action' => 'verify', 'expectedVersion' => 1]),
+        'a stale review cannot approve a new requirements lifecycle');
+    check($kyc->readiness($templateApp)['ready'] === false, 'resubmitted amended requirements still require file review');
+    $safetyDoc = Db::table('merchant_verify_document')->where('application_business_id', $seed['businessIds'][0])->where('doc_type', 'safety_cert')->first();
+    $barrier = '/tmp/kyc-review-barrier-' . bin2hex(random_bytes(8));
+    register_shutdown_function(static function () use ($barrier): void { if (is_file($barrier)) unlink($barrier); });
+    $reviewWorkers = [];
+    foreach ([[$customDoc['id'], 2], [$safetyDoc->id, 1]] as [$docId, $version]) {
+        $pipes = [];
+        $process = proc_open('php /tmp/onboarding-kyc-review-worker.php ' . (int) $docId . ' ' . $version . ' ' . escapeshellarg($barrier),
+            [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
+        check(trim((string) fgets($pipes[1])) === 'SNAPSHOT_READY', 'concurrent reviewer establishes an independent database snapshot');
+        $reviewWorkers[] = [$process, $pipes];
+    }
+    touch($barrier);
+    foreach ($reviewWorkers as [$process, $pipes]) {
+        $output = stream_get_contents($pipes[1]); $error = stream_get_contents($pipes[2]);
+        check(proc_close($process) === 0 && str_contains($output, 'REVIEW_COMPLETE'), 'concurrent file review completes: ' . $error);
+    }
+    check($kyc->readiness($templateApp)['ready'] === true, 'concurrent real file reviews complete the amended property lifecycle');
+    check(Db::table('merchant_verify_document_revision')->where('doc_id', $customDoc['id'])->count() === 2,
+        'amendment retains both file lifecycles and the original file');
     $approval->candidates = ['HAAAAA', 'HBBBBB'];
     $result = $approval->approve($seed['applicationId'], 'stage4-request-001', ['email', 'inapp']);
     check(preg_match('/^H[A-Z0-9]{5}$/D', $result['accessCode']) === 1 && $result['accessCode'] === 'HBBBBB', 'hotel access code retries a case-insensitive collision');
     check(count($result['propertyIds']) === 2, 'all initial businesses convert to formal properties');
     check(Db::table('merchant_store')->where('merchant_id', $result['merchantId'])->whereIn('source_business_id', $seed['businessIds'])->count() === 2,
         'each initial business has a unique source_business_id mapping');
+    check((int) Db::table('merchant_store')->where('source_business_id', $seed['businessIds'][0])->value('kyc_template_id') === $customTemplateId,
+        'final approval preserves the property-specific template version');
+    check((int) Db::table('merchant_store')->where('source_business_id', $seed['businessIds'][1])->value('kyc_template_id') === $hotelTemplate,
+        'final approval preserves the other property template');
     $app = (array) Db::table('merchant_application')->where('id', $seed['applicationId'])->first();
     check((int) $app['merchant_id'] === $result['merchantId'] && (int) $app['account_status'] === 1 && $app['final_approval_request_id'] === 'stage4-request-001',
         'application records merchant, pending activation, and idempotency request');
@@ -149,7 +200,7 @@ Db::connection('system')->table('sys_email_channel')->update(['status' => 2]);
     $aes = (string) config('mtrip.aes_key');
     check(CryptoHelper::decrypt($account['mobile'], $aes) === '+95940000001'
         && CryptoHelper::decrypt($account['email'], $aes) === 'stage4-one@example.test', 'owner account preserves verified phone and email');
-    check(Db::table('merchant_verify_document')->where('application_id', $seed['applicationId'])->where('merchant_id', $result['merchantId'])->count() === 3
+    check(Db::table('merchant_verify_document')->where('application_id', $seed['applicationId'])->where('merchant_id', $result['merchantId'])->count() === 4
         && Db::table('merchant_verify_document')->where('application_id', $seed['applicationId'])->where('scope_type', 'property')->where('property_id', 0)->count() === 0,
         'onboarding documents attach to the formal merchant and properties');
     check(Db::table('merchant_credential_delivery')->where('application_id', $seed['applicationId'])->count() === 2

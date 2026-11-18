@@ -232,50 +232,37 @@ class OnboardingController extends AbstractController
     #[Permission('merchant:onboarding:list')]
     public function kycTemplates(): array
     {
-        $query = Db::table('merchant_kyc_template')->where('business_type', 'unified')->where('status', 1);
-        return Result::success($query->orderByDesc('site_id')->orderBy('sort')->get()->map(static fn ($r) => (array) $r)->all());
+        $query = Db::table('merchant_kyc_template')->where('business_type', 'unified')->where('scope_type', 'merchant')
+            ->where('application_business_id', 0)->where('is_current', 1)->where('status', 1);
+        if (! AdminContext::isSuper()) $query->whereIn('site_id', [0, AdminContext::siteId()]);
+        return Result::success($query->orderByDesc('site_id')->orderBy('sort')->orderBy('template_group_id')->get()->map(static fn ($r) => (array) $r)->all());
     }
 
-    /** 编辑 KYC 验证模板:名称/业态/所需文档清单(含必填标记),平台级配置 */
-    #[Permission('merchant:onboarding:kyc')]
+    /** 兼容旧地址，公共模板编辑统一经过配置权限与版本控制。 */
+    #[Permission('config:kyc:edit')]
     public function kycTemplateUpdate(): array
     {
-        $id = $this->requireId('id');
-        $tpl = Db::table('merchant_kyc_template')->where('id', $id)->first();
-        if (! $tpl) {
-            throw new BusinessException(ErrorCode::NOT_FOUND, '验证模板不存在');
-        }
-        $tpl = (array) $tpl;
-        $this->assertSiteScope((int) $tpl['site_id']);
+        $input = $this->request->all();
+        $input['documents'] = array_map(static fn ($doc) => [
+            'docType' => $doc['doc_type'] ?? '', 'name' => $doc['name'] ?? '', 'required' => $doc['required'] ?? true,
+        ], (array) ($input['docs'] ?? []));
+        return Result::success((new \App\Service\KycTemplateService())->update($input));
+    }
 
-        $name = $this->requireStr('name');
-        if ((string) $tpl['business_type'] !== 'unified') {
-            throw new BusinessException(ErrorCode::FORBIDDEN, '仅可编辑统一 KYC 资料清单');
-        }
-        $docs = [];
-        foreach ((array) $this->input('docs', []) as $doc) {
-            $doc = (array) $doc;
-            $docName = trim((string) ($doc['name'] ?? ''));
-            if ($docName === '') {
-                continue;
-            }
-            $docs[] = [
-                'name' => mb_substr($docName, 0, 100),
-                'doc_type' => mb_substr((string) ($doc['doc_type'] ?? ''), 0, 50),
-                'required' => (bool) ($doc['required'] ?? true),
-            ];
-        }
-        if ($docs === []) {
-            throw new BusinessException(ErrorCode::PARAM_ERROR, '验证模板至少需要一份所需文档');
-        }
-        Db::table('merchant_kyc_template')->where('id', $id)->update([
-            'name' => mb_substr($name, 0, 100),
-            'business_type' => 'unified',
-            'docs' => json_encode($docs, JSON_UNESCAPED_UNICODE),
-            'status' => in_array($this->intInput('status', 1), [1, 2], true) ? $this->intInput('status', 1) : 1,
-            'sort' => $this->intInput('sort', (int) $tpl['sort']),
-        ]);
-        return Result::success(null, '验证模板已更新');
+    #[Permission('merchant:onboarding:list')]
+    public function propertyKycTemplates(): array
+    {
+        $app = $this->findApplication($this->requireId());
+        return Result::success($this->onboardingKyc->propertyTemplateOptions($app, $this->requireId('applicationBusinessId')));
+    }
+
+    #[Permission('merchant:onboarding:kyc')]
+    public function propertyKycConfigure(): array
+    {
+        $app = $this->findApplication($this->requireId());
+        return Result::success($this->onboardingKyc->configurePropertyTemplate(
+            $app, $this->requireId('applicationBusinessId'), $this->request->all()
+        ), '物业 KYC 要求已保存');
     }
 
     /** 管理端代录完整基础注册申请，直接进入待审核队列。 */
@@ -440,8 +427,9 @@ class OnboardingController extends AbstractController
         $this->assertEditable($app);
         $template = Db::table('merchant_kyc_template')
             ->whereIn('site_id', [0, (int) $app['site_id']])
-            ->where('business_type', 'unified')->where('status', 1)
-            ->orderByDesc('site_id')->orderBy('sort')->first();
+            ->where('business_type', 'unified')->where('scope_type', 'merchant')
+            ->where('application_business_id', 0)->where('is_current', 1)->where('status', 1)
+            ->orderByDesc('site_id')->orderBy('sort')->orderBy('template_group_id')->first();
         if (! $template) throw new BusinessException(ErrorCode::NOT_FOUND, '未配置启用的统一 KYC 资料清单');
         $docs = json_decode((string) $template->docs, true);
         if (! is_array($docs) || $docs === []) throw new BusinessException(ErrorCode::DATA_CONFLICT, '统一 KYC 资料清单为空');
@@ -664,10 +652,11 @@ class OnboardingController extends AbstractController
 
         $templateId = (int) ($business['kyc_template_id'] ?? 0);
         $template = $templateId > 0
-            ? Db::table('merchant_kyc_template')->where('id', $templateId)->where('status', 1)->first()
+            ? Db::table('merchant_kyc_template')->where('id', $templateId)->first()
             : Db::table('merchant_kyc_template')
+                ->where('application_business_id', 0)->where('is_current', 1)->whereIn('site_id', [0, (int) $app['site_id']])
                 ->where('business_type', (string) $business['business_type'])
-                ->where('status', 1)->orderBy('sort')->first();
+                ->where('status', 1)->orderByDesc('site_id')->orderBy('sort')->orderBy('template_group_id')->first();
         if (! $template) {
             throw new BusinessException(ErrorCode::DATA_CONFLICT, '当前商家尚未配置有效的 KYC 模板');
         }

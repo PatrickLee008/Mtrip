@@ -20,7 +20,7 @@ async function compileSetup(filename) {
       b.onLoad({ filter: /.*/, namespace: 'fixture' }, ({ path }) => ({ contents:
         path === 'vue' ? `export const {${Object.keys(vue).filter(key => !['onMounted', 'onBeforeUnmount'].includes(key)).join(',')}}=fixtureHost.vue; export const onMounted=()=>{}; export const onBeforeUnmount=fn=>{fixtureHost.unmount=fn;};` :
         path === 'vue-i18n' ? 'export const useI18n=()=>({t:key=>key});' :
-        path === 'vue-router' ? 'export const useRoute=()=>fixtureHost.route,useRouter=()=>({push(){}});' :
+        path === 'vue-router' ? 'export const useRoute=()=>fixtureHost.route,useRouter=()=>({push:target=>(fixtureHost.navigation??=[]).push(target)});' :
         'export const message={success(){},warning(){},info(){}}; export const Modal={confirm:options=>fixtureHost.confirm=options};',
       }));
       b.onLoad({ filter: /\.vue$/ }, () => ({ contents: 'export default {};' }));
@@ -32,6 +32,7 @@ async function compileSetup(filename) {
   return outputFiles[0].text;
 }
 const pageCode = await compileSetup(`${src}/views/merchant/onboarding/index.vue`);
+const propertyTemplateCode = await compileSetup(`${src}/views/merchant/onboarding/components/PropertyKycTemplate.vue`);
 const documentCode = await compileSetup(`${src}/views/merchant/onboarding/components/KycScopeDocuments.vue`);
 const previewCode = await compileSetup(`${src}/views/merchant/onboarding/components/MerchantDocumentPreview.vue`);
 const filterCode = await compileSetup(`${src}/components/SearchFilterBar.vue`);
@@ -61,6 +62,100 @@ function fixture() {
 
 let passed = 0;
 async function test(name, run) { await run(); console.log('PASS', name); passed++; }
+
+await test('legacy public template edit entry opens versioned platform management without a write', async () => {
+  const { fixtureHost, s } = fixture();
+  fixtureHost.user.hasPerm = () => false; s.openEditTemplate();
+  assert.equal(fixtureHost.navigation?.length ?? 0, 0);
+  fixtureHost.user.hasPerm = perm => perm === 'config:kyc:edit'; s.openEditTemplate();
+  assert.deepEqual(JSON.parse(JSON.stringify(fixtureHost.navigation ?? [])), [{ path: '/config/overview', query: { section: 'onboarding' } }]);
+  assert.equal(fixtureHost.calls.some(call => call.method === 'post'), false);
+});
+
+function templateFixture() {
+  const property = vue.reactive({ applicationBusinessId: 11, businessName: 'First Property', templateEditable: true, templateChangeable: true,
+    template: { id: 21, name: 'Current Template', sourceTemplateId: 21 }, documents: [{ docType: 'license', name: 'License', required: true }] });
+  const props = vue.reactive({ applicationId: 7, property, busy: false });
+  const host = { vue, calls: [], user: vue.reactive({ hasPerm: () => true }), emitted: [],
+    request: async (method, path, data) => { host.calls.push({ method, path, data });
+      return method === 'get' ? [{ id: 22, name: 'Alternative', documents: [{ docType: 'insurance', name: 'Insurance', required: true }] }] : {}; } };
+  const context = vm.createContext({ fixtureHost: host, console, crypto: globalThis.crypto });
+  vm.runInContext(propertyTemplateCode, context);
+  const s = context.subject.default.setup(props, { expose() {}, emit: (...args) => host.emitted.push(args) });
+  return { props, host, s };
+}
+
+await test('property template selection previews editable requirements and cancel performs no write', async () => {
+  const { host, s } = templateFixture();
+  await vue.nextTick(); await Promise.resolve(); await Promise.resolve();
+  s.editRequirements(22);
+  assert.equal(s.form.templateId, 22); assert.equal(s.form.documents[0].docType, 'insurance');
+  assert.equal(s.form.expectedTemplateId, 21); assert.equal(s.form.amendment, false);
+  s.open.value = false;
+  assert.equal(host.calls.filter(c => c.method === 'post').length, 0);
+});
+await test('property template save sends only current property requirements with concurrency version', async () => {
+  const { host, s } = templateFixture(); await vue.nextTick(); await Promise.resolve(); await Promise.resolve();
+  s.editRequirements(); s.form.name = '  Custom Requirements  '; s.form.documents[0].name = '  License  ';
+  await s.saveRequirements();
+  const saved = host.calls.find(c => c.method === 'post');
+  assert.ok(saved.path.endsWith('/property-kyc-configure'));
+  assert.equal(saved.data.applicationBusinessId, 11); assert.equal(saved.data.id, 7);
+  assert.equal(saved.data.expectedTemplateId, 21); assert.equal(saved.data.name, 'Custom Requirements');
+  assert.equal(saved.data.documents[0].name, 'License');
+  assert.equal(host.emitted[0][0], 'saved'); assert.equal(s.open.value, false);
+});
+await test('property requirement amendment requires a reason and explicitly requests resubmission', async () => {
+  const { props, host, s } = templateFixture(); await vue.nextTick(); await Promise.resolve(); await Promise.resolve(); props.property.templateEditable = false;
+  s.editRequirements(); assert.equal(s.form.amendment, true);
+  await s.saveRequirements(); assert.equal(host.calls.filter(c => c.method === 'post').length, 0);
+  s.form.reason = '  Corrected license requirement  '; await s.saveRequirements();
+  const saved = host.calls.find(c => c.method === 'post');
+  assert.equal(saved.data.amendment, true); assert.equal(saved.data.reason, 'Corrected license requirement');
+});
+await test('property template edits preserve document identifiers and reject invalid drafts', async () => {
+  const { host, s } = templateFixture(); await vue.nextTick(); await Promise.resolve(); await Promise.resolve(); s.editRequirements();
+  s.form.documents[0].name = 'Renamed License'; assert.equal(s.form.documents[0].docType, 'license');
+  s.addRequirement(); assert.match(s.form.documents[1].docType, /^custom_[a-f0-9]+$/);
+  await s.saveRequirements(); assert.equal(host.calls.filter(c => c.method === 'post').length, 0);
+  s.removeRequirement(1); s.form.documents[0].required = false;
+  await s.saveRequirements(); assert.equal(host.calls.filter(c => c.method === 'post').length, 0);
+});
+await test('property template loading, permission, final approval and stale version block writes', async () => {
+  const { props, host, s } = templateFixture(); await vue.nextTick(); await Promise.resolve(); await Promise.resolve();
+  host.user.hasPerm = () => false; s.editRequirements(); assert.equal(s.open.value, false);
+  host.user.hasPerm = () => true; s.editRequirements(); assert.equal(s.open.value, true); props.property.template.id = 30;
+  await s.saveRequirements(); assert.equal(host.calls.filter(c => c.method === 'post').length, 0);
+  props.property.templateChangeable = false; await s.saveRequirements();
+  assert.equal(host.calls.filter(c => c.method === 'post').length, 0);
+});
+await test('property template failure retains draft and business switches close the old editor', async () => {
+  const { props, host, s } = templateFixture(); await vue.nextTick(); await Promise.resolve(); await Promise.resolve(); s.editRequirements();
+  host.request = async () => { throw new Error('conflict'); }; await s.saveRequirements();
+  assert.equal(s.open.value, true); assert.equal(s.saving.value, false); assert.equal(host.emitted.length, 0);
+  props.property.applicationBusinessId = 12; await vue.nextTick(); await Promise.resolve(); await Promise.resolve();
+  assert.equal(s.open.value, false);
+});
+
+await test('late property template options cannot replace the newly selected property options', async () => {
+  const { props, host, s } = templateFixture(); await vue.nextTick(); await Promise.resolve(); await Promise.resolve();
+  let releaseOld;
+  host.request = (_method, _path, data) => data.applicationBusinessId === 11
+    ? new Promise(resolve => { releaseOld = resolve; })
+    : Promise.resolve([{ id: 30, name: 'Second Property Template', documents: [] }]);
+  const oldLoad = s.loadOptions(); props.property.applicationBusinessId = 12;
+  await vue.nextTick(); await Promise.resolve(); await Promise.resolve();
+  releaseOld([{ id: 22, name: 'Old Property Template' }]); await oldLoad;
+  assert.equal(s.options.value[0].id, 30); assert.equal(s.loading.value, false);
+});
+await test('refreshing a saved template cannot reopen a different application', async () => {
+  const { fixtureHost, s } = fixture(); let release;
+  fixtureHost.request = () => new Promise(resolve => { release = resolve; });
+  const refreshing = s.refreshPropertyTemplate(7);
+  s.app.value = { id: 8, state_model_version: 1, registration_status: 3 };
+  release(fixtureHost.detail); await refreshing;
+  assert.equal(s.app.value.id, 8); assert.equal(s.scopedKycBusy.value, false);
+});
 
 await test('approved list displays a date and the assigned operator name instead of reviewer ID', () => {
   const fixtureHost = { vue, route: vue.reactive({ path: '/merchant-verify/approved' }) };

@@ -1,3 +1,5 @@
+import { platformEn } from './platform';
+import { kycTemplateEn } from './kyc-template';
 import { supportEn } from './support';
 /**
  * 英文语言包(多语言占位符源)
@@ -8,6 +10,8 @@ import { supportEn } from './support';
  */
 import complianceS6 from './compliance/en-US';
 export default {
+  platformConfig: platformEn,
+  kycTemplate: kycTemplateEn,
   support: supportEn,
   merchantContactRecovery: {"title": "Correct login contacts after review", "hint": "Only after a human identity review. This releases replaced identities, revokes all sessions and resets changed contacts to unverified. It does not verify the contacts. Pending accounts must claim credentials again.", "phone": "New registration mobile (E.164)", "email": "New registration email", "reason": "Identity evidence and reason (at least 10 characters)", "confirm": "Confirm identity review and correction", "done": "Contacts corrected. Merchant must complete real OTP verification."},
   complianceS6,
@@ -2783,6 +2787,20 @@ export default {
       previewUnavailable: 'This file cannot be previewed. Use Download to view it locally.',
       previewRequirements: 'Preview Requirements',
       editTemplate: 'Edit Template',
+      propertyTemplateLocalHint: 'Only the selected property is affected. Public templates and other properties stay unchanged.',
+      propertyTemplateLockedHint: 'Requirements are locked after submission. Use Change Requirements to record a reason and request a new submission.',
+      propertyTemplateFinalHint: 'Final approval is complete. These verification requirements are read-only.',
+      propertyTemplateAmend: 'Change Requirements',
+      propertyTemplateAmendWarning: 'Saving will reopen KYC for this property and require a new submission. Existing files and review history are retained. Valid retained files require a fresh review; other scopes are unaffected. Removed items are archived.',
+      propertyTemplateChangeReason: 'Reason for changing requirements',
+      propertyTemplateAmendSave: 'Save and Request New Submission',
+      propertyTemplateSave: 'Save Property Requirements',
+      propertyTemplateSaved: 'Property KYC requirements saved',
+      propertyTemplateRequired: 'Enter the template name and all document names, keep at least one required document, and provide a reason for changes after submission.',
+      propertyTemplateStale: 'Requirements have changed. Refresh the application before saving.',
+      propertyTemplateLoadFailed: 'Could not load the available templates.',
+      propertyTemplateRemoveDoc: 'Remove document requirement',
+      propertyTemplateRetry: 'Retry',
       editTemplateTitle: 'Edit Verification Template',
       tplName: 'Template Name',
       tplNameRequired: 'Template name is required',

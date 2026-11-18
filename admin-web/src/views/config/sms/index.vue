@@ -29,7 +29,8 @@ import {
  * ⚠ **本站点存在启用中的 smspoh 渠道时,C 端注册就会强制要求短信验证**(后端 AuthController::register)。
  */
 const { t } = useI18n();
-const activeTab = ref('channel');
+const props = defineProps<{ initialTab?: 'channel' | 'template' | 'log' }>();
+const activeTab = ref(props.initialTab ?? 'channel');
 
 const PROVIDER_TEXT = computed<Record<string, string>>(() => ({
   twilio: t('config.sms.typeTwilio'),
