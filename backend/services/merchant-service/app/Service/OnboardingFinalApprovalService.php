@@ -94,7 +94,7 @@ class OnboardingFinalApprovalService
                 'merchant_name' => (string) ($app['merchant_name'] ?: $app['company_name']),
                 'merchant_short_name' => (string) ($app['merchant_name'] ?: $app['company_name']),
                 'merchant_type' => (string) $app['primary_business_type'] === 'hotel' ? 1 : 3,
-                'credit_code' => (string) $app['reg_number'],
+                'credit_code' => trim((string) $app['reg_number']) === '' ? null : (string) $app['reg_number'],
                 'legal_person' => '',
                 'contact_name' => (string) $firstBusiness['contact_name'],
                 'contact_phone' => (string) $app['registration_phone'],

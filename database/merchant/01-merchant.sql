@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS `merchant_info` (
   `merchant_name`       VARCHAR(100) NOT NULL COMMENT '商户全称',
   `merchant_short_name` VARCHAR(50)  NOT NULL DEFAULT '' COMMENT '商户简称(C端展示名)',
   `merchant_type`       TINYINT      NOT NULL DEFAULT 1 COMMENT '类型:1酒店 2景区 3综合',
-  `credit_code`         VARCHAR(50)  NOT NULL COMMENT '统一社会信用代码',
+  `credit_code`         VARCHAR(50)  NULL DEFAULT NULL COMMENT '统一社会信用代码',
   `business_license`    VARCHAR(255) NOT NULL DEFAULT '' COMMENT '营业执照图片URL',
   `legal_person`        VARCHAR(50)  NOT NULL COMMENT '法人姓名',
   `legal_id_card`       VARCHAR(255) NOT NULL DEFAULT '' COMMENT '法人身份证号(加密)',

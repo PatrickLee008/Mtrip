@@ -11,6 +11,11 @@
 
 ## 命名
 
+2026-11-19 最终批准空注册号修复：新增 `V20261119070000__allow-missing-merchant-registration-number.sql`，
+正式商户 `credit_code` 改为可空并将存量空字符串／纯空格置NULL，保留真实非空注册号唯一索引。
+须与最终批准代码配套发布，目标服预检、双库备份、暂停商户双池、标准迁移及原申请重试见
+[补救方案](../../docs/guides/setup/最终批准空注册号修复.md)。不修改历史迁移，不清理申请或KYC。
+
 格式固定为：`VYYYYMMDDHHMMSS__lower-kebab-description.sql`。
 
 示例：`V20260909143000__add-order-refund-index.sql`。版本必须是有效的 UTC 日期时间，14 位版本号在整个目录内
@@ -87,3 +92,40 @@ bash scripts/auto-deploy.sh --apply-db
 
 如出现校验和不一致或 running/failed，停止恢复并核对实际结构，不能通过加入白名单消除该错误。
 新迁移编号应晚于各部署环境的已发布最高版本，避免不同分支再次产生倒序遗漏。
+
+### 2026-11-19 商业设置迁移遗漏
+
+测试服截图中的 `20261117100000 < 20261117160000` 是另一条遗漏迁移，不应继续使用上例的 11-05 三个版本号。
+`V20261117100000__merchant-commercial-settings.sql` 新增商户商业配置历史表、商户 `commercial_version`
+及订单 `merchant_commercial_snapshot` 列；`V20261117160000__app-version-control.sql` 只插入 App 版本配置，
+两者没有顺序依赖。11-18 的 KYC 和平台配置迁移不引用上述商业字段；无需修改历史文件或顺序策略。
+
+本机独立 MySQL 8.0 容器使用原始两条迁移复现默认拦截，验证白名单预览不写入、补执行后账本 2/2、
+原 16:00 账本整行和 App 版本配置不变、两列和历史表创建成功、重复执行及原 SQL 幂等；临时容器已清理。
+迁移命名 72 个版本、Bash 语法与状态机回归通过。此证据仅覆盖本机隔离恢复，不代表目标测试服已修复，
+也不代表其他 11-18 迁移已在目标测试服通过验收。
+
+在截图所示测试服务器仓库根目录执行下面整段命令；遇到错误自动停止。恢复期间避免并行发布：
+
+```bash
+(
+  set -e
+  cd /www/wwwroot/Mtrip
+  bash scripts/db-migrate.sh --dry-run --allow-out-of-order=20261117100000
+
+  mkdir -p deploy/backups
+  repair_backup="deploy/backups/before-commercial-repair-$(date +%Y%m%d-%H%M%S).sql"
+  docker exec "${MYSQL_CONTAINER:-mtrip-mysql-1}" sh -c \
+    'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysqldump -uroot --single-transaction --routines --events --triggers --no-tablespaces --databases mtrip_system mtrip_business' \
+    > "$repair_backup"
+  test -s "$repair_backup"
+
+  bash scripts/db-migrate.sh --allow-out-of-order=20261117100000
+  bash scripts/db-migrate.sh --status
+  bash scripts/auto-deploy.sh --apply-db
+)
+```
+
+白名单只豁免该版本的顺序检查，执行仍覆盖本仓库全部待执行迁移（包括截图中的 11-18 迁移），
+正常成功后 `--status` 应显示待执行 0，再继续发布。如果出现 SQL 错误或 failed 状态，先核对实际结构，
+不要删除账本、重命名迁移、重放 `02-menu.sql` 或用 `--skip-db` 跳过。

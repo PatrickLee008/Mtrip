@@ -103,6 +103,11 @@ setMerchantAuthTestMode($config, false, false, 'test');
 $kyc = $container->get(OnboardingKycService::class);
 $delivery = new Stage4Delivery();
 $approval = new Stage4Approval($kyc, $delivery);
+check(Db::table('merchant_info')->where('merchant_code', 'MCH-REG-LEGACY')->whereNull('credit_code')->count() === 1,
+    'migration converts an existing empty registration number to NULL');
+check(Db::table('merchant_info')->where('merchant_code', 'MCH-REG-PRESENT')->where('credit_code', 'STAGE4-MIGRATION-PRESERVED')
+    ->where('merchant_name', 'Existing registration')->where('status', 1)->count() === 1,
+    'repeated migration preserves existing nonempty registration numbers and merchant data');
 AdminContext::set([
     'admin_id' => 94001, 'admin_name' => 'Stage 4 Super', 'site_id' => 0, 'is_super' => true,
     'permissions' => ['merchant:onboarding:final-approve', 'merchant:onboarding:credential-retry'],
@@ -288,6 +293,21 @@ Db::connection('system')->table('sys_email_channel')->update(['status' => 2]);
         'replayed final approval after activation returns existing receipts without dispatching stale credentials');
     setMerchantAuthTestMode($config, true, false);
 
+    $emptyRegistrationResults = [];
+    foreach (['', '', '   '] as $index => $registrationNumber) {
+        $emptyRegistration = seedReadyStage4($siteId, 'EMPTY-' . $index, 'hotel', 1,
+            '+9594000002' . $index, 'stage4-empty-' . $index . '@example.test', $merchantTemplate, $hotelTemplate);
+        Db::table('merchant_application')->where('id', $emptyRegistration['applicationId'])->update(['reg_number' => $registrationNumber]);
+        $emptyRegistrationResults[] = $approval->approve($emptyRegistration['applicationId'], 'stage4-empty-request-' . $index, ['email', 'inapp']);
+    }
+    check(count(array_unique(array_column($emptyRegistrationResults, 'merchantId'))) === 3,
+        'multiple applications without a registration number approve as separate merchants');
+    check(Db::table('merchant_info')->whereIn('id', array_column($emptyRegistrationResults, 'merchantId'))->whereNull('credit_code')->count() === 3,
+        'empty and whitespace-only registration numbers are stored as NULL');
+    $emptyReplay = $approval->approve($emptyRegistration['applicationId'], 'stage4-empty-request-2', ['email', 'inapp']);
+    check($emptyReplay['merchantId'] === $emptyRegistrationResults[2]['merchantId'],
+        'approval without a registration number remains idempotent');
+
     $rollback = seedReadyStage4($siteId, 'ROLLBACK', 'hotel', 1, '+95940000003', 'stage4-rollback@example.test', $merchantTemplate, $hotelTemplate);
     Db::table('merchant_info')->insert([
         'merchant_code' => 'MCH-9499', 'site_id' => $siteId, 'merchant_name' => 'Duplicate Credit',
@@ -299,7 +319,9 @@ Db::connection('system')->table('sys_email_channel')->update(['status' => 2]);
     try {
         $approval->approve($rollback['applicationId'], 'stage4-request-rollback', ['email']);
         check(false, 'duplicate credit code must fail');
-    } catch (Throwable) {
+    } catch (Hyperf\Database\Exception\QueryException $exception) {
+        check(str_contains($exception->getMessage(), '1062') && str_contains($exception->getMessage(), 'uk_credit_code'),
+            'nonempty registration numbers remain unique after allowing NULL');
         check(Db::table('merchant_info')->count() === $beforeMerchants && Db::table('merchant_admin')->count() === $beforeAccounts
             && Db::table('merchant_store')->count() === $beforeStores, 'entity creation rolls back when a transaction step fails');
     }

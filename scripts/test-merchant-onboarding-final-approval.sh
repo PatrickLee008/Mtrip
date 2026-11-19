@@ -55,6 +55,18 @@ for pass in 1 2; do
   sed -e "s/USE \`mtrip_business\`;/USE \`$TEST_DB\`;/" -e "s/USE \`mtrip_system\`;/USE \`$TEST_DB\`;/" "$management_migration" | mysql_exec
 done
 
+cat <<SQL | mysql_exec
+USE \`$TEST_DB\`;
+ALTER TABLE merchant_info MODIFY COLUMN credit_code VARCHAR(50) NOT NULL COMMENT '统一社会信用代码';
+INSERT INTO merchant_info (merchant_code,site_id,merchant_name,credit_code,legal_person,contact_name,contact_phone,status)
+VALUES ('MCH-REG-LEGACY',994,'Legacy empty registration','','','','',1),
+       ('MCH-REG-PRESENT',994,'Existing registration','STAGE4-MIGRATION-PRESERVED','','','',1);
+SQL
+registration_migration="$REPO_ROOT/database/migrations/V20261119070000__allow-missing-merchant-registration-number.sql"
+for pass in 1 2; do
+  sed "s/USE \`mtrip_business\`;/USE \`$TEST_DB\`;/" "$registration_migration" | mysql_exec
+done
+
 sed "s/mtrip_m12_s1_test/$TEST_DB/g" "$REPO_ROOT/backend/shared/tests/integration/M12Bootstrap.php" \
   | $DOCKER exec -i "$SERVICE_CONTAINER" sh -c 'cat > /tmp/M12Bootstrap.php'
 $DOCKER cp "$REPO_ROOT/backend/services/merchant-service/test/onboarding-final-approval.php" "$SERVICE_CONTAINER:/tmp/onboarding-final-approval.php"
