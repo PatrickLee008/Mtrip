@@ -10,7 +10,8 @@ import sys
 import tempfile
 
 ROOT = Path(__file__).resolve().parents[2]
-MIGRATION = ROOT / 'database/migrations/V20261119073300__move-qa-merchant-7014-to-yangon.sql'
+ORIGINAL_MIGRATION = ROOT / 'database/migrations/V20261119073300__move-qa-merchant-7014-to-yangon.sql'
+MIGRATION = ROOT / 'database/migrations/V20261119090000__recover-qa-merchant-site-notification-reads.sql'
 DOCKER = os.environ.get('DOCKER', 'docker')
 CONTAINER = os.environ.get('MYSQL_CONTAINER', 'mtrip-mysql-1')
 SOURCE_BUSINESS = os.environ.get('DB_BUSINESS_DATABASE', 'mtrip_business')
@@ -82,12 +83,13 @@ def insert(table, values, database=TEST_BUSINESS):
 
 
 def fixture():
-    tables = set(PLAN) | {'merchant_admin_role', 'merchant_role_menu', 'merchant_onboarding_agreement', 'order_main', 'marketing_coupon', 'ranking_market'}
+    tables = set(PLAN) | {'merchant_admin_role', 'merchant_role_menu', 'merchant_onboarding_agreement', 'merchant_notify_read', 'merchant_notify_delivery', 'order_main', 'marketing_coupon', 'ranking_market'}
     tables.add('migration_merchant_site_backup')
     existing = set(scalar(f"SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA='{TEST_BUSINESS}';").splitlines())
     statements = [f'USE `{TEST_BUSINESS}`;', 'DROP TRIGGER IF EXISTS qa_7014_fail_update;', 'DROP TABLE IF EXISTS qa_future_merchant_dependency;']
-    statements += [f'TRUNCATE TABLE `{table}`;' for table in sorted(tables & existing)]
-    statements += [f'TRUNCATE TABLE `{TEST_SYSTEM}`.sys_site;', f'TRUNCATE TABLE `{TEST_SYSTEM}`.sys_file;']
+    statements += ['START TRANSACTION;']
+    statements += [f'DELETE FROM `{table}`;' for table in sorted(tables & existing)]
+    statements += [f'DELETE FROM `{TEST_SYSTEM}`.sys_site;', f'DELETE FROM `{TEST_SYSTEM}`.sys_file;']
     statements += [insert('sys_site', {'id': 1, 'site_name': 'Global', 'status': 2, 'country_code': ''}, TEST_SYSTEM),
                    insert('sys_site', {'id': 7, 'site_name': 'Yangon', 'status': 1, 'country_code': 'MM'}, TEST_SYSTEM),
                    insert('sys_file', {'id': 999001, 'site_id': 1, 'file_name': 'audit-original.png', 'file_url': '/fixture.png'}, TEST_SYSTEM)]
@@ -132,12 +134,21 @@ def fixture():
     statements += [insert('merchant_admin_role', {'admin_id': 4716, 'role_id': role}) for role in (85004, 85005)]
     statements.append(insert('merchant_role_menu', {'role_id': 85004, 'menu_id': 100}))
     statements.append(insert('merchant_info', {'id': 999901, 'site_id': 1, 'merchant_code': 'UNRELATED', 'merchant_name': 'Must remain untouched', 'credit_code': 'UNRELATED', 'status': 3}))
+    statements.append(insert('merchant_admin', {'id': 999902, 'site_id': 1, 'merchant_id': 999901, 'username': 'unrelated-reader', 'password': 'fixture', 'status': 1}))
+    notify_id = 85020 + PLAN.index('merchant_notify')
+    statements += [insert('merchant_notify', {'id': 999910, 'site_id': 1, 'merchant_id': 0, 'property_id': 0, 'recipient_id': None}),
+                   insert('merchant_notify', {'id': 999911, 'site_id': 1, 'merchant_id': 999901, 'property_id': 0, 'recipient_id': 999902}),
+                   insert('merchant_notify_read', {'notify_id': notify_id, 'account_id': 4716, 'read_at': '2026-11-19 01:00:00'}),
+                   insert('merchant_notify_read', {'notify_id': 999910, 'account_id': 4716, 'read_at': '2026-11-19 01:01:00', 'hidden_at': '2026-11-19 01:02:00'}),
+                   insert('merchant_notify_read', {'notify_id': 999911, 'account_id': 999902, 'read_at': '2026-11-19 01:03:00'}),
+                   insert('merchant_notify_delivery', {'id': 999920, 'notify_id': notify_id, 'channel': 'inapp', 'status': 'delivered', 'receipt': 'preserve-receipt'})]
+    statements.append('COMMIT;')
     sql('\n'.join(statements))
 
 
 def fingerprint():
     statements = [f'USE `{TEST_BUSINESS}`;']
-    for table in PLAN + ['merchant_admin_role', 'merchant_role_menu', 'merchant_onboarding_agreement']:
+    for table in PLAN + ['merchant_admin_role', 'merchant_role_menu', 'merchant_onboarding_agreement', 'merchant_notify_read', 'merchant_notify_delivery']:
         fields = ','.join('`' + column[0] + '`' for column in METADATA[(TEST_BUSINESS, table)])
         statements.append(f'SELECT {fields} FROM `{table}` ORDER BY 1;')
     statements.append(f'SELECT * FROM `{TEST_SYSTEM}`.sys_file ORDER BY id;')
@@ -215,6 +226,105 @@ def test_creation_policy():
         subprocess.run([DOCKER, 'rm', '-f', redis_name], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
+def test_recovery():
+    """Use the actual shell recovery and the ordinary migration validator."""
+    with tempfile.TemporaryDirectory(prefix='mtrip-qa7014-recovery-') as directory:
+        checkout = Path(directory)
+        for subdir in ('scripts', 'database/init', 'database/migrations'):
+            (checkout / subdir).mkdir(parents=True, exist_ok=True)
+        old_file = checkout / 'database/migrations' / ORIGINAL_MIGRATION.name
+        new_file = checkout / 'database/migrations' / MIGRATION.name
+        old_file.write_text(rewrite(ORIGINAL_MIGRATION.read_text(encoding='utf-8-sig')), encoding='utf-8')
+        new_file.write_text(MIGRATION_SQL, encoding='utf-8')
+        helper = checkout / 'scripts/recover-qa-merchant-7014-site.sh'
+        helper.write_text((ROOT / 'scripts' / helper.name).read_text(encoding='utf-8-sig'), encoding='utf-8')
+        (checkout / 'scripts/db-migrate.sh').write_text(rewrite((ROOT / 'scripts/db-migrate.sh').read_text(encoding='utf-8-sig')), encoding='utf-8')
+        ledger_ddl = rewrite((ROOT / 'database/init/01-schema-migrations.sql').read_text(encoding='utf-8-sig'))
+        (checkout / 'database/init/01-schema-migrations.sql').write_text(ledger_ddl, encoding='utf-8')
+        sql(ledger_ddl)
+        old_hash = hashlib.sha256(old_file.read_bytes()).hexdigest()
+        new_hash = hashlib.sha256(new_file.read_bytes()).hexdigest()
+        shell = os.environ.get('BASH', r'C:\Program Files\Git\bin\bash.exe' if os.name == 'nt' else 'bash')
+        env = {**os.environ, 'MTRIP_REPO_ROOT': checkout.as_posix(), 'MYSQL_CONTAINER': CONTAINER,
+               'MYSQL_ROOT_PASSWORD': PASSWORD, 'DB_BUSINESS_DATABASE': TEST_BUSINESS,
+               'DB_SYSTEM_DATABASE': TEST_SYSTEM, 'MSYS_NO_PATHCONV': '1', 'MYSQL_MIGRATION_LOCK_TIMEOUT': '0'}
+
+        def command(mode, script=helper):
+            result = subprocess.run([shell, str(script), mode], cwd=checkout, env=env, capture_output=True, timeout=120)
+            return result.returncode, result.stdout.decode('utf-8', errors='replace'), result.stderr.decode('utf-8', errors='replace')
+
+        def reset():
+            fixture()
+            sql(f'DELETE FROM `{TEST_SYSTEM}`.schema_migrations;')
+            if scalar(f"SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA='{TEST_SYSTEM}' AND TABLE_NAME='schema_migration_recovery';") == '1':
+                sql(f'DELETE FROM `{TEST_SYSTEM}`.schema_migration_recovery;')
+            code, _, error = sql(old_file.read_text(encoding='utf-8'), allow_failure=True)
+            assert code and 'merchant_notify_read' in error
+            sql(insert('schema_migrations', {'version': '20261119073300', 'description': 'original failed intent',
+                       'script_path': 'database/migrations/' + old_file.name, 'checksum': old_hash, 'status': 'failed',
+                       'attempt_id': 'original-failed-read-link', 'git_commit': 'a' * 40, 'applied_by': 'original-ops',
+                       'started_at': '2026-11-19 08:53:00', 'finished_at': '2026-11-19 08:53:04',
+                       'error_message': 'mysql client execution failed'}, TEST_SYSTEM))
+
+        reset()
+        before = fingerprint()
+        code, output, error = command('--check')
+        check(code == 0 and fingerprint() == before, 'recovery check is read-only: ' + error)
+        check(scalar(f"SELECT status FROM `{TEST_SYSTEM}`.schema_migrations WHERE version='20261119073300';") == 'failed', 'check does not clear a failed ledger')
+        code, output, error = command('--apply')
+        check(code == 0, 'real recovery command succeeds: ' + output[-400:] + error)
+        check(scalar(f"SELECT COUNT(*) FROM `{TEST_SYSTEM}`.schema_migrations WHERE status='applied';") == '2', 'both completed intents are recorded after successful correction')
+        check(scalar(f"SELECT checksum FROM `{TEST_SYSTEM}`.schema_migrations WHERE version='20261119073300';") == old_hash, 'original published checksum is unchanged')
+        check(scalar(f"SELECT checksum FROM `{TEST_SYSTEM}`.schema_migrations WHERE version='20261119090000';") == new_hash, 'replacement execution has its own file checksum')
+        check(scalar(f"SELECT JSON_UNQUOTE(JSON_EXTRACT(original_ledger,'$.status')) FROM `{TEST_SYSTEM}`.schema_migration_recovery;") == 'failed', 'original failed status is retained in recovery audit')
+        check(scalar(f"SELECT JSON_UNQUOTE(JSON_EXTRACT(original_ledger,'$.attempt_id')) FROM `{TEST_SYSTEM}`.schema_migration_recovery;") == 'original-failed-read-link', 'original failed attempt identity is retained')
+        backups = list((checkout / 'deploy/backups').glob('qa7014-recovery-*.sql'))
+        check(len(backups) == 1 and backups[0].stat().st_size > 1000 and Path(str(backups[0]) + '.sha256').is_file(), 'recovery writes a full database backup and checksum')
+        check(scalar(f'SELECT COUNT(*) FROM `{TEST_BUSINESS}`.merchant_notify_read;') == '3', 'recovery keeps all notification read links')
+        code, output, error = command('--status', checkout / 'scripts/db-migrate.sh')
+        check(code == 0, 'ordinary migration validation resumes without bypass flags: ' + output[-400:] + error)
+        recovered = fingerprint()
+        code, _, error = command('--apply')
+        check(code == 0 and fingerprint() == recovered, 'repeat recovery is a no-op: ' + error)
+        check(len(list((checkout / 'deploy/backups').glob('qa7014-recovery-*.sql'))) == 1, 'completed recovery does not create another backup or attempt')
+
+        reset()
+        sql(f"UPDATE `{TEST_SYSTEM}`.schema_migrations SET checksum=REPEAT('f',64);")
+        before = fingerprint()
+        code, _, _ = command('--apply')
+        check(code != 0 and fingerprint() == before, 'recovery refuses checksum mismatches before business writes')
+
+        reset()
+        prerequisite = checkout / 'database/migrations/V20261119080000__missing-prerequisite.sql'
+        prerequisite.write_text('SET NAMES utf8mb4;\nSELECT 1;\n', encoding='utf-8')
+        before = fingerprint()
+        code, _, _ = command('--apply')
+        check(code != 0 and fingerprint() == before, 'recovery refuses an unapplied prerequisite version')
+        prerequisite.unlink()
+
+        reset()
+        sql(insert('order_main', {'id': 999100, 'site_id': 1, 'merchant_id': 7014, 'property_id': 7522,
+                                 'sku_id': 7021, 'order_type': 1, 'order_no': 'RECOVERY-MUST-STOP'}))
+        before = fingerprint()
+        code, _, error = command('--apply')
+        check(code != 0 and fingerprint() == before, 'corrective guard failure rolls back business changes')
+        check(scalar(f"SELECT COUNT(*) FROM `{TEST_SYSTEM}`.schema_migrations WHERE status='failed';") == '2', 'failed correction never clears either failed ledger')
+        check(scalar(f'SELECT COUNT(*) FROM `{TEST_SYSTEM}`.schema_migration_recovery;') == '0', 'failed correction never records a successful audit')
+        sql(f'DELETE FROM `{TEST_BUSINESS}`.order_main;')
+        code, output, error = command('--apply')
+        check(code == 0, 'reviewed retry of a failed corrective attempt succeeds: ' + output[-400:] + error)
+        check(scalar(f"SELECT JSON_UNQUOTE(JSON_EXTRACT(previous_recovery_ledger,'$.status')) FROM `{TEST_SYSTEM}`.schema_migration_recovery;") == 'failed', 'retry audit preserves the previous corrective failure')
+
+        reset()
+        sql(MIGRATION_SQL)
+        auth_version = scalar(f'SELECT auth_version FROM `{TEST_BUSINESS}`.merchant_admin WHERE id=4716;')
+        code, output, error = command('--apply')
+        check(code == 0, 'recovery resumes after data committed but ledger completion did not: ' + output[-400:] + error)
+        check(scalar(f'SELECT auth_version FROM `{TEST_BUSINESS}`.merchant_admin WHERE id=4716;') == auth_version, 'ledger completion does not revoke credentials a second time')
+        check(hashlib.sha256(old_file.read_bytes()).hexdigest() == old_hash, 'recovery never edits the original published SQL file')
+        print('Audited failed migration recovery tests passed.', flush=True)
+
+
 def main():
     for name in (SOURCE_BUSINESS, SOURCE_SYSTEM, TEST_BUSINESS, TEST_SYSTEM):
         if not re.fullmatch('[A-Za-z0-9_]+', name):
@@ -238,9 +348,20 @@ def main():
     if '--creation-only' in sys.argv:
         test_creation_policy()
         return
+    if '--recovery-only' in sys.argv:
+        test_recovery()
+        check(original == scalar(f'CHECKSUM TABLE `{SOURCE_BUSINESS}`.merchant_info,`{SOURCE_BUSINESS}`.merchant_store;'), 'recovery tests leave source development data unchanged')
+        print(f'QA site recovery: {PASSED} assertions passed.', flush=True)
+        return
 
     sql(MIGRATION_SQL)
     check(scalar(f'SELECT COUNT(*) FROM `{TEST_BUSINESS}`.migration_merchant_site_backup;') == '0', 'absent merchant is a no-op')
+    fixture()
+    before = fingerprint()
+    code, _, error = sql(rewrite(ORIGINAL_MIGRATION.read_text(encoding='utf-8-sig')), allow_failure=True)
+    check(code != 0 and 'unreviewed dependency in merchant_notify_read' in error, 'published original reproduces the actual notification-read failure')
+    check(fingerprint() == before, 'original failure occurs before business changes')
+    check(scalar(f'SELECT COUNT(*) FROM `{TEST_BUSINESS}`.migration_merchant_site_backup;') == '0', 'original failed attempt leaves no row backups')
     fixture()
     before = fingerprint()
     sql('SET @qa_7014_preview=1;\n' + MIGRATION_SQL)
@@ -255,6 +376,11 @@ def main():
     check(scalar(f'SELECT site_id FROM `{TEST_BUSINESS}`.merchant_info WHERE id=999901;') == '1', 'unrelated merchant is preserved')
     check(scalar(f'SELECT COUNT(*) FROM `{TEST_BUSINESS}`.merchant_kyc_template WHERE id IN (85001,85002) AND site_id=0;') == '2', 'shared templates keep their scope and IDs')
     check(scalar(f'SELECT site_id FROM `{TEST_BUSINESS}`.merchant_kyc_template WHERE id=85000;') == '7', 'private property checklist moves with the application')
+    check(scalar(f'SELECT COUNT(*) FROM `{TEST_BUSINESS}`.merchant_notify_read;') == '3', 'all read/hidden links are retained')
+    check(scalar(f"SELECT hidden_at FROM `{TEST_BUSINESS}`.merchant_notify_read WHERE notify_id=999910 AND account_id=4716;") == '2026-11-19 01:02:00', 'hidden broadcast flag is preserved')
+    check(scalar(f"SELECT receipt FROM `{TEST_BUSINESS}`.merchant_notify_delivery WHERE id=999920;") == 'preserve-receipt', 'site-less delivery receipt is preserved')
+    notify_id = 85020 + PLAN.index('merchant_notify')
+    check(scalar(f'SELECT COUNT(*) FROM `{TEST_BUSINESS}`.merchant_notify n JOIN `{TEST_BUSINESS}`.merchant_notify_read r ON r.notify_id=n.id WHERE n.id={notify_id} AND n.site_id=7 AND r.account_id=4716;') == '1', 'moved notification retains the same reader in site 7')
     check(scalar(f"SELECT JSON_UNQUOTE(JSON_EXTRACT(row_json,'$.auth_version')) FROM `{TEST_BUSINESS}`.migration_merchant_site_backup WHERE table_name='merchant_admin' AND row_id=4716;") == '4', 'backup preserves the pre-migration authentication version')
     moved = fingerprint()
     backups = scalar(f'SELECT COUNT(*) FROM `{TEST_BUSINESS}`.migration_merchant_site_backup;')
@@ -280,6 +406,8 @@ def main():
     reject_case('future unmapped dependency', 'CREATE TABLE qa_future_merchant_dependency(id BIGINT PRIMARY KEY,merchant_id BIGINT,site_id BIGINT) ENGINE=InnoDB; INSERT INTO qa_future_merchant_dependency VALUES(1,7014,1);')
     reject_case('wrong document owner', 'UPDATE merchant_verify_document SET merchant_id=999901;')
     reject_case('already moved without backup', 'UPDATE merchant_info SET site_id=7 WHERE id=7014;')
+    reject_case('unexpected scoped read-link schema', 'ALTER TABLE merchant_notify_read ADD COLUMN site_id BIGINT NOT NULL DEFAULT 1;')
+    sql(f'ALTER TABLE `{TEST_BUSINESS}`.merchant_notify_read DROP COLUMN site_id;')
     fixture()
     sql(f'ALTER TABLE `{TEST_BUSINESS}`.goods_daily_stock ENGINE=MyISAM;')
     before = fingerprint()
