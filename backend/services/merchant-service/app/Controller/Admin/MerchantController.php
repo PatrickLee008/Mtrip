@@ -359,11 +359,11 @@ class MerchantController extends AbstractController
     #[Permission('merchant:list:add')]
     public function create(): array
     {
+        $siteId = \Mtrip\Shared\Merchant\MerchantOnboardingSite::forAdmin(AdminContext::isSuper(), AdminContext::siteId());
         $creditCode = strtoupper($this->requireStr('creditCode'));
         if (Db::table('merchant_info')->where('credit_code', $creditCode)->whereNull('deleted_at')->exists()) {
             throw new BusinessException(ErrorCode::DATA_CONFLICT, '该统一社会信用代码已存在');
         }
-        $siteId = AdminContext::isSuper() ? $this->requireId('siteId') : AdminContext::siteId();
         $data = $this->collectFields();
         $data['site_id'] = $siteId;
         $data['merchant_name'] = $this->requireStr('merchantName');

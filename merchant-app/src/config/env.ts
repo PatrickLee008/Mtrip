@@ -17,7 +17,8 @@ export const ENV: AppEnv = ['development', 'staging', 'production'].includes(RAW
 export const API_BASE_URL: string =
   process.env.EXPO_PUBLIC_API_BASE_URL ?? DEFAULT_BASE_URL[ENV];
 
-export const DEFAULT_SITE_ID: number = Number(process.env.EXPO_PUBLIC_DEFAULT_SITE_ID ?? 1);
+export const DEFAULT_SITE_ID: number = Number(process.env.EXPO_PUBLIC_DEFAULT_SITE_ID ?? 7);
+export const MERCHANT_REGISTRATION_SITE_ID = 7;
 
 export const CLIENT_ID: string = process.env.EXPO_PUBLIC_CLIENT_ID ?? '';
 export const CLIENT_SECRET: string = process.env.EXPO_PUBLIC_CLIENT_SECRET ?? '';

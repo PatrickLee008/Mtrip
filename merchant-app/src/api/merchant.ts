@@ -1,4 +1,6 @@
 import { get, post, postEncrypted, postForm, request } from '@/api/request';
+import { MERCHANT_REGISTRATION_SITE_ID } from '@/config/env';
+import { useCommonStore } from '@/store/commonStore';
 import type { BookingAction, BookingDetail, BookingPage, PaymentFilter, PayAtHotelTerms } from '@/api/types';
 import type { ActivationIdentity, AgreementDetail, ApplicationDetail, ApplicationStatus, AuthOtpChallenge, ChallengeResult, DashboardBookingDetail, DashboardEarnings, DashboardProperty, DashboardStats, GuestThread, KycRequirements, KycSubmitResult, LoginResult, MenusResult, MerchantProfile, NotificationBookingDetail, NotificationPage, NotificationSummary, RegistrationChannel, RegistrationConfig, RegistrationOtpResult, RegistrationVerifyResult, TwoFaSetupResult } from '@/api/types';
 
@@ -75,9 +77,14 @@ export const apiBookingMessage = (id: number, propertyId: number, content: strin
 
 // Merchant onboarding is intentionally outside the authenticated merchant-web prefix.
 // 注意:OTP 两个接口的手机号与邮箱**都必传**(后端按两者哈希做联系方式一致性校验),渠道由 `otpChannel` 指定。
-export const apiRegistrationChannels = () => get<RegistrationConfig>('/api/v1/app/merchant/register/config');
-export const apiRegistrationOtpSend = (phone: string, email: string, otpChannel: RegistrationChannel) => post<RegistrationOtpResult>('/api/v1/app/merchant/register/otp-send', { phone, email, otpChannel });
-export const apiRegistrationOtpVerify = (phone: string, email: string, otpChannel: RegistrationChannel, otpCode: string) => post<RegistrationVerifyResult>('/api/v1/app/merchant/register/otp-verify', { phone, email, otpChannel, otpCode });
+async function registerAtYangon<T>(call: () => Promise<T>): Promise<T> {
+  await useCommonStore.getState().setSiteId(MERCHANT_REGISTRATION_SITE_ID);
+  return call();
+}
+
+export const apiRegistrationChannels = () => registerAtYangon(() => get<RegistrationConfig>('/api/v1/app/merchant/register/config'));
+export const apiRegistrationOtpSend = (phone: string, email: string, otpChannel: RegistrationChannel) => registerAtYangon(() => post<RegistrationOtpResult>('/api/v1/app/merchant/register/otp-send', { phone, email, otpChannel }));
+export const apiRegistrationOtpVerify = (phone: string, email: string, otpChannel: RegistrationChannel, otpCode: string) => registerAtYangon(() => post<RegistrationVerifyResult>('/api/v1/app/merchant/register/otp-verify', { phone, email, otpChannel, otpCode }));
 export const apiApplicationDetail = (registrationToken: string, applicationId: number) => get<ApplicationDetail>('/api/v1/app/merchant/application/detail', { registrationToken, applicationId });
 export const apiApplicationStatus = (registrationToken: string, applicationId: number) => get<ApplicationStatus>('/api/v1/app/merchant/application/status', { registrationToken, applicationId });
 export const apiKycRequirements = (registrationToken: string, applicationId: number) => get<KycRequirements>('/api/v1/app/merchant/application/kyc-requirements', { registrationToken, applicationId });

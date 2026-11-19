@@ -57,6 +57,7 @@ class OnboardingFinalApprovalService
             if ((int) $app['merchant_id'] > 0 || (int) $app['account_status'] !== 0) {
                 throw new BusinessException(ErrorCode::DATA_CONFLICT, '申请已存在正式实体或账号状态异常');
             }
+            \Mtrip\Shared\Merchant\MerchantOnboardingSite::assertNewMerchant((int) $app['site_id']);
             if ((int) $app['contact_data_status'] !== 0
                 || (string) $app['registration_phone'] === '' || (string) $app['registration_email'] === '') {
                 throw new BusinessException(ErrorCode::DATA_CONFLICT, '最终批准前必须完成手机号和邮箱验证');

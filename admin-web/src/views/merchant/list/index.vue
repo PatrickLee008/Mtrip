@@ -11,6 +11,7 @@ import ComplianceLinks from '@/components/merchant/ComplianceLinks.vue';
 import MerchantPropertyPanel from '@/components/merchant/MerchantPropertyPanel.vue';
 import PageContainer from '@/components/PageContainer.vue';
 import SiteTreeSelect from '@/components/SiteTreeSelect.vue';
+import { NEW_MERCHANT_SITE_ID } from '@/config/merchant';
 import StatusTag from '@/components/StatusTag.vue';
 import NotifyDrawer from '@/components/merchant/NotifyDrawer.vue';
 import ImpersonateModal from '@/components/merchant/ImpersonateModal.vue';
@@ -269,7 +270,7 @@ const form = reactive({
   contactEmail: '',
   address: '',
   remark: '',
-  siteId: 0,
+  siteId: NEW_MERCHANT_SITE_ID,
   subAccountLimit: 3,
 });
 
@@ -310,7 +311,7 @@ async function saveMerchant(): Promise<void> {
         message.warning(t('merchant.listPage.name'));
         return;
       }
-      await apiMerchantAdd({ ...form });
+      await apiMerchantAdd({ ...form, siteId: NEW_MERCHANT_SITE_ID });
       message.success(t('tip.saveSuccess'));
     }
     modalOpen.value = false;
@@ -618,7 +619,7 @@ onMounted(() => {
           </a-col>
           <a-col :span="12">
             <a-form-item v-if="isSuper && !editingId" :label="t('common.site')" required>
-              <SiteTreeSelect v-model:value="form.siteId" />
+              <SiteTreeSelect :value="NEW_MERCHANT_SITE_ID" disabled />
             </a-form-item>
           </a-col>
           <a-col :span="12">

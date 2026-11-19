@@ -146,7 +146,7 @@ function stage7RemoveDir(string $dir): void
 $mode = $argv[1] ?? 'start';
 $key = (string) getenv('MTRIP_STAGE7_KEY');
 if (! preg_match('/^[0-9]{8,24}$/D', $key)) throw new RuntimeException('Invalid Stage 7 key');
-$siteId = 997;
+$siteId = 7;
 
 if (in_array($mode, ['publish', 'offline'], true)) {
     $application = stage7Application($key);

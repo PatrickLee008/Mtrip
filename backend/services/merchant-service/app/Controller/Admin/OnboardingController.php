@@ -269,11 +269,8 @@ class OnboardingController extends AbstractController
     #[Permission('merchant:onboarding:create')]
     public function create(): array
     {
+        $siteId = \Mtrip\Shared\Merchant\MerchantOnboardingSite::forAdmin(AdminContext::isSuper(), AdminContext::siteId());
         $companyName = $this->requireStr('companyName');
-        $siteId = (int) (AdminContext::isSuper() ? $this->intInput('siteId') : AdminContext::siteId());
-        if ($siteId <= 0) {
-            throw new BusinessException(ErrorCode::PARAM_ERROR, '请选择所属站点');
-        }
         $merchantName = $this->strInput('merchantName') ?: $companyName;
         $regNumber = mb_substr($this->strInput('regNumber'), 0, 50);
         if ($regNumber !== '' && Db::table('merchant_application')

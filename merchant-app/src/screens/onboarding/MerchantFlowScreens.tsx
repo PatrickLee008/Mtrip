@@ -28,7 +28,7 @@ import {
   WhiteStepScaffold,
 } from '@/components/onboarding/MerchantFlowComponents';
 import { colors, PAGE_PADDING } from '@/config/theme';
-import { ONBOARDING_PROTOTYPE } from '@/config/env';
+import { MERCHANT_REGISTRATION_SITE_ID, ONBOARDING_PROTOTYPE } from '@/config/env';
 import { fonts } from '@/config/typography';
 import { useCommonStore } from '@/store/commonStore';
 import { useMerchantStore } from '@/store/merchantStore';
@@ -122,7 +122,6 @@ export function RegisterVerificationScreen() {
 export function RegisterOtpScreen() {
   const navigation = useNavigation();
   const { t } = useTranslation();
-  const siteId = useCommonStore((s) => s.siteId);
   const [code, setCode] = useState('');
   const showToast = useCommonStore((s) => s.showToast);
   const state = useRegistrationStore();
@@ -150,7 +149,7 @@ export function RegisterOtpScreen() {
       const verified = verifiedSession ?? await apiRegistrationOtpVerify(state.registrationPhone, state.registrationEmail, state.channel, code);
       otpConfirmed = true;
       setVerifiedSession(verified);
-      await state.verified(verified, siteId);
+      await state.verified(verified, MERCHANT_REGISTRATION_SITE_ID);
       const detail = await apiApplicationDetail(verified.registrationToken, verified.applicationId);
       state.setApplicationDetail(detail);
       if (detail.canEdit) navigation.navigate('Register');

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { genUUID } from '@/utils/uuid';
+import { NEW_MERCHANT_SITE_ID } from '@/config/merchant';
 import { computed, onMounted, reactive, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRouter } from 'vue-router';
@@ -986,7 +987,7 @@ async function doReject(): Promise<void> {
 const createOpen = ref(false);
 const createSaving = ref(false);
 const createForm = reactive({
-  siteId: 0,
+  siteId: NEW_MERCHANT_SITE_ID,
   registrationPhone: '',
   registrationEmail: '',
   companyName: '',
@@ -1005,7 +1006,7 @@ const createForm = reactive({
   }[],
 });
 function openCreate(): void {
-  createForm.siteId = user.profile?.siteId || 0;
+  createForm.siteId = NEW_MERCHANT_SITE_ID;
   createForm.registrationPhone = '';
   createForm.registrationEmail = '';
   createForm.companyName = '';
@@ -1047,7 +1048,7 @@ async function doCreate(): Promise<void> {
   createSaving.value = true;
   try {
     await apiOnboardingAdd({
-      siteId: createForm.siteId,
+      siteId: NEW_MERCHANT_SITE_ID,
       registrationPhone: createForm.registrationPhone,
       registrationEmail: createForm.registrationEmail,
       companyName: createForm.companyName,
@@ -1815,7 +1816,7 @@ onMounted(() => {
       <a-form layout="vertical">
         <a-alert type="info" show-icon :message="t('merchant.onboardingPage.adminContactsHint')" style="margin-bottom: 12px" />
         <a-form-item v-if="isSuper" :label="t('common.site')" required>
-          <SiteTreeSelect v-model:value="createForm.siteId" :placeholder="t('merchant.onboardingPage.siteRequired')" style="width: 100%" />
+          <SiteTreeSelect :value="NEW_MERCHANT_SITE_ID" disabled style="width: 100%" />
         </a-form-item>
         <a-row :gutter="12">
           <a-col :span="12">

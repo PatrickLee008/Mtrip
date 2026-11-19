@@ -98,7 +98,7 @@ function stage4Rejects(int $code, callable $callback, string $message): void
     rejects($code, $callback, $message);
 }
 
-$siteId = 994;
+$siteId = 7;
 setMerchantAuthTestMode($config, false, false, 'test');
 $kyc = $container->get(OnboardingKycService::class);
 $delivery = new Stage4Delivery();
@@ -141,6 +141,16 @@ Db::connection('system')->table('sys_email_channel')->update(['status' => 2]);
         'access_code' => 'haaaaa', 'status' => 1,
     ]);
     $seed = seedReadyStage4($siteId, '001', 'hotel', 2, '+95940000001', 'stage4-one@example.test', $merchantTemplate, $hotelTemplate);
+    $legacy = seedReadyStage4(1, 'LEGACY', 'hotel', 1, '+95940000008', 'stage4-legacy@example.test', $merchantTemplate, $hotelTemplate);
+    try {
+        $approval->approve($legacy['applicationId'], 'stage4-legacy-site-request', ['email']);
+        throw new RuntimeException('Legacy site final approval unexpectedly succeeded');
+    } catch (\Mtrip\Shared\Exception\BusinessException $e) {
+        check($e->getCode() === ErrorCode::DATA_CONFLICT && str_contains($e->getMessage(), '站点7'),
+            'final approval requires site 7 for a ready legacy application');
+    }
+    check(! Db::table('merchant_info')->where('credit_code', 'STAGE4-REG-LEGACY')->exists(),
+        'rejected legacy approval creates no merchant');
     if (! is_dir('/opt/www/uploads/kyc')) mkdir('/opt/www/uploads/kyc', 0775, true);
     $reviewPath = '/opt/www/uploads/kyc/template-review-' . bin2hex(random_bytes(8)) . '.pdf';
     file_put_contents($reviewPath, "%PDF-1.4\n%%EOF");
