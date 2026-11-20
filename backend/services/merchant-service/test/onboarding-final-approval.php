@@ -141,16 +141,7 @@ Db::connection('system')->table('sys_email_channel')->update(['status' => 2]);
         'access_code' => 'haaaaa', 'status' => 1,
     ]);
     $seed = seedReadyStage4($siteId, '001', 'hotel', 2, '+95940000001', 'stage4-one@example.test', $merchantTemplate, $hotelTemplate);
-    $legacy = seedReadyStage4(1, 'LEGACY', 'hotel', 1, '+95940000008', 'stage4-legacy@example.test', $merchantTemplate, $hotelTemplate);
-    try {
-        $approval->approve($legacy['applicationId'], 'stage4-legacy-site-request', ['email']);
-        throw new RuntimeException('Legacy site final approval unexpectedly succeeded');
-    } catch (\Mtrip\Shared\Exception\BusinessException $e) {
-        check($e->getCode() === ErrorCode::DATA_CONFLICT && str_contains($e->getMessage(), '站点7'),
-            'final approval requires site 7 for a ready legacy application');
-    }
-    check(! Db::table('merchant_info')->where('credit_code', 'STAGE4-REG-LEGACY')->exists(),
-        'rejected legacy approval creates no merchant');
+    require __DIR__ . '/onboarding-legacy-site.php';
     if (! is_dir('/opt/www/uploads/kyc')) mkdir('/opt/www/uploads/kyc', 0775, true);
     $reviewPath = '/opt/www/uploads/kyc/template-review-' . bin2hex(random_bytes(8)) . '.pdf';
     file_put_contents($reviewPath, "%PDF-1.4\n%%EOF");
@@ -343,7 +334,7 @@ Db::connection('system')->table('sys_email_channel')->update(['status' => 2]);
         'non-super administrator cannot execute final approval');
 
     AdminContext::set(['admin_id' => 94001, 'admin_name' => 'Stage 4 Super', 'site_id' => 0, 'is_super' => true, 'permissions' => []]);
-    $concurrent = seedReadyStage4($siteId, 'CONCURRENT', 'hotel', 2, '+95940000004', 'stage4-concurrent@example.test', $merchantTemplate, $hotelTemplate);
+    $concurrent = seedReadyStage4(1, 'CONCURRENT', 'hotel', 2, '+95940000004', 'stage4-concurrent@example.test', $merchantTemplate, $hotelTemplate);
     $command = 'php /tmp/onboarding-final-approval-worker.php ' . $concurrent['applicationId'] . ' stage4-concurrent-request';
     $pipesOne = $pipesTwo = [];
     $processOne = proc_open($command, [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipesOne);
@@ -357,6 +348,9 @@ check($workerOne['merchantId'] === $workerTwo['merchantId']
     && Db::table('merchant_info')->where('credit_code', 'STAGE4-REG-CONCURRENT')->count() === 1
     && Db::table('merchant_store')->whereIn('source_business_id', $concurrent['businessIds'])->count() === 2,
     'concurrent requests create one merchant and one property per initial business');
+check((int) Db::table('merchant_application')->where('id', $concurrent['applicationId'])->value('site_id') === 7
+    && Db::table('merchant_verify_timeline')->where('application_id', $concurrent['applicationId'])->where('action', 'onboarding_site_migrated')->count() === 1,
+    'concurrent legacy approvals migrate once and record one migration audit');
 
 setMerchantAuthTestMode($config, false, false, 'test');
 Db::table('merchant_admin')->where('id', $testResult['accountId'])->update([

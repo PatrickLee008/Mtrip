@@ -202,7 +202,7 @@ def test_creation_policy():
                     args += ['-e', f'{key}={value}']
                 mounts = [(ROOT / 'backend/services/merchant-service/app', '/opt/www/app'),
                           (ROOT / 'backend/shared/src', '/opt/www/vendor/mtrip/shared/src'), (bootstrap_path, '/tmp/M12Bootstrap.php')]
-                for filename in test_files + ['onboarding-final-approval-worker.php', 'onboarding-kyc-review-worker.php']:
+                for filename in test_files + ['onboarding-final-approval-worker.php', 'onboarding-kyc-review-worker.php', 'onboarding-legacy-site.php']:
                     mounts.append((ROOT / 'backend/services/merchant-service/test' / filename, '/tmp/' + filename))
                 args += [os.environ.get('MERCHANT_TEST_IMAGE', 'mtrip-merchant-service'), '/tmp/' + test_file]
                 created = subprocess.run(args, capture_output=True)

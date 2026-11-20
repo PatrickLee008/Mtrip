@@ -70,6 +70,7 @@ done
 sed "s/mtrip_m12_s1_test/$TEST_DB/g" "$REPO_ROOT/backend/shared/tests/integration/M12Bootstrap.php" \
   | $DOCKER exec -i "$SERVICE_CONTAINER" sh -c 'cat > /tmp/M12Bootstrap.php'
 $DOCKER cp "$REPO_ROOT/backend/services/merchant-service/test/onboarding-final-approval.php" "$SERVICE_CONTAINER:/tmp/onboarding-final-approval.php"
+$DOCKER cp "$REPO_ROOT/backend/services/merchant-service/test/onboarding-legacy-site.php" "$SERVICE_CONTAINER:/tmp/onboarding-legacy-site.php"
 $DOCKER cp "$REPO_ROOT/backend/services/merchant-service/test/onboarding-final-approval-worker.php" "$SERVICE_CONTAINER:/tmp/onboarding-final-approval-worker.php"
 $DOCKER cp "$REPO_ROOT/backend/services/merchant-service/test/onboarding-kyc-review-worker.php" "$SERVICE_CONTAINER:/tmp/onboarding-kyc-review-worker.php"
 $DOCKER exec \

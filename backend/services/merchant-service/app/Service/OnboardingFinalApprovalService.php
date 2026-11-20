@@ -57,6 +57,8 @@ class OnboardingFinalApprovalService
             if ((int) $app['merchant_id'] > 0 || (int) $app['account_status'] !== 0) {
                 throw new BusinessException(ErrorCode::DATA_CONFLICT, '申请已存在正式实体或账号状态异常');
             }
+            $sourceSiteId = (int) $app['site_id'];
+            $app = $this->moveLegacyApplication($app);
             \Mtrip\Shared\Merchant\MerchantOnboardingSite::assertNewMerchant((int) $app['site_id']);
             if ((int) $app['contact_data_status'] !== 0
                 || (string) $app['registration_phone'] === '' || (string) $app['registration_email'] === '') {
@@ -70,6 +72,9 @@ class OnboardingFinalApprovalService
             Db::table('merchant_verify_document')->where('application_id', $applicationId)->whereNull('deleted_at')->lockForUpdate()->get();
             $readiness = $this->kyc->readiness($app);
             if (! $readiness['ready']) {
+                if ($sourceSiteId !== (int) $app['site_id'] && in_array('current_agreement_not_signed', $readiness['reasons'], true)) {
+                    throw new BusinessException(ErrorCode::DATA_CONFLICT, '旧申请签署不满足站点7当前条款，请先单独迁移申请并重新签署；本次迁移和批准均已回滚');
+                }
                 throw new BusinessException(ErrorCode::DATA_CONFLICT, '最终批准门禁未通过：' . implode(',', $readiness['reasons']));
             }
             if ($businesses === []) {
@@ -169,6 +174,75 @@ class OnboardingFinalApprovalService
             ? $this->delivery->receipts($applicationId)
             : $this->delivery->deliverApplication($applicationId, $testMode);
         return $result;
+    }
+
+    /** Called only for an unconverted application inside the super-admin approval transaction. */
+    private function moveLegacyApplication(array $app): array
+    {
+        $targetSite = \Mtrip\Shared\Merchant\MerchantOnboardingSite::ID;
+        $sourceSite = (int) $app['site_id'];
+        if ($sourceSite === $targetSite) return $app;
+        if (! Db::connection('system')->table('sys_site')->where('id', $targetSite)->where('status', 1)->whereNull('deleted_at')->exists()) {
+            throw new BusinessException(ErrorCode::DATA_CONFLICT, '入驻目标站点7未启用，无法迁移旧申请');
+        }
+        $applicationId = (int) $app['id'];
+        if (Db::table('merchant_credential_delivery')->where('application_id', $applicationId)->exists()) {
+            throw new BusinessException(ErrorCode::DATA_CONFLICT, '旧申请已有凭证记录，请先核对正式商户归属');
+        }
+        $businesses = Db::table('merchant_application_business')->where('application_id', $applicationId)->orderBy('id')->lockForUpdate()->get();
+        $businessIds = $businesses->pluck('id')->map('intval')->all();
+        $documents = Db::table('merchant_verify_document')->where('application_id', $applicationId)->orderBy('id')->lockForUpdate()->get();
+        $documentIds = $documents->pluck('id')->all();
+        foreach ($documents as $document) {
+            if ((int) $document->application_business_id > 0 && ! in_array((int) $document->application_business_id, $businessIds, true)) {
+                throw new BusinessException(ErrorCode::DATA_CONFLICT, '旧申请文件关联其他申请的业务，无法自动迁移');
+            }
+        }
+        if (Db::table('merchant_verify_document')->whereIn('application_business_id', $businessIds)->where('application_id', '<>', $applicationId)->exists()
+            || Db::table('merchant_store')->whereIn('source_business_id', $businessIds)->exists()) {
+            throw new BusinessException(ErrorCode::DATA_CONFLICT, '旧申请业务已有其他申请文件或正式物业关联，无法自动迁移');
+        }
+        $privateTemplates = Db::table('merchant_kyc_template')->whereIn('application_business_id', $businessIds)->orderBy('id')->lockForUpdate()->get();
+        $privateTemplateIds = $privateTemplates->pluck('id')->map('intval')->all();
+        if (Db::table('merchant_application_business')->whereIn('kyc_template_id', $privateTemplateIds)->whereNotIn('id', $businessIds)->exists()
+            || Db::table('merchant_application')->whereIn('kyc_template_id', $privateTemplateIds)->where('id', '<>', $applicationId)->exists()
+            || Db::table('merchant_store')->whereIn('kyc_template_id', $privateTemplateIds)->exists()) {
+            throw new BusinessException(ErrorCode::DATA_CONFLICT, '旧申请私有KYC模板被其他业务引用，无法自动迁移');
+        }
+        $templateIds = array_values(array_unique(array_filter(array_merge([(int) $app['kyc_template_id']], $businesses->pluck('kyc_template_id')->map('intval')->all()))));
+        foreach (Db::table('merchant_kyc_template')->whereIn('id', $templateIds)->lockForUpdate()->get() as $template) {
+            if (! in_array((int) $template->site_id, [0, $targetSite], true) && ! in_array((int) $template->id, $privateTemplateIds, true)) {
+                throw new BusinessException(ErrorCode::DATA_CONFLICT, '旧申请使用原站点专属的公共KYC模板，请先核对模板归属');
+            }
+        }
+
+        $queries = [
+            Db::table('merchant_application_business')->where('application_id', $applicationId),
+            Db::table('merchant_application_note')->where('application_id', $applicationId),
+            Db::table('merchant_application_signature')->where('application_id', $applicationId),
+            Db::table('merchant_verify_document')->where('application_id', $applicationId),
+            Db::table('merchant_verify_document_revision')->whereIn('doc_id', $documentIds),
+            Db::table('merchant_document_event')->whereIn('doc_id', $documentIds),
+            Db::table('merchant_verify_timeline')->where('application_id', $applicationId),
+            Db::table('merchant_kyc_template')->whereIn('id', $privateTemplateIds),
+        ];
+        foreach ($queries as $query) {
+            foreach ((clone $query)->orderBy('id')->lockForUpdate()->get() as $row) {
+                if ((int) $row->site_id !== $sourceSite || (int) ($row->merchant_id ?? 0) > 0 || (int) ($row->property_id ?? 0) > 0) {
+                    throw new BusinessException(ErrorCode::DATA_CONFLICT, '旧申请关联数据的站点或正式实体不一致，无法自动迁移');
+                }
+            }
+        }
+        foreach ($queries as $query) $query->update(['site_id' => $targetSite]);
+        Db::table('merchant_application')->where('id', $applicationId)->update(['site_id' => $targetSite]);
+        Db::table('merchant_verify_timeline')->insert([
+            'site_id' => $targetSite, 'merchant_id' => 0, 'application_id' => $applicationId,
+            'action' => 'onboarding_site_migrated', 'actor_type' => 2,
+            'operator_id' => AdminContext::adminId(), 'operator_name' => AdminContext::adminName(),
+            'note' => '最终批准前迁移未转正式商户的入驻申请，站点' . $sourceSite . '→' . $targetSite,
+            'is_exception' => 0,
+        ]);
+        return array_replace($app, ['site_id' => $targetSite]);
     }
 
     public function status(int $applicationId): ?array
