@@ -14,7 +14,7 @@
  *
  * **与上一版(1675:6714)的差别**:上一版是二维码核销凭证页(QR + Booking Summary 四行 +
  * Download Voucher)。新稿把这些都去掉了 —— 核销码并没有丢,它在订单详情页
- * (`OrderDetailScreen` 的 `VerifyCodeView`),所以「View Booking」跳 `OrderDetail` 就够了;
+ * (`BookingDetail`),所以「View Booking」按单号跳 `BookingDetail`,按 Trip 跳 `TripDetail`;
  * 没有订单号(演示模式)时该按钮退回订单列表。吸底也按稿只剩这一枚按钮(稿面没有「Back to Home」)——
  * 正因为**本屏没有任何返回入口**,那枚按钮必须用 `navigation.reset` 而不是 `navigate`:
  * push 一层订单详情的话,详情页返回又回到本屏,除了再点一次 View Booking 无路可走
@@ -142,9 +142,11 @@ export default function BookingSuccessScreen() {
       index: 1,
       routes: [
         { name: 'MainTabs', params: { screen: 'MyPickTab' } },
-        p.orderId
-          ? { name: 'OrderDetail', params: { orderId: p.orderId } }
-          : { name: 'OrderList' },
+        p.tripId
+          ? { name: 'TripDetail', params: { tripId: p.tripId } }
+          : p.orderId
+            ? { name: 'BookingDetail', params: { orderId: p.orderId } }
+            : { name: 'OrderList' },
       ],
     });
 

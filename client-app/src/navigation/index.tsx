@@ -15,6 +15,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import FacebookCompleteScreen from '@/screens/user/FacebookCompleteScreen';
 import { isFacebookCompletion } from '@/utils/facebook';
+import { getReferralInvitation } from '@/utils/referralInvitation';
 import TikTokCompleteScreen from '@/screens/user/TikTokCompleteScreen';
 import AppleCompleteScreen from '@/screens/user/AppleCompleteScreen';
 import { isAppleCompletion } from '@/utils/apple';
@@ -189,8 +190,12 @@ function MainTabs() {
 
 export default function AppNavigator() {
   const { t } = useTranslation();
+  const referralCode = getReferralInvitation();
   return (
-    <NavigationContainer ref={navigationRef}>
+    <NavigationContainer ref={navigationRef} initialState={referralCode ? {
+      index: 1,
+      routes: [{ name: 'MainTabs' }, { name: 'Register', params: { referralCode } }],
+    } : undefined}>
       <Stack.Navigator initialRouteName={isAppleCompletion() ? 'AppleComplete' : isTikTokCompletion() ? 'TikTokComplete' : isFacebookCompletion() ? 'FacebookComplete' : 'MainTabs'} screenOptions={{ headerTitleAlign: 'center', headerTintColor: colors.text }}>
         <Stack.Screen name="AppleComplete" component={AppleCompleteScreen} options={{ headerShown: false }} />
         <Stack.Screen name="TikTokComplete" component={TikTokCompleteScreen} options={{ headerShown: false }} />

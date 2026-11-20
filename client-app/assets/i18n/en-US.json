@@ -754,6 +754,7 @@
     "referral": {
       "title": "Enter Referral Code",
       "subtitle": "Enter a referral code if you have one.",
+      "fromInvitation": "This code came from your invitation and will be included when you register.",
       "placeholder": "abcdef",
       "continue": "Continue",
       "skip": "Skip"
@@ -1191,7 +1192,13 @@
     "referral": {
       "title": "Refer & Earn",
       "bannerTitle": "Invite Friends\nEarn Rewards Together.",
-      "bannerDesc": "Earn 50,000 MMK after your friend completes their first hotel booking on mTrip.",
+      "bannerDesc": "Invite friends. Rewards depend on the current referral offer.",
+      "bannerOffer": "Earn {{amount}} {{currency}} after your friend checks in for their first eligible hotel booking.",
+      "unavailable": "Referral rewards are not available for this site.",
+      "noRewardNote": "{{count}} referral(s) completed without a reward.",
+      "completed": "Completed",
+      "noReward": "No reward",
+      "noRewardDesc": "This referral was completed with no reward credited to your wallet.",
       "totalRewards": "Total Rewards Earned",
       "stats": {
         "invited": "Friends Invited",

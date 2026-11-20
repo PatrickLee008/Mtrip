@@ -37,10 +37,13 @@ import { applyWebGlobalStyles } from '@/utils/webStyles';
 import { captureFacebookCompletion, isFacebookCompletion } from '@/utils/facebook';
 import { captureTikTokCompletion, isTikTokCompletion } from '@/utils/tiktok';
 import { captureAppleCompletion, isAppleCompletion } from '@/utils/apple';
+import { captureReferralInvitation, clearReferralInvitation } from '@/utils/referralInvitation';
+import { useUserStore } from '@/store/userStore';
 
 captureFacebookCompletion();
 captureTikTokCompletion();
 captureAppleCompletion();
+captureReferralInvitation();
 
 // 先以兼容默认语言初始化,避免引导期间 useTranslation 无实例告警
 initI18n('en-US');
@@ -78,6 +81,7 @@ export default function App() {
     void (async () => {
       const startedAt = Date.now();
       await bootstrapStores();
+      if (useUserStore.getState().isLogin) clearReferralInvitation();
 
       const { lang, langChosen, modeChosen } = useCommonStore.getState();
       if (langChosen) {

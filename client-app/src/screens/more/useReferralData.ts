@@ -22,7 +22,7 @@ import {
   type RefereeItem,
   type ReferralSummary,
 } from '@/api/user';
-import { REFERRAL_LINK_BASE } from '@/config/env';
+import { referralLink } from '@/utils/referralInvitation';
 import { useCommonStore } from '@/store/commonStore';
 import { useUserStore } from '@/store/userStore';
 
@@ -76,7 +76,7 @@ export function useReferralSummary(): ReferralSummaryData {
   return {
     isLogin,
     summary,
-    link: summary.referralCode ? `${REFERRAL_LINK_BASE}/${summary.referralCode}` : '',
+    link: summary.referralCode ? referralLink(summary.referralCode) : '',
     loading,
   };
 }

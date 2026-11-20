@@ -54,60 +54,67 @@ export default function ReferralStatusScreen() {
           tabs={TABS}
           value={tab}
           onChange={setTab}
-          label={(item) => t(`more.referral.status.tabs.${item}`)}
+          label={(item) => t(item === 'rewarded' ? 'more.referral.completed' : 'more.referral.status.tabs.pending')}
         />
 
         {list.length === 0 ? (
           <Text style={styles.empty}>{t('more.referral.status.empty')}</Text>
         ) : (
-          list.map((referee) => (
-            <View key={referee.id} style={[moreShared.panel, styles.card]}>
-              <View style={styles.head}>
-                <View style={styles.avatar}>
-                  <Text style={styles.avatarText}>{referee.nickname.slice(0, 1)}</Text>
-                </View>
-                <View style={styles.headText}>
-                  <View style={styles.nameRow}>
-                    <Text style={styles.name} numberOfLines={1}>
-                      {referee.nickname}
-                    </Text>
-                    <View style={styles.statusPill}>
-                      <Text style={styles.statusText}>
-                        {t(`more.referral.status.tabs.${tab}`)}
-                      </Text>
-                    </View>
+          list.map((referee) => {
+            const noReward = referee.reward_status === REFERRAL_STATUS.REWARDED
+              && Number(referee.reward_amount) <= 0;
+            return (
+              <View key={referee.id} style={[moreShared.panel, styles.card]}>
+                <View style={styles.head}>
+                  <View style={styles.avatar}>
+                    <Text style={styles.avatarText}>{referee.nickname.slice(0, 1)}</Text>
                   </View>
-                  <Text style={styles.desc} numberOfLines={2}>
-                    {t(`more.referral.status.desc.${refereeDescKey(referee.reward_status)}`)}
-                  </Text>
-                </View>
-              </View>
-
-              <View style={styles.progress}>
-                {REFERRAL_PROGRESS.map((step, index) => {
-                  const doneUntil = refereeDoneUntil(referee.reward_status);
-                  const done = index < doneUntil;
-                  const current = index === doneUntil;
-                  return (
-                    <View key={step} style={styles.progressCell}>
-                      {/* 连接线画在格子左侧,首格不画 */}
-                      {index > 0 ? <View style={styles.progressLine} /> : null}
-                      {done ? (
-                        <HomeIcon name="checkmarkCircle" size={20} color={colors.primary} />
-                      ) : current ? (
-                        <HomeIcon name="info" size={20} color={colors.orange} />
-                      ) : (
-                        <View style={styles.progressDot} />
-                      )}
-                      <Text style={styles.progressLabel}>
-                        {t(`more.referral.status.progress.${step}`)}
+                  <View style={styles.headText}>
+                    <View style={styles.nameRow}>
+                      <Text style={styles.name} numberOfLines={1}>
+                        {referee.nickname}
                       </Text>
+                      <View style={styles.statusPill}>
+                        <Text style={styles.statusText}>
+                          {t(noReward
+                            ? 'more.referral.noReward' : `more.referral.status.tabs.${tab}`)}
+                        </Text>
+                      </View>
                     </View>
+                    <Text style={styles.desc} numberOfLines={2}>
+                      {t(noReward
+                        ? 'more.referral.noRewardDesc'
+                        : `more.referral.status.desc.${refereeDescKey(referee.reward_status)}`)}
+                    </Text>
+                  </View>
+                </View>
+
+                {!noReward ? <View style={styles.progress}>
+                  {REFERRAL_PROGRESS.map((step, index) => {
+                    const doneUntil = refereeDoneUntil(referee.reward_status);
+                    const done = index < doneUntil;
+                    const current = index === doneUntil;
+                    return (
+                      <View key={step} style={styles.progressCell}>
+                        {/* 连接线画在格子左侧,首格不画 */}
+                        {index > 0 ? <View style={styles.progressLine} /> : null}
+                        {done ? (
+                          <HomeIcon name="checkmarkCircle" size={20} color={colors.primary} />
+                        ) : current ? (
+                          <HomeIcon name="info" size={20} color={colors.orange} />
+                        ) : (
+                          <View style={styles.progressDot} />
+                        )}
+                        <Text style={styles.progressLabel}>
+                          {t(`more.referral.status.progress.${step}`)}
+                        </Text>
+                      </View>
                   );
                 })}
-              </View>
+              </View> : null}
             </View>
-          ))
+            );
+          })
         )}
       </View>
     </MorePageLayout>

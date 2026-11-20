@@ -6,6 +6,9 @@ namespace App\Service;
 
 use Hyperf\DbConnection\Db;
 use Hyperf\Di\Annotation\Inject;
+use Mtrip\Shared\Constants\ErrorCode;
+use Mtrip\Shared\Exception\BusinessException;
+use Mtrip\Shared\Support\ReferralRewards;
 
 /**
  * 推荐返利发放(PRD 模块14):被推荐人首个**已入住核销**的酒店订单达成时,给推荐人+新人钱包入账。
@@ -31,8 +34,15 @@ class ReferralService
             return;
         }
         $ref = (array) $ref;
-        $inviterReward = $this->reward($siteId, 'referral_reward_inviter');
-        $inviteeReward = $this->reward($siteId, 'referral_reward_invitee');
+        if ((int) $ref['site_id'] !== $siteId || Db::table('user_info')
+            ->whereIn('id', [(int) $ref['inviter_user_id'], $inviteeUserId])
+            ->where('site_id', $siteId)->whereNull('deleted_at')
+            ->orderBy('id')->lockForUpdate()->get(['id'])->count() !== 2) {
+            throw new BusinessException(ErrorCode::DATA_CONFLICT, '推荐关系与预订的账户或站点不一致');
+        }
+        $program = ReferralRewards::forSite($siteId);
+        $inviterReward = $program['inviterAmount'];
+        $inviteeReward = $program['inviteeAmount'];
         if ($inviterReward > 0) {
             $this->walletService->credit($siteId, (int) $ref['inviter_user_id'], $inviterReward, 4, $orderId, 0, '推荐返利-邀请奖励');
         }
@@ -45,16 +55,5 @@ class ReferralService
             'reward_order_id' => $orderId,
             'reward_time' => date('Y-m-d H:i:s'),
         ]);
-    }
-
-    /** 推荐奖励额:sys_site_config[key](绝对金额 MMK),未配=0 */
-    private function reward(int $siteId, string $key): float
-    {
-        $value = Db::connection('system')->table('sys_site_config')
-            ->where('site_id', $siteId)
-            ->where('config_key', $key)
-            ->whereNull('deleted_at')
-            ->value('config_value');
-        return $value !== null ? max(0.0, (float) $value) : 0.0;
     }
 }

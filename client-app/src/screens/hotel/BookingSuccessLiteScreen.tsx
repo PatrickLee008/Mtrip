@@ -11,8 +11,8 @@
  * 传 `status: 'confirming'` 即可,页面不用再动。
  *
  * **与上一版的差别**:上一版(推导自 `224:3826`)是一张二维码核销凭证页。新稿没有二维码 ——
- * 核销码并没有丢,它在订单详情页(`OrderDetailScreen` 的 `VerifyCodeView`)里,
- * 所以「View Booking」跳 `OrderDetail` 就够了。没有订单号(演示模式)时该按钮退回订单列表。
+ * 核销码并没有丢,它在预订详情页(`BookingDetail`)里,
+ * 「View Booking」按单号跳 `BookingDetail`,按 Trip 跳 `TripDetail`。演示模式退回订单列表。
  *
  * 设计稿实测:
  *   Main     `2540:19865` padding 16 / gap 32
@@ -93,9 +93,11 @@ export default function BookingSuccessLiteScreen() {
       index: 1,
       routes: [
         { name: 'MainTabs', params: { screen: 'MyPickTab' } },
-        p.orderId
-          ? { name: 'OrderDetail', params: { orderId: p.orderId } }
-          : { name: 'OrderList' },
+        p.tripId
+          ? { name: 'TripDetail', params: { tripId: p.tripId } }
+          : p.orderId
+            ? { name: 'BookingDetail', params: { orderId: p.orderId } }
+            : { name: 'OrderList' },
       ],
     });
 

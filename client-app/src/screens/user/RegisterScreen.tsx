@@ -28,7 +28,7 @@
 
 import React, { useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTranslation } from 'react-i18next';
 
@@ -46,6 +46,7 @@ import { fonts } from '@/config/typography';
 import type { RootStackParamList } from '@/navigation/types';
 import { useCommonStore } from '@/store/commonStore';
 import { digitsOnly, isMobile, isPassword } from '@/utils/validate';
+import { getReferralInvitation } from '@/utils/referralInvitation';
 
 /** 设计稿固定展示 +95(缅甸),区号选择未实现 */
 const COUNTRY_CODE = '+95';
@@ -55,6 +56,8 @@ const SOCIALS: SocialProvider[] = ['google', 'facebook', 'apple'];
 export default function RegisterScreen() {
   const { t } = useTranslation();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const route = useRoute<RouteProp<RootStackParamList, 'Register'>>();
+  const referralCode = getReferralInvitation() ?? route.params?.referralCode;
   const showToast = useCommonStore((s) => s.showToast);
 
   const [mobile, setMobile] = useState('');
@@ -99,7 +102,7 @@ export default function RegisterScreen() {
       return;
     }
 
-    const draft = { mobile: mobile.trim(), password, realName: realName.trim() };
+    const draft = { mobile: mobile.trim(), password, realName: realName.trim(), referralCode };
 
     setSending(true);
     try {
@@ -143,10 +146,10 @@ export default function RegisterScreen() {
   };
 
   return (
-    /* 设计稿右上角是回登录页;注册页由登录页 push 而来,退栈即回登录 */
+    /* 邀请链接也能直达注册页,右上角明确跳登录。 */
     <AuthShell
       actionLabel={t('user.loginTitle')}
-      onAction={() => navigation.goBack()}
+      onAction={() => navigation.navigate('Login')}
       onBack={() => navigation.goBack()}
     >
       <View style={styles.card}>
@@ -262,26 +265,30 @@ export default function RegisterScreen() {
           <Text style={styles.submitText}>{t('user.register')}</Text>
         </Pressable>
 
-        <View style={styles.dividerRow}>
-          <View style={styles.hLine} />
-          <Text style={styles.dividerText}>{t('user.orLoginWith')}</Text>
-          <View style={styles.hLine} />
-        </View>
+        {!referralCode ? (
+          <>
+            <View style={styles.dividerRow}>
+              <View style={styles.hLine} />
+              <Text style={styles.dividerText}>{t('user.orLoginWith')}</Text>
+              <View style={styles.hLine} />
+            </View>
 
-        <View style={styles.socials}>
-          {SOCIALS.map((p) => p === 'facebook' ? <FacebookLoginEntry key={p} /> : p === 'apple' ? <AppleLoginEntry key={p} /> : (
-            <Pressable
-              key={p}
-              style={({ pressed }) => [styles.socialBtn, pressed && styles.pressed]}
-              onPress={comingSoon}
-            >
-              <SocialIcon provider={p} />
-            </Pressable>
-          ))}
-        </View>
-        <View style={styles.socials}>
-          <TikTokLoginEntry />
-        </View>
+            <View style={styles.socials}>
+              {SOCIALS.map((p) => p === 'facebook' ? <FacebookLoginEntry key={p} /> : p === 'apple' ? <AppleLoginEntry key={p} /> : (
+                <Pressable
+                  key={p}
+                  style={({ pressed }) => [styles.socialBtn, pressed && styles.pressed]}
+                  onPress={comingSoon}
+                >
+                  <SocialIcon provider={p} />
+                </Pressable>
+              ))}
+            </View>
+            <View style={styles.socials}>
+              <TikTokLoginEntry />
+            </View>
+          </>
+        ) : null}
       </View>
     </AuthShell>
   );

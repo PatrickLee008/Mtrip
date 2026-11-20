@@ -22,6 +22,8 @@ export interface SignupDraft {
   password: string;
   /** 姓名(取代原邮箱栏),落库进 `user_info.real_name` 加密列 */
   realName: string;
+  /** An invitation URL supplies an immutable code through the complete signup flow. */
+  referralCode?: string;
 }
 
 /** 底部 Tab(对应 Figma M-Trip / Home 81:2464 的 BottomNavBar) */
@@ -335,7 +337,7 @@ export type RootStackParamList = {
   /** 切换语言(Figma 3256:18986) */
   ChangeLanguage: undefined;
   Login: undefined;
-  Register: undefined;
+  Register: { referralCode?: string } | undefined;
   /**
    * 短信验证码(Figma `566:3741` / `566:3902`),三个场景共用一页。
    *

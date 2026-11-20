@@ -24,7 +24,8 @@ interface ReferralStatsCardProps {
 
 export default function ReferralStatsCard({ summary }: ReferralStatsCardProps) {
   const { t } = useTranslation();
-  const currency = useSiteStore((s) => s.currency);
+  const siteCurrency = useSiteStore((s) => s.currency);
+  const currency = summary.program?.currency || siteCurrency;
 
   const cells = [
     { key: 'invited', value: summary.inviteeCount, color: colors.heading },
@@ -56,11 +57,17 @@ export default function ReferralStatsCard({ summary }: ReferralStatsCardProps) {
           ))}
         </View>
       </View>
+      {(summary.noRewardCount ?? 0) > 0 ? (
+        <Text style={styles.noRewardNote}>
+          {t('more.referral.noRewardNote', { count: summary.noRewardCount })}
+        </Text>
+      ) : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  noRewardNote: { fontFamily: fonts.inter, fontSize: 12, lineHeight: 18, color: colors.textSoft },
   card: { gap: 16 },
   head: { flexDirection: 'row', alignItems: 'center', gap: 12, opacity: 0.9 },
   headText: { flex: 1, minWidth: 0 },

@@ -11,10 +11,11 @@ use Hyperf\DbConnection\Db;
 use Hyperf\Di\Annotation\Inject;
 use Mtrip\Shared\Context\UserContext;
 use Mtrip\Shared\Support\Result;
+use Mtrip\Shared\Support\ReferralRewards;
 
 /**
  * C端推荐返利(Refer & Earn):我的推荐码/战绩 + 邀请列表
- * PRD 模块 14:推荐码分享;被推荐人首单达成后奖励入推荐人钱包(发放在 order-service 支付成功时)
+ * PRD 模块 14:推荐码分享；首次合格酒店入住核销时由 order-service 发奖。
  */
 class ReferralController extends AbstractController
 {
@@ -36,7 +37,8 @@ class ReferralController extends AbstractController
             ->where('inviter_user_id', $userId)
             ->selectRaw('COUNT(*) AS invitee_count')
             ->selectRaw('SUM(reward_status = 0) AS pending_count')
-            ->selectRaw('SUM(reward_status = 1) AS rewarded_count')
+            ->selectRaw('SUM(reward_status = 1 AND reward_amount > 0) AS rewarded_count')
+            ->selectRaw('SUM(reward_status = 1 AND reward_amount = 0) AS no_reward_count')
             ->selectRaw('SUM(CASE WHEN reward_status = 1 THEN reward_amount ELSE 0 END) AS reward_total')
             ->first();
         return Result::success([
@@ -44,7 +46,9 @@ class ReferralController extends AbstractController
             'inviteeCount' => (int) ($stat['invitee_count'] ?? 0),
             'pendingCount' => (int) ($stat['pending_count'] ?? 0),
             'rewardedCount' => (int) ($stat['rewarded_count'] ?? 0),
+            'noRewardCount' => (int) ($stat['no_reward_count'] ?? 0),
             'rewardTotal' => (float) ($stat['reward_total'] ?? 0),
+            'program' => ReferralRewards::forSite(UserContext::siteId()),
         ]);
     }
 

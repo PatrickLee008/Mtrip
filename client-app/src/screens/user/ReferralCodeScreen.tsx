@@ -41,7 +41,8 @@ export default function ReferralCodeScreen() {
   const showToast = useCommonStore((s) => s.showToast);
   const setGdprAccepted = useCommonStore((s) => s.setGdprAccepted);
 
-  const [code, setCode] = useState('');
+  const invitationCode = draft.referralCode;
+  const [code, setCode] = useState(invitationCode ?? '');
   const [submitting, setSubmitting] = useState(false);
 
   /* 设计稿的 Continue 是 50% 透明的禁用态,对应推荐码没填(不想填就走下面的 Skip) */
@@ -80,6 +81,7 @@ export default function ReferralCodeScreen() {
         <View style={styles.header}>
           <Text style={styles.title}>{t('user.referral.title')}</Text>
           <Text style={styles.desc}>{t('user.referral.subtitle')}</Text>
+          {invitationCode ? <Text style={styles.desc}>{t('user.referral.fromInvitation')}</Text> : null}
         </View>
 
         <View style={styles.form}>
@@ -89,6 +91,7 @@ export default function ReferralCodeScreen() {
               style={styles.input}
               value={code}
               onChangeText={setCode}
+              editable={!invitationCode}
               placeholder={t('user.referral.placeholder')}
               placeholderTextColor={colors.textSoft}
               autoCapitalize="characters"
@@ -105,12 +108,12 @@ export default function ReferralCodeScreen() {
                 pressed && canSubmit && styles.pressed,
               ]}
               disabled={!canSubmit}
-              onPress={() => void finish(code.trim())}
+              onPress={() => void finish(invitationCode || code.trim())}
             >
               <Text style={styles.ctaText}>{t('user.referral.continue')}</Text>
             </Pressable>
 
-            <Pressable
+            {!invitationCode ? <Pressable
               style={({ pressed }) => [
                 styles.skipBtn,
                 submitting && styles.ctaDisabled,
@@ -120,7 +123,7 @@ export default function ReferralCodeScreen() {
               onPress={() => void finish('')}
             >
               <Text style={styles.skipText}>{t('user.referral.skip')}</Text>
-            </Pressable>
+            </Pressable> : null}
           </View>
         </View>
       </View>

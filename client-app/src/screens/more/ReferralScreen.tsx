@@ -33,6 +33,7 @@ import { fonts } from '@/config/typography';
 import type { RootStackParamList } from '@/navigation/types';
 import { useReferralSummary } from '@/screens/more/useReferralData';
 import { useCommonStore } from '@/store/commonStore';
+import { formatAmount } from '@/utils/format';
 
 export default function ReferralScreen() {
   const { t } = useTranslation();
@@ -86,7 +87,16 @@ export default function ReferralScreen() {
             <Rect x="0" y="0" width="100%" height="100%" fill="url(#referralGrad)" />
           </Svg>
           <Text style={styles.bannerTitle}>{t('more.referral.bannerTitle')}</Text>
-          <Text style={styles.bannerDesc}>{t('more.referral.bannerDesc')}</Text>
+          <Text style={styles.bannerDesc}>
+            {summary.program
+              ? summary.program.inviterAmount > 0
+                ? t('more.referral.bannerOffer', {
+                    amount: formatAmount(summary.program.inviterAmount, summary.program.currency),
+                    currency: summary.program.currency,
+                  })
+                : t('more.referral.unavailable')
+              : t('more.referral.bannerDesc')}
+          </Text>
         </View>
       </View>
 

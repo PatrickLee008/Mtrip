@@ -310,7 +310,7 @@ export function deleteTraveler(id: number): Promise<null> {
 
 /* ---- 推荐返利(Refer & Earn,需登录) ---- */
 
-/** 奖励状态:0 待达成 1 已发放 2 已失效(对齐 `user_referral.reward_status`) */
+/** 存储状态:0 待达成 1 已处理 2 已失效；历史 status=1 金额为0时没有实际奖励。 */
 export const REFERRAL_STATUS = {
   PENDING: 0,
   REWARDED: 1,
@@ -323,6 +323,10 @@ export interface ReferralSummary {
   inviteeCount: number;
   pendingCount: number;
   rewardedCount: number;
+  /** 已完成但未给推荐人发放金额的历史记录；不计入已奖励人数。 */
+  noRewardCount?: number;
+  /** 可选以兼容前后端分批更新；缺失时不承诺固定奖励金额。 */
+  program?: { inviterAmount: number; inviteeAmount: number; currency: string };
   /** 累计已到账奖励(仅 reward_status=1 的合计) */
   rewardTotal: number;
 }

@@ -754,6 +754,7 @@
     "referral": {
       "title": "输入推荐码",
       "subtitle": "如果你有推荐码,请在此输入。",
+      "fromInvitation": "此推荐码来自邀请链接，注册时会自动使用。",
       "placeholder": "abcdef",
       "continue": "继续",
       "skip": "跳过"
@@ -1191,7 +1192,13 @@
     "referral": {
       "title": "推荐有奖",
       "bannerTitle": "邀请好友\n一起赚取奖励",
-      "bannerDesc": "好友在 mTrip 完成首笔酒店订单后,你可获得 50,000 MMK 奖励。",
+      "bannerDesc": "邀请好友，奖励以当前推荐活动规则为准。",
+      "bannerOffer": "好友首次符合条件的酒店预订办理入住后，可获得 {{amount}} {{currency}} 奖励。",
+      "unavailable": "此站点目前没有推荐奖励。",
+      "noRewardNote": "有 {{count}} 次推荐已完成，但未发放奖励。",
+      "completed": "已完成",
+      "noReward": "未发放奖励",
+      "noRewardDesc": "此推荐已完成，但没有奖励金额入账。",
       "totalRewards": "累计获得奖励",
       "stats": {
         "invited": "已邀请",

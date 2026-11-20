@@ -34,13 +34,14 @@ import { useTranslation } from 'react-i18next';
 
 import { fetchOrderDetail } from '@/api/order';
 import { PAY_METHOD, getPayMethods, isMethodEnabled } from '@/api/pay';
-import { fetchTripDetail, type TripBookingRow } from '@/api/trip';
+import { fetchTripDetail, type TripBookingRow, type TripDetailResult } from '@/api/trip';
 import { ORDER_STATUS } from '@/config/global';
 import type { RootStackParamList } from '@/navigation/types';
 import { mmqrRouteParams, payPendingWithWallet } from '@/screens/pay/mmqrPay';
 import { useSiteStore } from '@/store/siteStore';
 import { useUserStore } from '@/store/userStore';
 import type { OrderDetail } from '@/types/models';
+import { parseUtcTime } from '@/utils/time';
 
 /** 结果页三态:成功 / 等酒店确认(后端暂无此档)/ 支付失败(单已建好,仍待支付) */
 export type BookingResultStatus = 'confirmed' | 'confirming' | 'failed';
@@ -74,7 +75,7 @@ export interface BookingResult {
    * 过期是每分钟的 `BookingExpiryService` 扫出来取消的。所以截止时间刚过的那一小段里
    * 后端其实还能正常扣款(付掉之后超时任务会跳过这张单)。
    * 按倒计时禁用按钮就会比后端更严,把只迟到几秒的用户挡在外面 ——
-   * 所以这里只认服务端状态,倒计时归零时去**重读一次**订单问问后端。
+   * 所以这里只认服务端状态,倒计时归零后每三秒重读订单,直到服务端确认支付或失效。
    */
   expired: boolean;
   paying: boolean;
@@ -84,12 +85,16 @@ export interface BookingResult {
   reload: () => Promise<void>;
 }
 
-/** `YYYY-MM-DD HH:mm:ss`(后端本地时间)→ 时间戳;RN 上 iOS 不认带空格的格式,得换成 ISO */
-function parseServerTime(value: string | null | undefined): number | null {
-  if (!value) return null;
-  const ms = Date.parse(value.replace(' ', 'T'));
-  return Number.isNaN(ms) ? null : ms;
+function paidOrder(status: number | undefined): boolean {
+  return status !== undefined && [ORDER_STATUS.PAID, ORDER_STATUS.USED, ORDER_STATUS.FINISHED,
+    ORDER_STATUS.REFUNDING, ORDER_STATUS.REFUNDED].some((value) => value === status);
 }
+
+function unavailableOrder(status: number): boolean {
+  return status === ORDER_STATUS.CANCELLED || status === ORDER_STATUS.EXPIRED;
+}
+
+type ResultSnapshot = { order?: OrderDetail; trip?: TripDetailResult };
 
 export function useBookingResult(p: BookingResultParams): BookingResult {
   const refreshProfile = useUserStore((s) => s.refreshProfile);
@@ -101,6 +106,7 @@ export function useBookingResult(p: BookingResultParams): BookingResult {
   const [bookings, setBookings] = useState<TripBookingRow[]>([]);
   const [tripPayAmount, setTripPayAmount] = useState<number | null>(null);
   const [tripNo, setTripNo] = useState('');
+  const [tripPayStatus, setTripPayStatus] = useState<number | null>(null);
   /** 本地态:重付成功后就地切成 confirmed,不再 push 一层新页面 */
   const [status, setStatus] = useState<BookingResultStatus>(p.status ?? 'confirmed');
   const [failReason, setFailReason] = useState(p.failReason ?? '');
@@ -108,23 +114,32 @@ export function useBookingResult(p: BookingResultParams): BookingResult {
   const [loading, setLoading] = useState(false);
   const [now, setNow] = useState(() => Date.now());
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (): Promise<ResultSnapshot | null> => {
     /* 演示模式没有 orderId/tripId:什么都不请求,整页走路由参数(与从前一致) */
-    if (!p.orderId && !p.tripId) return;
+    if (!p.orderId && !p.tripId) return null;
     setLoading(true);
     try {
-      if (p.orderId) {
-        const detail = await fetchOrderDetail(p.orderId).catch(() => null);
-        if (detail) setOrder(detail);
-      }
       if (p.tripId && p.tripId > 0) {
         const trip = await fetchTripDetail(p.tripId).catch(() => null);
         if (trip) {
           setBookings(trip.bookings ?? []);
           setTripPayAmount(Number(trip.pay_amount) || 0);
           setTripNo(String(trip.trip_no ?? ''));
+          setTripPayStatus(trip.pay_status);
+          setStatus(trip.pay_status === 1 ? 'confirmed' : 'failed');
+          if (trip.pay_status === 1) setFailReason('');
+          return { trip };
+        }
+      } else if (p.orderId) {
+        const detail = await fetchOrderDetail(p.orderId).catch(() => null);
+        if (detail) {
+          setOrder(detail);
+          setStatus(paidOrder(detail.order_status) ? 'confirmed' : 'failed');
+          if (paidOrder(detail.order_status)) setFailReason('');
+          return { order: detail };
         }
       }
+      return null;
     } finally {
       setLoading(false);
     }
@@ -141,17 +156,18 @@ export function useBookingResult(p: BookingResultParams): BookingResult {
   const expiresAt = useMemo(() => {
     const pending = (row: { order_status: number }) => row.order_status === ORDER_STATUS.PENDING;
     if (bookings.length > 0) {
+      if (tripPayStatus === 1 || bookings.some((row) => unavailableOrder(row.order_status))) return null;
       const times = bookings
         .filter(pending)
-        .map((row) => parseServerTime(row.payment_expires_at))
+        .map((row) => parseUtcTime(row.payment_expires_at))
         .filter((ms): ms is number => ms !== null);
       return times.length > 0 ? Math.min(...times) : null;
     }
     if (order && order.order_status === ORDER_STATUS.PENDING) {
-      return parseServerTime(order.payment_expires_at);
+      return parseUtcTime(order.payment_expires_at);
     }
     return null;
-  }, [bookings, order]);
+  }, [bookings, order, tripPayStatus]);
 
   /* 有截止时间才起秒表,免得成功页白白每秒重渲染 */
   const ticking = expiresAt !== null && status !== 'confirmed';
@@ -166,24 +182,31 @@ export function useBookingResult(p: BookingResultParams): BookingResult {
   /** 倒计时归零 ≠ 单子作废,只是「该去问问后端了」 */
   const timeUp = secondsLeft !== null && secondsLeft <= 0;
 
-  /* 归零的那一刻重读一次:后端的超时任务每分钟跑一次,状态要等它落下来 */
+  /* 到点后继续查询，直到服务器落下支付或失效状态；不能只问一次后永远停在0秒。 */
   const askedAfterTimeUp = useRef(false);
   useEffect(() => {
-    if (!timeUp || askedAfterTimeUp.current) return;
-    askedAfterTimeUp.current = true;
-    void load();
+    if (!timeUp) {
+      askedAfterTimeUp.current = false;
+      return;
+    }
+    if (!askedAfterTimeUp.current) {
+      askedAfterTimeUp.current = true;
+      void load();
+    }
+    const timer = setInterval(() => void load(), 3000);
+    return () => clearInterval(timer);
   }, [timeUp, load]);
 
   /** 失效以**服务端状态**为准 */
-  const expired =
-    order !== null &&
-    (order.order_status === ORDER_STATUS.CANCELLED || order.order_status === ORDER_STATUS.EXPIRED);
+  const expired = p.tripId
+    ? tripPayStatus !== 1 && bookings.some((row) => unavailableOrder(row.order_status))
+    : order !== null && unavailableOrder(order.order_status);
 
   /** 防连点:支付请求在途时再点一次会重复扣款风险 */
   const inFlight = useRef(false);
 
   const repay = useCallback(async (): Promise<boolean> => {
-    if (inFlight.current) return false;
+    if (inFlight.current || expired) return false;
     inFlight.current = true;
     setPaying(true);
     try {
@@ -228,11 +251,8 @@ export function useBookingResult(p: BookingResultParams): BookingResult {
        *   b) 上一次其实扣款成功、只是响应丢了 —— 此时报错会让用户莫名其妙。
        * 所以重读一次订单**按真实状态判**:已支付就当成功,不拿这句错误吓人。
        */
-      await load();
-      const paidNow = p.orderId ? await fetchOrderDetail(p.orderId).catch(() => null) : null;
-      if (paidNow && paidNow.order_status !== ORDER_STATUS.PENDING
-        && paidNow.order_status !== ORDER_STATUS.CANCELLED
-        && paidNow.order_status !== ORDER_STATUS.EXPIRED) {
+      const latest = await load();
+      if (latest?.trip?.pay_status === 1 || paidOrder(latest?.order?.order_status)) {
         setFailReason('');
         setStatus('confirmed');
         return true;
@@ -243,7 +263,7 @@ export function useBookingResult(p: BookingResultParams): BookingResult {
       inFlight.current = false;
       setPaying(false);
     }
-  }, [p.orderId, p.tripId, refreshProfile, load, currency, tripPayAmount, order, navigation, t]);
+  }, [p.orderId, p.tripId, refreshProfile, load, currency, tripPayAmount, order, navigation, t, expired]);
 
   return {
     status,
@@ -257,7 +277,7 @@ export function useBookingResult(p: BookingResultParams): BookingResult {
     paying,
     loading,
     repay,
-    reload: load,
+    reload: async () => { await load(); },
   };
 }
 
