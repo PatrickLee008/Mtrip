@@ -52,6 +52,11 @@ class MmqrCheckoutService
         return $this->center ??= new PaymentCenterClient();
     }
 
+    private function logger(): LoggerInterface
+    {
+        return $this->loggerFactory->get('mmqr_checkout');
+    }
+
     // ------------------------------------------------------------------ 出码
 
     /**

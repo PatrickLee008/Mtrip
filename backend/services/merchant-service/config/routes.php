@@ -145,6 +145,8 @@ Router::addGroup('/api/v1/admin', static function () {
     Router::post('/merchant/commission', [MerchantController::class, 'commission']);
     Router::get('/merchant/pay-at-hotel/terms', [MerchantController::class, 'payAtHotelTerms']);
     Router::post('/merchant/pay-at-hotel/terms', [MerchantController::class, 'savePayAtHotelTerms']);
+    Router::get('/merchant/commercial-settings/property', [MerchantController::class, 'propertyCommercial']);
+    Router::post('/merchant/commercial-settings/property', [MerchantController::class, 'savePropertyCommercial']);
     Router::get('/merchant/account', [MerchantController::class, 'accounts']);
     Router::post('/merchant/account-save', [MerchantController::class, 'saveAccount']);
     // 功能模块授权(酒店/餐饮…):决定商户端 merchant-web 可见的业务菜单

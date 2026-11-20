@@ -47,7 +47,6 @@ import ReviewBody from '@/components/hotel/booking/ReviewBody';
 import { AddMoreStayCard, PriceBreakdownCard } from '@/components/hotel/booking/ReviewCards';
 import StaySummaryCard from '@/components/hotel/booking/StaySummaryCard';
 import { BOTTOM_BAR_HEIGHT, bookingShared } from '@/components/hotel/booking/bookingShared';
-import { PAYMENT_WINDOW_MINUTES } from '@/config/global';
 import { PAGE_PADDING, colors, shadows } from '@/config/theme';
 import { fonts } from '@/config/typography';
 import type { RootStackParamList } from '@/navigation/types';
@@ -80,6 +79,7 @@ export default function HotelBookingScreen() {
     stayCardFor,
     tripRooms,
     primaryLabel,
+    checkoutTime,
     stays,
     current,
     multi,
@@ -382,7 +382,7 @@ export default function HotelBookingScreen() {
                   cartMode
                     ? {
                         label: t('hotels.booking.payment.payWithin'),
-                        value: `00:${String(PAYMENT_WINDOW_MINUTES).padStart(2, '0')}:00`,
+                        value: checkoutTime,
                       }
                     : null
                 }

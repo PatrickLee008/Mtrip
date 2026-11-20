@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
+import { useI18n } from 'vue-i18n';
 import type { Dayjs } from 'dayjs';
 import { ReloadOutlined, SearchOutlined } from '@ant-design/icons-vue';
 import PageContainer from '@/components/PageContainer.vue';
@@ -11,6 +12,7 @@ import { apiEntryList, apiEntrySummary } from '@/api/cops';
 
 /** 结算分账报表:出资分账明细 + 汇总(只读,数据来自支付时写入) */
 const userStore = useUserStore();
+const { t } = useI18n();
 const isSuper = userStore.profile?.isSuper === true;
 
 const { loading, list, query, load, search, reset, pagination } = useTable(apiEntryList, {
@@ -18,6 +20,7 @@ const { loading, list, query, load, search, reset, pagination } = useTable(apiEn
   startDate: '',
   endDate: '',
   siteId: 0,
+  reconciliationStatus: undefined,
 });
 
 const dateRange = ref<[Dayjs, Dayjs] | undefined>();
@@ -34,7 +37,7 @@ async function loadAll(): Promise<void> {
 
 const FUNDING: Record<number, string> = { 1: '平台', 2: '商户', 3: '合作方', 4: '共担' };
 
-const columns = [
+const columns = computed(() => [
   { title: '订单号', dataIndex: 'order_no', width: 190, ellipsis: true },
   { title: '商户ID', dataIndex: 'merchant_id', width: 90 },
   { title: '订单额', dataIndex: 'order_amount', width: 100 },
@@ -55,8 +58,9 @@ const columns = [
   { title: '已退手续费', dataIndex: 'refunded_transaction_fee', width: 110 },
   { title: '商户净应结', dataIndex: 'net_merchant_settlement', width: 115 },
   { title: '平台净实收', dataIndex: 'net_platform_revenue', width: 115 },
+  { title: t('merchantCommercial.reconciliation'), dataIndex: 'reconciliation_status', width: 160 },
   { title: '时间', dataIndex: 'created_at', width: 170 },
-];
+]);
 const AMT = ['order_amount', 'commission', 'hotel_balance', 'hotel_deposit', 'transaction_fee', 'discount_amount', 'mtrip_pays', 'merchant_pays', 'partner_pays', 'merchant_settlement', 'platform_revenue', 'refunded_deposit', 'refunded_addon', 'refunded_commission', 'refunded_transaction_fee', 'net_merchant_settlement', 'net_platform_revenue'];
 function isAmt(d: unknown): boolean {
   return typeof d === 'string' && AMT.includes(d);
@@ -88,6 +92,7 @@ onMounted(() => void loadAll());
         <a-form-item label="商户ID">
           <a-input-number v-model:value="query.merchantId" placeholder="商户ID" style="width: 120px" />
         </a-form-item>
+        <a-form-item :label="t('merchantCommercial.reconciliation')"><a-select v-model:value="query.reconciliationStatus" allow-clear style="width:170px"><a-select-option v-for="value in [0,1,2]" :key="value" :value="value">{{ t(`merchantCommercial.reconciliationStates.${value}`) }}</a-select-option></a-select></a-form-item>
         <a-form-item v-if="isSuper" label="站点">
           <SiteTreeSelect v-model:value="query.siteId" allow-all style="width: 160px" />
         </a-form-item>
@@ -107,6 +112,7 @@ onMounted(() => void loadAll());
       <a-table :columns="columns" :data-source="list" :loading="loading" :pagination="pagination" row-key="id" size="middle" :scroll="{ x: 2250 }">
         <template #bodyCell="{ column, record }">
           <template v-if="isAmt(column.dataIndex)">{{ fmt(record, column.dataIndex) }}</template>
+          <template v-else-if="column.dataIndex === 'reconciliation_status'">{{ record.reconciliation_status == null ? '—' : t(`merchantCommercial.reconciliationStates.${record.reconciliation_status}`) }}</template>
           <template v-else-if="column.dataIndex === 'funding_source'">
             <a-tag>{{ FUNDING[record.funding_source] ?? record.funding_source }}</a-tag>
           </template>

@@ -77,6 +77,20 @@ MiniTest::add('注销判定:进行中预订口径(待支付 / 已确认 / 已入
     }
 });
 
+MiniTest::add('Deletion uses checkout date without changing booking status; refunds override the exemption', static function (): void {
+    $today = '2026-11-20';
+    $past = ['booking_status' => 2, 'order_status' => 1, 'end_date' => '2026-11-19'];
+    MiniTest::assertSame(false, AccountDeletionPolicy::isOngoingBooking($past, $today));
+    foreach (['2026-11-20','2026-11-21','','2026-02-30'] as $end) {
+        MiniTest::assertSame(true, AccountDeletionPolicy::isOngoingBooking(array_replace($past, ['end_date' => $end]), $today));
+    }
+    foreach ([['booking_status'=>1],['booking_status'=>3],['refund_status'=>1],['order_status'=>5]] as $patch) {
+        MiniTest::assertSame(true, AccountDeletionPolicy::isOngoingBooking(array_replace($past, $patch), $today));
+    }
+    MiniTest::assertSame(false, AccountDeletionPolicy::isOngoingBooking(array_replace($past, ['booking_status'=>0]), $today));
+    MiniTest::assertSame(true, AccountDeletionPolicy::isOngoingBooking($past, '2026-11-19'));
+});
+
 MiniTest::add('关联手机号:+95 / 95 / 09 / 9 开头的缅甸号码统一成 9xxxxxxxx', static function (): void {
     MiniTest::assertSame('977700123', AccountContact::myanmarMobile('977700123'));
     MiniTest::assertSame('977700123', AccountContact::myanmarMobile('0977700123'));

@@ -6,6 +6,7 @@ namespace App\Service\Payment;
 
 use App\Constants\BookingConst;
 use App\Service\Booking\BookingEventService;
+use App\Service\Booking\PayAtHotelRefundBreakdown;
 use App\Service\OrderPayService;
 use App\Service\OrderStockService;
 use App\Service\PricingService;
@@ -570,8 +571,18 @@ class RefundSettleService
         $refundAmount = (float) $refund['refund_amount'];
         $refundedBefore = (float) Db::table('order_refund')->where('order_id', (int) $order['id'])->where('status', 3)
             ->where('late_pay', 0)->whereNull('deleted_at')->sum('refund_amount');
+        if ($refundAmount <= 0 || $refundedBefore + $refundAmount > (float) $order['pay_amount'] + 0.001) {
+            throw new BusinessException(ErrorCode::DATA_CONFLICT, 'Refund exceeds the remaining paid amount');
+        }
+        $components = [];
+        if ((int) ($order['pay_at_hotel'] ?? 0) === 1) {
+            $components = PayAtHotelRefundBreakdown::approved($refund, $refundAmount);
+            if (abs(array_sum($components) - $refundAmount) > 0.001) {
+                throw new BusinessException(ErrorCode::DATA_CONFLICT, 'Refund components do not match the approved amount');
+            }
+        }
         $fullRefund = $refundedBefore + $refundAmount >= (float) $order['pay_amount'] - 0.001;
-        $affected = Db::table('order_refund')->where('id', (int) $refund['id'])->where('status', 2)->update([
+        $affected = Db::table('order_refund')->where('id', (int) $refund['id'])->where('status', 2)->update($components + [
             'status' => 3,
             'refund_trade_no' => $tradeNo,
             'refund_time' => date('Y-m-d H:i:s'),
@@ -580,11 +591,14 @@ class RefundSettleService
             throw new BusinessException(ErrorCode::DATA_CONFLICT, '退款单状态已变更,请刷新');
         }
         $orderStatus = (int) $order['order_status'];
-        Db::table('order_main')->where('id', $order['id'])->update([
-            'order_status' => $fullRefund ? 6 : ($orderStatus === 5 ? 1 : $orderStatus),
+        $bookingClose = $fullRefund && in_array((int) $order['booking_status'], [BookingConst::STATUS_PENDING_PAYMENT, BookingConst::STATUS_CONFIRMED], true)
+            ? ['booking_status' => BookingConst::STATUS_CANCELLED, 'cancel_time' => gmdate('Y-m-d H:i:s'), 'cancel_reason' => 'Full prepaid refund completed'] : [];
+        Db::table('order_main')->where('id', $order['id'])->update($bookingClose + [
+            'order_status' => $fullRefund ? 6 : ($orderStatus === 5 ? (BookingConst::LEGACY_ORDER_STATUS[(int) $order['booking_status']] ?? 1) : $orderStatus),
             'refund_status' => $fullRefund ? 3 : 2,
             // M4:支付状态双写(部分退款/已退款)
             'payment_status' => $fullRefund ? BookingConst::PAY_REFUNDED : BookingConst::PAY_PARTIAL_REFUNDED,
+            'hotel_reconciliation_status' => (int) ($order['pay_at_hotel'] ?? 0) === 1 ? 0 : (int) ($order['hotel_reconciliation_status'] ?? 0),
             'version' => Db::raw('version + 1'),
         ]);
         if ($fullRefund) {

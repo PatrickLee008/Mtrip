@@ -135,6 +135,7 @@ class BookingController extends AbstractAdminController
                 'terms' => $this->jsonField($order['hotel_terms_snapshot'] ?? null),
                 'operationalSettlementStatus' => (int) ($order['hotel_settlement_status'] ?? 0),
                 'operationalSettledAt' => $order['hotel_settled_at'] ?? null,
+                'financialReconciliationStatus' => (int) ($order['hotel_reconciliation_status'] ?? 0),
                 'addonAmount' => (float) ($order['addon_amount'] ?? 0),
                 'payMethod' => $order['pay_method'],
                 'payTradeNo' => $order['pay_trade_no'],
@@ -253,6 +254,10 @@ class BookingController extends AbstractAdminController
     {
         $order = $this->findScopedBooking($this->requireId());
         $amount = $this->input('amount') !== null && $this->input('amount') !== '' ? $this->floatInput('amount') : null;
+        if ((int) ($order['pay_at_hotel'] ?? 0) === 1) {
+            return Result::success($this->refundService->requestFromMerchant($order, MerchantContext::adminId(), MerchantContext::adminName(),
+                $amount, $this->strInput('reason')), 'Refund submitted for platform review');
+        }
         $result = $this->refundService->apply($order, MerchantContext::adminId(), MerchantContext::adminName(), $amount, $this->strInput('reason'));
         return Result::success([
             'refundNo' => $result['refundNo'],

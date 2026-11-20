@@ -2212,6 +2212,8 @@
         "added": "A second stay has been added to this trip."
       },
       "payment": {
+        "sessionExpired": "Payment time has expired. Please review the current price and availability.",
+        "sessionLoading": "Preparing your payment session. Please try again shortly.",
         "summaryRange": "{{checkIn}} - {{checkOut}} ({{nights}})",
         "roomLine": "{{rooms}} x {{room}}, {{guests}} Guests",
         "roomLineMulti": "{{rooms}} rooms: {{list}}, {{guests}} Guests",

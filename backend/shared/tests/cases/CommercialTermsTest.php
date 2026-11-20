@@ -15,18 +15,18 @@ function commercialInput(array $overrides = []): array
     ], $overrides);
 }
 
-MiniTest::add('CommercialTerms preview charges transaction fee on commission and excludes it from upfront', static function () {
+MiniTest::add('CommercialTerms preview charges fee on commission and includes it once in customer payment', static function () {
     $terms = CommercialTerms::validate(commercialInput());
     MiniTest::assertSame('8.00', $terms['commission_rate']);
     MiniTest::assertSame('2026-11-17 10:00:00', $terms['effective_at']);
     MiniTest::assertSame('Contract signed', $terms['reason']);
     MiniTest::assertSame([
         'room_amount' => 10000000, 'commission_amount' => 800000, 'transaction_fee_amount' => 16000,
-        'merchant_upfront_amount' => 2000000, 'customer_upfront_amount' => 2800000, 'hotel_balance_amount' => 7200000,
+        'merchant_upfront_amount' => 2000000, 'customer_upfront_amount' => 2816000, 'hotel_balance_amount' => 7200000,
     ], CommercialTerms::preview($terms));
 });
 MiniTest::add('CommercialTerms accepts exact boundaries and no-show at zero', static function () {
-    foreach ([['0', '0', 0], ['70', '30', 10000000], ['100', '0', 10000000]] as [$commission, $merchant, $upfront]) {
+    foreach ([['0', '0', 0], ['70', '30', 10140000], ['100', '0', 10200000]] as [$commission, $merchant, $upfront]) {
         $terms = CommercialTerms::validate(commercialInput(['commissionRate' => $commission, 'merchantUpfrontRate' => $merchant]));
         MiniTest::assertSame($upfront, CommercialTerms::preview($terms)['customer_upfront_amount']);
     }
@@ -60,7 +60,15 @@ MiniTest::add('CommercialTerms preview rounds fractional transaction fee once to
     $terms = CommercialTerms::validate(commercialInput(['commissionRate' => '8.23', 'transactionFeeRate' => '1.79']));
     MiniTest::assertSame(823000, CommercialTerms::preview($terms)['commission_amount']);
     MiniTest::assertSame(14732, CommercialTerms::preview($terms)['transaction_fee_amount']);
-    MiniTest::assertSame(2823000, CommercialTerms::preview($terms)['customer_upfront_amount']);
+    MiniTest::assertSame(2837732, CommercialTerms::preview($terms)['customer_upfront_amount']);
+});
+
+MiniTest::add('Pay at hotel PRD example balances room price plus one transaction fee', static function () {
+    $terms = CommercialTerms::validate(commercialInput(['commissionRate' => '10', 'transactionFeeRate' => '2']));
+    $amounts = CommercialTerms::preview($terms);
+    MiniTest::assertSame(3020000, $amounts['customer_upfront_amount']);
+    MiniTest::assertSame(7000000, $amounts['hotel_balance_amount']);
+    MiniTest::assertSame(10020000, $amounts['customer_upfront_amount'] + $amounts['hotel_balance_amount']);
 });
 
 MiniTest::add('CommercialTerms never truncates a nonzero fractional effective second', static function () {

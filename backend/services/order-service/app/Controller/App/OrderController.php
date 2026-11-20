@@ -238,6 +238,7 @@ class OrderController extends AbstractController
                 'payAmount' => $payAmount,
                 'paymentExpiresAt' => $bookingFields['payment_expires_at'],
             ]);
+            \App\Service\BookingConsumerGuard::lockActive($siteId, $userId);
             return [
                 'orderId' => $orderId,
                 'original' => $totalAmount,
@@ -264,7 +265,9 @@ class OrderController extends AbstractController
                 'payAmount' => $priced['payAmount'],
                 'payAtHotel' => $priced['hotelOption'] !== null,
                 'hotelBalance' => $priced['hotelOption']['hotelBalance'] ?? 0,
-                'hotelOption' => $priced['hotelOption'],
+                'hotelOption' => $priced['hotelOption'] !== null
+                    ? array_diff_key($priced['hotelOption'], ['commercialTerms' => true])
+                    : null,
             ],
         ], '下单成功,请在支付截止时间前完成支付');
     }

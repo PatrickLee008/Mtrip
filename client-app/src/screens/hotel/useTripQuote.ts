@@ -11,7 +11,7 @@
  *   - `quote`:房型/日期/券全一致。券额与应付用它。
  */
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 import { apiTripQuote, type TripQuoteItem, type TripQuoteResult } from '@/api/trip';
 import type { CartRoom } from '@/store/roomCartStore';
@@ -73,5 +73,11 @@ export function useTripQuote(items: TripQuoteItem[], couponId: number, enabled: 
 
   const itemsQuote = state && itemsKey && state.itemsKey === itemsKey ? state.quote : null;
   const quote = itemsQuote && state!.couponId === couponId && state!.payAtHotel === payAtHotel ? itemsQuote : null;
-  return { itemsQuote, quote };
+  const refresh = useCallback(async () => {
+    const next = await apiTripQuote({ items, couponId: couponId || undefined, payAtHotel: payAtHotel ? 1 : 0 });
+    setState({ itemsKey, couponId, payAtHotel, quote: next });
+    return next;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [itemsKey, couponId, payAtHotel]);
+  return { itemsQuote, quote, refresh };
 }

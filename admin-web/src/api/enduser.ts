@@ -37,13 +37,3 @@ export interface AccountDeletionSummary {
   closed: { closed_at: string; purge_after: string; purged_at: string | null; forfeited_amount: string } | null;
   ongoingBookings: number;
 }
-
-/** 批准「有余额时注销」:余额在用户确认注销时没收(user:list:approve-deletion) */
-export function apiEndUserDeletionApprove(id: number, reason: string): Promise<{ id: number; approvedBalance: string; expiresAt: string }> {
-  return post('/admin/user/deletion/approve', { id, reason });
-}
-
-/** 撤销尚未使用的注销批准 */
-export function apiEndUserDeletionRevoke(id: number): Promise<{ revoked: number }> {
-  return post('/admin/user/deletion/revoke', { id });
-}

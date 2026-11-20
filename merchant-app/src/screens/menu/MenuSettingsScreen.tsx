@@ -66,8 +66,9 @@ export default function MenuSettingsScreen({ navigation, route }: NativeStackScr
     }
     setSaving(true);
     try {
-      const terms = await apiSavePayAtHotelTerms(noShowEnabled, rate);
+      const terms = await apiSavePayAtHotelTerms(noShowEnabled, rate, hotelTerms);
       setHotelTerms(terms);
+      setNoShowEnabled(Boolean(terms.no_show_enabled));
       setDepositRate(String(terms.deposit_rate));
       showToast(t('menu.hotelTerms.saved'));
     } catch { showToast(t('menu.saveFailed')); }
@@ -128,9 +129,10 @@ export default function MenuSettingsScreen({ navigation, route }: NativeStackScr
             <Text style={[ui.body, styles.description]}>{t('menu.hotelTerms.commission')}: {hotelTerms.commission_rate}%</Text>
             <Text style={[ui.body, styles.description]}>{t('menu.hotelTerms.transactionFee')}: {hotelTerms.transaction_fee_rate}%</Text>
             <Text style={[ui.body, styles.description]}>{t('menu.hotelTerms.version')}: {hotelTerms.version}</Text>
+            {hotelTerms.properties?.map(property => <Text key={property.id} style={[ui.body, styles.description]}>{property.store_name}: {property.commission_rate}% ({t(property.commission_scope === 'property' ? 'menu.hotelTerms.propertyRate' : 'menu.hotelTerms.merchantRate')})</Text>)}
           </View>
           {Boolean(hotelTerms.enabled) ? <View style={ui.card}>
-            <View style={styles.alertRow}><Text style={[ui.title, styles.copy]}>{t('menu.hotelTerms.noShow')}</Text><Switch value={noShowEnabled} onValueChange={setNoShowEnabled} disabled={!profile?.isOwner || profile.accountType !== 2} trackColor={{ false: '#E2E8F0', true: colors.primary }} /></View>
+            <View style={styles.alertRow}><Text style={[ui.title, styles.copy]}>{t('menu.hotelTerms.noShow')}</Text><Switch value={noShowEnabled} onValueChange={setNoShowEnabled} disabled={!profile?.isOwner || profile.accountType !== 2 || !hotelTerms.no_show_allowed} trackColor={{ false: '#E2E8F0', true: colors.primary }} /></View>
             {noShowEnabled ? <View style={styles.field}><Text style={styles.fieldLabel}>{t('menu.hotelTerms.depositRate', { max: Math.min(30, Number(hotelTerms.deposit_cap_rate)) })}</Text><TextInput style={styles.input} value={depositRate} onChangeText={setDepositRate} keyboardType="decimal-pad" editable={profile?.isOwner && profile.accountType === 2} accessibilityLabel={t('menu.hotelTerms.depositRate', { max: Math.min(30, Number(hotelTerms.deposit_cap_rate)) })} /></View> : null}
             {profile?.isOwner && profile.accountType === 2 ? <Pressable style={[ui.button, saving && ui.disabled]} disabled={saving} onPress={() => void saveHotelTerms()}><Text style={ui.buttonText}>{t(saving ? 'menu.saving' : 'menu.save')}</Text></Pressable> : null}
           </View> : null}

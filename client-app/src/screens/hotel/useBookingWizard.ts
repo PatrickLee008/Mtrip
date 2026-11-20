@@ -62,6 +62,7 @@ import {
   type PaymentMethodKey,
 } from '@/screens/hotel/bookingDemo';
 import { cartTripItems, useTripQuote } from '@/screens/hotel/useTripQuote';
+import { useCheckoutWindow } from '@/screens/hotel/useCheckoutWindow';
 import { useCommonStore } from '@/store/commonStore';
 import { useRoomCartStore, type TripStay } from '@/store/roomCartStore';
 import { useSiteStore } from '@/store/siteStore';
@@ -586,7 +587,7 @@ export function useBookingWizard({
    * 为空(未登录 / 演示 / 日期没选全 / 请求中 / 失败)时退回预估值(多房间 `cartTotal`,单房型 `current.total`)。
    * 传原始 `couponId`(而不是 appliedCoupon):券不适用时正好由试算的 couponError 报出来。
    */
-  const { itemsQuote: cartQuote, quote: tripQuote } = useTripQuote(
+  const { itemsQuote: cartQuote, quote: tripQuote, refresh: refreshQuote } = useTripQuote(
     quoteItems,
     couponId,
     isLogin && Boolean(current.checkIn && current.checkOut),
@@ -789,6 +790,23 @@ export function useBookingWizard({
   /** 序列最后一步就是付款步:常规是 payment,多房间钱包全额覆盖时是 review */
   const isPayStep = index === sequence.length - 1;
 
+  const checkout = useCheckoutWindow({
+    enabled: cartMode && !current.demo && isLogin,
+    active: isPayStep && priceSnapshot === null,
+    userId: profile?.id ?? 0,
+    siteId: useSiteStore((s) => s.siteId),
+    items: quoteItems, couponId: appliedCoupon?.receiveId ?? 0, payAtHotel: method === 'hotel',
+    onExpired: () => {
+      if (priceSnapshot !== null || (step !== 'payment' && !isPayStep)) return;
+      setStep('review'); setPriceChange(null);
+      showToast(t('hotels.booking.payment.sessionExpired'));
+      void refreshQuote().catch(() => undefined);
+    },
+  });
+  useEffect(() => {
+    if (checkout.window?.tripId) navigation.replace('TripDetail', { tripId: checkout.window.tripId });
+  }, [checkout.window?.tripId, navigation]);
+
   /** 改一段住宿。金额一律由 `scaleStay` 按新的晚数 × 间数重算,不会停在进来时那一晚的价上 */
   const patchStay = (patch: Partial<BookingStay>) =>
     setStays((prev) => [scaleStay({ ...prev[0], ...patch }), ...prev.slice(1)]);
@@ -922,6 +940,10 @@ export function useBookingWizard({
    *   无论哪种,提交的都是**用户看到并同意的那个数**,后端不一致就再拦一次。
    */
   const submit = async (confirmedAmount?: number) => {
+    if (cartMode && !checkout.ready) {
+      showToast(checkout.error || t('hotels.booking.payment.sessionLoading'));
+      return;
+    }
     /* 多房间模式下房型来自购物车,路由不一定带 roomTypeId,所以只在单房型链路上拦 */
     if (!cartMode && (!current.propertyId || !current.roomTypeId)) {
       comingSoon();
@@ -965,10 +987,13 @@ export function useBookingWizard({
       if (tripItems.length > 0) {
         const trip = await apiTripCreate({
           items: tripItems,
+          checkoutKey: checkout.window?.checkoutKey,
+          checkoutRevision: checkout.window?.revision,
           couponId: appliedCoupon?.receiveId,
           expectedPayAmount,
           payAtHotel: method === 'hotel' ? 1 : 0,
         });
+        void checkout.complete();
         /* 单已落库:先冻结页面金额,再把房型转存为快照并清空购物车,免得留在车里诱发重复下单 */
         /* 钱包怎么分以服务端建单金额为准(与页面显示的应付一致,价格变动已在建单时拦过) */
         const tripSplit = payPlan(trip.payAmount);
@@ -1076,6 +1101,12 @@ export function useBookingWizard({
        * 用户改完(换券 / 改日期 / 减房)再点 Pay Now,这种情况下重新建单才是对的。
        */
       /* 价格变了:没建单,弹确认框而不是失败弹窗 */
+      if (e instanceof ApiError && (e.data as { checkoutExpired?: boolean } | undefined)?.checkoutExpired) {
+        setStep('review'); setPayResult(null); setBalanceAtSubmit(null);
+        showToast(t('hotels.booking.payment.sessionExpired'));
+        void checkout.begin(); void refreshQuote().catch(() => undefined);
+        return;
+      }
       if (e instanceof ApiError && e.code === API_CODE.PRICE_CHANGED && e.data) {
         setBalanceAtSubmit(null);
         setPriceChange(e.data as PriceChangeDetail);
@@ -1106,7 +1137,15 @@ export function useBookingWizard({
   const cancelPriceChange = () => setPriceChange(null);
 
   const goNext = () => {
-    if (submitting || loadingGoods) return;
+    if (submitting || loadingGoods || checkout.loading) return;
+    if (cartMode && checkout.expired && (step === 'review' || step === 'payment')) {
+      void checkout.begin(true).then(async (result) => {
+        if (!result || result.expired) return;
+        await refreshQuote().catch(() => undefined);
+        if (!isPayStep) setStep('payment');
+      });
+      return;
+    }
     /**
      * 日历是「点一下起头、再点一下收尾」,中间那一下之后 `checkOut` 是空的。
      * 这个半选状态会一直留在页面上,必须拦 —— 否则真实模式会带着空的 `endDate` 去下单,
@@ -1310,6 +1349,7 @@ export function useBookingWizard({
   const goSuccess = () => goResult('confirmed');
 
   return {
+    checkoutTime: checkout.time,
     payAtHotel,
     payAtHotelAvailable: Boolean(cartQuote?.payAtHotelAvailable),
     hotelBalance: tripQuote?.hotelBalance ?? 0,

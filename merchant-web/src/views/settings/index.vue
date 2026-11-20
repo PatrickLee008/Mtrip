@@ -36,9 +36,12 @@ async function loadHotelTerms(): Promise<void> {
 onMounted(loadHotelTerms);
 
 async function saveHotelTerms(): Promise<void> {
+  if (!hotelTerms.value || hotelTermsSaving.value) return;
   hotelTermsSaving.value = true;
   try {
-    hotelTerms.value = await savePayAtHotelTerms(hotelNoShow.value, hotelNoShow.value ? hotelDepositRate.value : 0);
+    hotelTerms.value = await savePayAtHotelTerms(hotelNoShow.value, hotelNoShow.value ? hotelDepositRate.value : 0, hotelTerms.value);
+    hotelNoShow.value = Boolean(hotelTerms.value.no_show_enabled);
+    hotelDepositRate.value = Number(hotelTerms.value.deposit_rate);
     message.success(t('settings.hotelTerms.saved'));
   } finally {
     hotelTermsSaving.value = false;
@@ -211,13 +214,14 @@ async function submitPassword(): Promise<void> {
               <a-form-item :label="t('settings.hotelTerms.status')"><a-input :value="hotelTerms.enabled ? t('settings.hotelTerms.enabled') : t('settings.hotelTerms.disabled')" readonly /></a-form-item>
             </div>
             <template v-if="hotelTerms.enabled">
-              <a-form-item :label="t('settings.hotelTerms.noShow')"><a-switch v-model:checked="hotelNoShow" :disabled="!canManageContacts" /></a-form-item>
+              <a-form-item :label="t('settings.hotelTerms.noShow')"><a-switch v-model:checked="hotelNoShow" :disabled="!canManageContacts || !hotelTerms.no_show_allowed" /></a-form-item>
               <a-form-item :label="t('settings.hotelTerms.deposit')">
                 <a-input-number v-model:value="hotelDepositRate" :min="0" :max="Math.min(30, Number(hotelTerms.deposit_cap_rate))" :step="0.1" :disabled="!hotelNoShow || !canManageContacts" addon-after="%" />
                 <p class="muted">{{ t('settings.hotelTerms.cap') }} {{ hotelTerms.deposit_cap_rate }}%</p>
               </a-form-item>
               <a-button v-if="canManageContacts" type="primary" :loading="hotelTermsSaving" @click="saveHotelTerms">{{ t('settings.hotelTerms.save') }}</a-button>
             </template>
+            <div v-for="property in hotelTerms.properties" :key="property.id" class="muted">{{ property.store_name }}: {{ property.commission_rate }}% ({{ property.commission_scope === 'property' ? t('settings.hotelTerms.propertyRate') : t('settings.hotelTerms.merchantRate') }})</div>
           </div>
           <div class="settings-card">
             <div class="logo-row">

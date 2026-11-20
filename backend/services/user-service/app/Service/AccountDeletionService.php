@@ -19,7 +19,8 @@ use Mtrip\Shared\Wallet\WalletLedger;
  *
  * App:警告页 → Continue → 输入 DELETE → Confirm → 本服务判定(AccountDeletionPolicy):
  *   有进行中 / 待处理预订 → 拦截;钱包余额 > 0 → 默认拦截(用户联系客服);
- *   客服 / 后台已批准没收(user_account_deletion.status=1,未过期,余额不高于批准时)→ 余额经 WalletLedger 没收并记台账 → 注销。
+ *   授权超管批准 + 独立财务经办/复核,未过期且余额不高于两次审核额度 → WalletLedger 作废、记台账 → 注销。
+ *   小额正数余额规则尚待产品确认,不因配置门槛自动免审或作废。
  *
  * 注销 = 账号置为 3 已注销 + 解绑登录凭据(mobile_hash / email_hash / 社交身份置空并归档到注销记录),
  * 资料本身保留 90 天(PRD 数据保留政策),到期由 AccountPurge 定时任务匿名化。
@@ -64,7 +65,7 @@ class AccountDeletionService
                 $decision = AccountDeletionPolicy::decide(
                     $bookings,
                     $balanceCents,
-                    $approval ? WalletLedger::cents($approval['approved_balance']) : null,
+                    $approval ? min(WalletLedger::cents($approval['approved_balance']), WalletLedger::cents($approval['finance_balance'])) : null,
                 );
                 if (! $decision['allowed']) {
                     throw new BusinessException(ErrorCode::ACCOUNT_DELETION_BLOCKED, $this->blockedMessage($decision['blockers']), [
@@ -86,56 +87,16 @@ class AccountDeletionService
         }, 'Request in progress, please wait');
     }
 
-    /**
-     * 客服 / 后台批准「有余额时注销」(余额届时没收)。批准记下当前余额作为没收上限,有效期 7 天;
-     * 用户仍需自己在 App 内输入 DELETE 完成注销。同一用户已有有效批准时覆盖为最新一次。
-     *
-     * @param array<string, mixed> $user user_info 行
-     * @return array<string, mixed>
-     */
-    public function approve(array $user, string $reason, int $adminId, string $adminName): array
-    {
-        if ((int) $user['user_status'] === 3) {
-            throw new BusinessException(ErrorCode::DATA_CONFLICT, '该用户已注销');
-        }
-        $userId = (int) $user['id'];
-        return Db::transaction(function () use ($user, $userId, $reason, $adminId, $adminName): array {
-            $balance = WalletLedger::cents(WalletLedger::availableLocked($userId));
-            if ($balance <= 0) {
-                throw new BusinessException(ErrorCode::DATA_CONFLICT, '用户钱包余额为 0,无需批准即可自助注销');
-            }
-            Db::table('user_account_deletion')->where('user_id', $userId)->where('status', self::STATUS_APPROVED)
-                ->update(['status' => self::STATUS_REVOKED]);
-            $now = date('Y-m-d H:i:s');
-            $expires = date('Y-m-d H:i:s', time() + AccountDeletionPolicy::APPROVAL_VALID_DAYS * 86400);
-            $id = (int) Db::table('user_account_deletion')->insertGetId([
-                'site_id' => (int) $user['site_id'],
-                'user_id' => $userId,
-                'status' => self::STATUS_APPROVED,
-                'approved_balance' => WalletLedger::money($balance),
-                'approve_reason' => mb_substr($reason, 0, 255),
-                'approved_by' => $adminId,
-                'approved_name' => mb_substr($adminName, 0, 50),
-                'approved_at' => $now,
-                'approval_expires_at' => $expires,
-            ]);
-            return ['id' => $id, 'approvedBalance' => WalletLedger::money($balance), 'expiresAt' => $expires];
-        });
-    }
-
-    /** 撤销尚未被用户使用的批准 */
-    public function revoke(int $userId): int
-    {
-        return Db::table('user_account_deletion')->where('user_id', $userId)->where('status', self::STATUS_APPROVED)
-            ->update(['status' => self::STATUS_REVOKED]);
-    }
-
     /** @return array<string, mixed>|null 当前有效的没收批准(后台展示 / 注销判定) */
     public function validApproval(int $userId, bool $lock = false): ?array
     {
         $query = Db::table('user_account_deletion')
             ->where('user_id', $userId)->where('status', self::STATUS_APPROVED)
-            ->where('approval_expires_at', '>', date('Y-m-d H:i:s'))
+            ->where('policy_version', '>', 0)->where('requested_by', '>', 0)
+            ->where('finance_state', 2)->where('finance_maker_id', '>', 0)->where('finance_checker_id', '>', 0)
+            ->whereColumn('finance_maker_id', '<>', 'finance_checker_id')
+            ->whereColumn('finance_maker_id', '<>', 'approved_by')->whereColumn('finance_checker_id', '<>', 'approved_by')
+            ->where('approval_expires_at', '>', gmdate('Y-m-d H:i:s'))
             ->orderByDesc('id');
         if ($lock) {
             $query->lockForUpdate();
@@ -147,21 +108,7 @@ class AccountDeletionService
     /** 进行中 / 待处理的预订数(口径见 AccountDeletionPolicy::isOngoingBooking) */
     public function ongoingBookingCount(int $userId): int
     {
-        $rows = Db::table('order_main')->where('user_id', $userId)->whereNull('deleted_at')
-            ->where(static function ($q): void {
-                $q->whereIn('booking_status', [1, 2, 3])
-                    ->orWhere(static fn ($legacy) => $legacy->where('booking_status', 0)->whereIn('order_status', [0, 1, 2]))
-                    ->orWhere('order_status', 5)
-                    ->orWhere('refund_status', 1);
-            })
-            ->get(['booking_status', 'order_status', 'refund_status']);
-        $count = 0;
-        foreach ($rows as $row) {
-            if (AccountDeletionPolicy::isOngoingBooking((array) $row)) {
-                ++$count;
-            }
-        }
-        return $count;
+        return count(AccountDeletionBookings::blockers($userId));
     }
 
     /**
@@ -174,7 +121,7 @@ class AccountDeletionService
     {
         $userId = (int) $user['id'];
         $siteId = (int) $user['site_id'];
-        $now = date('Y-m-d H:i:s');
+        $now = gmdate('Y-m-d H:i:s');
 
         // 社交身份整行归档(含加密的 Apple refresh token,留给后续向 Apple 吊销授权;匿名化时一并清除)
         $identities = Db::table('user_social_identity')->where('user_id', $userId)
@@ -183,7 +130,7 @@ class AccountDeletionService
         $closing = [
             'status' => self::STATUS_CLOSED,
             'closed_at' => $now,
-            'purge_after' => date('Y-m-d H:i:s', time() + AccountDeletionPolicy::RETENTION_DAYS * 86400),
+            'purge_after' => gmdate('Y-m-d H:i:s', time() + AccountDeletionPolicy::RETENTION_DAYS * 86400),
             'archived_mobile_hash' => $user['mobile_hash'] ?: null,
             'archived_email_hash' => ($user['email_hash'] ?? null) ?: null,
             'archived_identities' => $identities === [] ? null : json_encode($identities, JSON_UNESCAPED_UNICODE),
@@ -192,6 +139,8 @@ class AccountDeletionService
         if ($approval) {
             $deletionId = (int) $approval['id'];
             Db::table('user_account_deletion')->where('id', $deletionId)->update($closing);
+            AccountDeletionWorkflow::event($approval, 'completed', $userId, 'Consumer', 'Consumer confirmed DELETE',
+                ['amount' => WalletLedger::money($forfeitCents)]);
         } else {
             $deletionId = (int) Db::table('user_account_deletion')->insertGetId($closing + ['site_id' => $siteId, 'user_id' => $userId]);
         }
@@ -216,6 +165,13 @@ class AccountDeletionService
         }
 
         Db::table('user_social_identity')->where('user_id', $userId)->delete();
+        // Closing a zero-balance account must also invalidate any unfinished escalation.
+        $unused = Db::table('user_account_deletion')->where('user_id', $userId)->where('id', '<>', $deletionId)
+            ->whereIn('status', [1, 4])->lockForUpdate()->get();
+        foreach ($unused as $row) {
+            Db::table('user_account_deletion')->where('id', $row->id)->update(['status' => self::STATUS_REVOKED]);
+            AccountDeletionWorkflow::event((array) $row, 'revoked', $userId, 'Consumer', 'Account closed');
+        }
         Db::table('user_info')->where('id', $userId)->update([
             'user_status' => 3,
             'mobile_hash' => null,

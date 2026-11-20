@@ -24,6 +24,7 @@ class AccountEntryController extends AbstractController
         $list = $query->orderByDesc('id')->forPage($page, $pageSize)
             ->get([
                 'finance_account_entry.*',
+                Db::raw('(SELECT CASE WHEN o.pay_at_hotel=1 THEN o.hotel_reconciliation_status ELSE NULL END FROM order_main o WHERE o.id=finance_account_entry.order_id) AS reconciliation_status'),
                 Db::raw('COALESCE(refunds.refund_hotel_commission,0) AS refunded_commission'),
                 Db::raw('COALESCE(refunds.refund_hotel_deposit,0) AS refunded_deposit'),
                 Db::raw('COALESCE(refunds.refund_transaction_fee,0) AS refunded_transaction_fee'),
@@ -65,6 +66,10 @@ class AccountEntryController extends AbstractController
             ->selectRaw('SUM(refund_hotel_commission) AS refund_hotel_commission, SUM(refund_hotel_deposit) AS refund_hotel_deposit, SUM(refund_transaction_fee) AS refund_transaction_fee, SUM(refund_addon) AS refund_addon');
         $query = Db::table('finance_account_entry')->leftJoinSub($refunds, 'refunds', 'finance_account_entry.order_id', '=', 'refunds.order_id');
         $this->applySiteScope($query);
+        if (($status = $this->input('reconciliationStatus')) !== null && $status !== '') {
+            $query->whereExists(static fn ($q) => $q->selectRaw('1')->from('order_main as o')
+                ->whereColumn('o.id', 'finance_account_entry.order_id')->where('o.pay_at_hotel', 1)->where('o.hotel_reconciliation_status', (int) $status));
+        }
         if (($merchantId = $this->intInput('merchantId')) > 0) {
             $query->where('merchant_id', $merchantId);
         }

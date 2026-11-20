@@ -4,6 +4,7 @@ import { message } from 'ant-design-vue';
 import { useI18n } from 'vue-i18n';
 import { CalculatorOutlined, CloseOutlined, HistoryOutlined } from '@ant-design/icons-vue';
 import dayjs, { type Dayjs } from 'dayjs';
+import PropertyCommissionSettings from './PropertyCommissionSettings.vue';
 import type { TableRow } from '@/composables/useTable';
 import { genUUID } from '@/utils/uuid';
 import { apiMerchantCommercialSettings, apiMerchantCommercialSave, apiMerchantCommercialHistory,
@@ -99,7 +100,7 @@ const preview = computed(() => {
   const transactionFee = Math.round(commission * Math.round(Number(form.transactionFeeRate) * 100) / 10000);
   const merchantUpfront = form.payAtHotelEnabled && form.noShowFeeEnabled ? Math.round(price * Math.round(Number(form.merchantUpfrontRate) * 100) / 10000) : 0;
   return { commission: commission / 100, transactionFee: transactionFee / 100, merchantUpfront: merchantUpfront / 100,
-    upfront: (commission + merchantUpfront) / 100, balance: (price - commission - merchantUpfront) / 100 };
+    upfront: (commission + merchantUpfront + transactionFee) / 100, balance: (price - commission - merchantUpfront) / 100 };
 });
 function money(value: number): string { return `${value.toLocaleString(undefined, { maximumFractionDigits: 2 })} MMK`; }
 async function save(): Promise<void> {
@@ -158,6 +159,7 @@ function showHistory(): void { historyOpen.value = true; void loadHistory(); }
         <p class="commercial-muted">{{ data.current.version ? t('merchantCommercial.currentVersion', { version: data.current.version, date: formatTime(data.current.effective_at) }) : t('merchantCommercial.legacyTerms') }}</p>
         <p v-if="data.next" class="commercial-next">{{ t('merchantCommercial.nextVersion', { version: data.next.version, date: formatTime(data.next.effective_at) }) }}</p>
         <a-button v-if="[3, 4].includes(Number(merchant.status))" v-perm="'merchant:list:edit'" class="commercial-edit" block @click="openEdit">{{ t('merchantCommercial.edit') }}</a-button>
+        <PropertyCommissionSettings :merchant-id="merchant.id" />
       </div>
       <a-alert v-else-if="loadFailed" type="error" :message="t('merchantCommercial.loadFailed')">
         <template #action><a-button size="small" @click="load">{{ t('common.refresh') }}</a-button></template>

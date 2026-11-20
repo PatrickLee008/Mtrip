@@ -305,7 +305,7 @@ class BookingLifecycleService
             if (! in_array((int) $order['booking_status'], [BookingConst::STATUS_PENDING_PAYMENT, BookingConst::STATUS_CONFIRMED], true)) {
                 throw new BusinessException(ErrorCode::DATA_CONFLICT, '当前预订状态不可取消');
             }
-            $paid = (int) $order['payment_status'] === BookingConst::PAY_PAID;
+            $paid = in_array((int) $order['payment_status'], [BookingConst::PAY_PAID, BookingConst::PAY_PARTIAL_REFUNDED], true);
             $this->transition($order, [
                 'booking_status' => BookingConst::STATUS_CANCELLED,
                 'order_status' => 4,
@@ -323,6 +323,10 @@ class BookingLifecycleService
                 'reason' => (string) $order['cancel_reason'],
                 'paid' => $paid,
             ]);
+            if ($paid && (int) ($order['pay_at_hotel'] ?? 0) === 1 && $operatorType === BookingConst::OPERATOR_MERCHANT) {
+                $this->refunds->refundHotelCancellation($order, $operatorId, $operatorName);
+                $order = $this->lockOrder($orderId);
+            }
             if (! $paid) {
                 // 未付清就取消:已冻结的钱包抵扣额退回(独立单在此退;Trip 的在 closePendingTrip 统一退)
                 $this->walletHold->releaseOrder($order, '预订已取消');
@@ -412,6 +416,9 @@ class BookingLifecycleService
      */
     public function markNoShow(int $orderId, int $operatorId, string $operatorName, bool $waiveFee = false, string $waiveReason = ''): array
     {
+        if ($waiveFee && (trim($waiveReason) === '' || mb_strlen($waiveReason) > 500)) {
+            throw new BusinessException(ErrorCode::PARAM_ERROR, 'A reason is required to waive the No-show fee');
+        }
         [$order, $changed] = Db::transaction(function () use ($orderId, $operatorId, $operatorName, $waiveFee, $waiveReason) {
             $order = $this->lockOrder($orderId);
             if ((int) $order['booking_status'] === BookingConst::STATUS_NO_SHOW) {
@@ -430,6 +437,10 @@ class BookingLifecycleService
                     ->where('status', 3)->where('late_pay', 0)->whereNull('deleted_at')
                     ->sum('refund_hotel_deposit');
                 $fee = min($fee, max(0.0, round((float) $order['hotel_deposit'] - $refundedDeposit, 2)));
+                $terms = $this->jsonPolicy($order['hotel_terms_snapshot'] ?? null);
+                if (is_array($terms['commercialTerms'] ?? null)) {
+                    $fee = max(0.0, round((float) $order['hotel_deposit'] - $refundedDeposit, 2));
+                }
             }
             if ($waiveFee) {
                 $fee = 0.0;

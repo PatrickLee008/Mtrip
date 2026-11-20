@@ -79,6 +79,7 @@ export interface BookingDetail {
     transactionFee?: number;
     terms?: { version: number; roomBase: number; depositRate: number; noShowEnabled: boolean } | null;
     operationalSettlementStatus?: number;
+    financialReconciliationStatus?: number;
     operationalSettledAt?: string | null;
     payMethod: number;
     payTradeNo: string;

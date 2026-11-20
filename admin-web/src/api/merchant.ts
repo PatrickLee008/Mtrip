@@ -85,6 +85,16 @@ export function apiMerchantCommercialSave(data: SaveCommercialSettings): Promise
 export function apiMerchantCommercialHistory(params: Record<string, unknown>): Promise<PageData<CommercialTerms>> {
   return get('/admin/merchant/commercial-settings/history', params);
 }
+export interface PropertyCommercialView {
+  property: { id: number; store_name: string };
+  latest_version: number;
+  current: { commission_rate: string | null; version: number; effective_at: string } | null;
+  history: { id: number; commission_rate: string | null; version: number; effective_at: string; reason: string; created_by_name: string }[];
+}
+export const apiPropertyCommercial = (merchantId: number, propertyId: number) =>
+  get<PropertyCommercialView>('/admin/merchant/commercial-settings/property', { merchantId, propertyId });
+export const apiSavePropertyCommercial = (params: Record<string, unknown>) =>
+  post<PropertyCommercialView>('/admin/merchant/commercial-settings/property', params);
 
 export function apiMerchantAdd(data: Record<string, unknown>): Promise<{ id: number }> {
   return post('/admin/merchant/add', data);

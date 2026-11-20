@@ -12,6 +12,9 @@ use Mtrip\Shared\Constants\ErrorCode;
 use Mtrip\Shared\Context\AdminContext;
 use Mtrip\Shared\Exception\BusinessException;
 use Mtrip\Shared\Support\Result;
+use Mtrip\Shared\Finance\PayAtHotelReconciliation;
+use Mtrip\Shared\Support\OrderNoGenerator;
+use Mtrip\Shared\Wallet\WalletLedger;
 
 /**
  * 商户结算单管理(文档 6.4.5)
@@ -62,6 +65,7 @@ class SettleController extends AbstractController
     public function confirm(): array
     {
         $settle = $this->findScoped($this->requireId());
+        if ((int) ($settle['order_id'] ?? 0) > 0) return $this->bookingTransition($settle, false);
         if ((int) $settle['status'] !== 0) {
             throw new BusinessException(ErrorCode::DATA_CONFLICT, '仅待确认结算单可确认');
         }
@@ -78,6 +82,7 @@ class SettleController extends AbstractController
     public function markPaid(): array
     {
         $settle = $this->findScoped($this->requireId());
+        if ((int) ($settle['order_id'] ?? 0) > 0) return $this->bookingTransition($settle, true);
         if ((int) $settle['status'] !== 1) {
             throw new BusinessException(ErrorCode::DATA_CONFLICT, '仅已确认结算单可标记打款');
         }
@@ -87,6 +92,39 @@ class SettleController extends AbstractController
             'pay_voucher' => $this->strInput('payVoucher'),
         ]);
         return Result::success(null, '结算单已标记打款');
+    }
+
+    private function bookingTransition(array $identity, bool $paid): array
+    {
+        return Db::transaction(function () use ($identity, $paid): array {
+            $order = Db::table('order_main')->where('id', $identity['order_id'])->lockForUpdate()->first();
+            $settle = Db::table('finance_merchant_settle')->where('id', $identity['id'])->lockForUpdate()->first();
+            if (! $order || ! $settle || (int) $settle->site_id !== (int) $order->site_id
+                || (int) $settle->merchant_id !== (int) $order->merchant_id || (int) $settle->property_id !== (int) $order->property_id) {
+                throw new BusinessException(ErrorCode::DATA_CONFLICT, 'Settlement ownership changed');
+            }
+            if ((int) $settle->status === ($paid ? 2 : 1)) return Result::success();
+            if ((int) $settle->status !== ($paid ? 1 : 0)) throw new BusinessException(ErrorCode::DATA_CONFLICT, 'Settlement stage changed');
+            $money = PayAtHotelReconciliation::totals((array) $order);
+            if (! $money['matched'] || $money['blocked'] || WalletLedger::cents($settle->settle_amount) !== $money['merchantCents']
+                || WalletLedger::cents($settle->refund_amount) !== $money['refundCents']) {
+                throw new BusinessException(ErrorCode::DATA_CONFLICT, 'Booking funds changed; reconcile before settlement');
+            }
+            if (! $paid) {
+                Db::table('finance_merchant_settle')->where('id', $settle->id)->update(['status' => 1,
+                    'confirm_by' => AdminContext::adminId(), 'confirm_time' => gmdate('Y-m-d H:i:s')]);
+            } else {
+                $proof = $this->requireStr('payVoucher');
+                Db::table('finance_merchant_settle')->where('id', $settle->id)->update(['status' => 2,
+                    'pay_time' => gmdate('Y-m-d H:i:s'), 'pay_voucher' => mb_substr($proof, 0, 255)]);
+                if ($money['merchantCents'] > 0) Db::table('finance_flow')->insert(['flow_no' => OrderNoGenerator::flowNo(),
+                    'site_id' => $order->site_id, 'flow_type' => 2, 'biz_type' => 3, 'amount' => WalletLedger::money($money['merchantCents']),
+                    'order_id' => $order->id, 'merchant_id' => $order->merchant_id, 'property_id' => $order->property_id,
+                    'flow_status' => 1, 'remark' => 'Merchant booking settlement ' . $settle->settle_no,
+                    'operator_id' => AdminContext::adminId()]);
+            }
+            return Result::success();
+        });
     }
 
     /** 标记争议 / 解除争议:0→3(必填说明);3→0(争议处理完毕重新待确认) */

@@ -13,8 +13,6 @@ import {
   apiEndUserToggleStatus,
   apiEndUserBlacklist,
   apiEndUserUnblacklist,
-  apiEndUserDeletionApprove,
-  apiEndUserDeletionRevoke,
 } from '@/api/enduser';
 import type { AccountDeletionSummary } from '@/api/enduser';
 
@@ -115,38 +113,6 @@ async function unblacklist(): Promise<void> {
 }
 
 // ---------- 账户注销:批准有余额时注销(余额没收,Consumer App PRD 模块 19) ----------
-const balance = computed(() => Number(data.user?.balance ?? 0));
-const canApproveDeletion = computed(() => status.value === 1 && balance.value > 0 && !data.deletion?.approval);
-const deletionOpen = ref(false);
-const deletionSaving = ref(false);
-const deletionReason = ref('');
-function openDeletion(): void {
-  deletionReason.value = '';
-  deletionOpen.value = true;
-}
-async function approveDeletion(): Promise<void> {
-  if (!data.user) return;
-  if (!deletionReason.value.trim()) {
-    message.warning('Verification note is required');
-    return;
-  }
-  deletionSaving.value = true;
-  try {
-    await apiEndUserDeletionApprove(data.user.id, deletionReason.value.trim());
-    message.success(t('tip.saveSuccess'));
-    deletionOpen.value = false;
-    await loadUser(data.user.id);
-  } finally {
-    deletionSaving.value = false;
-  }
-}
-async function revokeDeletion(): Promise<void> {
-  if (!data.user) return;
-  await apiEndUserDeletionRevoke(data.user.id);
-  message.success(t('tip.saveSuccess'));
-  await loadUser(data.user.id);
-}
-
 const balanceCols = [
   { title: 'Type', dataIndex: 'change_type', width: 90 },
   { title: 'Amount', dataIndex: 'amount', width: 110 },
@@ -208,10 +174,7 @@ onMounted(() => {
               <a-button v-if="status === 2" v-perm="'user:list:status'" type="primary" @click="unfreeze">Reactivate</a-button>
               <a-button v-if="status !== 4 && status !== 3" v-perm="'user:list:status'" danger @click="openAction('blacklist')">Blacklist</a-button>
               <a-button v-if="status === 4" v-perm="'user:list:status'" @click="unblacklist">Remove Blacklist</a-button>
-              <a-button v-if="canApproveDeletion" v-perm="'user:list:approve-deletion'" danger @click="openDeletion">Approve Deletion</a-button>
-              <a-popconfirm v-if="data.deletion?.approval" title="Revoke the deletion approval?" @confirm="revokeDeletion">
-                <a-button v-perm="'user:list:approve-deletion'">Revoke Deletion Approval</a-button>
-              </a-popconfirm>
+              <router-link v-perm="'user:deletion:list'" :to="{ path: '/user/deletion', query: { userId: data.user.id } }"><a-button>{{ t('accountDeletion.title') }}</a-button></router-link>
             </a-space>
           </div>
           <a-alert
@@ -285,23 +248,5 @@ onMounted(() => {
       <a-textarea v-if="actionKind === 'blacklist'" v-model:value="actionEvidence" :rows="2" placeholder="Evidence (optional)" />
     </a-modal>
 
-    <a-modal
-      v-model:open="deletionOpen"
-      title="Approve Account Deletion"
-      ok-text="Approve"
-      :confirm-loading="deletionSaving"
-      :ok-button-props="{ danger: true }"
-      @ok="approveDeletion"
-    >
-      <p style="margin-bottom: 8px">
-        The customer's wallet balance of <b>{{ balance.toFixed(2) }}</b> will be <b>forfeited</b> (non-refundable) and recorded in the
-        forfeited wallet balance ledger when the customer confirms deletion in the app. The approval is valid for 7 days; if the balance
-        increases afterwards, a new approval is required.
-      </p>
-      <p v-if="data.deletion && data.deletion.ongoingBookings > 0" style="color: var(--sap-error, #ff4d4f); margin-bottom: 8px">
-        The customer still has {{ data.deletion.ongoingBookings }} ongoing or pending booking(s); deletion stays blocked until they are completed or cancelled.
-      </p>
-      <a-textarea v-model:value="deletionReason" :rows="3" :maxlength="200" placeholder="Verification note (required)" />
-    </a-modal>
   </PageContainer>
 </template>

@@ -50,6 +50,7 @@
       "disabled": "Not enabled",
       "commission": "mTrip commission rate",
       "transactionFee": "Transaction fee rate",
+      "propertyRate": "Property rate", "merchantRate": "Merchant default",
       "version": "Terms version",
       "noShow": "Charge a no-show fee",
       "depositRate": "Hotel room prepayment (max {{max}}%)",
@@ -141,7 +142,8 @@
       "prepay": "Pay now", "balance": "Pay at hotel", "commission": "mTrip commission",
       "deposit": "Hotel deposit", "fee": "Transaction fee", "noShow": "No-show fee",
       "enabled": "Enabled", "disabled": "Waived", "version": "Terms version",
-      "settlement": "Operational settlement", "completed": "Completed after check-in", "pending": "Pending check-in"
+      "settlement": "Operational settlement", "completed": "Completed after check-in", "pending": "Pending check-in",
+      "reconciliation": "Financial reconciliation", "reconciliationStates": {"0":"Pending reconciliation","1":"Reconciled","2":"Needs review"}
     },
     "paymentHold": "The room is temporarily held while payment is pending. If payment is not received within the payment window, the server will cancel the booking automatically.",
     "checkingPayment": "Checking payment status…", "cancelledTitle": "Booking Cancelled",

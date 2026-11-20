@@ -4,6 +4,7 @@
 
 /** AsyncStorage 键统一前缀管理,禁止散落硬编码 */
 export const STORAGE_KEYS = {
+  CHECKOUT_SESSIONS: 'mtrip:checkout-sessions',
   TOKEN: 'mtrip:token',
   USER: 'mtrip:user',
   SITE: 'mtrip:site',

@@ -44,9 +44,10 @@ final class AccountDeletionPolicy
      * order_status:0待支付 1已支付 2已入住 3已完成 4已取消 5退款中 6已退款 7已过期
      * refund_status:1 申请中
      *
-     * @param array{booking_status?:int|string, order_status?:int|string, refund_status?:int|string} $order
+     * @param array{booking_status?:int|string, order_status?:int|string, refund_status?:int|string,end_date?:string|null} $order
+     * @param string|null $today Site-local calendar date; checkout today has not passed yet.
      */
-    public static function isOngoingBooking(array $order): bool
+    public static function isOngoingBooking(array $order, ?string $today = null): bool
     {
         $booking = (int) ($order['booking_status'] ?? 0);
         $legacy = (int) ($order['order_status'] ?? 0);
@@ -54,9 +55,24 @@ final class AccountDeletionPolicy
             return true;
         }
         if ($booking > 0) {
-            return in_array($booking, [1, 2, 3], true);
+            if ($booking === 2) {
+                return ! self::checkoutPassed($order, $today);
+            }
+            return in_array($booking, [1, 3], true);
+        }
+        if ($legacy === 1) {
+            return ! self::checkoutPassed($order, $today);
         }
         return in_array($legacy, [0, 1, 2], true);
+    }
+
+    /** A missing/invalid checkout date never grants a deletion exemption. */
+    private static function checkoutPassed(array $order, ?string $today): bool
+    {
+        $end = (string) ($order['end_date'] ?? '');
+        if (! preg_match('/^\d{4}-\d{2}-\d{2}$/D', $end)) return false;
+        [$year, $month, $day] = array_map('intval', explode('-', $end));
+        return checkdate($month, $day, $year) && $end < ($today ?? gmdate('Y-m-d'));
     }
 
     /**

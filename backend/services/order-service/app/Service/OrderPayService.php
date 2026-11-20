@@ -92,13 +92,17 @@ class OrderPayService
         ]);
         $codes = [];
         foreach ($bookings as $b) {
-            $tradeNo = $bookingTradeNo ?? 'MOCK' . OrderNoGenerator::flowNo();
+            $tradeNo = $bookingTradeNo ?? (self::isRealMoney($payMethod) ? $tripTradeNo : 'MOCK' . OrderNoGenerator::flowNo());
             $verifyCode = OrderNoGenerator::verifyCode();
             // 支付状态变更统一走 PaymentResultHandler(幂等+时间线)
             $verifyCode = $afterExpiry
                 ? $this->payHandler->markPaidAfterExpiry($b, $payMethod, $tradeNo, $verifyCode)
                 : $this->payHandler->markPaid($b, $payMethod, $tradeNo, $verifyCode);
-            // KBZ 为真实收款:按预订各记一条收入流水,金额扣掉分摊的钱包抵扣额(余额 Trip 维持原口径不记)
+            // One Trip debit, per-booking accounting: wallet and channel amounts must both reconcile.
+            $wallet = $payMethod === 3 ? round((float) $b['pay_amount'], 2)
+                : WalletHoldService::walletAmountOf($this->walletColumns('order_main', (int) $b['id']));
+            if ($wallet > 0) $this->recordIncome($b, $wallet, 3, $tradeNo, "Trip {$trip['trip_no']} wallet payment");
+            // KBZ remainder is recorded separately from the allocated wallet payment.
             if ($payMethod === BookingConst::PAY_METHOD_KBZ_MMQR) {
                 $kbz = WalletHoldService::remainder(
                     round((float) $b['pay_amount'], 2),
@@ -144,6 +148,8 @@ class OrderPayService
             'amount' => $amount,
             'order_id' => (int) $order['id'],
             'merchant_id' => (int) $order['merchant_id'],
+            'property_id' => (int) ($order['property_id'] ?? 0),
+            'room_type_id' => (int) ($order['room_type_id'] ?? 0),
             'supplier_id' => (int) $order['supplier_id'],
             'user_id' => (int) $order['user_id'],
             'pay_channel' => $payMethod,

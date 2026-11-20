@@ -57,17 +57,36 @@ export interface TripCreateResult {
  */
 export function apiTripCreate(params: {
   items: TripCreateItem[];
+  checkoutKey?: string;
+  checkoutRevision?: number;
   couponId?: number;
   expectedPayAmount?: number;
   payAtHotel?: 0 | 1;
 }): Promise<TripCreateResult> {
   return post<TripCreateResult>('/api/v1/app/order/trip/create', params, {
-    silentCodes: [API_CODE.PRICE_CHANGED],
+    silentCodes: [API_CODE.PRICE_CHANGED, API_CODE.CHECKOUT_EXPIRED],
   });
 }
 
 /** 试算入参:与 `TripCreateItem` 相同,但此时还没有联系人 */
 export type TripQuoteItem = Omit<TripCreateItem, 'contactName' | 'contactPhone' | 'remark'>;
+
+export interface CheckoutWindow {
+  checkoutKey: string;
+  revision: number;
+  expiresAtMs: number;
+  serverNowMs: number;
+  expired: boolean;
+  tripId: number;
+  /** Existing Trips and expired sessions return no fresh quote. */
+  quote: TripQuoteResult | null;
+}
+
+export function apiTripCheckout(params: {
+  checkoutKey: string; items: TripQuoteItem[]; couponId?: number; payAtHotel?: 0 | 1; review?: 0 | 1;
+}): Promise<CheckoutWindow> {
+  return post('/api/v1/app/order/trip/checkout', params, { silent: true });
+}
 
 /** 试算结果的一行(与 `items` 下标一一对应) */
 export interface TripQuoteLine {

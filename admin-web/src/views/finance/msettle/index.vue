@@ -109,17 +109,20 @@ async function confirmSettle(row: TableRow): Promise<void> {
 // 标记打款 Modal
 const payOpen = ref(false);
 const paySubmitting = ref(false);
-const payForm = reactive({ id: 0, settleNo: '', settleAmount: 0, payVoucher: '' });
+const payForm = reactive({ id: 0, settleNo: '', settleAmount: 0, payVoucher: '', booking: false });
 
 function openPay(row: TableRow): void {
   payForm.id = row.id;
   payForm.settleNo = row.settle_no;
   payForm.settleAmount = Number(row.settle_amount);
   payForm.payVoucher = '';
+  payForm.booking = Number(row.order_id ?? 0) > 0;
   payOpen.value = true;
 }
 
 async function submitPay(): Promise<void> {
+  if (paySubmitting.value) return;
+  if (payForm.booking && !payForm.payVoucher.trim()) { message.warning(t('merchantCommercial.payoutProofRequired')); return; }
   paySubmitting.value = true;
   try {
     await apiMerchantSettleMarkPaid({ id: payForm.id, payVoucher: payForm.payVoucher.trim() || undefined });
@@ -343,6 +346,7 @@ watch(activeTab, (tab) => {
           >
             <template #bodyCell="{ column, record }">
               <template v-if="column.dataIndex === 'order_amount'">{{ formatAmount(record.order_amount) }}</template>
+              <template v-else-if="column.dataIndex === 'settle_cycle'">{{ record.order_id ? t('merchantCommercial.bookingCycle', { id: record.order_id }) : record.settle_cycle }}</template>
               <template v-else-if="column.dataIndex === 'refund_amount'">{{ formatAmount(record.refund_amount) }}</template>
               <template v-else-if="column.dataIndex === 'commission'">{{ formatAmount(record.commission) }}</template>
               <template v-else-if="column.dataIndex === 'settle_amount'">
@@ -481,7 +485,7 @@ watch(activeTab, (tab) => {
       <a-descriptions v-if="settleDetail" :column="2" size="small" bordered>
         <a-descriptions-item :label="t('finance.msettlePage.settleNo')" :span="2">{{ settleDetail.settle_no }}</a-descriptions-item>
         <a-descriptions-item :label="t('finance.msettlePage.merchant')">{{ settleDetail.merchant_id }}</a-descriptions-item>
-        <a-descriptions-item :label="t('finance.msettlePage.period')">{{ settleDetail.settle_cycle }}</a-descriptions-item>
+        <a-descriptions-item :label="t('finance.msettlePage.period')">{{ settleDetail.order_id ? t('merchantCommercial.bookingCycle', { id: settleDetail.order_id }) : settleDetail.settle_cycle }}</a-descriptions-item>
         <a-descriptions-item :label="t('finance.msettlePage.orderCount')">{{ settleDetail.order_count }}</a-descriptions-item>
         <a-descriptions-item :label="t('finance.msettlePage.orderAmount')">{{ formatAmount(settleDetail.order_amount) }}</a-descriptions-item>
         <a-descriptions-item :label="t('finance.settlePage.refundAmount')">{{ formatAmount(settleDetail.refund_amount) }}</a-descriptions-item>
@@ -532,8 +536,8 @@ watch(activeTab, (tab) => {
         <a-form-item :label="t('finance.settlePage.settleAmount')">
           <span style="color: var(--mtrip-error, #ff4d4f); font-weight: 600">{{ formatAmount(payForm.settleAmount) }}</span>
         </a-form-item>
-        <a-form-item :label="t('common.remark')">
-          <a-input v-model:value="payForm.payVoucher" :maxlength="255" :placeholder="t('common.optional')" />
+        <a-form-item :label="payForm.booking ? t('merchantCommercial.payoutProof') : t('common.remark')" :required="payForm.booking">
+          <a-input v-model:value="payForm.payVoucher" :maxlength="255" :placeholder="payForm.booking ? t('merchantCommercial.payoutProofRequired') : t('common.optional')" />
         </a-form-item>
       </a-form>
     </a-modal>

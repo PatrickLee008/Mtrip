@@ -66,7 +66,7 @@ class BookingRefundService
             if ($type === 3) {
                 $policyRefundable = 0.0;
             } elseif ($type === 2) {
-                $policyRefundable = $this->stepRefundable($roomPay, is_string($policy['rules'] ?? null) ? (json_decode($policy['rules'], true) ?: []) : (array) ($policy['rules'] ?? []), (string) ($order['use_date'] ?? ''));
+                $policyRefundable = $this->stepRefundable($roomPay, is_string($policy['rules'] ?? null) ? (json_decode($policy['rules'], true) ?: []) : (array) ($policy['rules'] ?? []), $order);
             }
         }
         $policyRefundable = round($policyRefundable + $addon, 2);
@@ -85,6 +85,11 @@ class BookingRefundService
         $remainingPaid = max(0.0, round($pay - $refundedAlready, 2));
         $remainingRefundable = max(0.0, round($policyRefundable - $refundedAlready, 2));
         $refundable = min($remainingPaid, $remainingRefundable);
+        $parts = $this->breakdown($order, $refundable, $completed);
+        if ((int) ($order['pay_at_hotel'] ?? 0) === 1) {
+            $refundable = min($refundable, round(array_sum($parts), 2));
+            $policyRefundable = round($refundedAlready + $refundable, 2);
+        }
         return [
             'payAmount' => round($pay, 2),
             'policyRefundable' => round($policyRefundable, 2),
@@ -93,12 +98,59 @@ class BookingRefundService
             'refundedAlready' => $refundedAlready,
             'remainingPaid' => $remainingPaid,
             'remainingRefundable' => round($refundable, 2),
-        ] + $this->breakdown($order, $refundable, $completed);
+        ] + $parts;
     }
 
     public function breakdownFor(array $order, float $amount): array
     {
         return $this->breakdown($order, $amount, $this->completedComponents($order));
+    }
+
+    /** Merchant escalations require platform review; they never directly debit or credit a wallet. */
+    public function requestFromMerchant(array $order, int $actor, string $name, ?float $amount, string $reason): array
+    {
+        return Db::transaction(function () use ($order, $actor, $name, $amount, $reason): array {
+            $order = $this->lockRefundable($order);
+            [$quote, $approved, $full] = $this->resolveAmount($order, $amount);
+            $no = RefundSettleService::newRefundNo();
+            Db::table('order_refund')->insert(['refund_no' => $no, 'site_id' => $order['site_id'], 'order_id' => $order['id'],
+                'order_no' => $order['order_no'], 'user_id' => $order['user_id'], 'merchant_id' => $order['merchant_id'],
+                'property_id' => $order['property_id'], 'room_type_id' => $order['room_type_id'], 'refund_type' => $full ? 1 : 2,
+                'apply_amount' => $approved, 'refund_amount' => $approved,
+                'refund_channel' => RefundSettleService::isKbzOrder($order) ? 2 : 1,
+                'reason' => mb_substr($reason !== '' ? $reason : 'Merchant refund escalation', 0, 500), 'status' => 1,
+                'merchant_audit_by' => $actor, 'merchant_audit_time' => gmdate('Y-m-d H:i:s')]
+                + $this->breakdownFor($order, $approved));
+            Db::table('order_main')->where('id', $order['id'])->update(['refund_status' => 1, 'order_status' => 5, 'version' => Db::raw('version + 1')]);
+            $this->events->log($order, 'refund_applied', BookingConst::OPERATOR_MERCHANT, $actor, $name, 1,
+                ['refundNo' => $no, 'refundAmount' => $approved, 'platformReviewRequired' => true], 'refund');
+            return ['refundNo' => $no, 'refundAmount' => $approved, 'channel' => RefundSettleService::isKbzOrder($order) ? 'original' : 'wallet',
+                'refundStatus' => 'pending_review'];
+        });
+    }
+
+    /** Hotel cancellation is a platform-controlled full prepaid wallet refund, regardless of cutoff. */
+    public function refundHotelCancellation(array $order, int $actor, string $name): void
+    {
+        if (Db::table('order_refund')->where('order_id', $order['id'])->where('status', 2)->where('late_pay', 0)->whereNull('deleted_at')->exists()) {
+            throw new BusinessException(ErrorCode::DATA_CONFLICT, 'A refund is processing; finish it before hotel cancellation');
+        }
+        Db::table('order_refund')->where('order_id', $order['id'])->whereIn('status', [0,1])->where('late_pay', 0)
+            ->whereNull('deleted_at')->update(['status' => 5, 'audit_remark' => 'Superseded by full hotel cancellation refund']);
+        $completed = $this->completedComponents($order);
+        $paidBack = (float) Db::table('order_refund')->where('order_id', $order['id'])->where('status', 3)->where('late_pay', 0)
+            ->whereNull('deleted_at')->sum('refund_amount');
+        $remaining = round((float) $order['pay_amount'] - $paidBack, 2);
+        if ($remaining <= 0) return;
+        $id = Db::table('order_refund')->insertGetId(['refund_no' => RefundSettleService::newRefundNo(),
+            'site_id' => $order['site_id'], 'order_id' => $order['id'], 'order_no' => $order['order_no'],
+            'user_id' => $order['user_id'], 'merchant_id' => $order['merchant_id'], 'property_id' => $order['property_id'],
+            'room_type_id' => $order['room_type_id'], 'refund_type' => 1, 'apply_amount' => $remaining, 'refund_amount' => $remaining,
+            'refund_channel' => 1, 'reason' => 'Hotel cancelled: full prepaid refund', 'status' => 2,
+            'merchant_audit_by' => $actor, 'merchant_audit_time' => gmdate('Y-m-d H:i:s')]
+            + PayAtHotelRefundBreakdown::of($order, $remaining, $completed));
+        $refund = (array) Db::table('order_refund')->where('id', $id)->first();
+        $this->refundSettle->completeRow($refund, '', true, 0, BookingConst::OPERATOR_SYSTEM, 0);
     }
 
     /**
@@ -153,6 +205,7 @@ class BookingRefundService
                 'payment_status' => $fullRefund ? BookingConst::PAY_REFUNDED : BookingConst::PAY_PARTIAL_REFUNDED,
                 'version' => Db::raw('version + 1'),
             ];
+            if ((int) ($order['pay_at_hotel'] ?? 0) === 1) $update['hotel_reconciliation_status'] = 0;
             if ($fullRefund) {
                 $update['order_status'] = 6;
                 // 全额退款关闭预订;未履约(已确认)的预订同时置为已取消
@@ -359,18 +412,38 @@ class BookingRefundService
 
     private function breakdown(array $order, float $amount, array $completed): array
     {
+        if ((int) ($order['pay_at_hotel'] ?? 0) === 1 && ! $this->isPayAtHotelNoShow($order) && $this->protectedCommission($order)) {
+            // Past the disclosed free-cancellation window, commission and its fee are non-refundable.
+            $order['hotel_commission'] = 0;
+            $order['hotel_transaction_fee'] = 0;
+        }
         return $this->isPayAtHotelNoShow($order)
             ? PayAtHotelRefundBreakdown::noShow($order, $amount, $completed)
             : PayAtHotelRefundBreakdown::of($order, $amount, $completed);
     }
 
+    private function protectedCommission(array $order): bool
+    {
+        $policy = $order['cancellation_policy_snapshot'] ?? null;
+        $policy = is_string($policy) ? json_decode($policy, true) : $policy;
+        if (! is_array($policy) || (int) ($policy['ruleType'] ?? 1) === 1) return false;
+        if ((int) $policy['ruleType'] === 3) return true;
+        $rules = is_string($policy['rules'] ?? null) ? (json_decode($policy['rules'], true) ?: []) : (array) ($policy['rules'] ?? []);
+        return $this->stepRefundable(100, $rules, $order) < 100;
+    }
+
     /** 阶梯退款:按政策快照规则,距入住(当日14:00)剩余小时命中可满足的最优档 */
-    private function stepRefundable(float $pay, array $rules, string $useDate): float
+    private function stepRefundable(float $pay, array $rules, array $order): float
     {
         if ($rules === []) {
             return $pay;
         }
-        $checkin = $useDate !== '' ? strtotime($useDate . ' 14:00:00') : false;
+        $useDate = (string) ($order['use_date'] ?? '');
+        $snapshot = $order['no_show_policy_snapshot'] ?? null;
+        $snapshot = is_string($snapshot) ? json_decode($snapshot, true) : $snapshot;
+        $timezone = $snapshot['timezone'] ?? Db::connection('system')->table('sys_site')->where('id', $order['site_id'])->value('timezone') ?? 'UTC';
+        try { $zone = new \DateTimeZone((string) $timezone); } catch (\Exception) { $zone = new \DateTimeZone('UTC'); }
+        $checkin = $useDate !== '' ? (new \DateTimeImmutable($useDate . ' 14:00:00', $zone))->getTimestamp() : false;
         $hoursUntil = $checkin !== false ? ($checkin - time()) / 3600 : 0;
         usort($rules, static fn ($a, $b) => (float) ($b['hours_before'] ?? 0) <=> (float) ($a['hours_before'] ?? 0));
         foreach ($rules as $tier) {

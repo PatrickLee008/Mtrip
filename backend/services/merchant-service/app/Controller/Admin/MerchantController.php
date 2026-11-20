@@ -19,6 +19,7 @@ use Mtrip\Shared\Exception\BusinessException;
 use Mtrip\Shared\Support\MaskHelper;
 use Mtrip\Shared\Support\Result;
 use Mtrip\Shared\Merchant\MerchantCommercialSettings;
+use Mtrip\Shared\Merchant\PropertyCommercialSettings;
 
 /**
  * 商户管理(文档 6.4.2,11 接口)
@@ -38,6 +39,7 @@ class MerchantController extends AbstractController
     #[Inject]
     protected PayAtHotelTermsService $payAtHotelTerms;
 
+    #[Permission('merchant:list:list')]
     public function payAtHotelTerms(): array
     {
         $merchant = $this->findScoped($this->requireId('merchantId'));
@@ -50,8 +52,7 @@ class MerchantController extends AbstractController
     #[Permission('merchant:list:edit')]
     public function savePayAtHotelTerms(): array
     {
-        $merchant = $this->findScoped($this->requireId('merchantId'));
-        return Result::success($this->payAtHotelTerms->saveAdmin($merchant, $this->request->all(), AdminContext::adminId()));
+        throw new BusinessException(ErrorCode::DATA_CONFLICT, 'Use Commercial & Payment Settings with a version, effective time and reason');
     }
 
     /** M12目录：稳定分页、精确电话索引、同一物业的位置过滤；不返回登录凭证。 */
@@ -486,6 +487,20 @@ class MerchantController extends AbstractController
     {
         [$page, $pageSize] = $this->pageParams();
         return Result::success(MerchantCommercialSettings::history($this->requireId(), $page, $pageSize));
+    }
+
+    #[Permission('merchant:list:list')]
+    public function propertyCommercial(): array
+    {
+        return Result::success(PropertyCommercialSettings::read($this->requireId('merchantId'), $this->requireId('propertyId')));
+    }
+
+    #[Permission('merchant:list:edit')]
+    public function savePropertyCommercial(): array
+    {
+        $input = [];
+        foreach (['commissionRate','expectedVersion','requestId','reason','effectiveAt'] as $key) $input[$key] = $this->input($key);
+        return Result::success(PropertyCommercialSettings::save($this->requireId('merchantId'), $this->requireId('propertyId'), $input));
     }
 
     /** 旧直写入口停用，防止绕过生效时间、原因及版本审计。 */

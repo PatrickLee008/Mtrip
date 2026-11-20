@@ -80,6 +80,7 @@ class ErrorCode
     /** 邮箱 / 手机号已关联到另一个 mTrip 账号 (HTTP 409) */
     public const CONTACT_IN_USE = 40932;
     /** 账户注销被拦截(进行中预订 / 钱包余额);`data.blockers` 列出原因 (HTTP 409) */
+    public const CHECKOUT_EXPIRED = 40934;
     public const ACCOUNT_DELETION_BLOCKED = 40933;
 
     /** 请求过于频繁(限流) (HTTP 429) */
@@ -132,6 +133,7 @@ class ErrorCode
         self::CONTACT_UNCHANGED => 400,
         self::CONTACT_IN_USE => 409,
         self::ACCOUNT_DELETION_BLOCKED => 409,
+        self::CHECKOUT_EXPIRED => 409,
         self::TOO_MANY_REQUESTS => 429,
         self::REPEAT_SUBMIT => 429,
         self::SMS_SEND_TOO_FREQUENT => 429,
@@ -166,6 +168,7 @@ class ErrorCode
         self::PRICE_CHANGED => '价格已变动,请确认最新金额后重新提交',
         self::CONTACT_UNCHANGED => 'This is already your linked contact',
         self::CONTACT_IN_USE => 'This contact is already linked to another mTrip account',
+        self::CHECKOUT_EXPIRED => 'Payment session expired; please review prices and availability',
         self::ACCOUNT_DELETION_BLOCKED => 'Your account cannot be deleted right now',
         self::TOO_MANY_REQUESTS => '请求过于频繁',
         self::REPEAT_SUBMIT => '请求正在处理中,请勿重复提交',

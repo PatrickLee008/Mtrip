@@ -2212,6 +2212,8 @@
         "added": "ဤခရီးစဉ်တွင် ဒုတိယ တည်းခိုမှု ထည့်ပြီးပါပြီ။"
       },
       "payment": {
+        "sessionExpired": "Payment time has expired. Please review the current price and availability.",
+        "sessionLoading": "Preparing your payment session. Please try again shortly.",
         "summaryRange": "{{checkIn}} - {{checkOut}} ({{nights}})",
         "roomLine": "{{room}} {{rooms}} ခန်း၊ ဧည့်သည် {{guests}} ဦး",
         "roomLineMulti": "အခန်း {{rooms}} ခန်း: {{list}}၊ ဧည့်သည် {{guests}} ဦး",

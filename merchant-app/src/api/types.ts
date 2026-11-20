@@ -27,6 +27,11 @@ export interface MerchantProfile {
 
 export interface PayAtHotelTerms {
   version: number;
+  policy_version: number;
+  policy_source: string;
+  selection_version: number;
+  no_show_allowed: number;
+  properties?: { id: number; store_name: string; commission_rate: number; commission_scope: string }[];
   enabled: number;
   no_show_enabled: number;
   deposit_cap_rate: number;
@@ -187,6 +192,7 @@ export interface BookingDetail {
     merchantDeposit?: number; transactionFee?: number;
     terms?: { version?: number; noShowEnabled?: boolean; depositRate?: number } | null;
     operationalSettlementStatus?: number; operationalSettledAt?: string | null;
+    financialReconciliationStatus?: number;
     payMethod: number; paymentStatus: number; paymentExpiresAt: string | null;
   };
   stay: {

@@ -7,6 +7,9 @@ use Hyperf\Crontab\Crontab;
 return [
     'enable' => true,
     'crontab' => [
+        (new Crontab())->setName('pay-at-hotel-reconcile')->setRule('*/5 * * * *')
+            ->setSingleton(true)->setOnOneServer(true)->setMutexExpires(300)
+            ->setCallback([\App\Service\PayAtHotelSettlementService::class, 'generateDue']),
         // Merchant App M4:预订 10 分钟支付超时自动取消并释放库存
         (new Crontab())->setName('booking-payment-expiry')->setRule('* * * * *')
             ->setCallback([\App\Service\Booking\BookingExpiryService::class, 'expireDue']),

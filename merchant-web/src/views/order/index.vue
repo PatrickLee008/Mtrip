@@ -820,6 +820,7 @@ onBeforeUnmount(() => {
                     <div class="bm-field"><span class="bm-label">{{ t('booking.hotelTerms.balance') }}</span><AmountText class="bm-value" :value="detail.payment.hotelBalance ?? 0" /></div>
                     <div class="bm-field"><span class="bm-label">{{ t('booking.hotelTerms.version') }}</span><span class="bm-value">{{ detail.payment.terms?.version ?? '-' }}</span></div>
                     <div class="bm-field"><span class="bm-label">{{ t('booking.hotelTerms.settlement') }}</span><span class="bm-value">{{ detail.payment.operationalSettlementStatus === 1 ? t('booking.hotelTerms.completed') : t('booking.hotelTerms.pending') }}</span></div>
+                    <div class="bm-field"><span class="bm-label">{{ t('booking.hotelTerms.reconciliation') }}</span><span class="bm-value">{{ t(`booking.hotelTerms.reconciliationStates.${detail.payment.financialReconciliationStatus ?? 0}`) }}</span></div>
                   </template>
                   <div class="bm-field"><span class="bm-label">{{ t('booking.pay.method') }}</span><span class="bm-value">{{ paymentMethodText(detail.payment.payMethod) }}</span></div>
                   <div v-if="detail.payment.payTime" class="bm-field"><span class="bm-label">{{ t('booking.pay.payTime') }}</span><span class="bm-value">{{ detail.payment.payTime }}</span></div>

@@ -153,6 +153,7 @@ export default function BookingDetailScreen({ navigation, route }: NativeStackSc
                 <InfoRow title={t('bookings.hotelTerms.noShow')} value={detail.payment.terms?.noShowEnabled ? t('bookings.hotelTerms.enabled') : t('bookings.hotelTerms.disabled')} />
                 <InfoRow title={t('bookings.hotelTerms.version')} value={String(detail.payment.terms?.version ?? '-')} />
                 <InfoRow title={t('bookings.hotelTerms.settlement')} value={t(detail.payment.operationalSettlementStatus === 1 ? 'bookings.hotelTerms.completed' : 'bookings.hotelTerms.pending')} />
+                <InfoRow title={t('bookings.hotelTerms.reconciliation')} value={t(`bookings.hotelTerms.reconciliationStates.${detail.payment.financialReconciliationStatus ?? 0}`)} />
               </>
             ) : null}
             <InfoRow title={t('bookings.paymentMethod')} value={t(Number(detail.payment.payMethod) === 4 ? 'bookings.payment.hotel' : `bookings.method.${Number(detail.payment.payMethod)}`, { defaultValue: t('bookings.payment.unknown') })} />

@@ -13,7 +13,7 @@ async function compile(filename) {
   const { descriptor } = parse(readFileSync(`${src}/${filename}`, 'utf8'));
   const script = compileScript(descriptor, { id: 'merchant-commercial' });
   const { outputFiles } = await build({
-    stdin: { contents: script.content, loader: 'ts', resolveDir: `${src}/views/merchant/list` },
+    stdin: { contents: script.content, loader: 'ts', resolveDir: `${src}/${filename}`.replace(/[/\\][^/\\]+$/, '') },
     bundle: true, write: false, format: 'iife', globalName: 'subject', alias: { '@': src },
     plugins: [{ name: 'merchant-detail-boundaries', setup(b) {
       b.onResolve({ filter: /^(vue|vue-i18n|vue-router|ant-design-vue|@ant-design\/icons-vue)$/ }, ({ path }) => ({ path, namespace: 'fixture' }));
@@ -25,14 +25,15 @@ async function compile(filename) {
         'export const message={success(){},warning(){}}; export const Modal={confirm:options=>fixtureHost.confirm=options};',
       }));
       b.onLoad({ filter: /\.vue$/ }, () => ({ contents: 'export default {};' }));
-      b.onLoad({ filter: /\/stores\/user\.ts$/ }, () => ({ contents: 'export const useUserStore=()=>fixtureHost.user;' }));
-      b.onLoad({ filter: /\/utils\/http\.ts$/ }, () => ({ contents: 'export const get=(...args)=>fixtureHost.request("get",...args),post=(...args)=>fixtureHost.request("post",...args);' }));
+      b.onLoad({ filter: /[/\\]stores[/\\]user\.ts$/ }, () => ({ contents: 'export const useUserStore=()=>fixtureHost.user;' }));
+      b.onLoad({ filter: /[/\\]utils[/\\]http\.ts$/ }, () => ({ contents: 'export const get=(...args)=>fixtureHost.request("get",...args),post=(...args)=>fixtureHost.request("post",...args);' }));
     } }],
   });
   return outputFiles[0].text;
 }
 
 const code = await compile('components/merchant/CommercialSettingsDrawer.vue');
+const propertyCode = await compile('components/merchant/PropertyCommissionSettings.vue');
 const terms = { version: 0, commission_plan: null, commission_rate: '8.00', transaction_fee_rate: '2.00', pay_at_hotel_enabled: true, no_show_fee_enabled: true, merchant_upfront_rate: '20.00', effective_at: null, created_at: null, created_by_name: '', reason: '' };
 function fixture() {
   const host = { vue, calls: [], events: [], user: { profile: { isSuper: true } }, response: { merchant_id: 9, latest_version: 4, current: { ...terms }, next: null } };
@@ -52,7 +53,7 @@ await test('opening editor loads latest saved version without silently assigning
 });
 await test('preview uses actual rates and applies the transaction fee only to commission',async()=>{
   const {s}=await ready();valid(s);await vue.nextTick();
-  assert.equal(s.preview.value.commission,8000);assert.equal(s.preview.value.transactionFee,160);assert.equal(s.preview.value.merchantUpfront,20000);assert.equal(s.preview.value.upfront,28000);assert.equal(s.preview.value.balance,72000);
+  assert.equal(s.preview.value.commission,8000);assert.equal(s.preview.value.transactionFee,160);assert.equal(s.preview.value.merchantUpfront,20000);assert.equal(s.preview.value.upfront,28160);assert.equal(s.preview.value.balance,72000);
 });
 await test('disabling no-show or pay-at-hotel clears inapplicable upfront terms',async()=>{
   const {s}=await ready();valid(s);s.form.noShowFeeEnabled=false;await vue.nextTick();assert.equal(s.form.merchantUpfrontRate,0);
@@ -87,5 +88,46 @@ await test('older history responses cannot replace the most recently requested p
   pending[1]({list:[{...terms,version:2}],total:20});await second;
   pending[0]({list:[{...terms,version:1}],total:10});await first;
   assert.equal(s.history.list.value[0].version,2);assert.equal(s.history.total.value,20);assert.equal(s.history.page.value,2);assert.equal(s.history.loading.value,false);
+});
+function propertyFixture() {
+  const host={vue,calls:[],events:[],user:{profile:{isSuper:true}},failList:false,failPost:false};
+  host.request=async(method,path,data)=>{
+    host.calls.push({method,path,data});
+    if(path.endsWith('/detail')) {
+      if(host.failList)throw Error('list unavailable');
+      return {properties:[{id:data.id*10+1,store_name:'Property '+data.id}]};
+    }
+    if(method==='post' && host.failPost)throw Error('save unavailable');
+    if(method==='post' && host.gate)await host.gate;
+    return {property:{id:data.propertyId,store_name:'Property'},latest_version:3,current:{commission_rate:'12.00',version:3},history:[]};
+  };
+  const props=vue.reactive({merchantId:9});
+  const context=vm.createContext({fixtureHost:host,console,crypto:globalThis.crypto});
+  vm.runInContext(propertyCode,context);
+  const s=context.subject.default.setup(props,{expose(){}});
+  return {host,s,props};
+}
+async function settled(){await vue.nextTick();await new Promise(resolve=>setImmediate(resolve));await vue.nextTick();}
+await test('property editor loads the scoped property and its latest revision',async()=>{
+  const {s}=propertyFixture();await settled();assert.equal(s.selected.value,91);assert.equal(s.data.value.latest_version,3);
+});
+await test('switching merchant cannot retain the old property selection',async()=>{
+  const {s,props}=propertyFixture();await settled();props.merchantId=10;await settled();assert.equal(s.selected.value,101);assert.equal(s.data.value.property.id,101);
+});
+await test('empty property change reason never submits',async()=>{
+  const {s,host}=propertyFixture();await settled();s.edit();await s.save();assert.equal(host.calls.filter(c=>c.method==='post').length,0);
+});
+await test('restoring merchant inheritance sends explicit null, revision and UTC time',async()=>{
+  const {s,host}=propertyFixture();await settled();s.edit();s.form.inherit=true;s.form.reason='Restore default';await s.save();
+  const call=host.calls.find(c=>c.method==='post');assert.equal(call.data.merchantId,9);assert.equal(call.data.propertyId,91);assert.equal(call.data.commissionRate,null);assert.equal(call.data.expectedVersion,3);assert.match(call.data.effectiveAt,/Z$/);
+});
+await test('property save failures preserve the draft and retry request key',async()=>{
+  const {s,host}=propertyFixture();await settled();s.edit();s.form.reason='Keep draft';host.failPost=true;await assert.rejects(s.save());
+  const key=host.calls.find(c=>c.method==='post').data.requestId;assert.equal(s.open.value,true);assert.equal(s.saving.value,false);
+  host.failPost=false;await s.save();assert.equal(host.calls.filter(c=>c.method==='post')[1].data.requestId,key);
+});
+await test('property list load failure can retry without reopening the merchant',async()=>{
+  const {s,host}=propertyFixture();await settled();host.failList=true;await s.loadProperties();assert.equal(s.failed.value,true);
+  host.failList=false;s.retry();await settled();assert.equal(s.failed.value,false);assert.equal(s.selected.value,91);
 });
 console.log(`${passed} commercial settings interaction checks passed`);

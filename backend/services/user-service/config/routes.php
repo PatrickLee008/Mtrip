@@ -145,8 +145,17 @@ Router::addGroup('/api/v1/admin/user', static function () {
     Router::post('/wallet-adjust/reverse', [AdminUserController::class, 'walletAdjustReverse']);
     Router::post('/toggle-status', [AdminUserController::class, 'toggleStatus']);
     // 账户注销:客服批准「有余额时注销」(余额届时没收)/ 撤销批准(Consumer App PRD 模块 19)
-    Router::post('/deletion/approve', [AdminUserController::class, 'deletionApprove']);
-    Router::post('/deletion/revoke', [AdminUserController::class, 'deletionRevoke']);
+    Router::get('/deletion/report', [\App\Controller\Admin\AccountDeletionReportController::class, 'index']);
+    Router::post('/deletion/export', [\App\Controller\Admin\AccountDeletionReportController::class, 'export']);
+    Router::get('/deletion/list', [\App\Controller\Admin\AccountDeletionController::class, 'index']);
+    Router::get('/deletion/detail', [\App\Controller\Admin\AccountDeletionController::class, 'detail']);
+    Router::post('/deletion/request', [\App\Controller\Admin\AccountDeletionController::class, 'request']);
+    Router::post('/deletion/prepare', [\App\Controller\Admin\AccountDeletionController::class, 'prepare']);
+    Router::post('/deletion/check', [\App\Controller\Admin\AccountDeletionController::class, 'check']);
+    Router::get('/deletion/config', [\App\Controller\Admin\AccountDeletionController::class, 'config']);
+    Router::post('/deletion/config/save', [\App\Controller\Admin\AccountDeletionController::class, 'saveConfig']);
+    Router::post('/deletion/approve', [\App\Controller\Admin\AccountDeletionController::class, 'approve']);
+    Router::post('/deletion/revoke', [\App\Controller\Admin\AccountDeletionController::class, 'revoke']);
     Router::get('/feedback/list', [AdminFeedbackController::class, 'index']);
     Router::post('/feedback/handle', [AdminFeedbackController::class, 'handle']);
     // 风控与申诉(PRD 模块10.1)

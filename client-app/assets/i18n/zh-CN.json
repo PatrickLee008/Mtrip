@@ -2212,6 +2212,8 @@
         "added": "已为本次行程添加第二段住宿。"
       },
       "payment": {
+        "sessionExpired": "支付时间已到，请重新核对价格和库存。",
+        "sessionLoading": "正在准备支付，请稍后重试。",
         "summaryRange": "{{checkIn}} - {{checkOut}}({{nights}})",
         "roomLine": "{{rooms}} 间 {{room}},{{guests}} 人入住",
         "roomLineMulti": "{{rooms}} 间:{{list}},{{guests}} 人入住",

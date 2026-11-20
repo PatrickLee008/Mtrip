@@ -1,3 +1,4 @@
+import { zhDeletion } from './accountDeletion';
 import { platformZh } from './platform';
 import { kycTemplateZh } from './kyc-template';
 import { supportZh } from './support';
@@ -8,6 +9,7 @@ import { supportZh } from './support';
  */
 import complianceS6 from './compliance/zh-CN';
 export default {
+  accountDeletion: zhDeletion,
   platformConfig: platformZh,
   kycTemplate: kycTemplateZh,
   support: supportZh,
@@ -110,15 +112,23 @@ export default {
     commissionRate: '佣金比例 (%)', transactionFeeRate: '交易手续费率 (%)', transactionFeeHint: '按佣金金额计算。',
     payAtHotelTitle: '到店支付设置', payAtHotelHint: '设置是否允许住客到店支付余款',
     payAtHotel: '到店支付', payAtHotelDescription: '允许客户到酒店支付剩余金额。',
-    appNotOpen: '消费者 App 到店支付尚未开放；此处用于配置商户的商业条款。',
+    appNotOpen: '生效配置适用于新到店支付预订，已有预订保留接受时的条款。',
     noShowTitle: '未到店费用设置', noShowHint: '配置用于未到店保障的客户预付款',
-    noShowFee: '未到店费用', noFee: '不收取未到店费用', noFeeHint: '客户仅需预付 mTrip 佣金。',
+    noShowFee: '未到店费用', noFee: '不收取未到店费用', noFeeHint: '客户预付 mTrip 佣金及适用的交易手续费。',
     chargeFee: '收取未到店费用', chargeFeeHint: '随平台佣金一并收取商户的保障预付款。',
-    merchantUpfrontRate: '商户未到店预收比例 (%)', upfrontMax: '最高为房费的 30%。',
+    merchantUpfrontRate: '商户预收比例上限 (%)', upfrontMax: '最高为房费的30%，商户可选择更低比例或不收费。',
+    propertyCommission: '门店佣金', selectProperty: '选择门店', inheritRate: '使用商户默认佣金',
+    editProperty: '编辑门店佣金', effectiveUtc: '生效日期与时间（UTC）',
+    propertyRequired: '请填写有效佣金、生效时间和不超过500字的原因。',
+    reconciliation: '财务对账', reconciliationStates: { 0: '待对账', 1: '已对账', 2: '待人工核对' },
+    payoutProofRequired: '请填写打款凭证后，再登记该预订结算已打款。',
+    payoutProof: '打款凭证',
+    bookingCycle: '预订 #{id}',
+    editor: '修改人',
     previewTitle: '计算预览示例', examplePrice: '示例房费：100,000 MMK', livePreview: '实时预览',
     commissionAmount: 'mTrip 佣金（{rate}%）', transactionFeeAmount: '交易手续费（佣金的 {rate}%）',
     merchantUpfrontAmount: '商户未到店预收（{rate}%）', customerUpfront: '客户合并预付款', balanceAtHotel: '到店应付余额',
-    previewFeeHint: '合并预付款 = mTrip 佣金 + 商户未到店预收。交易手续费单独列示。',
+    previewFeeHint: '最高合并预付款 = 佣金 + 交易手续费 + 商户预收。交易手续费是房费之外已披露的客户费用。',
     previewUnavailable: '开启到店支付并填写有效费率后，可查看预付款计算示例。',
     effectiveTitle: '生效时间与变更原因', effectiveHint: '记录商业条款的生效时间及变更原因',
     effectiveAt: '生效日期与时间', selectDateTime: '选择日期与时间', localTime: '日期与时间均按您当前所在时区显示。',

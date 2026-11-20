@@ -62,7 +62,7 @@ final class CommercialTerms
         $merchant = intdiv($roomAmount * self::basisPoints($terms['merchant_upfront_rate']) + 5000, 10000);
         return [
             'room_amount' => $roomAmount, 'commission_amount' => $commission, 'transaction_fee_amount' => $fee,
-            'merchant_upfront_amount' => $merchant, 'customer_upfront_amount' => $commission + $merchant,
+            'merchant_upfront_amount' => $merchant, 'customer_upfront_amount' => $commission + $merchant + $fee,
             'hotel_balance_amount' => $roomAmount - $commission - $merchant,
         ];
     }

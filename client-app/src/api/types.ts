@@ -75,4 +75,5 @@ export const API_CODE = {
   CONTACT_IN_USE: 40932,
   /** 注销被拦截;ApiError.data = AccountDeletionBlocked */
   ACCOUNT_DELETION_BLOCKED: 40933,
+  CHECKOUT_EXPIRED: 40934,
 } as const;

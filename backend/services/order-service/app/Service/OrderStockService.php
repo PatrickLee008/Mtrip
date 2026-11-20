@@ -183,6 +183,8 @@ class OrderStockService
         $dates = $this->datesOf($skuType, (string) $order['use_date'], $order['end_date'] ? (string) $order['end_date'] : null);
         $logs = [];
         foreach ($dates as $date) {
+            if ($changeType === 4 && Db::table('goods_stock_log')->where('order_id', (int) $order['id'])
+                ->where('change_type', 4)->where('stock_date', $date)->exists()) continue;
             $propertyId = (int) ($order['property_id'] ?? 0);
             $goodsId = $skuType === 1 ? 0 : (int) ($order['goods_id'] ?? 0);
             $skuId = $skuType === 1 ? (int) ($order['room_type_id'] ?? 0) : (int) $order['sku_id'];

@@ -139,13 +139,17 @@ class EarningsController extends AbstractController
         $settle = $this->findScopedSettle($this->requireId());
         unset($settle['deleted_at']);
 
-        [$startDate, $endDate] = $this->cycleRange((string) $settle['settle_cycle']);
-        $entries = Db::table('finance_account_entry')
+        $entriesQuery = Db::table('finance_account_entry')
             ->where('merchant_id', (int) $settle['merchant_id'])
             ->where('site_id', MerchantContext::siteId())
-            ->where('property_id', (int) $settle['property_id'])
-            ->whereBetween('created_at', ["{$startDate} 00:00:00", "{$endDate} 23:59:59"])
-            ->orderByDesc('id')
+            ->where('property_id', (int) $settle['property_id']);
+        if ((int) ($settle['order_id'] ?? 0) > 0) {
+            $entriesQuery->where('order_id', $settle['order_id']);
+        } else {
+            [$startDate, $endDate] = $this->cycleRange((string) $settle['settle_cycle']);
+            $entriesQuery->whereBetween('created_at', ["{$startDate} 00:00:00", "{$endDate} 23:59:59"]);
+        }
+        $entries = $entriesQuery->orderByDesc('id')
             ->limit(200)
             ->get()
             ->map(static fn ($row) => (array) $row)

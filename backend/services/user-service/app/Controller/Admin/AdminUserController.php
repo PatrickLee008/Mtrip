@@ -328,32 +328,6 @@ class AdminUserController extends AbstractAdminController
         ]);
     }
 
-    /**
-     * 批准「有余额时注销」(Consumer App PRD 模块 19 第 8 条):客服核实后批准,记下当前余额作为没收上限,7 天内有效;
-     * 用户仍须自己在 App 内输入 DELETE 完成注销,届时余额经 WalletLedger 没收并记入「已没收钱包余额台账」。
-     * 余额之后若增加,旧批准不再覆盖,需重新批准。必填核实原因。
-     */
-    #[Permission('user:list:approve-deletion')]
-    public function deletionApprove(): array
-    {
-        $user = $this->findScoped($this->requireId());
-        $reason = $this->requireStr('reason');
-        if (mb_strlen($reason) > 200) {
-            throw new BusinessException(ErrorCode::PARAM_ERROR, '原因不能超过200字');
-        }
-        $data = $this->deletion->approve($user, $reason, AdminContext::adminId(), AdminContext::adminName());
-        return Result::success($data, '已批准:用户在 App 内确认注销时余额将被没收');
-    }
-
-    /** 撤销尚未使用的注销批准 */
-    #[Permission('user:list:approve-deletion')]
-    public function deletionRevoke(): array
-    {
-        $user = $this->findScoped($this->requireId());
-        $count = $this->deletion->revoke((int) $user['id']);
-        return Result::success(['revoked' => $count], $count > 0 ? '已撤销注销批准' : '没有待使用的注销批准');
-    }
-
     /** Customer 360 的注销信息:有效批准 / 已注销记录(含没收金额与保留截止);表缺失时降级为 null */
     private function deletionSummary(int $uid): ?array
     {

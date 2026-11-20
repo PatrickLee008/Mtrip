@@ -16,6 +16,7 @@ use App\Service\Payment\MmqrCheckoutService;
 use App\Service\PaymentResultHandler;
 use App\Service\PricingService;
 use App\Service\SettlementService;
+use App\Service\CheckoutSessionService;
 use App\Service\WalletHoldService;
 use App\Service\WalletService;
 use Hyperf\Contract\ConfigInterface;
@@ -77,6 +78,22 @@ class TripController extends AbstractController
     #[Inject]
     protected MmqrCheckoutService $mmqr;
 
+    #[Inject]
+    protected CheckoutSessionService $checkout;
+
+    /** Recover the existing Trip/expiry first; fresh payment windows require a valid quote. */
+    public function startCheckout(): array
+    {
+        $enteredAt = time();
+        $items = $this->input('items');
+        if (! is_array($items) || count($items) < 1 || count($items) > 10) {
+            throw new BusinessException(ErrorCode::PARAM_ERROR, 'Trip 须包含 1-10 个酒店预订');
+        }
+        $session = $this->checkout->open($this->requireSiteId(), UserContext::userId(), $this->strInput('checkoutKey'),
+            $items, $this->intInput('review') === 1, $enteredAt, fn () => $this->quote()['data']);
+        return Result::success($session);
+    }
+
     /** 创建 Trip:items 多个酒店预订 + 可选整单券,券按净额占比分摊 */
     public function create(): array
     {
@@ -89,14 +106,20 @@ class TripController extends AbstractController
         $couponId = $this->intInput('couponId', 0);
         $payAtHotel = $this->intInput('payAtHotel', 0) === 1;
 
-        // 先做无副作用的校验与取数(商品/房型/日期),事务内再锁库存计价
-        $prepared = [];
-        foreach ($items as $idx => $item) {
-            $prepared[] = $this->prepareItem($siteId, (array) $item, $idx);
-        }
-
         $tripNo = OrderNoGenerator::orderNo($siteId);
-        $result = Db::transaction(function () use ($siteId, $userId, $prepared, $couponId, $tripNo, $payAtHotel) {
+        $result = Db::transaction(function () use ($siteId, $userId, $couponId, $tripNo, $payAtHotel, $items) {
+            $key = $this->strInput('checkoutKey');
+            $stays = array_unique(array_map(static fn ($p) => (int) ($p['propertyId'] ?? 0) . ':' . ($p['useDate'] ?? '') . ':' . ($p['endDate'] ?? ''), $items));
+            $checkout = $key !== '' || count($stays) > 1
+                ? $this->checkout->lock($siteId, $userId, $key, $this->intInput('checkoutRevision'), $items) : null;
+            if ($checkout && (int) $checkout['trip_id'] > 0) {
+                \App\Service\BookingConsumerGuard::lockActive($siteId, $userId);
+                return $this->existingCheckoutTrip((int) $checkout['trip_id'], $siteId, $userId);
+            }
+            $prepared = [];
+            foreach ($items as $idx => $item) {
+                $prepared[] = $this->prepareItem($siteId, (array) $item, $idx);
+            }
             $properties = array_column($prepared, 'property');
             MerchantAccessGuard::lockBookable($properties, $siteId);
             MerchantAccessGuard::lockProperties($properties, $siteId);
@@ -202,7 +225,8 @@ class TripController extends AbstractController
                     'remark' => $leg['remark'],
                     'meal_plan_snapshot' => mb_substr((string) ($leg['room']['meal_plan'] ?? ''), 0, 255),
                 ] + ($payAtHotel ? $this->hotelPricing->bookingFields($leg['hotelOption']) : [])
-                    + $this->bookingLifecycle->buildCreateFields(1, $leg['propertyId'], $leg['roomTypeId'], (string) $leg['remark'], $siteId));
+                    + array_replace($this->bookingLifecycle->buildCreateFields(1, $leg['propertyId'], $leg['roomTypeId'], (string) $leg['remark'], $siteId),
+                        $checkout ? ['payment_expires_at' => $checkout['expires_at']] : []));
                 $this->stockService->logChanges($orderId, $leg['changes']);
                 $this->bookingEvents->log([
                     'id' => $orderId, 'order_no' => $orderNo, 'site_id' => $siteId,
@@ -215,6 +239,11 @@ class TripController extends AbstractController
                     'payAmount' => $payAmount, 'hotelBalance' => $leg['hotelOption']['hotelBalance'] ?? 0];
             }
 
+            if ($checkout) {
+                CheckoutSessionService::assertOpen($checkout);
+                Db::table('order_checkout_session')->where('id', $checkout['id'])->update(['trip_id' => $tripId]);
+            }
+            \App\Service\BookingConsumerGuard::lockActive($siteId, $userId);
             return [
                 'tripId' => $tripId,
                 'tripNo' => $tripNo,
@@ -229,6 +258,18 @@ class TripController extends AbstractController
         });
 
         return Result::success($result, 'Trip 已创建,请在支付截止时间前完成支付');
+    }
+
+    private function existingCheckoutTrip(int $id, int $site, int $user): array
+    {
+        $trip = Db::table('order_trip')->where('id', $id)->where('site_id', $site)->where('user_id', $user)->first();
+        if (! $trip) throw new BusinessException(ErrorCode::NOT_FOUND);
+        $bookings = Db::table('order_main')->where('trip_id', $id)->orderBy('id')->get()
+            ->map(static fn ($b) => ['orderId' => (int) $b->id, 'orderNo' => $b->order_no,
+                'propertyName' => $b->goods_name, 'payAmount' => (float) $b->pay_amount, 'hotelBalance' => (float) $b->hotel_balance])->all();
+        return ['tripId' => $id, 'tripNo' => $trip->trip_no, 'totalAmount' => (float) $trip->total_amount,
+            'couponDiscount' => (float) $trip->coupon_discount, 'payAmount' => (float) $trip->pay_amount,
+            'payAtHotel' => (bool) $trip->pay_at_hotel, 'hotelBalance' => (float) $trip->hotel_balance, 'bookings' => $bookings];
     }
 
     /**
@@ -377,6 +418,8 @@ class TripController extends AbstractController
             if ($payAtHotel) {
                 $this->hotelPricing->requireAvailable($option);
             }
+            // Internal approval reasons/operators belong only in the stored booking snapshot.
+            unset($option['commercialTerms']);
             $linePay = $payAtHotel ? $option['prepayAmount'] : round(max(0.0, round($leg['net'] - $alloc, 2)) + $leg['addonAmount'], 2);
             $payAmount = round($payAmount + $linePay, 2);
             $hotelBalance = round($hotelBalance + ($payAtHotel ? $option['hotelBalance'] : 0), 2);

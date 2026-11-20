@@ -73,8 +73,8 @@ final class MerchantCommercialSettings
         return compact('list', 'total', 'page', 'pageSize');
     }
 
-    /** 一次查询批量解析当前条款；不把未来配置提前显示在目录/详情。 */
-    public static function effectiveMany(array $merchants, ?string $at = null): array
+    /** Batch effective policy reads; a second batch handles merchants with only legacy terms. */
+    public static function effectiveMany(array $merchants, ?string $at = null, bool $currentRead = false): array
     {
         if ($merchants === []) return [];
         $at ??= gmdate('Y-m-d H:i:s');
@@ -85,13 +85,16 @@ final class MerchantCommercialSettings
             $sites[$id] = (int) $merchant['site_id'];
             $result[$id] = self::baseline($merchant);
         }
-        $rows = Db::table('merchant_commercial_config as c')->whereIn('c.merchant_id', array_keys($result))
+        $query = Db::table('merchant_commercial_config as c')->whereIn('c.merchant_id', array_keys($result))
             ->where('c.effective_at', '<=', $at)
-            ->whereRaw('NOT EXISTS (SELECT 1 FROM merchant_commercial_config n WHERE n.merchant_id = c.merchant_id AND n.site_id = c.site_id AND n.effective_at <= ? AND (n.effective_at > c.effective_at OR (n.effective_at = c.effective_at AND n.version > c.version)))', [$at])
-            ->get(['c.*']);
+            ->whereRaw('NOT EXISTS (SELECT 1 FROM merchant_commercial_config n WHERE n.merchant_id = c.merchant_id AND n.site_id = c.site_id AND n.effective_at <= ? AND (n.effective_at > c.effective_at OR (n.effective_at = c.effective_at AND n.version > c.version)))', [$at]);
+        if ($currentRead) $query->sharedLock();
+        $rows = $query->get(['c.*']);
         foreach ($rows as $row) {
             if ((int) $row->site_id === $sites[(int) $row->merchant_id]) $result[(int) $row->merchant_id] = self::terms((array) $row);
         }
+        $missing = array_values(array_filter($merchants, static fn ($m) => $result[(int) $m['id']]['source'] === 'baseline'));
+        foreach (PayAtHotelTerms::legacyPolicies($missing, $currentRead, $at) as $id => $legacy) $result[$id] = array_replace($result[$id], $legacy);
         return $result;
     }
 
@@ -106,10 +109,16 @@ final class MerchantCommercialSettings
         $config = Db::table('merchant_commercial_config')->where('merchant_id', $merchant['id'])
             ->where('site_id', $merchant['site_id'])->where('effective_at', '<=', $now)
             ->orderByDesc('effective_at')->orderByDesc('version')->sharedLock()->first();
-        $terms = $config ? self::terms((array) $config) : self::baseline($merchant);
+        $terms = $config ? self::terms((array) $config) : array_replace(self::baseline($merchant), PayAtHotelTerms::legacyPolicy($merchant, true));
+        if ((int) ($order['pay_at_hotel'] ?? 0) === 1) {
+            $frozen = $order['hotel_terms_snapshot'] ?? null;
+            $frozen = is_string($frozen) ? json_decode($frozen, true) : $frozen;
+            if (is_array($frozen['commercialTerms'] ?? null)) $terms = $frozen['commercialTerms'];
+        }
         $snapshot = array_intersect_key($terms, array_flip([
             'version', 'commission_plan', 'commission_rate', 'transaction_fee_rate', 'pay_at_hotel_enabled',
-            'no_show_fee_enabled', 'merchant_upfront_rate', 'effective_at',
+            'no_show_fee_enabled', 'merchant_upfront_rate', 'effective_at', 'source',
+            'commission_scope', 'property_version', 'selection_version',
         ]));
         $snapshot += ['merchant_id' => (int) $merchant['id'], 'site_id' => (int) $merchant['site_id'], 'captured_at' => $now];
         Db::table('order_main')->where('id', (int) $order['id'])->whereNull('merchant_commercial_snapshot')
@@ -141,7 +150,7 @@ final class MerchantCommercialSettings
     private static function baseline(array $merchant): array
     {
         return [
-            'version' => 0, 'commission_plan' => $merchant['commission_plan'] ?? null,
+            'version' => 0, 'source' => 'baseline', 'commission_plan' => $merchant['commission_plan'] ?? null,
             'commission_rate' => number_format((float) $merchant['commission_rate'], 2, '.', ''),
             'transaction_fee_rate' => '0.00', 'pay_at_hotel_enabled' => false, 'no_show_fee_enabled' => false,
             'merchant_upfront_rate' => '0.00', 'effective_at' => null, 'created_at' => null, 'created_by_name' => '', 'reason' => '',
@@ -157,7 +166,7 @@ final class MerchantCommercialSettings
         foreach (['id', 'version', 'created_by'] as $key) if (isset($terms[$key])) $terms[$key] = (int) $terms[$key];
         foreach (['pay_at_hotel_enabled', 'no_show_fee_enabled'] as $key) $terms[$key] = (bool) $terms[$key];
         foreach (['commission_rate', 'transaction_fee_rate', 'merchant_upfront_rate'] as $key) $terms[$key] = number_format((float) $terms[$key], 2, '.', '');
-        return $terms;
+        return $terms + ['source' => 'commercial'];
     }
 
     private static function permission(string $key): void

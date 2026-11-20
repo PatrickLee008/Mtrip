@@ -6,6 +6,15 @@ namespace App\Service\Booking;
 
 class PayAtHotelRefundBreakdown
 {
+    /** Scale a disclosed refund composition after approval of a smaller amount. */
+    public static function approved(array $components, float $amount): array
+    {
+        $available = ['pay_at_hotel' => 1, 'addon_amount' => $components['refund_addon'] ?? 0,
+            'hotel_commission' => $components['refund_hotel_commission'] ?? 0,
+            'hotel_deposit' => $components['refund_hotel_deposit'] ?? 0,
+            'hotel_transaction_fee' => $components['refund_transaction_fee'] ?? 0];
+        return self::of($available, $amount);
+    }
     public static function noShowRefundable(array $order, array $refunded): float
     {
         $addon = max(0, (int) round(((float) ($order['addon_amount'] ?? 0) - (float) ($refunded['refund_addon'] ?? 0)) * 100));

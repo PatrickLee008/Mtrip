@@ -23,8 +23,9 @@ export function apiMe(): Promise<MerchantProfile> {
 export const apiMerchantContacts = () => get<{ contacts: { channel: 'email' | 'sms'; recipient: string }[] }>('/auth/contacts');
 
 export const apiPayAtHotelTerms = () => get<PayAtHotelTerms>('/pay-at-hotel/terms');
-export const apiSavePayAtHotelTerms = (noShowEnabled: boolean, depositRate: number) =>
-  post<PayAtHotelTerms>('/pay-at-hotel/terms', { noShowEnabled, depositRate });
+export const apiSavePayAtHotelTerms = (noShowEnabled: boolean, depositRate: number, terms: PayAtHotelTerms) =>
+  post<PayAtHotelTerms>('/pay-at-hotel/terms', { noShowEnabled, depositRate,
+    policyVersion: terms.policy_version, policySource: terms.policy_source, selectionVersion: terms.selection_version });
 
 export function apiMenus(): Promise<MenusResult> {
   return get<MenusResult>('/auth/menus');

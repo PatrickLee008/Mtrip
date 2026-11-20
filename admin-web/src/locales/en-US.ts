@@ -1,3 +1,4 @@
+import { enDeletion } from './accountDeletion';
 import { platformEn } from './platform';
 import { kycTemplateEn } from './kyc-template';
 import { supportEn } from './support';
@@ -10,6 +11,7 @@ import { supportEn } from './support';
  */
 import complianceS6 from './compliance/en-US';
 export default {
+  accountDeletion: enDeletion,
   platformConfig: platformEn,
   kycTemplate: kycTemplateEn,
   support: supportEn,
@@ -112,15 +114,23 @@ export default {
     commissionRate: 'Commission Rate (%)', transactionFeeRate: 'Transaction Fee Rate (%)', transactionFeeHint: 'Calculated on the commission amount.',
     payAtHotelTitle: 'Pay at Hotel Settings', payAtHotelHint: 'Control whether guests can settle the balance on arrival',
     payAtHotel: 'Pay at Hotel', payAtHotelDescription: 'Allow customers to pay the remaining amount at the hotel.',
-    appNotOpen: 'Consumer App checkout with Pay at Hotel is not available yet. These settings define the merchant’s terms.',
+    appNotOpen: 'Effective settings apply to new Pay at Hotel bookings. Existing bookings keep their accepted terms.',
     noShowTitle: 'No-Show Fee Settings', noShowHint: 'Configure customer upfront payment for no-show protection',
-    noShowFee: 'No-Show Fee', noFee: 'No No-Show Fee', noFeeHint: 'Customer pays only the mTrip commission upfront.',
+    noShowFee: 'No-Show Fee', noFee: 'No No-Show Fee', noFeeHint: 'Customer prepays mTrip commission and any applicable transaction fee.',
     chargeFee: 'Charge No-Show Fee', chargeFeeHint: 'Collect merchant protection alongside the platform commission.',
-    merchantUpfrontRate: 'Merchant No-Show Fee (%)', upfrontMax: 'Maximum 30% of the room price.',
+    merchantUpfrontRate: 'Merchant Prepayment Limit (%)', upfrontMax: 'Up to 30% of the room price. The merchant can choose a lower rate or no fee.',
+    propertyCommission: 'Property Commission', selectProperty: 'Select a property', inheritRate: 'Use merchant default rate',
+    editProperty: 'Edit Property Commission', effectiveUtc: 'Effective Date / Time (UTC)',
+    propertyRequired: 'Enter a valid commission rate, effective time and reason (up to 500 characters).',
+    reconciliation: 'Financial Reconciliation', reconciliationStates: { 0: 'Pending', 1: 'Reconciled', 2: 'Needs Review' },
+    payoutProofRequired: 'Enter the payment proof before recording this booking settlement as paid.',
+    payoutProof: 'Payment Proof',
+    bookingCycle: 'Booking #{id}',
+    editor: 'Changed By',
     previewTitle: 'Calculation Preview Example', examplePrice: 'Room Price: 100,000 MMK', livePreview: 'LIVE PREVIEW',
     commissionAmount: 'mTrip Commission ({rate}%)', transactionFeeAmount: 'Transaction Fee ({rate}% of commission)',
     merchantUpfrontAmount: 'Merchant No-Show Fee ({rate}%)', customerUpfront: 'Customer Upfront Payment', balanceAtHotel: 'Balance at Hotel',
-    previewFeeHint: 'Upfront payment = mTrip commission + merchant no-show prepayment. The transaction fee is shown separately.',
+    previewFeeHint: 'Maximum upfront payment = commission + transaction fee + merchant prepayment. The guest pays the disclosed fee in addition to the room price.',
     previewUnavailable: 'Enable Pay at Hotel and enter valid rates to view the upfront payment example.',
     effectiveTitle: 'Effective Date & Reason', effectiveHint: 'Record when and why these commercial terms change',
     effectiveAt: 'Effective Date & Time', selectDateTime: 'Select date and time', localTime: 'Dates and times are shown in your local time zone.',

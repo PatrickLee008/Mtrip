@@ -50,6 +50,7 @@
       "disabled": "未开通",
       "commission": "mTrip 佣金比例",
       "transactionFee": "交易手续费比例",
+      "propertyRate": "门店专属佣金", "merchantRate": "商户默认佣金",
       "version": "条款版本",
       "noShow": "收取未入住费用",
       "depositRate": "商户房费预收比例（上限 {{max}}%）",
@@ -141,7 +142,8 @@
       "prepay": "线上预付", "balance": "到店应付", "commission": "mTrip 佣金",
       "deposit": "商户预收", "fee": "交易手续费", "noShow": "未到店费用",
       "enabled": "启用", "disabled": "免收", "version": "条款版本",
-      "settlement": "运营结算", "completed": "入住后已完成", "pending": "待入住"
+      "settlement": "运营结算", "completed": "入住后已完成", "pending": "待入住",
+      "reconciliation": "财务对账", "reconciliationStates": {"0":"待对账","1":"已对账","2":"待人工核对"}
     },
     "paymentHold": "等待付款期间暂时保留房间。如果付款时限内仍未收到付款，服务器将自动取消预订。",
     "checkingPayment": "正在确认付款状态…", "cancelledTitle": "预订已取消",
