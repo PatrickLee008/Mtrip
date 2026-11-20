@@ -1,22 +1,22 @@
 ---
 type: "prd-extract"
 product: "mTrip Merchant App"
-prd_version: "1.0.13"
+prd_version: "1.0.14"
 imported_on: "2026-10-25"
-updated_on: "2026-11-16"
-source: "[[mTrip 商户 App 知识库/08-原始资料/mTrip_Merchant App PRD_v1.0.13_中文版|完整 PRD 原文]]"
-tags: ["mtrip/merchant-app", "prd/v1-0-13"]
-source_lines: "1499-1526"
-source_sha256: "814fc247caaa2cd7d36a3794d474ab85bd839b7ad4ef41211a2a85020fdd8797"
+updated_on: "2026-11-20"
+source: "[[mTrip 商户 App 知识库/08-原始资料/mTrip_Merchant App PRD_v1.0.14_中文版|完整 PRD 原文]]"
+tags: ["mtrip/merchant-app", "prd/v1-0-14"]
+source_lines: "1505-1532"
+source_sha256: "0432b55e0d60b8bac1382f7365b35ad956d5bc79d3347c75aa6b3252f6b65b2e"
 ---
 
 # 参考范围与 PRD 检查清单
 
 > [!info] 原文摘录
-> 来源：[[mTrip 商户 App 知识库/08-原始资料/mTrip_Merchant App PRD_v1.0.13_中文版|mTrip_Merchant App PRD_v1.0.13_中文版]]，第 1499–1526 行（按导入快照计）。
+> 来源：[[mTrip 商户 App 知识库/08-原始资料/mTrip_Merchant App PRD_v1.0.14_中文版|mTrip_Merchant App PRD_v1.0.14_中文版]]，第 1505–1532 行（按导入快照计）。
 > 摘录保留原文措辞、表格和需求状态；仅调整图片相对路径。原文中的冲突请结合[[mTrip 商户 App 知识库/06-规划与治理/待澄清事项|待澄清事项]]阅读。
 
-<!-- PRD_SOURCE_START:1499-1526 -->
+<!-- PRD_SOURCE_START:1505-1532 -->
 ### 参考与范围说明
 
 Ctrip EBK 可作为成熟酒店商户运营的参考，涵盖商户工作台、门店与客房管理、可用房量与房价管理、预订生命周期、结算、评价、员工管理及活动管理。mTrip 商户平台受这些成熟工作流启发，但旨在满足自身业务要求与市场需求。因此，并非所有 Ctrip EBK 能力都会纳入第一阶段 MVP。商户入驻、强制双因素认证（2FA）、联盟推广与达人管理，以及未来的多品类商户支持等功能为 mTrip 产品路线图所独有。
