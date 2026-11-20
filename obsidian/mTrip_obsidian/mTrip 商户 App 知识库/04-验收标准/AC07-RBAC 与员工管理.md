@@ -1,22 +1,22 @@
 ---
 type: "prd-extract"
 product: "mTrip Merchant App"
-prd_version: "1.0.13"
+prd_version: "1.0.14"
 imported_on: "2026-10-25"
-updated_on: "2026-11-16"
-source: "[[mTrip 商户 App 知识库/08-原始资料/mTrip_Merchant App PRD_v1.0.13_中文版|完整 PRD 原文]]"
-tags: ["mtrip/merchant-app", "prd/v1-0-13"]
-source_lines: "1254-1262"
-source_sha256: "814fc247caaa2cd7d36a3794d474ab85bd839b7ad4ef41211a2a85020fdd8797"
+updated_on: "2026-11-20"
+source: "[[mTrip 商户 App 知识库/08-原始资料/mTrip_Merchant App PRD_v1.0.14_中文版|完整 PRD 原文]]"
+tags: ["mtrip/merchant-app", "prd/v1-0-14"]
+source_lines: "1260-1268"
+source_sha256: "0432b55e0d60b8bac1382f7365b35ad956d5bc79d3347c75aa6b3252f6b65b2e"
 ---
 
 # AC07-RBAC 与员工管理
 
 > [!info] 原文摘录
-> 来源：[[mTrip 商户 App 知识库/08-原始资料/mTrip_Merchant App PRD_v1.0.13_中文版|mTrip_Merchant App PRD_v1.0.13_中文版]]，第 1254–1262 行（按导入快照计）。
+> 来源：[[mTrip 商户 App 知识库/08-原始资料/mTrip_Merchant App PRD_v1.0.14_中文版|mTrip_Merchant App PRD_v1.0.14_中文版]]，第 1260–1268 行（按导入快照计）。
 > 摘录保留原文措辞、表格和需求状态；仅调整图片相对路径。原文中的冲突请结合[[mTrip 商户 App 知识库/06-规划与治理/待澄清事项|待澄清事项]]阅读。
 
-<!-- PRD_SOURCE_START:1254-1262 -->
+<!-- PRD_SOURCE_START:1260-1268 -->
 #### 7. 基于角色的访问控制（RBAC）与员工管理
 
 - 主商户账号可邀请、激活、停用及管理员工账号。

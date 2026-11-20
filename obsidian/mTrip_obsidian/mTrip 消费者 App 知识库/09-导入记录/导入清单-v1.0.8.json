@@ -1,0 +1,426 @@
+{
+  "version": "1.0.8",
+  "updated_on": "2026-11-20",
+  "previous_version": "1.0.6",
+  "previous_manifest": "导入清单.json",
+  "source_file": "mTrip_ Consumer App PRD_v1.0.8_中文版.md",
+  "source_sha256": "98cfb9a9bcf8695405ce78a3b64372363e4afcc86e8414cbc0c551adee6d392d",
+  "source_lines": 2631,
+  "docx_file": "mTrip_ Consumer App PRD_v1.0.8 20 Nov.docx",
+  "docx_sha256": "353aca9edcdb481a16a7453e54f2e4cbaf773ad3eeeda2cb5ad26431b46ecdbe",
+  "sections": [
+    {
+      "path": "01-产品与范围/PRD 文档信息.md",
+      "start": 1,
+      "end": 18
+    },
+    {
+      "path": "01-产品与范围/产品定位、目标与约束.md",
+      "start": 23,
+      "end": 42
+    },
+    {
+      "path": "01-产品与范围/用户画像.md",
+      "start": 43,
+      "end": 52
+    },
+    {
+      "path": "02-业务流程/使用旅程与平台工作流.md",
+      "start": 53,
+      "end": 66
+    },
+    {
+      "path": "03-功能模块/M01-整体酒店预订旅程与预订生命周期.md",
+      "start": 67,
+      "end": 99
+    },
+    {
+      "path": "03-功能模块/M01.1-多酒店预订、添加住宿与模式限制.md",
+      "start": 100,
+      "end": 216
+    },
+    {
+      "path": "03-功能模块/M02-酒店搜索与发现.md",
+      "start": 217,
+      "end": 248
+    },
+    {
+      "path": "03-功能模块/M02.1-长住优惠.md",
+      "start": 249,
+      "end": 397
+    },
+    {
+      "path": "03-功能模块/M03-酒店列表、筛选与排序.md",
+      "start": 398,
+      "end": 441
+    },
+    {
+      "path": "03-功能模块/M04-酒店详情与房型选择.md",
+      "start": 442,
+      "end": 483
+    },
+    {
+      "path": "03-功能模块/M04.1-与物业或酒店聊天.md",
+      "start": 484,
+      "end": 498
+    },
+    {
+      "path": "03-功能模块/M05-住客信息.md",
+      "start": 499,
+      "end": 512
+    },
+    {
+      "path": "03-功能模块/M06-定价、促销与保险.md",
+      "start": 513,
+      "end": 526
+    },
+    {
+      "path": "03-功能模块/M06.1-促销中心与我的优惠券.md",
+      "start": 527,
+      "end": 568
+    },
+    {
+      "path": "03-功能模块/M07-预订偏好与常旅客信息.md",
+      "start": 569,
+      "end": 665
+    },
+    {
+      "path": "03-功能模块/M07.3-轻量模式.md",
+      "start": 666,
+      "end": 683
+    },
+    {
+      "path": "03-功能模块/M07.2-收藏的酒店.md",
+      "start": 684,
+      "end": 733
+    },
+    {
+      "path": "03-功能模块/M08-支付、活动出资与结算.md",
+      "start": 734,
+      "end": 860
+    },
+    {
+      "path": "03-功能模块/M09-预订确认、管理与异常取消.md",
+      "start": 861,
+      "end": 976
+    },
+    {
+      "path": "03-功能模块/M10-通知中心.md",
+      "start": 977,
+      "end": 1019
+    },
+    {
+      "path": "03-功能模块/M10.1-预订风险管理与申诉.md",
+      "start": 1020,
+      "end": 1078
+    },
+    {
+      "path": "02-业务流程/取消退款与平台费政策.md",
+      "start": 1079,
+      "end": 1119
+    },
+    {
+      "path": "03-功能模块/M11-评价、评分与 AI 评价摘要.md",
+      "start": 1120,
+      "end": 1234
+    },
+    {
+      "path": "03-功能模块/M12-AI 酒店助手（阶段2）.md",
+      "start": 1235,
+      "end": 1248
+    },
+    {
+      "path": "03-功能模块/M13-在线客服与客户支持.md",
+      "start": 1249,
+      "end": 1305
+    },
+    {
+      "path": "03-功能模块/M14-联盟与推荐计划.md",
+      "start": 1306,
+      "end": 1344
+    },
+    {
+      "path": "03-功能模块/M15-动态 App 主题管理.md",
+      "start": 1345,
+      "end": 1415
+    },
+    {
+      "path": "03-功能模块/M16-用户引导与教程.md",
+      "start": 1416,
+      "end": 1552
+    },
+    {
+      "path": "03-功能模块/M17-酒店预订 UI、UX 与功能更新.md",
+      "start": 1553,
+      "end": 1582
+    },
+    {
+      "path": "03-功能模块/M17.1-预订取消入口.md",
+      "start": 1583,
+      "end": 1595
+    },
+    {
+      "path": "03-功能模块/M17.2-轻量模式与完整模式.md",
+      "start": 1596,
+      "end": 1608
+    },
+    {
+      "path": "03-功能模块/M17.3-设置个人资料.md",
+      "start": 1609,
+      "end": 1626
+    },
+    {
+      "path": "03-功能模块/M17.4-多客房选择与数量同步.md",
+      "start": 1627,
+      "end": 1658
+    },
+    {
+      "path": "03-功能模块/M17.5-优惠券资格与后台配置.md",
+      "start": 1659,
+      "end": 1700
+    },
+    {
+      "path": "03-功能模块/M17.6-优惠券分配与折扣分摊.md",
+      "start": 1701,
+      "end": 1749
+    },
+    {
+      "path": "03-功能模块/M18-mTrip 钱包.md",
+      "start": 1750,
+      "end": 1983
+    },
+    {
+      "path": "03-功能模块/M19-账户删除与余额没收.md",
+      "start": 1984,
+      "end": 2086
+    },
+    {
+      "path": "03-功能模块/M19.1-App 更新与强制更新.md",
+      "start": 2087,
+      "end": 2100
+    },
+    {
+      "path": "03-功能模块/M19.2-关联邮箱与关联手机号.md",
+      "start": 2101,
+      "end": 2146
+    },
+    {
+      "path": "03-功能模块/M19.3-联系我们.md",
+      "start": 2147,
+      "end": 2167
+    },
+    {
+      "path": "03-功能模块/M19.4-忘记密码.md",
+      "start": 2168,
+      "end": 2209
+    },
+    {
+      "path": "03-功能模块/M19.5-管理支付卡.md",
+      "start": 2210,
+      "end": 2320
+    },
+    {
+      "path": "03-功能模块/M19.6-重置密码与设置新密码.md",
+      "start": 2321,
+      "end": 2418
+    },
+    {
+      "path": "03-功能模块/M20-到店支付.md",
+      "start": 2419,
+      "end": 2507
+    },
+    {
+      "path": "04-验收标准/验收汇总说明.md",
+      "start": 2508,
+      "end": 2511
+    },
+    {
+      "path": "04-验收标准/P1-01-入驻与 KYC.md",
+      "start": 2512,
+      "end": 2518
+    },
+    {
+      "path": "04-验收标准/P1-02-酒店预订.md",
+      "start": 2519,
+      "end": 2526
+    },
+    {
+      "path": "04-验收标准/P1-03-餐饮服务.md",
+      "start": 2527,
+      "end": 2533
+    },
+    {
+      "path": "04-验收标准/P1-05-统一搜索及汇总附注.md",
+      "start": 2534,
+      "end": 2540
+    },
+    {
+      "path": "05-设计与集成/设计与原型说明.md",
+      "start": 2541,
+      "end": 2546
+    },
+    {
+      "path": "05-设计与集成/技术考量.md",
+      "start": 2547,
+      "end": 2550
+    },
+    {
+      "path": "06-规划与治理/成功指标.md",
+      "start": 2551,
+      "end": 2556
+    },
+    {
+      "path": "06-规划与治理/原文待解决问题.md",
+      "start": 2557,
+      "end": 2560
+    },
+    {
+      "path": "06-规划与治理/原文问答.md",
+      "start": 2561,
+      "end": 2570
+    },
+    {
+      "path": "06-规划与治理/功能时间线与阶段规划.md",
+      "start": 2571,
+      "end": 2594
+    },
+    {
+      "path": "06-规划与治理/PRD 检查清单.md",
+      "start": 2595,
+      "end": 2618
+    },
+    {
+      "path": "06-规划与治理/版本变更历史.md",
+      "start": 2619,
+      "end": 2631
+    }
+  ],
+  "images": [
+    {
+      "path": "08-原始资料/images_consumer/img_001.png",
+      "sha256": "3ff4765c3fed4fc611f660e1156ec3ce28fe041a91b3ce4fc2d51449d27fe9f0"
+    },
+    {
+      "path": "08-原始资料/images_consumer/img_002.png",
+      "sha256": "913f2246d01de696cbbc98c3997401e661036ba16ea71dcc60f8b2dc4f7aa29c"
+    },
+    {
+      "path": "08-原始资料/images_consumer/img_003.png",
+      "sha256": "55e269c71c74c597e4d3d9fb1cf19349ca5cb77dae0baa168c4d5773b7155b04"
+    },
+    {
+      "path": "08-原始资料/images_consumer/img_004.png",
+      "sha256": "c15fd83f27851055b4926d85bdec40a2cb908704214ec90144f7ab63360c0cee"
+    },
+    {
+      "path": "08-原始资料/images_consumer/img_005.png",
+      "sha256": "f3047c965aea859d2e08b34509e693f6fd0d0b97e6da3f356288737d99455827"
+    },
+    {
+      "path": "08-原始资料/images_consumer/img_006.png",
+      "sha256": "8c95ee36239f6fc7ef7faf0055079d126590b38351523bf0ad8e2dafb4601fc5"
+    },
+    {
+      "path": "08-原始资料/images_consumer/img_007.png",
+      "sha256": "07fa9969955aca5d0b7b9f70a2a6d8234e7025596bda70a159b7bfb7c247b7ae"
+    },
+    {
+      "path": "08-原始资料/images_consumer/img_008.png",
+      "sha256": "47f55f907e85f2c19dd1ce1c4e0dffaf6771978fe5de2576ec8f1cbcc377a763"
+    },
+    {
+      "path": "08-原始资料/images_consumer/img_009.png",
+      "sha256": "8f4bc814f7d8c5752ba9649dd9904cc1b52aba85ca501366e585efca0bac56e6"
+    },
+    {
+      "path": "08-原始资料/images_consumer/img_010.png",
+      "sha256": "cd1d6b39ba96ea1ae7e4c00ca4d7e12f8fdc86e4bafd87dc8fe905d682ebdf91"
+    },
+    {
+      "path": "08-原始资料/images_consumer/img_011.png",
+      "sha256": "68529cb4ffc05a3a5307fa2366be35affaa8e081ae9172792a2350335d69b74f"
+    },
+    {
+      "path": "08-原始资料/images_consumer/img_012.png",
+      "sha256": "2eb2fdd702f09a6bc96c1408ec4d73086bf03e8cbeb775cd2e24f7c355222b29"
+    },
+    {
+      "path": "08-原始资料/images_consumer/img_013.png",
+      "sha256": "1c3600c88a7a3873ad1f96d95f7395adb97b99c901b5398b655b1b522e01c637"
+    },
+    {
+      "path": "08-原始资料/images_consumer/img_014.png",
+      "sha256": "3ec9a454c753641a785f14eb15baf8ea7ce5fc3f70fda7e6afbcb9c4c6ed21dd"
+    },
+    {
+      "path": "08-原始资料/images_consumer/img_015.png",
+      "sha256": "9742be3763957a05aeeeb4b64cfb9a2f38c56414744db45ba0dfb74aa26dd011"
+    },
+    {
+      "path": "08-原始资料/images_consumer/img_016.png",
+      "sha256": "d9d2dd4a32388e2bdb6e113dcda93795be75addfc61c0e7f9bc83adb1e803e46"
+    },
+    {
+      "path": "08-原始资料/images_consumer/img_017.png",
+      "sha256": "c1266576cb8d525bd1ba632d5cdeb9748566e40b7f8e17d37375d593c4a7b9ef"
+    },
+    {
+      "path": "08-原始资料/images_consumer/img_018.png",
+      "sha256": "df0ad4c75f7dc4742f8ce13e627687f2ce68f1892a3c8cb274ca4873b93f9576"
+    },
+    {
+      "path": "08-原始资料/images_consumer/img_019.png",
+      "sha256": "6ca9e8c350dea8087fe5cedd89018fc559a91aedda4b774ef105368919288861"
+    },
+    {
+      "path": "08-原始资料/images_consumer/img_020.png",
+      "sha256": "8c9bf841050a74a72752916c7479214ae49963611ed7f8dce7228ebddf05caf5"
+    },
+    {
+      "path": "08-原始资料/images_consumer/img_021.png",
+      "sha256": "b14936904680d71381792612292c5ce4e6312fa30634a57e8f1a7e1ae43b5df6"
+    },
+    {
+      "path": "08-原始资料/images_consumer/img_022.png",
+      "sha256": "c134da82b65df8a953c82b8234519e71933e43a46e80f5d1b59c3a73fc031950"
+    },
+    {
+      "path": "08-原始资料/images_consumer/img_023.png",
+      "sha256": "698b450d9ca611ca4924182b89754cdf24da275c6f691c4f5bfac7a6b4e8d9d2"
+    },
+    {
+      "path": "08-原始资料/images_consumer/img_024.png",
+      "sha256": "324b34cf1b7cf713383aca5c097e5f895b57c593caf41b8535523ecb9d36ca58"
+    },
+    {
+      "path": "08-原始资料/images_consumer/img_025.png",
+      "sha256": "6727762fe35f58e1be33c6f26902e4156fed098af52c58f031573d98a01e2abf"
+    },
+    {
+      "path": "08-原始资料/images_consumer/img_026.png",
+      "sha256": "7d629a907c36f41d546ac0c6f59cc992e0bef5359316696c3bb57d37815926a5"
+    },
+    {
+      "path": "08-原始资料/images_consumer/img_027.png",
+      "sha256": "df1a0e857438da7290a6e750722ecba25963ca18bfdf7745c3ac538b83c33882"
+    },
+    {
+      "path": "08-原始资料/images_consumer/img_028.png",
+      "sha256": "a3726a59273d4c782bd34642d1672b4b74b5e5e5f5a14c9deb573bdd854f0996"
+    },
+    {
+      "path": "08-原始资料/images_consumer/img_029.png",
+      "sha256": "0c2cf38e7cdbaebd60c07698cedf74db74458b502acad3162d04aa626d3c1dd8"
+    }
+  ],
+  "validation": {
+    "source_and_docx_byte_matches": true,
+    "verbatim_extracts_match": 57,
+    "covered_lines": 2627,
+    "toc_only_in_source_lines": "19-22",
+    "original_note_supplements_preserved": 57,
+    "image_byte_matches": 29,
+    "local_links_resolved": true,
+    "historical_source_hash_rechecked": false
+  }
+}
