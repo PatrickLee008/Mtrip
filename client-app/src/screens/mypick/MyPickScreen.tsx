@@ -186,7 +186,7 @@ export default function MyPickScreen() {
         <View>
           <SectionHeader
             title={t('myPick.savedHotels.title')}
-            onSeeAll={requireLogin}
+            onSeeAll={() => isLogin ? navigation.navigate('SavedHotels') : navigation.navigate('Login')}
           />
           {savedHotels.length === 0 ? (
             <Text style={styles.empty}>{t('myPick.savedHotels.empty')}</Text>

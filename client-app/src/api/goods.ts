@@ -59,6 +59,9 @@ export function fetchGoodsDetail(id: number): Promise<GoodsDetail> {
 
 /** 酒店列表独有的筛选参数(HotelController::list);多值一律逗号拼接 */
 export interface HotelListParams extends Omit<GoodsListParams, 'goodsType'> {
+  rooms?: number;
+  adults?: number;
+  children?: number;
   /** 1=价格区间按公民价比较 */
   citizen?: number;
   /** 星级任一命中,如 "4,5" */
@@ -112,7 +115,7 @@ export function fetchHotelFacets(
 /** 带入住/离店日期时,每个房型额外下发 `available`(这段日期最多还能订几间) */
 export function fetchHotelDetail(
   propertyId: number,
-  dates?: { checkIn?: string; checkOut?: string },
+  dates?: { checkIn?: string; checkOut?: string; citizen?: number; rooms?: number; adults?: number; children?: number },
 ): Promise<GoodsDetail> {
   return get('/api/v1/app/hotels/detail', { propertyId, ...dates });
 }

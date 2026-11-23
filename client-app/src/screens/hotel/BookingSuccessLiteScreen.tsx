@@ -46,12 +46,15 @@ import type { RootStackParamList } from '@/navigation/types';
 import { BOOKING_DEMO } from '@/screens/hotel/bookingDemo';
 import { formatCountdown, useBookingResult } from '@/screens/hotel/useBookingResult';
 import { useCommonStore } from '@/store/commonStore';
+import { useSiteStore } from '@/store/siteStore';
+import { formatMoney } from '@/utils/format';
 
 export default function BookingSuccessLiteScreen() {
   const { t, i18n } = useTranslation();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const route = useRoute<RouteProp<RootStackParamList, 'BookingSuccessLite'>>();
   const showToast = useCommonStore((s) => s.showToast);
+  const currency = useSiteStore((s) => s.currency);
 
   /* 真实下单带参进来,缺参就回落到演示数值 */
   const p = route.params ?? {};
@@ -111,6 +114,9 @@ export default function BookingSuccessLiteScreen() {
         >
           {/* -------------------------------------------------------- 结果卡 */}
           <View style={styles.resultCard}>
+            {result.longStayDiscount > 0 ? (
+              <Text style={styles.idLabel}>{t('hotels.booking.review.longStayDiscount')} · {formatMoney(result.longStayDiscount, currency)}</Text>
+            ) : null}
             <View style={styles.header}>
               <View style={[styles.iconWrap, { backgroundColor: `${tone}1A` }]}>
                 <HomeIcon

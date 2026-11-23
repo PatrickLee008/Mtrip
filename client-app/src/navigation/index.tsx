@@ -57,6 +57,7 @@ import HotelsScreen from '@/screens/hotel/HotelsScreen';
 import InsuranceScreen from '@/screens/hotel/InsuranceScreen';
 import StayDetailScreen from '@/screens/hotel/StayDetailScreen';
 import AccountScreen from '@/screens/more/AccountScreen';
+import SavedHotelsScreen from '@/screens/more/SavedHotelsScreen';
 import DeleteAccountScreen from '@/screens/more/DeleteAccountScreen';
 import LinkContactScreen from '@/screens/more/LinkContactScreen';
 import GuidesScreen from '@/screens/more/GuidesScreen';
@@ -390,6 +391,11 @@ export default function AppNavigator() {
           name="Account"
           component={AccountScreen}
           options={{ title: t('more.account.title'), headerShown: false }}
+        />
+        <Stack.Screen
+          name="SavedHotels"
+          component={SavedHotelsScreen}
+          options={{ title: t('myPick.savedHotels.title'), headerShown: false }}
         />
         <Stack.Screen
           name="Travelers"

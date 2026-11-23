@@ -29,6 +29,7 @@ import { useSiteStore } from '@/store/siteStore';
 import type { GoodsItem } from '@/types/models';
 import { reviewLabelKey } from '@/utils/reviewLabel';
 import { formatMoney } from '@/utils/format';
+import LongStayPrice from '@/components/hotel/LongStayPrice';
 
 /** 设计稿封面高 */
 const COVER_HEIGHT = 176;
@@ -113,6 +114,7 @@ export default function LiteHotelCard({
           {goods.goods_name}
         </Text>
 
+        {goods.longStay ? <LongStayPrice quote={goods.longStay} /> : null}
         <View style={styles.priceRow}>
           <View style={styles.priceCol}>
             {hasCitizenPrice ? (

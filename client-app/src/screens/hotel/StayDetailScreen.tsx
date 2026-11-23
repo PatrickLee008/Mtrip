@@ -122,7 +122,7 @@ export default function StayDetailScreen() {
   const quoteItems = useMemo(
     () =>
       tripStay
-        ? cartTripItems(tripStay.propertyId, tripStay.items, tripStay.checkIn, tripStay.checkOut)
+        ? cartTripItems(tripStay.propertyId, tripStay.items, tripStay.checkIn, tripStay.checkOut, tripStay.citizen)
         : [],
     [tripStay],
   );

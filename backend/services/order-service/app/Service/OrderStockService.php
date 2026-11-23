@@ -6,6 +6,7 @@ namespace App\Service;
 
 use Hyperf\DbConnection\Db;
 use Mtrip\Shared\Support\RoomDefaults;
+use Mtrip\Shared\Support\LongStayOffer;
 use Mtrip\Shared\Constants\ErrorCode;
 use Mtrip\Shared\Exception\BusinessException;
 
@@ -28,7 +29,7 @@ class OrderStockService
         if ($start === false || $end === false || $end <= $start) {
             throw new BusinessException(ErrorCode::PARAM_ERROR, '入住/离店日期不正确');
         }
-        if (($end - $start) / 86400 > 30) {
+        if (($end - $start) / 86400 > LongStayOffer::MAX_BOOKABLE_NIGHTS) {
             throw new BusinessException(ErrorCode::PARAM_ERROR, '连住最多30晚');
         }
         $dates = [];
@@ -76,9 +77,7 @@ class OrderStockService
                 Db::table('goods_daily_stock')->where('id', $row['id'])
                     ->increment('stock_locked', $qty);
             }
-            $unitPrice = $isCitizen && (float) ($row['price_citizen'] ?? 0) > 0
-                ? (float) $row['price_citizen']
-                : (float) $row['price'];
+            $unitPrice = RoomDefaults::nightlyPrice($sku, $date, $isCitizen, $row);
             $total += $unitPrice * $qty;
             if ($dryRun) {
                 continue;

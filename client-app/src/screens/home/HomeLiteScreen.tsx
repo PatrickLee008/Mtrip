@@ -36,6 +36,7 @@ import { useTranslation } from 'react-i18next';
 
 import SupportChatFab from '@/components/chat/SupportChatFab';
 import HomeHeader from '@/components/home/HomeHeader';
+import MenuLink from '@/components/more/MenuLink';
 import { PAGE_PADDING, SECTION_GAP, colors, shadows } from '@/config/theme';
 import { fonts } from '@/config/typography';
 import type { RootStackParamList } from '@/navigation/types';
@@ -101,6 +102,7 @@ export default function HomeLiteScreen() {
           </View>
 
           <View style={styles.cards}>
+            <MenuLink lite icon="calendar2" title={t('hotels.longStay.title')} onPress={() => navigation.navigate('HotelsLite', { longStay: true })} />
             {LITE_SERVICES.map((item) => (
               <ServiceCard key={item.key} item={item} onPress={() => press(item)} />
             ))}

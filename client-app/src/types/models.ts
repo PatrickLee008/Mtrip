@@ -62,7 +62,17 @@ export interface AuthResult {
 }
 
 /** 商品列表行(goods-service,含起价) */
+export interface LongStayQuote {
+  nights: number;
+  rate: number;
+  original: number;
+  discount: number;
+  total: number;
+  currency: string;
+}
+
 export interface GoodsItem {
+  longStay?: LongStayQuote | null;
   id: number;
   property_id?: number;
   property_name?: string;
@@ -194,6 +204,7 @@ export interface HotelAddon {
 
 /** 商品详情 */
 export interface GoodsDetail extends GoodsItem {
+  longStayTiers?: { minNights: number; rate: number }[];
   /** 酒店附加服务(Enhance Your Stay);非酒店或未配置为空 */
   addons?: HotelAddon[];
   merchant_id: number;
@@ -256,6 +267,7 @@ export interface OrderItemData {
 
 /** 订单详情 */
 export interface OrderDetail extends OrderItemData {
+  longstay_discount?: string | number;
   site_id: number;
   user_id: number;
   unit_price: string;
@@ -356,7 +368,8 @@ export type CouponReason =
   | 'stay_date'
   | 'min_rooms'
   | 'min_hotels'
-  | 'protected_minimum';
+  | 'protected_minimum'
+  | 'long_stay_exclusive';
 
 /**
  * 统一优惠券视图:领券中心 / 活动详情 / 券详情 / 我的券 / 结账共用同一套字段。

@@ -227,6 +227,9 @@ export default function BookingSuccessScreen() {
 
         {/* ------------------------------------------------- 凭证卡 2659:13488 */}
         <View style={styles.voucherCard}>
+          {result.longStayDiscount > 0 ? (
+            <Text style={styles.amountLine}>{t('hotels.booking.review.longStayDiscount')} · {formatMoney(result.longStayDiscount, currency)}</Text>
+          ) : null}
           <View style={styles.logoBlock}>
             <Image source={VOUCHER_LOGO} style={styles.logo} resizeMode="contain" />
             <Text style={styles.tagline}>{t('hotels.booking.success.travelWithUs')}</Text>

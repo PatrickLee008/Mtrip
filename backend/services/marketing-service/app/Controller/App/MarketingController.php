@@ -318,6 +318,7 @@ class MarketingController extends AppAbstractController
     {
         $userId = UserContext::userId();
         $ctx = [
+            'siteId' => $this->requireSiteId(),
             'orderType' => $this->intInput('orderType', 1),
             'propertyId' => $this->intInput('propertyId'),
             'roomTypeId' => $this->intInput('roomTypeId'),
@@ -375,6 +376,7 @@ class MarketingController extends AppAbstractController
     {
         $userId = UserContext::userId();
         $ctx = [
+            'siteId' => $this->requireSiteId(),
             'orderType' => $this->intInput('orderType', 1),
             'propertyId' => $this->intInput('propertyId'),
             'roomTypeId' => $this->intInput('roomTypeId'),

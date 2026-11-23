@@ -9,6 +9,13 @@ use Hyperf\DbConnection\Db;
 /** Shared effective admin policy and bounded merchant choice; old policy rows are read-only fallback. */
 final class PayAtHotelTerms
 {
+    public static function isAvailable(bool $enabled, string $source, mixed $propertyPolicies): bool
+    {
+        if (! $enabled || $source !== 'legacy') return $enabled;
+        if (is_string($propertyPolicies)) $propertyPolicies = json_decode($propertyPolicies, true);
+        return is_array($propertyPolicies) && ! empty($propertyPolicies['booking']['payAtHotel']);
+    }
+
     public static function legacyPolicy(array $merchant, bool $currentRead = false, ?string $at = null): array
     {
         return self::legacyPolicies([$merchant], $currentRead, $at)[(int) $merchant['id']] ?? [];

@@ -40,6 +40,8 @@ import { TEMP_HOTEL_GALLERY } from '@/assets/tempImages';
 import { ErrorView, LoadingView } from '@/components/common/StateViews';
 import HomeIcon, { type HomeIconName } from '@/components/home/HomeIcon';
 import HotelAmenitiesTab from '@/components/hotel/HotelAmenitiesTab';
+import LongStayPrice from '@/components/hotel/LongStayPrice';
+import SaveHotelButton from '@/components/hotel/SaveHotelButton';
 import HotelDetailTabs from '@/components/hotel/HotelDetailTabs';
 import HotelGallery from '@/components/hotel/HotelGallery';
 import HotelNearbyTab from '@/components/hotel/HotelNearbyTab';
@@ -94,20 +96,22 @@ export default function HotelDetailScreen() {
   const [error, setError] = useState('');
 
   const detailCheckIn = route.params?.checkIn;
+  const { citizen, rooms, adults, children } = route.params ?? {};
   const detailCheckOut = route.params?.checkOut;
   const loadDetail = useCallback(async () => {
     if (!propertyId) return;
     setLoading(true);
     try {
       /* 带上日期:房型下发 available,加减器据此封顶(QA CA_TC_067) */
-      setDetail(await fetchHotelDetail(propertyId, { checkIn: detailCheckIn, checkOut: detailCheckOut }));
+      setDetail(await fetchHotelDetail(propertyId, { checkIn: detailCheckIn, checkOut: detailCheckOut,
+        citizen: citizen ? 1 : undefined, rooms, adults, children }));
       setError('');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Error');
     } finally {
       setLoading(false);
     }
-  }, [propertyId, detailCheckIn, detailCheckOut]);
+  }, [propertyId, detailCheckIn, detailCheckOut, citizen, rooms, adults, children]);
 
   useEffect(() => {
     void loadDetail();
@@ -139,8 +143,9 @@ export default function HotelDetailScreen() {
       hotelName: detail?.goods_name ?? '',
       checkIn: route.params?.checkIn,
       checkOut: route.params?.checkOut,
+      citizen,
     });
-  }, [propertyId, detail?.goods_name, route.params?.checkIn, route.params?.checkOut, setCartContext]);
+  }, [propertyId, detail?.goods_name, route.params?.checkIn, route.params?.checkOut, citizen, setCartContext]);
 
   const comingSoon = () => showToast(t('home.comingSoon'));
   /**
@@ -200,9 +205,9 @@ export default function HotelDetailScreen() {
   const cartQuoteItems = useMemo(
     () =>
       cartAllReal && propertyId && cartCheckIn && cartCheckOut
-        ? cartTripItems(propertyId, cartItems, cartCheckIn, cartCheckOut)
+        ? cartTripItems(propertyId, cartItems, cartCheckIn, cartCheckOut, citizen)
         : [],
-    [cartAllReal, propertyId, cartItems, cartCheckIn, cartCheckOut],
+    [cartAllReal, propertyId, cartItems, cartCheckIn, cartCheckOut, citizen],
   );
   const { quote: cartQuote } = useTripQuote(cartQuoteItems, 0, isLogin && cartQuoteItems.length > 0);
   const cartTotal = cartQuote?.payAmount ?? cartEstimate;
@@ -281,7 +286,7 @@ export default function HotelDetailScreen() {
           />
         );
       case 'amenities':
-        return <HotelAmenitiesTab />;
+        return <HotelAmenitiesTab tiers={detail?.longStayTiers} activeRate={detail?.longStay?.rate} />;
       case 'nearby':
         return <HotelNearbyTab onComingSoon={comingSoon} />;
       case 'reviews':
@@ -319,7 +324,11 @@ export default function HotelDetailScreen() {
         {/* 标题卡(六个页签共用) */}
         <View style={styles.titleWrap}>
           <View style={styles.titleCard}>
-            <Text style={styles.title}>{title}</Text>
+            <View style={styles.titleActions}>
+              <Text style={[styles.title, styles.flex]}>{title}</Text>
+              {propertyId ? <SaveHotelButton key={propertyId} propertyId={propertyId} /> : null}
+            </View>
+            {detail?.longStay ? <LongStayPrice quote={detail.longStay} /> : null}
             <View style={styles.addressRow}>
               <HomeIcon name="locationOutline" width={12} height={15} color={colors.textSoft} />
               <Text style={styles.address}>{address}</Text>
@@ -472,6 +481,7 @@ const styles = StyleSheet.create({
 
   /* ---- 标题卡 ---- */
   titleWrap: { paddingHorizontal: PAGE_PADDING, paddingTop: SECTION_GAP },
+  titleActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   titleCard: {
     padding: 21,
     borderRadius: 28,

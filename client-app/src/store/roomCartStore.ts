@@ -49,6 +49,7 @@ export interface TripStay {
   hotelName: string;
   checkIn: string;
   checkOut: string;
+  citizen?: boolean;
   items: CartRoom[];
   /**
    * 这一段在向导第 1 步填好的内容(每家酒店各自一份):主要入住人、特殊要求、附加服务与人数。
@@ -76,6 +77,7 @@ interface RoomCartState {
   hotelName: string;
   checkIn?: string;
   checkOut?: string;
+  citizen?: boolean;
   items: CartRoom[];
   /**
    * 最近一单订下的房型快照。下单成功要把车清空(免得回到房型页还挂着已经订掉的房),
@@ -93,6 +95,7 @@ interface RoomCartState {
     hotelName: string;
     checkIn?: string;
     checkOut?: string;
+    citizen?: boolean;
   }) => void;
   /** Choose / Remove:已在车里就整条移出,否则加 1 间 */
   toggle: (room: Omit<CartRoom, 'quantity'>) => void;
@@ -127,6 +130,7 @@ export function combineTripStays(state: {
   hotelName: string;
   checkIn?: string;
   checkOut?: string;
+  citizen?: boolean;
   items: CartRoom[];
 }): TripStay[] {
   const real = state.items.filter((item) => item.sku);
@@ -139,6 +143,7 @@ export function combineTripStays(state: {
             hotelName: state.hotelName,
             checkIn: state.checkIn,
             checkOut: state.checkOut,
+            citizen: state.citizen,
             items: real,
           },
         ]
@@ -173,6 +178,7 @@ export const useRoomCartStore = create<RoomCartState>((set, get) => ({
       hotelName: ctx.hotelName,
       checkIn: ctx.checkIn,
       checkOut: ctx.checkOut,
+      citizen: ctx.citizen,
       items: sameHotel ? get().items : [],
     });
   },
@@ -225,6 +231,7 @@ export const useRoomCartStore = create<RoomCartState>((set, get) => ({
             hotelName: state.hotelName,
             checkIn: dates.checkIn,
             checkOut: dates.checkOut,
+            citizen: state.citizen,
             items: real,
             ...extras,
           },

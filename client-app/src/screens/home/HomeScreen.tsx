@@ -32,6 +32,7 @@ import MagazineCard from '@/components/home/MagazineCard';
 import MemberCard from '@/components/home/MemberCard';
 import PromoCard from '@/components/home/PromoCard';
 import QuickActionGrid from '@/components/home/QuickActionGrid';
+import MenuLink from '@/components/more/MenuLink';
 import SearchSection from '@/components/home/SearchSection';
 import SectionHeader from '@/components/home/SectionHeader';
 import SpecialDealBanner from '@/components/home/SpecialDealBanner';
@@ -164,6 +165,7 @@ export default function HomeScreen() {
 
         {/* 01 快捷入口(设计稿只有一行 4 项) */}
         <QuickActionGrid items={QUICK_ACTIONS} onPress={quickActionPress} />
+        <MenuLink icon="calendar2" title={t('hotels.longStay.title')} onPress={() => navigation.navigate('Hotels', { longStay: true })} />
 
         {/* 04 新用户促销 */}
         <PromoCard onPress={() => goList(GOODS_TYPE.HOTEL, t('home.promo.category'))} />

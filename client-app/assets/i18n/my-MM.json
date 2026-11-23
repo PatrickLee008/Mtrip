@@ -203,6 +203,14 @@
       "noStay": "No completed stay to review yet"
     },
     "savedHotels": {
+      "add": "ဟိုတယ်ကို သိမ်းရန်",
+      "added": "ဟိုတယ်ကို သိမ်းပြီးပါပြီ",
+      "updateFailed": "သိမ်းထားသော ဟိုတယ်များကို ပြင်ဆင်၍မရပါ။ ထပ်စမ်းပါ။",
+      "remove": "သိမ်းထားသော ဟိုတယ်ကို ဖယ်ရှားရန်",
+      "refresh": "ပြန်လည်ရယူရန်",
+      "retry": "ထပ်စမ်းရန်",
+      "loadMore": "နောက်ထပ် ကြည့်ရန်",
+      "removeFailed": "ဟိုတယ်ကို မဖယ်ရှားနိုင်ပါ။ ထပ်စမ်းပါ။",
       "title": "သိမ်းဆည်းထားသောဟိုတယ်များ",
       "empty": "သိမ်းဆည်းထားသော ဟိုတယ် မရှိသေးပါ။ ဟိုတယ်ကတ်ပေါ်မှ နှလုံးပုံကို နှိပ်၍ သိမ်းပါ။",
       "removed": "သိမ်းဆည်းမှုမှ ဖယ်ရှားပြီးပါပြီ",
@@ -298,7 +306,8 @@
         "stay_date": "တည်းခိုမည့်ရက် မကိုက်ညီပါ",
         "min_rooms": "အခန်းအရေအတွက် မလုံလောက်ပါ",
         "min_hotels": "ဟိုတယ်အရေအတွက် မလုံလောက်ပါ",
-        "protected_minimum": "Discount exceeds the protected minimum payable amount"
+        "protected_minimum": "Discount exceeds the protected minimum payable amount",
+        "long_stay_exclusive": "ဤကူပွန်ကို ရက်ရှည်တည်းခို အထူးအစီအစဉ်နှင့် တွဲသုံး၍မရပါ။"
       }
     },
     "items": {
@@ -1667,6 +1676,12 @@
     "openFailed": "App Store ကို ဖွင့်၍မရပါ။ Store မှ mTrip ကို ကိုယ်တိုင် အပ်ဒိတ်လုပ်ပါ။"
   },
   "hotels": {
+    "longStay": {
+      "maxNights": "{{nights}} ညထက် မပိုသော တည်းခိုရက်ကို ရွေးပါ။",
+      "title": "ရက်ရှည်တည်းခို အထူးအစီအစဉ်",
+      "offer": "ရက်ရှည်တည်းခို · {{percent}}% လျှော့စျေး",
+      "saved": "{{nights}} ညအတွက် {{amount}} သက်သာသည်"
+    },
     "title": "ဟိုတယ်နှင့် တည်းခိုခန်း",
     "searchPlaceholder": "ရှာဖွေရန်",
     "checkIn": "ဝင်ရောက်ရက်",

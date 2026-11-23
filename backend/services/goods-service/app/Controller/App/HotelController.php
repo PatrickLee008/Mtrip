@@ -7,11 +7,14 @@ namespace App\Controller\App;
 use App\Controller\AbstractController;
 use Hyperf\DbConnection\Db;
 use Mtrip\Shared\Support\HotelAddons;
+use Mtrip\Shared\Support\LongStayOffer;
 use Mtrip\Shared\Support\RoomDefaults;
 use Mtrip\Shared\Constants\ErrorCode;
 use Mtrip\Shared\Context\UserContext;
 use Mtrip\Shared\Exception\BusinessException;
 use Mtrip\Shared\Merchant\MarketplaceReader;
+use Mtrip\Shared\Merchant\MerchantCommercialSettings;
+use Mtrip\Shared\Merchant\PayAtHotelTerms;
 use Mtrip\Shared\Support\Result;
 
 /** Consumer hotel reads use Property and room type IDs only. */
@@ -44,7 +47,6 @@ final class HotelController extends AbstractController
         $breakfast = $this->intInput('breakfast') === 1;
         $freeCancel = $this->intInput('freeCancel') === 1;
         $bedrooms = array_values(array_intersect(array_map('intval', $this->csvInput('bedrooms')), self::BEDROOM_LEVELS));
-        /* 到店付款:只读物业政策开关,本期 App 未露出该筛选项(支付流程未接) */
         $payAtHotel = $this->intInput('payAtHotel') === 1;
 
         /* 组内:星级/床型/类型/城市任一命中即可,设施与房间特色须全部具备;组间一律取交集 */
@@ -85,7 +87,6 @@ final class HotelController extends AbstractController
         }
         $total = count($rows);
         $list = array_map(static function (array $row): array {
-            /* 到店付款开关下发给卡片/详情做「即将开放」提示;其余筛选标签不出参 */
             $row['payAtHotel'] = $row['_tags']['payAtHotel'];
             unset($row['_tags']);
             return self::listAliases($row);
@@ -151,15 +152,7 @@ final class HotelController extends AbstractController
         $stores = Db::table('merchant_store')->where('site_id', $siteId)->whereIn('id', $ids)
             ->get(['id', 'merchant_id', 'amenities', 'hotel_policies'])->keyBy('id')->all();
         $merchantIds = array_values(array_unique(array_map(static fn ($store) => (int) $store->merchant_id, $stores)));
-        $enabledMerchants = [];
-        if ($merchantIds !== []) {
-            $terms = Db::table('merchant_pay_at_hotel_terms')->where('site_id', $siteId)
-                ->whereIn('merchant_id', $merchantIds)->where('effective_at', '<=', gmdate('Y-m-d H:i:s'))
-                ->orderByDesc('effective_at')->orderByDesc('version')->get(['merchant_id', 'enabled']);
-            foreach ($terms as $term) {
-                $enabledMerchants[(int) $term->merchant_id] ??= (int) $term->enabled === 1;
-            }
-        }
+        $policies = $this->commercialPolicies($siteId, $merchantIds);
         $rooms = Db::table('hotel_room_type')->where('site_id', $siteId)->whereIn('property_id', $ids)
             ->where('status', 1)->where('publish_status', 2)->where('approved_version', '>', 0)->whereNull('deleted_at')
             ->get(['property_id', 'bed_type', 'bedding', 'bedroom_count', 'room_view', 'facilities']);
@@ -181,6 +174,7 @@ final class HotelController extends AbstractController
             $tags = [];
             foreach ($row['facilities'] as $facility) if (is_string($facility)) self::addTag($tags, $facility);
             $store = $stores[$pid] ?? null;
+            $policy = $policies[(int) ($store->merchant_id ?? 0)] ?? [];
             foreach ($this->jsonList($store->amenities ?? null) as $amenity) {
                 if (is_array($amenity) && ($amenity['enabled'] ?? true) && is_string($amenity['name'] ?? null)) self::addTag($tags, $amenity['name']);
             }
@@ -191,8 +185,8 @@ final class HotelController extends AbstractController
                 'beds' => $roomTags[$pid]['beds'] ?? [],
                 'features' => $roomTags[$pid]['features'] ?? [],
                 'bedrooms' => array_values($roomTags[$pid]['bedrooms'] ?? []),
-                'payAtHotel' => self::payAtHotel($store->hotel_policies ?? null)
-                    && ($enabledMerchants[(int) ($store->merchant_id ?? 0)] ?? false),
+                'payAtHotel' => PayAtHotelTerms::isAvailable((bool) ($policy['pay_at_hotel_enabled'] ?? false),
+                    $policy['source'] ?? '', $store->hotel_policies ?? null),
             ];
         }
         unset($row);
@@ -238,22 +232,47 @@ final class HotelController extends AbstractController
         if ($offsets === []) return [];
 
         $ids = array_column($rows, 'property_id');
+        $tiers = LongStayOffer::activeTiers($siteId, $ids);
+        $citizen = $this->intInput('citizen') === 1;
+        $roomCount = min(20, max(1, $this->intInput('rooms', 1)));
+        $adults = $this->intInput('adults');
+        $children = $this->intInput('children');
         $rooms = Db::table('hotel_room_type')->where('site_id', $siteId)->whereIn('property_id', $ids)
             ->where('status', 1)->where('publish_status', 2)->where('approved_version', '>', 0)->whereNull('deleted_at')
-            ->get(['id', 'property_id', 'base_stock', 'launch_stock'])->map(static fn ($r) => (array) $r)->all();
+            ->get(['id', 'property_id', 'base_stock', 'launch_stock', 'base_price', 'base_price_citizen', 'weekend_price', 'currency',
+                'max_adults', 'max_children', 'max_guests'])->map(static fn ($r) => (array) $r)->all();
         $stocks = self::stockMap($siteId, $ids, self::shiftDate($checkIn, min($offsets)), self::shiftDate($checkOut, max($offsets) - 1));
         $byProperty = [];
         foreach ($rooms as $room) $byProperty[(int) $room['property_id']][] = $room;
 
         $result = [];
         foreach ($rows as $row) {
+            $tier = $nights <= LongStayOffer::MAX_BOOKABLE_NIGHTS ? LongStayOffer::tier($tiers, (int) $row['property_id'], $nights) : null;
             foreach ($offsets as $offset) {
                 $start = self::shiftDate($checkIn, $offset);
+                $available = false;
+                $offer = null;
                 foreach ($byProperty[(int) $row['property_id']] ?? [] as $room) {
-                    if (self::minAvailable($room, $stocks, $start, $nights) < 1) continue;
-                    $result[] = $row + ['availableCheckIn' => $start, 'availableCheckOut' => self::shiftDate($start, $nights)];
-                    continue 3;
+                    if (self::minAvailable($room, $stocks, $start, $nights) < $roomCount) continue;
+                    if ($adults > (int) $room['max_adults'] * $roomCount || $children > (int) $room['max_children'] * $roomCount
+                        || $adults + $children > (int) $room['max_guests'] * $roomCount) continue;
+                    $available = true;
+                    if ($tier === null) break;
+                    $original = 0.0;
+                    for ($night = 0; $night < $nights; ++$night) {
+                        $date = self::shiftDate($start, $night);
+                        $original += RoomDefaults::nightlyPrice($room, $date, $citizen, $stocks[(int) $room['id']][$date] ?? null) * $roomCount;
+                    }
+                    $discount = LongStayOffer::discount($tier, $original);
+                    $total = round($original - $discount, 2);
+                    if ($offer === null || $total < $offer['total']) {
+                        $offer = ['nights' => $nights, 'rate' => (float) $tier['discount_rate'], 'original' => round($original, 2),
+                            'discount' => $discount, 'total' => $total, 'currency' => $room['currency']];
+                    }
                 }
+                if (! $available) continue;
+                $result[] = $row + ['availableCheckIn' => $start, 'availableCheckOut' => self::shiftDate($start, $nights), 'longStay' => $offer];
+                break;
             }
         }
         return $result;
@@ -265,10 +284,10 @@ final class HotelController extends AbstractController
         $stocks = [];
         Db::table('goods_daily_stock')->where('site_id', $siteId)->whereIn('property_id', $propertyIds)->where('sku_type', 1)
             ->whereBetween('stock_date', [$from, $to])->whereNull('deleted_at')
-            ->get(['sku_id', 'stock_date', 'stock_total', 'stock_sold', 'stock_locked', 'is_closed'])
+            ->get(['sku_id', 'stock_date', 'stock_total', 'stock_sold', 'stock_locked', 'is_closed', 'price', 'price_citizen'])
             ->each(static function ($s) use (&$stocks): void {
-                $stocks[(int) $s->sku_id][(string) $s->stock_date] = (int) $s->is_closed === 1 ? 0
-                    : max(0, (int) $s->stock_total - (int) $s->stock_sold - (int) $s->stock_locked);
+                $stocks[(int) $s->sku_id][(string) $s->stock_date] = ['price' => $s->price, 'price_citizen' => $s->price_citizen,
+                    'available' => (int) $s->is_closed === 1 ? 0 : max(0, (int) $s->stock_total - (int) $s->stock_sold - (int) $s->stock_locked)];
             });
         return $stocks;
     }
@@ -279,7 +298,7 @@ final class HotelController extends AbstractController
         $default = RoomDefaults::stock($room);
         $min = PHP_INT_MAX;
         for ($n = 0; $n < $nights; ++$n) {
-            $min = min($min, $stocks[(int) $room['id']][self::shiftDate($start, $n)] ?? $default);
+            $min = min($min, $stocks[(int) $room['id']][self::shiftDate($start, $n)]['available'] ?? $default);
         }
         return $min === PHP_INT_MAX ? 0 : $min;
     }
@@ -314,11 +333,12 @@ final class HotelController extends AbstractController
         $tags[$key] = strlen($key) <= 2 ? strtoupper($label) : ucfirst(str_replace('_', ' ', $label));
     }
 
-    /** 物业政策 booking.payAtHotel(商户端「政策」页开关,随资料审核发布) */
-    private static function payAtHotel(mixed $policies): bool
+    private function commercialPolicies(int $siteId, array $merchantIds): array
     {
-        if (is_string($policies)) $policies = json_decode($policies, true);
-        return is_array($policies) && filter_var($policies['booking']['payAtHotel'] ?? false, FILTER_VALIDATE_BOOLEAN);
+        if ($merchantIds === []) return [];
+        $merchants = Db::table('merchant_info')->where('site_id', $siteId)->whereIn('id', $merchantIds)
+            ->whereNull('deleted_at')->get()->map(static fn ($row) => (array) $row)->all();
+        return MerchantCommercialSettings::effectiveMany($merchants);
     }
 
     private function csvInput(string $key): array
@@ -333,7 +353,7 @@ final class HotelController extends AbstractController
         $summary = $this->publishedProperty($siteId, $propertyId);
         $property = (array) Db::table('merchant_store')->where('id', $propertyId)->where('site_id', $siteId)
             ->where('business_type', 'hotel')->whereNull('deleted_at')->first([
-                'id', 'store_name', 'address', 'longitude', 'latitude', 'images', 'description', 'star_level',
+                'id', 'merchant_id', 'hotel_policies', 'store_name', 'address', 'longitude', 'latitude', 'images', 'description', 'star_level',
                 'facilities', 'website', 'checkin_time', 'checkout_time', 'addons',
             ]);
         if ($property === []) throw new BusinessException(ErrorCode::NOT_FOUND, '酒店物业不存在');
@@ -372,14 +392,17 @@ final class HotelController extends AbstractController
         $detail['skus'] = $rooms;
         $detail['refundRules'] = $rules;
         $detail['reviewSummary'] = ['rating' => $summary['rating'], 'count' => $summary['reviewCount'], 'dimensions' => $this->reviewDimensions($propertyId)];
+        $detail['longStay'] = $this->availableRows($siteId, [$summary])[0]['longStay'] ?? null;
+        $detail['longStayTiers'] = array_values(array_map(static fn ($tier) => [
+            'minNights' => (int) $tier['min_nights'], 'rate' => (float) $tier['discount_rate'],
+        ], LongStayOffer::activeTiers($siteId, [$propertyId])));
         /* 附加服务:只下发已发布配置里启用的项(Enhance Your Stay),计价规则见 shared HotelAddons */
         $detail['addons'] = HotelAddons::enabled($property['addons'] ?? null);
-        $store = Db::table('merchant_store')->where('id', $propertyId)->where('site_id', $siteId)
-            ->first(['merchant_id', 'hotel_policies']);
-        $enabled = $store ? Db::table('merchant_pay_at_hotel_terms')->where('merchant_id', (int) $store->merchant_id)
-            ->where('site_id', $siteId)->where('effective_at', '<=', gmdate('Y-m-d H:i:s'))
-            ->orderByDesc('effective_at')->orderByDesc('version')->value('enabled') : 0;
-        $detail['payAtHotel'] = $store && self::payAtHotel($store->hotel_policies) && (int) $enabled === 1;
+        $merchantId = (int) $property['merchant_id'];
+        $policy = $this->commercialPolicies($siteId, [$merchantId])[$merchantId] ?? [];
+        $detail['payAtHotel'] = PayAtHotelTerms::isAvailable((bool) ($policy['pay_at_hotel_enabled'] ?? false),
+            $policy['source'] ?? '', $property['hotel_policies']);
+        unset($detail['hotel_policies']);
         $detail['goods_detail'] = $property['description'];
         $detail['open_time'] = $property['checkin_time'];
         $detail['close_time'] = $property['checkout_time'];

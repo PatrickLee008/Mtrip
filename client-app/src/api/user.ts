@@ -268,6 +268,10 @@ export function fetchFavoriteList(params: PageParams): Promise<PageData<Favorite
   return get('/api/v1/app/user/favorite/list', { ...params });
 }
 
+export function fetchFavoriteStatus(propertyId: number): Promise<{ saved: boolean }> {
+  return get('/api/v1/app/user/favorite/status', { propertyId });
+}
+
 export function addFavorite(propertyId: number): Promise<null> {
   return post<null>('/api/v1/app/user/favorite/add', { propertyId });
 }

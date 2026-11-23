@@ -17,17 +17,16 @@ import HomeIcon from '@/components/home/HomeIcon';
 import { detailShared } from '@/components/hotel/detailShared';
 import { colors } from '@/config/theme';
 import { fonts } from '@/config/typography';
-import {
-  DETAIL_AMENITY_GROUPS,
-  DETAIL_LONG_STAY_BENEFITS,
-  DETAIL_LONG_STAY_TIERS,
-} from '@/screens/hotel/detailDemo';
+import { DETAIL_AMENITY_GROUPS } from '@/screens/hotel/detailDemo';
 
 /** 设计稿分组标题与条目文字用的是这一版深蓝/近黑,不是通用的 heading */
 const GROUP_TITLE_COLOR = '#204DDA';
 const ITEM_TEXT_COLOR = '#0B1C30';
 
-export default function HotelAmenitiesTab() {
+export default function HotelAmenitiesTab({ tiers = [], activeRate }: {
+  tiers?: { minNights: number; rate: number }[];
+  activeRate?: number;
+}) {
   const { t } = useTranslation();
 
   return (
@@ -63,29 +62,17 @@ export default function HotelAmenitiesTab() {
         </View>
       </View>
 
-      {/* 02 长住折扣阶梯 */}
-      <View style={[detailShared.panel, styles.listPanel]}>
-        <Text style={styles.listTitle}>{t('hotels.stayLonger')}</Text>
-        {DETAIL_LONG_STAY_TIERS.map((tier) => (
-          <View key={tier.nights} style={[styles.tierRow, !tier.current && styles.tierDim]}>
-            <Text style={styles.tierNights}>{t('hotels.nights', { nights: tier.nights })}</Text>
-            <Text style={styles.tierPercent}>{tier.percent}%</Text>
-          </View>
-        ))}
-      </View>
-
-      {/* 03 长住权益 */}
-      <View style={[detailShared.panel, styles.listPanel]}>
-        <Text style={styles.listTitle}>{t('hotels.detail.longStay.title')}</Text>
-        {DETAIL_LONG_STAY_BENEFITS.map((benefit) => (
-          <View key={benefit.key} style={styles.benefitRow}>
-            <HomeIcon name="check" size={20} color={colors.primary} />
-            <Text style={[styles.benefitText, benefit.strong && styles.benefitStrong]}>
-              {t(`hotels.detail.longStay.benefits.${benefit.key}`)}
-            </Text>
-          </View>
-        ))}
-      </View>
+      {tiers.length > 0 ? (
+        <View style={[detailShared.panel, styles.listPanel]}>
+          <Text style={styles.listTitle}>{t('hotels.stayLonger')}</Text>
+          {tiers.map((tier, index) => (
+            <View key={index} style={[styles.tierRow, activeRate !== undefined && tier.rate !== activeRate && styles.tierDim]}>
+              <Text style={styles.tierNights}>{t('hotels.nights', { nights: tier.minNights })}</Text>
+              <Text style={styles.tierPercent}>{tier.rate}%</Text>
+            </View>
+          ))}
+        </View>
+      ) : null}
     </View>
   );
 }

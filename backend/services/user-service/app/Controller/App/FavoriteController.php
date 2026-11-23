@@ -19,6 +19,13 @@ use Mtrip\Shared\Support\Result;
  */
 class FavoriteController extends AbstractController
 {
+    public function status(): array
+    {
+        $saved = Db::table('user_favorite')->where('site_id', $this->requireSiteId())
+            ->where('user_id', UserContext::userId())->where('property_id', $this->requireId('propertyId'))->exists();
+        return Result::success(['saved' => $saved]);
+    }
+
     /** 收藏列表:物业名称、图片、位置与星级 */
     public function list(): array
     {

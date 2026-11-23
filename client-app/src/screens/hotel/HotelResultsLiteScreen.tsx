@@ -81,8 +81,12 @@ export default function HotelResultsLiteScreen() {
       checkIn: params.checkIn,
       checkOut: params.checkOut,
       flexDays: params.flexDays || undefined,
+      rooms: params.longStay ? params.rooms : undefined,
+      adults: params.longStay ? params.adults : undefined,
+      children: params.longStay ? params.children : undefined,
     }),
-    [params.countryCode, params.cityKey, params.keyword, params.citizen, params.checkIn, params.checkOut, params.flexDays],
+    [params.countryCode, params.cityKey, params.keyword, params.citizen, params.checkIn, params.checkOut,
+      params.flexDays, params.longStay, params.rooms, params.adults, params.children],
   );
   const query = useMemo(() => ({ ...scope, ...filterToParams(filter) }), [scope, filter]);
 
@@ -185,7 +189,7 @@ export default function HotelResultsLiteScreen() {
             <HomeIcon name="location" size={18} color={colors.primary} />
             <View style={styles.flexCol}>
               <Text style={styles.destName} numberOfLines={1}>
-                {params.keyword || t('hotels.lite.anywhere')}
+                {params.keyword || t(params.longStay ? 'hotels.longStay.title' : 'hotels.lite.anywhere')}
               </Text>
               {dateLabel ? (
                 <Text style={styles.destDates} numberOfLines={1}>
@@ -240,6 +244,7 @@ export default function HotelResultsLiteScreen() {
                     id: goods.id,
                     checkIn: goods.availableCheckIn ?? params.checkIn,
                     checkOut: goods.availableCheckOut ?? params.checkOut,
+                    citizen: params.citizen, rooms: scope.rooms, adults: scope.adults, children: scope.children,
                   })
                 }
                 onToggleFavorite={toggleFavorite}

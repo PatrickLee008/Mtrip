@@ -107,6 +107,7 @@ interface Props {
   value: DateRangeValue;
   onClose: () => void;
   onConfirm: (value: DateRangeValue) => void;
+  maxNights?: number;
   /**
    * 是否压一层遮罩。**默认不压** —— 搜索页(完整版 / 关怀版)与结果页的设计稿都要求
    * 背后那张大图保持原亮度,见下方 render 里的注释。
@@ -120,6 +121,7 @@ export default function DatePickerSheet({
   value,
   onClose,
   onConfirm,
+  maxNights,
   backdrop = false,
 }: Props) {
   const { t, i18n } = useTranslation();
@@ -225,7 +227,8 @@ export default function DatePickerSheet({
   const pick = (key: string) => setDraft((d) => ({ ...d, ...pickStayRange(d.checkIn, d.checkOut, key) }));
 
   const nights = nightsBetween(draft.checkIn, draft.checkOut);
-  const canConfirm = Boolean(draft.checkIn && draft.checkOut);
+  const overLimit = maxNights !== undefined && nights > maxNights;
+  const canConfirm = Boolean(draft.checkIn && draft.checkOut && !overLimit);
 
   const formatField = (key: string) =>
     key
@@ -336,6 +339,9 @@ export default function DatePickerSheet({
               <Text style={styles.durationLabel}>{t('hotels.datePicker.totalDuration')}</Text>
               <Text style={styles.durationValue}>{t('hotels.nights', { nights })}</Text>
             </View>
+            {overLimit ? <Text accessibilityLiveRegion="polite" style={styles.durationLabel}>
+              {t('hotels.longStay.maxNights', { nights: maxNights })}
+            </Text> : null}
 
             {/* 03 日历 */}
             <View style={styles.calendar}>

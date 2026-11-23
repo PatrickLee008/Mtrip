@@ -69,10 +69,6 @@ class UserController extends AbstractController
         return Result::success(null, '密码已修改,请重新登录');
     }
 
-    /**
-     * 钱包流水筛选(App mTrip Wallet 页的四个页签)。change_type:1充值 2消费 3退款 4调账(含推荐返利) 5提现;
-     * 6 预留给「余额过期」—— 目前钱包余额没有过期机制,Expired 页签恒为空,有了过期任务再按 6 落流水。
-     */
     private const BALANCE_LOG_TYPES = ['refund' => [3], 'spend' => [2], 'expired' => [6]];
 
     /**
@@ -82,9 +78,13 @@ class UserController extends AbstractController
     public function balanceLogs(): array
     {
         [$page, $pageSize] = $this->pageParams();
+        $currentMonth = new \DateTimeImmutable('first day of this month midnight', new \DateTimeZone('UTC'));
+        $firstMonth = $currentMonth->modify('-5 months');
         $query = Db::table('user_balance_log')
             ->where('user_id', UserContext::userId())
-            ->orderByDesc('id');
+            ->where('created_at', '>=', $firstMonth->format('Y-m-d H:i:s'))
+            ->where('created_at', '<', $currentMonth->modify('+1 month')->format('Y-m-d H:i:s'))
+            ->orderByDesc('created_at')->orderByDesc('id');
         $types = self::BALANCE_LOG_TYPES[$this->strInput('type')] ?? null;
         if ($types !== null) {
             $query->whereIn('change_type', $types);
@@ -94,9 +94,9 @@ class UserController extends AbstractController
             if (! preg_match('/^(\d{4})-(0[1-9]|1[0-2])$/', $month, $m)) {
                 throw new BusinessException(ErrorCode::PARAM_ERROR, '月份格式应为 YYYY-MM');
             }
-            $start = sprintf('%s-%s-01 00:00:00', $m[1], $m[2]);
-            $query->where('created_at', '>=', $start)
-                ->where('created_at', '<', date('Y-m-d H:i:s', strtotime($start . ' +1 month')));
+            $start = new \DateTimeImmutable($month . '-01 00:00:00', new \DateTimeZone('UTC'));
+            $query->where('created_at', '>=', $start->format('Y-m-d H:i:s'))
+                ->where('created_at', '<', $start->modify('+1 month')->format('Y-m-d H:i:s'));
         }
         $total = (clone $query)->count();
         $list = $query->forPage($page, $pageSize)->get()

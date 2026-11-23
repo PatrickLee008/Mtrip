@@ -25,6 +25,7 @@ export function cartTripItems(
   rooms: CartRoom[],
   checkIn: string,
   checkOut: string,
+  citizen?: boolean,
 ): TripQuoteItem[] {
   return rooms
     .filter((room) => room.sku)
@@ -34,6 +35,7 @@ export function cartTripItems(
       quantity: room.quantity,
       useDate: checkIn,
       endDate: checkOut,
+      ...(citizen ? { isCitizen: 1 } : {}),
     }));
 }
 

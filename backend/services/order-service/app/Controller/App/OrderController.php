@@ -156,7 +156,10 @@ class OrderController extends AbstractController
                 $sku, $dates, $quantity, $isCitizen
             );
             // 长住优惠:仅酒店,按住宿夜数命中最高梯度,对原总价打折
-            $longstay = $orderType === 1 ? $this->pricingService->longstayDiscount($siteId, count($dates), $totalAmount) : 0.0;
+            $longstay = $orderType === 1 ? \Mtrip\Shared\Support\LongStayOffer::discount(
+                \Mtrip\Shared\Support\LongStayOffer::tier(\Mtrip\Shared\Support\LongStayOffer::activeTiers($siteId, [$propertyId]), $propertyId, count($dates)),
+                $totalAmount
+            ) : 0.0;
             // 优惠券(可选):校验归属/状态/有效期/适用范围/门槛,计算抵扣(不在此消耗,支付时消耗)
             [$couponRefId, $couponDiscount, $couponSnapshot] = $couponId > 0
                 ? $this->pricingService->resolveCoupon($siteId, $userId, $couponId, $orderType,

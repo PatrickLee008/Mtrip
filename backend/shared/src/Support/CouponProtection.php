@@ -9,8 +9,16 @@ use Hyperf\DbConnection\Db;
 /** Use official room prices for the commission floor, including after other room discounts. */
 final class CouponProtection
 {
-    public static function evaluate(array $coupon, array $legs, int $orderType, string $today): array
+    public static function evaluate(array $coupon, array $legs, int $orderType, string $today, int $siteId = 0): array
     {
+        if ($orderType === 1 && $siteId > 0) {
+            $tiers = LongStayOffer::activeTiers($siteId, array_unique(array_column($legs, 'propertyId')));
+            foreach ($legs as &$leg) {
+                $tier = LongStayOffer::tier($tiers, (int) ($leg['propertyId'] ?? 0), (int) ($leg['nights'] ?? 0));
+                $leg['longStayExclusive'] = ! LongStayOffer::allowsCoupon($tier, $coupon);
+            }
+            unset($leg);
+        }
         $result = CouponEligibility::evaluate($coupon, $legs, $orderType, $today);
         $policy = $coupon['merchant_policy'] ?? null;
         $policy = is_string($policy) ? json_decode($policy, true) : $policy;

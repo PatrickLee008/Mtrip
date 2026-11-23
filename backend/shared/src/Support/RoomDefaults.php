@@ -7,6 +7,13 @@ namespace Mtrip\Shared\Support;
 /** Used only when a date has no explicit inventory record. */
 final class RoomDefaults
 {
+    public static function nightlyPrice(array $room, string $date, bool $citizen, ?array $stock = null): float
+    {
+        $citizenPrice = (float) ($stock === null ? ($room['base_price_citizen'] ?? 0) : ($stock['price_citizen'] ?? 0));
+        if ($citizen && $citizenPrice > 0) return $citizenPrice;
+        return $stock === null ? self::price($room, $date) : (float) $stock['price'];
+    }
+
     public static function price(array $room, string $date): float
     {
         $weekend = in_array((int) date('w', strtotime($date)), [5, 6], true);

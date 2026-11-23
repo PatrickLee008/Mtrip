@@ -203,6 +203,14 @@
       "noStay": "No completed stay to review yet"
     },
     "savedHotels": {
+      "add": "Save hotel",
+      "added": "Saved to your hotels",
+      "updateFailed": "Could not update saved hotels. Try again.",
+      "remove": "Remove hotel",
+      "refresh": "Refresh",
+      "retry": "Retry",
+      "loadMore": "Load more",
+      "removeFailed": "Could not remove the hotel. Try again.",
       "title": "Save Hotels",
       "empty": "No saved hotels yet. Tap the heart on any hotel to save it here.",
       "removed": "Removed from saved hotels",
@@ -298,7 +306,8 @@
         "stay_date": "Stay dates not eligible",
         "min_rooms": "Not enough rooms",
         "min_hotels": "Not enough hotels",
-        "protected_minimum": "Discount exceeds the protected minimum payable amount"
+        "protected_minimum": "Discount exceeds the protected minimum payable amount",
+        "long_stay_exclusive": "This coupon cannot be combined with the Long Stay deal."
       }
     },
     "items": {
@@ -1667,6 +1676,12 @@
     "openFailed": "Unable to open the app store. Please update mTrip from the store manually."
   },
   "hotels": {
+    "longStay": {
+      "maxNights": "Choose a stay of up to {{nights}} nights.",
+      "title": "Long Stay Deals",
+      "offer": "Long Stay · {{percent}}% off",
+      "saved": "Save {{amount}} over {{nights}} nights"
+    },
     "title": "Hotel & Homestay",
     "searchPlaceholder": "Search",
     "checkIn": "Check In",

@@ -200,6 +200,9 @@ final class CouponEligibility
         if ($orderType !== 1) {
             return null;
         }
+        if (! empty($leg['longStayExclusive'])) {
+            return 'long_stay_exclusive';
+        }
         $nights = isset($leg['nights']) ? (int) $leg['nights'] : null;
         $minNights = (int) ($coupon['min_nights'] ?? 0);
         $maxNights = (int) ($coupon['max_nights'] ?? 0);

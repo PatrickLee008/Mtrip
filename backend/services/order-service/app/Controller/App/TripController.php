@@ -463,11 +463,13 @@ class TripController extends AbstractController
     {
         $legs = [];
         $tripTotal = 0.0;
+        $tiers = \Mtrip\Shared\Support\LongStayOffer::activeTiers($siteId, array_unique(array_column($prepared, 'propertyId')));
         foreach ($prepared as $p) {
             [$original, $changes] = $this->stockService->lock(
                 $siteId, $p['propertyId'], 0, 1, $p['roomTypeId'], $p['room'], $p['dates'], $p['quantity'], $p['isCitizen'], $dryRun
             );
-            $longstay = $this->pricingService->longstayDiscount($siteId, count($p['dates']), $original);
+            $tier = \Mtrip\Shared\Support\LongStayOffer::tier($tiers, $p['propertyId'], count($p['dates']));
+            $longstay = \Mtrip\Shared\Support\LongStayOffer::discount($tier, $original);
             $net = round($original - $longstay, 2);
             $tripTotal = round($tripTotal + $net, 2);
             $legs[] = $p + ['original' => $original, 'longstay' => $longstay, 'net' => $net, 'changes' => $changes];
@@ -560,7 +562,7 @@ class TripController extends AbstractController
             /* payment_expires_at:C 端支付失败页要显示「剩余可支付时间」。
                过期时间只在 order_main 上(order_trip 没有这一列),整车取各预订里最早的那个。 */
             ->get(['id', 'order_no', 'property_id', 'room_type_id', 'goods_name', 'goods_image', 'sku_name', 'quantity',
-                'pay_amount', 'pay_at_hotel', 'hotel_balance', 'alloc_coupon_discount', 'order_status', 'refund_status', 'use_date', 'end_date',
+                'pay_amount', 'pay_at_hotel', 'hotel_balance', 'longstay_discount', 'alloc_coupon_discount', 'order_status', 'refund_status', 'use_date', 'end_date',
                 'payment_expires_at'])
             ->map(static fn ($row) => (array) $row)->all();
         $trip['bookings'] = $bookings;

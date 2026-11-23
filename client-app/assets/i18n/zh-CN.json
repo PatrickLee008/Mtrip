@@ -203,6 +203,14 @@
       "noStay": "还没有可评价的入住"
     },
     "savedHotels": {
+      "add": "收藏酒店",
+      "added": "已收藏酒店",
+      "updateFailed": "未能更新收藏，请重试。",
+      "remove": "删除收藏",
+      "refresh": "刷新",
+      "retry": "重试",
+      "loadMore": "加载更多",
+      "removeFailed": "未能删除收藏，请重试。",
       "title": "收藏酒店",
       "empty": "还没有收藏的酒店,点酒店卡片上的心形即可收藏。",
       "removed": "已取消收藏",
@@ -298,7 +306,8 @@
         "stay_date": "入住日期不适用",
         "min_rooms": "未达最少间数",
         "min_hotels": "未达最少酒店数",
-        "protected_minimum": "优惠后金额低于受保护的最低应付金额"
+        "protected_minimum": "优惠后金额低于受保护的最低应付金额",
+        "long_stay_exclusive": "此优惠券不能与当前长住优惠叠加。"
       }
     },
     "items": {
@@ -1667,6 +1676,12 @@
     "openFailed": "无法打开应用商店,请前往商店手动更新 mTrip。"
   },
   "hotels": {
+    "longStay": {
+      "maxNights": "请选择不超过 {{nights}} 晚的住宿。",
+      "title": "长住优惠",
+      "offer": "长住优惠 · 立减 {{percent}}%",
+      "saved": "{{nights}} 晚共省 {{amount}}"
+    },
     "title": "酒店与民宿",
     "searchPlaceholder": "搜索",
     "checkIn": "入住",

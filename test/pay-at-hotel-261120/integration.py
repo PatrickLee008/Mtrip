@@ -161,7 +161,7 @@ try:
     for source,target in [('mtrip_business',B),('mtrip_system',S)]:
         tables=sql(f"SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA='{source}' AND TABLE_TYPE='BASE TABLE';").splitlines()
         sql(''.join(f'CREATE TABLE `{target}`.`{table}` LIKE `{source}`.`{table}`;' for table in tables))
-    migrations=['V20261117100000__merchant-commercial-settings.sql','V20261120100100__multi-hotel-checkout-sessions.sql','V20261120120000__property-commercial-commission.sql','V20261120120100__pay-at-hotel-booking-settlements.sql']
+    migrations=['V20261117100000__merchant-commercial-settings.sql','V20261120100100__multi-hotel-checkout-sessions.sql','V20261120120000__property-commercial-commission.sql','V20261120120100__pay-at-hotel-booking-settlements.sql','V20261123090000__scope-long-stay-tiers.sql']
     for _ in range(2):
         for filename in migrations:
             isolated=(ROOT/'database/migrations'/filename).read_text(encoding='utf-8').replace('mtrip_business',B).replace('mtrip_system',S)
@@ -378,6 +378,82 @@ try:
     check('mixed wallet and channel income add up to the disclosed prepayment',sql(f"SELECT COUNT(*),SUM(amount) FROM `{B}`.finance_flow WHERE order_id={mixed['orderId']} AND flow_type=1;")=='2\t30200.00')
     reviewed_refund(mixed,30200)
     check('mixed payment refund credits the wallet without over-refunding the bank channel',sql(f'SELECT balance FROM `{B}`.user_info WHERE id={mixed_uid};')=='30200.00' and sql(f"SELECT refund_channel FROM `{B}`.order_refund WHERE order_id={mixed['orderId']};")=='1')
+
+    # Use each service's real HTTP entry points with the same disposable schema.
+    with tempfile.TemporaryDirectory(prefix='sprint-p0-') as tmp:
+        _,goods=start('goods',9503,Path(tmp))
+        _,users=start('user',9502,Path(tmp))
+        _,marketing=start('marketing',9507,Path(tmp))
+    claims=dict(aud='app',user_id=UID,site_id=7)
+    def hotels(path):
+        return data(http(goods,'/api/v1/app/hotels/'+path,claims))
+    def user(path, body=None, device='one'):
+        return data(http(users,'/api/v1/app/user/'+path,dict(claims,device=device),body))
+
+    sql(f'UPDATE `{B}`.merchant_store SET display_enabled=1 WHERE id IN (81,82);')
+    check('canonical policy is used by list, facet and detail without a legacy property flag',
+        hotels('list?payAtHotel=1')['total']==2 and hotels('filters')['counts']['payAtHotel']==2
+        and hotels('detail?propertyId=81')['payAtHotel'] is True)
+    policy(payAtHotelEnabled=False,noShowFeeEnabled=False,merchantUpfrontRate=0)
+    check('disabling Pay at Hotel removes it from list, facet and detail',hotels('list?payAtHotel=1')['total']==0
+        and hotels('filters')['counts']['payAtHotel']==0 and hotels('detail?propertyId=81')['payAtHotel'] is False)
+    policy(effectiveAt=(datetime.now(timezone.utc)+timedelta(days=1)).strftime('%Y-%m-%dT%H:%M:%SZ'))
+    check('scheduled policy is hidden until it takes effect',hotels('filters')['counts']['payAtHotel']==0)
+
+    user('favorite/add',dict(propertyId=81)); user('favorite/add',dict(propertyId=82)); user('favorite/add',dict(propertyId=81))
+    check('saved hotels sync by account and are paginated',user('favorite/list?pageSize=1',device='two')['total']==2
+        and user('favorite/list?page=2&pageSize=1',device='two')['list'][0]['property_id']==81)
+    user('favorite/remove',dict(propertyId=81),device='two')
+    check('another device sees deletion and existing orders are unaffected',user('favorite/list')['total']==1 and row(first)['paid']=='30200.00')
+    check('the hotel details can detect a deleted favorite and save it again',user('favorite/status?propertyId=81')['saved'] is False
+        and user('favorite/add',dict(propertyId=81)) is None and user('favorite/status?propertyId=81',device='two')['saved'] is True)
+
+    wallet_start=datetime.now(timezone.utc).date().replace(day=1)
+    previous=(wallet_start-timedelta(days=1)).replace(day=1).isoformat()
+    outside=(wallet_start-timedelta(days=190)).replace(day=1).isoformat()
+    fixture_wallet=UID+2
+    sql(f"INSERT INTO `{B}`.user_info(id,site_id,mobile,mobile_hash,nickname) VALUES({fixture_wallet},7,'pah-history-{RUN}','pah-history-{RUN}','Wallet History');"
+        f"INSERT INTO `{B}`.user_balance_log(site_id,user_id,change_type,created_at) VALUES "
+        + ','.join(f"(7,{fixture_wallet},6,'{previous} 12:00:{i:02}')" for i in range(10))
+        + f",(7,{fixture_wallet},6,'{wallet_start} 00:00:00'),(7,{fixture_wallet},6,'{outside} 00:00:00');")
+    def wallet(path):
+        return data(http(users,'/api/v1/app/user/balance-logs?type=expired'+path,dict(claims,user_id=fixture_wallet)))
+    check('expired history fills from the previous month and excludes earlier audit history',wallet('')['total']==11
+        and len(wallet('')['list'])==10 and len(wallet('&pageSize=20')['list'])==11)
+    check('wallet month filtering is bounded by the same six-month window',wallet('&month='+previous[:7])['total']==10
+        and wallet('&month='+outside[:7])['total']==0)
+
+    tier=dict(siteId=7,propertyId=81,minNights=2,discountRate=20,status=1,priority=0,couponStackable=0)
+    save_tier=lambda body,site=0,super=True: admin('marketing/longstay/save',body,base=marketing,site=site,super=super,perms=['marketing:longstay:save'])
+    data(save_tier(tier))
+    data(save_tier(dict(tier,discountRate=70,priority=10,startsAt=(datetime.now(timezone.utc)+timedelta(days=1)).strftime('%Y-%m-%d %H:%M:%S'))))
+    check('long-stay settings reject cross-site hotel IDs and unbookable nights',save_tier(dict(tier,siteId=6))['code']!=0
+        and save_tier(dict(tier,minNights=60))['code']!=0)
+    end=(datetime.fromisoformat(ARRIVE)+timedelta(days=2)).date().isoformat()
+    qs=f'checkIn={ARRIVE}&checkOut={end}'
+    sql(f"UPDATE `{B}`.hotel_room_type SET weekend_price=120000,base_price_citizen=90000 WHERE id=91;")
+    listings={r['property_id']:r for r in hotels('list?'+qs)['list']}
+    quote=hotels('detail?propertyId=81&'+qs)['longStay']
+    check('scheduled and property-scoped long stays match list and detail',listings[81]['longStay']==quote
+        and quote['rate']==20 and listings[82]['longStay'] is None)
+    stay=data(app('trip/quote',dict(items=[dict(propertyId=81,roomTypeId=91,quantity=1,useDate=ARRIVE,endDate=end)])))
+    booked=book(payAtHotel=0,endDate=end,expectedPayAmount=quote['total'])
+    check('long-stay calendar price and discount agree across discovery, quote and actual booking',
+        quote['total']==stay['payAmount']==booked['priceDetail']['payAmount'] and quote['discount']==stay['longstayDiscount'])
+    sql(f"UPDATE `{B}`.goods_daily_stock SET price_citizen=90000 WHERE site_id=7 AND property_id=81 AND sku_id=91 AND stock_date='{ARRIVE}';")
+    citizen_quote=hotels('detail?citizen=1&propertyId=81&'+qs)['longStay']
+    citizen_booking=book(payAtHotel=0,endDate=end,isCitizen=1,expectedPayAmount=citizen_quote['total'])
+    check('citizen price shown in long stay uses the same booking rate',citizen_quote['original']==180000
+        and citizen_quote['total']==citizen_booking['priceDetail']['payAmount']==144000)
+
+    sql(f"INSERT INTO `{B}`.marketing_coupon(id,site_id,coupon_name,coupon_type,discount_value,goods_scope,stackable,status) VALUES(90,7,'Long stay test',3,1000,1,1,1);"
+        f"INSERT INTO `{B}`.marketing_coupon_receive(id,site_id,coupon_id,user_id,coupon_code) VALUES(92,7,90,{UID},'test-longstay-{RUN}');")
+    lines=[dict(propertyId=81,roomTypeId=91,quantity=1,useDate=ARRIVE,endDate=end)]
+    exclusive=data(app('trip/quote',dict(items=lines,couponId=92)))
+    allowed=data(app('trip/quote',dict(items=lines+[dict(lines[0],propertyId=82,roomTypeId=92)],couponId=92)))
+    check('an exclusive long-stay tier blocks the coupon only on its own property',bool(exclusive.get('couponError'))
+        and exclusive['couponDiscount']==0 and allowed['items'][0]['couponDiscount']==0
+        and allowed['items'][1]['couponDiscount']==1000)
     print(f'PASSED {len(PASSED)} assertions',flush=True)
 except BaseException:
     for name in CONTAINERS:

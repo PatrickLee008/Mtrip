@@ -64,8 +64,10 @@ export default function AccountScreen() {
           icon="peopleAdd"
           title={t('more.account.personal.traveler')}
           desc={t('more.account.manage')}
+          divider
           onPress={() => navigation.navigate('Travelers')}
         />
+        <MenuLink icon="heart" title={t('myPick.savedHotels.title')} onPress={() => navigation.navigate('SavedHotels')} />
       </View>
 
       <View style={[moreShared.panel, styles.panel]}>

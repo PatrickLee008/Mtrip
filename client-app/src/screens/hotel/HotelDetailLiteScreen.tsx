@@ -36,6 +36,8 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTranslation } from 'react-i18next';
 
 import { fetchHotelDetail } from '@/api/goods';
+import LongStayPrice from '@/components/hotel/LongStayPrice';
+import SaveHotelButton from '@/components/hotel/SaveHotelButton';
 import { tempCoverFor } from '@/assets/tempImages';
 import { ErrorView, LoadingView } from '@/components/common/StateViews';
 import HomeIcon from '@/components/home/HomeIcon';
@@ -82,14 +84,15 @@ export default function HotelDetailLiteScreen() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      setDetail(await fetchHotelDetail(params.id, { checkIn: params.checkIn, checkOut: params.checkOut }));
+      setDetail(await fetchHotelDetail(params.id, { checkIn: params.checkIn, checkOut: params.checkOut,
+        citizen: params.citizen ? 1 : undefined, rooms: params.rooms, adults: params.adults, children: params.children }));
       setError('');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Error');
     } finally {
       setLoading(false);
     }
-  }, [params.id, params.checkIn, params.checkOut]);
+  }, [params.id, params.checkIn, params.checkOut, params.citizen, params.rooms, params.adults, params.children]);
 
   useEffect(() => {
     void load();
@@ -108,8 +111,9 @@ export default function HotelDetailLiteScreen() {
       hotelName: detail?.goods_name ?? '',
       checkIn: params.checkIn,
       checkOut: params.checkOut,
+      citizen: params.citizen,
     });
-  }, [params.id, detail?.goods_name, params.checkIn, params.checkOut, setCartContext]);
+  }, [params.id, detail?.goods_name, params.checkIn, params.checkOut, params.citizen, setCartContext]);
 
   const rooms = useMemo(() => detail?.skus ?? [], [detail]);
   /** 房型 id → 车内间数(卡片加减器读它) */
@@ -129,9 +133,9 @@ export default function HotelDetailLiteScreen() {
   const quoteItems = useMemo(
     () =>
       allReal && params.checkIn && params.checkOut
-        ? cartTripItems(params.id, cartItems, params.checkIn, params.checkOut)
+        ? cartTripItems(params.id, cartItems, params.checkIn, params.checkOut, params.citizen)
         : [],
-    [allReal, params.id, cartItems, params.checkIn, params.checkOut],
+    [allReal, params.id, cartItems, params.checkIn, params.checkOut, params.citizen],
   );
   const { quote } = useTripQuote(quoteItems, 0, isLogin && quoteItems.length > 0);
   const total = quote?.payAmount ?? estimate;
@@ -174,7 +178,11 @@ export default function HotelDetailLiteScreen() {
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.titleCard}>
-            <Text style={styles.hotelName}>{detail.goods_name}</Text>
+            <View style={styles.titleActions}>
+              <Text style={[styles.hotelName, styles.titleText]}>{detail.goods_name}</Text>
+              <SaveHotelButton key={params.id} propertyId={params.id} />
+            </View>
+            {detail.longStay ? <LongStayPrice quote={detail.longStay} /> : null}
 
             <View style={styles.addressRow}>
               <HomeIcon name="locationOutline" size={16} color={colors.textSoft} />
@@ -280,6 +288,8 @@ export default function HotelDetailLiteScreen() {
 }
 
 const styles = StyleSheet.create({
+  titleActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  titleText: { flex: 1 },
   root: { flex: 1, backgroundColor: colors.pageBg },
   safe: { flex: 1 },
   flex: { flex: 1 },

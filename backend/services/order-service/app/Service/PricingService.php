@@ -18,22 +18,6 @@ use Mtrip\Shared\Support\HotelAddons;
  */
 class PricingService
 {
-    /** 长住优惠额:命中站点内 min_nights<=夜数 的最高梯度,按原总价乘折扣率 */
-    public function longstayDiscount(int $siteId, int $nights, float $total): float
-    {
-        $tier = Db::table('marketing_longstay_tier')
-            ->where('site_id', $siteId)
-            ->where('status', 1)
-            ->where('min_nights', '<=', $nights)
-            ->whereNull('deleted_at')
-            ->orderByDesc('min_nights')
-            ->first(['discount_rate']);
-        if (! $tier) {
-            return 0.0;
-        }
-        return round($total * (float) $tier->discount_rate / 100, 2);
-    }
-
     /**
      * 下单金额确认:客户端带了 expectedPayAmount(用户在页面上看到的应付)就与服务端实际计价比对,
      * 差额超过 0.01 抛 PRICE_CHANGED(须在下单事务内、建单前调用,抛错即回滚已锁库存)。
@@ -222,7 +206,7 @@ class PricingService
         }
         $coupon = CouponVersion::forReceive((array) $coupon, $rec);
 
-        $result = CouponProtection::evaluate($coupon, $legs, $orderType, date('Y-m-d'));
+        $result = CouponProtection::evaluate($coupon, $legs, $orderType, date('Y-m-d'), $siteId);
         if (! $result['eligible']) {
             throw new BusinessException(ErrorCode::DATA_CONFLICT, $this->couponReasonMessage((string) $result['reason'], $orderType));
         }
@@ -238,6 +222,7 @@ class PricingService
     private function couponReasonMessage(string $reason, int $orderType): string
     {
         return match ($reason) {
+            'long_stay_exclusive' => '此优惠券不能与当前长住优惠叠加',
             'protected_minimum' => '优惠金额超过商户促销限额或受保护最低应付金额',
             CouponEligibility::REASON_SCOPE => $orderType === 1 ? '该券不适用于所选酒店或房型' : '该券不适用于本商品或票种',
             CouponEligibility::REASON_NIGHTS => '入住晚数不符合该券要求',

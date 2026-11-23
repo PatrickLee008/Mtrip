@@ -29,7 +29,7 @@
 import React, { useCallback, useState } from 'react';
 import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTranslation } from 'react-i18next';
 
@@ -61,6 +61,7 @@ const RECENT_MAX = 3;
 export default function HotelsLiteScreen() {
   const { t, i18n } = useTranslation();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const longStay = useRoute<RouteProp<RootStackParamList, 'HotelsLite'>>().params?.longStay;
   const showToast = useCommonStore((s) => s.showToast);
 
   const [keyword, setKeyword] = useState('');
@@ -117,6 +118,7 @@ export default function HotelsLiteScreen() {
       checkOut: range.checkOut,
       flexDays: range.flexDays,
       citizen,
+      longStay,
       rooms: guests.rooms,
       adults: guests.adults,
       children: guests.children,
@@ -155,7 +157,7 @@ export default function HotelsLiteScreen() {
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.card}>
-            <Text style={styles.title}>{t('hotels.lite.title')}</Text>
+            <Text style={styles.title}>{t(longStay ? 'hotels.longStay.title' : 'hotels.lite.title')}</Text>
 
             {/* 目的地:聚焦后卡片下方展开 Nearby / Search on Map / 最近搜索 */}
             <View style={styles.field}>
@@ -308,6 +310,7 @@ export default function HotelsLiteScreen() {
       </SafeAreaView>
 
       <DatePickerSheet
+        maxNights={longStay ? 30 : undefined}
         visible={dateOpen}
         value={range}
         onClose={() => setDateOpen(false)}

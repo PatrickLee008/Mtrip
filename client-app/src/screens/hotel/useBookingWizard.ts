@@ -281,6 +281,7 @@ export function useBookingWizard({
   /** 房型购物车:有内容就走 Trip 多房间下单,支付成功后清空 */
   const cartRooms = useRoomCartStore((s) => s.items);
   const cartPropertyId = useRoomCartStore((s) => s.propertyId);
+  const cartCitizen = useRoomCartStore((s) => s.citizen);
   const cartHotelName = useRoomCartStore((s) => s.hotelName);
   const checkoutCart = useRoomCartStore((s) => s.checkout);
   const clearCart = useRoomCartStore((s) => s.clear);
@@ -376,6 +377,7 @@ export function useBookingWizard({
    * 最终实付以 `create` 返回的 `priceDetail.payAmount` 为准。
    */
   const propertyId = params?.propertyId;
+  const isCitizen = cartPropertyId === propertyId && cartCitizen ? 1 : undefined;
   const roomTypeId = params?.roomTypeId;
   const realMode = Boolean(propertyId && roomTypeId);
   const [loadingGoods, setLoadingGoods] = useState(realMode);
@@ -469,12 +471,13 @@ export function useBookingWizard({
               hotelName: cartHotelName || current.hotelName || '',
               checkIn: current.checkIn,
               checkOut: current.checkOut,
+              citizen: Boolean(isCitizen),
               items: activeRooms,
             },
           ]
         : []),
     ],
-    [useCart, enableMultiStay, storedTripStays, activeRooms, cartPropertyId, cartHotelName, current.hotelName, current.checkIn, current.checkOut],
+    [useCart, enableMultiStay, storedTripStays, activeRooms, cartPropertyId, cartHotelName, current.hotelName, current.checkIn, current.checkOut, isCitizen],
   );
   /** 所有住宿里能落单的房型,顺序与 `tripBaseItems` 一一对应(选券的行净额预估按下标取单价) */
   const tripRooms = useMemo(() => hotelStays.flatMap((stay) => stay.items), [hotelStays]);
@@ -486,7 +489,7 @@ export function useBookingWizard({
    */
   const tripBaseItems = useMemo(
     () =>
-      hotelStays.flatMap((stay) => cartTripItems(stay.propertyId, stay.items, stay.checkIn, stay.checkOut)),
+      hotelStays.flatMap((stay) => cartTripItems(stay.propertyId, stay.items, stay.checkIn, stay.checkOut, stay.citizen)),
     [hotelStays],
   );
   /**
@@ -549,7 +552,7 @@ export function useBookingWizard({
         const active = stay.key === ACTIVE_STAY_KEY;
         const addons = active ? selectedAddons : (stay.addons ?? []);
         const guests = active ? guestCount : (stay.guestCount ?? 1);
-        const items = cartTripItems(stay.propertyId, stay.items, stay.checkIn, stay.checkOut).map((item, i) =>
+        const items = cartTripItems(stay.propertyId, stay.items, stay.checkIn, stay.checkOut, stay.citizen).map((item, i) =>
           i === 0 && addons.length > 0 ? { ...item, addons, guestCount: guests } : item,
         );
         return {
@@ -574,11 +577,12 @@ export function useBookingWizard({
                 quantity: current.rooms,
                 useDate: current.checkIn,
                 endDate: current.checkOut,
+                isCitizen,
                 ...(selectedAddons.length > 0 ? { addons: selectedAddons, guestCount } : {}),
               },
             ]
           : [],
-    [cartMode, tripItemsWithAddons, realMode, current.propertyId, current.roomTypeId, current.rooms, current.checkIn, current.checkOut, selectedAddons, guestCount],
+    [cartMode, tripItemsWithAddons, realMode, current.propertyId, current.roomTypeId, current.rooms, current.checkIn, current.checkOut, isCitizen, selectedAddons, guestCount],
   );
   /**
    * 试算(`trip/quote`,与下单同一套后端计价),见 `useTripQuote`:
@@ -1049,6 +1053,7 @@ export function useBookingWizard({
         useDate: current.checkIn,
         endDate: current.checkOut,
         contactName,
+        isCitizen,
         contactPhone,
         remark: request.trim() || undefined,
         /* 复核页应用的券。后端 create 会用同一张券再算一次并以它为准,

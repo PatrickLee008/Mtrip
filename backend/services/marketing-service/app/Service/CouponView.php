@@ -151,7 +151,7 @@ class CouponView
         // 有下单上下文时再叠一层「这单能不能用」的判定(PRD §17.5/§17.6,与下单同一实现)
         $view['discount'] = 0.0;
         if ($ctx !== null && $view['unusableReason'] === null) {
-            $result = CouponProtection::evaluate($row, $this->legsOf($ctx), (int) ($ctx['orderType'] ?? 1), date('Y-m-d', $now));
+            $result = CouponProtection::evaluate($row, $this->legsOf($ctx), (int) ($ctx['orderType'] ?? 1), date('Y-m-d', $now), (int) ($ctx['siteId'] ?? 0));
             if (! $result['eligible']) {
                 $view['status'] = self::STATUS_UNUSABLE;
                 $view['unusableReason'] = $result['reason'];

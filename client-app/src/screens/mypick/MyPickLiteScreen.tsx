@@ -159,7 +159,7 @@ export default function MyPickLiteScreen() {
           <LiteSectionHeader
             title={t('myPick.savedHotels.title')}
             action={t('home.seeAll')}
-            onPressAction={requireLogin}
+            onPressAction={() => isLogin ? navigation.navigate('SavedHotels') : navigation.navigate('Login')}
           />
           {savedHotels.length === 0 ? (
             <Text style={styles.empty}>{t('myPick.savedHotels.empty')}</Text>

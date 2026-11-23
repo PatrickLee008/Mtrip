@@ -147,8 +147,9 @@ export default function HotelResultsScreen() {
       checkIn: applied.range.checkIn,
       checkOut: applied.range.checkOut,
       flexDays: applied.range.flexDays || undefined,
+      rooms: params.rooms, adults: params.adults, children: params.children,
     }),
-    [applied, params?.countryCode, params?.cityKey],
+    [applied, params?.countryCode, params?.cityKey, params.rooms, params.adults, params.children],
   );
 
   const query = useMemo(() => {
@@ -284,7 +285,7 @@ export default function HotelResultsScreen() {
       <View style={styles.main}>
         {/* 01 搜索卡(回显当前条件,可改后重查) */}
         <View style={styles.searchCard}>
-          <Text style={styles.searchTitle}>{t('hotels.title')}</Text>
+          <Text style={styles.searchTitle}>{t(params.longStay ? 'hotels.longStay.title' : 'hotels.title')}</Text>
 
           <View style={[styles.field, styles.searchField]}>
             <HomeIcon name="search" size={18} color={colors.primary} />
@@ -427,6 +428,7 @@ export default function HotelResultsScreen() {
                   propertyId: g.id,
                   checkIn: g.availableCheckIn ?? applied.range.checkIn,
                   checkOut: g.availableCheckOut ?? applied.range.checkOut,
+                  citizen: applied.citizen, rooms: params.rooms, adults: params.adults, children: params.children,
                 })
               }
               onToggleFavorite={toggleFavorite}
@@ -500,6 +502,7 @@ export default function HotelResultsScreen() {
       />
 
       <DatePickerSheet
+        maxNights={params.longStay ? 30 : undefined}
         visible={dateOpen}
         value={range}
         onClose={() => setDateOpen(false)}

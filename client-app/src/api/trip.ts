@@ -161,6 +161,7 @@ export function apiTripPay(params: {
  * (订单快照里没有人数/床型/含早)。
  */
 export interface TripBookingRow {
+  longstay_discount?: string | number;
   pay_at_hotel?: number;
   hotel_balance?: string | number;
   id: number;

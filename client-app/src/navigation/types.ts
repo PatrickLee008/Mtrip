@@ -43,17 +43,17 @@ export type RootStackParamList = {
   MainTabs: NavigatorScreenParams<MainTabParamList>;
   SiteSelect: undefined;
   /** 酒店搜索页(Figma 91:200),首页快捷入口 hotels 的落地页 */
-  Hotels: undefined;
+  Hotels: { longStay?: boolean } | undefined;
   /**
    * 关怀模式酒店搜索页(Figma section `Hotel Search Lite` `2312:6435`),
    * liteMode 下首页 Hotels 卡的落地页;完整模式仍走 `Hotels`
    */
-  HotelsLite: undefined;
+  HotelsLite: { longStay?: boolean } | undefined;
   /**
    * 关怀模式酒店详情族(Figma section `Hotel Details Lite` `2352:5591`)。
    * 五页共用同一个商品 id;`checkIn/checkOut` 一路透传到订房向导,免得选完房日期跳回默认值。
    */
-  HotelDetailLite: { id: number; checkIn?: string; checkOut?: string };
+  HotelDetailLite: { id: number; checkIn?: string; checkOut?: string; citizen?: boolean; rooms?: number; adults?: number; children?: number };
   /**
    * 正常模式房型详情(Figma Rooms Details `281:1041`),酒店详情 Rooms 页签真实房型卡的 See Details 进来。
    * 参数与关怀模式同形:商品 id + 房型 id,日期透传给订房向导。
@@ -71,6 +71,7 @@ export type RootStackParamList = {
   PropertyPreviewLite: { id: number };
   /** 关怀模式酒店搜索结果页(同上 section 的 Search Results `2312:6745`) */
   HotelResultsLite: {
+    longStay?: boolean;
     /** 与完整模式 `HotelResults` 同一套列表参数:两位用于按国家/城市圈定物业 */
     countryCode?: string;
     cityKey?: string;
@@ -86,6 +87,10 @@ export type RootStackParamList = {
   };
   /** 酒店搜索结果页(Figma 1695:6325),酒店搜索页 Search 的落地页 */
   HotelResults: {
+    longStay?: boolean;
+    rooms?: number;
+    adults?: number;
+    children?: number;
     countryCode?: string;
     cityKey?: string;
     keyword?: string;
@@ -107,7 +112,8 @@ export type RootStackParamList = {
    * `tab` 是**回跳时要落在哪个页签**:评价整页底栏的「Choose my room」用它把本页切到 Rooms
    * (本页在栈里已挂载,`navigate` 只改 params 不重挂,页面里要跟着 params 同步一次)。
    */
-  HotelDetail: { propertyId?: number; checkIn?: string; checkOut?: string; tab?: DetailTabKey } | undefined;
+  HotelDetail: { propertyId?: number; checkIn?: string; checkOut?: string; tab?: DetailTabKey; citizen?: boolean;
+    rooms?: number; adults?: number; children?: number } | undefined;
   /**
    * 房型购物车(Figma Room Cart `2659:11842`)。
    * 不收参数 —— 车里的内容与所属酒店都在 `store/roomCartStore` 里,避免与详情页两份状态。
@@ -308,6 +314,7 @@ export type RootStackParamList = {
   /** 通知(Figma 1770:3863),首页 / 我的精选顶部栏铃铛的落地页 */
   Notifications: undefined;
   Account: undefined;
+  SavedHotels: undefined;
   /** `pick` = 从订房第 2 步进来的「选择主要入住人」模式:点一行即选中并返回,不是多选管理 */
   Travelers: { pick?: boolean } | undefined;
   /** 关联邮箱 / 关联手机号(PRD 模块 19.2),先验证新值再保存 */

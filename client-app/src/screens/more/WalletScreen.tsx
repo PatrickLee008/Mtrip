@@ -54,7 +54,7 @@ import { storage } from '@/utils/storage';
 
 const CARD_ART = require('../../../assets/images/wallet/card-bg.png');
 const TABS: BalanceLogType[] = ['all', 'refund', 'spend', 'expired'];
-const PAGE_SIZE = 20;
+const PAGE_SIZE = 10;
 /** 月份筛选「全部」的哨兵键 */
 const ALL_MONTHS = 'all';
 
@@ -134,16 +134,13 @@ export default function WalletScreen() {
     [tab, month],
   );
 
-  useEffect(() => {
-    setList([]);
-    void load(1);
-  }, [load]);
-
-  // 余额以服务端为准:从订房 / 退款回来时刷新一次
   useFocusEffect(
     useCallback(() => {
+      setList([]);
+      void load(1);
       void refreshProfile().catch(() => undefined);
-    }, [refreshProfile]),
+      return () => { ++generation.current; };
+    }, [load, refreshProfile]),
   );
 
   return (

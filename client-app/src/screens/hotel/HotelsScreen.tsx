@@ -27,7 +27,7 @@ import React, { useState } from 'react';
 import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTranslation } from 'react-i18next';
 
@@ -43,6 +43,7 @@ import HotelFilterSheet, {
   HotelFilterValue,
 } from '@/components/hotel/HotelFilterSheet';
 import HotelGuideOverlay from '@/components/hotel/guide/HotelGuideOverlay';
+import GuestRoomSheet, { DEFAULT_GUEST_ROOM } from '@/components/hotel/lite/GuestRoomSheet';
 import { CitizenCheck, GuidePill } from '@/components/hotel/HotelSearchBits';
 import { GOODS_TYPE } from '@/config/global';
 import { PAGE_PADDING, colors, radius } from '@/config/theme';
@@ -56,20 +57,13 @@ const HERO = require('../../../assets/images/hotels/hero.png');
 const HERO_HEIGHT = 268;
 const MAIN_OVERLAP = HERO_HEIGHT - 120;
 
-/** 阶梯折扣(设计稿静态值,后端暂无对应接口) */
-const STAY_TIERS = [
-  { nights: 7, off: 5 },
-  { nights: 14, off: 10 },
-  { nights: 30, off: 25 },
-  { nights: 90, off: 40 },
-] as const;
-
 /** 设计稿示例是「今天 → 两天后」,先按同样的默认值展示 */
 const DEFAULT_NIGHTS = 2;
 
 export default function HotelsScreen() {
   const { t, i18n } = useTranslation();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const longStay = useRoute<RouteProp<RootStackParamList, 'Hotels'>>().params?.longStay;
   const showToast = useCommonStore((s) => s.showToast);
 
   const [keyword, setKeyword] = useState('');
@@ -78,6 +72,8 @@ export default function HotelsScreen() {
   const [guideOpen, setGuideOpen] = useState(false);
   const [filter, setFilter] = useState<HotelFilterValue>(DEFAULT_HOTEL_FILTER);
   const [dateOpen, setDateOpen] = useState(false);
+  const [guests, setGuests] = useState(DEFAULT_GUEST_ROOM);
+  const [guestOpen, setGuestOpen] = useState(false);
   const [range, setRange] = useState<DateRangeValue>(() => defaultDateRange(DEFAULT_NIGHTS));
 
   const comingSoon = () => showToast(t('home.comingSoon'));
@@ -106,6 +102,8 @@ export default function HotelsScreen() {
       checkOut: range.checkOut,
       flexDays: range.flexDays,
       citizen,
+      longStay,
+      ...(longStay ? guests : {}),
       filter: next,
     });
   };
@@ -124,7 +122,7 @@ export default function HotelsScreen() {
           <View style={styles.main}>
             {/* 01 搜索筛选卡 */}
             <View style={styles.searchCard}>
-              <Text style={styles.searchTitle}>{t('hotels.title')}</Text>
+              <Text style={styles.searchTitle}>{t(longStay ? 'hotels.longStay.title' : 'hotels.title')}</Text>
 
               <View style={[styles.field, styles.searchField]}>
                 <HomeIcon name="search" size={18} color={colors.primary} />
@@ -166,13 +164,13 @@ export default function HotelsScreen() {
 
               <Pressable
                 style={({ pressed }) => [styles.field, styles.guestField, pressed && styles.pressed]}
-                onPress={comingSoon}
+                onPress={() => setGuestOpen(true)}
               >
                 <HomeIcon name="travelers" size={22} color={colors.primary} />
                 <View>
                   <Text style={styles.fieldLabel}>{t('hotels.guests')}</Text>
                   <Text style={styles.fieldValue}>
-                    {t('hotels.guestsValue', { adults: 2, rooms: 1 })}
+                    {t('hotels.guestsValue', { adults: guests.adults, rooms: guests.rooms })}
                   </Text>
                 </View>
               </Pressable>
@@ -185,20 +183,6 @@ export default function HotelsScreen() {
               >
                 <Text style={styles.ctaText}>{t('hotels.search')}</Text>
               </Pressable>
-            </View>
-
-            {/* 02 阶梯折扣 */}
-            <View style={styles.tierCard}>
-              <Text style={styles.tierTitle}>{t('hotels.stayLonger')}</Text>
-              {STAY_TIERS.map((tier) => (
-                <View key={tier.nights} style={styles.tierRow}>
-                  {/* 用 nights 而非 count:count 是 i18next 的复数化保留字,会去找 nights_one/_other */}
-                  <Text style={styles.tierNights}>
-                    {t('hotels.nights', { nights: tier.nights })}
-                  </Text>
-                  <Text style={styles.tierOff}>{tier.off}%</Text>
-                </View>
-              ))}
             </View>
 
             {/* 03 新用户促销(与首页同一张卡) */}
@@ -256,9 +240,14 @@ export default function HotelsScreen() {
       <SupportChatFab bottom={28} />
 
       <HotelGuideOverlay visible={guideOpen} onClose={() => setGuideOpen(false)} />
+      <GuestRoomSheet visible={guestOpen} value={guests} onClose={() => setGuestOpen(false)} onConfirm={(next) => {
+        setGuests(next);
+        setGuestOpen(false);
+      }} />
 
       {/* 日期选择器:选中的区间回填搜索卡,Search 时带到结果页 */}
       <DatePickerSheet
+        maxNights={longStay ? 30 : undefined}
         visible={dateOpen}
         value={range}
         onClose={() => setDateOpen(false)}

@@ -45,6 +45,7 @@ import { useSiteStore } from '@/store/siteStore';
 import type { GoodsItem } from '@/types/models';
 import { reviewLabelKey } from '@/utils/reviewLabel';
 import { formatMoney } from '@/utils/format';
+import LongStayPrice from '@/components/hotel/LongStayPrice';
 
 const COVER_HEIGHT = 176;
 /** 卡片圆角(设计稿 20,比首页卡的 32 小) */
@@ -239,6 +240,7 @@ export default function HotelResultCard({
           </View>
         ) : null}
 
+        {goods.longStay ? <LongStayPrice quote={goods.longStay} /> : null}
         <View style={styles.priceRow}>
           <View>
             {shownPromo ? (

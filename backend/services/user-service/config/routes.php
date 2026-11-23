@@ -95,6 +95,7 @@ Router::addGroup('/api/v1/app', static function () {
 
     // 收藏(Saved Hotels)
     Router::get('/user/favorite/list', [FavoriteController::class, 'list']);
+    Router::get('/user/favorite/status', [FavoriteController::class, 'status']);
     Router::post('/user/favorite/add', [FavoriteController::class, 'add']);
     Router::post('/user/favorite/remove', [FavoriteController::class, 'remove']);
 

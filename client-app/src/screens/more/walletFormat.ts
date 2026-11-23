@@ -78,11 +78,11 @@ export function walletDetailTime(log: BalanceLog, lang: string): string {
   return `${date}, ${time}`;
 }
 
-/** 最近 12 个自然月(含本月),月份筛选的选项;key 为 YYYY-MM */
+/** 最近六个 UTC 自然月，与钱包流水接口使用同一月份边界。 */
 export function recentMonths(lang: string, now = new Date()): { key: string; label: string }[] {
-  return Array.from({ length: 12 }, (_, i) => {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-    return { key, label: d.toLocaleDateString(lang, { month: 'short', year: 'numeric' }) };
+  return Array.from({ length: 6 }, (_, i) => {
+    const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i, 1));
+    const key = d.toISOString().slice(0, 7);
+    return { key, label: d.toLocaleDateString(lang, { month: 'short', year: 'numeric', timeZone: 'UTC' }) };
   });
 }

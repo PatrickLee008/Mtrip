@@ -61,6 +61,7 @@ export interface BookingResult {
   bookingId: string;
   /** 实付金额:接口优先 */
   payAmount: number;
+  longStayDiscount: number;
   /** 同 Trip 下的各预订(单房型链路为空) */
   bookings: TripBookingRow[];
   order: OrderDetail | null;
@@ -269,6 +270,9 @@ export function useBookingResult(p: BookingResultParams): BookingResult {
     status,
     bookingId: tripNo || order?.order_no || p.orderNo || '',
     payAmount: tripPayAmount ?? (order ? Number(order.pay_amount) || 0 : (p.paidTotal ?? 0)),
+    longStayDiscount: p.tripId
+      ? bookings.reduce((total, booking) => total + (Number(booking.longstay_discount) || 0), 0)
+      : Number(order?.longstay_discount) || 0,
     bookings,
     order,
     failReason,

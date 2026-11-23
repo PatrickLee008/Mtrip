@@ -20,11 +20,8 @@ class PayAtHotelPricingService
         $property = Db::table('merchant_store')->where('id', $propertyId)->where('site_id', $siteId)
             ->where('merchant_id', $merchantId)->whereNull('deleted_at')->first();
         $terms = $merchant ? PayAtHotelTerms::resolve((array) $merchant, $property ? (array) $property : null) : [];
-        $policies = $property->hotel_policies ?? null;
-        $policies = is_string($policies) ? json_decode($policies, true) : $policies;
-        // Explicit commercial policy is merchant-wide; retain the old property flag only for legacy fallback.
-        $propertyEnabled = ($terms['policy_source'] ?? '') !== 'legacy' || (is_array($policies) && ! empty($policies['booking']['payAtHotel']));
-        $available = $merchant && $property && $propertyEnabled && $terms && (int) $terms['enabled'] === 1;
+        $available = $property && PayAtHotelTerms::isAvailable((bool) ($terms['enabled'] ?? false),
+            $terms['policy_source'] ?? '', $property->hotel_policies);
         $base = round(max(0.0, $roomBase), 2);
         $commissionRate = (float) ($terms['commission_rate'] ?? 0);
         $feeRate = (float) ($terms['transaction_fee_rate'] ?? 0);
