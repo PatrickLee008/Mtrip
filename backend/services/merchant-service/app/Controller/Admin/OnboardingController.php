@@ -45,6 +45,12 @@ class OnboardingController extends AbstractController
     #[Inject]
     protected \Hyperf\HttpServer\Contract\ResponseInterface $response;
 
+    #[Inject]
+    protected \App\Service\OnboardingRegistrationHistoryService $registrationHistory;
+
+    #[Inject]
+    protected \App\Service\OnboardingReapplyService $reapply;
+
     private const BUSINESS_TYPES = ['hotel', 'car_rental', 'restaurant', 'airline', 'attraction'];
 
     /** 阶段文案(审计/日志用) */
@@ -76,7 +82,7 @@ class OnboardingController extends AbstractController
         [$page, $pageSize] = $this->pageParams();
         $query = Db::table('merchant_application')->whereNull('deleted_at');
         $this->applySiteScope($query);
-        if (($queue = $this->strInput('queue')) !== '') {
+        if (($queue = $this->strInput('queue') ?: 'onboarding') !== '') {
             switch ($queue) {
                 case 'pending':
                     $query->whereIn('registration_status', [1, 2]);
@@ -85,12 +91,13 @@ class OnboardingController extends AbstractController
                     $query->where('registration_status', 3);
                     break;
                 case 'rejected':
-                    $query->where('registration_status', 5);
+                    \App\Support\OnboardingQueue::rejected($query);
                     break;
                 case 'resubmission':
                     $query->where('registration_status', 4);
                     break;
                 default:
+                    \App\Support\OnboardingQueue::excludeRejected($query);
                     break;
             }
         }
@@ -166,16 +173,20 @@ class OnboardingController extends AbstractController
     }
 
     /** 详情:申请 + 业务单元 + KYC 文档 + 时间线 + 内部备注 */
-    #[Permission('merchant:onboarding:list')]
+    #[Permission(['merchant:onboarding:list', 'merchant:list:audit'])]
     public function detail(): array
     {
         $app = $this->findApplication($this->requireId());
+        if (!AdminContext::hasPermission('merchant:onboarding:list') && !\App\Support\OnboardingQueue::isRejected($app)) {
+            throw new BusinessException(ErrorCode::FORBIDDEN);
+        }
         $businesses = Db::table('merchant_application_business')
             ->where('application_id', $app['id'])->orderBy('id')->get()
             ->map(function ($r) {
                 $r = (array) $r;
                 // 手机号加密存储,详情接口解密后明文返回(入驻阶段需完整联系方式跟进线索)
                 $r['contact_phone'] = $this->decryptField((string) ($r['contact_phone'] ?? ''));
+                if (!AdminContext::hasPermission('merchant:onboarding:list')) $r['contact_phone'] = \Mtrip\Shared\Support\MaskHelper::mobile($r['contact_phone']);
                 unset($r['contact_phone_index']);
                 return $r;
             })->all();
@@ -219,6 +230,7 @@ class OnboardingController extends AbstractController
         return Result::success([
             'application' => $app,
             'businesses' => $businesses,
+            'registrationHistory' => $this->registrationHistory->history((int) $app['id'], AdminContext::hasPermission('merchant:onboarding:list')),
             'documents' => $documents,
             'timeline' => $timeline,
             'notes' => $notes,
@@ -347,12 +359,24 @@ class OnboardingController extends AbstractController
                 ]);
             }
             $app = $this->findApplication($appId);
+            $this->registrationHistory->submitted($app);
             $this->pushTimeline($app, 'lead_created', '入驻线索录入');
             $this->pushTimeline($app, 'registration_contacts_admin_confirmed', '后台代录注册手机号和邮箱，默认由管理员确认；未执行 OTP，凭证交付前须通过商户真实 OTP');
         });
 
         $app = $this->findApplication($appId);
         return Result::success($app, '线索已录入');
+    }
+
+    #[Permission('merchant:onboarding:reopen')]
+    public function reopen(): array
+    {
+        $this->reapply->adminReopen($this->requireId(), [
+            'reason' => $this->input('reason'),
+            'expectedRegistrationStatus' => $this->input('expectedRegistrationStatus'),
+            'expectedStage' => $this->input('expectedStage'),
+        ]);
+        return Result::success(null, '已重新开启申请，等待申请人修改并提交');
     }
 
     #[Permission('merchant:onboarding:delete')]
@@ -395,6 +419,7 @@ class OnboardingController extends AbstractController
                 || Db::table('merchant_info')->where('credit_code', $number)->exists())) {
                 throw new BusinessException(ErrorCode::DATA_CONFLICT, '该公司注册号已存在');
             }
+            $this->registrationHistory->ensureCurrent((array) $current);
             Db::table('merchant_application')->where('id', $app['id'])->update([
                 'reg_number' => $number, 'last_updated_at' => gmdate('Y-m-d H:i:s'),
             ]);
@@ -451,16 +476,25 @@ class OnboardingController extends AbstractController
     public function saveAssessment(): array
     {
         $app = $this->findApplication($this->requireId());
-        $this->assertEditable($app);
-        Db::table('merchant_application')->where('id', $app['id'])->update([
-            'operator_type' => mb_substr($this->strInput('operatorType'), 0, 30),
-            'expected_launch_date' => $this->strInput('expectedLaunchDate') ?: null,
-            'operations_notes' => mb_substr($this->strInput('operationsNotes'), 0, 500),
-            'business_types' => mb_substr($this->strInput('businessTypes', (string) $app['business_types']), 0, 100),
-            'num_businesses' => max(1, $this->intInput('numBusinesses', (int) $app['num_businesses'])),
-            'last_updated_at' => date('Y-m-d H:i:s'),
-        ]);
-        $this->pushTimeline($app, 'assessment_saved', '运营评估已保存');
+        Db::transaction(function () use ($app): void {
+            $current = Db::table('merchant_application')->where('id', $app['id'])->where('site_id', $app['site_id'])
+                ->whereNull('deleted_at')->lockForUpdate()->first();
+            if (!$current) throw new BusinessException(ErrorCode::NOT_FOUND, '入驻申请不存在');
+            $app = (array) $current;
+            $this->assertEditable($app);
+            if ((int) $app['state_model_version'] >= 1 && in_array((int) $app['registration_status'], [1, 2, 4], true)) {
+                $this->registrationHistory->ensureCurrent($app);
+            }
+            Db::table('merchant_application')->where('id', $app['id'])->update([
+                'operator_type' => mb_substr($this->strInput('operatorType'), 0, 30),
+                'expected_launch_date' => $this->strInput('expectedLaunchDate') ?: null,
+                'operations_notes' => mb_substr($this->strInput('operationsNotes'), 0, 500),
+                'business_types' => mb_substr($this->strInput('businessTypes', (string) $app['business_types']), 0, 100),
+                'num_businesses' => max(1, $this->intInput('numBusinesses', (int) $app['num_businesses'])),
+                'last_updated_at' => date('Y-m-d H:i:s'),
+            ]);
+            $this->pushTimeline($app, 'assessment_saved', '运营评估已保存');
+        });
         return Result::success(null, '评估已保存');
     }
 
@@ -538,15 +572,22 @@ class OnboardingController extends AbstractController
     {
         $app = $this->findApplication($this->requireId());
         $now = date('Y-m-d H:i:s');
-        $updated = Db::table('merchant_application')->where('id', $app['id'])->where('registration_status', 1)->update([
-            'registration_status' => 2,
-            'registration_reviewed_by' => AdminContext::adminId(),
-            'registration_reviewed_at' => $now,
-            'registration_review_reason' => '',
-            'last_updated_at' => $now,
-        ]);
-        if ($updated !== 1) throw new BusinessException(ErrorCode::DATA_CONFLICT, '仅已提交申请可以开始审核');
-        $this->pushTimeline($app, 'registration_review_started', '基础注册开始审核');
+        Db::transaction(function () use ($app, $now): void {
+            $current = Db::table('merchant_application')->where('id', $app['id'])->whereNull('deleted_at')->lockForUpdate()->first();
+            if (!$current) throw new BusinessException(ErrorCode::NOT_FOUND, '入驻申请不存在');
+            $app = (array) $current;
+            $this->registrationHistory->ensureCurrent($app);
+            $updated = Db::table('merchant_application')->where('id', $app['id'])->where('registration_status', 1)->update([
+                'registration_status' => 2,
+                'registration_reviewed_by' => AdminContext::adminId(),
+                'registration_reviewed_at' => $now,
+                'registration_review_reason' => '',
+                'last_updated_at' => $now,
+            ]);
+            if ($updated !== 1) throw new BusinessException(ErrorCode::DATA_CONFLICT, '仅已提交申请可以开始审核');
+            $this->pushTimeline($app, 'registration_review_started', '基础注册开始审核');
+            $this->registrationHistory->reviewed($app, 2, '', $now);
+        });
         return Result::success(null, '已开始基础注册审核');
     }
 
@@ -557,15 +598,22 @@ class OnboardingController extends AbstractController
         $app = $this->findApplication($this->requireId());
         $reason = mb_substr($this->requireStr('reason'), 0, 500);
         $now = date('Y-m-d H:i:s');
-        $updated = Db::table('merchant_application')->where('id', $app['id'])->where('registration_status', 2)->update([
-            'registration_status' => 4,
-            'registration_reviewed_by' => AdminContext::adminId(),
-            'registration_reviewed_at' => $now,
-            'registration_review_reason' => $reason,
-            'last_updated_at' => $now,
-        ]);
-        if ($updated !== 1) throw new BusinessException(ErrorCode::DATA_CONFLICT, '仅审核中的申请可以要求补正');
-        $this->pushTimeline($app, 'registration_resubmit_required', $reason, true);
+        Db::transaction(function () use ($app, $now, $reason): void {
+            $current = Db::table('merchant_application')->where('id', $app['id'])->whereNull('deleted_at')->lockForUpdate()->first();
+            if (!$current) throw new BusinessException(ErrorCode::NOT_FOUND, '入驻申请不存在');
+            $app = (array) $current;
+            $this->registrationHistory->ensureCurrent($app);
+            $updated = Db::table('merchant_application')->where('id', $app['id'])->where('registration_status', 2)->update([
+                'registration_status' => 4,
+                'registration_reviewed_by' => AdminContext::adminId(),
+                'registration_reviewed_at' => $now,
+                'registration_review_reason' => $reason,
+                'last_updated_at' => $now,
+            ]);
+            if ($updated !== 1) throw new BusinessException(ErrorCode::DATA_CONFLICT, '仅审核中的申请可以要求补正');
+            $this->pushTimeline($app, 'registration_resubmit_required', $reason, true);
+            $this->registrationHistory->reviewed($app, 4, $reason, $now);
+        });
         return Result::success(null, '已要求申请人补正基础资料');
     }
 
@@ -576,6 +624,10 @@ class OnboardingController extends AbstractController
         $app = $this->findApplication($this->requireId());
         $now = date('Y-m-d H:i:s');
         Db::transaction(function () use ($app, $now): void {
+            $current = Db::table('merchant_application')->where('id', $app['id'])->whereNull('deleted_at')->lockForUpdate()->first();
+            if (!$current) throw new BusinessException(ErrorCode::NOT_FOUND, '入驻申请不存在');
+            $app = (array) $current;
+            $this->registrationHistory->ensureCurrent($app);
             $updated = Db::table('merchant_application')->where('id', $app['id'])->where('registration_status', 2)->update([
                 'registration_status' => 3,
                 'merchant_kyc_status' => 1,
@@ -585,9 +637,10 @@ class OnboardingController extends AbstractController
                 'last_updated_at' => $now,
             ]);
             if ($updated !== 1) throw new BusinessException(ErrorCode::DATA_CONFLICT, '仅审核中的申请可以批准');
+            $this->registrationHistory->reviewed($app, 3, '', $now);
             $this->onboardingKyc->initialize(array_replace($app, ['registration_status' => 3, 'merchant_kyc_status' => 1]));
+            $this->pushTimeline($app, 'registration_approved', '基础注册已批准，KYC 已开放');
         });
-        $this->pushTimeline($app, 'registration_approved', '基础注册已批准，KYC 已开放');
         return Result::success(null, '基础注册已批准，KYC 已开放');
     }
 
@@ -635,17 +688,24 @@ class OnboardingController extends AbstractController
         $note = $this->strInput('note');
         $reason = 'reason_code:' . $reasonCode . ($note !== '' ? ' ' . mb_substr($note, 0, 450) : '');
         $now = date('Y-m-d H:i:s');
-        $updated = Db::table('merchant_application')->where('id', $app['id'])->where('registration_status', 2)->update([
-            'registration_status' => 5,
-            'registration_reviewed_by' => AdminContext::adminId(),
-            'registration_reviewed_at' => $now,
-            'registration_review_reason' => mb_substr($reason, 0, 500),
-            'reject_reason_code' => $reasonCode,
-            'reject_note' => mb_substr($note, 0, 500),
-            'last_updated_at' => $now,
-        ]);
-        if ($updated !== 1) throw new BusinessException(ErrorCode::DATA_CONFLICT, '仅审核中的申请可以驳回');
-        $this->pushTimeline($app, 'rejected', '原因码#' . $reasonCode . ($note !== '' ? ':' . $note : ''), true);
+        Db::transaction(function () use ($app, $now, $reason, $reasonCode, $note): void {
+            $current = Db::table('merchant_application')->where('id', $app['id'])->whereNull('deleted_at')->lockForUpdate()->first();
+            if (!$current) throw new BusinessException(ErrorCode::NOT_FOUND, '入驻申请不存在');
+            $app = (array) $current;
+            $this->registrationHistory->ensureCurrent($app);
+            $updated = Db::table('merchant_application')->where('id', $app['id'])->where('registration_status', 2)->update([
+                'registration_status' => 5,
+                'registration_reviewed_by' => AdminContext::adminId(),
+                'registration_reviewed_at' => $now,
+                'registration_review_reason' => mb_substr($reason, 0, 500),
+                'reject_reason_code' => $reasonCode,
+                'reject_note' => mb_substr($note, 0, 500),
+                'last_updated_at' => $now,
+            ]);
+            if ($updated !== 1) throw new BusinessException(ErrorCode::DATA_CONFLICT, '仅审核中的申请可以驳回');
+            $this->pushTimeline($app, 'rejected', '原因码#' . $reasonCode . ($note !== '' ? ':' . $note : ''), true);
+            $this->registrationHistory->reviewed($app, 5, mb_substr($reason, 0, 500), $now);
+        });
         return Result::success(null, '入驻申请已驳回');
     }
 

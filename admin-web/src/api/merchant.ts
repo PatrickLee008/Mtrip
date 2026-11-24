@@ -445,6 +445,20 @@ export function apiOnboardingQueues(): Promise<Record<string, number>> {
   return get('/admin/merchant/onboarding/queues');
 }
 
+export interface OnboardingRegistrationHistory {
+  id: number;
+  round_no: number;
+  registration_status: number;
+  submitted_at: string | null;
+  reviewed_at: string | null;
+  reviewer_name: string;
+  review_reason: string;
+  snapshot: {
+    application: { company_name?: string; company_group_name?: string; merchant_name?: string; reg_number?: string; country?: string; city?: string; address?: string; num_businesses?: number; business_types?: string | string[] };
+    businesses: { business_name?: string; business_type?: string; country_code?: string; city?: string; city_key?: string; address?: string; contact_name?: string; contact_phone?: string; contact_email?: string }[];
+  };
+}
+
 export function apiOnboardingDetail(id: number): Promise<{
   application: Row;
   businesses: Row[];
@@ -454,6 +468,7 @@ export function apiOnboardingDetail(id: number): Promise<{
   template: Row | null;
   kyc: Row | null;
   finalApproval: Row | null;
+  registrationHistory: OnboardingRegistrationHistory[];
 }> {
   return get('/admin/merchant/onboarding/detail', { id });
 }
@@ -481,6 +496,10 @@ export function apiOnboardingAdd(data: Record<string, unknown>): Promise<Row> {
 
 export function apiOnboardingDelete(data: { id: number; confirmAppNo: string; reason: string; expectedRegistrationStatus: number; expectedKycStatus: number; expectedStage: number }): Promise<null> {
   return post('/admin/merchant/onboarding/delete', data);
+}
+
+export function apiOnboardingReopen(data: { id: number; reason: string; expectedRegistrationStatus: number; expectedStage: number }): Promise<null> {
+  return post('/admin/merchant/onboarding/reopen', data);
 }
 
 export function apiOnboardingUpdateStage(id: number, stage: number): Promise<null> {

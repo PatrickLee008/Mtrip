@@ -134,6 +134,7 @@ merchant_verify_document|1=1
 merchant_verify_timeline|1=1
 merchant_application_note|1=1
 merchant_application_signature|1=1
+merchant_application_registration_review|1=1
 merchant_application_business|1=1
 merchant_application|1=1
 merchant_property_kyc_event|1=1

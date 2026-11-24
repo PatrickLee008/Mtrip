@@ -19,7 +19,9 @@ class MerchantAppOnboardingService
 
     public function __construct(
         private readonly MerchantRegistrationOtpService $otp,
-        private readonly OnboardingKycService $kyc
+        private readonly OnboardingKycService $kyc,
+        private readonly OnboardingRegistrationHistoryService $history,
+        private readonly OnboardingReapplyService $reapply
     )
     {
     }
@@ -34,6 +36,7 @@ class MerchantAppOnboardingService
         return Db::transaction(function () use ($siteId, $claims, $applicationId, $input, $now): array {
             $app = $this->owned($applicationId, $siteId, $claims, true);
             $this->assertRegistrationEditable($app);
+            if ((int) $app['registration_status'] === 4) $this->history->ensureCurrent($app);
             $patch = $this->applicationPatch($input);
             $patch['last_activity_at'] = $now;
             $patch['last_updated_at'] = $now;
@@ -68,6 +71,7 @@ class MerchantAppOnboardingService
             if ((int) $app['registration_status'] === 1) return $this->statusFor($app);
             $this->assertRegistrationEditable($app);
             $this->assertRegistrationComplete($app);
+            if ((int) $app['registration_status'] === 4) $this->history->ensureCurrent($app);
             $now = gmdate('Y-m-d H:i:s');
             Db::table('merchant_application')->where('id', $applicationId)->update([
                 'registration_status' => 1,
@@ -80,8 +84,19 @@ class MerchantAppOnboardingService
                 'last_activity_at' => $now,
                 'last_updated_at' => $now,
             ]);
+            $this->history->submitted(array_replace($app, ['submitted_at' => $now]));
             $this->timeline($app, (int) $app['registration_status'] === 4 ? 'registration_resubmitted' : 'registration_submitted', 'Merchant App registration submitted');
             return $this->statusFor($this->owned($applicationId, $siteId, $claims));
+        });
+    }
+
+    public function reopen(int $siteId, string $token, int $applicationId): array
+    {
+        $claims = $this->otp->registrationClaims($siteId, $token);
+        return Db::transaction(function () use ($siteId, $claims, $applicationId): array {
+            $app = $this->owned($applicationId, $siteId, $claims, true);
+            $this->reapply->reopen($app, '原申请人验证注册身份后重新申请', false);
+            return $this->detailFor($this->owned($applicationId, $siteId, $claims));
         });
     }
 
@@ -282,6 +297,7 @@ class MerchantAppOnboardingService
             'merchantKycStatus' => match ($kyc) { 0 => 'locked', 1 => 'draft', 2 => 'submitted', 3 => 'under_review', 4 => 'resubmit_required', 5 => 'approved', 6 => 'rejected', default => 'unknown' },
             'accountStatus' => match ($account) { 0 => 'not_created', 1 => 'pending_activation', 2 => 'active', 3 => 'suspended', 4 => 'disabled', default => 'unknown' },
             'currentStep' => (int) $app['current_step'], 'completionPercent' => (int) $app['completion_percent'],
+            'canReapply' => $this->reapply->canReapply($app),
             'canEdit' => in_array($registration, [0, 4], true), 'canSubmit' => in_array($registration, [0, 4], true),
             'reviewReason' => (string) $app['registration_review_reason'], 'initialProperties' => $properties,
         ];

@@ -84,7 +84,7 @@ async function requestGuards() {
     [{ contactPhone: '', contactEmail: '' }, null, false],
   ]) {
     const messages = [], calls = [];
-    const registration = { companyName: 'Test', registrationToken: 'mock', setApplicationDetail() {} };
+    const registration = { companyName: 'Test', regNumber: '', registrationToken: 'mock', setApplicationDetail() {} };
     const context = { registration, cards: [{ ...goodCard, ...patch }], ...validation.exports, ONBOARDING_PROTOTYPE: false,
       t: (key, args) => `${key}:${args?.index}`, showToast: (message) => messages.push(message), setSubmitting() {},
       apiApplicationSave: async () => { calls.push('save'); return {}; }, submit };

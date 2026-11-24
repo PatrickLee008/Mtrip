@@ -232,6 +232,7 @@ export interface ApplicationStatus {
   completionPercent: number;
   canEdit: boolean;
   canSubmit: boolean;
+  canReapply?: boolean;
   reviewReason: string;
   initialProperties: InitialPropertyStatus[];
   merchantKyc?: { status: KycStatus; reviewReason: string; documents: KycDocument[] };

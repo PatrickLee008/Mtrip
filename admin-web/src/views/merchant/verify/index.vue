@@ -4,11 +4,13 @@ import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { message } from 'ant-design-vue';
-import { CheckCircleOutlined, CloseCircleOutlined, CloseOutlined, EyeOutlined, SyncOutlined, DownloadOutlined, FileTextOutlined, MenuOutlined, DownOutlined, UserOutlined, PaperClipOutlined, ClockCircleOutlined, KeyOutlined, CopyOutlined, MailOutlined, MessageOutlined, BellOutlined } from '@ant-design/icons-vue';
+import { CheckCircleOutlined, CloseCircleOutlined, CloseOutlined, EyeOutlined, SyncOutlined, DownloadOutlined, FileTextOutlined, MenuOutlined, DownOutlined, UserOutlined, PaperClipOutlined, ClockCircleOutlined, KeyOutlined, CopyOutlined, MailOutlined, MessageOutlined, BellOutlined, DeleteOutlined, ReloadOutlined } from '@ant-design/icons-vue';
 import MerchantDocumentPreview from '@/views/merchant/onboarding/components/MerchantDocumentPreview.vue';
+import OnboardingDetail from '@/views/merchant/onboarding/index.vue';
 import PageContainer from '@/components/PageContainer.vue';
 import StatusTag from '@/components/StatusTag.vue';
 import MerchantVerifyNav from '@/components/MerchantVerifyNav.vue';
+import { useUserStore } from '@/stores/user';
 import SearchFilterBar, { type FilterConfig } from '@/components/SearchFilterBar.vue';
 import { useTable, type TableRow } from '@/composables/useTable';
 import type { StatusItem } from '@/components/StatusTag.vue';
@@ -34,6 +36,7 @@ import {
 const { t } = useI18n();
 const route = useRoute();
 const router = useRouter();
+const user = useUserStore();
 
 const TABS = [
   { key: 'pending', label: 'Pending Review' },
@@ -180,9 +183,19 @@ const VERIF_BADGE = computed<Record<number, StatusItem>>(() => ({
 const drawerOpen = ref(false);
 const detailLoading = ref(false);
 const detail = ref<TableRow | null>(null);
+const rejectedApplicationDetail = ref<InstanceType<typeof OnboardingDetail> | null>(null);
+function canManageRejectedApplication(row: TableRow, action: 'reopen' | 'delete'): boolean {
+  return activeTab.value === 'rejected' && row.record_type === 'application' && user.profile?.isSuper === true
+    && user.hasPerm(`merchant:onboarding:${action}`);
+}
+async function openRejectedAction(row: TableRow, action: 'reopen' | 'delete'): Promise<void> {
+  if (!canManageRejectedApplication(row, action)) return;
+  await rejectedApplicationDetail.value?.openRejectedAction({ id: row.application_id }, action);
+}
 const approvedPreview = ref<InstanceType<typeof MerchantDocumentPreview> | null>(null);
 function submittedDate(row: TableRow): string { return formatUploadDate(row.application_submitted_at || row.created_at); }
 function assignedOpsName(row: TableRow): string { return String(row.assigned_ops_name || '').trim() || '-'; }
+function verificationRowKey(row: TableRow): string | number { return row.row_key || row.id; }
 const documents = ref<TableRow[]>([]);
 const timeline = ref<TableRow[]>([]);
 const historyExpanded = ref(false);
@@ -374,6 +387,10 @@ const finalDecisionSubtitle = computed(() => {
 });
 
 async function openDetail(row: TableRow): Promise<void> {
+  if (row.record_type === 'application') {
+    await rejectedApplicationDetail.value?.openDetail({ id: row.application_id });
+    return;
+  }
   historyExpanded.value = false;
   drawerOpen.value = true;
   detailLoading.value = true;
@@ -653,7 +670,7 @@ onMounted(() => {
       :data-source="list"
       :loading="loading"
       :pagination="tablePagination"
-      row-key="id"
+      :row-key="verificationRowKey"
       size="middle"
       :scroll="{ x: 1410 }"
     >
@@ -684,6 +701,12 @@ onMounted(() => {
             <a-space :size="0">
               <a-tooltip :title="t('common.detail')">
                 <a-button type="link" size="small" @click="openDetail(record)"><EyeOutlined /></a-button>
+              </a-tooltip>
+              <a-tooltip v-if="canManageRejectedApplication(record, 'reopen')" :title="t('merchant.onboardingPage.reopenLeadTitle')">
+                <a-button v-perm="'merchant:onboarding:reopen'" type="link" size="small" :aria-label="t('merchant.onboardingPage.reopenLeadTitle')" @click="openRejectedAction(record, 'reopen')"><ReloadOutlined /></a-button>
+              </a-tooltip>
+              <a-tooltip v-if="canManageRejectedApplication(record, 'delete')" :title="t('merchant.onboardingPage.deleteLeadTitle')">
+                <a-button v-perm="'merchant:onboarding:delete'" type="link" danger size="small" :aria-label="t('merchant.onboardingPage.deleteLeadTitle')" @click="openRejectedAction(record, 'delete')"><DeleteOutlined /></a-button>
               </a-tooltip>
               <template v-if="canAct">
                 <a-tooltip :title="t('merchant.verifyPage.btnApprove')">
@@ -1102,6 +1125,7 @@ onMounted(() => {
     <a-modal v-model:open="docRejectOpen" :title="t('merchant.verifyPage.docRejectModalTitle')" :confirm-loading="docRejectSaving" :ok-text="t('merchant.verifyPage.btnReject')" :ok-button-props="{ danger: true }" @ok="doDocReject">
       <a-textarea v-model:value="docRejectReason" :rows="3" :placeholder="t('merchant.verifyPage.docRejectPlaceholder')" />
     </a-modal>
+    <OnboardingDetail v-if="activeTab === 'rejected'" ref="rejectedApplicationDetail" detail-only @changed="load" />
   </PageContainer>
 </template>
 

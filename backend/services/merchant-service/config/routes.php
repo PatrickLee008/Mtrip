@@ -47,6 +47,7 @@ Router::post('/api/v1/app/merchant/register/otp-send', [AppRegistrationControlle
 Router::post('/api/v1/app/merchant/register/otp-verify', [AppRegistrationController::class, 'verifyOtp']);
 Router::get('/api/v1/app/merchant/application/detail', [AppApplicationController::class, 'detail']);
 Router::post('/api/v1/app/merchant/application/save', [AppApplicationController::class, 'save']);
+Router::post('/api/v1/app/merchant/application/reopen', [AppApplicationController::class, 'reopen']);
 Router::post('/api/v1/app/merchant/application/submit', [AppApplicationController::class, 'submit']);
 Router::get('/api/v1/app/merchant/application/status', [AppApplicationController::class, 'status']);
 Router::get('/api/v1/app/merchant/application/kyc-requirements', [AppApplicationController::class, 'kycRequirements']);
@@ -190,6 +191,7 @@ Router::addGroup('/api/v1/admin', static function () {
     Router::get('/merchant/onboarding/property-kyc-templates', [OnboardingController::class, 'propertyKycTemplates']);
     Router::post('/merchant/onboarding/property-kyc-configure', [OnboardingController::class, 'propertyKycConfigure']);
     Router::post('/merchant/onboarding/add', [OnboardingController::class, 'create']);
+    Router::post('/merchant/onboarding/reopen', [OnboardingController::class, 'reopen']);
     Router::post('/merchant/onboarding/delete', [OnboardingController::class, 'delete']);
     Router::post('/merchant/onboarding/update-stage', [OnboardingController::class, 'updateStage']);
     Router::post('/merchant/onboarding/registration-number', [OnboardingController::class, 'updateRegistrationNumber']);

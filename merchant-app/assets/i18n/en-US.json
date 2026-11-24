@@ -229,6 +229,10 @@
       "status": "Application status",
       "nextKyc": "Next Step: KYC Upload",
       "edit": "Edit Registration",
+      "reapply": "Edit Details and Reapply",
+      "reopening": "Reopening Application...",
+      "reverifyIdentity": "Verify your original registered phone number and email with a one-time code, then tap Reapply again.",
+      "reapplyFailed": "Could not reopen your application. Please try again.",
       "proceedKyc": "Proceed to KYC Upload",
       "activate": "Activate Account",
       "anotherPhone": "Register with Another Phone Number"

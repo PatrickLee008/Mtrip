@@ -75,7 +75,7 @@ final class OnboardingLeadDeletionService
                     Db::table('merchant_document_event')->whereIn('doc_id', $docIds)->delete();
                     Db::table('merchant_activity_log')->where('entity_type', 'document')->whereIn('entity_id', $docIds)->delete();
                     Db::table('merchant_verify_document_revision')->whereIn('doc_id', $docIds)->delete();
-                    foreach (['merchant_verify_document', 'merchant_application_signature', 'merchant_application_note', 'merchant_verify_timeline', 'merchant_application_business'] as $table) {
+                    foreach (['merchant_application_registration_review', 'merchant_verify_document', 'merchant_application_signature', 'merchant_application_note', 'merchant_verify_timeline', 'merchant_application_business'] as $table) {
                         Db::table($table)->where('application_id', $id)->delete();
                     }
                     Db::table('merchant_kyc_template')->whereIn('id', $templates)->delete();

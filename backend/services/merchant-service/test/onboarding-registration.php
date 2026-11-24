@@ -222,6 +222,7 @@ try {
     onboardingRequest($admin, 'reject', ['id' => $secondId, 'reasonCode' => 3, 'note' => 'Registration data mismatch']);
     check((int) Db::table('merchant_application')->where('id', $secondId)->value('registration_status') === 5,
         'reviewer can reject an under-review registration');
+    check(($onboarding->status(7, $second['registrationToken'], $secondId)['canReapply'] ?? false) === true, 'rejected base registration explicitly allows same-identity reapplication');
 
     $queues = onboardingRequest($admin, 'queues', []);
     check($queues['approved'] === 1 && $queues['rejected'] === 1 && $queues['pending'] === 0 && $queues['resubmission'] === 0,
@@ -236,7 +237,7 @@ try {
         && (int) $progressRows[0]['registration_status'] === 3,
         'list tracks partial property approval without overwriting base registration status');
     Db::table('merchant_application_business')->where('id', $businessId)->update(['kyc_status' => 1]);
-    $rejectedRows = onboardingRequest($admin, 'index', ['registrationStatus' => 5])['list'];
+    $rejectedRows = onboardingRequest($admin, 'index', ['queue' => 'rejected', 'registrationStatus' => 5])['list'];
     check(count($rejectedRows) === 1 && $rejectedRows[0]['initial_property_kyc_statuses'] === [],
         'property progress is grouped by application without borrowing another application scopes');
     AdminContext::set(['admin_id' => 92002, 'admin_name' => 'Wrong Site', 'site_id' => 992, 'is_super' => false,
@@ -358,6 +359,7 @@ try {
     }
     if ($applicationIds !== []) {
         Db::table('merchant_verify_timeline')->whereIn('application_id', $applicationIds)->delete();
+        Db::table('merchant_application_registration_review')->whereIn('application_id', $applicationIds)->delete();
         Db::table('merchant_application_business')->whereIn('application_id', $applicationIds)->delete();
         Db::table('merchant_application')->whereIn('id', $applicationIds)->delete();
     }

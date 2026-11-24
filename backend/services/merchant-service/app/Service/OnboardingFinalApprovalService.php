@@ -220,6 +220,7 @@ class OnboardingFinalApprovalService
             Db::table('merchant_application_business')->where('application_id', $applicationId),
             Db::table('merchant_application_note')->where('application_id', $applicationId),
             Db::table('merchant_application_signature')->where('application_id', $applicationId),
+            Db::table('merchant_application_registration_review')->where('application_id', $applicationId),
             Db::table('merchant_verify_document')->where('application_id', $applicationId),
             Db::table('merchant_verify_document_revision')->whereIn('doc_id', $documentIds),
             Db::table('merchant_document_event')->whereIn('doc_id', $documentIds),

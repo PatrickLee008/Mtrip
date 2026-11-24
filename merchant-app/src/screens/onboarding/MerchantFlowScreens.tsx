@@ -33,8 +33,9 @@ import { fonts } from '@/config/typography';
 import { useCommonStore } from '@/store/commonStore';
 import { useMerchantStore } from '@/store/merchantStore';
 import { useRegistrationStore } from '@/store/registrationStore';
-import { apiActivationFinish, apiActivationTotpSetup, apiActivationTotpVerify, apiAgreement, apiAgreementRead, apiAgreementSign, apiApplicationDetail, apiApplicationStatus, apiKycRequirements, apiKycSubmit, apiKycUpload, apiRecoveryTotpSetup, apiRecoveryTotpVerify, apiRegistrationChannels, apiRegistrationOtpSend, apiRegistrationOtpVerify } from '@/api/merchant';
-import type { AgreementDetail, KycDocument, KycRequirements, RegistrationChannel, RegistrationVerifyResult } from '@/api/types';
+import { apiActivationFinish, apiActivationTotpSetup, apiActivationTotpVerify, apiAgreement, apiAgreementRead, apiAgreementSign, apiApplicationDetail, apiApplicationReopen, apiApplicationStatus, apiKycRequirements, apiKycSubmit, apiKycUpload, apiRecoveryTotpSetup, apiRecoveryTotpVerify, apiRegistrationChannels, apiRegistrationOtpSend, apiRegistrationOtpVerify } from '@/api/merchant';
+import { ApiError } from '@/api/request';
+import { API_CODE, type AgreementDetail, type KycDocument, type KycRequirements, type RegistrationChannel, type RegistrationVerifyResult } from '@/api/types';
 import type { RootStackParamList } from '@/navigation/types';
 import { enableBiometric } from '@/utils/merchantSession';
 import { removeOnboardingSession } from '@/utils/onboardingSession';
@@ -190,21 +191,31 @@ function ReviewScreen({ kyc = false }: { kyc?: boolean }) {
   const { t } = useTranslation();
   const state = useRegistrationStore();
   const status = state.status;
+  const isLogin = useMerchantStore((s) => s.isLogin);
+  const showToast = useCommonStore((s) => s.showToast);
   const [approvalNotice, setApprovalNotice] = useState(false);
-  const refresh = async () => {
-    if (!state.registrationToken || !state.applicationId) return;
-    try {
-      const next = await apiApplicationStatus(state.registrationToken, state.applicationId);
-      state.setApplication(next);
-    } catch {
-      // The request interceptor already presents a transport or business error.
-    }
-  };
+  const [busyAction, setBusyAction] = useState<'reopen' | 'another' | null>(null);
+  const busyRef = useRef(false);
+  const refreshVersion = useRef(0);
   useEffect(() => {
+    if (!focused) return;
+    let active = true;
+    const refresh = async () => {
+      if (!state.registrationToken || !state.applicationId || busyRef.current) return;
+      const version = refreshVersion.current;
+      try {
+        const next = await apiApplicationStatus(state.registrationToken, state.applicationId);
+        const current = useRegistrationStore.getState();
+        if (active && version === refreshVersion.current && current.registrationToken === state.registrationToken
+          && current.applicationId === state.applicationId) state.setApplication(next);
+      } catch {
+        // The request interceptor already presents a transport or business error.
+      }
+    };
     void refresh();
     const timer = setInterval(() => void refresh(), 20000);
-    return () => clearInterval(timer);
-  }, [state.applicationId, state.registrationToken]);
+    return () => { active = false; clearInterval(timer); };
+  }, [focused, state.applicationId, state.registrationToken]);
   const needsCorrection = status?.registrationStatus === 'resubmit_required';
   const awaitingRegistration = status?.registrationStatus === 'submitted' || status?.registrationStatus === 'under_review';
   const canUpload = status?.registrationStatus === 'approved'
@@ -232,6 +243,8 @@ function ReviewScreen({ kyc = false }: { kyc?: boolean }) {
   const accountUnavailable = status?.accountStatus === 'suspended' || status?.accountStatus === 'disabled';
   const rejectedProperty = status?.initialProperties.find((property) => property.kycStatus === 'rejected');
   const rejected = status?.registrationStatus === 'rejected' || status?.merchantKycStatus === 'rejected' || !!rejectedProperty;
+  const canReapply = !kyc && !isLogin && status?.registrationStatus === 'rejected' && status.canReapply === true
+    && status.accountStatus === 'not_created' && status.merchantKycStatus !== 'rejected' && !rejectedProperty;
   const success = ONBOARDING_PROTOTYPE || needsCorrection || canUpload || pendingActivation || active || rejected || accountUnavailable;
   const title = needsCorrection ? t('flow.review.changesRequested')
     : rejected ? t('flow.review.rejected')
@@ -248,7 +261,31 @@ function ReviewScreen({ kyc = false }: { kyc?: boolean }) {
           : active ? t('flow.review.activeBody')
             : awaitingRegistration ? t('flow.review.awaitingBody')
               : t('flow.review.reviewBody');
-  const action = () => {
+  const recoverIdentity = () => {
+    showToast(t('flow.review.reverifyIdentity'));
+    navigation.navigate(isMobileNumber(state.registrationPhone) && isEmail(state.registrationEmail) ? 'RegisterVerification' : 'RegisterContact');
+  };
+  const action = async () => {
+    if (busyRef.current) return;
+    if (canReapply) {
+      if (!state.registrationToken || state.tokenExpiresAt <= Date.now()) { recoverIdentity(); return; }
+      busyRef.current = true;
+      refreshVersion.current += 1;
+      setBusyAction('reopen');
+      try {
+        const detail = await apiApplicationReopen(state.registrationToken, state.applicationId);
+        state.setApplicationDetail(detail);
+        navigation.navigate('Register');
+      } catch (error) {
+        if (error instanceof ApiError && (error.code === API_CODE.UNAUTHORIZED || error.code === API_CODE.TOKEN_EXPIRED)) recoverIdentity();
+        else showToast(error instanceof Error ? error.message : t('flow.review.reapplyFailed'));
+      } finally {
+        busyRef.current = false;
+        setBusyAction(null);
+      }
+      return;
+    }
+    if (rejected || accountUnavailable) return;
     if (ONBOARDING_PROTOTYPE) navigation.navigate(kyc ? 'MerchantLogin' : 'KycDocuments');
     else if (needsCorrection) navigation.navigate('Register');
     else if (canUpload) navigation.navigate('KycDocuments');
@@ -256,16 +293,25 @@ function ReviewScreen({ kyc = false }: { kyc?: boolean }) {
     else navigation.navigate('MerchantLogin');
   };
   const startAnother = async () => {
-    await removeOnboardingSession();
-    state.clear();
-    navigation.reset({ index: 0, routes: [{ name: 'Onboarding' }] });
+    if (busyRef.current) return;
+    busyRef.current = true;
+    refreshVersion.current += 1;
+    setBusyAction('another');
+    try {
+      await removeOnboardingSession();
+      state.clear();
+      navigation.reset({ index: 0, routes: [{ name: 'Onboarding' }] });
+    } finally {
+      busyRef.current = false;
+      setBusyAction(null);
+    }
   };
   return <ResultStatusScreen
     status={success ? 'success' : 'loading'} title={title}
     subtitle={status?.appNo ? t('flow.review.applicationNo', { appNo: status.appNo }) : t('flow.review.status')}
     cardTitle={awaitingRegistration || canUpload ? t('flow.review.nextKyc') : title} cardBody={cardBody} cardIcon={kyc ? 'file' : 'info'}
-    buttonLabel={rejected ? t('flow.review.rejected') : accountUnavailable ? t('flow.review.unavailable') : needsCorrection ? t('flow.review.edit') : awaitingRegistration || canUpload ? t('flow.review.proceedKyc') : pendingActivation ? t('flow.review.activate') : t('flow.twoFa.dashboardLogin')}
-    buttonDisabled={!success || rejected || accountUnavailable}
+    buttonLabel={busyAction === 'reopen' ? t('flow.review.reopening') : canReapply ? t('flow.review.reapply') : rejected ? t('flow.review.rejected') : accountUnavailable ? t('flow.review.unavailable') : needsCorrection ? t('flow.review.edit') : awaitingRegistration || canUpload ? t('flow.review.proceedKyc') : pendingActivation ? t('flow.review.activate') : t('flow.twoFa.dashboardLogin')}
+    buttonDisabled={busyAction !== null || !success || (rejected && !canReapply) || accountUnavailable}
     onButtonPress={action}
     secondaryLabel={kyc || status?.registrationStatus === 'approved' ? undefined : t('flow.review.anotherPhone')}
     onSecondaryPress={kyc || status?.registrationStatus === 'approved' ? undefined : () => void startAnother()}

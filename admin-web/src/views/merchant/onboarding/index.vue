@@ -22,6 +22,7 @@ import {
   InfoCircleOutlined,
   MenuOutlined,
   PlusOutlined,
+  ReloadOutlined,
   SafetyCertificateOutlined,
   SendOutlined,
   UploadOutlined,
@@ -54,6 +55,7 @@ import {
   apiOnboardingKycUpload,
   apiOnboardingList,
   apiOnboardingDelete,
+  apiOnboardingReopen,
   apiOnboardingRegistrationResubmit,
   apiOnboardingRegistrationNumber,
   apiOnboardingRegistrationReviewStart,
@@ -63,6 +65,7 @@ import {
   apiOnboardingSendReminder,
   apiOnboardingUpdateStage,
   apiVerifyDocReview,
+  type OnboardingRegistrationHistory,
 } from '@/api/merchant';
 import { apiAdminList } from '@/api/system';
 import { exportCsv } from '@/utils/exportCsv';
@@ -76,6 +79,8 @@ import { exportCsv } from '@/utils/exportCsv';
  *   验证状态页(Pending Verification/Approved/Rejected/Resubmission)由 merchant/verify/index 承接
  */
 const { t } = useI18n();
+const props = defineProps<{ detailOnly?: boolean }>();
+const emit = defineEmits<{ changed: [] }>();
 const user = useUserStore();
 const isSuper = computed(() => user.profile?.isSuper === true);
 
@@ -166,7 +171,7 @@ const SEARCH_FILTERS = computed<FilterConfig[]>(() => [
     key: 'registrationStatus',
     label: t('merchant.onboardingPage.filterStage'),
     allLabel: t('merchant.onboardingPage.allStages'),
-    options: [0, 1, 2, 3, 4, 5].map((value) => ({ value, label: REGISTRATION_STATUS_MAP.value[value].text })),
+    options: [0, 1, 2, 3, 4].map((value) => ({ value, label: REGISTRATION_STATUS_MAP.value[value].text })),
   },
   {
     key: 'category',
@@ -334,7 +339,7 @@ const registrationProgress = computed(() => currentProgress.value.step);
 const currentProperty = computed<TableRow | null>(() => (kyc.value?.initialProperties || [])
   .find((property: TableRow) => Number(property.applicationBusinessId) === Number(kycBizId.value)) ?? null);
 async function refreshPropertyTemplate(applicationId: number): Promise<void> {
-  if (Number(app.value?.id) !== applicationId) return;
+  if (props.detailOnly || Number(app.value?.id) !== applicationId) return;
   scopedKycBusy.value = true;
   try {
     await loadDetail(applicationId, true);
@@ -391,6 +396,47 @@ const deleteLeadOpen = ref(false);
 const deleteLeadSaving = ref(false);
 const deleteLeadTarget = ref<TableRow | null>(null);
 const deleteLeadForm = reactive({ confirmAppNo: '', reason: '' });
+const reopenLeadOpen = ref(false);
+const reopenLeadSaving = ref(false);
+const reopenLeadTarget = ref<TableRow | null>(null);
+const reopenLeadReason = ref('');
+function canReopenLead(row: TableRow): boolean {
+  return isSuper.value && user.hasPerm('merchant:onboarding:reopen') && Number(row.state_model_version) === 1
+    && Number(row.registration_status) === 5 && Number(row.merchant_id ?? 0) === 0
+    && Number(row.account_status ?? 0) === 0 && !row.final_approved_at;
+}
+function openReopenLead(row: TableRow): void {
+  if (!canReopenLead(row) || reopenLeadSaving.value) return;
+  reopenLeadTarget.value = { ...row };
+  reopenLeadReason.value = '';
+  reopenLeadOpen.value = true;
+}
+async function reopenLead(): Promise<void> {
+  const target = reopenLeadTarget.value;
+  const reason = reopenLeadReason.value.trim();
+  if (!target || !canReopenLead(target) || reopenLeadSaving.value || !reason || reason.length > 200
+    || Number(app.value?.id) !== Number(target.id) || !canReopenLead(app.value!)) return;
+  reopenLeadSaving.value = true;
+  try {
+    await apiOnboardingReopen({ id: Number(target.id), reason,
+      expectedRegistrationStatus: Number(target.registration_status), expectedStage: Number(target.stage) });
+    reopenLeadOpen.value = false;
+    reopenLeadTarget.value = null;
+    if (Number(app.value?.id) === Number(target.id)) { drawerOpen.value = false; scopedAssistOpen.value = false; app.value = null; }
+    window.dispatchEvent(new Event('mtrip:onboarding-changed'));
+    emit('changed');
+    if (!props.detailOnly) await load();
+    message.success(t('merchant.onboardingPage.reopenLeadSuccess'));
+  } finally { reopenLeadSaving.value = false; }
+}
+async function openRejectedAction(row: TableRow, action: 'reopen' | 'delete'): Promise<void> {
+  if (!isSuper.value || !user.hasPerm(`merchant:onboarding:${action}`)) return;
+  await openDetail(row);
+  if (!app.value) return;
+  if (action === 'delete') openDeleteLead(app.value);
+  else if (canReopenLead(app.value)) openReopenLead(app.value);
+  else message.warning(t('merchant.onboardingPage.reopenLeadUnavailable'));
+}
 function canDeleteLead(row: TableRow): boolean {
   return isSuper.value && user.hasPerm('merchant:onboarding:delete') && Number(row.merchant_id ?? 0) === 0
     && Number(row.account_status ?? 0) === 0 && Number(row.stage) !== 5 && !row.final_approved_at;
@@ -420,7 +466,8 @@ function confirmDeleteLead(): void {
         if (Number(app.value?.id) === data.id) { drawerOpen.value = false; scopedAssistOpen.value = false; app.value = null; }
         if (list.value.length === 1 && currentPage.value > 1) currentPage.value--;
         window.dispatchEvent(new Event('mtrip:onboarding-changed'));
-        await load();
+        emit('changed');
+        if (!props.detailOnly) await load();
         message.success(t('merchant.onboardingPage.deleteLeadSuccess'));
       } finally { deleteLeadSaving.value = false; }
     },
@@ -428,6 +475,8 @@ function confirmDeleteLead(): void {
 }
 
 async function openDetail(row: TableRow): Promise<void> {
+  registrationHistoryExpanded.value = false;
+  reopenLeadOpen.value = false;
   registrationNumberOpen.value = false;
   timelineExpanded.value = false;
   scopedAssistOpen.value = false;
@@ -451,7 +500,7 @@ async function openDetail(row: TableRow): Promise<void> {
     kycBizId.value = firstB?.id ?? 0;
     openBizId.value = firstB?.id ?? 0;
     kycSetup.templateId = Number(app.value?.kyc_template_id) || undefined;
-    if (!isLegacy.value) return;
+    if (!isLegacy.value || props.detailOnly) return;
     await loadTemplates();
     if (!kycSetup.templateId) {
       kycSetup.templateId = templates.value[0]?.id;
@@ -472,6 +521,7 @@ async function loadDetail(id: number, onlyIfCurrent = false): Promise<void> {
   notes.value = data.notes;
   kyc.value = data.kyc;
   finalApprovalResult.value = data.finalApproval;
+  registrationHistory.value = data.registrationHistory || [];
   // Opening or refreshing a detail also refreshes that visible row's progress snapshot.
   list.value = list.value.map((row) => Number(row.id) === Number(app.value?.id) ? {
     ...row,
@@ -481,10 +531,22 @@ async function loadDetail(id: number, onlyIfCurrent = false): Promise<void> {
 }
 
 const isLegacy = computed(() => Number(app.value?.state_model_version ?? 0) === 0);
+const registrationHistory = ref<OnboardingRegistrationHistory[]>([]);
+const registrationHistoryExpanded = ref(false);
+function historyBusinessTypes(value?: string | string[]): string {
+  const types = typeof value === 'string' ? value.split(',').filter(Boolean) : value || [];
+  return types.map(bizTypeText).join(', ') || '-';
+}
+function historyReviewReason(value: string): string {
+  const reason = value.trim();
+  const match = /^reason_code:(\d+)(?:\s+([\s\S]*))?$/.exec(reason);
+  const option = match && REJECT_REASONS.value.find(item => item.code === Number(match[1]));
+  return option ? [option.label, match[2]].filter(Boolean).join(' · ') : reason || '-';
+}
 const registrationNumberOpen = ref(false);
 const registrationNumberSaving = ref(false);
 const registrationNumberForm = reactive({ id: 0, regNumber: '', expectedRegNumber: '', reason: '' });
-const canEditRegistrationNumber = computed(() => !!app.value && !isLegacy.value
+const canEditRegistrationNumber = computed(() => !props.detailOnly && !!app.value && !isLegacy.value
   && Number(app.value.merchant_id ?? 0) === 0 && [1, 2, 4].includes(Number(app.value.registration_status))
   && user.hasPerm('merchant:onboarding:update'));
 function openRegistrationNumber(): void {
@@ -515,7 +577,7 @@ async function saveRegistrationNumber(): Promise<void> {
 const scopedKycBusy = ref(false);
 const testAgreementOpen = ref(false);
 const testAgreementForm = reactive({ id: 0, agreementId: 0, version: '', reason: '' });
-const canAssistNewKyc = computed(() => !isLegacy.value && !!kyc.value && Number(app.value?.merchant_id ?? 0) === 0);
+const canAssistNewKyc = computed(() => !props.detailOnly && !isLegacy.value && !!kyc.value && Number(app.value?.merchant_id ?? 0) === 0);
 const canSubmitNewKyc = computed(() => canAssistNewKyc.value && kyc.value?.agreement?.satisfied === true
   && [kyc.value?.merchantKyc?.status, ...(kyc.value?.initialProperties || []).map((p: TableRow) => p.kycStatus)]
     .some((status) => ['draft', 'resubmit_required'].includes(status)));
@@ -597,7 +659,7 @@ async function rejectScopedDocument(): Promise<void> {
 }
 
 function uploadScopedDoc(file: File, scope: string, businessId: number, doc: TableRow): false {
-  if (!app.value || scopedKycBusy.value) return false;
+  if (props.detailOnly || !app.value || scopedKycBusy.value) return false;
   const id = app.value.id;
   scopedKycBusy.value = true;
   void (async () => {
@@ -653,10 +715,10 @@ async function confirmTestAgreement(): Promise<void> {
     scopedKycBusy.value = false;
   }
 }
-const editable = computed(() => app.value !== null && (isLegacy.value ? app.value.stage < 5 : [1, 2, 4].includes(Number(app.value.registration_status))));
-const registrationReviewable = computed(() => !isLegacy.value && Number(app.value?.registration_status) === 1);
-const registrationDecisionable = computed(() => !isLegacy.value && Number(app.value?.registration_status) === 2);
-const finalApprovable = computed(() => isSuper.value
+const editable = computed(() => !props.detailOnly && app.value !== null && (isLegacy.value ? app.value.stage < 5 : [1, 2, 4].includes(Number(app.value.registration_status))));
+const registrationReviewable = computed(() => !props.detailOnly && !isLegacy.value && Number(app.value?.registration_status) === 1);
+const registrationDecisionable = computed(() => !props.detailOnly && !isLegacy.value && Number(app.value?.registration_status) === 2);
+const finalApprovable = computed(() => !props.detailOnly && isSuper.value
   && !isLegacy.value
   && Number(app.value?.account_status ?? 0) === 0
   && Number(app.value?.merchant_id ?? 0) === 0);
@@ -1051,6 +1113,7 @@ async function doReject(): Promise<void> {
     message.success(t('merchant.onboardingPage.rejectSuccess'));
     rejectOpen.value = false;
     drawerOpen.value = false;
+    window.dispatchEvent(new Event('mtrip:onboarding-changed'));
     await load();
   } finally {
     rejectSaving.value = false;
@@ -1145,13 +1208,16 @@ async function doCreate(): Promise<void> {
 const unassignedOpsOption = computed(() => [{ value: 0, label: t('merchant.onboardingPage.unassigned') }]);
 
 onMounted(() => {
+  if (props.detailOnly) return;
   void load();
   void loadOps();
 });
+defineExpose({ openDetail, openRejectedAction });
 </script>
 
 <template>
-  <PageContainer class="onboarding-page">
+  <component :is="props.detailOnly ? 'div' : PageContainer" class="onboarding-page">
+    <template v-if="!props.detailOnly">
     <!-- 页面标题区(eyebrow + 主标题 + 描述) -->
     <div class="ob-header">
       <div>
@@ -1224,6 +1290,7 @@ onMounted(() => {
       </template>
     </a-table>
 
+    </template>
     <!-- 详情抽屉:7 分区审核工作台 -->
     <a-drawer v-model:open="drawerOpen" root-class-name="onboarding-drawer" width="760" :closable="false" :mask-closable="!scopedKycBusy" :keyboard="!scopedKycBusy">
       <template #title>
@@ -1253,7 +1320,7 @@ onMounted(() => {
             </div>
             <div v-if="!isLegacy && [4, 5].includes(Number(app.registration_status))" class="stage-card__rejected">
               <CloseCircleOutlined />
-              <span>{{ app.registration_review_reason || t('merchant.onboardingPage.rejectedNotice') }}</span>
+              <span>{{ app.registration_review_reason ? historyReviewReason(app.registration_review_reason) : t('merchant.onboardingPage.rejectedNotice') }}</span>
             </div>
             <div v-else-if="isLegacy && app.stage === 6" class="stage-card__rejected">
               <CloseCircleOutlined />
@@ -1333,6 +1400,42 @@ onMounted(() => {
               </div>
             </div>
           </div>
+
+          <section v-if="registrationHistory.length" class="co-info-section registration-history">
+            <button type="button" class="co-section-heading registration-history__toggle" :aria-expanded="registrationHistoryExpanded" aria-controls="registration-history" @click="registrationHistoryExpanded = !registrationHistoryExpanded">
+              <ClockCircleOutlined class="co-heading-icon" /><span class="co-heading-text">{{ t('merchant.onboardingPage.registrationHistory') }}</span><span class="co-heading-line" /><DownOutlined :rotate="registrationHistoryExpanded ? 180 : 0" />
+            </button>
+            <div v-if="registrationHistoryExpanded" id="registration-history">
+              <a-card v-for="round in registrationHistory" :key="round.id" size="small" class="registration-history__round">
+                <template #title>{{ t('merchant.onboardingPage.registrationRound', { round: round.round_no }) }}</template>
+                <template #extra><StatusTag :value="round.registration_status" :map="REGISTRATION_STATUS_MAP" /></template>
+                <a-descriptions size="small" :column="2">
+                  <a-descriptions-item :label="t('merchant.onboardingPage.labelSubmitted')">{{ round.submitted_at || '-' }}</a-descriptions-item>
+                  <a-descriptions-item :label="t('merchant.onboardingPage.historyReviewedAt')">{{ round.reviewed_at || '-' }}</a-descriptions-item>
+                  <a-descriptions-item :label="t('merchant.onboardingPage.historyReviewer')">{{ round.reviewer_name || '-' }}</a-descriptions-item>
+                  <a-descriptions-item :label="t('merchant.onboardingPage.historyReason')">{{ historyReviewReason(round.review_reason) }}</a-descriptions-item>
+                  <a-descriptions-item :label="t('merchant.onboardingPage.labelCompanyGroupName')">{{ round.snapshot.application.company_name || round.snapshot.application.company_group_name || '-' }}</a-descriptions-item>
+                  <a-descriptions-item :label="t('merchant.onboardingPage.labelMerchantName')">{{ round.snapshot.application.merchant_name || '-' }}</a-descriptions-item>
+                  <a-descriptions-item :label="t('merchant.onboardingPage.labelRegNumber')">{{ round.snapshot.application.reg_number || '-' }}</a-descriptions-item>
+                  <a-descriptions-item :label="t('merchant.onboardingPage.labelCountry')">{{ round.snapshot.application.country || '-' }}</a-descriptions-item>
+                  <a-descriptions-item :label="t('merchant.onboardingPage.labelCity')">{{ round.snapshot.application.city || '-' }}</a-descriptions-item>
+                  <a-descriptions-item :label="t('merchant.onboardingPage.labelAddress')">{{ round.snapshot.application.address || '-' }}</a-descriptions-item>
+                  <a-descriptions-item :label="t('merchant.onboardingPage.labelNumBusinesses')">{{ round.snapshot.application.num_businesses ?? '-' }}</a-descriptions-item>
+                  <a-descriptions-item :label="t('merchant.onboardingPage.labelBusinessTypes')">{{ historyBusinessTypes(round.snapshot.application.business_types) }}</a-descriptions-item>
+                </a-descriptions>
+                <a-descriptions v-for="(business, index) in round.snapshot.businesses" :key="index" size="small" :column="2" bordered class="registration-history__business">
+                  <a-descriptions-item :label="t('merchant.onboardingPage.labelBusinessName')">{{ business.business_name || '-' }}</a-descriptions-item>
+                  <a-descriptions-item :label="t('merchant.onboardingPage.labelRegisteredBusinessType')">{{ bizTypeText(business.business_type || '') }}</a-descriptions-item>
+                  <a-descriptions-item :label="t('merchant.onboardingPage.labelCountry')">{{ business.country_code || '-' }}</a-descriptions-item>
+                  <a-descriptions-item :label="t('merchant.onboardingPage.labelCity')">{{ business.city || business.city_key || '-' }}</a-descriptions-item>
+                  <a-descriptions-item :label="t('merchant.onboardingPage.labelAddress')">{{ business.address || '-' }}</a-descriptions-item>
+                  <a-descriptions-item :label="t('merchant.onboardingPage.labelRegisteredBusinessContact')">{{ business.contact_name || '-' }}</a-descriptions-item>
+                  <a-descriptions-item :label="t('merchant.onboardingPage.labelRegisteredBusinessPhone')">{{ business.contact_phone || '-' }}</a-descriptions-item>
+                  <a-descriptions-item :label="t('merchant.onboardingPage.labelRegisteredBusinessEmail')">{{ business.contact_email || '-' }}</a-descriptions-item>
+                </a-descriptions>
+              </a-card>
+            </div>
+          </section>
 
           <div v-if="app.contact_verification?.length" class="co-info-section ob-contacts">
             <div class="co-section-heading"><SafetyCertificateOutlined class="co-heading-icon" /><h4 class="co-heading-text">{{ t('merchant.onboardingPage.contactVerification') }}</h4><div class="co-heading-line" /></div>
@@ -1570,7 +1673,7 @@ onMounted(() => {
               <div><span class="kyc-label">{{ t('merchant.onboardingPage.verificationScope') }}</span><a-tag color="blue">{{ t('merchant.onboardingPage.propertyKycScope') }}</a-tag></div>
               <div><span class="kyc-label">{{ t('merchant.onboardingPage.businessType') }}</span><a-tag>{{ bizTypeText(currentBiz.business_type) }}</a-tag></div>
             </div>
-            <PropertyKycTemplate v-if="currentProperty" :key="`${app.id}:${currentProperty.applicationBusinessId}`" :application-id="Number(app.id)" :property="currentProperty" :busy="scopedKycBusy" @saved="refreshPropertyTemplate">
+            <PropertyKycTemplate v-if="currentProperty" :key="`${app.id}:${currentProperty.applicationBusinessId}`" :application-id="Number(app.id)" :property="currentProperty" :busy="props.detailOnly || scopedKycBusy" @saved="refreshPropertyTemplate">
               <KycScopeDocuments v-if="currentProperty" :title="t('merchant.onboardingPage.propertyKycScope')" :subtitle="currentProperty.businessName" :status="currentProperty.kycStatus" :documents="currentProperty.documents || []" scope-type="property" :business-id="currentProperty.applicationBusinessId" :formal-merchant="!!app?.merchant_id"  :busy="scopedKycBusy" :can-review="canReviewScopedDoc" @review="openKycReview" @preview="openDocumentPreview" />
               <div v-if="currentProperty?.reviewReason" class="kyc-scope-reason">{{ currentProperty.reviewReason }}</div>
               <template #actions>
@@ -1682,8 +1785,10 @@ onMounted(() => {
         </template>
       </a-spin>
       <template #footer>
-        <div v-if="app && (editable || (!isLegacy && kyc))" class="drawer-footer">
-          <template v-if="isLegacy">
+        <div v-if="app && (editable || (!props.detailOnly && !isLegacy && kyc) || canReopenLead(app) || canDeleteLead(app))" class="drawer-footer">
+          <a-button v-if="canReopenLead(app)" v-perm="'merchant:onboarding:reopen'" class="drawer-footer-btn drawer-footer-btn--primary" :disabled="reopenLeadSaving" @click="openReopenLead(app)"><ReloadOutlined />{{ t('merchant.onboardingPage.reopenLeadTitle') }}</a-button>
+          <a-button v-if="canDeleteLead(app)" v-perm="'merchant:onboarding:delete'" class="drawer-footer-btn drawer-footer-btn--danger" :disabled="deleteLeadSaving" @click="openDeleteLead(app)"><DeleteOutlined />{{ t('merchant.onboardingPage.deleteLeadTitle') }}</a-button>
+          <template v-if="!props.detailOnly && isLegacy && editable">
             <a-button v-perm="'merchant:onboarding:kyc'" class="drawer-footer-btn drawer-footer-btn--ghost" @click="sendReminder">{{ t('merchant.onboardingPage.sendReminder') }}</a-button>
             <a-button v-perm="'merchant:onboarding:registration-approve'" class="drawer-footer-btn drawer-footer-btn--primary" @click="openApprove(app)">{{ t('merchant.onboardingPage.approveOnboarding') }}</a-button>
             <a-button v-perm="'merchant:onboarding:reject'" class="drawer-footer-btn drawer-footer-btn--danger" @click="openReject(app)">{{ t('merchant.onboardingPage.rejectLead') }}</a-button>
@@ -1694,7 +1799,7 @@ onMounted(() => {
             <a-button v-perm="'merchant:onboarding:update'" class="drawer-footer-btn drawer-footer-btn--ghost" @click="resubmitReason = ''; resubmitOpen = true">{{ t('merchant.onboardingPage.requestCorrection') }}</a-button>
             <a-button v-perm="'merchant:onboarding:reject'" class="drawer-footer-btn drawer-footer-btn--danger" @click="openReject(app)">{{ t('merchant.onboardingPage.rejectRegistration') }}</a-button>
           </template>
-          <template v-if="!isLegacy && kyc">
+          <template v-if="!props.detailOnly && !isLegacy && kyc">
             <a-button v-if="canAssistNewKyc" v-perm="'merchant:onboarding:kyc'" class="drawer-footer-btn drawer-footer-btn--ghost" @click="openScopedAssist">{{ t('merchant.onboardingPage.methodAssist') }}</a-button>
             <a-button v-if="!finalApprovalResult && finalApprovable" v-perm="'merchant:onboarding:final-approve'" class="drawer-footer-btn drawer-footer-btn--primary" :disabled="!kyc.finalApproval?.ready" @click="openFinalApprove"><CheckCircleOutlined />{{ t('merchant.onboardingPage.finalApproveAction') }}</a-button>
           </template>
@@ -2046,6 +2151,12 @@ onMounted(() => {
       </a-form>
     </a-modal>
 
+    <a-modal v-model:open="reopenLeadOpen" :title="t('merchant.onboardingPage.reopenLeadTitle')" :z-index="1200" :confirm-loading="reopenLeadSaving" :closable="!reopenLeadSaving" :mask-closable="!reopenLeadSaving" :keyboard="!reopenLeadSaving" :cancel-button-props="{ disabled: reopenLeadSaving }" :ok-button-props="{ disabled: !reopenLeadReason.trim() }" @ok="reopenLead">
+      <a-alert type="info" show-icon :message="t('merchant.onboardingPage.reopenLeadHint')" style="margin-bottom: 16px" />
+      <p>{{ reopenLeadTarget?.app_no }} · {{ reopenLeadTarget?.company_name || reopenLeadTarget?.merchant_name || '—' }}</p>
+      <a-form layout="vertical"><a-form-item :label="t('merchant.onboardingPage.reopenLeadReason')" required><a-textarea v-model:value="reopenLeadReason" :rows="3" :maxlength="200" show-count :disabled="reopenLeadSaving" /></a-form-item></a-form>
+    </a-modal>
+
     <a-modal v-model:open="deleteLeadOpen" :title="t('merchant.onboardingPage.deleteLeadTitle')" :z-index="1200" :closable="!deleteLeadSaving" :mask-closable="!deleteLeadSaving" :keyboard="!deleteLeadSaving" :cancel-button-props="{ disabled: deleteLeadSaving }" :ok-text="t('merchant.onboardingPage.deleteLeadContinue')" :ok-button-props="{ danger: true, disabled: deleteLeadSaving || !deleteLeadForm.reason.trim() || deleteLeadForm.confirmAppNo !== deleteLeadTarget?.app_no }" @ok="confirmDeleteLead">
       <a-alert type="warning" show-icon :message="t('merchant.onboardingPage.deleteLeadWarning')" style="margin-bottom: 16px" />
       <p>{{ deleteLeadTarget?.app_no }} · {{ deleteLeadTarget?.company_name || deleteLeadTarget?.merchant_name || '—' }}</p>
@@ -2075,10 +2186,13 @@ onMounted(() => {
       </a-form>
     </a-modal>
     <MerchantDocumentPreview ref="documentPreview" />
-  </PageContainer>
+  </component>
 </template>
 
 <style scoped>
+.registration-history__toggle { width: 100%; padding: 0; border: 0; background: transparent; text-align: left; cursor: pointer; }
+.registration-history__round + .registration-history__round, .registration-history__business { margin-top: 12px; }
+
 .ob-header { display: flex; justify-content: space-between; align-items: center; gap: 20px; margin-bottom: 20px; }
 .ob-lead-link { white-space: nowrap; font-weight: 500; font-family: monospace; color: #2563eb; }
 .ob-mono-value { font-family: monospace; font-size: 12px; overflow-wrap: anywhere; }

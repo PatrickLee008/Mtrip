@@ -40,6 +40,11 @@ ORDER BY TABLE_SCHEMA,TABLE_NAME;
 SQL
 )"
 printf '%s\n' "$create_sql" | mysql_exec
+
+reapply_migration="$REPO_ROOT/database/migrations/V20261124090000__onboarding-registration-reapply.sql"
+for pass in 1 2; do
+  sed -e "s/USE \`mtrip_business\`;/USE \`$TEST_DB\`;/" -e "s/USE \`mtrip_system\`;/USE \`$TEST_DB\`;/" "$reapply_migration" | mysql_exec
+done
 sed "s/USE \`mtrip_business\`;/USE \`$TEST_DB\`;/" "$MIGRATION" | mysql_exec
 sed "s/USE \`mtrip_business\`;/USE \`$TEST_DB\`;/" "$MIGRATION" | mysql_exec
 
@@ -79,3 +84,19 @@ echo "PASS: deletion permission migration is idempotent and grants only the supe
 $DOCKER cp "$REPO_ROOT/backend/services/merchant-service/test/onboarding-lead-delete.php" "$SERVICE_CONTAINER:/tmp/onboarding-lead-delete.php"
 $DOCKER exec -e DB_BUSINESS_DATABASE="$TEST_DB" -e DB_SYSTEM_DATABASE="$TEST_DB" \
   "$SERVICE_CONTAINER" php -d display_errors=1 /tmp/onboarding-lead-delete.php
+
+$DOCKER cp "$REPO_ROOT/backend/services/merchant-service/test/onboarding-rejected-queue.php" "$SERVICE_CONTAINER:/tmp/onboarding-rejected-queue.php"
+$DOCKER exec -e DB_BUSINESS_DATABASE="$TEST_DB" -e DB_SYSTEM_DATABASE="$TEST_DB" \
+  "$SERVICE_CONTAINER" php -d display_errors=1 /tmp/onboarding-rejected-queue.php
+
+$DOCKER cp "$REPO_ROOT/backend/services/merchant-service/test/onboarding-reapply-worker.php" "$SERVICE_CONTAINER:/tmp/onboarding-reapply-worker.php"
+$DOCKER cp "$REPO_ROOT/backend/services/merchant-service/test/onboarding-reapply.php" "$SERVICE_CONTAINER:/tmp/onboarding-reapply.php"
+$DOCKER exec -e DB_BUSINESS_DATABASE="$TEST_DB" -e DB_SYSTEM_DATABASE="$TEST_DB" \
+  "$SERVICE_CONTAINER" php -d display_errors=1 /tmp/onboarding-reapply.php
+
+reopen_permission_result="$(printf 'SELECT (SELECT COUNT(*) FROM %s.sys_menu WHERE id=20510 AND perm_key="merchant:onboarding:reopen"),(SELECT COUNT(*) FROM %s.sys_role_menu WHERE menu_id=20510 AND role_id=1),(SELECT COUNT(*) FROM %s.sys_role_menu WHERE menu_id=20510 AND role_id<>1);\n' "$TEST_DB" "$TEST_DB" "$TEST_DB" | mysql_exec)"
+if [ "$reopen_permission_result" != $'1\t1\t0' ]; then
+  echo "Reopen permission migration failed idempotence or ordinary-role isolation" >&2
+  exit 1
+fi
+echo "PASS: reopen permission migration is idempotent and grants only the super role"

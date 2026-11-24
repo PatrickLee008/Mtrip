@@ -229,6 +229,10 @@
       "status": "申请状态",
       "nextKyc": "下一步：上传 KYC 文件",
       "edit": "修改注册资料",
+      "reapply": "修改资料并重新申请",
+      "reopening": "正在重新开启申请…",
+      "reverifyIdentity": "请使用原注册手机号和邮箱完成验证码验证，再点击重新申请。",
+      "reapplyFailed": "重新开启申请失败，请重试。",
       "proceedKyc": "前往上传 KYC 文件",
       "activate": "激活账户",
       "anotherPhone": "使用其他手机号注册"

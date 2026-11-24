@@ -40,6 +40,11 @@ ORDER BY TABLE_SCHEMA,TABLE_NAME;
 SQL
 )"
 printf '%s\n' "$create_sql" | mysql_exec
+
+reapply_migration="$REPO_ROOT/database/migrations/V20261124090000__onboarding-registration-reapply.sql"
+for pass in 1 2; do
+  sed -e "s/USE \`mtrip_business\`;/USE \`$TEST_DB\`;/" -e "s/USE \`mtrip_system\`;/USE \`$TEST_DB\`;/" "$reapply_migration" | mysql_exec
+done
 sed "s/USE \`mtrip_business\`;/USE \`$TEST_DB\`;/" "$MIGRATION" | mysql_exec
 sed "s/USE \`mtrip_business\`;/USE \`$TEST_DB\`;/" "$MIGRATION" | mysql_exec
 

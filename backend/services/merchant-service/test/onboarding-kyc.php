@@ -259,6 +259,7 @@ try {
     Db::table('merchant_activity_log')->where('site_id', $siteId)->where('merchant_id', 0)->delete();
     Db::table('merchant_verify_timeline')->whereIn('application_id', [$applicationId, $otherApplicationId])->delete();
     Db::table('merchant_application_signature')->whereIn('application_id', [$applicationId, $otherApplicationId])->delete();
+    Db::table('merchant_application_registration_review')->whereIn('application_id', [$applicationId, $otherApplicationId])->delete();
     Db::table('merchant_application_business')->whereIn('application_id', [$applicationId, $otherApplicationId])->delete();
     Db::table('merchant_application')->whereIn('id', [$applicationId, $otherApplicationId])->delete();
     Db::table('merchant_kyc_template')->whereIn('id', [$merchantTemplate ?? 0, $propertyTemplate ?? 0])->delete();

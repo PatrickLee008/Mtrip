@@ -42,6 +42,11 @@ SQL
 )"
 printf '%s\n' "$create_sql" | mysql_exec
 
+reapply_migration="$REPO_ROOT/database/migrations/V20261124090000__onboarding-registration-reapply.sql"
+for pass in 1 2; do
+  sed -e "s/USE \`mtrip_business\`;/USE \`$TEST_DB\`;/" -e "s/USE \`mtrip_system\`;/USE \`$TEST_DB\`;/" "$reapply_migration" | mysql_exec
+done
+
 for email_migration in "$REPO_ROOT/database/migrations/V20261012130000__add-merchant-email-identity-lock.sql" "$REPO_ROOT/database/migrations/V20261012130100__enforce-merchant-email-uniqueness.sql" "$REPO_ROOT/database/migrations/V20261013130000__add-merchant-phone-identity-and-proofs.sql" "$REPO_ROOT/database/migrations/V20261013130100__enforce-merchant-phone-uniqueness.sql"; do
   sed "s/USE \`mtrip_business\`;/USE \`$TEST_DB\`;/" "$email_migration" | mysql_exec
 done

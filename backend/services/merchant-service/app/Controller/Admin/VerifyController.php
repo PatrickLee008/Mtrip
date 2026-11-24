@@ -61,6 +61,7 @@ class VerifyController extends AbstractController
         $statuses = self::TAB_STATUS[$tab] ?? self::TAB_STATUS['pending'];
 
         $query = Db::table('merchant_info')->whereNull('deleted_at')->whereIn('status', $statuses);
+        if ($tab === 'rejected') $query = $this->rejectedApplications($query);
         $this->applySiteScope($query);
         if (($kw = $this->strInput('keyword')) !== '') {
             $appMerchantIds = Db::table('merchant_application')
@@ -68,15 +69,19 @@ class VerifyController extends AbstractController
                 ->where('merchant_id', '>', 0)
                 ->where('app_no', 'like', "%{$kw}%")
                 ->pluck('merchant_id')->all();
-            $query->where(function ($q) use ($kw, $appMerchantIds) {
+            $query->where(function ($q) use ($kw, $appMerchantIds, $tab) {
                 $q->where('merchant_name', 'like', "%{$kw}%")
                     ->orWhere('merchant_code', 'like', "%{$kw}%")
                     ->orWhere('credit_code', 'like', "%{$kw}%")
                     ->orWhere('contact_name', 'like', "%{$kw}%")
                     ->orWhere('contact_email', 'like', "%{$kw}%")
                     ->orWhere('address', 'like', "%{$kw}%");
+                if ($tab === 'rejected') $q->orWhere('application_no', 'like', "%{$kw}%")->orWhere('merchant_short_name', 'like', "%{$kw}%");
                 if ($appMerchantIds !== []) {
-                    $q->orWhereIn('id', $appMerchantIds);
+                    $q->orWhere(function ($q) use ($appMerchantIds, $tab) {
+                        $q->whereIn('id', $appMerchantIds);
+                        if ($tab === 'rejected') $q->where('record_type', 'merchant');
+                    });
                 }
             });
         }
@@ -99,14 +104,16 @@ class VerifyController extends AbstractController
             $query->where('created_at', '<=', $regEnd . ' 23:59:59');
         }
         $total = (clone $query)->count();
-        $list = $query->orderByDesc('id')->forPage($page, $pageSize)
+        $query->orderByDesc('id');
+        if ($tab === 'rejected') $query->orderBy('record_type');
+        $list = $query->forPage($page, $pageSize)
             ->get(['id', 'site_id', 'merchant_name', 'merchant_short_name', 'merchant_type', 'credit_code', 'legal_person', 'contact_name', 'contact_phone', 'contact_email', 'address', 'status', 'audit_remark', 'audit_by', 'audit_time', 'created_at'])
             ->map(function ($row) {
                 $row = (array) $row;
                 $row['contact_phone'] = MaskHelper::mobile($this->decryptField((string) $row['contact_phone']));
                 return $row;
             })->all();
-        $merchantIds = array_column($list, 'id');
+        $merchantIds = array_column(array_filter($list, static fn ($row) => ($row['record_type'] ?? 'merchant') !== 'application'), 'id');
         $applications = [];
         if ($merchantIds !== []) {
             foreach (Db::table('merchant_application')
@@ -118,6 +125,9 @@ class VerifyController extends AbstractController
             }
         }
         foreach ($list as &$row) {
+            $row['record_type'] ??= 'merchant';
+            $row['row_key'] = $row['record_type'] . ':' . $row['id'];
+            if ($row['record_type'] === 'application') continue;
             $application = $applications[(int) $row['id'] . ':' . (int) $row['site_id']] ?? null;
             $row['application_no'] = (string) ($application->app_no ?? '');
             $row['application_submitted_at'] = $application->submitted_at ?? null;
@@ -125,6 +135,24 @@ class VerifyController extends AbstractController
         }
         unset($row);
         return Result::page($list, $total, $page, $pageSize);
+    }
+
+    /** Normalize unconverted rejected leads without creating formal merchant records. */
+    private function rejectedApplications(\Hyperf\Database\Query\Builder $merchants): \Hyperf\Database\Query\Builder
+    {
+        $merchants->select(['id', 'site_id', 'merchant_name', 'merchant_short_name', 'merchant_type', 'credit_code', 'legal_person', 'contact_name', 'contact_phone', 'contact_email', 'address', 'status', 'audit_remark', 'audit_by', 'audit_time', 'created_at', 'merchant_code'])
+            ->selectRaw("'merchant' AS record_type, 0 AS application_id, '' AS application_no, NULL AS application_submitted_at, '' AS assigned_ops_name");
+        $applications = \App\Support\OnboardingQueue::rejected(Db::table('merchant_application')->whereNull('deleted_at'))
+            ->selectRaw("id, site_id, COALESCE(NULLIF(merchant_name, ''), company_name) AS merchant_name,
+                COALESCE((SELECT GROUP_CONCAT(b.business_name ORDER BY b.id SEPARATOR ', ') FROM merchant_application_business b WHERE b.application_id = merchant_application.id), '') AS merchant_short_name,
+                CASE WHEN primary_business_type = 'hotel' THEN 1 ELSE 3 END AS merchant_type, reg_number AS credit_code,
+                '' AS legal_person, '' AS contact_name, '' AS contact_phone, '' AS contact_email,
+                COALESCE((SELECT b.city FROM merchant_application_business b WHERE b.application_id = merchant_application.id ORDER BY b.id LIMIT 1), country) AS address,
+                2 AS status, registration_review_reason AS audit_remark, registration_reviewed_by AS audit_by,
+                registration_reviewed_at AS audit_time, COALESCE(submitted_at, created_at) AS created_at, merchant_code,
+                'application' AS record_type, id AS application_id, app_no AS application_no, submitted_at AS application_submitted_at,
+                CASE WHEN assigned_ops_id > 0 THEN assigned_ops_name ELSE '' END AS assigned_ops_name");
+        return Db::query()->fromSub($merchants->unionAll($applications), 'rejected_applications')->select('*');
     }
 
     /**
@@ -137,9 +165,12 @@ class VerifyController extends AbstractController
         $siteId = AdminContext::scopeSiteId($this->intInput('siteId'));
 
         $appQuery = Db::table('merchant_application')->whereNull('deleted_at')->whereIn('stage', [1, 2, 3, 4]);
+        \App\Support\OnboardingQueue::excludeRejected($appQuery);
+        $rejectedApplications = \App\Support\OnboardingQueue::rejected(Db::table('merchant_application')->whereNull('deleted_at'));
         $merchantQuery = Db::table('merchant_info')->whereNull('deleted_at');
         if ($siteId !== null && $siteId > 0) {
             $appQuery->where('site_id', $siteId);
+            $rejectedApplications->where('site_id', $siteId);
             $merchantQuery->where('site_id', $siteId);
         }
 
@@ -148,7 +179,7 @@ class VerifyController extends AbstractController
             'pending' => (int) (clone $merchantQuery)->where('status', 0)->count(),
             'resubmission' => (int) (clone $merchantQuery)->where('status', 6)->count(),
             'approved' => (int) (clone $merchantQuery)->where('status', 3)->count(),
-            'rejected' => (int) (clone $merchantQuery)->where('status', 2)->count(),
+            'rejected' => (int) (clone $merchantQuery)->where('status', 2)->count() + $rejectedApplications->count(),
         ];
         return Result::success($counts);
     }

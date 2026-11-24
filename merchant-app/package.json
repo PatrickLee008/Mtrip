@@ -17,6 +17,7 @@
     "test:menu": "node scripts/test-menu.cjs",
     "test:validation": "node scripts/test-validation.cjs",
     "test:registration": "node scripts/test-registration.cjs",
+    "test:registration-reapply": "node scripts/test-registration-reapply.cjs",
     "test:registration-site": "node scripts/test-registration-site.cjs",
     "dev": "expo start --web --offline --port 8083",
     "start:lan": "expo start --offline --port 8083",

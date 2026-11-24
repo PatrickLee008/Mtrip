@@ -88,6 +88,7 @@ export const apiRegistrationOtpSend = (phone: string, email: string, otpChannel:
 export const apiRegistrationOtpVerify = (phone: string, email: string, otpChannel: RegistrationChannel, otpCode: string) => registerAtYangon(() => post<RegistrationVerifyResult>('/api/v1/app/merchant/register/otp-verify', { phone, email, otpChannel, otpCode }));
 export const apiApplicationDetail = (registrationToken: string, applicationId: number) => get<ApplicationDetail>('/api/v1/app/merchant/application/detail', { registrationToken, applicationId });
 export const apiApplicationStatus = (registrationToken: string, applicationId: number) => get<ApplicationStatus>('/api/v1/app/merchant/application/status', { registrationToken, applicationId });
+export const apiApplicationReopen = (registrationToken: string, applicationId: number) => post<ApplicationDetail>('/api/v1/app/merchant/application/reopen', { registrationToken, applicationId });
 export const apiKycRequirements = (registrationToken: string, applicationId: number) => get<KycRequirements>('/api/v1/app/merchant/application/kyc-requirements', { registrationToken, applicationId });
 export const apiApplicationSave = (registrationToken: string, application: Record<string, unknown>) => post<ApplicationDetail>('/api/v1/app/merchant/application/save', { registrationToken, application });
 export const apiApplicationSubmit = (registrationToken: string, applicationId: number) => post<ApplicationStatus>('/api/v1/app/merchant/application/submit', { registrationToken, applicationId });

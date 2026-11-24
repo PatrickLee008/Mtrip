@@ -6,14 +6,15 @@ import vm from 'node:vm';
 
 const require = createRequire(import.meta.url);
 const vue = require('vue');
-const { parse, compileScript } = require('@vue/compiler-sfc');
+const { parse, compileScript, compileTemplate } = require('@vue/compiler-sfc');
 const { build } = require('esbuild');
 const src = fileURLToPath(new URL('../src', import.meta.url));
-async function compileSetup(filename) {
+async function compileSetup(filename, includeRender = false) {
   const { descriptor } = parse(readFileSync(filename, 'utf8'));
   const script = compileScript(descriptor, { id: 'onboarding-interactions' });
+  const render = includeRender ? compileTemplate({ source: descriptor.template.content, filename, id: 'onboarding-interactions', compilerOptions: { bindingMetadata: script.bindings } }).code : '';
   const { outputFiles } = await build({
-    stdin: { contents: script.content, loader: 'ts', resolveDir: `${src}/views/merchant/onboarding` },
+    stdin: { contents: script.content + '\n' + render, loader: 'ts', resolveDir: `${src}/views/merchant/onboarding` },
     bundle: true, write: false, format: 'iife', globalName: 'subject', alias: { '@': src },
     plugins: [{ name: 'onboarding-boundaries', setup(b) {
       b.onResolve({ filter: /^(vue|vue-i18n|vue-router|ant-design-vue)$/ }, ({ path }) => ({ path, namespace: 'fixture' }));
@@ -23,7 +24,7 @@ async function compileSetup(filename) {
         path === 'vue-router' ? 'export const useRoute=()=>fixtureHost.route,useRouter=()=>({push:target=>(fixtureHost.navigation??=[]).push(target)});' :
         'export const message={success(){},warning(){},info(){}}; export const Modal={confirm:options=>fixtureHost.confirm=options};',
       }));
-      b.onLoad({ filter: /\.vue$/ }, () => ({ contents: 'export default {};' }));
+      b.onLoad({ filter: /\.vue$/ }, ({ path }) => ({ contents: `export default {name:${JSON.stringify(path.split('/').pop().replace('.vue', ''))}};` }));
       b.onLoad({ filter: /\/stores\/user\.ts$/ }, () => ({ contents: 'export const useUserStore=()=>fixtureHost.user;' }));
       b.onLoad({ filter: /\/utils\/http\.ts$/ }, () => ({ contents: 'export const get=(...args)=>fixtureHost.request("get",...args),post=(...args)=>fixtureHost.request("post",...args);' }));
     } }],
@@ -31,15 +32,15 @@ async function compileSetup(filename) {
 
   return outputFiles[0].text;
 }
-const pageCode = await compileSetup(`${src}/views/merchant/onboarding/index.vue`);
+const pageCode = await compileSetup(`${src}/views/merchant/onboarding/index.vue`, true);
 const propertyTemplateCode = await compileSetup(`${src}/views/merchant/onboarding/components/PropertyKycTemplate.vue`);
 const documentCode = await compileSetup(`${src}/views/merchant/onboarding/components/KycScopeDocuments.vue`);
 const previewCode = await compileSetup(`${src}/views/merchant/onboarding/components/MerchantDocumentPreview.vue`);
 const filterCode = await compileSetup(`${src}/components/SearchFilterBar.vue`);
 const verifyCode = await compileSetup(`${src}/views/merchant/verify/index.vue`);
 
-function fixture() {
-  const fixtureHost = { vue, calls: [], user: vue.reactive({ profile: { isSuper: true } }), confirm: null,
+function fixture(props = {}) {
+  const fixtureHost = { vue, calls: [], user: vue.reactive({ profile: { isSuper: true }, hasPerm: () => true }), confirm: null, emitted: [],
     detail: { application: { id: 7, state_model_version: 1, registration_status: 3, merchant_id: 0, account_status: 0 },
       businesses: [], documents: [], timeline: [], notes: [], kyc: null, finalApproval: null },
     request: async (method, path, data) => {
@@ -52,17 +53,38 @@ function fixture() {
   const context = vm.createContext({ fixtureHost, console, FormData, Blob, URL, crypto: globalThis.crypto, Event,
     window: { dispatchEvent: event => (fixtureHost.events ??= []).push(event.type) } });
   vm.runInContext(pageCode, context);
-  const s = context.subject.default.setup({}, { expose() {} });
+  const s = context.subject.default.setup(props, { expose() {}, emit: (...args) => fixtureHost.emitted.push(args) });
   s.app.value = { ...fixtureHost.detail.application };
   s.kyc.value = { merchantKyc: { status: 'draft', documents: [] },
     initialProperties: [{ applicationBusinessId: 11, businessName: 'First', kycStatus: 'draft', documents: [] },
       { applicationBusinessId: 12, businessName: 'Second', kycStatus: 'draft', documents: [] }],
     agreement: { satisfied: false }, finalApproval: { ready: false, reasons: ['current_agreement_not_signed'] } };
-  return { fixtureHost, s };
+  return { fixtureHost, s, render: context.subject.render };
 }
 
 let passed = 0;
 async function test(name, run) { await run(); console.log('PASS', name); passed++; }
+
+await test('rejected application detail uses its application ID instead of the merchant detail API', async () => {
+  const fixtureHost = { vue, user: vue.reactive({ profile: { isSuper: true }, hasPerm: () => true }), route: vue.reactive({ path: '/merchant-verify/rejected' }), calls: [],
+    request: (...args) => { fixtureHost.calls.push(args); throw new Error('Must not query a merchant for an unconverted lead'); } };
+  const context = vm.createContext({ fixtureHost }); vm.runInContext(verifyCode, context);
+  const s = context.subject.default.setup({}, { expose() {} });
+  let opened;
+  s.rejectedApplicationDetail.value = { openDetail: row => { opened = row.id; } };
+  await s.openDetail({ id: 7, application_id: 23, record_type: 'application' });
+  assert.equal(opened, 23);
+  assert.equal(fixtureHost.calls.length, 0);
+  assert.equal(s.drawerOpen.value, false);
+});
+
+await test('successful base rejection refreshes navigation counts as well as its list', async () => {
+  const { fixtureHost, s } = fixture();
+  s.rejectTarget.value = { id: 7 }; s.rejectReasonCode.value = 4;
+  await s.doReject();
+  assert.ok(fixtureHost.events.includes('mtrip:onboarding-changed'));
+  assert.equal(s.drawerOpen.value, false);
+});
 
 await test('legacy public template edit entry opens versioned platform management without a write', async () => {
   const { fixtureHost, s } = fixture();
@@ -159,7 +181,7 @@ await test('refreshing a saved template cannot reopen a different application', 
 });
 
 await test('approved list displays a date and the assigned operator name instead of reviewer ID', () => {
-  const fixtureHost = { vue, route: vue.reactive({ path: '/merchant-verify/approved' }) };
+  const fixtureHost = { vue, user: vue.reactive({ profile: { isSuper: true }, hasPerm: () => true }), route: vue.reactive({ path: '/merchant-verify/approved' }) };
   const context = vm.createContext({ fixtureHost });
   vm.runInContext(verifyCode, context);
   const s = context.subject.default.setup({}, { expose() {} });
@@ -172,7 +194,7 @@ await test('approved list displays a date and the assigned operator name instead
 });
 
 await test('approved document groups separate shared merchant files and the selected application business', () => {
-  const fixtureHost = { vue, route: vue.reactive({ path: '/merchant-verify/approved' }) };
+  const fixtureHost = { vue, user: vue.reactive({ profile: { isSuper: true }, hasPerm: () => true }), route: vue.reactive({ path: '/merchant-verify/approved' }) };
   const context = vm.createContext({ fixtureHost }); vm.runInContext(verifyCode, context);
   const s = context.subject.default.setup({}, { expose() {} });
   s.businesses.value = [{ id: 11, business_name: 'First' }, { id: 12, business_name: 'Second' }];
@@ -191,7 +213,7 @@ await test('approved document groups separate shared merchant files and the sele
 });
 
 await test('approved summary uses actual account and delivery states without assuming activation or successful delivery', () => {
-  const fixtureHost = { vue, route: vue.reactive({ path: '/merchant-verify/approved' }) };
+  const fixtureHost = { vue, user: vue.reactive({ profile: { isSuper: true }, hasPerm: () => true }), route: vue.reactive({ path: '/merchant-verify/approved' }) };
   const context = vm.createContext({ fixtureHost }); vm.runInContext(verifyCode, context);
   const s = context.subject.default.setup({}, { expose() {} });
   s.detail.value = { approval_account_status: 3, access_status: 1 };
@@ -217,7 +239,7 @@ await test('approved summary uses actual account and delivery states without ass
 });
 
 await test('delivery summary distinguishes accepted mail, failures, queued channels and test mode without inferring delivery from activation', () => {
-  const fixtureHost = { vue, route: vue.reactive({ path: '/merchant-verify/approved' }) };
+  const fixtureHost = { vue, user: vue.reactive({ profile: { isSuper: true }, hasPerm: () => true }), route: vue.reactive({ path: '/merchant-verify/approved' }) };
   const context = vm.createContext({ fixtureHost }); vm.runInContext(verifyCode, context);
   const s = context.subject.default.setup({}, { expose() {} });
   s.detail.value = { approval_account_status: 2, access_status: 1 };
@@ -695,6 +717,136 @@ await test('a role change after opening the deletion form blocks the request', a
   s.deleteLeadForm.confirmAppNo = 'APP-TEST-7'; s.deleteLeadForm.reason = 'Remove duplicate'; s.confirmDeleteLead();
   fixtureHost.user.profile.isSuper = false;
   await fixtureHost.confirm.onOk(); assert.equal(fixtureHost.calls.length, 0);
+});
+
+
+await test('reopening requires a rejected unconverted application, super admin and its own permission', async () => {
+  const { fixtureHost, s } = fixture({ detailOnly: true });
+  const row = { id: 23, app_no: 'APP-23', state_model_version: 1, registration_status: 5, stage: 6, merchant_id: 0, account_status: 0 };
+  assert.equal(typeof s.canReopenLead, 'function', 'rejected applications need a reopen permission guard');
+  assert.equal(s.canReopenLead(row), true);
+  for (const patch of [{ state_model_version: 0 }, { registration_status: 3 }, { merchant_id: 9 }, { account_status: 1 }, { final_approved_at: '2026-11-24' }]) assert.equal(s.canReopenLead({ ...row, ...patch }), false);
+  fixtureHost.user.profile.isSuper = false; assert.equal(s.canReopenLead(row), false);
+  fixtureHost.user.profile.isSuper = true;
+  fixtureHost.user.hasPerm = key => key === 'merchant:onboarding:delete'; assert.equal(s.canReopenLead(row), false);
+});
+
+await test('rejected row actions load application snapshot and reopening requires reason before writing', async () => {
+  const { fixtureHost, s } = fixture({ detailOnly: true });
+  fixtureHost.detail.application = { id: 23, app_no: 'APP-23', state_model_version: 1, registration_status: 5, stage: 6, merchant_kyc_status: 0, merchant_id: 0, account_status: 0 };
+  await s.openRejectedAction({ id: 23 }, 'reopen');
+  assert.equal(fixtureHost.calls[0].path, '/admin/merchant/onboarding/detail');
+  assert.equal(fixtureHost.calls[0].data.id, 23);
+  assert.equal(s.reopenLeadOpen.value, true);
+  await s.reopenLead(); assert.equal(fixtureHost.calls.filter(c => c.method === 'post').length, 0);
+  s.reopenLeadReason.value = '  Corrected details requested by merchant  ';
+  await s.reopenLead();
+  const write = fixtureHost.calls.find(c => c.method === 'post');
+  assert.equal(write.path, '/admin/merchant/onboarding/reopen');
+  assert.deepEqual(JSON.parse(JSON.stringify(write.data)), { id: 23, reason: 'Corrected details requested by merchant', expectedRegistrationStatus: 5, expectedStage: 6 });
+  assert.equal(s.reopenLeadOpen.value, false); assert.equal(s.drawerOpen.value, false); assert.equal(s.app.value, null);
+  assert.ok(fixtureHost.emitted.some(([event]) => event === 'changed'));
+  assert.ok(fixtureHost.events.includes('mtrip:onboarding-changed'));
+  assert.equal(fixtureHost.calls.some(c => c.path.endsWith('/list')), false);
+});
+
+await test('reopen failure preserves reason and permissions or changed detail block stale submission', async () => {
+  const { fixtureHost, s } = fixture({ detailOnly: true });
+  const row = { id: 23, state_model_version: 1, registration_status: 5, stage: 6, merchant_id: 0, account_status: 0 };
+  s.app.value = row; s.openReopenLead(row); s.reopenLeadReason.value = 'Merchant asked to correct';
+  fixtureHost.user.profile.isSuper = false; await s.reopenLead(); assert.equal(fixtureHost.calls.length, 0);
+  fixtureHost.user.profile.isSuper = true; s.app.value = { ...row, id: 24 }; await s.reopenLead(); assert.equal(fixtureHost.calls.length, 0);
+  s.app.value = row; fixtureHost.request = async () => { throw new Error('conflict'); };
+  await assert.rejects(s.reopenLead(), /conflict/);
+  assert.equal(s.reopenLeadOpen.value, true); assert.equal(s.reopenLeadSaving.value, false); assert.equal(s.reopenLeadReason.value, 'Merchant asked to correct');
+});
+
+await test('rejected detail deletion reuses typed number and second confirmation and refreshes its parent', async () => {
+  const { fixtureHost, s } = fixture({ detailOnly: true });
+  fixtureHost.detail.application = { id: 23, app_no: 'APP-23', state_model_version: 1, registration_status: 5, stage: 6, merchant_kyc_status: 0, merchant_id: 0, account_status: 0 };
+  await s.openRejectedAction({ id: 23 }, 'delete');
+  assert.equal(s.deleteLeadTarget.value.id, 23); assert.equal(s.deleteLeadOpen.value, true);
+  s.deleteLeadForm.reason = 'Duplicate'; s.confirmDeleteLead(); assert.equal(fixtureHost.confirm, null);
+  s.deleteLeadForm.confirmAppNo = 'APP-23'; s.confirmDeleteLead();
+  assert.equal(fixtureHost.calls.filter(c => c.method === 'post').length, 0);
+  await fixtureHost.confirm.onOk();
+  const write = fixtureHost.calls.find(c => c.method === 'post');
+  assert.equal(write.data.id, 23); assert.equal(write.data.expectedRegistrationStatus, 5); assert.equal(write.data.expectedStage, 6);
+  assert.ok(fixtureHost.emitted.some(([event]) => event === 'changed'));
+  assert.equal(fixtureHost.calls.some(c => c.path.endsWith('/list')), false);
+});
+
+await test('history loads separately from current company and resets collapsed for each application', async () => {
+  const { fixtureHost, s } = fixture({ detailOnly: true });
+  fixtureHost.detail.application.company_name = 'Current Company';
+  fixtureHost.detail.registrationHistory = [{ id: 3, round_no: 1, registration_status: 5, reviewer_name: 'Reviewer', review_reason: 'Invalid registration', snapshot: { application: { company_name: 'Original Company' }, businesses: [] } }];
+  await s.openDetail({ id: 7 });
+  assert.equal(s.registrationHistory.value[0].snapshot.application.company_name, 'Original Company');
+  assert.equal(s.app.value.company_name, 'Current Company'); assert.equal(s.registrationHistoryExpanded.value, false);
+  s.registrationHistoryExpanded.value = true; fixtureHost.detail.registrationHistory = [];
+  await s.openDetail({ id: 8 }); assert.equal(s.registrationHistoryExpanded.value, false); assert.equal(s.registrationHistory.value.length, 0);
+  assert.equal(s.editable.value, false); assert.equal(s.canAssistNewKyc.value, false); assert.equal(s.finalApprovable.value, false);
+});
+
+await test('review history translates known rejection codes and keeps freeform reasons and notes readable', async () => {
+  const { s } = fixture({ detailOnly: true });
+  assert.equal(typeof s.historyReviewReason, 'function', 'review reasons should resolve existing rejection translations');
+  assert.equal(s.historyReviewReason('reason_code:4 Invalid certificate'), 'merchant.rejectReasons.r4 · Invalid certificate');
+  assert.equal(s.historyReviewReason('reason_code:9'), 'merchant.rejectReasons.r9');
+  assert.equal(s.historyReviewReason('Please correct the business address'), 'Please correct the business address');
+  assert.equal(s.historyReviewReason('reason_code:42 Legacy reason'), 'reason_code:42 Legacy reason');
+  assert.equal(s.historyReviewReason(''), '-');
+  assert.equal(s.historyBusinessTypes('hotel,restaurant'), 'merchant.onboardingPage.bizHotel, merchant.onboardingPage.bizRestaurant');
+});
+
+await test('verify rejected actions reject merchant rows and forward only application IDs with per-action permission', async () => {
+  const fixtureHost = { vue, user: vue.reactive({ profile: { isSuper: true }, hasPerm: () => true }), route: vue.reactive({ path: '/merchant-verify/rejected' }) };
+  const context = vm.createContext({ fixtureHost }); vm.runInContext(verifyCode, context);
+  const s = context.subject.default.setup({}, { expose() {} });
+  let opened; s.rejectedApplicationDetail.value = { openRejectedAction: (row, action) => { opened = [row.id, action]; } };
+  const row = { id: 7, application_id: 23, record_type: 'application' };
+  assert.equal(s.canManageRejectedApplication(row, 'reopen'), true);
+  await s.openRejectedAction(row, 'reopen'); assert.deepEqual(opened, [23, 'reopen']);
+  opened = undefined; await s.openRejectedAction({ ...row, record_type: 'merchant' }, 'delete'); assert.equal(opened, undefined);
+  fixtureHost.user.hasPerm = key => key === 'merchant:onboarding:delete';
+  await s.openRejectedAction(row, 'reopen'); assert.equal(opened, undefined);
+  await s.openRejectedAction(row, 'delete'); assert.deepEqual(opened, [23, 'delete']);
+  fixtureHost.user.profile.isSuper = false; assert.equal(s.canManageRejectedApplication(row, 'delete'), false);
+});
+
+
+await test('read-only rejected detail passes a write lock to the actual property template child', async () => {
+  const { fixtureHost, s, render } = fixture({ detailOnly: true });
+  s.kyc.value.initialProperties[0].templateEditable = true;
+  s.kyc.value.initialProperties[0].templateChangeable = true;
+  s.kyc.value.initialProperties[0].template = { id: 21, name: 'Current', sourceTemplateId: 21 };
+  s.kycBizId.value = 11;
+  s.currentProperty.value.documents = [{ docType: 'license', name: 'License', required: true }];
+  let child;
+  function visit(vnode) {
+    if (Array.isArray(vnode)) { vnode.forEach(visit); return; }
+    if (!vnode || typeof vnode !== 'object') return;
+    if (vnode.type === s.PropertyKycTemplate) { child = vnode; return; }
+    if (Array.isArray(vnode.children)) visit(vnode.children);
+    else if (vnode.children && typeof vnode.children === 'object') Object.values(vnode.children).filter(value => typeof value === 'function').forEach(slot => visit(slot()));
+  }
+  const warn = console.warn; console.warn = () => {};
+  try { visit(render({}, [], {}, vue.proxyRefs(s))); } finally { console.warn = warn; }
+  assert.ok(child, 'the rendered detail includes its property template');
+  const props = vue.reactive({ ...child.props, applicationId: child.props['application-id'] });
+  const host = { ...fixtureHost, request: async (method, path, data) => { fixtureHost.calls.push({ method, path, data }); return [{ id: 21, name: 'Current', documents: [{ docType: 'license', name: 'License', required: true }] }]; } };
+  const context = vm.createContext({ fixtureHost: host }); vm.runInContext(propertyTemplateCode, context);
+  const template = context.subject.default.setup(props, { expose() {}, emit() {} });
+  await vue.nextTick(); await Promise.resolve(); await Promise.resolve();
+  template.editRequirements();
+  assert.equal(template.open.value, false, 'read-only detail must not open the template editor');
+  template.open.value = true; await template.saveRequirements();
+  assert.equal(fixtureHost.calls.some(call => call.method === 'post'), false);
+  fixtureHost.calls.length = 0; await s.refreshPropertyTemplate(7);
+  assert.equal(fixtureHost.calls.length, 0, 'read-only parent ignores template mutation callbacks');
+  s.uploadScopedDoc(new Blob(['license']), 'property', 11, { docType: 'license' });
+  await Promise.resolve(); await Promise.resolve();
+  assert.equal(fixtureHost.calls.length, 0, 'read-only parent rejects document upload events');
 });
 
 console.log(`Onboarding interactions: ${passed} tests passed`);

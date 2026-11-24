@@ -30,12 +30,31 @@ Db::table('merchant_verify_timeline')->insert([
     'site_id' => 1, 'merchant_id' => 0, 'application_id' => $legacy['applicationId'], 'action' => 'registration_approved',
     'actor_type' => 2, 'operator_id' => 94001, 'operator_name' => 'Stage 4 Super', 'note' => 'Keep legacy review',
 ]);
+$historyFixture = static function (int $applicationId): int {
+    return (int) Db::table('merchant_application_registration_review')->insertGetId([
+        'site_id' => 1, 'application_id' => $applicationId, 'round_no' => 1, 'registration_status' => 5,
+        'submitted_at' => '2026-10-01 00:00:00', 'reviewed_at' => '2026-10-02 00:00:00',
+        'reviewer_id' => 94001, 'reviewer_name' => 'Legacy reviewer', 'review_reason' => 'Keep old refusal',
+        'snapshot' => json_encode(['application' => ['company_name' => 'Old registration company'], 'businesses' => []]),
+    ]);
+};
+$historyBoundaryFailures = [];
+$expectHistoryBoundary = static function (bool $condition, string $name) use (&$historyBoundaryFailures): void {
+    echo ($condition ? 'PASS: ' : 'FAIL: ') . $name . PHP_EOL;
+    if (!$condition) $historyBoundaryFailures[] = $name;
+};
+$legacyHistoryId = $historyFixture($legacy['applicationId']);
+$legacyHistoryBefore = (array) Db::table('merchant_application_registration_review')->where('id', $legacyHistoryId)->first();
 $legacyBefore = (array) Db::table('merchant_application')->where('id', $legacy['applicationId'])->first();
 $legacyResult = $approval->approve($legacy['applicationId'], 'stage4-legacy-site-request', ['email', 'inapp']);
 check((int) Db::table('merchant_application')->where('id', $legacy['applicationId'])->value('site_id') === 7
     && (int) Db::table('merchant_info')->where('id', $legacyResult['merchantId'])->value('site_id') === 7
     && (int) Db::table('merchant_admin')->where('id', $legacyResult['accountId'])->value('site_id') === 7,
     'ready legacy application and new merchant/owner move to site 7 during final approval');
+$legacyHistoryAfter = (array) Db::table('merchant_application_registration_review')->where('id', $legacyHistoryId)->first();
+$expectHistoryBoundary((int) $legacyHistoryAfter['site_id'] === 7
+    && array_diff_assoc($legacyHistoryBefore, $legacyHistoryAfter) === ['site_id' => 1],
+    'successful legacy migration moves registration history site and preserves every archived value');
 check(count($legacyResult['propertyIds']) === 2
     && Db::table('merchant_store')->whereIn('id', $legacyResult['propertyIds'])->where('site_id', 7)->count() === 2
     && Db::table('merchant_application_business')->whereIn('id', $legacy['businessIds'])->where('site_id', 7)->where('kyc_status', 5)->count() === 2,
@@ -61,6 +80,7 @@ check($legacyReplay['merchantId'] === $legacyResult['merchantId']
     'legacy approval replay neither creates duplicate merchants nor repeats the migration audit');
 
 $legacyBlocked = seedReadyStage4(1, 'LEGACY-BLOCKED', 'hotel', 1, '+95940000108', 'stage4-legacy-blocked@example.test', $merchantTemplate, $hotelTemplate);
+$blockedHistoryId = $historyFixture($legacyBlocked['applicationId']);
 Db::table('merchant_application_business')->where('id', $legacyBlocked['businessIds'][0])->update(['kyc_status' => 2]);
 stage4Rejects(ErrorCode::DATA_CONFLICT,
     fn () => $approval->approve($legacyBlocked['applicationId'], 'stage4-legacy-blocked-request', ['email']),
@@ -69,10 +89,14 @@ check((int) Db::table('merchant_application')->where('id', $legacyBlocked['appli
     && (int) Db::table('merchant_application_business')->where('id', $legacyBlocked['businessIds'][0])->value('site_id') === 1
     && Db::table('merchant_verify_timeline')->where('application_id', $legacyBlocked['applicationId'])->where('action', 'onboarding_site_migrated')->count() === 0,
     'failed approval rolls back the legacy move and its audit together');
+$expectHistoryBoundary((int) Db::table('merchant_application_registration_review')->where('id', $blockedHistoryId)->value('site_id') === 1,
+    'KYC readiness rejection leaves registration history in its source site');
 AdminContext::set(['admin_id' => 94002, 'site_id' => 1, 'is_super' => false]);
 stage4Rejects(ErrorCode::FORBIDDEN,
     fn () => $approval->approve($legacyBlocked['applicationId'], 'stage4-legacy-ordinary-request', ['email']),
     'ordinary administrators cannot move and approve a legacy application');
+$expectHistoryBoundary((int) Db::table('merchant_application_registration_review')->where('id', $blockedHistoryId)->value('site_id') === 1,
+    'ordinary administrator rejection leaves registration history in its source site');
 AdminContext::set(['admin_id' => 94001, 'admin_name' => 'Stage 4 Super', 'site_id' => 0, 'is_super' => true]);
 
 Db::connection('system')->table('sys_site')->where('id', 7)->update(['status' => 2]);
@@ -103,6 +127,7 @@ check((int) Db::table('merchant_kyc_template')->where('id', $legacySharedTemplat
     'refused migration preserves source-site public resources');
 
 $legacyDuplicate = seedReadyStage4(1, 'LEGACY-DUPLICATE', 'hotel', 1, '+95940000408', 'stage4-legacy-duplicate@example.test', $merchantTemplate, $hotelTemplate);
+$duplicateHistoryId = $historyFixture($legacyDuplicate['applicationId']);
 Db::table('merchant_application')->where('id', $legacyDuplicate['applicationId'])->update(['reg_number' => 'STAGE4-COLLISION']);
 try {
     $approval->approve($legacyDuplicate['applicationId'], 'stage4-legacy-duplicate-request', ['email']);
@@ -116,6 +141,9 @@ check((int) Db::table('merchant_application')->where('id', $legacyDuplicate['app
     && Db::table('merchant_verify_document')->where('application_id', $legacyDuplicate['applicationId'])->where('site_id', 1)->count() === 2
     && Db::table('merchant_verify_timeline')->where('application_id', $legacyDuplicate['applicationId'])->where('action', 'onboarding_site_migrated')->count() === 0,
     'a later entity insertion failure rolls back migrated application, KYC, signatures and audit');
+
+$expectHistoryBoundary((int) Db::table('merchant_application_registration_review')->where('id', $duplicateHistoryId)->value('site_id') === 1,
+    'later entity insertion failure rolls registration history ownership back with the application');
 
 $legacyTerms = seedReadyStage4(1, 'LEGACY-TERMS', 'hotel', 1, '+95940000508', 'stage4-legacy-terms@example.test', $merchantTemplate, $hotelTemplate);
 $targetAgreement = (int) Db::table('merchant_onboarding_agreement')->insertGetId([
@@ -134,3 +162,5 @@ check((int) Db::table('merchant_application')->where('id', $legacyTerms['applica
     && Db::table('merchant_application_signature')->where('application_id', $legacyTerms['applicationId'])->where('site_id', 1)->where('status', 1)->count() === 1,
     'different target terms neither rewrite consent nor commit a partial migration');
 Db::table('merchant_onboarding_agreement')->where('id', $targetAgreement)->update(['status' => 2]);
+
+check($historyBoundaryFailures === [], 'registration history follows atomic legacy site migration boundaries');
