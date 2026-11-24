@@ -175,7 +175,16 @@ class MerchantDocumentService
 
     public function download(int $id, ?int $revisionId = null): array
     {
+        return Db::transaction(fn () => $this->downloadLocked($id, $revisionId));
+    }
+
+    private function downloadLocked(int $id, ?int $revisionId): array
+    {
         $doc = $this->document($id);
+        if ((int) ($doc['application_id'] ?? 0) > 0 && (int) $doc['merchant_id'] === 0) {
+            $app = Db::table('merchant_application')->where('id', $doc['application_id'])->whereNull('deleted_at')->lockForUpdate()->first();
+            if (!$app) throw new BusinessException(ErrorCode::NOT_FOUND, '入驻申请不存在或已删除');
+        }
         if ($this->approved($doc)) $this->permission('merchant:document:download');
         elseif (! AdminContext::hasAnyPermission(['merchant:onboarding:kyc', 'merchant:verify:doc', 'merchant:document:download'])) throw new BusinessException(ErrorCode::FORBIDDEN);
         $revision = $revisionId === null

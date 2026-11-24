@@ -160,6 +160,30 @@ try {
     $storeBefore = Db::table('merchant_store')->count();
     $reviewPermissions = ['merchant:onboarding:list', 'merchant:onboarding:update', 'merchant:onboarding:registration-approve', 'merchant:onboarding:reject'];
     AdminContext::set(['admin_id' => 92001, 'admin_name' => 'Stage 2 Reviewer', 'site_id' => 7, 'is_super' => false, 'permissions' => $reviewPermissions]);
+    $numberInput = ['id' => $applicationId, 'regNumber' => '  REG-APP-001  ', 'expectedRegNumber' => '', 'reason' => 'Checked against registration certificate'];
+    onboardingRequest($admin, 'updateRegistrationNumber', $numberInput);
+    $numberRow = (array) Db::table('merchant_application')->where('id', $applicationId)->first();
+    check($numberRow['reg_number'] === 'REG-APP-001' && (int) $numberRow['registration_status'] === 1
+        && (int) $numberRow['merchant_kyc_status'] === 0 && (int) $numberRow['merchant_id'] === 0,
+        'admin can supplement registration number without approving registration or opening KYC');
+    $numberEvent = Db::table('merchant_verify_timeline')->where('application_id', $applicationId)->where('action', 'registration_number_updated')->first();
+    check($numberEvent && (int) $numberEvent->operator_id === 92001 && str_contains($numberEvent->note, 'REG-APP-001')
+        && str_contains($numberEvent->note, $numberInput['reason']), 'registration number amendment records operator, old/new values and reason');
+    rejects(ErrorCode::DATA_CONFLICT, fn () => onboardingRequest($admin, 'updateRegistrationNumber', $numberInput), 'stale registration number cannot overwrite a newer amendment');
+    $numberInput['expectedRegNumber'] = 'REG-APP-001';
+    rejects(ErrorCode::PARAM_ERROR, fn () => onboardingRequest($admin, 'updateRegistrationNumber', array_replace($numberInput, ['reason' => '  '])), 'registration number correction requires a reason');
+    rejects(ErrorCode::PARAM_ERROR, fn () => onboardingRequest($admin, 'updateRegistrationNumber', array_replace($numberInput, ['regNumber' => str_repeat('A', 51)])), 'registration number rejects excess length without truncation');
+    rejects(ErrorCode::PARAM_ERROR, fn () => onboardingRequest($admin, 'updateRegistrationNumber', ['id' => $applicationId, 'reason' => 'Missing fields']), 'amendment cannot omit value and concurrency snapshot');
+    $numberInput['regNumber'] = '';
+    onboardingRequest($admin, 'updateRegistrationNumber', $numberInput);
+    check($onboarding->detail(7, $token, $applicationId)['application']['regNumber'] === '', 'registration number remains optional and can be cleared with audit');
+    $numberInput['regNumber'] = 'REG-APP-001'; $numberInput['expectedRegNumber'] = '';
+    AdminContext::set(['admin_id' => 92002, 'site_id' => 992, 'is_super' => false, 'permissions' => $reviewPermissions]);
+    rejects(ErrorCode::NO_DATA_PERMISSION, fn () => onboardingRequest($admin, 'updateRegistrationNumber', $numberInput), 'registration number correction is site scoped');
+    AdminContext::set(['admin_id' => 92002, 'site_id' => 7, 'is_super' => false, 'permissions' => ['merchant:onboarding:list']]);
+    rejects(ErrorCode::FORBIDDEN, fn () => onboardingRequest($admin, 'updateRegistrationNumber', $numberInput), 'read-only admin cannot amend company registration number');
+    AdminContext::set(['admin_id' => 92001, 'admin_name' => 'Stage 2 Reviewer', 'site_id' => 7, 'is_super' => false, 'permissions' => $reviewPermissions]);
+    onboardingRequest($admin, 'updateRegistrationNumber', $numberInput);
     onboardingRequest($admin, 'registrationReviewStart', ['id' => $applicationId]);
     onboardingRequest($admin, 'registrationResubmit', ['id' => $applicationId, 'reason' => 'Please confirm the trading name']);
     check($onboarding->status(7, $token, $applicationId)['registrationStatus'] === 'resubmit_required', 'reviewer can request registration correction');
@@ -167,6 +191,8 @@ try {
     check($onboarding->submit(7, $token, $applicationId)['registrationStatus'] === 'submitted', 'corrected registration can be resubmitted');
     onboardingRequest($admin, 'registrationReviewStart', ['id' => $applicationId]);
     onboardingRequest($admin, 'approve', ['id' => $applicationId]);
+    rejects(ErrorCode::DATA_CONFLICT, fn () => onboardingRequest($admin, 'updateRegistrationNumber', array_replace($numberInput,
+        ['expectedRegNumber' => 'REG-APP-001', 'regNumber' => 'CHANGED-AFTER-APPROVAL'])), 'base-approved application number cannot be directly changed');
 
     $approved = (array) Db::table('merchant_application')->where('id', $applicationId)->first();
     check((int) $approved['registration_status'] === 3 && (int) $approved['merchant_kyc_status'] === 1
@@ -239,6 +265,20 @@ try {
     rejects(ErrorCode::PARAM_ERROR, fn () => onboardingRequest($admin, 'create', array_replace($leadInput, ['registrationEmail' => 'invalid'])),
         'admin creation validates owner email');
     $lead = onboardingRequest($admin, 'create', $leadInput);
+    $leadAdminContext = AdminContext::get();
+    AdminContext::set(array_replace($leadAdminContext, ['permissions' => array_merge(AdminContext::permissions(), ['merchant:onboarding:update'])]));
+    $leadNumberInput = ['id' => $lead['id'], 'regNumber' => 'REG-APP-001', 'expectedRegNumber' => $leadInput['regNumber'], 'reason' => 'Checked duplicate registration certificate'];
+    rejects(ErrorCode::DATA_CONFLICT, fn () => onboardingRequest($admin, 'updateRegistrationNumber', $leadNumberInput), 'admin amendment cannot use another application registration number');
+    foreach ([0, 3, 5] as $lockedRegistrationStatus) {
+        Db::table('merchant_application')->where('id', $lead['id'])->update(['registration_status' => $lockedRegistrationStatus]);
+        rejects(ErrorCode::DATA_CONFLICT, fn () => onboardingRequest($admin, 'updateRegistrationNumber', array_replace($leadNumberInput, ['regNumber' => 'NEW-REG'])), 'registration amendment rejects locked state ' . $lockedRegistrationStatus);
+    }
+    Db::table('merchant_application')->where('id', $lead['id'])->update(['registration_status' => 1, 'state_model_version' => 0]);
+    rejects(ErrorCode::DATA_CONFLICT, fn () => onboardingRequest($admin, 'updateRegistrationNumber', $leadNumberInput), 'legacy workflow registration number remains untouched');
+    Db::table('merchant_application')->where('id', $lead['id'])->update(['state_model_version' => 1, 'merchant_id' => 999999]);
+    rejects(ErrorCode::DATA_CONFLICT, fn () => onboardingRequest($admin, 'updateRegistrationNumber', $leadNumberInput), 'formal merchant cannot be changed through registration correction');
+    Db::table('merchant_application')->where('id', $lead['id'])->update(['merchant_id' => 0]);
+    AdminContext::set($leadAdminContext);
     $applicationIds[] = (int) $lead['id'];
     check((int) $lead['site_id'] === 7 && $lead['registration_channel'] === 'admin' && (int) $lead['contact_data_status'] === 0,
         'admin contacts are confirmed on the authorized site with a server-owned source');

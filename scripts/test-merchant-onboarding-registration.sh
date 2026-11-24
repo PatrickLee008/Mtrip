@@ -64,3 +64,18 @@ $DOCKER exec \
   "$SERVICE_CONTAINER" php -d display_errors=1 /tmp/onboarding-registration.php
 
 echo "Stage 2 onboarding registration tests passed"
+
+delete_migration="$REPO_ROOT/database/migrations/V20261124060000__onboarding-lead-delete-permission.sql"
+for pass in 1 2; do
+  sed "s/USE \`mtrip_system\`;/USE \`$TEST_DB\`;/" "$delete_migration" | mysql_exec
+done
+permission_result="$(printf 'SELECT (SELECT COUNT(*) FROM %s.sys_menu WHERE id=20509 AND perm_key="merchant:onboarding:delete"),(SELECT COUNT(*) FROM %s.sys_role_menu WHERE menu_id=20509 AND role_id=1),(SELECT COUNT(*) FROM %s.sys_role_menu WHERE menu_id=20509 AND role_id<>1);\n' "$TEST_DB" "$TEST_DB" "$TEST_DB" | mysql_exec)"
+if [ "$permission_result" != $'1\t1\t0' ]; then
+  echo "Deletion permission migration failed idempotence or ordinary-role isolation" >&2
+  exit 1
+fi
+echo "PASS: deletion permission migration is idempotent and grants only the super role"
+
+$DOCKER cp "$REPO_ROOT/backend/services/merchant-service/test/onboarding-lead-delete.php" "$SERVICE_CONTAINER:/tmp/onboarding-lead-delete.php"
+$DOCKER exec -e DB_BUSINESS_DATABASE="$TEST_DB" -e DB_SYSTEM_DATABASE="$TEST_DB" \
+  "$SERVICE_CONTAINER" php -d display_errors=1 /tmp/onboarding-lead-delete.php

@@ -190,7 +190,9 @@ Router::addGroup('/api/v1/admin', static function () {
     Router::get('/merchant/onboarding/property-kyc-templates', [OnboardingController::class, 'propertyKycTemplates']);
     Router::post('/merchant/onboarding/property-kyc-configure', [OnboardingController::class, 'propertyKycConfigure']);
     Router::post('/merchant/onboarding/add', [OnboardingController::class, 'create']);
+    Router::post('/merchant/onboarding/delete', [OnboardingController::class, 'delete']);
     Router::post('/merchant/onboarding/update-stage', [OnboardingController::class, 'updateStage']);
+    Router::post('/merchant/onboarding/registration-number', [OnboardingController::class, 'updateRegistrationNumber']);
     Router::post('/merchant/onboarding/assign-ops', [OnboardingController::class, 'assignOps']);
     Router::post('/merchant/onboarding/save-assessment', [OnboardingController::class, 'saveAssessment']);
     Router::post('/merchant/onboarding/send-kyc', [OnboardingController::class, 'sendKyc']);
@@ -245,7 +247,7 @@ Router::addGroup('/api/v1/admin', static function () {
     Router::post('/supplier/settle/audit', [SupplierController::class, 'settleAudit']);
     Router::post('/supplier/settle/confirm-pay', [SupplierController::class, 'settleConfirmPay']);
 }, [
-    'middleware' => [AdminAuthMiddleware::class, OperationLogMiddleware::class],
+    'middleware' => [AdminAuthMiddleware::class, OperationLogMiddleware::class, \App\Middleware\OnboardingMutationMiddleware::class],
 ]);
 
 // ============================================================

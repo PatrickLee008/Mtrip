@@ -49,7 +49,8 @@ function fixture() {
       return { list: [], total: 0 };
     },
   };
-  const context = vm.createContext({ fixtureHost, console, FormData, Blob, URL, crypto: globalThis.crypto });
+  const context = vm.createContext({ fixtureHost, console, FormData, Blob, URL, crypto: globalThis.crypto, Event,
+    window: { dispatchEvent: event => (fixtureHost.events ??= []).push(event.type) } });
   vm.runInContext(pageCode, context);
   const s = context.subject.default.setup({}, { expose() {} });
   s.app.value = { ...fixtureHost.detail.application };
@@ -625,6 +626,75 @@ await test('scoped upload keeps the original multipart endpoint and owner fields
     assert.equal(write.data.has('bizUnit'), false);
     assert.equal(s.scopedKycBusy.value, false);
   }
+});
+
+await test('registration number editing requires update permission and a pre-approval registration state', async () => {
+  const { fixtureHost, s } = fixture();
+  fixtureHost.user.hasPerm = perm => perm === 'merchant:onboarding:update';
+  for (const state of [1, 2, 4]) {
+    s.app.value.registration_status = state;
+    assert.equal(s.canEditRegistrationNumber.value, true);
+  }
+  for (const state of [0, 3, 5]) {
+    s.app.value.registration_status = state;
+    assert.equal(s.canEditRegistrationNumber.value, false);
+  }
+  s.app.value.registration_status = 2;
+  fixtureHost.user.hasPerm = () => false;
+  assert.equal(s.canEditRegistrationNumber.value, false);
+});
+await test('registration number correction requires reason and submits its original snapshot then refreshes', async () => {
+  const { fixtureHost, s } = fixture();
+  fixtureHost.user.hasPerm = () => true;
+  s.app.value.registration_status = 2; s.app.value.reg_number = '';
+  s.openRegistrationNumber();
+  s.registrationNumberForm.regNumber = '  CERT-001  ';
+  await s.saveRegistrationNumber();
+  assert.equal(fixtureHost.calls.length, 0);
+  s.registrationNumberForm.reason = '  Confirmed against certificate  ';
+  await s.saveRegistrationNumber();
+  const write = fixtureHost.calls.find(c => c.method === 'post');
+  assert.ok(write.path.endsWith('/registration-number'));
+  assert.deepEqual(JSON.parse(JSON.stringify(write.data)), { id: 7, regNumber: 'CERT-001', expectedRegNumber: '', reason: 'Confirmed against certificate' });
+  assert.ok(fixtureHost.calls.some(c => c.path.endsWith('/detail')));
+  assert.equal(s.registrationNumberOpen.value, false);
+});
+await test('switching applications or newer number snapshots prevent stale corrections', async () => {
+  const { fixtureHost, s } = fixture(); fixtureHost.user.hasPerm = () => true;
+  s.app.value.registration_status = 2; s.app.value.reg_number = 'OLD';
+  s.openRegistrationNumber(); s.registrationNumberForm.regNumber = 'NEW'; s.registrationNumberForm.reason = 'Corrected certificate';
+  s.app.value.reg_number = 'UPDATED'; await s.saveRegistrationNumber();
+  assert.equal(fixtureHost.calls.length, 0);
+  s.app.value.id = 8; await s.saveRegistrationNumber();
+  assert.equal(fixtureHost.calls.length, 0);
+});
+
+await test('lead deletion is available only to super administrators and never to converted applications', async () => {
+  const { fixtureHost, s } = fixture(); fixtureHost.user.hasPerm = () => true;
+  const row = { id: 7, app_no: 'APP-TEST-7', merchant_id: 0, account_status: 0, stage: 1, registration_status: 0, merchant_kyc_status: 0 };
+  assert.equal(s.canDeleteLead(row), true);
+  fixtureHost.user.profile.isSuper = false; assert.equal(s.canDeleteLead(row), false);
+  fixtureHost.user.profile.isSuper = true;
+  for (const patch of [{ merchant_id: 4 }, { account_status: 1 }, { stage: 5 }, { final_approved_at: '2026-11-24' }]) assert.equal(s.canDeleteLead({ ...row, ...patch }), false);
+});
+await test('lead deletion requires typed application number, reason and a second confirmation before writing', async () => {
+  const { fixtureHost, s } = fixture(); fixtureHost.user.hasPerm = () => true;
+  const row = { id: 7, app_no: 'APP-TEST-7', merchant_id: 0, account_status: 0, stage: 1, registration_status: 0, merchant_kyc_status: 0 };
+  s.openDeleteLead(row); s.confirmDeleteLead(); assert.equal(fixtureHost.confirm, null);
+  s.deleteLeadForm.confirmAppNo = row.app_no; s.deleteLeadForm.reason = '  Duplicate registration  ';
+  s.confirmDeleteLead(); assert.equal(fixtureHost.calls.length, 0); assert.ok(fixtureHost.confirm);
+  await fixtureHost.confirm.onOk();
+  const write = fixtureHost.calls.find(c => c.method === 'post'); assert.ok(write.path.endsWith('/onboarding/delete'));
+  assert.equal(write.data.id, 7); assert.equal(write.data.confirmAppNo, row.app_no); assert.equal(write.data.reason, 'Duplicate registration');
+  assert.equal(write.data.expectedRegistrationStatus, 0); assert.equal(write.data.expectedKycStatus, 0);
+  assert.equal(s.deleteLeadOpen.value, false); assert.ok(fixtureHost.events.includes('mtrip:onboarding-changed'));
+});
+await test('a role change after opening the deletion form blocks the request', async () => {
+  const { fixtureHost, s } = fixture(); fixtureHost.user.hasPerm = () => true;
+  s.openDeleteLead({ id: 7, app_no: 'APP-TEST-7', merchant_id: 0, account_status: 0, stage: 1 });
+  s.deleteLeadForm.confirmAppNo = 'APP-TEST-7'; s.deleteLeadForm.reason = 'Remove duplicate'; s.confirmDeleteLead();
+  fixtureHost.user.profile.isSuper = false;
+  await fixtureHost.confirm.onOk(); assert.equal(fixtureHost.calls.length, 0);
 });
 
 console.log(`Onboarding interactions: ${passed} tests passed`);

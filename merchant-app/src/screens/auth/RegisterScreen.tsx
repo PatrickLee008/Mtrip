@@ -47,6 +47,7 @@ export default function RegisterScreen() {
         const detail = await apiApplicationSave(registration.registrationToken, {
           applicationId: registration.applicationId,
           companyName: registration.companyName.trim(),
+          regNumber: registration.regNumber.trim(),
           currentStep: 3,
           removeBusinessIds: registration.removedBusinessIds,
           businesses: registration.businesses,
@@ -91,6 +92,17 @@ export default function RegisterScreen() {
             placeholder={t('register.companyInfo.companyNamePlaceholder')}
             autoCapitalize="words"
             returnKeyType="next"
+          />
+        </FloatingField>
+        <FloatingField label={t('register.companyInfo.regNumber')}>
+          <FieldInput
+            value={registration.regNumber}
+            onChangeText={(regNumber) => registration.setCompany({ regNumber })}
+            placeholder={t('register.companyInfo.regNumberPlaceholder')}
+            maxLength={50}
+            autoCapitalize="none"
+            autoCorrect={false}
+            returnKeyType="done"
           />
         </FloatingField>
       </View>

@@ -74,7 +74,8 @@ INSERT IGNORE INTO `sys_menu` (`id`,`parent_id`,`menu_name`,`menu_name_en`,`perm
 (20505,205,'基础注册通过','Approve Registration','merchant:onboarding:registration-approve',3,5),
 (20506,205,'入驻驳回','Reject Onboarding','merchant:onboarding:reject',3,6),
 (20507,205,'最终批准','Final Approval','merchant:onboarding:final-approve',3,7),
-(20508,205,'重试凭证投递','Retry Credentials','merchant:onboarding:credential-retry',3,8);
+(20508,205,'重试凭证投递','Retry Credentials','merchant:onboarding:credential-retry',3,8),
+(20509,205,'永久删除入驻线索（仅超管）','Permanently Delete Lead (Super Admin Only)','merchant:onboarding:delete',3,9);
 
 -- ================= 300 商户管理 =================
 INSERT IGNORE INTO `sys_menu` (`id`,`parent_id`,`menu_name`,`menu_name_en`,`i18n_key`,`perm_key`,`menu_type`,`route_path`,`component`,`icon`,`sort`) VALUES

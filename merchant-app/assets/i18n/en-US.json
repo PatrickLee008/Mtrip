@@ -517,6 +517,8 @@
       },
       "companyName": "Company / Group Name",
       "companyNamePlaceholder": "e.g., Grand Royal Group",
+      "regNumber": "Company Registration Number (optional)",
+      "regNumberPlaceholder": "Enter the number on your registration certificate",
       "required": "Enter your company / group name"
     },
     "businessDetails": {

@@ -168,6 +168,7 @@ export default function RegisterBusinessDetailsScreen() {
       const draft = await apiApplicationSave(registrationToken, {
         applicationId: registration.applicationId,
         companyName,
+        regNumber: registration.regNumber.trim(),
         currentStep: 4,
         removeBusinessIds: registration.removedBusinessIds,
         businesses: cards,

@@ -53,7 +53,9 @@ import {
   apiOnboardingKycTemplates,
   apiOnboardingKycUpload,
   apiOnboardingList,
+  apiOnboardingDelete,
   apiOnboardingRegistrationResubmit,
+  apiOnboardingRegistrationNumber,
   apiOnboardingRegistrationReviewStart,
   apiOnboardingReject,
   apiOnboardingSaveAssessment,
@@ -146,7 +148,7 @@ const REJECT_REASONS = computed(() =>
   Array.from({ length: 9 }, (_, i) => ({ code: i + 1, label: t(`merchant.rejectReasons.r${i + 1}`) })),
 );
 
-const { loading, list, query, load, search, pagination } = useTable(apiOnboardingList, {
+const { loading, list, query, load, search, pagination, page: currentPage } = useTable(apiOnboardingList, {
   queue: '',
   registrationStatus: undefined,
   category: '',
@@ -231,9 +233,9 @@ const columns = computed(() => [
   { title: t('merchant.onboardingPage.colLeadId'), dataIndex: 'app_no', width: 210 },
   { title: t('merchant.onboardingPage.colMerchantName'), dataIndex: 'merchant_name', ellipsis: true },
   { title: t('merchant.onboardingPage.colBusinessName'), dataIndex: 'business_names', ellipsis: true },
-  { title: t('merchant.onboardingPage.colRegNumber'), dataIndex: 'reg_number', width: 112, ellipsis: true },
+  { title: t('merchant.onboardingPage.colRegNumber'), dataIndex: 'reg_number', width: 200 },
   { title: t('merchant.onboardingPage.colSubmitted'), dataIndex: 'submitted_at', width: 100 },
-  { title: t('merchant.onboardingPage.colProgress'), key: 'progress', width: 150 },
+  { title: t('merchant.onboardingPage.colProgress'), key: 'progress', width: 250 },
   { title: t('merchant.onboardingPage.colAssignedOps'), dataIndex: 'assigned_ops_name', width: 110, ellipsis: true },
   { title: t('common.action'), key: 'action_col', width: 150, fixed: 'right' as const },
 ]);
@@ -385,7 +387,48 @@ function toggleBiz(id: number, biz: TableRow): void {
   void selectBiz(biz);
 }
 
+const deleteLeadOpen = ref(false);
+const deleteLeadSaving = ref(false);
+const deleteLeadTarget = ref<TableRow | null>(null);
+const deleteLeadForm = reactive({ confirmAppNo: '', reason: '' });
+function canDeleteLead(row: TableRow): boolean {
+  return isSuper.value && user.hasPerm('merchant:onboarding:delete') && Number(row.merchant_id ?? 0) === 0
+    && Number(row.account_status ?? 0) === 0 && Number(row.stage) !== 5 && !row.final_approved_at;
+}
+function openDeleteLead(row: TableRow): void {
+  if (!canDeleteLead(row) || deleteLeadSaving.value) return;
+  deleteLeadTarget.value = { ...row };
+  Object.assign(deleteLeadForm, { confirmAppNo: '', reason: '' });
+  deleteLeadOpen.value = true;
+}
+function confirmDeleteLead(): void {
+  const target = deleteLeadTarget.value;
+  const reason = deleteLeadForm.reason.trim();
+  if (!target || !canDeleteLead(target) || deleteLeadSaving.value || !reason || reason.length > 200
+    || deleteLeadForm.confirmAppNo !== target.app_no) return;
+  const data = { id: Number(target.id), confirmAppNo: deleteLeadForm.confirmAppNo, reason,
+    expectedRegistrationStatus: Number(target.registration_status), expectedKycStatus: Number(target.merchant_kyc_status), expectedStage: Number(target.stage) };
+  Modal.confirm({ title: t('merchant.onboardingPage.deleteLeadFinalTitle'), content: t('merchant.onboardingPage.deleteLeadFinalWarning', { appNo: target.app_no }),
+    okText: t('merchant.onboardingPage.deleteLeadPermanently'), okType: 'danger', cancelText: t('common.cancel'), zIndex: 1400,
+    async onOk() {
+      if (!canDeleteLead(target) || deleteLeadSaving.value) return;
+      deleteLeadSaving.value = true;
+      try {
+        await apiOnboardingDelete(data);
+        deleteLeadOpen.value = false;
+        deleteLeadTarget.value = null;
+        if (Number(app.value?.id) === data.id) { drawerOpen.value = false; scopedAssistOpen.value = false; app.value = null; }
+        if (list.value.length === 1 && currentPage.value > 1) currentPage.value--;
+        window.dispatchEvent(new Event('mtrip:onboarding-changed'));
+        await load();
+        message.success(t('merchant.onboardingPage.deleteLeadSuccess'));
+      } finally { deleteLeadSaving.value = false; }
+    },
+  });
+}
+
 async function openDetail(row: TableRow): Promise<void> {
+  registrationNumberOpen.value = false;
   timelineExpanded.value = false;
   scopedAssistOpen.value = false;
   requirementsOpen.value = false;
@@ -438,6 +481,37 @@ async function loadDetail(id: number, onlyIfCurrent = false): Promise<void> {
 }
 
 const isLegacy = computed(() => Number(app.value?.state_model_version ?? 0) === 0);
+const registrationNumberOpen = ref(false);
+const registrationNumberSaving = ref(false);
+const registrationNumberForm = reactive({ id: 0, regNumber: '', expectedRegNumber: '', reason: '' });
+const canEditRegistrationNumber = computed(() => !!app.value && !isLegacy.value
+  && Number(app.value.merchant_id ?? 0) === 0 && [1, 2, 4].includes(Number(app.value.registration_status))
+  && user.hasPerm('merchant:onboarding:update'));
+function openRegistrationNumber(): void {
+  if (!canEditRegistrationNumber.value || registrationNumberSaving.value) return;
+  Object.assign(registrationNumberForm, { id: app.value!.id, regNumber: app.value!.reg_number || '', expectedRegNumber: app.value!.reg_number || '', reason: '' });
+  registrationNumberOpen.value = true;
+}
+async function saveRegistrationNumber(): Promise<void> {
+  if (!canEditRegistrationNumber.value || registrationNumberSaving.value
+    || Number(app.value?.id) !== registrationNumberForm.id
+    || String(app.value?.reg_number || '') !== registrationNumberForm.expectedRegNumber) return;
+  const regNumber = registrationNumberForm.regNumber.trim();
+  const reason = registrationNumberForm.reason.trim();
+  if (!reason || regNumber.length > 50 || reason.length > 200) return;
+  const id = registrationNumberForm.id;
+  registrationNumberSaving.value = true;
+  try {
+    await apiOnboardingRegistrationNumber({ id, regNumber, expectedRegNumber: registrationNumberForm.expectedRegNumber, reason });
+    if (Number(app.value?.id) === id) {
+      registrationNumberOpen.value = false;
+      await loadDetail(id, true);
+    }
+    message.success(t('merchant.onboardingPage.regNumberSaved'));
+  } finally {
+    registrationNumberSaving.value = false;
+  }
+}
 const scopedKycBusy = ref(false);
 const testAgreementOpen = ref(false);
 const testAgreementForm = reactive({ id: 0, agreementId: 0, version: '', reason: '' });
@@ -1116,7 +1190,7 @@ onMounted(() => {
       :pagination="tablePagination"
       row-key="id"
       size="middle"
-      :scroll="{ x: 1152 }"
+      :scroll="{ x: 1380 }"
     >
       <template #bodyCell="{ column, record }">
         <template v-if="column.dataIndex === 'app_no'">
@@ -1136,11 +1210,16 @@ onMounted(() => {
           <span :style="{ color: record.assigned_ops_name ? undefined : 'var(--sap-muted)' }">{{ record.assigned_ops_name || t('merchant.onboardingPage.unassigned') }}</span>
         </template>
         <template v-else-if="column.key === 'action_col'">
+          <a-space :size="4">
           <a-tooltip :title="t('common.detail')">
             <a-button type="link" size="small" @click="openDetail(record)">
               <EyeOutlined />
             </a-button>
           </a-tooltip>
+          <a-tooltip v-if="canDeleteLead(record)" :title="t('merchant.onboardingPage.deleteLeadTitle')">
+            <a-button v-perm="'merchant:onboarding:delete'" type="link" danger size="small" :disabled="deleteLeadSaving" :aria-label="t('merchant.onboardingPage.deleteLeadTitle')" @click="openDeleteLead(record)"><DeleteOutlined /></a-button>
+          </a-tooltip>
+          </a-space>
         </template>
       </template>
     </a-table>
@@ -1226,7 +1305,7 @@ onMounted(() => {
                   <div class="co-cell-value">{{ app.company_name }}</div>
                 </div>
                 <div class="co-cell">
-                  <div class="co-cell-label">{{ t('merchant.onboardingPage.labelRegNumber') }}</div>
+                  <div class="co-cell-label co-reg-number-label">{{ t('merchant.onboardingPage.labelRegNumber') }}<a-button v-if="canEditRegistrationNumber" v-perm="'merchant:onboarding:update'" type="link" size="small" class="co-reg-number-edit" @click="openRegistrationNumber"><EditOutlined />{{ t('merchant.onboardingPage.editRegNumber') }}</a-button></div>
                   <div class="co-cell-value">{{ app.reg_number || '-' }}</div>
                 </div>
                 <div class="co-cell">
@@ -1845,7 +1924,7 @@ onMounted(() => {
         <a-row :gutter="12">
           <a-col :span="12">
             <a-form-item :label="t('merchant.onboardingPage.labelRegNumber')">
-              <a-input v-model:value="createForm.regNumber" />
+              <a-input v-model:value="createForm.regNumber" :maxlength="50" :placeholder="t('merchant.onboardingPage.regNumberHint')" />
             </a-form-item>
           </a-col>
           <a-col :span="12">
@@ -1948,11 +2027,31 @@ onMounted(() => {
       </a-form>
     </a-modal>
 
+    <a-modal v-model:open="registrationNumberOpen" :title="t('merchant.onboardingPage.editRegNumber')" :z-index="1200" :confirm-loading="registrationNumberSaving" :mask-closable="!registrationNumberSaving" :closable="!registrationNumberSaving" :keyboard="!registrationNumberSaving" :cancel-button-props="{ disabled: registrationNumberSaving }" :ok-button-props="{ disabled: !registrationNumberForm.reason.trim() || !canEditRegistrationNumber }" @ok="saveRegistrationNumber">
+      <a-form layout="vertical">
+        <a-form-item :label="t('merchant.onboardingPage.labelRegNumber')" :extra="t('merchant.onboardingPage.regNumberHint')">
+          <a-input v-model:value="registrationNumberForm.regNumber" :maxlength="50" :disabled="registrationNumberSaving" />
+        </a-form-item>
+        <a-form-item :label="t('merchant.onboardingPage.regNumberReason')" required>
+          <a-textarea v-model:value="registrationNumberForm.reason" :rows="3" :maxlength="200" show-count :disabled="registrationNumberSaving" />
+        </a-form-item>
+      </a-form>
+    </a-modal>
+
     <a-modal v-model:open="resubmitOpen" :title="t('merchant.onboardingPage.resubmitModalTitle')" :confirm-loading="resubmitSaving" :ok-text="t('merchant.onboardingPage.requestCorrection')" @ok="doRequestResubmit">
       <a-form layout="vertical">
         <a-form-item :label="t('merchant.onboardingPage.resubmitReason')" required>
           <a-textarea v-model:value="resubmitReason" :rows="4" :placeholder="t('merchant.onboardingPage.resubmitReasonPlaceholder')" />
         </a-form-item>
+      </a-form>
+    </a-modal>
+
+    <a-modal v-model:open="deleteLeadOpen" :title="t('merchant.onboardingPage.deleteLeadTitle')" :z-index="1200" :closable="!deleteLeadSaving" :mask-closable="!deleteLeadSaving" :keyboard="!deleteLeadSaving" :cancel-button-props="{ disabled: deleteLeadSaving }" :ok-text="t('merchant.onboardingPage.deleteLeadContinue')" :ok-button-props="{ danger: true, disabled: deleteLeadSaving || !deleteLeadForm.reason.trim() || deleteLeadForm.confirmAppNo !== deleteLeadTarget?.app_no }" @ok="confirmDeleteLead">
+      <a-alert type="warning" show-icon :message="t('merchant.onboardingPage.deleteLeadWarning')" style="margin-bottom: 16px" />
+      <p>{{ deleteLeadTarget?.app_no }} · {{ deleteLeadTarget?.company_name || deleteLeadTarget?.merchant_name || '—' }}</p>
+      <a-form layout="vertical">
+        <a-form-item :label="t('merchant.onboardingPage.deleteLeadNumber')" required><a-input v-model:value="deleteLeadForm.confirmAppNo" :disabled="deleteLeadSaving" :placeholder="deleteLeadTarget?.app_no" /></a-form-item>
+        <a-form-item :label="t('merchant.onboardingPage.deleteLeadReason')" required><a-textarea v-model:value="deleteLeadForm.reason" :rows="3" :maxlength="200" show-count :disabled="deleteLeadSaving" /></a-form-item>
       </a-form>
     </a-modal>
 
@@ -1982,9 +2081,9 @@ onMounted(() => {
 <style scoped>
 .ob-header { display: flex; justify-content: space-between; align-items: center; gap: 20px; margin-bottom: 20px; }
 .ob-lead-link { white-space: nowrap; font-weight: 500; font-family: monospace; color: #2563eb; }
-.ob-mono-value { font-family: monospace; font-size: 12px; }
+.ob-mono-value { font-family: monospace; font-size: 12px; overflow-wrap: anywhere; }
 .ob-merchant-name { font-weight: 500; color: #1a2332; }
-.ob-progress-badge :deep(.ant-tag) { max-width: 100%; white-space: normal; }
+.ob-progress-badge :deep(.ant-tag) { white-space: nowrap; }
 .ob-kyc-locked-hint { margin: 12px 0 16px; }
 .ob-drawer-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .ob-drawer-heading strong { display: block; font-size: 16px; color: #1a2332; }
@@ -2012,7 +2111,7 @@ onMounted(() => {
 .timeline-toggle-arrow.is-expanded { transform: rotate(180deg); }
 .timeline-scroll { max-height: 320px; overflow-y: auto; overscroll-behavior: contain; margin-top: 8px; padding: 4px 8px 12px 2px; }
 .internal-notes-heading { margin: 24px 0 12px; }
-.ob-contacts__grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border: 1px solid #e3e8f0; border-radius: 8px; overflow: hidden; }
+.ob-contacts__grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 10px; border: 1px solid #e3e8f0; border-radius: 8px; overflow: hidden; }
 .ob-contacts__grid .co-cell { padding: 12px; background: #fafbfc; min-width: 0; overflow-wrap: anywhere; }
 .ob-contacts__label { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: #64748b; font-size: 11px; }
 .ob-contact-state { font-size: 10px; color: #b54708; }
@@ -2147,6 +2246,8 @@ onMounted(() => {
 .co-info-section {
   margin: 20px 0;
 }
+.co-reg-number-label { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.co-reg-number-edit.ant-btn { height: auto; padding: 0; font-size: 11px; line-height: inherit; }
 .co-section-heading {
   display: flex;
   align-items: center;
@@ -3788,7 +3889,6 @@ onMounted(() => {
   border-radius: 6px;
 }
 @media (max-width: 700px) {
-  .ob-queue-nav.mv-nav { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .ob-header { align-items: flex-start; flex-direction: column; gap: 12px; }
   .ob-contacts__grid { grid-template-columns: 1fr; }
   .rb-table { overflow-x: auto; }

@@ -517,6 +517,8 @@
       },
       "companyName": "公司 / 集团名称",
       "companyNamePlaceholder": "例如：Grand Royal Group",
+      "regNumber": "公司注册号（选填）",
+      "regNumberPlaceholder": "请填写注册证照上的编号",
       "required": "请填写公司 / 集团名称"
     },
     "businessDetails": {

@@ -355,6 +355,55 @@ class OnboardingController extends AbstractController
         return Result::success($app, '线索已录入');
     }
 
+    #[Permission('merchant:onboarding:delete')]
+    public function delete(): array
+    {
+        (new \App\Service\OnboardingLeadDeletionService())->delete($this->requireId(), $this->request->all());
+        return Result::success(null, '入驻线索及关联资料已永久删除');
+    }
+
+    /** 基础注册审核期补录证照注册号，不改变审批状态。 */
+    #[Permission('merchant:onboarding:update')]
+    public function updateRegistrationNumber(): array
+    {
+        if (! AdminContext::hasPermission('merchant:onboarding:update')) {
+            throw new BusinessException(ErrorCode::FORBIDDEN);
+        }
+        $app = $this->findApplication($this->requireId());
+        if (! is_string($this->input('regNumber')) || ! is_string($this->input('expectedRegNumber'))) {
+            throw new BusinessException(ErrorCode::PARAM_ERROR, '请提供公司注册号及原值');
+        }
+        $number = $this->strInput('regNumber');
+        $expected = $this->strInput('expectedRegNumber');
+        $reason = $this->requireStr('reason');
+        if (mb_strlen($number) > 50 || mb_strlen($reason) > 200) {
+            throw new BusinessException(ErrorCode::PARAM_ERROR, '公司注册号最多50字符，修改原因最多200字符');
+        }
+        Db::transaction(function () use ($app, $number, $expected, $reason): void {
+            $current = Db::table('merchant_application')->where('id', $app['id'])->where('site_id', $app['site_id'])
+                ->whereNull('deleted_at')->lockForUpdate()->first();
+            if (! $current || (int) $current->state_model_version < 1 || (int) $current->merchant_id > 0
+                || ! in_array((int) $current->registration_status, [1, 2, 4], true)) {
+                throw new BusinessException(ErrorCode::DATA_CONFLICT, '仅基础注册待审、审核中或补正中的申请可更正注册号');
+            }
+            if ((string) $current->reg_number !== $expected) {
+                throw new BusinessException(ErrorCode::DATA_CONFLICT, '公司注册号已更新，请刷新后重试');
+            }
+            if ($number === $expected) return;
+            if ($number !== '' && (Db::table('merchant_application')->where('reg_number', $number)
+                ->where('id', '!=', $app['id'])->whereNull('deleted_at')->exists()
+                || Db::table('merchant_info')->where('credit_code', $number)->exists())) {
+                throw new BusinessException(ErrorCode::DATA_CONFLICT, '该公司注册号已存在');
+            }
+            Db::table('merchant_application')->where('id', $app['id'])->update([
+                'reg_number' => $number, 'last_updated_at' => gmdate('Y-m-d H:i:s'),
+            ]);
+            $this->pushTimeline((array) $current, 'registration_number_updated',
+                sprintf('公司注册号：%s → %s；原因：%s', $expected === '' ? '（未填写）' : $expected, $number === '' ? '（未填写）' : $number, $reason));
+        });
+        return Result::success(null, '公司注册号已更新');
+    }
+
     /** 人工调整阶段(仅 1-4;通过/驳回走 approve/reject 接口) */
     #[Permission('merchant:onboarding:update')]
     public function updateStage(): array

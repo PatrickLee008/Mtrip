@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import { useI18n } from 'vue-i18n';
 import * as Icons from '@ant-design/icons-vue';
 import { useUserStore } from '@/stores/user';
 import { menuTitle } from '@/locales/menuI18n';
@@ -9,13 +10,14 @@ import { apiVerifyQueues } from '@/api/merchant';
 const route = useRoute();
 const router = useRouter();
 const userStore = useUserStore();
+const { t } = useI18n();
+const LEGACY_VERIFY_PATHS = ['/merchant-verify/pending', '/merchant-verify/resubmission'];
 
-/** 商户验证队列计数(侧边栏徽标:入驻申请/待核实/重新提交显示,60s 自动刷新) */
+/** 入驻申请待办徽标，60s 自动刷新；旧队列不计入常规导航。 */
 const queueCounts = ref<Record<string, number>>({});
 let queueTimer: number | undefined;
 async function loadQueues(): Promise<void> {
   try {
-    // 待核实/重新提交均来自 merchant_info.status，不能使用入驻线索 stage 统计。
     queueCounts.value = await apiVerifyQueues();
   } catch {
     queueCounts.value = {};
@@ -23,27 +25,28 @@ async function loadQueues(): Promise<void> {
 }
 onMounted(() => {
   void loadQueues();
+  window.addEventListener('mtrip:onboarding-changed', loadQueues);
   queueTimer = window.setInterval(() => void loadQueues(), 60000);
 });
 onUnmounted(() => {
+  window.removeEventListener('mtrip:onboarding-changed', loadQueues);
   if (queueTimer) {
     window.clearInterval(queueTimer);
   }
 });
 
-/** 子菜单徽标:入驻申请、待核实、重新提交；计数 0 不显示 */
+/** 子菜单徽标:入驻申请；计数 0 不显示 */
 function childBadge(child: MenuItem): number | undefined {
+  if (child.badge) return child.badge;
   if (child.key === '/merchant-verify/onboarding') return (queueCounts.value.onboarding ?? 0) > 0 ? queueCounts.value.onboarding : undefined;
-  if (child.key === '/merchant-verify/pending') return (queueCounts.value.pending ?? 0) > 0 ? queueCounts.value.pending : undefined;
-  if (child.key === '/merchant-verify/resubmission') return (queueCounts.value.resubmission ?? 0) > 0 ? queueCounts.value.resubmission : undefined;
   return undefined;
 }
 
-/** 父级徽标:商户验证显示三项待办总计,计数 0 不显示 */
+/** 父级徽标仅统计有权访问的入驻申请，不混入隐藏的旧队列。 */
 function groupBadge(group: MenuGroup): number | undefined {
   if (group.key !== '/merchant-verify') return undefined;
-  const total = (queueCounts.value.onboarding ?? 0) + (queueCounts.value.pending ?? 0) + (queueCounts.value.resubmission ?? 0);
-  return total > 0 ? total : undefined;
+  const onboarding = group.children.find(child => child.key === '/merchant-verify/onboarding');
+  return onboarding ? childBadge(onboarding) : group.children.find(child => child.badge)?.badge;
 }
 
 /** 图标名 → 组件 */
@@ -55,6 +58,7 @@ interface MenuItem {
   key: string;
   label: string;
   icon?: string;
+  badge?: number;
 }
 
 interface MenuGroup {
@@ -73,17 +77,27 @@ const groups = computed<MenuGroup[]>(() => {
   for (const node of nodes) {
     if (node.menu_type === 1) {
       const children: MenuItem[] = (node.children ?? [])
-        .filter((child) => child.menu_type === 2)
+        .filter((child) => child.menu_type === 2 && !LEGACY_VERIFY_PATHS.includes(child.route_path))
         .map((child) => ({
           key: child.route_path || String(child.id),
           label: menuTitle(child),
           icon: child.icon || undefined,
         }));
+      if (node.route_path === '/merchant-verify' && children.length === 0) {
+        const legacyTasks = (node.children ?? []).filter(child => LEGACY_VERIFY_PATHS.includes(child.route_path) && (queueCounts.value[child.route_path.split('/').pop() || ''] ?? 0) > 0);
+        if (legacyTasks.length === 0) continue;
+        children.push({
+          key: legacyTasks[0].route_path,
+          label: t('merchant.verifyPage.legacyQueueTasks'),
+          badge: legacyTasks.reduce((sum, child) => sum + (queueCounts.value[child.route_path.split('/').pop() || ''] ?? 0), 0),
+        });
+      }
       result.push({
         key: node.route_path || String(node.id),
         label: menuTitle(node),
         icon: node.icon || undefined,
         children,
+        ownedPaths: (node.children ?? []).filter(child => child.menu_type === 2).map(child => child.route_path),
       });
     } else if (node.menu_type === 2) {
       result.push({
@@ -109,7 +123,7 @@ watch(
     activeKey.value = path;
     // 自动展开包含当前路由的分组
     for (const g of groups.value) {
-      if (g.children.some((c) => c.key === path)) {
+      if (g.children.some((c) => c.key === path) || g.ownedPaths?.includes(path)) {
         expandedKeys.value.add(g.key);
       }
     }
@@ -120,7 +134,7 @@ watch(
 /** 分组是否处于激活状态(自身或子项匹配) */
 function isGroupActive(group: MenuGroup): boolean {
   if (group.children.length === 0) return group.key === activeKey.value || !!group.ownedPaths?.includes(activeKey.value);
-  return group.key === activeKey.value || group.children.some((c) => c.key === activeKey.value);
+  return group.key === activeKey.value || group.children.some((c) => c.key === activeKey.value) || !!group.ownedPaths?.includes(activeKey.value);
 }
 
 /** 点击分组 */

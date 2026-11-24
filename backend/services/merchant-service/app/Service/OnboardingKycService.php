@@ -271,6 +271,15 @@ class OnboardingKycService
         string $ipAddress,
         string $userAgent
     ): array {
+        return Db::transaction(function () use ($app, $agreementId, $version, $readReceipt, $signerName, $signerRole, $signature, $ipAddress, $userAgent): array {
+            $current = Db::table('merchant_application')->where('id', $app['id'])->whereNull('deleted_at')->lockForUpdate()->first();
+            $this->assertReadable($current ? (array) $current : []);
+            return $this->signLocked((array) $current, $agreementId, $version, $readReceipt, $signerName, $signerRole, $signature, $ipAddress, $userAgent);
+        });
+    }
+
+    private function signLocked(array $app, int $agreementId, string $version, string $readReceipt, string $signerName, string $signerRole, string $signature, string $ipAddress, string $userAgent): array
+    {
         $this->assertReadable($app);
         $agreement = $this->activeAgreement((int) $app['site_id']);
         if ((int) $agreement['id'] !== $agreementId || ! hash_equals((string) $agreement['agreement_version'], $version)) {
@@ -335,6 +344,15 @@ class OnboardingKycService
     }
 
     public function upload(array $app, string $scopeType, int $applicationBusinessId, string $docType, ?UploadedFileInterface $file, bool $adminAssisted = false): array
+    {
+        return Db::transaction(function () use ($app, $scopeType, $applicationBusinessId, $docType, $file, $adminAssisted): array {
+            $current = Db::table('merchant_application')->where('id', $app['id'])->whereNull('deleted_at')->lockForUpdate()->first();
+            $this->assertReadable($current ? (array) $current : []);
+            return $this->uploadLocked((array) $current, $scopeType, $applicationBusinessId, $docType, $file, $adminAssisted);
+        });
+    }
+
+    private function uploadLocked(array $app, string $scopeType, int $applicationBusinessId, string $docType, ?UploadedFileInterface $file, bool $adminAssisted): array
     {
         $this->assertEditable($app, $scopeType, $applicationBusinessId);
         $scopeType = strtolower(trim($scopeType));
@@ -575,6 +593,7 @@ class OnboardingKycService
 
     private function assertReadable(array $app): void
     {
+        if ($app === [] || !empty($app['deleted_at'])) throw new BusinessException(ErrorCode::DATA_CONFLICT, '入驻申请已删除或不可访问');
         if ((int) $app['registration_status'] !== 3 || (int) $app['merchant_kyc_status'] === 0) {
             throw new BusinessException(ErrorCode::FORBIDDEN, '基础注册通过后才能访问 KYC');
         }

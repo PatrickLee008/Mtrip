@@ -479,6 +479,10 @@ export function apiOnboardingAdd(data: Record<string, unknown>): Promise<Row> {
   return post('/admin/merchant/onboarding/add', data);
 }
 
+export function apiOnboardingDelete(data: { id: number; confirmAppNo: string; reason: string; expectedRegistrationStatus: number; expectedKycStatus: number; expectedStage: number }): Promise<null> {
+  return post('/admin/merchant/onboarding/delete', data);
+}
+
 export function apiOnboardingUpdateStage(id: number, stage: number): Promise<null> {
   return post('/admin/merchant/onboarding/update-stage', { id, stage });
 }
@@ -489,6 +493,10 @@ export function apiOnboardingAssignOps(id: number, opsId: number, opsName: strin
 
 export function apiOnboardingSaveAssessment(data: Record<string, unknown>): Promise<null> {
   return post('/admin/merchant/onboarding/save-assessment', data);
+}
+
+export function apiOnboardingRegistrationNumber(data: { id: number; regNumber: string; expectedRegNumber: string; reason: string }): Promise<null> {
+  return post('/admin/merchant/onboarding/registration-number', data);
 }
 
 export function apiOnboardingSendKyc(data: { id: number; submissionMethod: number }): Promise<null> {
