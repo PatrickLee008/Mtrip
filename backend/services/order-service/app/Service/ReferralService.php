@@ -28,6 +28,7 @@ class ReferralService
         $ref = Db::table('user_referral')
             ->where('invitee_user_id', $inviteeUserId)
             ->where('reward_status', 0)
+            ->whereNull('consumer_affiliate_id')
             ->lockForUpdate()
             ->first();
         if (! $ref) {

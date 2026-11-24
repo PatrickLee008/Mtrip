@@ -94,14 +94,31 @@ const drawerOpen = ref(false);
 const detailLoading = ref(false);
 const detail = ref<TableRow | null>(null);
 const detailOrder = ref<TableRow | null>(null);
+const refundHistory = ref<TableRow[]>([]);
+const refundHistoryColumns = computed(() => [
+  { title: t('order.refund.historyEvent'), dataIndex: 'event_type' },
+  { title: t('order.refund.tradeNo', 'Refund Trade No.'), dataIndex: 'reference' },
+  { title: t('common.createTime'), dataIndex: 'created_at' },
+]);
+const refundEventLabels: Record<string, string> = {
+  refund_completed: 'historyCompleted',
+  refund_submitted: 'historySubmitted',
+  refund_failed: 'historyFailed',
+  payment_late_refunded: 'historyCompleted',
+  payment_late_refund_failed: 'historyFailed',
+};
 
 async function openDetail(row: TableRow): Promise<void> {
   drawerOpen.value = true;
   detailLoading.value = true;
+  detail.value = null;
+  detailOrder.value = null;
+  refundHistory.value = [];
   try {
     const data = await apiRefundDetail(row.id);
     detail.value = data.refund;
     detailOrder.value = data.order;
+    refundHistory.value = data.history ?? [];
   } finally {
     detailLoading.value = false;
   }
@@ -380,7 +397,18 @@ async function submitConfirm(): Promise<void> {
             >{{ detail.refund_trade_no }}</a-descriptions-item>
             <a-descriptions-item :label="t('order.refund.applyTime')">{{ detail.created_at }}</a-descriptions-item>
             <a-descriptions-item :label="t('order.refund.refundTime', 'Refund Time')">{{ detail.refund_time || '-' }}</a-descriptions-item>
+            <a-descriptions-item v-if="detail.pay_no" :label="t('order.refund.originalPaymentRef', 'Original Payment Reference')" :span="2">{{ detail.pay_no }}</a-descriptions-item>
           </a-descriptions>
+          <template v-if="refundHistory.length">
+            <a-divider orientation="left">{{ t('order.refund.orderHistory', 'Order Refund History') }}</a-divider>
+            <a-table :data-source="refundHistory" :columns="refundHistoryColumns" row-key="id" size="small" :pagination="{ pageSize: 5 }">
+              <template #bodyCell="{ column, record }">
+                <template v-if="column.dataIndex === 'event_type'">
+                  {{ refundEventLabels[record.event_type] ? t('order.refund.' + refundEventLabels[record.event_type]) : record.event_type }}
+                </template>
+              </template>
+            </a-table>
+          </template>
           <template v-if="Array.isArray(detail.images) && detail.images.length">
             <a-divider orientation="left">{{ t('order.refund.images') }}</a-divider>
             <a-image-preview-group>

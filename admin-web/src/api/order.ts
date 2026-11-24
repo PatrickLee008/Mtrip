@@ -38,7 +38,7 @@ export function apiRefundList(params: Record<string, unknown>): Promise<PageData
   return get<PageData<Row>>('/admin/order/refund/list', params);
 }
 
-export function apiRefundDetail(id: number): Promise<{ refund: Row; order: Row | null }> {
+export function apiRefundDetail(id: number): Promise<{ refund: Row; order: Row | null; history?: Row[] }> {
   return get('/admin/order/refund/detail', { id });
 }
 

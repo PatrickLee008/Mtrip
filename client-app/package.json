@@ -10,6 +10,7 @@
     "ios": "expo start --ios --port 8082",
     "web": "expo start --web --port 8082",
     "build:web": "expo export -p web --clear",
+    "postbuild:web": "node scripts/write-android-app-links.cjs",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

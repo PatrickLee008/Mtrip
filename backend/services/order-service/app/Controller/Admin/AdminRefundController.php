@@ -82,9 +82,24 @@ class AdminRefundController extends AbstractAdminController
                 'total_amount', 'pay_amount', 'order_status', 'refund_status',
                 'use_date', 'end_date', 'contact_name', 'pay_method', 'pay_time', 'created_at']);
         $refund['pay_method'] = $order !== null ? (int) $order->pay_method : 0;
+        $history = Db::table('order_booking_event')
+            ->where('site_id', $refund['site_id'])->where('order_id', $refund['order_id'])
+            ->where('event_category', 'refund')->orderByDesc('id')->limit(50)
+            ->get(['id', 'event_type', 'status', 'detail', 'created_at'])
+            ->map(static function ($event): array {
+                $detail = json_decode((string) $event->detail, true);
+                return [
+                    'id' => (int) $event->id,
+                    'event_type' => (string) $event->event_type,
+                    'status' => (int) $event->status,
+                    'reference' => (string) (($detail['tradeNo'] ?? '') ?: ($detail['refundNo'] ?? '')),
+                    'created_at' => $event->created_at,
+                ];
+            })->all();
         return Result::success([
             'refund' => $refund,
             'order' => $order !== null ? (array) $order : null,
+            'history' => $history,
         ]);
     }
 

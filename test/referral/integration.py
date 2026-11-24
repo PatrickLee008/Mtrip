@@ -10,6 +10,7 @@ import hashlib
 import hmac
 import json
 from pathlib import Path
+import re
 import secrets
 import subprocess
 import tempfile
@@ -46,22 +47,86 @@ def check(name, condition):
     print('PASS ' + name, flush=True)
 
 
-def token(uid=1, site=7):
+def token(uid=1, site=7, *, admin_permissions=None):
     def encode(value):
         return base64.urlsafe_b64encode(json.dumps(value).encode()).decode().rstrip('=')
-    body = encode(dict(alg='HS256', typ='JWT')) + '.' + encode(dict(
-        aud='app', user_id=uid, site_id=site, iat=int(time.time()), exp=int(time.time()) + 3600))
+    claims = dict(aud='app', user_id=uid, site_id=site)
+    if admin_permissions is not None:
+        claims = dict(aud='admin', admin_id=uid, site_id=site, permissions=admin_permissions)
+    claims.update(iat=int(time.time()), exp=int(time.time()) + 3600)
+    body = encode(dict(alg='HS256', typ='JWT')) + '.' + encode(claims)
     return body + '.' + base64.urlsafe_b64encode(hmac.new(SECRET.encode(), body.encode(), hashlib.sha256).digest()).decode().rstrip('=')
 
 
-def request(path, uid=1, site=7):
-    req = urllib.request.Request(BASE + '/api/v1/app/user/referral/' + path,
-                                 headers={'Authorization': 'Bearer ' + token(uid, site), 'X-Site-Id': str(site)})
+def http_json(url, uid=1, site=7, *, admin_permissions=None, body=None):
+    req = urllib.request.Request(url, None if body is None else json.dumps(body).encode(),
+                                 headers={'Authorization': 'Bearer ' + token(uid, site, admin_permissions=admin_permissions),
+                                          'X-Site-Id': str(site), 'Content-Type': 'application/json'})
     try:
         response = urllib.request.urlopen(req, timeout=15)
     except urllib.error.HTTPError as error:
         response = error
     return json.loads(response.read())
+
+
+def request(path, uid=1, site=7):
+    return http_json(BASE + '/api/v1/app/user/referral/' + path, uid, site)
+
+
+def affiliate_checks(marketing):
+    endpoint = marketing + '/api/v1/admin/affiliate/partner/consumer-access'
+    manage = ['affiliate:partner:list', 'affiliate:partner:manage-consumer']
+
+    def admin_read(site=7):
+        return http_json(endpoint + '?userId=60', 101, site, admin_permissions=manage)
+
+    def admin_change(expected, status, *, site=7, permissions=manage):
+        return http_json(endpoint, 101, site, admin_permissions=permissions,
+                         body=dict(userId=60, status=status, expectedStatus=expected,
+                                   affiliateType='agent', reason='Isolated affiliate verification'))
+
+    def access(uid=60, site=7):
+        return http_json(BASE + '/api/v1/app/user/affiliate/access', uid, site)['data']
+
+    check('unactivated accounts do not see the affiliate center', access() == {'active': False})
+    ordinary = register('977880006', 'REFQA60')
+    ordinary_id = ordinary['data']['user']['id']
+    check('partner read permission does not grant activation', admin_change(0, 1, permissions=manage[:1])['code'] != 0)
+    check('admin cannot read or activate another site', admin_read(6)['code'] != 0 and admin_change(0, 1, site=6)['code'] != 0)
+    first, retry = admin_change(0, 1), admin_change(0, 1)
+    profile = admin_read()['data']
+    profile_id = first['data']['profileId']
+    check('activation uses one profile and retries preserve a single audit row',
+          first['code'] == 0 and retry['data']['profileId'] == profile_id
+          and profile['profile']['id'] == profile_id and len(profile['history']) == 1)
+    check('only the same active consumer and site see the profile',
+          access()['affiliateId'] == profile_id and not access(59)['active'] and not access(site=6)['active'])
+    linked = register('977880007', 'REFQA60')
+    linked_id = linked['data']['user']['id']
+    check('active affiliation is frozen at registration and excludes ordinary rewards and history',
+          mysql(f'SELECT consumer_affiliate_id FROM `{BUSINESS}`.user_referral WHERE invitee_user_id={linked_id};') == str(profile_id)
+          and access()['registeredReferrals'] == 1
+          and request('my', 60)['data']['inviteeCount'] == 1
+          and request('my', 60)['data']['program']['inviterAmount'] == 0)
+    check('suspending hides the center immediately', admin_change(1, 2)['code'] == 0 and not access()['active'])
+    check('a suspended affiliate code cannot create another qualifying referral',
+          register('977880008', 'REFQA60')['code'] == 40001 and register('977880008')['code'] == 0)
+    check('a past ordinary registration still earns its ordinary reward after the inviter becomes an affiliate',
+          job('checkin', order=booking(ordinary_id))['ok']
+          and mysql(f'SELECT reward_status FROM `{BUSINESS}`.user_referral WHERE invitee_user_id={ordinary_id};') == '1')
+    before = balances(60, linked_id)
+    check('a frozen affiliate registration keeps its linkage after suspension and never enters ordinary wallet rewards',
+          job('checkin', order=booking(linked_id))['ok'] and balances(60, linked_id) == before
+          and mysql(f'SELECT consumer_affiliate_id,reward_status FROM `{BUSINESS}`.user_referral WHERE invitee_user_id={linked_id};')
+          == f'{profile_id}\t0')
+    check('stale status cannot override a newer change', admin_change(1, 3)['code'] != 0)
+    check('disable and reactivate retain the original profile and activation time',
+          admin_change(2, 3)['code'] == 0 and not access()['active']
+          and admin_change(3, 1)['data']['profileId'] == profile_id
+          and access()['activatedAt'] == profile['profile']['activated_at'])
+    check('all state changes are audited with operator and reason',
+          [(entry['previous_status'], entry['new_status'], entry['operator_id'], bool(entry['reason']))
+           for entry in admin_read()['data']['history']] == [(3, 1, 101, True), (2, 3, 101, True), (1, 2, 101, True), (0, 1, 101, True)])
 
 
 def register(mobile, referral='', password='Referral123456789'):
@@ -135,6 +200,15 @@ try:
     for source, target in [('mtrip_business', BUSINESS), ('mtrip_system', SYSTEM)]:
         tables = mysql(f"SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA='{source}' AND TABLE_TYPE='BASE TABLE';").splitlines()
         mysql(''.join(f'CREATE TABLE `{target}`.`{table}` LIKE `{source}`.`{table}`;' for table in tables))
+    migration = ROOT / 'database/migrations/V20261124070000__consumer-affiliate-access.sql'
+    isolated = migration.read_text(encoding='utf-8').replace('mtrip_business', BUSINESS).replace('mtrip_system', SYSTEM)
+    if re.findall(r'\bUSE\s+(\w+)\s*;', isolated) != [BUSINESS, SYSTEM]:
+        raise RuntimeError('Invalid isolated migration targets')
+    for _ in range(2):
+        command(['docker', 'exec', '-i', '-e', 'MYSQL_PWD='+PASSWORD, 'mtrip-mysql-1',
+                 'mysql', '-u'+DBUSER, '--default-character-set=utf8mb4'], isolated)
+    check('affiliate migration reruns and creates the dedicated permission once',
+          mysql(f"SELECT COUNT(*) FROM `{SYSTEM}`.sys_menu WHERE perm_key='affiliate:partner:manage-consumer';") == '1')
     mysql(f"INSERT INTO `{SYSTEM}`.sys_site(id,site_name,currency) VALUES(1,'No reward','EUR'),(6,'Other offer','MMK'),(7,'Reward QA','MMK'); "
           f"INSERT INTO `{SYSTEM}`.sys_site_config(site_id,config_group,config_key,config_value,config_name) VALUES "
           "(7,'operate','referral_reward_inviter','50000','QA'),(7,'operate','referral_reward_invitee','12000','QA'),"
@@ -149,6 +223,7 @@ try:
         directory = Path(temp)
         ORDER_CONTAINER, _ = start_service('order', 9504, directory)
         _, BASE = start_service('user', 9502, directory)
+        _, MARKETING = start_service('marketing', 9507, directory)
     command(['docker', 'cp', str(ROOT / 'test/referral/runner.php'), ORDER_CONTAINER + ':/tmp/referral-runner.php'])
 
     summary = request('my')['data']
@@ -214,6 +289,7 @@ try:
     check('invalid referral is rejected without a half-created account', register('977880003', 'INVALIDQA')['code'] == 40001 and mysql(f'SELECT COUNT(*) FROM `{BUSINESS}`.user_info;') == before_count)
     check('cross-site referral code cannot bind a foreign inviter', register('977880004', 'REFQA61')['code'] == 40001)
     check('new-password complexity enforced by the real register API', register('977880005', password='abcdef1')['code'] == 40001)
+    affiliate_checks(MARKETING)
     print('PASS_COUNT=' + str(len(PASSED)), flush=True)
 finally:
     for container in CONTAINERS:

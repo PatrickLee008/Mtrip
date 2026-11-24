@@ -763,7 +763,9 @@
     "referral": {
       "title": "输入推荐码",
       "subtitle": "如果你有推荐码,请在此输入。",
-      "fromInvitation": "此推荐码来自邀请链接，注册时会自动使用。",
+      "fromInvitation": "此推荐码来自邀请链接，请在注册前核对。",
+      "invitationCode": "推荐码：{{code}}",
+      "downloadApp": "下载 mTrip App",
       "placeholder": "abcdef",
       "continue": "继续",
       "skip": "跳过"
@@ -1665,6 +1667,14 @@
       "cta": "使用完整模式"
     },
     "modeFootnote": "你之后可以随时在设置中更改"
+  },
+  "affiliateAccess": {
+    "title": "联盟中心",
+    "id": "联盟编号",
+    "agent": "代理",
+    "merchant": "商户",
+    "activatedAt": "开通日期",
+    "registeredReferrals": "已注册推荐人数"
   },
   "appUpdate": {
     "forceTitle": "需要更新",

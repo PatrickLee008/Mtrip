@@ -91,7 +91,7 @@ export default function ReferralCodeScreen() {
               style={styles.input}
               value={code}
               onChangeText={setCode}
-              editable={!invitationCode}
+              editable={!submitting}
               placeholder={t('user.referral.placeholder')}
               placeholderTextColor={colors.textSoft}
               autoCapitalize="characters"
@@ -108,12 +108,12 @@ export default function ReferralCodeScreen() {
                 pressed && canSubmit && styles.pressed,
               ]}
               disabled={!canSubmit}
-              onPress={() => void finish(invitationCode || code.trim())}
+              onPress={() => void finish(code.trim())}
             >
               <Text style={styles.ctaText}>{t('user.referral.continue')}</Text>
             </Pressable>
 
-            {!invitationCode ? <Pressable
+            <Pressable
               style={({ pressed }) => [
                 styles.skipBtn,
                 submitting && styles.ctaDisabled,
@@ -123,7 +123,7 @@ export default function ReferralCodeScreen() {
               onPress={() => void finish('')}
             >
               <Text style={styles.skipText}>{t('user.referral.skip')}</Text>
-            </Pressable> : null}
+            </Pressable>
           </View>
         </View>
       </View>

@@ -37,6 +37,7 @@ import { API_CODE } from '@/api/types';
 import { apiSmsSend } from '@/api/user';
 import HomeIcon from '@/components/home/HomeIcon';
 import AuthShell from '@/components/user/AuthShell';
+import ReferralDownload from '@/components/user/ReferralDownload';
 import SocialIcon, { type SocialProvider } from '@/components/user/SocialIcon';
 import FacebookLoginEntry from '@/components/user/FacebookLoginEntry';
 import TikTokLoginEntry from '@/components/user/TikTokLoginEntry';
@@ -153,6 +154,7 @@ export default function RegisterScreen() {
       onBack={() => navigation.goBack()}
     >
       <View style={styles.card}>
+        {referralCode ? <ReferralDownload code={referralCode} /> : null}
         <View style={styles.fields}>
           {/* 手机号:区号固定 +95,竖线右侧为号码输入 */}
           <View style={styles.field}>

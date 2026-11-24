@@ -6,6 +6,18 @@ import { get, post, postEncrypted, postForm, type RequestOptions } from '@/api/r
 import type { PageData, PageParams } from '@/api/types';
 import type { AuthResult, FavoriteItem, TravelerItem, UserProfile } from '@/types/models';
 
+export type ConsumerAffiliateAccess = { active: false } | {
+  active: true;
+  affiliateId: number;
+  affiliateType: 'agent' | 'merchant';
+  activatedAt: string;
+  registeredReferrals: number;
+};
+
+export function fetchConsumerAffiliateAccess(): Promise<ConsumerAffiliateAccess> {
+  return get('/api/v1/app/user/affiliate/access', undefined, { silent: true });
+}
+
 /** 短信验证码场景(对齐后端 SmsVerifyService::SCENES) */
 export type SmsScene = 'register' | 'login' | 'reset';
 

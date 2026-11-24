@@ -13,6 +13,7 @@
  */
 
 import React, { useEffect, useState } from 'react';
+import { Linking, Platform } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useFonts } from 'expo-font';
@@ -29,6 +30,7 @@ import ToastHost from '@/components/common/ToastHost';
 import type { Lang } from '@/config/global';
 import { changeLanguage, initI18n } from '@/i18n';
 import AppNavigator from '@/navigation';
+import { navigationRef } from '@/navigation/navigationRef';
 import ChooseModeScreen from '@/screens/splash/ChooseModeScreen';
 import SplashScreen from '@/screens/splash/SplashScreen';
 import { bootstrapStores, useCommonStore } from '@/store';
@@ -37,7 +39,8 @@ import { applyWebGlobalStyles } from '@/utils/webStyles';
 import { captureFacebookCompletion, isFacebookCompletion } from '@/utils/facebook';
 import { captureTikTokCompletion, isTikTokCompletion } from '@/utils/tiktok';
 import { captureAppleCompletion, isAppleCompletion } from '@/utils/apple';
-import { captureReferralInvitation, clearReferralInvitation } from '@/utils/referralInvitation';
+import { captureReferralInvitation, clearReferralInvitation, getReferralInvitation, referralLink } from '@/utils/referralInvitation';
+import { clearInstallReferral, getInstallReferral } from '@/utils/nativeReferral';
 import { useUserStore } from '@/store/userStore';
 
 captureFacebookCompletion();
@@ -78,10 +81,28 @@ export default function App() {
   });
 
   useEffect(() => {
+    const onLink = (url: string) => {
+      if (useUserStore.getState().isLogin) return;
+      const referralCode = captureReferralInvitation(url);
+      if (referralCode && navigationRef.isReady()) {
+        navigationRef.navigate('Register', { referralCode });
+      }
+    };
+    const links = Platform.OS === 'web' ? undefined : Linking.addEventListener('url', ({ url }) => onLink(url));
     void (async () => {
       const startedAt = Date.now();
       await bootstrapStores();
-      if (useUserStore.getState().isLogin) clearReferralInvitation();
+      if (useUserStore.getState().isLogin) {
+        clearReferralInvitation();
+        void clearInstallReferral();
+      } else if (Platform.OS !== 'web') {
+        const initialUrl = await Linking.getInitialURL().catch(() => null);
+        if (!getReferralInvitation() && initialUrl) onLink(initialUrl);
+        if (!getReferralInvitation()) {
+          const installedCode = await getInstallReferral();
+          if (installedCode && !getReferralInvitation()) onLink(referralLink(installedCode));
+        }
+      }
 
       const { lang, langChosen, modeChosen } = useCommonStore.getState();
       if (langChosen) {
@@ -101,6 +122,7 @@ export default function App() {
       else if (!langChosen) setPhase('language');
       else setPhase(!ASK_MODE_ON_LAUNCH || modeChosen ? 'app' : 'mode');
     })();
+    return () => links?.remove();
   }, []);
 
   const onPickLanguage = (picked: Lang) => {

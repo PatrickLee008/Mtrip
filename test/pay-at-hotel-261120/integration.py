@@ -161,7 +161,7 @@ try:
     for source,target in [('mtrip_business',B),('mtrip_system',S)]:
         tables=sql(f"SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA='{source}' AND TABLE_TYPE='BASE TABLE';").splitlines()
         sql(''.join(f'CREATE TABLE `{target}`.`{table}` LIKE `{source}`.`{table}`;' for table in tables))
-    migrations=['V20261117100000__merchant-commercial-settings.sql','V20261120100100__multi-hotel-checkout-sessions.sql','V20261120120000__property-commercial-commission.sql','V20261120120100__pay-at-hotel-booking-settlements.sql','V20261123090000__scope-long-stay-tiers.sql']
+    migrations=['V20261117100000__merchant-commercial-settings.sql','V20261120100100__multi-hotel-checkout-sessions.sql','V20261120120000__property-commercial-commission.sql','V20261120120100__pay-at-hotel-booking-settlements.sql','V20261123090000__scope-long-stay-tiers.sql','V20261124070000__consumer-affiliate-access.sql']
     for _ in range(2):
         for filename in migrations:
             isolated=(ROOT/'database/migrations'/filename).read_text(encoding='utf-8').replace('mtrip_business',B).replace('mtrip_system',S)
@@ -259,6 +259,12 @@ try:
     check('sequential refunds stop at the prepaid amount and close the booking',row(refundable)['status']==5 and row(refundable)['payment']==4 and sql(f"SELECT SUM(refund_amount) FROM `{B}`.order_refund WHERE order_id={refundable['orderId']} AND status=3;")=='30200.00')
     check('full refund restores inventory exactly once',sql(f"SELECT COUNT(*) FROM `{B}`.goods_stock_log WHERE order_id={refundable['orderId']} AND change_type=4;")=='1')
     check('duplicate completion cannot credit the wallet twice',admin('order/refund/confirm',dict(id=rid),base=ORDER)['code']!=0)
+    history = data(admin(f'order/refund/detail?id={rid}', base=ORDER))
+    check('refund details include the wallet completion and refund reference',
+          any(event['event_type'] == 'refund_completed' and event['reference'] == history['refund']['refund_no']
+              for event in history['history']))
+    check('cross-site admins cannot read the refund history',
+          admin(f'order/refund/detail?id={rid}', base=ORDER, site=6, super=False)['code'] != 0)
 
     # Hotel cancellation overrides a non-refundable policy and refunds prepaid funds to the wallet.
     sql(f"INSERT INTO `{B}`.goods_refund_rule(property_id,sku_type,sku_id,rule_type,remark) VALUES(81,1,91,3,'No refund');")

@@ -35,12 +35,21 @@ class ReferralController extends AbstractController
         // 统计卡要「已邀请/待结算/已奖励」三格 + 累计金额,一次聚合查完(无记录时 SUM 为 NULL,强转兜 0)
         $stat = (array) Db::table('user_referral')
             ->where('inviter_user_id', $userId)
+            ->whereNull('consumer_affiliate_id')
             ->selectRaw('COUNT(*) AS invitee_count')
             ->selectRaw('SUM(reward_status = 0) AS pending_count')
             ->selectRaw('SUM(reward_status = 1 AND reward_amount > 0) AS rewarded_count')
             ->selectRaw('SUM(reward_status = 1 AND reward_amount = 0) AS no_reward_count')
             ->selectRaw('SUM(CASE WHEN reward_status = 1 THEN reward_amount ELSE 0 END) AS reward_total')
             ->first();
+        $siteId = UserContext::siteId();
+        $program = ReferralRewards::forSite($siteId);
+        $usesAffiliateRules = Db::table('consumer_affiliate_profile')->where('site_id', $siteId)
+            ->where('user_id', $userId)->whereIn('status', [1, 2])->exists();
+        if ($usesAffiliateRules) {
+            $program['inviterAmount'] = 0.0;
+            $program['inviteeAmount'] = 0.0;
+        }
         return Result::success([
             'referralCode' => $code,
             'inviteeCount' => (int) ($stat['invitee_count'] ?? 0),
@@ -48,7 +57,7 @@ class ReferralController extends AbstractController
             'rewardedCount' => (int) ($stat['rewarded_count'] ?? 0),
             'noRewardCount' => (int) ($stat['no_reward_count'] ?? 0),
             'rewardTotal' => (float) ($stat['reward_total'] ?? 0),
-            'program' => ReferralRewards::forSite(UserContext::siteId()),
+            'program' => $program,
         ]);
     }
 
@@ -64,7 +73,7 @@ class ReferralController extends AbstractController
         [$page, $pageSize] = $this->pageParams();
         $query = Db::table('user_referral as ur')
             ->leftJoin('user_info as u', 'u.id', '=', 'ur.invitee_user_id')
-            ->where('ur.inviter_user_id', $userId);
+            ->where('ur.inviter_user_id', $userId)->whereNull('ur.consumer_affiliate_id');
         $status = $this->input('status');
         if ($status !== null && $status !== '') {
             $query->where('ur.reward_status', (int) $status);

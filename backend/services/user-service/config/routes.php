@@ -100,6 +100,7 @@ Router::addGroup('/api/v1/app', static function () {
     Router::post('/user/favorite/remove', [FavoriteController::class, 'remove']);
 
     // 推荐返利(Refer & Earn)
+    Router::get('/user/affiliate/access', [\App\Controller\App\ConsumerAffiliateController::class, 'access']);
     Router::get('/user/referral/my', [ReferralController::class, 'my']);
     Router::get('/user/referral/invitees', [ReferralController::class, 'invitees']);
 

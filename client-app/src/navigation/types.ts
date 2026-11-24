@@ -315,6 +315,7 @@ export type RootStackParamList = {
   Notifications: undefined;
   Account: undefined;
   SavedHotels: undefined;
+  AffiliateCenter: undefined;
   /** `pick` = 从订房第 2 步进来的「选择主要入住人」模式:点一行即选中并返回,不是多选管理 */
   Travelers: { pick?: boolean } | undefined;
   /** 关联邮箱 / 关联手机号(PRD 模块 19.2),先验证新值再保存 */

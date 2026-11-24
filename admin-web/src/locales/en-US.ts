@@ -11,6 +11,12 @@ import { supportEn } from './support';
  */
 import complianceS6 from './compliance/en-US';
 export default {
+  affiliateConsumer: {
+    title: 'Consumer Affiliate Access', userId: 'User ID', affiliateId: 'Affiliate ID', type: 'Affiliate type',
+    activatedAt: 'Activated at (UTC)', agent: 'Agent', merchant: 'Merchant', inactive: 'Not activated',
+    active: 'Active', suspended: 'Suspended', disabled: 'Disabled', reason: 'Reason for change',
+    history: 'Access history', operatorId: 'Admin ID',
+  },
   accountDeletion: enDeletion,
   platformConfig: platformEn,
   kycTemplate: kycTemplateEn,
@@ -1619,6 +1625,12 @@ export default {
       deductAmount: 'Deduct Amount',
       tradeNo: 'Refund Trade No.',
       refundTime: 'Refund Time',
+      originalPaymentRef: 'Original Payment Reference',
+      orderHistory: 'Order Refund History',
+      historyEvent: 'Refund Event',
+      historySubmitted: 'Sent to payment provider',
+      historyCompleted: 'Refund completed',
+      historyFailed: 'Refund failed',
       orderSnapshot: 'Order Snapshot',
       warningAmountRange: 'Refund amount must be > 0 and ≤ apply amount',
       rejectSuccess: 'Refund rejected, order back to paid',

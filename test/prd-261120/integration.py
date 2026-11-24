@@ -137,7 +137,7 @@ def ready(uid):
 
 
 def apply_migrations():
-    for filename in ['V20261117100000__merchant-commercial-settings.sql','V20261120100000__account-deletion-finance-controls.sql','V20261120100100__multi-hotel-checkout-sessions.sql','V20261120120000__property-commercial-commission.sql','V20261120120100__pay-at-hotel-booking-settlements.sql','V20261123090000__scope-long-stay-tiers.sql']:
+    for filename in ['V20261117100000__merchant-commercial-settings.sql','V20261120100000__account-deletion-finance-controls.sql','V20261120100100__multi-hotel-checkout-sessions.sql','V20261120120000__property-commercial-commission.sql','V20261120120100__pay-at-hotel-booking-settlements.sql','V20261123090000__scope-long-stay-tiers.sql','V20261124070000__consumer-affiliate-access.sql']:
         content=(ROOT/'database/migrations'/filename).read_text(encoding='utf-8')
         isolated = content.replace('mtrip_business', B).replace('mtrip_system', S)
         targets = re.findall(r'\bUSE\s+`?([A-Za-z0-9_]+)`?\s*;', isolated, re.IGNORECASE)

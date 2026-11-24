@@ -25,12 +25,14 @@ import type { RootStackParamList } from '@/navigation/types';
 import { useCommonStore } from '@/store/commonStore';
 import { useUserStore } from '@/store/userStore';
 import { maskEmail, maskMobile } from '@/utils/format';
+import { useConsumerAffiliateAccess } from './useConsumerAffiliateAccess';
 
 export default function AccountScreen() {
   const { t } = useTranslation();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const profile = useUserStore((s) => s.profile);
   const showToast = useCommonStore((s) => s.showToast);
+  const affiliate = useConsumerAffiliateAccess();
 
   const comingSoon = () => showToast(t('home.comingSoon'));
   const notSet = t('more.account.notSet');
@@ -68,6 +70,9 @@ export default function AccountScreen() {
           onPress={() => navigation.navigate('Travelers')}
         />
         <MenuLink icon="heart" title={t('myPick.savedHotels.title')} onPress={() => navigation.navigate('SavedHotels')} />
+        {affiliate?.active ? (
+          <MenuLink icon="peopleAdd" title={t('affiliateAccess.title')} onPress={() => navigation.navigate('AffiliateCenter')} />
+        ) : null}
       </View>
 
       <View style={[moreShared.panel, styles.panel]}>

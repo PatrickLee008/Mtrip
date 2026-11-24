@@ -121,6 +121,8 @@ Router::addGroup('/api/v1/admin/affiliate', static function () {
     // 合作方名录
     Router::get('/partner/list', [AffiliateController::class, 'partners']);
     Router::post('/partner/toggle-status', [AffiliateController::class, 'partnerToggle']);
+    Router::get('/partner/consumer-access', [AffiliateController::class, 'consumerAccess']);
+    Router::post('/partner/consumer-access', [AffiliateController::class, 'setConsumerAccess']);
     // 联盟计划
     Router::get('/program', [AffiliateController::class, 'program']);
     Router::post('/program/save', [AffiliateController::class, 'programSave']);

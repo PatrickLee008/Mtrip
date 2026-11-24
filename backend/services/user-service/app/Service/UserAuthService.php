@@ -97,17 +97,24 @@ class UserAuthService
         }
         $inviter = Db::table('user_info')
             ->where('site_id', $siteId)->where('referral_code', $referralCode)
-            ->whereNull('deleted_at')->first(['id', 'user_status']);
+            ->whereNull('deleted_at')->lockForUpdate()->first(['id', 'user_status']);
         if (! $inviter || (int) $inviter->user_status !== 1) {
             throw new BusinessException(ErrorCode::PARAM_ERROR, '推荐码无效');
         }
         if ((int) $inviter->id === $userId) {
             throw new BusinessException(ErrorCode::PARAM_ERROR, '不能使用自己的推荐码');
         }
+        // 与联盟资格管理使用同一个用户行锁，按注册时状态固定所属计划。
+        $affiliate = Db::table('consumer_affiliate_profile')->where('site_id', $siteId)
+            ->where('user_id', $inviter->id)->whereIn('status', [1, 2])->lockForUpdate()->first(['id', 'status']);
+        if ((int) ($affiliate->status ?? 0) === 2) {
+            throw new BusinessException(ErrorCode::PARAM_ERROR, '推荐码暂不可用');
+        }
         Db::table('user_referral')->insert([
             'site_id' => $siteId,
             'inviter_user_id' => (int) $inviter->id,
             'invitee_user_id' => $userId,
+            'consumer_affiliate_id' => $affiliate->id ?? null,
             'reward_status' => 0,
             'bind_time' => date('Y-m-d H:i:s'),
         ]);

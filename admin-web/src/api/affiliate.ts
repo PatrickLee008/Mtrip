@@ -23,6 +23,22 @@ export function apiAffiliatePartnerToggle(id: number): Promise<{ status: number 
   return post('/admin/affiliate/partner/toggle-status', { id });
 }
 
+export interface ConsumerAffiliateAccess {
+  user: { id: number; site_id: number; nickname: string; user_status: number };
+  profile: { id: number; affiliate_type: string; status: number; activated_at: string } | null;
+  history: { id: number; previous_status: number; new_status: number; operator_id: number; reason: string; created_at: string }[];
+}
+
+export function apiConsumerAffiliateAccess(userId: number): Promise<ConsumerAffiliateAccess> {
+  return get('/admin/affiliate/partner/consumer-access', { userId });
+}
+
+export function apiSetConsumerAffiliateAccess(data: {
+  userId: number; status: number; expectedStatus: number; affiliateType: string; reason: string;
+}): Promise<{ profileId: number; status: number }> {
+  return post('/admin/affiliate/partner/consumer-access', data);
+}
+
 // ---------- 联盟计划 ----------
 export function apiAffiliateProgram(): Promise<{ commissionRules: Row[]; rewardRules: Row[]; settings: Row[] }> {
   return get('/admin/affiliate/program');

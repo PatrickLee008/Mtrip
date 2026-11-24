@@ -14,10 +14,19 @@
     ],
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.mtrip.clientapp"
+      "bundleIdentifier": "com.mtrip.clientapp",
+      "associatedDomains": ["applinks:m.myanmartrip.com"]
     },
     "android": {
-      "package": "com.mtrip.clientapp"
+      "package": "com.mtrip.clientapp",
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [{ "scheme": "https", "host": "m.myanmartrip.com", "pathPrefix": "/r/" }],
+          "category": ["BROWSABLE", "DEFAULT"]
+        }
+      ]
     },
     "web": {
       "bundler": "metro"

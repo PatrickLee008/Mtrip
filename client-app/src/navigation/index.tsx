@@ -57,6 +57,7 @@ import HotelsScreen from '@/screens/hotel/HotelsScreen';
 import InsuranceScreen from '@/screens/hotel/InsuranceScreen';
 import StayDetailScreen from '@/screens/hotel/StayDetailScreen';
 import AccountScreen from '@/screens/more/AccountScreen';
+import AffiliateCenterScreen from '@/screens/more/AffiliateCenterScreen';
 import SavedHotelsScreen from '@/screens/more/SavedHotelsScreen';
 import DeleteAccountScreen from '@/screens/more/DeleteAccountScreen';
 import LinkContactScreen from '@/screens/more/LinkContactScreen';
@@ -392,6 +393,7 @@ export default function AppNavigator() {
           component={AccountScreen}
           options={{ title: t('more.account.title'), headerShown: false }}
         />
+        <Stack.Screen name="AffiliateCenter" component={AffiliateCenterScreen} options={{ headerShown: false }} />
         <Stack.Screen
           name="SavedHotels"
           component={SavedHotelsScreen}

@@ -763,7 +763,9 @@
     "referral": {
       "title": "Enter Referral Code",
       "subtitle": "Enter a referral code if you have one.",
-      "fromInvitation": "This code came from your invitation and will be included when you register.",
+      "fromInvitation": "This code came from your invitation. Check it before registering.",
+      "invitationCode": "Referral code: {{code}}",
+      "downloadApp": "Download the mTrip app",
       "placeholder": "abcdef",
       "continue": "Continue",
       "skip": "Skip"
@@ -1665,6 +1667,14 @@
       "cta": "Use Full Mode"
     },
     "modeFootnote": "You can change this anytime later in Settings"
+  },
+  "affiliateAccess": {
+    "title": "Affiliate Center",
+    "id": "Affiliate ID",
+    "agent": "Agent",
+    "merchant": "Merchant",
+    "activatedAt": "Activated on",
+    "registeredReferrals": "Registered referrals"
   },
   "appUpdate": {
     "forceTitle": "Update Required",

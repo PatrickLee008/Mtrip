@@ -1,0 +1,15 @@
+apply plugin: 'com.android.library'
+
+def expoModulesCorePlugin = new File(project(":expo-modules-core").projectDir, "ExpoModulesCorePlugin.gradle")
+apply from: expoModulesCorePlugin
+applyKotlinExpoModulesCorePlugin()
+useCoreDependencies()
+useDefaultAndroidSdkVersions()
+
+android {
+  namespace "com.mtrip.installreferrer"
+}
+
+dependencies {
+  implementation "com.android.installreferrer:installreferrer:2.2"
+}

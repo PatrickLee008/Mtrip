@@ -9,6 +9,12 @@ import { supportZh } from './support';
  */
 import complianceS6 from './compliance/zh-CN';
 export default {
+  affiliateConsumer: {
+    title: '消费者联盟资格', userId: '用户编号', affiliateId: '联盟编号', type: '联盟类型',
+    activatedAt: '开通时间（UTC）', agent: '代理', merchant: '商户', inactive: '未开通',
+    active: '已开通', suspended: '已暂停', disabled: '已停用', reason: '变更原因',
+    history: '资格变更记录', operatorId: '管理员编号',
+  },
   accountDeletion: zhDeletion,
   platformConfig: platformZh,
   kycTemplate: kycTemplateZh,
@@ -1605,6 +1611,12 @@ export default {
       deductAmount: '扣减金额',
       tradeNo: '退款流水号',
       refundTime: '退款完成时间',
+      originalPaymentRef: '原支付单号',
+      orderHistory: '订单退款历史',
+      historyEvent: '退款事件',
+      historySubmitted: '已提交支付渠道',
+      historyCompleted: '退款完成',
+      historyFailed: '退款失败',
       orderSnapshot: '订单快照',
       warningAmountRange: '退款金额必须 > 0 且 ≤ 申请金额',
       rejectSuccess: '已拒绝退款,订单恢复已支付',

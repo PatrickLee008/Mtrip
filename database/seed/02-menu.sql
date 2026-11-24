@@ -179,6 +179,7 @@ INSERT IGNORE INTO `sys_menu` (`id`,`parent_id`,`menu_name`,`menu_name_en`,`i18n
 INSERT IGNORE INTO `sys_menu` (`id`,`parent_id`,`menu_name`,`menu_name_en`,`perm_key`,`menu_type`,`sort`) VALUES
 (60101,601,'通过申请','Approve','affiliate:application:approve',3,1),
 (60102,601,'驳回申请','Reject','affiliate:application:reject',3,2),
+(60201,602,'管理消费者联盟资格','Manage Consumer Affiliate Access','affiliate:partner:manage-consumer',3,1),
 (60301,603,'保存计划','Save Program','affiliate:program:save',3,1),
 (60401,604,'钱包调整','Adjust','affiliate:wallet:adjust',3,1),
 (60402,604,'提现打款','Pay Withdrawal','affiliate:withdraw:pay',3,2),

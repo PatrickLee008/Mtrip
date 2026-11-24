@@ -141,6 +141,87 @@ class AffiliateController extends AbstractController
         return Result::success(['status' => $next], $next === 1 ? '已恢复' : '已暂停');
     }
 
+    #[Permission('affiliate:partner:list')]
+    public function consumerAccess(): array
+    {
+        $user = $this->consumerAccount($this->requireId('userId'));
+        $profile = Db::table('consumer_affiliate_profile')
+            ->where('site_id', $user->site_id)->where('user_id', $user->id)->first();
+        $history = $profile === null ? [] : Db::table('consumer_affiliate_status_log')
+            ->where('site_id', $user->site_id)->where('profile_id', $profile->id)
+            ->orderByDesc('id')->limit(50)->get()->all();
+        return Result::success(['user' => $user, 'profile' => $profile, 'history' => $history]);
+    }
+
+    #[Permission('affiliate:partner:manage-consumer')]
+    public function setConsumerAccess(): array
+    {
+        $userId = $this->requireId('userId');
+        $status = $this->intInput('status');
+        $expected = $this->intInput('expectedStatus', -1);
+        $type = $this->strInput('affiliateType');
+        $reason = mb_substr($this->requireStr('reason'), 0, 500);
+        if (! in_array($status, [1, 2, 3], true) || ! in_array($expected, [0, 1, 2, 3], true)) {
+            throw new BusinessException(ErrorCode::PARAM_ERROR);
+        }
+
+        $profileId = Db::transaction(function () use ($userId, $status, $expected, $type, $reason): int {
+            $user = $this->consumerAccount($userId, true);
+            $query = Db::table('consumer_affiliate_profile')->where('user_id', $userId);
+            $profile = (clone $query)->lockForUpdate()->first();
+            $previous = (int) ($profile->status ?? 0);
+            if ($profile !== null && (int) $profile->site_id !== (int) $user->site_id) {
+                throw new BusinessException(ErrorCode::DATA_CONFLICT, '联盟档案与用户站点不一致');
+            }
+            if ($status === 1 && (int) $user->user_status !== 1) {
+                throw new BusinessException(ErrorCode::DATA_CONFLICT, '仅正常账户可开通联盟资格');
+            }
+            if ($profile !== null && $previous === $status && ($type === '' || $type === $profile->affiliate_type)) {
+                return (int) $profile->id;
+            }
+            if ($expected !== $previous || ($previous === 0 && $status !== 1)) {
+                throw new BusinessException(ErrorCode::DATA_CONFLICT, '联盟资格已变化，请刷新后重试');
+            }
+            $now = gmdate('Y-m-d H:i:s');
+            if ($profile === null) {
+                if (! in_array($type, ['agent', 'merchant'], true)) {
+                    throw new BusinessException(ErrorCode::PARAM_ERROR, '请选择联盟类型');
+                }
+                $id = (int) Db::table('consumer_affiliate_profile')->insertGetId([
+                    'user_id' => $userId, 'site_id' => (int) $user->site_id,
+                    'affiliate_type' => $type, 'status' => $status, 'activated_at' => $now, 'updated_at' => $now,
+                ]);
+            } else {
+                if ($type !== '' && $type !== $profile->affiliate_type) {
+                    throw new BusinessException(ErrorCode::PARAM_ERROR, '已开通的联盟类型不能在状态操作中修改');
+                }
+                $id = (int) $profile->id;
+                $query->update(['status' => $status, 'updated_at' => $now]);
+            }
+            Db::table('consumer_affiliate_status_log')->insert([
+                'site_id' => (int) $user->site_id, 'profile_id' => $id,
+                'previous_status' => $previous, 'new_status' => $status,
+                'operator_id' => AdminContext::adminId(), 'reason' => $reason, 'created_at' => $now,
+            ]);
+            return $id;
+        });
+        return Result::success(['profileId' => $profileId, 'status' => $status]);
+    }
+
+    private function consumerAccount(int $id, bool $lock = false): object
+    {
+        $query = Db::table('user_info')->where('id', $id)->whereNull('deleted_at');
+        if ($lock) {
+            $query->lockForUpdate();
+        }
+        $user = $query->first(['id', 'site_id', 'nickname', 'user_status']);
+        if ($user === null) {
+            throw new BusinessException(ErrorCode::NOT_FOUND);
+        }
+        $this->assertSiteScope((int) $user->site_id);
+        return $user;
+    }
+
     // ── 3. 联盟计划(佣金/奖励/全局参数)────────────────────────
 
     #[Permission('affiliate:program:list')]

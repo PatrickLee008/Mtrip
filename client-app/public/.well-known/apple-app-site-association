@@ -1,0 +1,11 @@
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appID": "64VH8HZJ2Q.com.mtrip.clientapp",
+        "paths": ["/r/*"]
+      }
+    ]
+  }
+}
