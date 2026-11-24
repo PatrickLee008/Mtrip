@@ -1,25 +1,25 @@
 ---
 type: "prd-extract"
 product: "mTrip Consumer App"
-prd_version: "1.0.8"
+prd_version: "1.0.9"
 imported_on: "2026-10-25"
-updated_on: "2026-11-20"
-source: "[[mTrip 消费者 App 知识库/08-原始资料/mTrip_ Consumer App PRD_v1.0.8_中文版|完整 PRD 原文]]"
-tags: ["mtrip/consumer", "prd/v1-0-8"]
-source_lines: "2595-2618"
-source_sha256: "98cfb9a9bcf8695405ce78a3b64372363e4afcc86e8414cbc0c551adee6d392d"
+updated_on: "2026-11-24"
+source: "[[mTrip 消费者 App 知识库/08-原始资料/mTrip_ Consumer App PRD_v1.0.9_中文版|完整 PRD 原文]]"
+tags: ["mtrip/consumer", "prd/v1-0-9"]
+source_lines: "2628-2651"
+source_sha256: "ae4270d7b268f318b5b9003fcd2a252cd44b8444386d5f0db4d4f3e2c64cc973"
 ---
 
 # PRD 检查清单
 
 > [!info] 原文摘录
-> 来源：[[mTrip 消费者 App 知识库/08-原始资料/mTrip_ Consumer App PRD_v1.0.8_中文版|mTrip_ Consumer App PRD_v1.0.8_中文版]]，第 2595–2618 行（按导入快照计）。
+> 来源：[[mTrip 消费者 App 知识库/08-原始资料/mTrip_ Consumer App PRD_v1.0.9_中文版|mTrip_ Consumer App PRD_v1.0.9_中文版]]，第 2628–2651 行（按导入快照计）。
 > 下方保留原文措辞、表格、状态与重复条款，仅调整图片路径；整理标题与关联阅读置于摘录区外。
 
-<!-- PRD_SOURCE_START:2595-2618 -->
+<!-- PRD_SOURCE_START:2628-2651 -->
 ## PRD 检查清单
 
-以下是必须在 PRD 中包含的主题清单：
+以下是 PRD 中必须包含的主题清单：
 
 | 序号 | 主题 | 完成 |
 |---|---|---|
@@ -29,13 +29,13 @@ source_sha256: "98cfb9a9bcf8695405ce78a3b64372363e4afcc86e8414cbc0c551adee6d392d
 | 4. | 变更记录 |  |
 | 5. | 概述 |  |
 | 6. | 成功概述 |  |
-| 7. | 信息传达 |  |
+| 7. | 消息传递 |  |
 | 8. | 时间线/发布计划 |  |
 | 9. | 用户画像 |  |
 | 10. | 用户场景 |  |
 | 11. | 用户故事/功能/需求 |  |
-| 12. | 包含的功能 |  |
-| 13. | 排除的功能 |  |
+| 12. | 包含功能 |  |
+| 13. | 不包含功能 |  |
 | 14. | 设计 |  |
 | 15. | 待定问题 |  |
 | 16. | 问答 |  |
