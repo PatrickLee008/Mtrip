@@ -4,7 +4,7 @@ import { useI18n } from 'vue-i18n';
 import { message } from 'ant-design-vue';
 import { apiMerchantDetail, apiPropertyCommercial, apiSavePropertyCommercial, type PropertyCommercialView } from '@/api/merchant';
 import { genUUID } from '@/utils/uuid';
-const props = defineProps<{ merchantId: number }>();
+const props = defineProps<{ merchantId: number; defaultRate: string }>();
 const { t } = useI18n();
 const properties = ref<{ id: number; store_name: string }[]>([]);
 const selected = ref<number>();
@@ -66,15 +66,29 @@ async function save(): Promise<void> {
 }
 </script>
 <template>
-  <section style="margin-top:20px">
-    <h4>{{ t('merchantCommercial.propertyCommission') }}</h4>
-    <a-select v-model:value="selected" :disabled="saving" style="width:100%" :placeholder="t('merchantCommercial.selectProperty')">
+  <section class="property-commission">
+    <header class="property-header">
+      <h4>{{ t('merchantCommercial.propertyCommission') }}</h4>
+      <a-button v-if="data" v-perm="'merchant:list:edit'" type="link" size="small" @click="edit">
+        {{ t('merchantCommercial.editProperty') }}
+      </a-button>
+    </header>
+    <a-select v-if="properties.length" v-model:value="selected" class="property-select"
+      :disabled="saving" :aria-label="t('merchantCommercial.selectProperty')" :placeholder="t('merchantCommercial.selectProperty')">
       <a-select-option v-for="property in properties" :key="property.id" :value="property.id">{{ property.store_name }} (#{{ property.id }})</a-select-option>
     </a-select>
-    <a-spin :spinning="loading">
-      <p v-if="data">{{ data.current?.commission_rate == null ? t('merchantCommercial.inheritRate') : `${data.current.commission_rate}%` }}</p>
-      <a-button v-if="data" v-perm="'merchant:list:edit'" @click="edit">{{ t('merchantCommercial.editProperty') }}</a-button>
-      <a-alert v-if="failed" type="error" :message="t('merchantCommercial.loadFailed')"><template #action><a-button @click="retry">{{ t('common.refresh') }}</a-button></template></a-alert>
+    <a-spin :spinning="loading" size="small">
+      <div v-if="data" class="property-rate" aria-live="polite">
+        <div>
+          <span class="rate-label">{{ t('merchantCommercial.effectiveRate') }}</span>
+          <strong>{{ data.current?.commission_rate ?? defaultRate }}<small>%</small></strong>
+        </div>
+        <span class="rate-source" :class="{ override: data.current?.commission_rate != null }">
+          {{ t(data.current?.commission_rate == null ? 'merchantCommercial.merchantDefault' : 'merchantCommercial.propertyOverride') }}
+        </span>
+      </div>
+      <a-alert v-else-if="failed" type="error" :message="t('merchantCommercial.loadFailed')"><template #action><a-button @click="retry">{{ t('common.refresh') }}</a-button></template></a-alert>
+      <div v-else class="property-placeholder">{{ loading ? '' : t('merchant.profile.noProperties') }}</div>
     </a-spin>
     <a-modal v-model:open="open" :title="t('merchantCommercial.propertyCommission')" :confirm-loading="saving" :mask-closable="!saving" @ok="save">
       <a-form layout="vertical">
@@ -93,3 +107,18 @@ async function save(): Promise<void> {
     </a-modal>
   </section>
 </template>
+
+<style scoped>
+.property-commission { display: grid; gap: 10px; margin-top: 16px; padding-top: 14px; border-top: 1px solid #e3e8f0; }
+.property-header, .property-rate { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px 12px; }
+.property-header h4 { margin: 0; color: #344054; font-size: 12px; font-weight: 600; line-height: 18px; }
+.property-header .ant-btn { height: auto; padding: 2px 0; color: #4f46e5; font-size: 12px; }
+.property-select { width: 100%; min-width: 0; font-size: 12px; }
+.property-rate { padding: 10px 12px; border-radius: 8px; background: #f8fafc; }
+.rate-label { display: block; color: #475569; font-size: 11px; line-height: 17px; }
+.property-rate strong { display: block; margin-top: 2px; color: #1a2332; font-size: 18px; line-height: 24px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.property-rate small { margin-left: 2px; font-size: 12px; }
+.rate-source { padding: 2px 8px; border: 1px solid #dce3eb; border-radius: 12px; color: #475569; background: #fff; font-size: 11px; line-height: 16px; }
+.rate-source.override { color: #4338ca; border-color: #c7d2fe; background: #eef2ff; }
+.property-placeholder { min-height: 36px; padding: 8px 0; color: #64748b; font-size: 12px; }
+</style>

@@ -124,6 +124,7 @@ export default {
     chargeFee: '收取未到店费用', chargeFeeHint: '随平台佣金一并收取商户的保障预付款。',
     merchantUpfrontRate: '商户预收比例上限 (%)', upfrontMax: '最高为房费的30%，商户可选择更低比例或不收费。',
     propertyCommission: '门店佣金', selectProperty: '选择门店', inheritRate: '使用商户默认佣金',
+    effectiveRate: '当前适用佣金', merchantDefault: '继承商户默认', propertyOverride: '门店专属',
     editProperty: '编辑门店佣金', effectiveUtc: '生效日期与时间（UTC）',
     propertyRequired: '请填写有效佣金、生效时间和不超过500字的原因。',
     reconciliation: '财务对账', reconciliationStates: { 0: '待对账', 1: '已对账', 2: '待人工核对' },

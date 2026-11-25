@@ -159,7 +159,7 @@ function showHistory(): void { historyOpen.value = true; void loadHistory(); }
         <p class="commercial-muted">{{ data.current.version ? t('merchantCommercial.currentVersion', { version: data.current.version, date: formatTime(data.current.effective_at) }) : t('merchantCommercial.legacyTerms') }}</p>
         <p v-if="data.next" class="commercial-next">{{ t('merchantCommercial.nextVersion', { version: data.next.version, date: formatTime(data.next.effective_at) }) }}</p>
         <a-button v-if="[3, 4].includes(Number(merchant.status))" v-perm="'merchant:list:edit'" class="commercial-edit" block @click="openEdit">{{ t('merchantCommercial.edit') }}</a-button>
-        <PropertyCommissionSettings :merchant-id="merchant.id" />
+        <PropertyCommissionSettings :merchant-id="merchant.id" :default-rate="data.current.commission_rate" />
       </div>
       <a-alert v-else-if="loadFailed" type="error" :message="t('merchantCommercial.loadFailed')">
         <template #action><a-button size="small" @click="load">{{ t('common.refresh') }}</a-button></template>

@@ -126,6 +126,7 @@ export default {
     chargeFee: 'Charge No-Show Fee', chargeFeeHint: 'Collect merchant protection alongside the platform commission.',
     merchantUpfrontRate: 'Merchant Prepayment Limit (%)', upfrontMax: 'Up to 30% of the room price. The merchant can choose a lower rate or no fee.',
     propertyCommission: 'Property Commission', selectProperty: 'Select a property', inheritRate: 'Use merchant default rate',
+    effectiveRate: 'Effective commission', merchantDefault: 'Merchant default', propertyOverride: 'Property override',
     editProperty: 'Edit Property Commission', effectiveUtc: 'Effective Date / Time (UTC)',
     propertyRequired: 'Enter a valid commission rate, effective time and reason (up to 500 characters).',
     reconciliation: 'Financial Reconciliation', reconciliationStates: { 0: 'Pending', 1: 'Reconciled', 2: 'Needs Review' },
