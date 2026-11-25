@@ -3,6 +3,7 @@ import { computed, ref } from 'vue';
 import { message } from 'ant-design-vue';
 import { useI18n } from 'vue-i18n';
 import { apiConsumerAffiliateAccess, apiSetConsumerAffiliateAccess, type ConsumerAffiliateAccess } from '@/api/affiliate';
+import PayoutAccounts from './PayoutAccounts.vue';
 
 const { t } = useI18n();
 const userId = ref<number | null>(null);
@@ -90,6 +91,7 @@ async function save(): Promise<void> {
           {{ t('common.save') }}
         </a-button>
       </a-form>
+      <PayoutAccounts v-if="record.profile" :key="record.profile.id" :affiliate-id="record.profile.id" />
       <a-divider v-if="record.history.length" orientation="left">{{ t(`${key}.history`) }}</a-divider>
       <a-timeline v-if="record.history.length">
         <a-timeline-item v-for="item in record.history" :key="item.id">

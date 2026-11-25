@@ -88,6 +88,12 @@ def affiliate_checks(marketing):
     def access(uid=60, site=7):
         return http_json(BASE + '/api/v1/app/user/affiliate/access', uid, site)['data']
 
+    def open_invitation(code, property_id=None, site=7):
+        payload = {'code': code}
+        if property_id is not None:
+            payload['propertyId'] = property_id
+        return http_json(BASE + '/api/v1/app/auth/referral/open', site=site, body=payload)
+
     check('unactivated accounts do not see the affiliate center', access() == {'active': False})
     ordinary = register('977880006', 'REFQA60')
     ordinary_id = ordinary['data']['user']['id']
@@ -101,14 +107,36 @@ def affiliate_checks(marketing):
           and profile['profile']['id'] == profile_id and len(profile['history']) == 1)
     check('only the same active consumer and site see the profile',
           access()['affiliateId'] == profile_id and not access(59)['active'] and not access(site=6)['active'])
-    linked = register('977880007', 'REFQA60')
+    check('affiliate QR codes use the same code that ordinary invitations and registration already use',
+          access()['referralCode'] == request('my', 60)['data']['referralCode'] == 'REFQA60')
+    mysql(f"INSERT INTO `{BUSINESS}`.merchant_store (id,site_id,merchant_id,store_name,business_type) "
+          "VALUES (7522,7,71,'Referral test hotel','hotel'),(7523,6,72,'Other site hotel','hotel');")
+    check('affiliate link opens are counted by destination without making another referral binding',
+          open_invitation('refqa60')['code'] == 0 and open_invitation('REFQA60', 7522)['code'] == 0
+          and access()['linkOpens'] == 2 and access()['registeredReferrals'] == 0
+          and mysql(f'SELECT property_id,opens FROM `{BUSINESS}`.consumer_affiliate_link_daily ORDER BY property_id;') == '0\t1\n7522\t1')
+    check('ordinary, unknown or cross-site affiliate links do not change the count',
+          open_invitation('REFQA59')['code'] == 0 and open_invitation('UNKNOWN')['code'] == 0
+          and open_invitation('REFQA60', site=6)['code'] == 0 and open_invitation('REFQA60', 7523)['code'] == 0
+          and access()['linkOpens'] == 2)
+    linked = register('977880007', 'REFQA60', property_id=7522)
     linked_id = linked['data']['user']['id']
     check('active affiliation is frozen at registration and excludes ordinary rewards and history',
           mysql(f'SELECT consumer_affiliate_id FROM `{BUSINESS}`.user_referral WHERE invitee_user_id={linked_id};') == str(profile_id)
           and access()['registeredReferrals'] == 1
           and request('my', 60)['data']['inviteeCount'] == 1
           and request('my', 60)['data']['program']['inviterAmount'] == 0)
+    check('hotel attribution is stored only with the completed same-site affiliate registration',
+          mysql(f'SELECT referral_property_id FROM `{BUSINESS}`.user_referral WHERE invitee_user_id={linked_id};') == '7522')
+    cross_site = register('977880009', 'REFQA60', property_id=7523)
+    cross_site_id = cross_site['data']['user']['id']
+    check('foreign destination is omitted without changing valid affiliate attribution',
+          mysql(f'SELECT consumer_affiliate_id,referral_property_id FROM `{BUSINESS}`.user_referral WHERE invitee_user_id={cross_site_id};')
+          == f'{profile_id}\tNULL')
     check('suspending hides the center immediately', admin_change(1, 2)['code'] == 0 and not access()['active'])
+    check('a suspended affiliate link stops counting',
+          open_invitation('REFQA60', 7522)['code'] == 0
+          and mysql(f'SELECT SUM(opens) FROM `{BUSINESS}`.consumer_affiliate_link_daily;') == '2')
     check('a suspended affiliate code cannot create another qualifying referral',
           register('977880008', 'REFQA60')['code'] == 40001 and register('977880008')['code'] == 0)
     check('a past ordinary registration still earns its ordinary reward after the inviter becomes an affiliate',
@@ -129,8 +157,10 @@ def affiliate_checks(marketing):
            for entry in admin_read()['data']['history']] == [(3, 1, 101, True), (2, 3, 101, True), (1, 2, 101, True), (0, 1, 101, True)])
 
 
-def register(mobile, referral='', password='Referral123456789'):
+def register(mobile, referral='', password='Referral123456789', property_id=None):
     payload = dict(mobile=mobile, password=password, referralCode=referral)
+    if property_id is not None:
+        payload['referralPropertyId'] = property_id
     req = urllib.request.Request(BASE + '/api/v1/app/auth/register', json.dumps(payload).encode(),
                                  headers={'Content-Type': 'application/json', 'X-Site-Id': '7'})
     try:
@@ -138,6 +168,74 @@ def register(mobile, referral='', password='Referral123456789'):
     except urllib.error.HTTPError as error:
         response = error
     return json.loads(response.read())
+
+
+def payout_account_checks(marketing):
+    base = marketing + '/api/v1/admin/affiliate/'
+    app_base = BASE + '/api/v1/app/user/affiliate/payout-accounts'
+    verify = ['affiliate:payout-account:verify']
+    manage = ['affiliate:payout-provider:manage']
+
+    def admin(path, body=None, *, permissions=verify, site=7):
+        return http_json(base + path, 101, site, admin_permissions=permissions, body=body)
+
+    def app(path='', body=None, uid=60, site=7):
+        return http_json(app_base + path, uid, site, body=body)
+
+    profile_id = http_json(BASE + '/api/v1/app/user/affiliate/access', 60)['data']['affiliateId']
+    provider = dict(siteId=7, kind='wallet', name='Fixture provider', enabled=1)
+    check('site controls provider configuration',
+          admin('payout-providers/save', provider, permissions=manage, site=6)['code'] != 0
+          and admin('payout-providers/save', provider, permissions=verify)['code'] != 0
+          and admin('payout-providers/save', provider, permissions=manage)['code'] == 0)
+    provider_id = app()['data']['providers'][0]['id']
+    fields = dict(providerId=provider_id, holderName='Fixture recipient', accountNumber='90123456789')
+    check('only an active affiliate at the correct site can submit and read accounts',
+          app('/save', fields, uid=59)['code'] != 0 and app(site=6)['code'] != 0)
+    first = app('/save', fields)['data']['id']
+    check('retrying creation with the same recipient account reuses the original row',
+          app('/save', fields)['data']['id'] == first)
+    second = app('/save', dict(fields, accountNumber='90234567890'))['data']['id']
+    summary = app()['data']['accounts']
+    check('multiple accounts can be saved and user list returns suffixes only',
+          len(summary) == 2 and {row['number_suffix'] for row in summary} == {'6789', '7890'}
+          and all('number_cipher' not in row and 'holder_cipher' not in row for row in summary))
+    masked = mysql(f'SELECT number_cipher,holder_cipher FROM `{BUSINESS}`.consumer_affiliate_payout_account WHERE id={first};')
+    check('recipient name and full number are encrypted in storage',
+          fields['holderName'] not in masked and fields['accountNumber'] not in masked and len(masked) > 30)
+    check('pending accounts cannot be set as default',
+          app('/default', {'id': first})['code'] != 0)
+    check('only a permitted same-site verifier can read the full account',
+          admin('payout-accounts/inspect', {'id': first}, site=6)['code'] != 0
+          and admin('payout-accounts/inspect', {'id': first}, permissions=manage)['code'] != 0
+          and admin('payout-accounts/inspect', {'id': first})['data']['accountNumber'] == fields['accountNumber'])
+    check('admin payout list stays masked',
+          'number_cipher' not in admin(f'payout-accounts?affiliateId={profile_id}')['data'][0])
+    for account in [first, second]:
+        check('verified account may become the default',
+              admin('payout-accounts/review', dict(id=account, version=1, status=1))['code'] == 0
+              and app('/default', {'id': account})['code'] == 0)
+    check('choosing another default clears the previous one',
+          [row['id'] for row in app()['data']['accounts'] if row['is_default']] == [second])
+    check('updating verified details requires a new review and clears the default',
+          app('/save', dict(fields, id=second, version=1, accountNumber='90333333333'))['code'] == 0
+          and app('/default', {'id': second})['code'] != 0
+          and [row['id'] for row in app()['data']['accounts'] if row['is_default']] == [])
+    check('stale and missing-reason reviews are refused',
+          admin('payout-accounts/review', dict(id=second, version=1, status=1))['code'] != 0
+          and admin('payout-accounts/review', dict(id=second, version=2, status=2))['code'] != 0)
+    check('rejection shows its reason and leaves no default',
+          admin('payout-accounts/review', dict(id=second, version=2, status=2, reason='Fixture rejected'))['code'] == 0
+          and app()['data']['accounts'][0]['review_note'] == 'Fixture rejected'
+          and app('/default', {'id': second})['code'] != 0)
+    check('a disabled provider cannot be selected or submitted',
+          admin('payout-providers/save', dict(siteId=7, id=provider_id, enabled=0), permissions=manage)['code'] == 0
+          and app('/default', {'id': first})['code'] != 0
+          and app('/save', fields)['code'] != 0
+          and app()['data']['providers'] == [])
+    check('reading and reviewing details writes an audit record without the account number',
+          mysql(f'SELECT GROUP_CONCAT(action ORDER BY id) FROM `{BUSINESS}`.consumer_affiliate_payout_audit WHERE account_id={first};')
+          == 'inspected,verified')
 
 
 def job(mode, uid=0, order=0, site=7):
@@ -200,13 +298,16 @@ try:
     for source, target in [('mtrip_business', BUSINESS), ('mtrip_system', SYSTEM)]:
         tables = mysql(f"SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA='{source}' AND TABLE_TYPE='BASE TABLE';").splitlines()
         mysql(''.join(f'CREATE TABLE `{target}`.`{table}` LIKE `{source}`.`{table}`;' for table in tables))
-    migration = ROOT / 'database/migrations/V20261124070000__consumer-affiliate-access.sql'
-    isolated = migration.read_text(encoding='utf-8').replace('mtrip_business', BUSINESS).replace('mtrip_system', SYSTEM)
-    if re.findall(r'\bUSE\s+(\w+)\s*;', isolated) != [BUSINESS, SYSTEM]:
-        raise RuntimeError('Invalid isolated migration targets')
-    for _ in range(2):
-        command(['docker', 'exec', '-i', '-e', 'MYSQL_PWD='+PASSWORD, 'mtrip-mysql-1',
-                 'mysql', '-u'+DBUSER, '--default-character-set=utf8mb4'], isolated)
+    for filename, targets in [('V20261124070000__consumer-affiliate-access.sql', [BUSINESS, SYSTEM]),
+                              ('V20261125080000__consumer-affiliate-link-opens.sql', [BUSINESS]),
+                              ('V20261125090000__consumer-affiliate-payout-accounts.sql', [BUSINESS, SYSTEM])]:
+        migration = ROOT / 'database/migrations' / filename
+        isolated = migration.read_text(encoding='utf-8').replace('mtrip_business', BUSINESS).replace('mtrip_system', SYSTEM)
+        if re.findall(r'\bUSE\s+(\w+)\s*;', isolated) != targets:
+            raise RuntimeError('Invalid isolated migration targets')
+        for _ in range(2):
+            command(['docker', 'exec', '-i', '-e', 'MYSQL_PWD='+PASSWORD, 'mtrip-mysql-1',
+                     'mysql', '-u'+DBUSER, '--default-character-set=utf8mb4'], isolated)
     check('affiliate migration reruns and creates the dedicated permission once',
           mysql(f"SELECT COUNT(*) FROM `{SYSTEM}`.sys_menu WHERE perm_key='affiliate:partner:manage-consumer';") == '1')
     mysql(f"INSERT INTO `{SYSTEM}`.sys_site(id,site_name,currency) VALUES(1,'No reward','EUR'),(6,'Other offer','MMK'),(7,'Reward QA','MMK'); "
@@ -290,6 +391,7 @@ try:
     check('cross-site referral code cannot bind a foreign inviter', register('977880004', 'REFQA61')['code'] == 40001)
     check('new-password complexity enforced by the real register API', register('977880005', password='abcdef1')['code'] == 40001)
     affiliate_checks(MARKETING)
+    payout_account_checks(MARKETING)
     print('PASS_COUNT=' + str(len(PASSED)), flush=True)
 finally:
     for container in CONTAINERS:

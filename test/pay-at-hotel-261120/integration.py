@@ -161,7 +161,7 @@ try:
     for source,target in [('mtrip_business',B),('mtrip_system',S)]:
         tables=sql(f"SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA='{source}' AND TABLE_TYPE='BASE TABLE';").splitlines()
         sql(''.join(f'CREATE TABLE `{target}`.`{table}` LIKE `{source}`.`{table}`;' for table in tables))
-    migrations=['V20261117100000__merchant-commercial-settings.sql','V20261120100100__multi-hotel-checkout-sessions.sql','V20261120120000__property-commercial-commission.sql','V20261120120100__pay-at-hotel-booking-settlements.sql','V20261123090000__scope-long-stay-tiers.sql','V20261124070000__consumer-affiliate-access.sql']
+    migrations=['V20261117100000__merchant-commercial-settings.sql','V20261120100100__multi-hotel-checkout-sessions.sql','V20261120120000__property-commercial-commission.sql','V20261120120100__pay-at-hotel-booking-settlements.sql','V20261123090000__scope-long-stay-tiers.sql','V20261124070000__consumer-affiliate-access.sql','V20261125080000__consumer-affiliate-link-opens.sql']
     for _ in range(2):
         for filename in migrations:
             isolated=(ROOT/'database/migrations'/filename).read_text(encoding='utf-8').replace('mtrip_business',B).replace('mtrip_system',S)

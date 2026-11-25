@@ -9,6 +9,24 @@ import { supportZh } from './support';
  */
 import complianceS6 from './compliance/zh-CN';
 export default {
+  affiliatePayout: {
+    providers: "联盟收款服务商",
+    providerName: "服务商名称",
+    bank: "银行",
+    wallet: "移动钱包",
+    disableProvider: "停用",
+    enableProvider: "启用",
+    accounts: "收款账户",
+    status0: "待核验",
+    status1: "已核验",
+    status2: "已驳回",
+    inspect: "查看资料",
+    holder: "账户持有人",
+    number: "收款账号",
+    reason: "审核说明，驳回时必填。",
+    verify: "通过核验",
+    reject: "驳回",
+  },
   affiliateConsumer: {
     title: '消费者联盟资格', userId: '用户编号', affiliateId: '联盟编号', type: '联盟类型',
     activatedAt: '开通时间（UTC）', agent: '代理', merchant: '商户', inactive: '未开通',

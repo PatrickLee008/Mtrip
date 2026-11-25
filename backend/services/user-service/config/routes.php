@@ -15,6 +15,7 @@ use App\Controller\Admin\AdminRiskController;
 use App\Controller\Admin\AdminReferralController;
 use App\Controller\Admin\AdminUserController;
 use App\Controller\App\AccountController;
+use App\Controller\App\AffiliatePayoutAccountController;
 use App\Controller\App\AppealController;
 use App\Controller\App\AuthController;
 use App\Controller\App\FacebookAuthController;
@@ -24,6 +25,7 @@ use App\Controller\AppleCallbackController;
 use App\Controller\FacebookCallbackController;
 use App\Controller\TikTokCallbackController;
 use App\Controller\App\ChatController;
+use App\Controller\App\ConsumerAffiliateController;
 use App\Controller\App\FavoriteController;
 use App\Controller\App\NotifyController;
 use App\Controller\App\ProfileSetupController;
@@ -42,6 +44,7 @@ Router::get('/healthz', static fn () => ['status' => 'ok', 'service' => 'user-se
 // 公开接口(游客可用,须携带 X-Site-Id)
 Router::post('/api/v1/app/auth/register', [AuthController::class, 'register']);
 Router::post('/api/v1/app/auth/login', [AuthController::class, 'login']);
+Router::post('/api/v1/app/auth/referral/open', [ConsumerAffiliateController::class, 'recordOpen']);
 Router::post('/api/v1/app/auth/facebook/settings', [FacebookAuthController::class, 'settings']);
 Router::post('/api/v1/app/auth/tiktok/settings', [TikTokAuthController::class, 'settings']);
 Router::post('/api/v1/app/auth/apple/settings', [AppleAuthController::class, 'settings']);
@@ -100,7 +103,10 @@ Router::addGroup('/api/v1/app', static function () {
     Router::post('/user/favorite/remove', [FavoriteController::class, 'remove']);
 
     // 推荐返利(Refer & Earn)
-    Router::get('/user/affiliate/access', [\App\Controller\App\ConsumerAffiliateController::class, 'access']);
+    Router::get('/user/affiliate/access', [ConsumerAffiliateController::class, 'access']);
+    Router::get('/user/affiliate/payout-accounts', [AffiliatePayoutAccountController::class, 'index']);
+    Router::post('/user/affiliate/payout-accounts/save', [AffiliatePayoutAccountController::class, 'save']);
+    Router::post('/user/affiliate/payout-accounts/default', [AffiliatePayoutAccountController::class, 'makeDefault']);
     Router::get('/user/referral/my', [ReferralController::class, 'my']);
     Router::get('/user/referral/invitees', [ReferralController::class, 'invitees']);
 

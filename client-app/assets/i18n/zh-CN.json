@@ -766,6 +766,10 @@
       "fromInvitation": "此推荐码来自邀请链接，请在注册前核对。",
       "invitationCode": "推荐码：{{code}}",
       "downloadApp": "下载 mTrip App",
+      "copyAndDownload": "复制邀请并下载",
+      "pasteAfterInstall": "安装后注册时，在推荐码页面点击粘贴。",
+      "copyFailed": "无法复制邀请。",
+      "invalidPaste": "请粘贴 mTrip 邀请链接或推荐码。",
       "placeholder": "abcdef",
       "continue": "继续",
       "skip": "跳过"
@@ -1668,13 +1672,38 @@
     },
     "modeFootnote": "你之后可以随时在设置中更改"
   },
+  "affiliatePayout": {
+    "title": "收款账户",
+    "status0": "待核验",
+    "status1": "已核验",
+    "status2": "已驳回",
+    "default": "默认账户",
+    "makeDefault": "设为默认",
+    "edit": "修改账户",
+    "add": "新增账户",
+    "noProviders": "本站点暂未配置收款服务商。",
+    "provider": "收款服务商",
+    "bank": "银行账户",
+    "wallet": "移动钱包",
+    "holder": "账户持有人",
+    "number": "收款账号",
+    "submit": "提交核验"
+  },
   "affiliateAccess": {
     "title": "联盟中心",
     "id": "联盟编号",
     "agent": "代理",
     "merchant": "商户",
     "activatedAt": "开通日期",
-    "registeredReferrals": "已注册推荐人数"
+    "registeredReferrals": "已注册推荐人数",
+    "linkOpens": "链接打开次数",
+    "registrationLink": "注册链接",
+    "copyLink": "复制链接",
+    "qrLabel": "邀请二维码",
+    "downloadQr": "下载二维码",
+    "exportFailed": "无法导出二维码。",
+    "shareHotel": "分享此酒店的推广链接",
+    "registerWithInvitation": "使用此邀请注册"
   },
   "appUpdate": {
     "forceTitle": "需要更新",

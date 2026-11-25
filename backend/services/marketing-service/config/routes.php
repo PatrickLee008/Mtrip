@@ -8,6 +8,7 @@ declare(strict_types=1);
  */
 
 use App\Controller\Admin\AffiliateController;
+use App\Controller\Admin\AffiliatePayoutAccountController;
 use App\Controller\Admin\CampaignController;
 use App\Controller\Admin\CouponController;
 use App\Controller\Admin\LongstayController;
@@ -123,6 +124,11 @@ Router::addGroup('/api/v1/admin/affiliate', static function () {
     Router::post('/partner/toggle-status', [AffiliateController::class, 'partnerToggle']);
     Router::get('/partner/consumer-access', [AffiliateController::class, 'consumerAccess']);
     Router::post('/partner/consumer-access', [AffiliateController::class, 'setConsumerAccess']);
+    Router::get('/payout-providers', [AffiliatePayoutAccountController::class, 'providers']);
+    Router::post('/payout-providers/save', [AffiliatePayoutAccountController::class, 'saveProvider']);
+    Router::get('/payout-accounts', [AffiliatePayoutAccountController::class, 'index']);
+    Router::post('/payout-accounts/inspect', [AffiliatePayoutAccountController::class, 'inspect']);
+    Router::post('/payout-accounts/review', [AffiliatePayoutAccountController::class, 'review']);
     // 联盟计划
     Router::get('/program', [AffiliateController::class, 'program']);
     Router::post('/program/save', [AffiliateController::class, 'programSave']);

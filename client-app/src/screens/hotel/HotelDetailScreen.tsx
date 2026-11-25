@@ -32,6 +32,7 @@ import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View, typ
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
+import HotelReferralActions from '@/components/hotel/HotelReferralActions';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTranslation } from 'react-i18next';
 
@@ -226,7 +227,18 @@ export default function HotelDetailScreen() {
   };
 
   if (loading) return <LoadingView />;
-  if (error) return <ErrorView message={error} onRetry={() => void loadDetail()} />;
+  if (error) {
+    return (
+      <View style={styles.root}>
+        <ErrorView message={error} onRetry={() => void loadDetail()} />
+        {propertyId && route.params?.invitationCode ? (
+          <View style={styles.titleWrap}>
+            <HotelReferralActions propertyId={propertyId} invitationCode={route.params.invitationCode} />
+          </View>
+        ) : null}
+      </View>
+    );
+  }
 
   /** Rooms 页签显示购物车栏(选中任一房型才出现),其余页签仍是起价栏 */
   const showCartBar = tab === 'rooms' && pickedKeys.length > 0;
@@ -329,6 +341,9 @@ export default function HotelDetailScreen() {
               {propertyId ? <SaveHotelButton key={propertyId} propertyId={propertyId} /> : null}
             </View>
             {detail?.longStay ? <LongStayPrice quote={detail.longStay} /> : null}
+            {propertyId && (detail || route.params?.invitationCode) ? (
+              <HotelReferralActions propertyId={propertyId} hotelName={detail?.goods_name} invitationCode={route.params?.invitationCode} />
+            ) : null}
             <View style={styles.addressRow}>
               <HomeIcon name="locationOutline" width={12} height={15} color={colors.textSoft} />
               <Text style={styles.address}>{address}</Text>

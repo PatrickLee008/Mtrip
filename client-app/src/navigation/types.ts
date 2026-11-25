@@ -22,8 +22,9 @@ export interface SignupDraft {
   password: string;
   /** 姓名(取代原邮箱栏),落库进 `user_info.real_name` 加密列 */
   realName: string;
-  /** An invitation URL supplies an immutable code through the complete signup flow. */
+  /** Invitation fields prefilled from the link. The signup screen allows users to change the code. */
   referralCode?: string;
+  referralPropertyId?: number;
 }
 
 /** 底部 Tab(对应 Figma M-Trip / Home 81:2464 的 BottomNavBar) */
@@ -53,7 +54,7 @@ export type RootStackParamList = {
    * 关怀模式酒店详情族(Figma section `Hotel Details Lite` `2352:5591`)。
    * 五页共用同一个商品 id;`checkIn/checkOut` 一路透传到订房向导,免得选完房日期跳回默认值。
    */
-  HotelDetailLite: { id: number; checkIn?: string; checkOut?: string; citizen?: boolean; rooms?: number; adults?: number; children?: number };
+  HotelDetailLite: { id: number; checkIn?: string; checkOut?: string; citizen?: boolean; rooms?: number; adults?: number; children?: number; invitationCode?: string };
   /**
    * 正常模式房型详情(Figma Rooms Details `281:1041`),酒店详情 Rooms 页签真实房型卡的 See Details 进来。
    * 参数与关怀模式同形:商品 id + 房型 id,日期透传给订房向导。
@@ -112,7 +113,7 @@ export type RootStackParamList = {
    * `tab` 是**回跳时要落在哪个页签**:评价整页底栏的「Choose my room」用它把本页切到 Rooms
    * (本页在栈里已挂载,`navigate` 只改 params 不重挂,页面里要跟着 params 同步一次)。
    */
-  HotelDetail: { propertyId?: number; checkIn?: string; checkOut?: string; tab?: DetailTabKey; citizen?: boolean;
+  HotelDetail: { propertyId?: number; checkIn?: string; checkOut?: string; tab?: DetailTabKey; citizen?: boolean; invitationCode?: string;
     rooms?: number; adults?: number; children?: number } | undefined;
   /**
    * 房型购物车(Figma Room Cart `2659:11842`)。
@@ -315,7 +316,8 @@ export type RootStackParamList = {
   Notifications: undefined;
   Account: undefined;
   SavedHotels: undefined;
-  AffiliateCenter: undefined;
+  AffiliateCenter: { propertyId: number; hotelName: string } | undefined;
+  AffiliatePayoutAccounts: undefined;
   /** `pick` = 从订房第 2 步进来的「选择主要入住人」模式:点一行即选中并返回,不是多选管理 */
   Travelers: { pick?: boolean } | undefined;
   /** 关联邮箱 / 关联手机号(PRD 模块 19.2),先验证新值再保存 */
@@ -345,7 +347,7 @@ export type RootStackParamList = {
   /** 切换语言(Figma 3256:18986) */
   ChangeLanguage: undefined;
   Login: undefined;
-  Register: { referralCode?: string } | undefined;
+  Register: { referralCode?: string; referralPropertyId?: number } | undefined;
   /**
    * 短信验证码(Figma `566:3741` / `566:3902`),三个场景共用一页。
    *

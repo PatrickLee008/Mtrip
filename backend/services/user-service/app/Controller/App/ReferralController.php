@@ -26,12 +26,7 @@ class ReferralController extends AbstractController
     public function my(): array
     {
         $userId = UserContext::userId();
-        $user = (array) Db::table('user_info')->where('id', $userId)->first(['referral_code']);
-        $code = (string) ($user['referral_code'] ?? '');
-        if ($code === '') {
-            $code = $this->authService->genReferralCode($userId);
-            Db::table('user_info')->where('id', $userId)->update(['referral_code' => $code]);
-        }
+        $code = $this->authService->referralCodeForUser($userId);
         // 统计卡要「已邀请/待结算/已奖励」三格 + 累计金额,一次聚合查完(无记录时 SUM 为 NULL,强转兜 0)
         $stat = (array) Db::table('user_referral')
             ->where('inviter_user_id', $userId)
