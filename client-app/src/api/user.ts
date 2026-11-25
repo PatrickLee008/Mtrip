@@ -11,11 +11,49 @@ export type ConsumerAffiliateAccess = { active: false } | {
   affiliateId: number;
   affiliateType: 'agent' | 'merchant';
   activatedAt: string;
+  referralCode: string;
   registeredReferrals: number;
+  linkOpens: number;
 };
 
 export function fetchConsumerAffiliateAccess(): Promise<ConsumerAffiliateAccess> {
   return get('/api/v1/app/user/affiliate/access', undefined, { silent: true });
+}
+
+export function recordReferralOpen(code: string, propertyId?: number): Promise<null> {
+  return post('/api/v1/app/auth/referral/open', { code, propertyId }, { silent: true });
+}
+
+export interface AffiliatePayoutProvider {
+  id: number;
+  kind: 'bank' | 'wallet';
+  name: string;
+}
+
+export interface AffiliatePayoutAccount {
+  id: number;
+  provider_id: number;
+  provider_name: string;
+  provider_enabled: number;
+  number_suffix: string;
+  status: number;
+  version: number;
+  is_default: number;
+  review_note: string;
+}
+
+export function fetchAffiliatePayoutAccounts(): Promise<{ accounts: AffiliatePayoutAccount[]; providers: AffiliatePayoutProvider[] }> {
+  return get('/api/v1/app/user/affiliate/payout-accounts');
+}
+
+export function saveAffiliatePayoutAccount(data: {
+  id?: number; version?: number; providerId: number; holderName: string; accountNumber: string;
+}): Promise<{ id: number }> {
+  return postEncrypted('/api/v1/app/user/affiliate/payout-accounts/save', data);
+}
+
+export function setDefaultAffiliatePayoutAccount(id: number): Promise<null> {
+  return post('/api/v1/app/user/affiliate/payout-accounts/default', { id });
 }
 
 /** 短信验证码场景(对齐后端 SmsVerifyService::SCENES) */
@@ -89,6 +127,7 @@ export function apiRegister(params: {
    * 后端 `UserAuthService::setupReferral` 会据此写 `user_referral`;**填错会直接注册失败**(推荐码无效)
    */
   referralCode?: string;
+  referralPropertyId?: number;
   /**
    * 短信验证票据(`apiSmsVerify` 返回)。
    * 站点配了启用中的短信渠道时**必填**,否则后端返回 40111;未配渠道时可省略。

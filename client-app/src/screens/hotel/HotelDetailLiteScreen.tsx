@@ -32,6 +32,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
+import HotelReferralActions from '@/components/hotel/HotelReferralActions';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTranslation } from 'react-i18next';
 
@@ -142,7 +143,18 @@ export default function HotelDetailLiteScreen() {
 
   /* Hook 必须全部跑完再早退,否则渲染分支之间 Hook 数量不一致 */
   if (loading) return <LoadingView />;
-  if (error || !detail) return <ErrorView message={error} onRetry={() => void load()} />;
+  if (error || !detail) {
+    return (
+      <SafeAreaView style={styles.root}>
+        <ErrorView message={error} onRetry={() => void load()} />
+        {params.invitationCode ? (
+          <View style={styles.titleCard}>
+            <HotelReferralActions propertyId={params.id} invitationCode={params.invitationCode} />
+          </View>
+        ) : null}
+      </SafeAreaView>
+    );
+  }
 
   const goBooking = (sku: GoodsSku) =>
     navigation.navigate('HotelBookingLite', {
@@ -183,6 +195,7 @@ export default function HotelDetailLiteScreen() {
               <SaveHotelButton key={params.id} propertyId={params.id} />
             </View>
             {detail.longStay ? <LongStayPrice quote={detail.longStay} /> : null}
+            <HotelReferralActions propertyId={params.id} hotelName={detail.goods_name} invitationCode={params.invitationCode} />
 
             <View style={styles.addressRow}>
               <HomeIcon name="locationOutline" size={16} color={colors.textSoft} />

@@ -1,13 +1,18 @@
 import React, { useEffect, useState } from 'react';
+import * as Clipboard from 'expo-clipboard';
 import { Platform, Pressable, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 
 import { fetchVersionCheck } from '@/api/site';
 import { colors } from '@/config/theme';
-import { referralPlayStoreUrl } from '@/utils/referralInvitation';
+import { referralLink, referralPlayStoreUrl } from '@/utils/referralInvitation';
+import { useCommonStore } from '@/store/commonStore';
 
-export default function ReferralDownload({ code }: { code: string }) {
+export default function ReferralDownload({
+  code, propertyId, autoRedirect = true,
+}: { code: string; propertyId?: number; autoRedirect?: boolean }) {
   const { t } = useTranslation();
+  const showToast = useCommonStore((state) => state.showToast);
   const [iosStore, setIosStore] = useState('');
   const userAgent = Platform.OS === 'web' ? window.navigator.userAgent : '';
   const android = /Android/i.test(userAgent);
@@ -27,27 +32,46 @@ export default function ReferralDownload({ code }: { code: string }) {
     return () => { active = false; };
   }, [ios]);
 
-  const url = android ? referralPlayStoreUrl(code) : iosStore;
+  const url = android ? referralPlayStoreUrl(code, propertyId) : iosStore;
   useEffect(() => {
-    if (!url) return;
+    if (!url || !autoRedirect || ios) return;
     try {
-      const key = `referral_store_opened:${code}`;
+      const key = `referral_store_opened:${code}:${propertyId ?? ''}`;
       if (window.sessionStorage.getItem(key)) return;
       window.sessionStorage.setItem(key, '1');
       window.location.assign(url);
     } catch {
       // A manual link is still available when the browser restricts automatic navigation.
     }
-  }, [code, url]);
+  }, [autoRedirect, code, ios, propertyId, url]);
+
+  const openStore = async () => {
+    if (ios) {
+      const copied = await Clipboard.setStringAsync(referralLink(code, propertyId)).catch(() => false);
+      if (!copied) {
+        showToast(t('user.referral.copyFailed'));
+        return;
+      }
+    }
+    window.location.assign(url);
+  };
 
   if (!android && !ios) return null;
   return (
     <View style={{ padding: 12, gap: 8, backgroundColor: colors.softBlue }}>
       <Text selectable style={{ color: colors.text }}>{t('user.referral.invitationCode', { code })}</Text>
       {url ? (
-        <Pressable accessibilityRole="link" onPress={() => window.location.assign(url)}>
-          <Text style={{ color: colors.primary }}>{t('user.referral.downloadApp')}</Text>
+        <Pressable accessibilityRole="link" onPress={() => void openStore()}>
+          <Text style={{ color: colors.primary }}>{t(ios ? 'user.referral.copyAndDownload' : 'user.referral.downloadApp')}</Text>
         </Pressable>
+      ) : null}
+      {ios && url ? (
+        <>
+          <Text style={{ color: colors.text }}>{t('user.referral.pasteAfterInstall')}</Text>
+          <Pressable accessibilityRole="link" onPress={() => window.location.assign(url)}>
+            <Text style={{ color: colors.primary }}>{t('user.referral.downloadApp')}</Text>
+          </Pressable>
+        </>
       ) : null}
     </View>
   );

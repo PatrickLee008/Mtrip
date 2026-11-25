@@ -49,10 +49,31 @@ if (!process.argv.includes('--timezone-child')) {
     assert.equal(invite.referralCodeFromInstall('mtrip_referral=MT5EVAB&mtrip_referral=BADCODE'), null);
     assert.equal(invite.referralCodeFromInstall('utm_source=organic'), null);
   });
+  check('hotel QR destinations round-trip through links and Google Play install referrer', () => {
+    const url = invite.referralLink('MT5EVAB', 7522);
+    assert.equal(url, 'https://m.myanmartrip.com/r/MT5EVAB/hotel/7522');
+    assert.deepEqual(invite.parseReferralDestination(url), { code: 'MT5EVAB', propertyId: 7522 });
+    const install = new URL(invite.referralPlayStoreUrl('MT5EVAB', 7522)).searchParams.get('referrer');
+    assert.deepEqual(invite.referralDestinationFromInstall(install), { code: 'MT5EVAB', propertyId: 7522 });
+  });
+  check('hotel referral parsing rejects foreign origins, overflow and ambiguous Play parameters', () => {
+    assert.equal(invite.parseReferralDestination('https://example.net/r/MT5EVAB/hotel/7522'), null);
+    assert.equal(invite.parseReferralDestination('/r/MT5EVAB/hotel/99999999999999999999'), null);
+    assert.equal(invite.parseReferralDestination('/r/MT5EVAB/hotel/0'), null);
+    assert.equal(invite.parseReferralDestination('/r/MT5EVAB/hotel/7522/arbitrary'), null);
+    assert.equal(invite.referralDestinationFromInstall('mtrip_referral=MT5EVAB&mtrip_hotel=1&mtrip_hotel=2'), null);
+  });
   check('unrelated auth callback does not become an invitation', () => assert.equal(invite.parseReferralInvitation('/auth/facebook/complete#ticket=MT5EVAB'), null));
   check('overlong and malformed codes are ignored', () => { assert.equal(invite.parseReferralInvitation('/r/' + 'A'.repeat(33)), null); assert.equal(invite.parseReferralInvitation('/r/<script>'), null); });
   check('captured invitation survives onboarding screen changes', () => { invite.captureReferralInvitation(); assert.equal(invite.getReferralInvitation(), 'MT5EVAB'); });
   check('successful authentication removes stale invitation and URL', () => { invite.clearReferralInvitation(); assert.equal(invite.getReferralInvitation(), null); assert.equal(href, 'https://m.myanmartrip.com/'); });
+  check('returning users can reload a shared hotel without retaining a registration invitation', () => {
+    href = 'https://m.myanmartrip.com/r/MT5EVAB/hotel/7522';
+    invite.captureReferralInvitation();
+    invite.clearReferralInvitation(true);
+    assert.equal(invite.getReferralInvitation(), null);
+    assert.equal(href, 'https://m.myanmartrip.com/r/MT5EVAB/hotel/7522');
+  });
   check('clearing invitation never changes a social auth callback', () => { href = 'https://m.myanmartrip.com/auth/apple/complete'; invite.clearReferralInvitation(); assert.equal(href, 'https://m.myanmartrip.com/auth/apple/complete'); });
   console.log('PASS_COUNT=' + passed);
 } else {

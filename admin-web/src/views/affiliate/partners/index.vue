@@ -6,6 +6,7 @@ import { ReloadOutlined, SearchOutlined } from '@ant-design/icons-vue';
 import PageContainer from '@/components/PageContainer.vue';
 import StatusTag from '@/components/StatusTag.vue';
 import ConsumerAccess from './ConsumerAccess.vue';
+import PayoutProviders from './PayoutProviders.vue';
 import { useTable, type TableRow } from '@/composables/useTable';
 import type { StatusItem } from '@/components/StatusTag.vue';
 import { apiAffiliatePartners, apiAffiliatePartnerToggle } from '@/api/affiliate';
@@ -54,6 +55,7 @@ onMounted(() => {
 <template>
   <PageContainer>
     <ConsumerAccess />
+    <PayoutProviders />
     <a-card :bordered="false" class="mtrip-card-shadow" style="margin-bottom: 16px">
       <a-form layout="inline">
         <a-form-item label="Keyword">

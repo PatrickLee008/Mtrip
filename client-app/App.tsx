@@ -26,6 +26,7 @@ import {
 } from '@expo-google-fonts/inter';
 
 import AppUpdateGate from '@/components/common/AppUpdateGate';
+import { recordReferralOpen } from '@/api/user';
 import ToastHost from '@/components/common/ToastHost';
 import type { Lang } from '@/config/global';
 import { changeLanguage, initI18n } from '@/i18n';
@@ -39,7 +40,7 @@ import { applyWebGlobalStyles } from '@/utils/webStyles';
 import { captureFacebookCompletion, isFacebookCompletion } from '@/utils/facebook';
 import { captureTikTokCompletion, isTikTokCompletion } from '@/utils/tiktok';
 import { captureAppleCompletion, isAppleCompletion } from '@/utils/apple';
-import { captureReferralInvitation, clearReferralInvitation, getReferralInvitation, referralLink } from '@/utils/referralInvitation';
+import { captureReferralInvitation, clearReferralInvitation, getReferralDestination, parseReferralDestination, type ReferralDestination } from '@/utils/referralInvitation';
 import { clearInstallReferral, getInstallReferral } from '@/utils/nativeReferral';
 import { useUserStore } from '@/store/userStore';
 
@@ -66,6 +67,7 @@ export default function App() {
   /** boot=纯开屏 language=语言选择 mode=模式选择 app=进主流程 */
   const [phase, setPhase] = useState<'boot' | 'language' | 'mode' | 'app'>('boot');
   const [systemLang, setSystemLang] = useState<Lang>('en-US');
+  const [initialInvitation, setInitialInvitation] = useState(getReferralDestination);
   const setLang = useCommonStore((s) => s.setLang);
   const setMode = useCommonStore((s) => s.setMode);
 
@@ -81,26 +83,63 @@ export default function App() {
   });
 
   useEffect(() => {
-    const onLink = (url: string) => {
-      if (useUserStore.getState().isLogin) return;
-      const referralCode = captureReferralInvitation(url);
-      if (referralCode && navigationRef.isReady()) {
-        navigationRef.navigate('Register', { referralCode });
+    const recordOpen = (destination: ReferralDestination) => {
+      if (Platform.OS === 'web') {
+        try {
+          const key = `referral_open:${destination.code}:${destination.propertyId ?? ''}`;
+          if (window.sessionStorage.getItem(key)) return;
+          window.sessionStorage.setItem(key, '1');
+        } catch {
+          // Storage may be unavailable in private browsing.
+        }
+      }
+      void recordReferralOpen(destination.code, destination.propertyId).catch(() => {});
+    };
+    let hydrated = false;
+    let bufferedLink: string | undefined;
+    const onLink = (url: string, recovered = false) => {
+      if (!hydrated) {
+        bufferedLink = url;
+        return;
+      }
+      const destination = parseReferralDestination(url);
+      if (!destination) return;
+      if (!recovered) recordOpen(destination);
+      const authenticated = useUserStore.getState().isLogin;
+      if (!authenticated) captureReferralInvitation(url);
+      if (!navigationRef.isReady()) {
+        setInitialInvitation(destination);
+        return;
+      }
+      if (destination.propertyId) {
+        const invitationCode = authenticated ? undefined : destination.code;
+        if (useCommonStore.getState().liteMode) {
+          navigationRef.navigate('HotelDetailLite', { id: destination.propertyId, invitationCode });
+        } else {
+          navigationRef.navigate('HotelDetail', { propertyId: destination.propertyId, invitationCode });
+        }
+      } else if (!authenticated) {
+        navigationRef.navigate('Register', { referralCode: destination.code });
       }
     };
     const links = Platform.OS === 'web' ? undefined : Linking.addEventListener('url', ({ url }) => onLink(url));
     void (async () => {
       const startedAt = Date.now();
       await bootstrapStores();
+      hydrated = true;
+      const webInvitation = getReferralDestination();
+      if (Platform.OS === 'web' && webInvitation) recordOpen(webInvitation);
       if (useUserStore.getState().isLogin) {
-        clearReferralInvitation();
+        clearReferralInvitation(true);
         void clearInstallReferral();
-      } else if (Platform.OS !== 'web') {
+      }
+      if (Platform.OS !== 'web') {
         const initialUrl = await Linking.getInitialURL().catch(() => null);
-        if (!getReferralInvitation() && initialUrl) onLink(initialUrl);
-        if (!getReferralInvitation()) {
-          const installedCode = await getInstallReferral();
-          if (installedCode && !getReferralInvitation()) onLink(referralLink(installedCode));
+        const startupLink = bufferedLink ?? initialUrl;
+        if (!getReferralDestination() && startupLink) onLink(startupLink);
+        if (!useUserStore.getState().isLogin && !getReferralDestination()) {
+          const installedLink = await getInstallReferral();
+          if (installedLink && !getReferralDestination()) onLink(installedLink, true);
         }
       }
 
@@ -151,7 +190,7 @@ export default function App() {
     <SafeAreaProvider>
       {/* 开屏是主色深底,状态栏要走浅色 */}
       <StatusBar style={showApp ? 'dark' : 'light'} />
-      {showApp ? <AppNavigator /> : null}
+      {showApp ? <AppNavigator initialInvitation={initialInvitation} /> : null}
       {/* 字体没就绪时(fontsLoaded=false)三个 show* 都为假,统一停在纯开屏 */}
       {!showApp && showMode ? <ChooseModeScreen onConfirm={onPickMode} /> : null}
       {!showApp && !showMode ? (

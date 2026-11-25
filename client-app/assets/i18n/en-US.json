@@ -766,6 +766,10 @@
       "fromInvitation": "This code came from your invitation. Check it before registering.",
       "invitationCode": "Referral code: {{code}}",
       "downloadApp": "Download the mTrip app",
+      "copyAndDownload": "Copy invitation and download",
+      "pasteAfterInstall": "After installing, tap Paste on the referral code screen when you sign up.",
+      "copyFailed": "Could not copy the invitation.",
+      "invalidPaste": "Paste an mTrip invitation link or referral code.",
       "placeholder": "abcdef",
       "continue": "Continue",
       "skip": "Skip"
@@ -1668,13 +1672,38 @@
     },
     "modeFootnote": "You can change this anytime later in Settings"
   },
+  "affiliatePayout": {
+    "title": "Payout accounts",
+    "status0": "Pending verification",
+    "status1": "Verified",
+    "status2": "Rejected",
+    "default": "Default",
+    "makeDefault": "Make default",
+    "edit": "Edit account",
+    "add": "Add account",
+    "noProviders": "No payout providers are available for this site.",
+    "provider": "Payout provider",
+    "bank": "Bank account",
+    "wallet": "Mobile wallet",
+    "holder": "Account holder",
+    "number": "Account number",
+    "submit": "Submit for verification"
+  },
   "affiliateAccess": {
     "title": "Affiliate Center",
     "id": "Affiliate ID",
     "agent": "Agent",
     "merchant": "Merchant",
     "activatedAt": "Activated on",
-    "registeredReferrals": "Registered referrals"
+    "registeredReferrals": "Registered referrals",
+    "linkOpens": "Link opens",
+    "registrationLink": "Registration link",
+    "copyLink": "Copy link",
+    "qrLabel": "Invitation QR code",
+    "downloadQr": "Download QR code",
+    "exportFailed": "Could not export the QR code.",
+    "shareHotel": "Share this hotel as an affiliate",
+    "registerWithInvitation": "Sign up with this invitation"
   },
   "appUpdate": {
     "forceTitle": "Update Required",

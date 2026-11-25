@@ -15,7 +15,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import FacebookCompleteScreen from '@/screens/user/FacebookCompleteScreen';
 import { isFacebookCompletion } from '@/utils/facebook';
-import { getReferralInvitation } from '@/utils/referralInvitation';
+import type { ReferralDestination } from '@/utils/referralInvitation';
 import TikTokCompleteScreen from '@/screens/user/TikTokCompleteScreen';
 import AppleCompleteScreen from '@/screens/user/AppleCompleteScreen';
 import { isAppleCompletion } from '@/utils/apple';
@@ -58,6 +58,7 @@ import InsuranceScreen from '@/screens/hotel/InsuranceScreen';
 import StayDetailScreen from '@/screens/hotel/StayDetailScreen';
 import AccountScreen from '@/screens/more/AccountScreen';
 import AffiliateCenterScreen from '@/screens/more/AffiliateCenterScreen';
+import AffiliatePayoutAccountsScreen from '@/screens/more/AffiliatePayoutAccountsScreen';
 import SavedHotelsScreen from '@/screens/more/SavedHotelsScreen';
 import DeleteAccountScreen from '@/screens/more/DeleteAccountScreen';
 import LinkContactScreen from '@/screens/more/LinkContactScreen';
@@ -103,6 +104,7 @@ import RegisterScreen from '@/screens/user/RegisterScreen';
 import ResetPasswordScreen from '@/screens/user/ResetPasswordScreen';
 import VerifyOtpScreen from '@/screens/user/VerifyOtpScreen';
 import { useCommonStore } from '@/store/commonStore';
+import { useUserStore } from '@/store/userStore';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const Tab = createBottomTabNavigator<MainTabParamList>();
@@ -190,13 +192,21 @@ function MainTabs() {
   );
 }
 
-export default function AppNavigator() {
+export default function AppNavigator({ initialInvitation }: { initialInvitation: ReferralDestination | null }) {
   const { t } = useTranslation();
-  const referralCode = getReferralInvitation();
+  const lite = useCommonStore((state) => state.liteMode);
+  const authenticated = useUserStore((state) => state.isLogin);
+  const referralCode = authenticated ? undefined : initialInvitation?.code;
+  const propertyId = initialInvitation?.propertyId;
+  const destination = propertyId
+    ? lite
+      ? { name: 'HotelDetailLite', params: { id: propertyId, invitationCode: referralCode } }
+      : { name: 'HotelDetail', params: { propertyId, invitationCode: referralCode } }
+    : referralCode ? { name: 'Register', params: { referralCode } } : undefined;
   return (
-    <NavigationContainer ref={navigationRef} initialState={referralCode ? {
+    <NavigationContainer ref={navigationRef} initialState={destination ? {
       index: 1,
-      routes: [{ name: 'MainTabs' }, { name: 'Register', params: { referralCode } }],
+      routes: [{ name: 'MainTabs' }, destination],
     } : undefined}>
       <Stack.Navigator initialRouteName={isAppleCompletion() ? 'AppleComplete' : isTikTokCompletion() ? 'TikTokComplete' : isFacebookCompletion() ? 'FacebookComplete' : 'MainTabs'} screenOptions={{ headerTitleAlign: 'center', headerTintColor: colors.text }}>
         <Stack.Screen name="AppleComplete" component={AppleCompleteScreen} options={{ headerShown: false }} />
@@ -394,6 +404,7 @@ export default function AppNavigator() {
           options={{ title: t('more.account.title'), headerShown: false }}
         />
         <Stack.Screen name="AffiliateCenter" component={AffiliateCenterScreen} options={{ headerShown: false }} />
+        <Stack.Screen name="AffiliatePayoutAccounts" component={AffiliatePayoutAccountsScreen} options={{ headerShown: false }} />
         <Stack.Screen
           name="SavedHotels"
           component={SavedHotelsScreen}

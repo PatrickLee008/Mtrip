@@ -33,15 +33,24 @@ class UserAuthService
     {
     }
 
-    public function register(int $siteId, string $mobile, string $password, string $nickname, int $source, string $ip, string $referralCode = '', string $realName = ''): array
-    {
+    public function register(
+        int $siteId,
+        string $mobile,
+        string $password,
+        string $nickname,
+        int $source,
+        string $ip,
+        string $referralCode = '',
+        string $realName = '',
+        int $referralPropertyId = 0,
+    ): array {
         $mobileHash = $this->mobileHash($mobile);
         $this->assertSiteEnabled($siteId);
 
         // 同手机号并发注册加 Redis 分布式锁串行,业务完成即释放;
         // 拦截不同设备/客户端同时提交同一手机号导致的"先查后插"竞态
         $lockKey = "mtrip:lock:user:register:{$siteId}:{$mobileHash}";
-        return $this->lock->run($lockKey, 10, function () use ($siteId, $mobile, $mobileHash, $password, $nickname, $source, $ip, $referralCode, $realName): array {
+        return $this->lock->run($lockKey, 10, function () use ($siteId, $mobile, $mobileHash, $password, $nickname, $source, $ip, $referralCode, $realName, $referralPropertyId): array {
             if ($this->isRegistered($siteId, $mobileHash)) {
                 throw new BusinessException(ErrorCode::DATA_CONFLICT, '该手机号已注册');
             }
@@ -54,7 +63,7 @@ class UserAuthService
              * 反而被告知「该手机号已注册」,等于一次输入错误把号码废掉。
              * (接入短信验证后更要紧:重试还得再发一条短信。)
              */
-            $userId = Db::transaction(function () use ($siteId, $mobile, $mobileHash, $password, $nickname, $source, $ip, $now, $referralCode, $realName): int {
+            $userId = Db::transaction(function () use ($siteId, $mobile, $mobileHash, $password, $nickname, $source, $ip, $now, $referralCode, $realName, $referralPropertyId): int {
                 try {
                     $userId = Db::table('user_info')->insertGetId([
                         'site_id' => $siteId,
@@ -79,7 +88,7 @@ class UserAuthService
                     throw $e;
                 }
                 // 生成本人推荐码 + (可选)绑定推荐关系;推荐码无效则拦截注册(PRD 模块14)
-                $this->setupReferral($siteId, $userId, $referralCode);
+                $this->setupReferral($siteId, $userId, $referralCode, $referralPropertyId);
                 return $userId;
             });
             $this->actionLog($siteId, $userId, 1, '注册并登录', $ip);
@@ -89,7 +98,7 @@ class UserAuthService
     }
 
     /** 生成本人推荐码(基于 userId 唯一),并按传入推荐码绑定推荐人 */
-    private function setupReferral(int $siteId, int $userId, string $referralCode): void
+    private function setupReferral(int $siteId, int $userId, string $referralCode, int $referralPropertyId = 0): void
     {
         Db::table('user_info')->where('id', $userId)->update(['referral_code' => $this->genReferralCode($userId)]);
         if ($referralCode === '') {
@@ -110,11 +119,15 @@ class UserAuthService
         if ((int) ($affiliate->status ?? 0) === 2) {
             throw new BusinessException(ErrorCode::PARAM_ERROR, '推荐码暂不可用');
         }
+        $qualifiedDestination = $affiliate !== null && $referralPropertyId > 0 && Db::table('merchant_store')
+            ->where('id', $referralPropertyId)->where('site_id', $siteId)
+            ->where('business_type', 'hotel')->whereNull('deleted_at')->exists();
         Db::table('user_referral')->insert([
             'site_id' => $siteId,
             'inviter_user_id' => (int) $inviter->id,
             'invitee_user_id' => $userId,
             'consumer_affiliate_id' => $affiliate->id ?? null,
+            'referral_property_id' => $qualifiedDestination ? $referralPropertyId : null,
             'reward_status' => 0,
             'bind_time' => date('Y-m-d H:i:s'),
         ]);
@@ -124,6 +137,21 @@ class UserAuthService
     public function genReferralCode(int $userId): string
     {
         return 'MT' . strtoupper(base_convert((string) $userId, 10, 36)) . strtoupper(bin2hex(random_bytes(1)));
+    }
+
+    public function referralCodeForUser(int $userId): string
+    {
+        $user = Db::table('user_info')->where('id', $userId)->whereNull('deleted_at');
+        $code = (string) (clone $user)->value('referral_code');
+        if ($code !== '') {
+            return $code;
+        }
+
+        (clone $user)->where(static function ($query): void {
+            $query->whereNull('referral_code')->orWhere('referral_code', '');
+        })->update(['referral_code' => $this->genReferralCode($userId)]);
+
+        return (string) $user->value('referral_code');
     }
 
     public function login(int $siteId, string $mobile, string $password, string $ip): array

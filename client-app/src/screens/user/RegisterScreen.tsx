@@ -47,7 +47,7 @@ import { fonts } from '@/config/typography';
 import type { RootStackParamList } from '@/navigation/types';
 import { useCommonStore } from '@/store/commonStore';
 import { digitsOnly, isMobile, isPassword } from '@/utils/validate';
-import { getReferralInvitation } from '@/utils/referralInvitation';
+import { getReferralDestination } from '@/utils/referralInvitation';
 
 /** 设计稿固定展示 +95(缅甸),区号选择未实现 */
 const COUNTRY_CODE = '+95';
@@ -58,7 +58,9 @@ export default function RegisterScreen() {
   const { t } = useTranslation();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const route = useRoute<RouteProp<RootStackParamList, 'Register'>>();
-  const referralCode = getReferralInvitation() ?? route.params?.referralCode;
+  const destination = getReferralDestination();
+  const referralCode = route.params?.referralCode ?? destination?.code;
+  const referralPropertyId = route.params?.referralCode ? route.params.referralPropertyId : destination?.propertyId;
   const showToast = useCommonStore((s) => s.showToast);
 
   const [mobile, setMobile] = useState('');
@@ -103,7 +105,7 @@ export default function RegisterScreen() {
       return;
     }
 
-    const draft = { mobile: mobile.trim(), password, realName: realName.trim(), referralCode };
+    const draft = { mobile: mobile.trim(), password, realName: realName.trim(), referralCode, referralPropertyId };
 
     setSending(true);
     try {
@@ -154,7 +156,9 @@ export default function RegisterScreen() {
       onBack={() => navigation.goBack()}
     >
       <View style={styles.card}>
-        {referralCode ? <ReferralDownload code={referralCode} /> : null}
+        {referralCode ? (
+          <ReferralDownload code={referralCode} propertyId={referralPropertyId} autoRedirect={!referralPropertyId} />
+        ) : null}
         <View style={styles.fields}>
           {/* 手机号:区号固定 +95,竖线右侧为号码输入 */}
           <View style={styles.field}>

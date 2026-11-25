@@ -19,6 +19,7 @@
  */
 
 import React, { useState } from 'react';
+import * as Clipboard from 'expo-clipboard';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -32,6 +33,7 @@ import type { RootStackParamList } from '@/navigation/types';
 import { useCommonStore } from '@/store/commonStore';
 import { useUserStore } from '@/store/userStore';
 import { setGdprConsent } from '@/utils/gdpr';
+import { parseReferralDestination, type ReferralDestination } from '@/utils/referralInvitation';
 
 export default function ReferralCodeScreen() {
   const { t } = useTranslation();
@@ -43,6 +45,7 @@ export default function ReferralCodeScreen() {
 
   const invitationCode = draft.referralCode;
   const [code, setCode] = useState(invitationCode ?? '');
+  const [pastedInvitation, setPastedInvitation] = useState<ReferralDestination | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   /* 设计稿的 Continue 是 50% 透明的禁用态,对应推荐码没填(不想填就走下面的 Skip) */
@@ -51,10 +54,13 @@ export default function ReferralCodeScreen() {
   /** 注册落库:`referralCode` 传空即「不绑定推荐人」,后端只生成本人推荐码 */
   const finish = async (referralCode: string) => {
     setSubmitting(true);
+    const normalizedCode = referralCode.toUpperCase();
+    const invitation = pastedInvitation ?? { code: invitationCode, propertyId: draft.referralPropertyId };
     try {
       await register(draft.mobile, draft.password, {
         realName: draft.realName || undefined,
-        referralCode: referralCode || undefined,
+        referralCode: normalizedCode || undefined,
+        referralPropertyId: normalizedCode === invitation.code ? invitation.propertyId : undefined,
         // 短信验证票据(站点没配渠道时为空,后端此时也不强制)
         verifyToken,
       });
@@ -85,6 +91,26 @@ export default function ReferralCodeScreen() {
         </View>
 
         <View style={styles.form}>
+          {!invitationCode && Clipboard.isPasteButtonAvailable ? (
+            <Clipboard.ClipboardPasteButton
+              acceptedContentTypes={['plain-text']}
+              style={{ width: 130, height: 42, alignSelf: 'center' }}
+              onPress={(content) => {
+                if (content.type !== 'text') return;
+                const text = content.text.trim();
+                const destination = parseReferralDestination(text);
+                if (destination) {
+                  setPastedInvitation(destination);
+                  setCode(destination.code);
+                } else if (/^[a-z0-9]{4,32}$/i.test(text)) {
+                  setPastedInvitation(null);
+                  setCode(text.toUpperCase());
+                } else {
+                  showToast(t('user.referral.invalidPaste'));
+                }
+              }}
+            />
+          ) : null}
           <View style={styles.field}>
             <HomeIcon name="peopleAdd" size={20} color={colors.primary} />
             <TextInput

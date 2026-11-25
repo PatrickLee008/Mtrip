@@ -11,6 +11,24 @@ import { supportEn } from './support';
  */
 import complianceS6 from './compliance/en-US';
 export default {
+  affiliatePayout: {
+    providers: "Affiliate payout providers",
+    providerName: "Provider name",
+    bank: "Bank",
+    wallet: "Mobile wallet",
+    disableProvider: "Disable",
+    enableProvider: "Enable",
+    accounts: "Payout accounts",
+    status0: "Pending verification",
+    status1: "Verified",
+    status2: "Rejected",
+    inspect: "View details",
+    holder: "Account holder",
+    number: "Account number",
+    reason: "Review note. Required for rejection.",
+    verify: "Verify",
+    reject: "Reject",
+  },
   affiliateConsumer: {
     title: 'Consumer Affiliate Access', userId: 'User ID', affiliateId: 'Affiliate ID', type: 'Affiliate type',
     activatedAt: 'Activated at (UTC)', agent: 'Agent', merchant: 'Merchant', inactive: 'Not activated',

@@ -4,6 +4,46 @@ import type { PageData } from '@/api/types';
 /** 带货达人与联盟(Super Admin Portal Phase 2,marketing-service /api/v1/admin/affiliate/*) */
 type Row = Record<string, any>;
 
+export interface AffiliatePayoutProvider {
+  id: number;
+  site_id: number;
+  kind: 'bank' | 'wallet';
+  name: string;
+  enabled: number;
+}
+
+export interface AffiliatePayoutAccountSummary {
+  id: number;
+  provider_name: string;
+  number_suffix: string;
+  provider_enabled: number;
+  status: number;
+  version: number;
+  review_note: string;
+}
+
+export function apiAffiliatePayoutProviders(siteId: number): Promise<AffiliatePayoutProvider[]> {
+  return get('/admin/affiliate/payout-providers', { siteId });
+}
+
+export function apiSaveAffiliatePayoutProvider(data: {
+  siteId: number; id?: number; kind?: 'bank' | 'wallet'; name?: string; enabled: number;
+}): Promise<null> {
+  return post('/admin/affiliate/payout-providers/save', data);
+}
+
+export function apiAffiliatePayoutAccounts(affiliateId: number): Promise<AffiliatePayoutAccountSummary[]> {
+  return get('/admin/affiliate/payout-accounts', { affiliateId });
+}
+
+export function apiInspectAffiliatePayoutAccount(id: number): Promise<{ holderName: string; accountNumber: string; version: number }> {
+  return post('/admin/affiliate/payout-accounts/inspect', { id });
+}
+
+export function apiReviewAffiliatePayoutAccount(data: { id: number; version: number; status: number; reason: string }): Promise<null> {
+  return post('/admin/affiliate/payout-accounts/review', data);
+}
+
 // ---------- 申请审核 ----------
 export function apiAffiliateApplications(params: Record<string, unknown>): Promise<PageData<Row>> {
   return get<PageData<Row>>('/admin/affiliate/application/list', params);
