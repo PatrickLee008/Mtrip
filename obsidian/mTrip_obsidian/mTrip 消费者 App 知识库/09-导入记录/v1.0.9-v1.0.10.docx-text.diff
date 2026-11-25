@@ -1,0 +1,263 @@
+--- v1.0.9
++++ v1.0.10
+@@ -1,4 +1,3 @@
+-
+ 
+ 
+ mTrip Product Requirements Document (PRD)
+@@ -739,7 +738,222 @@
+ Original payment reversal or automatic void
+ No settlement
+ 
+-Business Rules
++8.9. Pay at Hotel Settlement Scenarios (for Pay at Hotel Bookings Only)Sample financial calculation
++Sample room booking price = 100,000 MMK
++Fee component
++Rate
++Amount
++Commission
++20%
++20,000
++No-Show Fee
++20% 
++20,000
++Transaction Fee
++3%
++3,000
++Total Pay Now Fee (Online)
++43%
++43,000
++No-Show Fee is configurable by the hotel merchant, up to a maximum of 30% of the room booking price.
++8.9.1 Case-by-case scenariosCase 1: Customer cancels within the Free Cancellation Period
++Scenario: Customer cancels the booking before or at the free cancellation deadline.
++Money Allocation
++Amount (MMK)
++Description
++Original Pay Now Fee (Online)
++43,000
++Commission + No-Show Fee + Transaction Fee
++Commission Refund
++20,000
++100% refunded
++No-Show Fee Refund
++20,000
++100% refunded
++Transaction Fee
++3,000
++Non-refundable
++Total Customer Refund
++40,000
++Commission + No-Show Fee
++Hotel Merchant Settlement
++0
++No settlement
++Business Rules:
++Refund 100% of the Commission and No-Show Fee.
++Transaction Fee is non-refundable.
++No No-Show Fee is charged or settled to the hotel merchant.
++Case 2: Customer cancels after the Free Cancellation Period
++Scenario: Customer cancels after the free cancellation deadline.
++Money Allocation
++Amount (MMK)
++Description
++Original Pay Now Fee (Online)
++43,000
++Commission + No-Show Fee + Transaction Fee
++Customer Refund
++0
++No refund
++Commission Retained by mTrip
++20,000
++Retained by platform
++No-Show Fee to Hotel Merchant
++20,000
++Settled to hotel
++Transaction Fee
++3,000
++Non-refundable
++Total Allocated
++43,000
++Fully allocated
++Business Rules for Case 2: Customer cancels after the Free Cancellation Period
++No refund is provided for the Pay Now Fee (Online).
++The configured No-Show Fee is settled to the hotel merchant.
++Commission remains with mTrip.
++Transaction Fee remains non-refundable.
++Case 3: Customer does not cancel but fails to check in (No-Show)
++Scenario: Customer does not cancel the booking and fails to arrive at the hotel. The booking is marked as No-Show according to the configured No-Show rules.
++Money Allocation
++Amount (MMK)
++Description
++Original Pay Now Fee (Online)
++43,000
++Commission + No-Show Fee + Transaction Fee
++Customer Refund
++0
++No refund
++Commission Retained by mTrip
++20,000
++Retained by platform
++No-Show Fee to Hotel Merchant
++20,000
++Settled to hotel
++Transaction Fee
++3,000
++Non-refundable
++Total Allocated
++43,000
++Fully allocated
++Business Rules for Case 3: Customer does not cancel but fails to check in (No-Show)
++No refund is provided for the Pay Now Fee (Online).
++The configured No-Show Fee is settled to the hotel merchant.
++Commission remains with mTrip.
++Transaction Fee remains non-refundable.
++Case 4: Hotel merchant cancels the confirmed booking
++Scenario: Hotel merchant cancels the confirmed booking before customer check-in.
++Money Allocation
++Amount (MMK)
++Description
++Original Pay Now Fee (Online)
++43,000
++Total upfront fee
++Commission Refund
++20,000
++Full refund
++No-Show Fee Refund
++20,000
++Full refund
++Transaction Fee Refund
++3,000
++Full refund
++Total Customer Refund
++43,000
++Full refund
++Hotel Merchant Settlement
++0
++No settlement
++Business Rules for Case 4: Hotel merchant cancels the confirmed booking
++Refund the full Pay Now Fee (Online), including Transaction Fee.
++No No-Show Fee is charged or settled.
++Case 5: mTrip cancels the confirmed booking
++Scenario: mTrip Operations cancels the confirmed booking due to operational or platform-related reasons.
++Money Allocation
++Amount (MMK)
++Description
++Original Pay Now Fee (Online)
++43,000
++Total upfront fee
++Commission Refund
++20,000
++Full refund
++No-Show Fee Refund
++20,000
++Full refund
++Transaction Fee Refund
++3,000
++Full refund
++Total Customer Refund
++43,000
++Full refund
++Hotel Merchant Settlement
++0
++No settlement
++Business Rules:
++Refund the full Pay Now Fee (Online), including Transaction Fee.
++No No-Show Fee is charged or settled.
++8.9.2 Consolidated settlement comparison
++Scenario
++Customer Refund
++mTrip Commission
++Merchant No-Show Fee
++Transaction Fee
++1. Free Cancellation
++40,000
++0
++0
++Retained
++2. After Free Cancellation
++0
++20,000
++20,000
++Retained
++3. Customer No-Show
++0
++20,000
++20,000
++Retained
++4. Hotel Cancellation
++43,000
++0
++0
++Full Refunded
++5. mTrip Cancellation
++43,000
++0
++0
++Full Refunded
++8.9.3 General business rules for Pay at Hotel
++No.
++Requirement
++Business Rule
++1
++No-Show Fee Configuration
++Hotel merchants can configure No-Show Fee up to 30% of the room booking price.
++2
++Upfront Fee Collection
++Collect Commission, No-Show Fee, and Transaction Fee through online payment.
++3
++Fee Snapshot
++Save the applicable fee rates and amounts at booking confirmation.
++4
++Free Cancellation
++Refund Commission + No-Show Fee; Transaction Fee is non-refundable.
++5
++Late Cancellation
++No refund; settle No-Show Fee to hotel merchant.
++6
++Customer No-Show
++No refund; settle No-Show Fee to hotel merchant.
++7
++Hotel / mTrip Cancellation
++Refund the full Pay Now Fee (Online).
++8
++Merchant Settlement
++Settle only the configured No-Show Fee to the hotel merchant.
++9
++Finance Reconciliation
++Track Commission, No-Show Fee, Transaction Fee, customer refunds, and merchant settlements separately.
++8.10. Business Rules
+ Customers make a single payment to mTrip for the hotel booking.
+ mTrip deducts the agreed commission before settling the remaining amount to the hotel merchant.
+ Merchant settlement is processed according to the configured settlement cycle (e.g., weekly, bi-weekly, or monthly).
+@@ -868,6 +1082,12 @@
+ -
+ 50,000
+ Wallet credit issued after successful booking
++
++
++
++
++
++
+ 
+ Module 9: Booking Confirmation & Booking Management
+ Diagram: No. 1 Complete Payment & Booking Confirmed Work flow
+@@ -2471,7 +2691,7 @@
+ Bank Account / Payment Wallet: Refund may take around 30 days.
+ After the cancellation deadline: No refund of the commission or transaction fee.
+ No-show: No refund of the upfront payment.
+-Refund method selection is available only for bookings made with Pay at Hotel. The refundable amount depends on the applicable cancellation policy.
++Refund method selection is available only for bookings made with Pay at Hotel. The refundable amount depends on the applicable cancellation polic
+ Pay at Hotel Payment Option Work Flow Diagram 
+ 
+ 20.4. Admin Auto Reconciliation
+@@ -2698,6 +2918,9 @@
+ 1.0.9
+ Nov 23, 2026
+ Affiliate Program
++1.0.10
++Nov 25, 2026
++8.9. Pay at Hotel Settlement Scenarios (for Pay at Hotel Bookings Only)
+ 
+ 
+ Module 1: Affiliate Account Management

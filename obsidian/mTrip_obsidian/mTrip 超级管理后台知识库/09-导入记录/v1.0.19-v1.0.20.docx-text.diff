@@ -1,0 +1,596 @@
+--- v1.0.19
++++ v1.0.20
+@@ -3,7 +3,7 @@
+ mTrip Product Requirements Document (PRD)
+ 
+ 
+-Super Admin-  v 1.0.19
++Super Admin-  v 1.0.20
+ 
+ 
+ 
+@@ -336,7 +336,7 @@
+ The onboarding progression is:
+ New Lead → Contacted → Registration Under Review → Registration Approved → KYC Access Granted → KYC In Progress 
+ A merchant may register one or multiple businesses under the same company/group. Company-level information is maintained once, while each registered business maintains its own business information, including business type, contact details, city, and applicable KYC requirements.
+-Only after basic registration approval may the merchant access and submit KYC documents. The application then moves to Pending Verification, where authorized administrators review KYC documents and make the final verification decision. Initial registration/KYC corrections are not post-approval property profile update requests. 
++Merchants can access and submit KYC documents only after receiving basic registration approval. The application then moves to Pending Verification, where authorized administrators review KYC documents and make the final verification decision. Initial registration/KYC corrections are not post-approval property profile update requests. 
+ During verification, administrators may approve or reject individual documents. Depending on the review result, the application may be Approved, Rejected, or returned to the merchant for Resubmission. Resubmitted documents are reviewed again before a final decision is made.
+ All significant onboarding and verification activities are recorded in the application timeline.
+ Upon final approval, the system generates a unique six-character Merchant Access Code. Hotel codes use HXXXXX and Car Rental codes use CXXXXX. The code is delivered through the selected notification channels (Email, SMS, and/or In-App Notification) and remains one available authentication method. Returning merchants may instead use their registered email with Email OTP or registered mobile number with SMS OTP. The Merchant Access Code is not required when another approved login method is selected. 
+@@ -447,6 +447,9 @@
+ Disabling a login method forces logout of all selected active  merchant sessions and invalidates pending QR login requests.
+ Authorized Super Administrator can revoke trusted mobile-device and biometric access for a lost-phone or suspected-fraud case.
+ Super Administrator can view login history, active sessions, trusted devices, and security-action audit records.
++
++
++
+ 
+ 
+ Module 12: Merchant Management
+@@ -789,14 +792,174 @@
+ Review merchant payout calculations. 
+ View settlement history
+ Pay at Hotel – Booking Administration: Show merchant opt-in, applicable no-show fee policy, merchant pre-collection percentage, mTrip commission, upfront deposit and remaining hotel balance for the booking.
+-For Pay at Hotel, collect the applicable mTrip commission upfront. If merchant no-show fees are disabled, do not add merchant room-fee pre-collection. If enabled, add the merchant-selected room-fee percentage (maximum 30%). Transaction fee, where applicable, is calculated on commission, not room price, and separately accounted for.
++For Pay at Hotel, commission is calculated on the final room amount after eligible Long Stay discount and coupon. Transaction fee is calculated on commission only. No-show pre-collection is zero if disabled; otherwise apply the captured rate, capped at 30%. The precise discounted versus original room base for no-show pre-collection requires Product/Finance confirmation. 
+ Record booking-specific cancellation/no-show policy, applicable deadlines, financial components and refund/retention outcome. Merchant pre-collection and mTrip commission must remain separately identifiable in the ledger.
+ Pay at Hotel cancellation and no-show outcomes must follow the policy captured at booking confirmation; the merchant pre-collection amount is only applicable when the merchant has enabled no-show fees.
+-For a confirmed no-show, do not collect the remaining hotel balance. Do not share mTrip commission with the merchant. Account for any merchant no-show pre-collection separately under the captured no-show policy.
+-Illustrative calculation: room price 200,000 MMK, mTrip commission 10%=20,000 MMK. If merchant no-show fees are disabled, upfront commission component=20,000 MMK and merchant component=0. If enabled at 20% of room price, merchant component=40,000 MMK and combined upfront components=60,000 MMK (excluding separately applicable transaction fees).
++For late customer cancellations and confirmed no-shows, no refund is issued. mTrip retains the commission and transaction fee, and the merchant receives the no-show pre-collection. The outstanding hotel balance is not collected. Discount subsidy treatment is pending Product and Finance confirmation. 
++Simple example without discounts: room amount 100,000 MMK; commission 5% = 5,000; transaction fee 2% of commission = 100. With no-show disabled, Pay Now = 5,100 and Pay at Hotel = 95,000. With no-show enabled at 10%, Pay Now = 15,100 and Pay at Hotel = 85,000. Total payment for a completed stay = 100,100 MMK in both cases.
+ Apply the merchant commission, Pay at Hotel setting, no-show policy and room-fee pre-collection percentage captured at booking confirmation; future changes must not retroactively affect confirmed bookings.
++
++Pay at Hotel – Payment Calculation, Settlement & Refund Rules
++1. Commission and Payment Collection
++The mTrip commission is borne by the merchant and is not an additional charge to the customer.
++For Pay at Hotel bookings, mTrip collects the commission, applicable transaction fee and no-show pre-collection (if enabled) through online payment.
++The commission and no-show pre-collection are deducted from the room amount payable at the hotel.
++The transaction fee is charged separately and calculated on the commission amount only.
++Commission already collected online must not be charged again during merchant settlement.
++2. Discount and Payment Calculation
++When both a Long Stay discount and a coupon are applicable, the Long Stay discount must be applied first, followed by the eligible coupon.
++Each discount must retain its respective funding type (merchant-funded, platform-funded or co-funded) and funding ratio at the time of booking.
++Calculation Rules
++Item
++Calculation
++Final Room Amount
++Original Room Amount − Long Stay Discount − Coupon Discount
++Commission
++Final Room Amount × Commission Rate
++Transaction Fee
++Commission × Transaction Fee Rate
++Pay Now
++Commission + Transaction Fee + No-Show Pre-Collection
++Pay at Hotel
++Final Room Amount − Commission − No-Show Pre-Collection
++TotalCustomer Payment
++Final Room Amount + Transaction Fee
++
++
++
++3. No-Show Policy
++If the no-show policy is disabled, no no-show amount is collected upfront.
++If enabled, the configured no-show rate must be between 1% and 30%.
++If the customer checks in, the pre-collected amount is applied towards the room payment and settled with the merchant.
++If the customer fails to show up, the no-show amount is non-refundable and must be settled with the merchant as compensation for holding the reservation.
++The remaining unpaid hotel balance must not be collected for confirmed no-show bookings.
++For customer cancellations within the allowed cancellation period, refund the commission and any no-show pre-collection. The transaction fee is non-refundable. No no-show payment is due to the merchant. 
++The system must retain the no-show policy and rate applicable at the time of booking.
++4. Sample Payment Calculation
++Example: Booking with Long Stay Discount and Coupon
++All amounts are in MMK.
++Description
++Amount
++Original room amount
++100,000
++Long Stay discount (10%, merchant-funded)
++(10,000)
++Room amount after Long Stay discount
++90,000
++Fixed coupon (platform-funded)
++(10,000)
++Final room amount
++80,000
++Commission (5%)
++4,000
++Transaction fee (2% of commission)
++80
++No-show pre-collection (10%)
++8,000
++
++
++
++Payment Breakdown
++Description
++No-Show Enabled
++No-Show Disabled
++Commission
++4,000
++4,000
++Transaction fee
++80
++80
++No-show pre-collection
++8,000
++0
++Pay Now
++12,080
++4,080
++Pay at Hotel
++68,000
++76,000
++Total Customer Payment
++80,080
++80,080
++Note: The rates are illustrative. This example uses the final discounted room amount as the no-show calculation base, subject to Product and Finance confirmation.
++5. Merchant Settlement
++Platform-funded discounts must be reimbursed to the merchant through settlement. For co-funded discounts, the reimbursement must follow the funding ratio recorded at the time of booking.
++Scenario A: Customer Successfully Checks In
++Based on the example with the no-show policy enabled:
++Description
++Amount (MMK)
++Final room amount
++80,000
++Less: Commission
++(4,000)
++Add: Platform-funded coupon reimbursement
++10,000
++Total Merchant Entitlement
++86,000
++Amount collected directly by hotel
++68,000
++Amount payable by mTrip to merchant
++18,000
++The amount payable by mTrip consists of the no-show pre-collection of 8,000 MMK and the platform-funded coupon reimbursement of 10,000 MMK.
++Platform Financial Breakdown
++Description
++Amount (MMK)
++Commission earned
++4,000
++Transaction fee collected
++80
++Platform-funded coupon expense
++(10,000)
++Net financial result before other costs
++(5,920)
++Scenario B: Customer Does Not Show Up
++Description
++Amount (MMK)
++Original online payment
++12,080
++Non-refundable no-show amount (merchant); commission 4,000 and transaction fee 80 retained by mTrip; total refund 0 
++8,000
++Original unpaid hotel balance
++68,000
++Hotel balance to be collected
++0
++No-show compensation payable to merchant
++8,000
++The no-show amount must not be refunded to the customer.
++For confirmed no-show, mTrip retains commission and transaction fee. Platform-funded and co-funded discount treatment remains subject to Product and Finance confirmation. 
++6. Cancellation and Refund Rules
++Cancellation eligibility follows the policy recorded at booking (Consumer PRD Module 8, Section 8.9.1). For eligible customer cancellations, refund all online payments except the transaction fee. For late cancellations and no-shows, no refund is issued; mTrip retains the commission and transaction fee, and the merchant receives the no-show pre-collection. If the merchant or mTrip cancels a confirmed booking before check-in, refund the full online payment, including the transaction fee, regardless of the cancellation deadline. No no-show payment is due to the merchant in this case.
++Partial cancellation and partial refund are out of scope for MVP. Each cancellation applies to one complete Booking ID, including bookings within a multi-hotel trip. For Pay at Hotel, the customer selects either mTrip Wallet or an external bank/e-wallet to receive the full eligible refund, regardless of the original payment split. Example: for an online payment of 30,200 MMK (commission 10,000; transaction fee 200; no-show pre-collection 20,000), an eligible customer cancellation returns 30,000 MMK, a merchant or mTrip cancellation returns 30,200 MMK, and a late cancellation or no-show returns 0 MMK. The unpaid hotel balance is not collected. Refer to Module 24 for refund processing and audit requirements.
++
++7. Super Admin Financial Records
++The Super Admin Portal must maintain the following information for payment, refund and settlement reconciliation:
++Original and final discounted room amounts.
++Applied discounts, funding types and funding ratios.
++Commission and transaction fee.
++No-show policy, rate and collected amount.
++Online payment and hotel payment breakdown.
++Refund amount, status and transaction reference.
++Merchant entitlement and settlement amount.
++Original and revised financial records following cancellation or refund.
++Merchant bank transfers must be processed manually by Finance. The completed transfer, transaction reference and settlement status must be recorded in the Super Admin Portal.
++8. Pending Business Confirmation
++The following items require Product and Finance confirmation before release:
++Item
++Confirmation Required
++No-show calculation
++Original or final discounted room amount as the calculation base.
++No-show settlement
++Confirmed: commission and transaction fee retained by mTrip; configured no-show pre-collection settled to merchant. 
++Discount funding
++Treatment of platform-funded and co-funded discounts for confirmed no-show bookings.
++Refund execution (Q3) 
++Pending Product and Finance confirmation: supported automatic refund methods at launch, provider failure verification, retry rules and manual refund takeover. 
++Post-check-in refund
++Refund and settlement handling for amounts already collected directly by the hotel.
++
+                Acceptance Criteria:
+ Pay at Hotel is offered only for enabled merchants; the booking shows upfront charge, hotel balance, fee breakdown, payment confirmations, cancellation/no-show outcome and complete audit history.
++
+ Booking Records
+ View booking verification history
+ View booking modification history
+@@ -831,27 +994,35 @@
+ Booking information remains synchronized across the Merchant App and Customer App.
+ Pay at Hotel settlement is automatically marked Completed upon a recorded actual check-in event, not merely upon arrival of the scheduled check-in date; the status transition and timestamp are auditable, and no separate payment verification is required for normal check-ins. 
+ The system applies captured commission, transaction fee and Pay at Hotel settings to confirmed bookings, and records merchant no-show pre-collection separately from mTrip commission for audit and reconciliation.
+-Cancellation and no-show refunds or retention follow the booking-specific agreed policy and recorded fee components;  merchant room-fee’s pre-collection will not be applied when merchant no-show fees are disabled.
+-
+-
+-
++Verify the five Pay at Hotel outcomes in Section 6, including refund amounts, transaction fee treatment, merchant settlement and refund destination. Confirm that partial cancellation and partial refund actions are unavailable. 
+ 
+ Module 14: Campaign & Promotion Management
+ Objective
+-Enable Super Administrators to create and manage platform campaigns and Super Admin-created promotions, while providing read-only monitoring of merchant-created self-funded promotions managed independently through the Merchant App. 
++Enable Super Administrators to create and manage platform campaigns and Super Admin-created promotions, while providing read-only monitoring of merchant-created self-funded promotions managed independently through the Merchant App.  This approval-free/read-only rule applies to ordinary non-Long-Stay merchant promotions; Long Stay follows the dedicated approval workflow. 
+ Description
+-The module supports platform campaigns, Super Admin-created promotions, vouchers, promotion codes, campaign funding and analytics. Merchant-created self-funded promotions are independently created and managed in the Merchant Dashboard without Super Admin approval. Super Admin has separate read-only oversight of merchant-created promotions and management controls for Super Admin-created promotions and platform campaigns.  
++The module supports platform campaigns, Super Admin-created promotions, vouchers, promotion codes, campaign funding and analytics. Merchant-created self-funded promotions are independently created and managed in the Merchant Dashboard without Super Admin approval. Super Admin has separate read-only oversight of merchant-created promotions and management controls for Super Admin-created promotions and platform campaigns.   This approval-free/read-only rule applies to ordinary non-Long-Stay merchant promotions; Long Stay follows the dedicated approval workflow. 
+ Key Functions
+ Platform Campaigns
+-•  Create and manage platform campaigns with applicable campaign type, reward type, eligibility, schedule and participating merchants. Merchant self-funded promotions are not created or approved through this workflow. 
++• Create and manage platform campaigns with applicable campaign type, reward type, eligibility, schedule and participating merchants. Merchant self-funded promotions are not created or approved through this workflow.  This approval-free/read-only rule applies to ordinary non-Long-Stay merchant promotions; Long Stay follows the dedicated approval workflow. 
+ • Set a campaign goal, schedule (start/end date and time), allocated budget, and participating merchants (all merchants by default for platform campaigns, or a single merchant for merchant-owned campaigns).
+ •Configure and monitor the Platform Campaign Fund, including total approved budget, allocated budget, reserved amount, utilized amount, and available balance. Super Admin may prepare or request campaign/co-fund budget allocation, but use of mTrip platform funds requires approval by an Authorized Budget Approver (Finance/Operations according to RBAC). 
+-•    Pause, resume, or end a campaign; view its linked vouchers and promotion codes.
+-•   Create a Long Stay Deal campaign with tiered nightly discounts (for example, 10% off stays of 3+ nights, 20% off stays of 7+ nights), a choice of who funds the discount (the platform, the merchant, or a shared split), and rules for how it combines with other coupons.
+-Super Admin created promotions may be configured and managed by authorized administrators for selected eligible merchants. Merchant-created self-funded Percentage, Fixed Amount and Promo Code promotions are visible for monitoring only and require no Super Admin approval.
++•Pause, resume, or end a campaign; view its linked vouchers and promotion codes.
++Create Long Stay campaigns using the Admin-only configuration and approval workflow below. Each property may have only one effective Long Stay configuration at a time.
++
++Long Stay – Configuration and property-level conflict prevention
++Only authorized Super Admin users configure Long Stay eligibility, participating hotel properties, minimum/maximum booking duration, tier minimum/maximum nights, discount percentage, eligible room types, validity date/time, funding type (merchant/platform/co-funded) and co-funding ratio. Merchants may submit proposed promotion details but cannot configure or activate Long Stay rules.
++Support multiple non-overlapping tiers within one configuration; validate positive nights, minimum ≤ maximum, discount limits and funding split. Apply the highest eligible tier where threshold-based tiers are used; do not combine multiple Long Stay discounts. Allow bookings beyond 30 nights only when the property configuration and availability for the entire stay permit it. A 60-night tier is illustrative, not a global maximum.
++Enforce one active Long Stay configuration per hotel property, not per legal merchant account. Validate conflicts on submission, approval, scheduling, activation and edit across platform and merchant-originated campaigns, including overlapping future validity periods and concurrent requests. Block activation/approval for conflicting properties and identify the existing campaign; do not silently replace it. Multi-property campaigns must exclude conflicts or resolve them before activation.
++Apply an eligible coupon after the Long Stay discount subject to coupon eligibility. Configure coupon funding independently. Existing prototype coupon options Long Stay Only / Best Wins must not override the agreed eligible stacking rule; reconcile with Consumer Module 2 before release. Preserve confirmed booking and claimed entitlement terms; edits apply prospectively.
++Long Stay – Merchant promotion approval requests
++Campaign & Promotion → Campaigns → Campaign Approval Requests: provide a queue for merchant-submitted Long Stay promotions, distinct from ordinary self-funded promotions and budget approval. Display request ID, merchant/property, proposed discount, room types, minimum nights, schedule, submission date, conflict result and status.
++Workflow: Submitted/Pending Approval → Under Review → Approved or Rejected (reason required for rejection); allow return for correction and resubmission. Approval does not activate a campaign until Admin rules, conflict checks, required funding approvals and validity conditions are satisfied. Authorized Admin configures final rules and publishes/schedules the approved promotion. Notify merchant of decision and final terms; maintain versioned audit history.
++QA – Reject overlapping active/scheduled Long Stay rules for the same property regardless of origin; allow different properties under the same merchant; verify approval permissions, tier validation, >30-night eligibility, coupon calculation and prospective changes. Ordinary self-funded non-Long-Stay promotions remain approval-free.
++Super Admin created promotions may be configured and managed by authorized administrators for selected eligible merchants. Merchant-created self-funded Percentage, Fixed Amount and Promo Code promotions are visible for monitoring only and require no Super Admin approval. This approval-free/read-only rule applies to ordinary non-Long-Stay merchant promotions; Long Stay follows the dedicated approval workflow.
+ Where a Super Admin-created campaign or promotion uses mTrip Co-Fund, authorized administrators configure the proposed platform contribution and submit a separate Platform Fund Usage Request; promotion management permission alone does not authorize fund usage.
+ Where mTrip funding is required for a Super Admin-created campaign or promotion, platform-funded benefits must not activate until an Authorized Budget Approver (Finance/Operations according to RBAC) approves the funding request.
+ After funding approval, the approved mTrip-funded amount is reserved against the applicable Platform Campaign Fund. The system updates promotion and funding statuses, records the approver and decision, and sends the applicable notification. If funding is rejected, no platform budget is reserved or utilized.
++
+ 
+ 
+ Voucher Management
+@@ -874,19 +1045,19 @@
+ Compare two campaigns, or two time periods, side by side; export the comparison and campaign performance reports.
+ Break down campaign performance by where it originated (the platform itself, a specific merchant, or a specific promotion, voucher, code, or reward type) and by merchant participation.
+ 
++
+ Merchant Self-Funded Promotions (Read-Only Monitoring) & Welcome Rewards 
+-View merchant-created self-funded promotions separately from Super Admin-created promotions. Search and filter by merchant/property, promotion type, validity date/time, enabled status and lifecycle status; view discount, claim activity and audit history. Super Admin has monitoring-only access and no approval, rejection, editing, activation or ending action for these promotions.
+-Merchants create, edit, enable, disable, end and delete their own self-funded Percentage, Fixed Amount and Promo Code promotions through the Merchant Dashboard without requesting Super Admin approval. Funding Type and Co-Fund configuration are not available to merchants.
++View merchant-created self-funded promotions separately from Super Admin-created promotions. Search and filter by merchant/property, promotion type, validity date/time, enabled status and lifecycle status; view discount, claim activity and audit history. Super Admin has monitoring-only access and no approval, rejection, editing, activation or ending action for these promotions. This approval-free/read-only rule applies to ordinary non-Long-Stay merchant promotions; Long Stay follows the dedicated approval workflow.
++Merchants create, edit, enable, disable, end and delete their own self-funded Percentage, Fixed Amount and Promo Code promotions through the Merchant Dashboard without requesting Super Admin approval. Funding Type and Co-Fund configuration are not available to merchants. This approval-free/read-only rule applies to ordinary non-Long-Stay merchant promotions; Long Stay follows the dedicated approval workflow.
+ Super Admin-created promotions and platform/co-funded campaigns are managed separately by authorized Super Admin users. Any mTrip-funded contribution requires the established independent Platform Fund Usage approval, reservation and utilization controls.
+ Authorized Budget Approvers (Finance/Operations according to RBAC) approve or reject platform fund requests for Super Admin-managed/co-funded campaigns; this approval does not apply to merchant-created self-funded promotions.
+ After funding approval for eligible Super Admin-managed campaigns, reserve and track the approved mTrip contribution, record actual utilization, and release unused funds under the existing financial rules.
+ For merchant-created self-funded promotions, enforce the platform-defined maximum merchant-funded discount and protected minimum payable amount at merchant save time. For example, an official room price of 100,000 MMK with a protected minimum payable amount of 20,000 MMK allows a maximum merchant-funded discount of 80,000 MMK; unauthorized 100% free promotions are blocked.
+-Merchant-created promotions require Valid From and Valid To dates and times in the platform-defined timezone, with Valid To later than Valid From. The system validates the date-time range when the merchant saves the promotion. The Super Admin Portal displays these values for monitoring; it does not approve the validity range.
+-Merchant self-funded promotions have no Pending Approval, Approved, Rejected, On Hold or Request to Super-admin workflow. Enabled promotions follow Scheduled → Active → Expired according to validity; disabling or ending prevents new claims immediately.
+-Merchant edits to self-funded promotions are applied directly and prospectively without approval. Preserve the original terms, discount, redemption limits and validity of previously claimed customer entitlements.
+-Disabling, ending or deleting a merchant self-funded promotion immediately stops new customer claims but does not invalidate existing eligible claims. Deletion is a soft delete/archive; retain records for customer redemption, reporting and audit.
++Merchant self-funded promotions have no Pending Approval, Approved, Rejected, On Hold or Request to Super-admin workflow. Enabled promotions follow Scheduled → Active → Expired according to validity; disabling or ending prevents new claims immediately. This approval-free/read-only rule applies to ordinary non-Long-Stay merchant promotions; Long Stay follows the dedicated approval workflow.
++Merchant edits to self-funded promotions are applied directly and prospectively without approval. Preserve the original terms, discount, redemption limits and validity of previously claimed customer entitlements. This approval-free/read-only rule applies to ordinary non-Long-Stay merchant promotions; Long Stay follows the dedicated approval workflow.
++Disabling, ending or deleting a merchant self-funded promotion immediately stops new customer claims but does not invalidate existing eligible claims. Deletion is a soft delete/archive; retain records for customer redemption, reporting and audit. This approval-free/read-only rule applies to ordinary non-Long-Stay merchant promotions; Long Stay follows the dedicated approval workflow.
+ Previously claimed promotions remain visible to customers and redeemable according to their original claim-time terms and validity, including after merchant edits, disables, ends or deletes the promotion.
+-Super Admin can monitor promotion lifecycle, enabled state, merchant/property, claim counts, timestamps and original promotion versions, but cannot change merchant self-funded promotion state or customer entitlements.
++Super Admin can monitor promotion lifecycle, enabled state, merchant/property, claim counts, timestamps and original promotion versions, but cannot change merchant self-funded promotion state or customer entitlements. This approval-free/read-only rule applies to ordinary non-Long-Stay merchant promotions; Long Stay follows the dedicated approval workflow. 
+ Merchant participation in Super Admin-created platform campaigns is governed by the separate campaign rules. Merchants may participate in eligible campaigns but cannot configure platform Co-Fund splits.
+ Merchant withdrawal from an mTrip-created or Co-Funded campaign requires Super Admin approval. A merchant withdrawal request remains Pending until an authorized Super Admin approves or rejects it. While pending, existing campaign participation and eligible new customer claims continue. Upon approval, new claims under that merchant's campaign participation stop from the approval effective timestamp, while previously claimed customer benefits and confirmed bookings remain valid under their original terms. If rejected, campaign participation continues unchanged. Record the request, decision, reviewer, timestamps, reason and audit history, and notify the merchant of the outcome.
+ Record merchant promotion creation, edits, enable/disable, end/delete actions, actors, timestamps, versions and linked customer claims for read-only Super Admin oversight and traceability.
+@@ -908,18 +1079,18 @@
+ 
+ Business Rules
+ Super Administrators can create platform-wide campaigns available to all or selected merchants.
+-Merchants independently create and manage self-funded promotions through the Merchant Dashboard; Super Admin has read-only monitoring access. 
++Merchants independently create and manage self-funded promotions through the Merchant Dashboard; Super Admin has read-only monitoring access.  This approval-free/read-only rule applies to ordinary non-Long-Stay merchant promotions; Long Stay follows the dedicated approval workflow.
+ Merchant-created promotions must comply with platform policies.
+-Merchant-created self-funded promotions have no Funding Type or Co-Fund option, and Super Admin does not classify or approve them. Co-Fund applies only through separately governed Super Admin-managed platform campaigns.
+-Merchant-created self-funded promotions do not require Super Admin approval for creation, editing, enabling, disabling, ending or deletion. No Request to Super-admin, Pending Approval, Rejected or On Hold status applies to these promotions.
++Merchant-created self-funded promotions have no Funding Type or Co-Fund option, and Super Admin does not classify or approve them. Co-Fund applies only through separately governed Super Admin-managed platform campaigns. This approval-free/read-only rule applies to ordinary non-Long-Stay merchant promotions; Long Stay follows the dedicated approval workflow.
++Merchant-created self-funded promotions do not require Super Admin approval for creation, editing, enabling, disabling, ending or deletion. No Request to Super-admin, Pending Approval, Rejected or On Hold status applies to these promotions. This approval-free/read-only rule applies to ordinary non-Long-Stay merchant promotions; Long Stay follows the dedicated approval workflow.
+ Platform Fund Usage Requests and separate Authorized Budget Approver decisions apply to Super Admin-managed platform/co-funded campaigns that require mTrip funding, not merchant self-funded promotions.
+ The system must not reserve, deduct, or utilize Platform Campaign Fund budget based only on Super Admin promotion approval. Platform fund usage requires a separate funding-approval decision, and the approved amount must not exceed the available Platform Campaign Fund balance.
+ After funding approval, the system must reserve the approved mTrip-funded amount against the applicable Platform Campaign Fund and maintain total approved budget, reserved, utilized, released, and available balances. Rejected funding requests must not affect the fund balance.
+-Merchant self-funded promotion edits take effect directly for future claims; no Super Admin re-approval or edit-request On Hold state applies. Existing claimed benefits retain their original terms.
++Merchant self-funded promotion edits take effect directly for future claims; no Super Admin re-approval or edit-request On Hold state applies. Existing claimed benefits retain their original terms. This approval-free/read-only rule applies to ordinary non-Long-Stay merchant promotions; Long Stay follows the dedicated approval workflow. 
+ Merchant disabling, ending or soft-deleting a promotion stops new claims immediately while retaining previously claimed customer benefits according to original terms and validity. 
+ Merchant promotion edits, deactivation, ending and deletion must not invalidate existing customer claims; entitlements remain linked to the original claimed version.
+-Maintain separate records and read-only visibility for merchant-created self-funded promotions versus Super Admin-created promotions and platform campaigns, subject to RBAC and audit logging.
+-Validate merchant self-funded discount limits and protected minimum payable amounts at merchant save time. Platform-funded campaigns remain subject to their own approval and funding controls.
++Maintain separate records and read-only visibility for merchant-created self-funded promotions versus Super Admin-created promotions and platform campaigns, subject to RBAC and audit logging. This approval-free/read-only rule applies to ordinary non-Long-Stay merchant promotions; Long Stay follows the dedicated approval workflow.
++Validate merchant self-funded discount limits and protected minimum payable amounts at merchant save time. Platform-funded campaigns remain subject to their own approval and funding controls. This approval-free/read-only rule applies to ordinary non-Long-Stay merchant promotions; Long Stay follows the dedicated approval workflow.
+ Promotion cancellations, holds and revisions shall not invalidate existing customer claims; customer entitlements must remain traceable to the version originally claimed.
+ Promotion and edit-request review statuses shall be stored and displayed separately, with all decisions subject to RBAC and audit logging.
+ Before activation, the system must validate the merchant-funded discount against the maximum merchant-funded discount and protected minimum payable amount. Promotions exceeding the merchant limit, resulting in an unauthorized 100% free booking, or reducing the payable amount below the protected minimum must not be activated. Co-Fund promotions require both promotion approval and funding approval before activation/customer visibility.
+@@ -928,12 +1099,12 @@
+ Promotion codes must be unique across the platform.
+ Expired vouchers and promotion codes cannot be redeemed.
+ Campaign priority determines which promotion is applied when multiple campaigns are eligible.
+-Super Admin can view merchant self-funded Valid From/To timestamps and lifecycle statuses without approving or rejecting merchant promotion submissions.
++Super Admin can view merchant self-funded Valid From/To timestamps and lifecycle statuses without approving or rejecting merchant promotion submissions. This approval-free/read-only rule applies to ordinary non-Long-Stay merchant promotions; Long Stay follows the dedicated approval workflow.
+ Super Admin can view merchant promotion change history and claim-linked original versions in read-only mode.
+ Merchant promotion changes apply prospectively without an approval hold; previously claimed customer benefits remain redeemable under original terms.
+ Enabled merchant promotions follow validity-based Scheduled, Active and Expired states; disabling or ending stops new claims immediately.
+ Merchant edits, disables, ends and soft-deletes do not remove or modify previously claimed entitlements.
+-Super Admin can separately monitor merchant self-funded promotion status, enabled state, validity, claims and activity history without approval actions.
++Super Admin can separately monitor merchant self-funded promotion status, enabled state, validity, claims and activity history without approval actions. This approval-free/read-only rule applies to ordinary non-Long-Stay merchant promotions; Long Stay follows the dedicated approval workflow.
+ Claim protection applies to merchant self-funded promotions and eligible participation in platform/co-funded campaigns; funding approvals remain separate for platform-funded campaigns. 
+ Automatically scheduled campaigns must activate and deactivate based on configured dates and times.
+  A Long Stay Deal requires at least one discount tier and, if it only applies to selected hotels, at least one hotel must be chosen.
+@@ -957,17 +1128,10 @@
+ Enable Super Administrators to manage the platform's affiliate and influencer programs, including affiliate onboarding, campaign management, referral tracking, commission monitoring, and performance analysis.
+ Description
+ The Affiliate & Influencer Management module enables Super Administrators to manage the mTrip affiliate ecosystem, including affiliate onboarding, partner management, reward distribution, fraud prevention, affiliate program configuration, and affiliate codes. It provides centralized control over affiliate operations, commission and reward rules, referral governance, and partner performance across the platform. 
+-Affiliate and referral rewards are distributed through the Reward Wallet as non-cash incentives, including travel credits, reward points, coupons, and vouchers. The module also provides centralized configuration of affiliate program settings, which are used by the Referral Campaigns module to define campaign-specific referral rules and promotional activities
+-Consumer-to-Consumer referral rewards are non-cash incentives (travel credits, points, coupons or vouchers) recorded in the Reward Wallet. Certified Influencer earnings and Agent/Merchant affiliate commissions are monetary, held in separate withdrawable ledgers subject to release and payout rules. The module centrally configures commissions, referral rewards, certification, attribution, and fraud controls. 
+-
+-
+-
+-
+-
+-
++Affiliate and referral rewards are distributed through the Reward Wallet as non-cash incentives, including travel credits, reward points, coupons, and vouchers. The module also provides centralized configuration of affiliate program settings, which are used by the Referral Campaigns module to define campaign-specific referral rules and promotional activities Regular consumer referral booking credits are recorded in the same mTrip Wallet (Module 25), not a separate spendable reward balance; monetary affiliate payouts remain separate.
++Consumer-to-Consumer referral rewards are non-cash incentives (travel credits, points, coupons or vouchers) recorded in the Reward Wallet. Certified Influencer earnings and Agent/Merchant affiliate commissions are monetary, held in separate withdrawable ledgers subject to release and payout rules. The module centrally configures commissions, referral rewards, certification, attribution, and fraud controls.  Regular consumer referral booking credits are recorded in the same mTrip Wallet (Module 25), not a separate spendable reward balance; monetary affiliate payouts remain separate.
+ 
+ High-Level Workflow
+-
+ 
+ Key Functions
+ Affiliate Applications
+@@ -979,8 +1143,8 @@
+ •  Browse and manage affiliate partners across supported partner types, including Influencers, Business Affiliates, and User Referrals. 
+ •    View a partner profile, send a message, and suspend or restore a partner.
+ Reward Wallet
+-• Review only non-cash Consumer-to-Consumer referral rewards in Reward Wallet, including earned, redeemed, expired, and manual adjustments. Monetary Influencer and Agent/Merchant commissions must be managed in their separate ledgers under Financial Management.
+-• Allow authorized manual adjustments to non-cash Reward Wallet balances only, with mandatory reason and audit record; do not treat this function as a monetary payout.
++• Review only non-cash Consumer-to-Consumer referral rewards in Reward Wallet, including earned, redeemed, expired, and manual adjustments. Monetary Influencer and Agent/Merchant commissions must be managed in their separate ledgers under Financial Management. Regular consumer referral booking credits are recorded in the same mTrip Wallet (Module 25), not a separate spendable reward balance; monetary affiliate payouts remain separate.
++• Allow authorized manual adjustments to non-cash Reward Wallet balances only, with mandatory reason and audit record; do not treat this function as a monetary payout. Regular consumer referral booking credits are recorded in the same mTrip Wallet (Module 25), not a separate spendable reward balance; monetary affiliate payouts remain separate.
+ •    Export the reward wallet history.
+ Fraud Prevention
+ •    Review a fraud queue with risk level, detection reason, and investigation status.
+@@ -1031,7 +1195,7 @@
+ Each successful booking can only generate one referral reward unless otherwise configured.
+ The system detects duplicate referrals using configured fraud prevention rules.
+ Suspicious referral activities can be flagged for manual review.
+-Consumer-to-Consumer Reward Wallet rewards are non-cash travel credits, points, coupons or vouchers and cannot be withdrawn or bank-transferred. This restriction does not apply to eligible monetary Influencer Wallet or Agent/Merchant Affiliate Commission Wallet balances. 
++Consumer-to-Consumer Reward Wallet rewards are non-cash travel credits, points, coupons or vouchers and cannot be withdrawn or bank-transferred. This restriction does not apply to eligible monetary Influencer Wallet or Agent/Merchant Affiliate Commission Wallet balances.  Regular consumer referral booking credits are recorded in the same mTrip Wallet (Module 25), not a separate spendable reward balance; monetary affiliate payouts remain separate. 
+ Manual reward adjustments require an administrator reason and must be recorded in the audit log. 
+ Acceptance Criteria
+ Super Admin can review influencer verification evidence and approve or reject certification with an audit record.
+@@ -1047,7 +1211,7 @@
+ Authorized Super Administrator can set and update both Affiliate Program minimum and maximum withdrawal amounts per request; the system validates requests against both limits and available balance, displays the applicable limits to eligible affiliates, and records configuration changes with actor, previous value, new value, and timestamp. 
+ For an eligible booking with a 100,000 MMK booking amount and a 20,000 MMK discount, a 5% affiliate commission is calculated as 5% × 80,000 MMK = 4,000 MMK.
+ The system generates unique referral links or codes for approved affiliates, and tracks referral and commission activity.
+-Super Administrator can review and manually credit the non-cash reward wallet for affiliates.
++Super Administrator can review and manually credit the non-cash reward wallet for affiliates. Regular consumer referral booking credits are recorded in the same mTrip Wallet (Module 25), not a separate spendable reward balance; monetary affiliate payouts remain separate. 
+ Super Administrator can configure commission, reward, and fraud rules.
+ Unauthorized users cannot access affiliate management functions.
+ Referral activities are tracked and available for reporting.
+@@ -1229,6 +1393,7 @@
+ Report exports are recorded in the audit log. 
+  Scheduled reports are generated successfully. 
+ Unauthorized users cannot access restricted reports. 
++
+ Consumer Wallet Forfeiture Report 
+ Provide Reports & Analytics → Financial Reports → Consumer Wallet Forfeiture Report. Authorized Finance and Super Admin roles may view and export CSV/XLSX; enforce RBAC and log exports.
+ Filter by date range, Consumer ID, deletion request ID, status and approver. Display forfeiture amount, currency, approval reason, request/approval/finalization timestamps, Super Admin approver, Finance maker/checker, ledger reference and final status.
+@@ -1386,8 +1551,10 @@
+ Wallet threshold: Super Admin shall configure the minimum balance threshold in MMK via controlled settings, with change history, effective date and permission control. Check current wallet balance at submission and again before final execution. A balance above threshold blocks self-service deletion and directs the consumer to Customer Support.
+ Approval: Authorized Super Admin may approve/reject a Customer Support escalated deletion request; approval reason is mandatory, supporting documents optional. Approval validity defaults to 7 days and is Super Admin configurable for future approvals; log changes. Expired approval requires renewed review.
+ Finance control: Following Super Admin approval, a separate Finance maker and Finance checker must review the irreversible forfeiture before account deletion completes. No one-person finalization. On completion, terminate active sessions and retain required financial, booking and audit records.
++
+ Business Rules 
+-For balance equal to or below threshold, Consumer PRD allows deletion without additional approval but also states positive balances must not be automatically forfeited solely due to threshold. Keep this as a pending cross-platform decision: confirm disposition of positive balance and whether Finance maker-checker applies before implementing a bypass.
++For wallet balance equal to or below threshold, allow self-service deletion without Support/Finance approval, subject to booking blockers and explicit consumer acknowledgement of forfeiture. Forfeit remaining credit only upon successful deletion and post to the internal ledger; no cash refund. Above threshold, retain Support escalation, Super Admin approval and Finance maker-checker; enable consumer self-service deletion only after approval. Latest Mario clarification supersedes conflicting Consumer Module 19 wording; Product/Finance sign-off required before release.
++After required approval, enable deletion for the specific consumer and notify them; consumer completes deletion in the app within the configured approval validity. Recheck blockers and balance; material balance changes require renewed review. Example threshold 5,000 MMK: 0–5,000 direct deletion; 5,001 requires Support and approval.
+ Acceptance Criteria 
+ Unauthorized users cannot approve; missing reason blocks approval; supporting document optional; expired approvals cannot finalize; refund in progress blocks deletion; confirmed past-checkout bookings alone do not block; every completed forfeiture is ledger-posted and auditable.
+ 
+@@ -1555,7 +1722,8 @@
+ Objective
+ Enable Super Administrators to design, launch, and manage referral-based user-acquisition campaigns that reward customers for inviting new users onto the platform.
+ Description
+-The Referral Campaigns module enables Super Administrators to design, manage, and monitor referral-based marketing campaigns that encourage existing users to invite new customers to the platform. Each campaign can inherit the platform-wide referral settings configured in the Affiliate Program (Module 15) or override them with campaign-specific rules. Rewards issued through referral campaigns are managed through the Affiliate Program's Reward Wallet, ensuring centralized reward tracking and governance. 
++The Referral Campaigns module enables Super Administrators to design, manage, and monitor referral-based marketing campaigns that encourage existing users to invite new customers to the platform. Each campaign can inherit the platform-wide referral settings configured in the Affiliate Program (Module 15) or override them with campaign-specific rules. Rewards issued through referral campaigns are managed through the Affiliate Program's Reward Wallet, ensuring centralized reward tracking and governance.  Regular consumer referral booking credits are recorded in the same mTrip Wallet (Module 25), not a separate spendable reward balance; monetary affiliate payouts remain separate.
++Referral attribution: support eligible new registrations only, validate code and apply once per account. Consumer Module 14 owns installed-app deep links, store redirects, deferred code recovery and manual-entry fallback; Super Admin retains campaign attribution and audit records. No new Admin UI required for deep linking.
+ Key Functions
+ •  View and manage referral campaigns, including campaign status, participation, and reward distribution metrics. 
+ •  Create and configure referral campaigns, including campaign information, reward configuration, referral conditions, budget allocation, fraud prevention rules, and publication settings. 
+@@ -1629,7 +1797,7 @@
+ Search transactions by Transaction ID, Booking ID, customer, or merchant.
+ Filter transactions by date range, transaction type, status, business domain, and merchant.
+ View supported transaction types, including booking payments, refunds, chargebacks, and adjustments.
+-View transaction status such as Completed, Pending, Failed, Refunded, and Partial Refund.
++View transaction statuses: Completed, Pending, Failed and Refunded. Refunded means the full eligible refund has been completed, even if a non-refundable transaction fee was retained. 
+ Export transaction records.
+ Merchant Settlements
+ View merchant payable and settlement information.
+@@ -1651,11 +1819,20 @@
+ Post an immutable Wallet Refund/Manual Adjustment ledger entry only after approval; show pending, approved, rejected, posted and failed states; provide notifications, reversal through compensating entries where authorized, and complete 
+ An approved eligible MMK settlement updates the customer Wallet exactly once; rejected/failed requests do not change balance; loyalty points remain unchanged; wallet-credit expiry and usage restrictions follow Module 25.
+ View refund details including Refund ID, Booking ID, customer, merchant, business domain, refund/adjustment type, original amount, refund amount, merchant impact, and status.
+-View full refunds, partial refunds, cancellation refunds, chargebacks, and authorized manual adjustments 
++View eligible cancellation refunds, chargebacks and authorized manual adjustments. Partial cancellation and partial refund actions are not supported in MVP.  
+ Track pending, processing, completed, failed, and rejected refunds or adjustments.
+ Search refunds and adjustments by Refund ID, Booking ID, customer, or merchant.
+ Filter records by date range, type, status, business domain, and merchant.
+ Export refund and adjustment records.
++Pay at Hotel – Refund execution and settlement transfers
++
++Normal bookings: credit the full eligible refund to mTrip Wallet only. Pay at Hotel: allow the customer to select mTrip Wallet (within 24 hours) or an external bank/e-wallet (approximately 30 days), including merchant- or mTrip-initiated cancellations. Send the entire eligible refund to the selected destination, regardless of the original payment split. For example, a 30,000 MMK eligible refund from a mixed Wallet/KBZ payment is sent in full to the selected destination. Apply the transaction fee rules in Module 13, Section 6.
++Wallet refunds are credited internally once. External refunds must follow the customer’s selected destination. The payment methods eligible for automatic refunds and those requiring manual Finance transfers at launch remain pending Product and Finance confirmation (Q3).
++Refund lifecycle: Pending Approval (if required) → Approved/Pending Processing → Processing → Refunded. Mark the booking Refunded only after the full eligible refund is verified as complete. Record successful refund transactions as Completed and retain reasons and history for failed or rejected refunds. Proposed Q3 safeguard, pending Product and Finance approval: reconcile pending, timed-out or unknown provider outcomes before retrying or initiating a manual transfer. Confirm that the original attempt did not pay the customer before proceeding to prevent duplicate refunds.
++Finance manual refund: record beneficiary/payment method, approved amount, transfer reference, evidence, actual processing date, operator and approval/audit history; mark completed only after transfer confirmation. Prevent duplicate refunds across API, manual and Wallet routes; reconcile cumulative refunds against eligible amount. Synchronize status to Booking Administration and Consumer/Merchant views as applicable.
++Merchant settlement bank transfers: MMQR provides payment/refund APIs but no transfer API at this stage (developer confirmation). System calculates payable and reconciliation automatically; Finance executes bank transfer outside the system and records completed transfer reference, amount, date, evidence and status. Keep actual payout status separate from operational settlement Completed at recorded check-in.
++
++QA Check Point – Verify the five cancellation outcomes, refund destinations for both booking types, mixed-payment routing, transaction fee treatment, Wallet credits and merchant settlement. Automatic refund failure, retry, manual transfer verification and duplicate prevention tests are subject to the final Q3 decision. 
+ 
+ Financial Reports
+ Generate Revenue & Commission Reports.
+@@ -1689,11 +1866,11 @@
+ Super Administrator can view and search financial transactions.
+ Super Administrator can filter transactions by date range, type, status, business domain, and merchant.
+ Super Administrator can view gross amount, commission, and net amount for a transaction.
+-Super Administrator can view merchant settlements and their current statuses.
++Settlement control: Treat the upfront commission as already collected from the room amount. Do not deduct or collect it a second time from a merchant settlement. Record the transaction fee separately and reconcile merchant no-show pre-collection and applicable platform-funded subsidies against the merchant payable. 
+ Pay at Hotel – Financial Settlement and Reconciliation: Record mTrip commission received upfront and applicable transaction fees (calculated on commission), plus merchant room-fee pre-collection only when merchant no-show fees are enabled (maximum 30% of room price). Separate each component in ledger, refunds and settlement. 
+ Pay at Hotel – Check-in Trigger: For confirmed Pay at Hotel bookings, a recorded actual customer check-in shall automatically set the operational settlement status to Completed. The system shall not rely solely on the scheduled check-in date, and shall retain the check-in event, timestamp, and settlement status history for reconciliation. This status does not constitute independent confirmation of the amount collected directly by the hotel. Cancellation, no-show, and pre-check-in refund/adjustment handling remain subject to existing policies 
+ Pay at Hotel configuration is merchant-specific; the platform must not present this option where the merchant has not opted in. Merchant opt-in/opt-out and effective dates must synchronize with Merchant Dashboard and Consumer checkout.
+-Cancellation policy must be evaluated against the booking-specific deadline, timezone and effective terms. Refund any refundable upfront amount via the approved original-payment or eligible Wallet refund route; do not assume non-refundable amounts always belong entirely to mTrip.
++Evaluate cancellation eligibility using the policy, deadline and time zone recorded at booking. Apply the refund and settlement rules in Modules 13 and 24. 
+ Admin can reconcile combined Pay at Hotel deposits and distinguish mTrip commission from merchant’s no-show pre-collection. No double collection occurs; refund/no-show events update ledgers consistently. 
+ For Pay at Hotel bookings with recorded actual check-in, the settlement status becomes Completed automatically without separate merchant payment confirmation or Super Admin/Finance verification for the normal flow; the check-in and transition are recorded for audit. 
+ Super Administrator can search and filter merchant settlements.
+@@ -1703,35 +1880,44 @@
+ SuperAdministrator can view the financial impact of a refund or adjustment.
+ Super Administrator can generate Revenue & Commission, Merchant Settlement, Refund & Adjustment, and Transaction reports.
+ Super Administrator can export supported financial records and reports.
+-Generated reports can be downloaded in the supported file formats.
+-Unauthorized administrators cannot access restricted financial information or actions.
++Generated reports can be downloaded in the supported file formats. Actual bank payout remains manual as specified above.
++Apply the cancellation and refund rules in Module 13, Section 6, and the refund destination rules in Module 24. Retain the transaction fee for eligible customer cancellations; refund it when the merchant or mTrip cancels a confirmed booking. 
+ Relevant financial administrative actions are recorded in the audit log.
+ 
+ Consumer Wallet Forfeiture Controls
+ Finance maker-checker: After an authorized Super Admin approves a wallet-forfeiture deletion request, the Finance maker shall prepare/verify the forfeiture transaction and a different authorized Finance checker shall approve it before final forfeiture and deletion execution. The same user cannot act as both maker and checker.
+ Internal Forfeited mTrip Wallet Balance Ledger shall be the source of truth for finalized consumer account-deletion forfeitures, separate from ordinary wallet-credit expiry. Record Consumer ID, deletion request ID, balance snapshot, final amount, currency, timestamps, reason, Super Admin approver, Finance maker/checker, approval status, ledger reference and audit history.
+-Forfeiture must not be recorded as completed until Finance checking succeeds and the final balance has been revalidated. Rejected, expired or failed requests must not be posted as completed forfeitures. Preserve records according to financial/audit retention policy.
+-
++Forfeiture is completed only upon successful deletion after final balance revalidation and applicable approval (Finance checker for above-threshold cases). Rejected, expired or failed requests must not be posted as completed forfeitures. Preserve financial/audit records. 
+ Business Rules 
+-Threshold-exempt deletion with a positive wallet balance: Consumer PRD Module 19 permits proceeding without additional approval but also prohibits automatic forfeiture merely because balance is below threshold. Do not implement automatic forfeiture or bypass Finance controls without explicit Product/Finance confirmation; zero-balance deletion needs no forfeiture.
++If the remaining wallet balance is equal to or below the configured threshold, manual Finance approval is not required, as per the latest Consumer PRD clarification.
++The remaining wallet balance must be automatically forfeited only after the consumer confirms the account deletion and the deletion is successfully completed.
++The system must validate the final wallet balance before account deletion and maintain an audit record of the forfeiture.
++If the wallet balance exceeds the configured threshold, the existing Finance maker-checker approval process must apply.
++The Finance approval exemption for balances within the threshold is subject to Product and Finance confirmation before release.
++Consumer PRD Module 19 must be aligned with the confirmed business rules to ensure consistency across both platforms.
++
+ Acceptance Criteria
+ Finance maker and checker are distinct; final ledger is immutable/auditable; rejected and pending cases are not counted as completed forfeitures; reports reconcile with finalized ledger entries.
++
+ 
+ Module 25: Wallet Management
+ Objective
+ Enable authorized Super Administrators to configure, monitor, and govern the Consumer mTrip Wallet in alignment with Consumer App Module 18, including refund-credit expiry, maximum applicable wallet limits, wallet usage behavior, refund allocation, balance visibility, and wallet transaction monitoring. 
+ Description
+-mTrip Wallet is a temporary booking-credit wallet for eligible refunds from mTrip transactions. It is not a normal e-wallet: consumers cannot cash in, cash out, top up, transfer, or withdraw wallet balance. One wallet credit equals 1 MMK, and wallet credit can only be used for eligible mTrip transactions such as Hotel Booking, Car Booking, and other supported mTrip services.
++mTrip Wallet is a temporary booking-credit wallet for eligible refunds and regular consumer referral rewards. It is not a normal e-wallet: consumers cannot cash in, cash out, top up, transfer, or withdraw wallet balance. One wallet credit equals 1 MMK, and wallet credit can only be used for eligible mTrip transactions such as Hotel Booking, Car Booking, and other supported mTrip services. 
+ The Super Admin Portal provides the configuration and operational monitoring required by the Consumer App wallet flow. Admin controls the wallet-credit expiry period and the maximum wallet amount applicable to each supported transaction type, and can monitor Refund, Spend, and Expired wallet transactions.
+ Key Functions
+ Manual Wallet Settlement Controls: Display separate Manual Settlement requests and Wallet Refund ledger records with customer, linked booking, MMK or any other amount, reason, approver, timestamps, expiry and reconciliation reference. Manual Wallet settlements are approved refund credits only, not general-purpose wallet top-ups.
+ Business Rules / Acceptance Criteria: Enforce RBAC, approval, refund eligibility, duplicate prevention, transaction audit, correct available balance, expiry and Wallet transaction visibility. A loyalty-point adjustment must never be recorded as a monetary Wallet settlement.
+ 
+ Wallet Configuration
+-• Configure the Wallet credit expiry period used for newly issued refund credits (for example, 6 months or 1 year).
+-• Configure the maximum Wallet applicable amount / limit for each supported transaction type or service, such as Hotel Booking and Car Booking.
+-• Configure Wallet usage as Auto Apply at checkout, with the consumer allowed to switch Wallet usage ON/OFF before payment.
+-• Maintain the rule that Wallet credit is available only for eligible mTrip transactions and cannot be used for cash-in, cash-out, top-up, transfer, or withdrawal.
++Configure the Wallet credit expiry period used for newly issued refund credits (for example, 6 months or 1 year).
++Configure the maximum Wallet applicable amount / limit for each supported transaction type or service, such as Hotel Booking and Car Booking.
++Configure Wallet usage as Auto Apply at checkout, with the consumer allowed to switch Wallet usage ON/OFF before payment.
++Regular consumer-to-consumer referral booking-credit rewards post to the same mTrip Wallet, tagged Referral Reward with source campaign, amount, expiry and audit reference. Maintain separate monetary Affiliate/Influencer ledgers; points/coupons/vouchers are not converted into cash or Wallet credit without approved rules.
++Configure per-booking maximum applicable Wallet amount by service and individual credit expiry. Consumer PRD shows six months and 100,000 MMK as examples; launch defaults, returned-credit expiry and referral-credit expiry require confirmation. No Top Up; Consumer UI uses See Details.
++QA Check Point – Mixed Wallet/KBZPay standard refund credits the eligible total to Wallet once; each refund credit has its own configured expiry. Verify limit enforcement, referral reward posting and no withdrawal/top-up.
++Maintain the rule that Wallet credit is available only for eligible mTrip transactions and cannot be used for cash-in, cash-out, top-up, transfer, or withdrawal.
+ Wallet Account & Balance Monitoring
+ • Search and view a consumer Wallet using supported customer identifiers.
+ • View the consumer’s current available Wallet balance in MMK.
+@@ -1746,7 +1932,7 @@
+ • Wallet transaction records shall support traceability to the relevant booking and maintain a unique mTrip Wallet Transaction ID.
+ • Transaction history shall remain available for Refund, Spend, and Expired wallet transactions for operational investigation and audit purposes. 
+ Refund Wallet Allocation & Expiry Control 
+-• Eligible refunds shall be automatically allocated to the consumer’s mTrip Wallet according to the approved mTrip transaction and refund process.
++Eligible refunds for normal bookings are credited to mTrip Wallet. For Pay at Hotel, credit the Wallet only if selected by the customer; otherwise process the refund externally under Module 24. 
+ • Each refund credit shall receive its own expiry date based on the Wallet expiry period configured in the Super Admin Portal.
+ • When the expiry date is reached, the expired credit shall be forfeited, removed from the usable Wallet balance, and recorded as an Expired Wallet transaction.
+ • Super Admin shall control refund Wallet allocation according to the applicable mTrip transaction/refund process.
+@@ -1756,15 +1942,15 @@
+ • The consumer may switch Wallet usage OFF before payment; when OFF, Wallet credit shall not be applied to that transaction.
+ • If the booking amount exceeds the applicable Wallet amount, the remaining amount shall be paid using another supported payment method.
+ Affiliate & Influencer Settlement
+-Maintain distinct monetary ledgers for Influencer Wallet and Agent/Merchant Affiliate Commission Wallet, with pending/held, available, reserved, paid and reversed balances and linked transactions. Keep non-cash Consumer-to-Consumer Reward Wallet separate from monetary payouts.
++Maintain distinct monetary ledgers for Influencer Wallet and Agent/Merchant Affiliate Commission Wallet, with pending/held, available, reserved, paid and reversed balances and linked transactions. Keep non-cash Consumer-to-Consumer Reward Wallet separate from monetary payouts. Regular consumer referral booking credits are recorded in the same mTrip Wallet (Module 25), not a separate spendable reward balance; monetary affiliate payouts remain separate. 
+ Configure minimum and maximum monetary withdrawal amounts per request by eligible partner type/level, the applicable earning hold period, and eligibility. Maximum must be greater than or equal to minimum. Withdrawal requests must meet both configured limits and remain within released available balance; reserve requested funds to prevent double withdrawal, and return funds to available balance on rejection or failed payout. 
+ When an Agent/Merchant or Influencer account is suspended, withhold unpaid monetary earnings and block new withdrawal processing until authorized release. Refund reversal/clawback rules remain pending confirmation.
+-Acceptance Criteria: Influencer and Agent/Merchant monetary ledgers are separate from non-cash Reward Wallet; released balance and applicable minimum/maximum per-request withdrawal limits are enforced; Finance-only approval/transfer permissions apply; rejected/failed payouts restore reserved funds; suspended accounts cannot withdraw; all decisions and payment events are auditable. 
++Acceptance Criteria: Influencer and Agent/Merchant monetary ledgers are separate from non-cash Reward Wallet; released balance and applicable minimum/maximum per-request withdrawal limits are enforced; Finance-only approval/transfer permissions apply; rejected/failed payouts restore reserved funds; suspended accounts cannot withdraw; all decisions and payment events are auditable.  Regular consumer referral booking credits are recorded in the same mTrip Wallet (Module 25), not a separate spendable reward balance; monetary affiliate payouts remain separate. 
+ Business Rules
+-• mTrip Wallet is refund/booking credit only and is not a normal e-wallet.
++• mTrip Wallet is booking credit for refunds and regular referral rewards and is not a normal e-wallet. 
+ • 1 Wallet Credit = 1 MMK.
+ • Consumers cannot cash in, cash out, top up, transfer, or withdraw Wallet balance.
+-• Eligible refunds are automatically added to the Wallet.
++•Eligible refunds for normal bookings are credited to mTrip Wallet. For Pay at Hotel, credit the Wallet only if selected by the customer; otherwise process the refund externally under Module 24.
+ • Each refund credit has an individual expiry date, and the expiry period is controlled by the Super Admin Portal.
+ • Expired Wallet credit is forfeited and cannot be used.
+ • Super Admin controls the maximum Wallet amount applicable to each supported transaction type.
+@@ -1776,7 +1962,7 @@
+ • Authorized Super Administrator can configure the maximum Wallet applicable amount / limit for each supported transaction type.
+ • Super Administrator can view consumer Wallet balances and individual refund-credit expiry information.
+ • Super Administrator can view Wallet Refund, Spend, and Expired transactions with relevant booking and Wallet transaction references.
+-• Eligible refunds are credited to the Wallet according to the mTrip refund process and receive an expiry date based on the configured Admin rule.
++•Eligible refunds for normal bookings are credited to mTrip Wallet. For Pay at Hotel, credit the Wallet only if selected by the customer; otherwise process the refund externally under Module 24. Wallet credits expire according to the configured Admin rule. 
+ • Expired Wallet credit is forfeited, excluded from the usable balance, and recorded as an Expired transaction.
+ • At checkout, Wallet usage respects the configured maximum applicable limit and Auto Apply behavior.
+ • Consumers can switch Wallet usage OFF before payment.
+@@ -1816,6 +2002,8 @@
+ During first account activation, the merchant must complete one successful full authentication using an approved login method and its required OTP. Google Authenticator enrollment is required only when the merchant chooses Merchant Access Code + Google Authenticator.
+ Merchant Dashboard access is granted only after successful account activation and full authentication using the selected approved login method.
+ 
++
++
+ Module 12: Merchant Management
+ Super Administrator can view marketplace listings by supported business type.
+ Super Administrator can filter marketplace listings by city and status.
+@@ -1856,7 +2044,7 @@
+ Super Administrator can view campaign performance reports and analytics. 
+ Voucher redemption and promotion code usage are tracked.
+ All campaign activities are recorded in the audit log.
+- Super Administrator can create a Long Stay Deal campaign and restrict any offer to specific service types.
++Super Administrator can create a Long Stay Deal campaign and restrict any offer to specific service types.
+ Super Administrator can search, filter and view all merchant-created self-funded promotions and their claims and activity history in read-only mode, separately from Super Admin-created promotions.
+ Merchant self-funded promotions do not require Super Admin approval for creation, edits, enabling, disabling, ending or deletion; no approval-request or edit On Hold workflow applies.
+ Super Administrator can create and manage Super Admin-created promotions and platform campaigns separately, with platform Co-Fund usage subject to independent funding approval; previously claimed merchant promotion benefits remain protected under original claim-time terms.
+@@ -1867,7 +2055,7 @@
+ Super Administrator can create and manage affiliate codes.
+ Super Administrator can configure affiliate program settings.
+ The system generates unique referral links or codes for approved affiliates, and tracks referral and commission activity.
+-Super Administrator can review and manually credit the non-cash reward wallet for affiliates.
++Super Administrator can review and manually credit the non-cash reward wallet for affiliates. Regular consumer referral booking credits are recorded in the same mTrip Wallet (Module 25), not a separate spendable reward balance; monetary affiliate payouts remain separate. 
+ Super Administrator can configure commission, reward, and fraud rules.
+ Unauthorized users cannot access affiliate management functions.
+ Referral activities are tracked and available for reporting.
+@@ -1982,8 +2170,8 @@
+ Authorized Super Administrator can configure the Wallet credit expiry period.
+ Authorized Super Administrator can configure the maximum Wallet applicable amount  limit for each supported transaction type.
+ Super Administrator can view consumer Wallet balances and refund-credit expiry dates.
+-• Super Administrator can view Refund, Spend, and Expired Wallet transactions with relevant booking and Wallet transaction references.
+-Eligible refunds are automatically credited to the Wallet according to the approved refund process.
++Super Administrator can view Refund, Spend, and Expired Wallet transactions with relevant booking and Wallet transaction references.
++Eligible refunds for normal bookings are credited to mTrip Wallet. For Pay at Hotel, credit the Wallet only if selected by the customer; otherwise process the refund externally under Module 24. 
+ Expired Wallet credit is forfeited, excluded from usable balance, and recorded as an Expired transaction.
+ Wallet usage at checkout respects the Admin-configured applicable limit and Auto Apply behavior, while the consumer can switch Wallet usage OFF.
+  Wallet credit remains booking/refund credit only and cannot be cashed in, cashed out, topped up, transferred, or withdrawn. 
+@@ -1992,6 +2180,9 @@
+ 
+ Design Figma Link by UX/UI Team
+ https://pixel-igloo-58570745.figma.site/
++
++Figma Link Manual Drawing by Design team 
++https://www.figma.com/design/ToBbeDlxTGYrtdLxI0yZ7o/Super_Admin_Dashboard?node-id=13-2&p=f&t=mnQBq4tFRb0Fqz0G-0
+ 
+ 
+ Technical Considerations
+@@ -2103,6 +2294,9 @@
+ 1.0.19
+ Nov 19,2026
+ Updated Consumer Account Deletion requirements, including booking eligibility validation, configurable minimum wallet balance threshold, Super Admin approval workflow, mandatory approval reason, configurable approval validity, Finance maker-checker authorization, wallet forfeiture ledger, and financial reporting/export.Aligned the account deletion requirements with Consumer App PRD Module 19. Updated the Multi-Hotel Checkout payment rules to reflect the confirmed Option: a 10-minute countdown starting when the payment page opens, with redirection to price review upon expiry.
++1.0.20
++Nov24,2026
++Updated Modules 12–15, 20, 22, 24 and 25 to align with Consumer PRD clarifications. Refined Long Stay promotions, Pay at Hotel calculations and settlement, cancellation and refund rules, manual transfers, wallet and referral credits, and account deletion thresholds. Removed partial cancellation and partial refund from MVP. Clarified refund destinations and transaction fee exceptions. Added calculation examples and recorded outstanding Product and Finance decisions, including Q3. 
+ 
+ Open Issues
+ Merchant suspension policy

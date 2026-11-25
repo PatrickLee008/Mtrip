@@ -1,0 +1,294 @@
+{
+  "version": "1.0.20",
+  "updated_on": "2026-11-25",
+  "previous_version": "1.0.19",
+  "previous_manifest": "导入清单-v1.0.19.json",
+  "source_file": "mTrip_Super_Admin_Portal_PRD_Enterprise_v1.0.20_中文版.md",
+  "source_sha256": "3b3aeef09f228049b03b81d533e08ce59bd3dc140dfd9ae270dfac8245b752e8",
+  "source_lines": 2448,
+  "docx_file": "mTrip_Super_Admin_Portal_PRD_Enterprise_v1.0.20.docx",
+  "docx_sha256": "c3cc0f22ad887488e330a1334f339e4f8f04c7fcbed986e477a165922291cc44",
+  "sections": [
+    {
+      "path": "01-产品与范围/PRD 文档信息.md",
+      "start": 1,
+      "end": 18
+    },
+    {
+      "path": "01-产品与范围/产品定位、目标与约束.md",
+      "start": 23,
+      "end": 63
+    },
+    {
+      "path": "01-产品与范围/用户画像.md",
+      "start": 64,
+      "end": 69
+    },
+    {
+      "path": "02-业务流程/用户旅程总览.md",
+      "start": 70,
+      "end": 73
+    },
+    {
+      "path": "02-业务流程/场景1-商户认证与审批.md",
+      "start": 74,
+      "end": 100
+    },
+    {
+      "path": "02-业务流程/场景2-商户运营管理.md",
+      "start": 101,
+      "end": 122
+    },
+    {
+      "path": "02-业务流程/场景3-平台管理.md",
+      "start": 123,
+      "end": 136
+    },
+    {
+      "path": "02-业务流程/场景4-终端用户账户支持与高层工作流.md",
+      "start": 137,
+      "end": 159
+    },
+    {
+      "path": "03-功能模块/M11-商户认证与审批.md",
+      "start": 160,
+      "end": 293
+    },
+    {
+      "path": "03-功能模块/M12-商户管理.md",
+      "start": 294,
+      "end": 644
+    },
+    {
+      "path": "03-功能模块/M13-预订管理.md",
+      "start": 645,
+      "end": 877
+    },
+    {
+      "path": "03-功能模块/M14-活动与促销管理.md",
+      "start": 878,
+      "end": 1022
+    },
+    {
+      "path": "03-功能模块/M15-联盟与达人管理.md",
+      "start": 1023,
+      "end": 1146
+    },
+    {
+      "path": "03-功能模块/M16-用户与角色管理.md",
+      "start": 1147,
+      "end": 1219
+    },
+    {
+      "path": "03-功能模块/M17-报表与分析.md",
+      "start": 1220,
+      "end": 1369
+    },
+    {
+      "path": "03-功能模块/M18-平台配置与管理.md",
+      "start": 1370,
+      "end": 1472
+    },
+    {
+      "path": "03-功能模块/M19-库存与可售量管理（仅监控）.md",
+      "start": 1473,
+      "end": 1505
+    },
+    {
+      "path": "03-功能模块/M20-终端用户管理.md",
+      "start": 1506,
+      "end": 1669
+    },
+    {
+      "path": "03-功能模块/M21-帮助中心管理.md",
+      "start": 1670,
+      "end": 1751
+    },
+    {
+      "path": "03-功能模块/M22-推荐活动.md",
+      "start": 1752,
+      "end": 1793
+    },
+    {
+      "path": "03-功能模块/M23-内容管理.md",
+      "start": 1794,
+      "end": 1832
+    },
+    {
+      "path": "03-功能模块/M24-财务管理.md",
+      "start": 1833,
+      "end": 1986
+    },
+    {
+      "path": "03-功能模块/M25-钱包管理.md",
+      "start": 1987,
+      "end": 2078
+    },
+    {
+      "path": "04-验收标准/验收汇总说明.md",
+      "start": 2079,
+      "end": 2080
+    },
+    {
+      "path": "04-验收标准/AC11-商户认证与审批.md",
+      "start": 2081,
+      "end": 2113
+    },
+    {
+      "path": "04-验收标准/AC12-商户管理.md",
+      "start": 2114,
+      "end": 2131
+    },
+    {
+      "path": "04-验收标准/AC13-预订管理.md",
+      "start": 2132,
+      "end": 2146
+    },
+    {
+      "path": "04-验收标准/AC14-活动与促销管理.md",
+      "start": 2147,
+      "end": 2162
+    },
+    {
+      "path": "04-验收标准/AC15-联盟与达人管理.md",
+      "start": 2163,
+      "end": 2175
+    },
+    {
+      "path": "04-验收标准/AC16-用户与角色管理.md",
+      "start": 2176,
+      "end": 2190
+    },
+    {
+      "path": "04-验收标准/AC17-报表与分析.md",
+      "start": 2191,
+      "end": 2204
+    },
+    {
+      "path": "04-验收标准/AC18-平台配置与管理.md",
+      "start": 2205,
+      "end": 2220
+    },
+    {
+      "path": "04-验收标准/AC19-库存与可售量管理（仅监控）.md",
+      "start": 2221,
+      "end": 2228
+    },
+    {
+      "path": "04-验收标准/AC20-终端用户管理.md",
+      "start": 2229,
+      "end": 2245
+    },
+    {
+      "path": "04-验收标准/AC21-帮助中心管理.md",
+      "start": 2246,
+      "end": 2257
+    },
+    {
+      "path": "04-验收标准/AC22-推荐活动.md",
+      "start": 2258,
+      "end": 2265
+    },
+    {
+      "path": "04-验收标准/AC23-内容管理.md",
+      "start": 2266,
+      "end": 2272
+    },
+    {
+      "path": "04-验收标准/AC24-财务管理.md",
+      "start": 2273,
+      "end": 2293
+    },
+    {
+      "path": "04-验收标准/AC25-钱包管理.md",
+      "start": 2294,
+      "end": 2304
+    },
+    {
+      "path": "05-设计与集成/设计与原型链接.md",
+      "start": 2305,
+      "end": 2310
+    },
+    {
+      "path": "05-设计与集成/技术考量与跨平台集成.md",
+      "start": 2311,
+      "end": 2347
+    },
+    {
+      "path": "06-规划与治理/成功指标.md",
+      "start": 2348,
+      "end": 2362
+    },
+    {
+      "path": "06-规划与治理/版本变更历史.md",
+      "start": 2363,
+      "end": 2387
+    },
+    {
+      "path": "06-规划与治理/原文待解决问题.md",
+      "start": 2388,
+      "end": 2402
+    },
+    {
+      "path": "06-规划与治理/原文问答.md",
+      "start": 2403,
+      "end": 2412
+    },
+    {
+      "path": "06-规划与治理/功能时间线与阶段规划.md",
+      "start": 2413,
+      "end": 2430
+    },
+    {
+      "path": "06-规划与治理/PRD 检查清单.md",
+      "start": 2431,
+      "end": 2448
+    }
+  ],
+  "images": [
+    {
+      "path": "08-原始资料/images_superadmin_v120/img_001.png",
+      "sha256": "cd6e5dd8fff804776d827ce2197fe3548aa5b0dca647308526cfc71428188ad5"
+    },
+    {
+      "path": "08-原始资料/images_superadmin_v120/img_002.png",
+      "sha256": "693c98d758215ad87962d7bbb229d369a809efd83fc146d0b431d23ff7855fe2"
+    },
+    {
+      "path": "08-原始资料/images_superadmin_v120/img_003.png",
+      "sha256": "d3fbbc194a4a98af543e76ed9a93c0e2a236b407f0f32d178c998b3e04821f8d"
+    },
+    {
+      "path": "08-原始资料/images_superadmin_v120/img_004.png",
+      "sha256": "7ff4b9d642b0b930cd517794399165c9394f1464ac915d28d2b779b5770d2c60"
+    },
+    {
+      "path": "08-原始资料/images_superadmin_v120/img_005.png",
+      "sha256": "b9798e4ba8fc58128bd20a3aeac968b81f150cbf36cb172276ad8a200596cfd0"
+    },
+    {
+      "path": "08-原始资料/images_superadmin_v120/img_006.png",
+      "sha256": "48b6d67635a71e189e7c9bfbd0830005979e573c021cc71269a99c9d32647068"
+    },
+    {
+      "path": "08-原始资料/images_superadmin_v120/img_007.png",
+      "sha256": "328f888d8fb85deeee8ed0d64969fb4c31695d57bda8c3db9e47ab0faf00227c"
+    }
+  ],
+  "omitted_lines": [
+    19,
+    20,
+    21,
+    22
+  ],
+  "validation": {
+    "source_and_docx_byte_matches": true,
+    "verbatim_extracts_match": 47,
+    "covered_lines": 2444,
+    "toc_only_in_source_lines": "19-22",
+    "original_note_supplements_preserved": 47,
+    "image_byte_matches": 7,
+    "local_links_resolved": true,
+    "historical_source_hash_rechecked": true
+  }
+}
