@@ -21,7 +21,7 @@ async function compileSetup(filename, includeRender = false) {
       b.onLoad({ filter: /.*/, namespace: 'fixture' }, ({ path }) => ({ contents:
         path === 'vue' ? `export const {${Object.keys(vue).filter(key => !['onMounted', 'onBeforeUnmount'].includes(key)).join(',')}}=fixtureHost.vue; export const onMounted=()=>{}; export const onBeforeUnmount=fn=>{fixtureHost.unmount=fn;};` :
         path === 'vue-i18n' ? 'export const useI18n=()=>({t:key=>key});' :
-        path === 'vue-router' ? 'export const useRoute=()=>fixtureHost.route,useRouter=()=>({push:target=>(fixtureHost.navigation??=[]).push(target)});' :
+        path === 'vue-router' ? 'export const useRoute=()=>fixtureHost.route,useRouter=()=>({push:target=>(fixtureHost.navigation??=[]).push(target), replace:target=>{fixtureHost.route.query=target.query;}});' :
         'export const message={success(){},warning(){},info(){}}; export const Modal={confirm:options=>fixtureHost.confirm=options};',
       }));
       b.onLoad({ filter: /\.vue$/ }, ({ path }) => ({ contents: `export default {name:${JSON.stringify(path.split('/').pop().replace('.vue', ''))}};` }));
@@ -76,6 +76,39 @@ await test('rejected application detail uses its application ID instead of the m
   assert.equal(opened, 23);
   assert.equal(fixtureHost.calls.length, 0);
   assert.equal(s.drawerOpen.value, false);
+});
+
+await test('approved drawer restores a linked hotel, opens its revision, and clears only the drawer query on close', async () => {
+  const route = vue.reactive({ path: '/merchant-verify/approved', query: { merchantId: '7', businessId: '12', keyword: 'Hotel' } });
+  const reviewMenu = { menu_type: 2, route_path: '/merchant/property-review', perm_key: 'merchant:property:content-list' };
+  const fixtureHost = { vue, route, user: vue.reactive({ profile: { isSuper: false }, hasPerm: () => false, perms: [],
+    menus: [{ menu_type: 1, children: [reviewMenu] }] }),
+    request: async () => ({ merchant: { id: 7, status: 3 }, documents: [], timeline: [], businesses: [
+      { id: 11, business_type: 'hotel' }, { id: 12, business_type: 'hotel', pending_profile_revision: { id: 31, submitted_at: '2026-11-25 10:05:02' } },
+    ] }) };
+  const context = vm.createContext({ fixtureHost }); vm.runInContext(verifyCode, context);
+  const s = context.subject.default.setup({}, { expose() {} });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(s.drawerOpen.value, true);
+  assert.equal(s.verifyBizId.value, 12);
+  assert.equal(s.openBizId.value, 12);
+  assert.equal(s.canReviewProfile(s.businesses.value[0]), false);
+  const hotel = s.businesses.value[1];
+  assert.equal(s.canReviewProfile(hotel), true);
+  fixtureHost.user.menus[0].children = [];
+  assert.equal(s.canReviewProfile(hotel), false);
+  await s.openProfileReview(hotel);
+  assert.equal(fixtureHost.navigation, undefined);
+  fixtureHost.user.menus[0].children.push(reviewMenu);
+  await s.openProfileReview(hotel);
+  assert.deepEqual(JSON.parse(JSON.stringify(fixtureHost.navigation)), [{ path: '/merchant/property-review', query: { revisionId: '31', merchantId: '7', businessId: '12' } }]);
+  s.toggleVerifyBiz(hotel);
+  await vue.nextTick();
+  assert.equal(s.openBizId.value, 0);
+  assert.equal(s.verifyBizId.value, 12, 'collapsing the hotel keeps its document group selected');
+  s.drawerOpen.value = false;
+  await vue.nextTick();
+  assert.deepEqual(JSON.parse(JSON.stringify(route.query)), { keyword: 'Hotel' });
 });
 
 await test('successful base rejection refreshes navigation counts as well as its list', async () => {

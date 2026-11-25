@@ -222,8 +222,20 @@ class PropertyProfileService
         if (! $revision) throw new BusinessException(ErrorCode::NOT_FOUND, '物业资料版本不存在');
         $this->assertAdminSite((int) $revision->site_id);
         $item = $this->formatRevision((array) $revision);
-        $effective = Db::table('merchant_store')->where('id', $revision->property_id)->first();
-        return ['revision' => $item, 'effective' => $effective ? $this->formatProperty((array) $effective) : null];
+        $property = Db::table('merchant_store')->where('id', $revision->property_id)->first();
+        $effective = $property ? $this->formatProperty((array) $property) : null;
+        $previous = Db::table('merchant_property_content_revision')->where('property_id', $revision->property_id)
+            ->where('site_id', $revision->site_id)->where('status', 2)->where('version', '<', $revision->version)
+            ->orderByDesc('version')->value('payload_json');
+        $baseline = null;
+        if ($previous !== null) {
+            $baseline = $this->formatPayload($this->decode((string) $previous));
+        } elseif ($effective && (int) $effective['content_approved_version'] > 0
+            && (int) $effective['content_approved_version'] < (int) $revision->version) {
+            // 旧商品迁移仅在物业主表保留已批准资料。
+            $baseline = array_intersect_key($effective, array_flip(self::FIELDS));
+        }
+        return ['revision' => $item, 'effective' => $effective, 'baseline' => $baseline];
     }
 
     public function audit(int $revisionId, int $auditStatus, string $remark): void
@@ -240,6 +252,17 @@ class PropertyProfileService
             if (! $property) throw new BusinessException(ErrorCode::NOT_FOUND, '物业不存在');
             $now = date('Y-m-d H:i:s');
             if ($auditStatus === 1) {
+                $previousVersion = (int) $property->content_approved_version;
+                if ($previousVersion > 0 && ! Db::table('merchant_property_content_revision')
+                    ->where('property_id', $property->id)->where('version', $previousVersion)->exists()) {
+                    // 覆盖旧商品迁入的已批准资料前，保存仍可还原的原始值。
+                    Db::table('merchant_property_content_revision')->insert([
+                        'site_id' => $property->site_id, 'merchant_id' => $property->merchant_id,
+                        'property_id' => $property->id, 'version' => $previousVersion, 'status' => 2,
+                        'payload_json' => $this->encode(array_intersect_key((array) $property, array_flip(self::FIELDS))),
+                        'reviewed_at' => $property->content_approved_at, 'review_remark' => '旧物业已批准资料快照',
+                    ]);
+                }
                 $payload = $this->decode((string) $revision->payload_json);
                 $approved = $payload + [
                     'content_status' => 2, 'content_approved_version' => (int) $revision->version,

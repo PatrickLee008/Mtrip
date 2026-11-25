@@ -279,7 +279,22 @@ class VerifyController extends AbstractController
                     $templatesByType[$template['business_type']] ??= $template;
                 }
             }
+            $pendingProfiles = [];
+            if ((int) $merchant['status'] === 3 && AdminContext::hasPermission('merchant:property:content-list')) {
+                $pendingProfiles = Db::table('merchant_store as p')
+                    ->join('merchant_property_content_revision as v', 'v.property_id', '=', 'p.id')
+                    ->where('p.site_id', $merchant['site_id'])->where('p.merchant_id', $merchant['id'])
+                    ->where('v.site_id', $merchant['site_id'])->where('v.merchant_id', $merchant['id'])
+                    ->whereIn('p.source_business_id', array_column($businesses, 'id'))
+                    ->where('p.business_type', 'hotel')->whereNull('p.deleted_at')->where('v.status', 1)
+                    ->orderBy('v.version')->get(['p.source_business_id', 'v.id', 'v.submitted_at'])
+                    ->keyBy('source_business_id')->all();
+            }
             foreach ($businesses as &$business) {
+                $pending = $pendingProfiles[$business['id']] ?? null;
+                if ($pending && $business['business_type'] === 'hotel') {
+                    $business['pending_profile_revision'] = ['id' => (int) $pending->id, 'submitted_at' => $pending->submitted_at];
+                }
                 $template = $templatesById[(int) ($business['kyc_template_id'] ?? 0)]
                     ?? $templatesByType[$business['business_type'] ?? '']
                     ?? null;

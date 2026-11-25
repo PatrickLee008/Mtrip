@@ -73,9 +73,39 @@ try {
     check((int) $controller->detail()['data']['businesses'][0]['kyc_status'] === 1, 'migrated legacy biz_unit retains its explicit application business link');
     Db::table('merchant_verify_document')->where('doc_type', 'hotel_license')->update(['scope_model_version' => 0, 'application_business_id' => 0]);
     check((int) $controller->detail()['data']['businesses'][0]['kyc_status'] === 1, 'legacy biz_unit files remain compatible');
+    $property = (int) Db::table('merchant_store')->insertGetId([
+        'site_id' => 991, 'merchant_id' => $merchant, 'source_business_id' => $business, 'business_type' => 'hotel', 'store_name' => 'Approved Hotel',
+    ]);
+    $revision = (int) Db::table('merchant_property_content_revision')->insertGetId([
+        'site_id' => 991, 'merchant_id' => $merchant, 'property_id' => $property, 'version' => 1, 'status' => 1,
+        'submitted_at' => '2026-11-25 10:05:02', 'payload_json' => '{}',
+    ]);
+    $pending = static fn () => $controller->detail()['data']['businesses'][0]['pending_profile_revision'] ?? null;
+    check($pending() === null, 'verification permission alone does not expose a pending revision');
+    AdminContext::set(AdminContext::get() + ['permissions' => ['merchant:property:content-list']]);
+    $summary = $pending();
+    check($summary !== null && (int) $summary['id'] === $revision && $summary['submitted_at'] === '2026-11-25 10:05:02', 'approved hotel exposes the actual mapped pending revision and its submission time');
+    foreach ([['merchant_store', $property, 'site_id', 992, 991],
+        ['merchant_store', $property, 'merchant_id', $merchant + 1, $merchant],
+        ['merchant_store', $property, 'source_business_id', null, $business],
+        ['merchant_store', $property, 'deleted_at', '2026-11-25 12:00:00', null],
+        ['merchant_store', $property, 'business_type', 'restaurant', 'hotel'],
+        ['merchant_application_business', $business, 'business_type', 'restaurant', 'hotel'],
+        ['merchant_property_content_revision', $revision, 'site_id', 992, 991],
+        ['merchant_property_content_revision', $revision, 'merchant_id', $merchant + 1, $merchant],
+        ['merchant_property_content_revision', $revision, 'status', 0, 1],
+        ['merchant_property_content_revision', $revision, 'status', 2, 1],
+        ['merchant_property_content_revision', $revision, 'status', 3, 1],
+        ['merchant_property_content_revision', $revision, 'status', 4, 1],
+        ['merchant_info', $merchant, 'status', 0, 3],
+    ] as [$table, $id, $field, $value, $original]) {
+        Db::table($table)->where('id', $id)->update([$field => $value]);
+        check($pending() === null, "ineligible $table.$field ($value) hides pending review");
+        Db::table($table)->where('id', $id)->update([$field => $original]);
+    }
     AdminContext::set(['admin_id' => 92002, 'site_id' => 992, 'is_super' => false]);
     rejects(ErrorCode::NO_DATA_PERMISSION, fn () => $controller->detail(), 'foreign-site operator cannot open the merchant detail');
 } finally {
     Db::rollBack();
 }
-echo "Approved detail: 15 checks passed\n";
+echo "Approved detail checks passed\n";

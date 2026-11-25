@@ -31,7 +31,7 @@ export function apiMerchantPropertyContentList(params: Record<string, unknown>):
   return get<PageData<Row> & { stats?: Record<string, number> }>('/admin/merchant/property/content-list', params);
 }
 
-export function apiMerchantPropertyContentDetail(id: number): Promise<{ revision: Row; effective: Row }> {
+export function apiMerchantPropertyContentDetail(id: number): Promise<{ revision: Row; effective: Row | null; baseline: Row | null }> {
   return get('/admin/merchant/property/content-detail', { id });
 }
 

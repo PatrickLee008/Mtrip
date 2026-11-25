@@ -8,6 +8,7 @@ const require = createRequire(import.meta.url);
 const vue = require('vue');
 const { parse, compileScript } = require('@vue/compiler-sfc');
 const { build } = require('esbuild');
+const { createI18n } = require('vue-i18n');
 const src = fileURLToPath(new URL('../src', import.meta.url));
 async function compile(filename) {
   const { descriptor } = parse(readFileSync(`${src}/${filename}`, 'utf8'));
@@ -20,10 +21,11 @@ async function compile(filename) {
       b.onLoad({ filter: /.*/, namespace: 'fixture' }, ({ path }) => ({ contents:
         path === 'vue' ? `export const {${Object.keys(vue).filter(key => key !== 'onMounted').join(',')}}=fixtureHost.vue; export const onMounted=()=>{};` :
         path === 'vue-i18n' ? 'export const useI18n=()=>({t:(key,params)=>params ? key+JSON.stringify(params) : key});' :
-        path === 'vue-router' ? 'export const useRoute=()=>({query:{}});' :
-        path === '@ant-design/icons-vue' ? 'export const BellOutlined={},LoginOutlined={},EyeOutlined={},DownloadOutlined={},ExclamationCircleOutlined={},CloseOutlined={};' :
+        path === 'vue-router' ? 'export const useRoute=()=>fixtureHost.route, useRouter=()=>fixtureHost.router;' :
+        path === '@ant-design/icons-vue' ? 'export const BellOutlined={},LoginOutlined={},EyeOutlined={},DownloadOutlined={},ExclamationCircleOutlined={},CloseOutlined={},CheckCircleOutlined={},ClockCircleOutlined={},CloseCircleOutlined={},FileSearchOutlined={},ReloadOutlined={},SearchOutlined={};' :
         'export const message={success(){},warning(){}}; export const Modal={confirm:options=>fixtureHost.confirm=options};',
       }));
+      b.onResolve({ filter: /\.vue$/ }, ({ path }) => ({ path, namespace: 'component' }));
       b.onLoad({ filter: /\.vue$/ }, () => ({ contents: 'export default {};' }));
       b.onLoad({ filter: /\/stores\/user\.ts$/ }, () => ({ contents: 'export const useUserStore=()=>fixtureHost.user;' }));
       b.onLoad({ filter: /\/utils\/http\.ts$/ }, () => ({ contents: 'export const get=(...args)=>fixtureHost.request("get",...args),post=(...args)=>fixtureHost.request("post",...args);' }));
@@ -34,8 +36,11 @@ async function compile(filename) {
 const page = await compile('views/merchant/list/index.vue');
 const security = await compile('components/merchant/AccountSecurityPanel.vue');
 const property = await compile('components/merchant/MerchantPropertyPanel.vue');
-function fixture(code, props = {}) {
+const reviewQueue = await compile('views/merchant/property-review/index.vue');
+function fixture(code, props = {}, query = {}) {
   const host = { vue, calls: [], user: { profile: { isSuper: true } },
+    route: vue.reactive({ path: '/merchant/property-review', query }),
+    router: { push: target => host.navigation = target, replace: target => host.navigation = target },
     response: [], request: async (method, path, data) => {
       host.calls.push({ method, path, data });
       return host.response;
@@ -113,5 +118,43 @@ await test('property KYC distinguishes new and legacy application status models'
   assert.equal(s.businessKycBadge({ application_id: 1, kyc_status: 5 }).text, 'merchant.onboardingPage.kycVerified');
   assert.equal(s.businessKycBadge({ application_id: 2, kyc_status: 1 }).text, 'merchantDirectory.kyc1');
   assert.equal(s.businessKycBadge({ application_id: 2, kyc_status: 99 }).text, 'merchantDirectory.unknown');
+});
+await test('queue opens the revision URL and refreshes its filter on return', async () => {
+  const { host, state } = fixture(reviewQueue);
+  state.reviews.query.keyword = 'Jade';
+  await state.openDetail({ id: 83, property_id: 7 });
+  assert.equal(host.navigation?.query.revisionId, '83');
+  host.route.query = { revisionId: '83' };
+  await vue.nextTick();
+  assert.equal(state.revisionId.value, 83);
+  host.calls = [];
+  host.route.query = {};
+  await vue.nextTick();
+  assert.ok(host.calls.some(call => call.data?.keyword === 'Jade' && call.data?.status === 1));
+});
+await test('direct review link returns to the selected merchant and business', async () => {
+  const { host, state } = fixture(reviewQueue, {}, { revisionId: '83', merchantId: '16', businessId: '45' });
+  assert.equal(host.calls.length, 0);
+  await state.closeDetail();
+  assert.equal(host.navigation.path, '/merchant-verify/approved');
+  assert.equal(host.navigation.query.merchantId, '16');
+  assert.equal(host.navigation.query.businessId, '45');
+});
+await test('property review title resolves in both supported languages', async () => {
+  const expected = { 'zh-CN': '物业资料审核', 'en-US': 'Property Profile Review' };
+  const messages = {};
+  for (const locale of Object.keys(expected)) {
+    const { outputFiles } = await build({
+      entryPoints: [`${src}/locales/${locale}.ts`], bundle: true, write: false, format: 'cjs', alias: { '@': src },
+    });
+    const module = { exports: {} };
+    vm.runInNewContext(outputFiles[0].text, { module });
+    messages[locale] = module.exports.default;
+  }
+  const { global } = createI18n({ legacy: false, fallbackLocale: false, missingWarn: false, messages });
+  for (const [locale, title] of Object.entries(expected)) {
+    global.locale.value = locale;
+    assert.equal(global.t('merchant.propertyReviewPage.title'), title);
+  }
 });
 console.log(`${passed} merchant detail interaction checks passed`);

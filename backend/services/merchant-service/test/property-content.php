@@ -133,8 +133,12 @@ try {
     check(($controllerQueue['data']['total'] ?? 0) === 1 && isset($controllerQueue['data']['stats']),
         'C read permission can access profile review list and stats');
     setRequest(['id' => $submitted['revisionId']]);
-    check(($reviewController->contentDetail()['data']['revision']['id'] ?? 0) === $submitted['revisionId'],
+    $initialReview = $reviewController->contentDetail()['data'];
+    check(($initialReview['revision']['id'] ?? 0) === $submitted['revisionId'],
         'C read permission can access profile review detail');
+    check(array_key_exists('baseline', $initialReview) && $initialReview['baseline'] === null
+        && $initialReview['effective']['description'] === 'First submitted profile',
+        'C first submission has no approved baseline even when the store mirrors the submission');
     contentActor($merchantId);
     rejects(40901, fn () => $service->uploadImage($propertyId, null),
         'F property image upload is locked during profile review');
@@ -229,10 +233,47 @@ try {
     check(Db::table('merchant_store')->where('id', $propertyId)->value('description') === 'Approved profile',
         'C pending profile update preserves approved live profile');
     AdminContext::set(['admin_id' => 99101, 'admin_name' => 'Reviewer', 'site_id' => 991, 'is_super' => false]);
+    $updateReview = $service->reviewDetail($pendingUpdate['revisionId']);
+    check($updateReview['baseline']['description'] === 'Approved profile'
+        && $updateReview['baseline']['contact_phone'] === '+959 111 222 333'
+        && $updateReview['baseline']['facilities'] === ['Free WiFi'],
+        'C pending update uses the formatted previous approved payload');
     $service->audit($pendingUpdate['revisionId'], 2, 'Keep approved profile');
     check(Db::table('merchant_store')->where('id', $propertyId)->value('description') === 'Approved profile'
         && (int) Db::table('merchant_store')->where('id', $propertyId)->value('publish_status') === 1,
         'C rejected update preserves live published profile');
+    $nextUpdate = $service->save(['propertyId' => $propertyId, 'description' => 'New live profile'], true);
+    $service->audit($nextUpdate['revisionId'], 1, '');
+    foreach ([$pendingUpdate, $nextUpdate] as $version) {
+        $historical = $service->reviewDetail($version['revisionId']);
+        check($historical['baseline']['description'] === 'Approved profile'
+            && $historical['effective']['description'] === 'New live profile',
+            'C historical version ' . $version['version'] . ' keeps the earlier approval as its baseline');
+    }
+    check($service->reviewDetail($approvedSubmission['revisionId'])['baseline'] === null,
+        'C first approval skips earlier rejected versions and later approvals');
+
+    // The legacy goods migration set approved version 1 on the store without inserting a revision.
+    Db::table('merchant_store')->where('id', $foreignPropertyId)->update([
+        'content_version' => 1, 'content_approved_version' => 1, 'content_status' => 2,
+        'description' => 'Legacy approved profile', 'country_code' => 'MM', 'city_key' => 'mandalay',
+        'contact_phone' => $storedProperty['contact_phone'], 'facilities' => json_encode(['Legacy Gym']),
+    ]);
+    contentActor($foreignMerchantId);
+    $legacyUpdate = $service->save(['propertyId' => $foreignPropertyId, 'description' => 'Legacy update'], true);
+    $legacyBaseline = $service->reviewDetail($legacyUpdate['revisionId'])['baseline'];
+    check($legacyBaseline['description'] === 'Legacy approved profile' && ! array_key_exists('id', $legacyBaseline),
+        'C legacy update can compare against the earlier approved store payload');
+    $service->audit($legacyUpdate['revisionId'], 1, '');
+    $legacyHistory = $service->reviewDetail($legacyUpdate['revisionId']);
+    check($legacyHistory['baseline'] == $legacyBaseline && $legacyHistory['effective']['description'] === 'Legacy update',
+        'C approving a legacy update preserves its original baseline');
+    $legacySnapshot = Db::table('merchant_property_content_revision')->where('property_id', $foreignPropertyId)
+        ->where('version', 1)->first();
+    check(json_decode((string) $legacySnapshot->payload_json, true)['contact_phone'] === $storedProperty['contact_phone']
+        && $legacyHistory['baseline']['facilities'] === ['Legacy Gym']
+        && $legacySnapshot->reviewed_at === null && (int) $legacySnapshot->reviewed_by === 0,
+        'C legacy approval snapshot preserves encrypted fields and unknown audit metadata');
     check(Db::table('goods_info')->where('goods_type', 1)->count() === $hotelGoodsBefore,
         'C property profile lifecycle creates no hotel goods row');
 } finally {

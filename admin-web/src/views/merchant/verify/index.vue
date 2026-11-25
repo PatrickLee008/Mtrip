@@ -4,13 +4,14 @@ import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { message } from 'ant-design-vue';
-import { CheckCircleOutlined, CloseCircleOutlined, CloseOutlined, EyeOutlined, SyncOutlined, DownloadOutlined, FileTextOutlined, MenuOutlined, DownOutlined, UserOutlined, PaperClipOutlined, ClockCircleOutlined, KeyOutlined, CopyOutlined, MailOutlined, MessageOutlined, BellOutlined, DeleteOutlined, ReloadOutlined } from '@ant-design/icons-vue';
+import { CheckCircleOutlined, CloseCircleOutlined, CloseOutlined, EyeOutlined, SyncOutlined, DownloadOutlined, FileTextOutlined, MenuOutlined, DownOutlined, UserOutlined, PaperClipOutlined, ClockCircleOutlined, KeyOutlined, CopyOutlined, MailOutlined, MessageOutlined, BellOutlined, DeleteOutlined, ReloadOutlined, EditOutlined, ExportOutlined } from '@ant-design/icons-vue';
 import MerchantDocumentPreview from '@/views/merchant/onboarding/components/MerchantDocumentPreview.vue';
 import OnboardingDetail from '@/views/merchant/onboarding/index.vue';
 import PageContainer from '@/components/PageContainer.vue';
 import StatusTag from '@/components/StatusTag.vue';
 import MerchantVerifyNav from '@/components/MerchantVerifyNav.vue';
 import { useUserStore } from '@/stores/user';
+import type { MenuNode } from '@/api/types';
 import SearchFilterBar, { type FilterConfig } from '@/components/SearchFilterBar.vue';
 import { useTable, type TableRow } from '@/composables/useTable';
 import type { StatusItem } from '@/components/StatusTag.vue';
@@ -370,6 +371,9 @@ const resubmissionDocumentRows = computed<ResubmissionDocumentRow[]>(() => {
 function toggleVerifyBiz(biz: TableRow): void {
   verifyBizId.value = biz.id;
   openBizId.value = openBizId.value === biz.id ? 0 : biz.id;
+  if (activeTab.value === 'approved' && detail.value) {
+    void setApprovedDrawer(detail.value.id, openBizId.value);
+  }
 }
 
 /** 已审核文档数(status 1 核验通过 / 3 已驳回 视为已给出决定) */
@@ -386,16 +390,54 @@ const finalDecisionSubtitle = computed(() => {
   return t('merchant.verifyPage.finalDecisionPending', { n: reviewedCount.value, total });
 });
 
+function setApprovedDrawer(merchantId?: number, businessId?: number) {
+  return router.replace({ query: {
+    ...route.query, merchantId: merchantId ? String(merchantId) : undefined,
+    businessId: businessId ? String(businessId) : undefined,
+  } });
+}
+
+function selectLinkedBusiness(): void {
+  const selected = businesses.value.find(b => String(b.id) === route.query?.businessId);
+  openBizId.value = selected?.id ?? 0;
+  if (selected) verifyBizId.value = selected.id;
+}
+
+const hasProfileReviewPage = computed(() => {
+  const contains = (nodes: MenuNode[]): boolean => nodes.some(node =>
+    (node.menu_type === 2 && node.perm_key === 'merchant:property:content-list') || contains(node.children ?? []));
+  return user.isSuper || contains(user.menus ?? []);
+});
+function canReviewProfile(biz: TableRow): boolean {
+  return activeTab.value === 'approved' && Number(detail.value?.status) === 3 && biz.business_type === 'hotel'
+    && !!biz.pending_profile_revision?.id && hasProfileReviewPage.value;
+}
+
+function openProfileReview(biz: TableRow) {
+  if (!detail.value || !canReviewProfile(biz)) return;
+  return router.push({ path: '/merchant/property-review', query: {
+    revisionId: String(biz.pending_profile_revision.id), merchantId: String(detail.value.id), businessId: String(biz.id),
+  } });
+}
+
+let detailRequest = 0;
 async function openDetail(row: TableRow): Promise<void> {
   if (row.record_type === 'application') {
     await rejectedApplicationDetail.value?.openDetail({ id: row.application_id });
     return;
   }
+  const request = ++detailRequest;
   historyExpanded.value = false;
+  detail.value = null;
   drawerOpen.value = true;
   detailLoading.value = true;
   try {
     const data = await apiVerifyDetail(row.id);
+    if (request !== detailRequest || !drawerOpen.value) return;
+    if (activeTab.value === 'approved' && Number(data.merchant.status) !== 3) {
+      drawerOpen.value = false;
+      return;
+    }
     detail.value = data.merchant;
     documents.value = data.documents;
     businesses.value = data.businesses || [];
@@ -406,10 +448,32 @@ async function openDetail(row: TableRow): Promise<void> {
     // 默认选中第一个注册商家(biz 为空则 0 → 显示全部文档)
     verifyBizId.value = businesses.value[0]?.id ?? 0;
     openBizId.value = 0;
+    if (activeTab.value === 'approved') selectLinkedBusiness();
+  } catch (error) {
+    if (request === detailRequest) drawerOpen.value = false;
+    throw error;
   } finally {
-    detailLoading.value = false;
+    if (request === detailRequest) detailLoading.value = false;
   }
 }
+
+watch(
+  () => activeTab.value === 'approved' ? route.query?.merchantId : undefined,
+  (merchantId, previous) => {
+    if (typeof merchantId === 'string' && /^[1-9]\d*$/.test(merchantId) && Number.isSafeInteger(Number(merchantId))) {
+      void openDetail({ id: Number(merchantId) }).catch(() => { /* HTTP errors are shown by the interceptor. */ });
+    } else if (previous) {
+      drawerOpen.value = false;
+    }
+  },
+  { immediate: true },
+);
+watch(() => route.query?.businessId, () => {
+  if (activeTab.value === 'approved' && detail.value) selectLinkedBusiness();
+});
+watch(drawerOpen, open => {
+  if (!open && activeTab.value === 'approved' && route.query?.merchantId) void setApprovedDrawer();
+});
 
 const docColumns = computed(() => [
   { title: VP('colDoc'), dataIndex: 'required_name', width: 250, ellipsis: true },
@@ -700,7 +764,7 @@ onMounted(() => {
           <template v-else-if="column.key === 'action_col'">
             <a-space :size="0">
               <a-tooltip :title="t('common.detail')">
-                <a-button type="link" size="small" @click="openDetail(record)"><EyeOutlined /></a-button>
+                <a-button type="link" size="small" @click="activeTab === 'approved' ? setApprovedDrawer(record.id) : openDetail(record)"><EyeOutlined /></a-button>
               </a-tooltip>
               <a-tooltip v-if="canManageRejectedApplication(record, 'reopen')" :title="t('merchant.onboardingPage.reopenLeadTitle')">
                 <a-button v-perm="'merchant:onboarding:reopen'" type="link" size="small" :aria-label="t('merchant.onboardingPage.reopenLeadTitle')" @click="openRejectedAction(record, 'reopen')"><ReloadOutlined /></a-button>
@@ -856,6 +920,16 @@ onMounted(() => {
                   <div class="co-cell-label">{{ t('merchant.onboardingPage.bizEmail') }}</div>
                   <div class="co-cell-value">{{ biz.contact_email || '-' }}</div>
                 </div>
+              </div>
+              <div v-if="canReviewProfile(biz)" class="rb-profile-review">
+                <span class="rb-profile-review__icon" aria-hidden="true"><EditOutlined /></span>
+                <div class="rb-profile-review__copy">
+                  <strong>{{ t('merchant.propertyReviewPage.pendingUpdates') }}</strong>
+                  <p>{{ t('merchant.propertyReviewPage.pendingUpdatesHint') }}</p>
+                </div>
+                <a-button type="primary" class="rb-profile-review__action" @click="openProfileReview(biz)">
+                  {{ t('merchant.propertyReviewPage.viewFullUpdates') }} <ExportOutlined aria-hidden="true" />
+                </a-button>
               </div>
             </div>
             </template>
@@ -1558,6 +1632,45 @@ onMounted(() => {
   padding: 10px 12px;
   border-top: 1px solid #f1f5f9;
   background: #f8fafc;
+}
+.approved-drawer .rb-row.is-open { background: #eaf2ff; }
+.approved-drawer .rb-row.is-open .rb-name { color: #1664ff; font-weight: 650; }
+.approved-drawer .rb-expand { padding: 14px 16px 16px; border-left: 3px solid #1664ff; background: #f6f9ff; }
+.rb-profile-review {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
+  padding: 12px 14px;
+  border: 1px solid #bfd7ff;
+  border-radius: 9px;
+  background: #fff;
+}
+.rb-profile-review__icon {
+  display: grid;
+  flex: 0 0 34px;
+  height: 34px;
+  place-items: center;
+  border-radius: 9px;
+  background: #eef4ff;
+  color: #1664ff;
+  font-size: 16px;
+}
+.rb-profile-review__copy { flex: 1; min-width: 0; }
+.rb-profile-review__copy strong { color: #172033; font-size: 13px; }
+.rb-profile-review__copy p { margin: 3px 0 0; color: #64748b; font-size: 11px; line-height: 1.5; }
+.rb-profile-review__action {
+  height: 34px;
+  padding-inline: 14px;
+  border-radius: 8px;
+  background: #1664ff;
+  font-size: 12px;
+  font-weight: 600;
+  box-shadow: 0 3px 8px #1664ff29;
+}
+@media (max-width: 600px) {
+  .rb-profile-review { flex-wrap: wrap; }
+  .rb-profile-review__action { width: 100%; }
 }
 .rb-expand-title {
   margin-bottom: 8px;

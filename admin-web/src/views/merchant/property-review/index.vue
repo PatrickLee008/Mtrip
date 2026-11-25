@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue';
-import { message } from 'ant-design-vue';
+import { computed, ref, watch } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
+import PropertyReviewDetail from './PropertyReviewDetail.vue';
 import {
   CheckCircleOutlined,
   ClockCircleOutlined,
@@ -12,11 +13,7 @@ import {
 import { useI18n } from 'vue-i18n';
 import PageContainer from '@/components/PageContainer.vue';
 import { useTable, type TableRow } from '@/composables/useTable';
-import {
-  apiMerchantPropertyContentAudit,
-  apiMerchantPropertyContentDetail,
-  apiMerchantPropertyContentList,
-} from '@/api/merchant';
+import { apiMerchantPropertyContentList } from '@/api/merchant';
 
 const { t } = useI18n();
 const stats = ref<Record<string, number>>({});
@@ -49,7 +46,7 @@ const columns = computed(() => [
   { title: t('common.status'), dataIndex: 'status', width: 130 },
   { title: t('goods.audit.submitTime'), dataIndex: 'submitted_at', width: 175 },
   { title: t('merchant.propertyReviewPage.reviewedAt'), dataIndex: 'reviewed_at', width: 175 },
-  { title: t('common.action'), key: 'action_col', width: 200, fixed: 'right' as const },
+  { title: t('common.action'), key: 'action_col', width: 100, fixed: 'right' as const },
 ]);
 
 function selectStatus(status: number | undefined): void {
@@ -65,91 +62,40 @@ function statusColor(status: number): string {
   return ({ 0: 'default', 1: 'warning', 2: 'success', 3: 'error' } as Record<number, string>)[status] ?? 'default';
 }
 
-const drawerOpen = ref(false);
-const drawerLoading = ref(false);
-const detail = ref<TableRow | null>(null);
-const diffRows = computed(() => {
-  const current = detail.value?.effective || {};
-  const submitted = detail.value?.revision?.payload || {};
-  const fields = [
-    'store_name', 'contact_phone', 'contact_phone2', 'contact_email', 'address', 'country_code',
-    'city_key', 'longitude', 'latitude', 'description', 'star_level', 'facilities', 'amenities',
-    'images', 'image_gallery', 'website', 'checkin_time', 'checkout_time',
-    /* 长住 / 政策(含 booking.payAtHotel 到店付款开关)/ 附近景点也随资料审核发布,审核人要看得到 */
-    'long_stay', 'hotel_policies', 'nearby_attractions', 'addons',
-  ];
-  return fields.map((field) => ({
-    field,
-    current: current[field],
-    submitted: submitted[field],
-    changed: JSON.stringify(current[field] ?? null) !== JSON.stringify(submitted[field] ?? null),
-  }));
-});
-const submittedImages = computed<string[]>(() => {
-  const payload = detail.value?.revision?.payload || {};
-  const gallery = Array.isArray(payload.image_gallery)
-    ? payload.image_gallery.map((item: unknown) => typeof item === 'string' ? item : String((item as TableRow)?.url || '')).filter(Boolean)
-    : [];
-  const images = Array.isArray(payload.images) ? payload.images.map(String).filter(Boolean) : [];
-  return Array.from(new Set([...gallery, ...images]));
-});
+const route = useRoute();
+const router = useRouter();
+const queuePath = '/merchant/property-review';
 
-function displayValue(value: unknown): string {
-  if (value === null || value === undefined || value === '') return '-';
-  if (Array.isArray(value) && value.every((item) => typeof item !== 'object')) return value.join(', ');
-  return typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value);
+function queryId(value: unknown): number {
+  if (typeof value !== 'string' || !/^[1-9]\d*$/.test(value)) return 0;
+  const id = Number(value);
+  return Number.isSafeInteger(id) ? id : 0;
 }
 
-function diffRowClass(record: TableRow): string {
-  return record.changed ? 'changed-row' : '';
+const revisionId = computed(() => queryId(route.query.revisionId));
+
+function openDetail(row: TableRow): void {
+  void router.push({ path: queuePath, query: { revisionId: String(row.id) } });
 }
 
-async function openDetail(row: TableRow): Promise<void> {
-  drawerOpen.value = true;
-  drawerLoading.value = true;
-  try {
-    detail.value = await apiMerchantPropertyContentDetail(row.id);
-  } finally {
-    drawerLoading.value = false;
+function closeDetail(): void {
+  const merchantId = queryId(route.query.merchantId);
+  const businessId = queryId(route.query.businessId);
+  if (merchantId && businessId) {
+    void router.replace({ path: '/merchant-verify/approved', query: { merchantId: String(merchantId), businessId: String(businessId) } });
+  } else {
+    void router.replace({ path: queuePath });
   }
 }
 
-const auditOpen = ref(false);
-const auditSaving = ref(false);
-const auditTarget = ref<TableRow | null>(null);
-const auditForm = reactive({ auditStatus: 1, auditRemark: '' });
-
-function openAudit(row: TableRow, auditStatus: number): void {
-  auditTarget.value = row;
-  Object.assign(auditForm, { auditStatus, auditRemark: '' });
-  auditOpen.value = true;
-}
-
-async function submitAudit(): Promise<void> {
-  if (!auditTarget.value) return;
-  if (auditForm.auditStatus === 2 && !auditForm.auditRemark.trim()) {
-    message.warning(t('goods.audit.auditModal.warningRejectReasonRequired'));
-    return;
-  }
-  auditSaving.value = true;
-  try {
-    await apiMerchantPropertyContentAudit({ id: auditTarget.value.id, ...auditForm });
-    message.success(t(auditForm.auditStatus === 1
-      ? 'goods.audit.propertyReview.successApprove'
-      : 'goods.audit.propertyReview.successReject'));
-    auditOpen.value = false;
-    drawerOpen.value = false;
-    await reviews.load();
-  } finally {
-    auditSaving.value = false;
-  }
-}
-
-onMounted(() => void reviews.load());
+watch(revisionId, id => {
+  if (!id && route.path === queuePath) void reviews.load();
+}, { immediate: true });
 </script>
 
 <template>
-  <PageContainer>
+  <PropertyReviewDetail v-if="revisionId" :key="revisionId" :revision-id="revisionId" @close="closeDetail" @reviewed="closeDetail" />
+  <PageContainer v-else>
     <div class="review-page">
       <header class="page-head">
         <div>
@@ -193,7 +139,7 @@ onMounted(() => void reviews.load());
           :data-source="reviews.list.value"
           :loading="reviews.loading.value"
           :pagination="reviews.pagination.value"
-          :scroll="{ x: 1180 }"
+          :scroll="{ x: 1080 }"
           row-key="id"
           size="middle"
         >
@@ -207,80 +153,15 @@ onMounted(() => void reviews.load());
             </template>
             <template v-else-if="column.dataIndex === 'reviewed_at'">{{ record.reviewed_at || '-' }}</template>
             <template v-else-if="column.key === 'action_col'">
-              <a-space :size="0">
-                <a-button type="link" size="small" @click="openDetail(record)">{{ t('common.detail') }}</a-button>
-                <template v-if="record.status === 1">
-                  <a-button v-perm="'merchant:property:content-audit'" type="link" size="small" class="approve" @click="openAudit(record, 1)">{{ t('goods.audit.columns.pass') }}</a-button>
-                  <a-button v-perm="'merchant:property:content-audit'" type="link" size="small" danger @click="openAudit(record, 2)">{{ t('goods.audit.columns.reject') }}</a-button>
-                </template>
-              </a-space>
+              <a-button type="link" size="small" @click="openDetail(record)">
+                {{ record.status === 1 ? t('merchant.propertyReviewPage.viewUpdates') : t('common.detail') }}
+              </a-button>
             </template>
           </template>
         </a-table>
       </a-card>
     </div>
 
-    <a-drawer v-model:open="drawerOpen" :title="t('merchant.propertyReviewPage.detailTitle')" width="920">
-      <a-spin :spinning="drawerLoading">
-        <template v-if="detail">
-          <a-descriptions :column="2" bordered size="small">
-            <a-descriptions-item :label="t('goods.audit.propertyReview.property')">{{ detail.revision.payload.store_name }}</a-descriptions-item>
-            <a-descriptions-item :label="t('goods.audit.merchant')">{{ detail.revision.merchant_name }}</a-descriptions-item>
-            <a-descriptions-item :label="t('goods.audit.roomReview.version')">v{{ detail.revision.version }}</a-descriptions-item>
-            <a-descriptions-item :label="t('common.status')"><a-tag :color="statusColor(detail.revision.status)">{{ statusLabel(detail.revision.status) }}</a-tag></a-descriptions-item>
-            <a-descriptions-item :label="t('goods.audit.submitTime')">{{ detail.revision.submitted_at || '-' }}</a-descriptions-item>
-            <a-descriptions-item :label="t('merchant.propertyReviewPage.reviewedAt')">{{ detail.revision.reviewed_at || '-' }}</a-descriptions-item>
-            <a-descriptions-item v-if="detail.revision.reject_reason" :label="t('merchant.propertyReviewPage.rejectReason')" :span="2">{{ detail.revision.reject_reason }}</a-descriptions-item>
-          </a-descriptions>
-          <a-divider orientation="left">{{ t('goods.audit.roomReview.submittedChanges') }}</a-divider>
-          <a-table
-            :data-source="diffRows"
-            row-key="field"
-            size="small"
-            :pagination="false"
-            :columns="[
-              { title: t('goods.audit.roomReview.field'), dataIndex: 'field', width: 180 },
-              { title: t('goods.audit.roomReview.currentLive'), dataIndex: 'current' },
-              { title: t('goods.audit.roomReview.submitted'), dataIndex: 'submitted' },
-            ]"
-            :row-class-name="diffRowClass"
-          >
-            <template #bodyCell="{ column, record }">
-              <template v-if="column.dataIndex === 'current'"><pre class="diff-value">{{ displayValue(record.current) }}</pre></template>
-              <template v-else-if="column.dataIndex === 'submitted'"><pre class="diff-value">{{ displayValue(record.submitted) }}</pre></template>
-            </template>
-          </a-table>
-          <template v-if="submittedImages.length">
-            <a-divider orientation="left">{{ t('goods.audit.roomReview.media') }}</a-divider>
-            <a-image-preview-group><a-space wrap><a-image v-for="url in submittedImages" :key="url" :src="url" :width="120" :height="90" class="media-image" /></a-space></a-image-preview-group>
-          </template>
-          <template v-if="detail.revision.status === 1">
-            <a-divider />
-            <a-space>
-              <a-button v-perm="'merchant:property:content-audit'" type="primary" @click="openAudit(detail.revision, 1)">{{ t('goods.audit.columns.pass') }}</a-button>
-              <a-button v-perm="'merchant:property:content-audit'" danger @click="openAudit(detail.revision, 2)">{{ t('goods.audit.columns.reject') }}</a-button>
-            </a-space>
-          </template>
-        </template>
-      </a-spin>
-    </a-drawer>
-
-    <a-modal
-      v-model:open="auditOpen"
-      :title="auditForm.auditStatus === 1 ? t('goods.audit.propertyReview.approveTitle') : t('goods.audit.propertyReview.rejectTitle')"
-      width="480px"
-      :confirm-loading="auditSaving"
-      :ok-button-props="auditForm.auditStatus === 2 ? { danger: true } : undefined"
-      @ok="submitAudit"
-    >
-      <a-alert
-        :type="auditForm.auditStatus === 1 ? 'success' : 'warning'"
-        :message="auditForm.auditStatus === 1 ? t('goods.audit.propertyReview.approveNotice') : t('goods.audit.propertyReview.rejectNotice')"
-        show-icon
-        style="margin: 16px 0"
-      />
-      <a-form><a-form-item :label="t('goods.audit.roomReview.reviewNote')" :required="auditForm.auditStatus === 2"><a-textarea v-model:value="auditForm.auditRemark" :rows="3" :maxlength="500" /></a-form-item></a-form>
-    </a-modal>
   </PageContainer>
 </template>
 
@@ -302,10 +183,6 @@ onMounted(() => void reviews.load());
 .review-card { border-radius: 12px; box-shadow: 0 10px 28px rgba(15, 23, 42, 0.05); }
 .toolbar { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; }
 .muted { color: #94a3b8; font-size: 12px; }
-.approve { color: #15803d; }
-.diff-value { margin: 0; white-space: pre-wrap; word-break: break-word; font-family: inherit; }
-:deep(.changed-row td) { background: #fffbea !important; }
-.media-image { object-fit: cover; border-radius: 6px; }
 @media (max-width: 900px) { .stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 560px) { .stats-grid { grid-template-columns: 1fr; } .page-head { align-items: stretch; flex-direction: column; } }
 </style>

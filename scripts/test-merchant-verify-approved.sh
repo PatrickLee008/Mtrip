@@ -16,7 +16,7 @@ fi
 cleanup() { printf 'DROP DATABASE IF EXISTS `%s`;\n' "$TEST_DB" | mysql_exec >/dev/null; }
 trap cleanup EXIT
 printf 'CREATE DATABASE `%s` CHARACTER SET utf8mb4 COLLATE utf8mb4_bin; GRANT ALL PRIVILEGES ON `%s`.* TO '\''mtrip'\''@'\''%%'\'';\n' "$TEST_DB" "$TEST_DB" | mysql_exec
-for table in merchant_info merchant_application merchant_application_business merchant_verify_document merchant_verify_document_revision merchant_verify_timeline merchant_kyc_template merchant_access_code_log merchant_credential_delivery; do
+for table in merchant_info merchant_application merchant_application_business merchant_store merchant_property_content_revision merchant_verify_document merchant_verify_document_revision merchant_verify_timeline merchant_kyc_template merchant_access_code_log merchant_credential_delivery; do
   printf 'CREATE TABLE `%s`.`%s` LIKE mtrip_business.`%s`;\n' "$TEST_DB" "$table" "$table" | mysql_exec
 done
 printf 'CREATE TABLE `%s`.sys_config LIKE mtrip_system.sys_config;\n' "$TEST_DB" | mysql_exec
