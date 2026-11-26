@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import StoreBookingActions from '@/components/merchant/StoreBookingActions.vue';
+import StoreInvestigationActions from '@/components/merchant/StoreInvestigationActions.vue';
 import { computed, reactive, ref } from 'vue';
 import { message } from 'ant-design-vue';
 import { useI18n } from 'vue-i18n';
@@ -104,6 +105,7 @@ const businessColumns = computed(() => [
         </template>
         <footer v-if="!store.deleted_at" class="property-card-actions">
           <StoreBookingActions :store="store" card-footer @changed="emit('changed')" />
+          <StoreInvestigationActions :store-id="Number(store.id)" :store-name="store.store_name" card-footer />
         </footer>
       </article>
       <div v-if="!properties.length" class="property-empty">{{ t('merchant.profile.noProperties') }}</div>

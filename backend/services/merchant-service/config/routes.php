@@ -102,6 +102,11 @@ Router::addGroup('/api/v1/app/merchant', static function () {
 ]);
 
 Router::addGroup('/api/v1/admin', static function () {
+    Router::get('/merchant/investigations/list', [\App\Controller\Admin\StoreInvestigationController::class, 'index']);
+    Router::get('/merchant/investigations/detail', [\App\Controller\Admin\StoreInvestigationController::class, 'detail']);
+    Router::post('/merchant/investigations/flag', [\App\Controller\Admin\StoreInvestigationController::class, 'flag']);
+    Router::post('/merchant/investigations/escalate', [\App\Controller\Admin\StoreInvestigationController::class, 'escalate']);
+    Router::post('/merchant/investigations/resolve', [\App\Controller\Admin\StoreInvestigationController::class, 'resolve']);
     Router::get('/merchant/deletion/list', [MerchantDeletionController::class, 'index']);
     Router::get('/merchant/deletion/detail', [MerchantDeletionController::class, 'detail']);
     Router::post('/merchant/deletion/review', [MerchantDeletionController::class, 'review']);

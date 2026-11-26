@@ -1,5 +1,18 @@
 # 15 - PRD模块12商户管理整改
 
+## 2026-11-26 共用搜索栏筛选字号
+
+2026-11-26 统一后台共用搜索栏的筛选区字号为 12px，关键词输入为 14px。商户调查、门店管理、商户注销审批和所有商户的站点、所属商户或排序控件已修复。已在本机 8090 验证全部七个使用共用搜索栏的页面，并核对商户调查切换站点及重置。后台构建通过。
+
+## 2026-11-26 门店疑似欺诈或严重违规升级
+
+「门店管理」与商户详情的物业卡片均可标记疑似欺诈或严重违规。标记需填写原因，可补充佐证说明或凭证编号。每家门店同时最多有一件未结调查。授权人员可在「商户管理 → 商户调查」将标记升级到商户层级，填写最终决定并查看操作人、时间、原因、佐证和全过程。新列表沿用门店管理的标题、搜索筛选和分页模式，支持按站点、状态及名称查询，门店入口自动限定该店。
+
+标记和升级期间沿用商户与各门店原有经营状态。结案可记录无需处置或转门店跟进，授权超管也可明确选择暂停整个商户。整户暂停沿用已有状态、预订、通知及审计规则，并与调查决定同事务提交。暂停失败时调查仍在进行，已确认预订继续按现有规则履约。
+
+25 项隔离检查覆盖权限与站点、同店重复标记、状态流转、历史、整户暂停及回滚。后台构建通过。备份本机双库和前端后，仅应用迁移 `20261126160000`，刷新商户双池并更新 8090。登录态核对了标记类别、必填原因及门店历史入口。开发库调查表为空，实际处置写入使用隔离夹具。[超管 M12 条款](<../../obsidian/mTrip_obsidian/mTrip 超级管理后台知识库/03-功能模块/M12-商户管理.md#L79>)
+
+
 ## 2026-11-26 商户登录方式、会话与设备管控
 
 2026-11-26 「登录方式、会话与设备」改为带边框的按钮，放在商户详情账户安全卡片的商户访问码右侧。后台构建通过，已备份同步到本机 8090，并在登录态核对按钮位置和管控面板打开。
@@ -66,7 +79,7 @@ App 登录补齐手机号短信入口，邮箱和短信沿用平台已有的 Goo
 | 登录方式、会话及设备管控 | 未实现后台管控 | 缺三种登录方式的状态与掩码展示、商户级邮件/短信登录开关、确认与原因、复核后恢复、单独强退全部会话，以及联动失效待处理扫码登录和撤销设备/生物识别信任。安全页也缺会话与设备列表、最近登录方式及设备/IP 的集中查看、受影响对象与结果的动作审计。[后台账户安全](../../admin-web/src/components/merchant/AccountSecurityPanel.vue#L84) · [App 生物识别存储](../../merchant-app/src/utils/merchantSession.ts#L36) |
 | 短信 OTP 和 2FA 重置 | OTP 待整改，2FA 重置已完成隔离验证 | 商户 App 正常登录入口只有访问码及邮箱，缺短信 OTP。Web 的邮件/短信 OTP 后仍要求验证器，独立登录方式与当前 M11/M12 文字有差异。2FA 重置按上述整改保留密码，商户完成身份验证后自行重新绑定。真机扫码及目标环境待验。[App 认证 API](../../merchant-app/src/api/merchant.ts#L130) · [OTP 登录](../../backend/services/merchant-service/app/Service/MerchantAuthenticationService.php#L196) |
 | 门店级暂停和恢复 | 整改已完成隔离验证 | 超管可指定单店暂停、恢复和查看历史。隔离验收覆盖同商户其他门店继续接单、暂停门店可继续核销已确认订单、恢复后重新接单。目标环境发布及浏览器登录态待验。[单店状态处置](../../backend/services/merchant-service/app/Controller/Admin/StoreController.php#L144) · [下单门禁](../../backend/shared/src/Merchant/MerchantAccessGuard.php#L53) |
-| 门店欺诈或严重违规升级 | 未实现 | 缺门店标记、提交商户级调查、调查结果与决策历史，以及标记期间维持整户状态的流程。现有合规处置以商户为对象。[合规服务](../../backend/services/merchant-service/app/Service/MerchantComplianceService.php#L14) |
+| 门店欺诈或严重违规升级 | 本机 8090 已发布 | 门店标记、升级商户调查、最终决定与历史已接入。标记及升级沿用现行经营状态。整户暂停由授权超管明确决定。[交付与验证](#2026-11-26-门店疑似欺诈或严重违规升级) |
 | 商户及门店定向通知 | 部分实现 | 按商户发送站内信、模板、预览、定时、受控链接、投递历史已有。商户收件箱已识别物业范围，后台发送仍只传商户 ID，缺选定门店、发送前明确目标范围以及按范围记录。邮件、短信及 Push 渠道禁用，沿用此前延期决定。[发送表单](../../admin-web/src/components/merchant/NotifyDrawer.vue#L162) · [渠道能力](../../backend/services/merchant-service/app/Service/MerchantNotificationService.php#L12) · [收件箱范围](../../backend/services/merchant-service/app/Controller/Merchant/NotificationController.php#L20) |
 | 餐厅目录、人工核验与覆盖 | 未实现，餐厅运营此前延期 | 当前有餐厅入驻及关联业务资料展示。缺 Google/API 来源目录及 Place ID、来源和状态筛选、待人工核验标记、五种核验结果、备注/来源/佐证、原始值与平台覆盖值分别保留、隐藏停业/未找到餐厅及重新核验全量审计。餐厅也未进入商城榜单。[关联业务](../../admin-web/src/components/merchant/MerchantPropertyPanel.vue#L116) · [排序业务类型限制](../../backend/services/merchant-service/app/Service/MarketplaceService.php#L14) · [延期记录](./m12/00-design.md#L11) |
 | 商户目录筛选与排序 | 本机 8090 已发布 | 已提供地区、注册日期及排序入口，保留一商户一行及组合筛选。地区覆盖关联门店和有明确地区且已核验的未映射非酒店业务。[目录控件](../../admin-web/src/views/merchant/list/index.vue#L68) · [筛选排序接口](../../backend/services/merchant-service/app/Controller/Admin/MerchantController.php#L121) |

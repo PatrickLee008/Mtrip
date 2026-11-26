@@ -222,6 +222,13 @@ function handleOpenChange(key: string, open: boolean): void {
   align-items: center;
   flex-wrap: wrap;
   gap: 4px;
+  font-size: 12px;
+
+  :deep(.ant-select),
+  :deep(.ant-select-selector),
+  :deep(.ant-select-selection-search-input) {
+    font-size: inherit;
+  }
 }
 
 .sfb-filter-item {
@@ -230,7 +237,6 @@ function handleOpenChange(key: string, open: boolean): void {
   gap: 4px;
   padding: 4px 8px;
   border-radius: 6px;
-  font-size: 12px;
   color: var(--mtrip-text-secondary);
   cursor: pointer;
   transition: all 0.15s;

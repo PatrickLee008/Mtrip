@@ -8,6 +8,7 @@ import SearchFilterBar, { type FilterConfig } from '@/components/SearchFilterBar
 import SiteTreeSelect from '@/components/SiteTreeSelect.vue';
 import StatusTag from '@/components/StatusTag.vue';
 import StoreBookingActions from '@/components/merchant/StoreBookingActions.vue';
+import StoreInvestigationActions from '@/components/merchant/StoreInvestigationActions.vue';
 import { useTable, type TableRow } from '@/composables/useTable';
 import { useUserStore } from '@/stores/user';
 import type { StatusItem } from '@/components/StatusTag.vue';
@@ -286,7 +287,7 @@ onMounted(() => {
             <StatusTag :value="displayStatus(record)" :map="STATUS_MAP" />
           </template>
           <template v-else-if="column.key === 'action_col'">
-            <a-space :size="0">
+            <a-space :size="0" wrap>
               <a-button type="link" size="small" @click="openDetail(record)">{{ t('common.detail') }}</a-button>
               <a-button v-perm="'merchant:store:edit'" type="link" size="small" @click="openEdit(record)">{{ t('common.edit') }}</a-button>
               <a-popconfirm
@@ -297,6 +298,7 @@ onMounted(() => {
                 <a-button v-perm="'merchant:store:edit'" type="link" size="small">{{ t('merchant.storePage.setMain') }}</a-button>
               </a-popconfirm>
               <StoreBookingActions :store="record" @changed="load" />
+              <StoreInvestigationActions :store-id="Number(record.id)" :store-name="record.store_name" />
               <a-popconfirm
                 v-if="record.is_main !== 1"
                 :title="t('merchant.storePage.deleteConfirm')"

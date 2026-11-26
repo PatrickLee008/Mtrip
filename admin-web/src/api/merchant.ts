@@ -649,3 +649,37 @@ export interface MerchantLoginControls {
 export const apiMerchantLoginControls = (merchantId: number) => get<MerchantLoginControls>('/admin/merchant/security/login-controls', { merchantId });
 export const apiMerchantLoginControlChange = (data: { merchantId: number; action: string; deviceId?: number; reason: string; reviewed: number }) =>
   post<unknown>('/admin/merchant/security/login-controls', data);
+
+export type InvestigationStatus = 'flagged' | 'investigating' | 'resolved';
+export type InvestigationCategory = 'suspected_fraud' | 'serious_violation';
+export type InvestigationDecision = 'cleared' | 'store_followup' | 'suspend_merchant';
+
+export interface StoreInvestigation {
+  id: number;
+  merchant_id: number;
+  merchant_name: string;
+  store_id: number;
+  store_name: string;
+  category: InvestigationCategory;
+  status: InvestigationStatus;
+  decision: InvestigationDecision | null;
+  updated_at: string;
+}
+
+export interface StoreInvestigationDetail {
+  case: StoreInvestigation;
+  merchant: { status: number; status_version: number } | null;
+  history: {
+    id: number; action: string; reason: string; evidence: string;
+    decision: InvestigationDecision | null; actor_name: string; created_at: string;
+  }[];
+}
+
+const investigationPath = '/admin/merchant/investigations';
+export const apiStoreInvestigations = (params: Record<string, unknown>) => get<PageData<StoreInvestigation>>(investigationPath + '/list', params);
+export const apiStoreInvestigationDetail = (id: number) => get<StoreInvestigationDetail>(investigationPath + '/detail', { id });
+export const apiFlagStoreInvestigation = (data: { storeId: number; category: InvestigationCategory; reason: string; evidence: string }) =>
+  post<{ id: number }>(investigationPath + '/flag', data);
+export const apiStoreInvestigationAction = (action: 'escalate' | 'resolve', data: {
+  id: number; reason: string; evidence: string; decision?: InvestigationDecision; expectedVersion?: number;
+}) => post<null>(investigationPath + '/' + action, data);

@@ -2,6 +2,7 @@ import { createI18n } from 'vue-i18n';
 import zhCN from './zh-CN';
 import enUS from './en-US';
 import { merchantLoginControlEn, merchantLoginControlZh } from './merchantLoginControl';
+import { storeInvestigationEn, storeInvestigationZh } from './storeInvestigation';
 import { merchantDeletionEn, merchantDeletionZh } from './merchantDeletion';
 
 /**
@@ -15,8 +16,8 @@ export const i18n = createI18n({
   locale: localStorage.getItem('mtrip_admin_locale') || 'en-US',
   fallbackLocale: ['en-US'],
   messages: {
-    'zh-CN': { ...zhCN, menu: { ...zhCN.menu, merchantDeletion: "商户注销审批" }, merchantDeletion: merchantDeletionZh, merchantLoginControl: merchantLoginControlZh },
-    'en-US': { ...enUS, menu: { ...enUS.menu, merchantDeletion: "Merchant Account Deletion" }, merchantDeletion: merchantDeletionEn, merchantLoginControl: merchantLoginControlEn },
+    'zh-CN': { ...zhCN, menu: { ...zhCN.menu, merchantDeletion: "商户注销审批", merchantInvestigation: storeInvestigationZh.title }, merchantDeletion: merchantDeletionZh, merchantLoginControl: merchantLoginControlZh, storeInvestigation: storeInvestigationZh },
+    'en-US': { ...enUS, menu: { ...enUS.menu, merchantDeletion: "Merchant Account Deletion", merchantInvestigation: storeInvestigationEn.title }, merchantDeletion: merchantDeletionEn, merchantLoginControl: merchantLoginControlEn, storeInvestigation: storeInvestigationEn },
   },
 });
 

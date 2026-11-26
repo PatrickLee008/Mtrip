@@ -91,7 +91,8 @@ INSERT IGNORE INTO `sys_menu` (`id`,`parent_id`,`menu_name`,`menu_name_en`,`i18n
 (309,300,'商户统计','Merchant Stats','menu.merchantStats','merchant:stats:list',2,'/merchant/stats','merchant/stats/index','',9),
 (310,300,'市场排名','Marketplace Ranking','','merchant:ranking:list',2,'/merchant/ranking','merchant/ranking/index','',10),
 (311,300,'物业资料审核','Property Profile Review','','merchant:property:content-list',2,'/merchant/property-review','merchant/property-review/index','',11),
-(312,300,'商户注销审批','Merchant Account Deletion','menu.merchantDeletion','merchant:deletion:list',2,'/merchant/deletion','merchant/deletion/index','',12);
+(312,300,'商户注销审批','Merchant Account Deletion','menu.merchantDeletion','merchant:deletion:list',2,'/merchant/deletion','merchant/deletion/index','',12),
+(313,300,'商户调查','Merchant Investigations','menu.merchantInvestigation','merchant:investigation:list',2,'/merchant/investigations','merchant/investigations/index','',13);
 INSERT IGNORE INTO `sys_menu` (`id`,`parent_id`,`menu_name`,`menu_name_en`,`perm_key`,`menu_type`,`sort`) VALUES
 (30101,301,'新增商户','Add','merchant:list:add',3,1),
 (30102,301,'编辑商户','Edit','merchant:list:edit',3,2),
@@ -121,6 +122,9 @@ INSERT IGNORE INTO `sys_menu` (`id`,`parent_id`,`menu_name`,`menu_name_en`,`perm
 (30801,308,'新增门店','Add Store','merchant:store:add',3,1),
 (30802,308,'编辑门店','Edit Store','merchant:store:edit',3,2),
 (30803,308,'暂停或恢复门店','Suspend or Restore Store','merchant:store:status',3,3),
+(30804,308,'标记门店疑似违规','Flag Store for Investigation','merchant:store:flag',3,4),
+(31301,313,'升级商户调查','Escalate Merchant Investigation','merchant:investigation:escalate',3,1),
+(31302,313,'记录调查决定','Resolve Merchant Investigation','merchant:investigation:review',3,2),
 (31001,310,'保存排序','Save Order','merchant:ranking:save',3,1),
 (31002,310,'发布','Publish','merchant:ranking:publish',3,2),
 (31003,310,'新增目的地','Add Destination','merchant:ranking:add',3,3),

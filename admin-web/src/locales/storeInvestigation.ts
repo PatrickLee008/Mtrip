@@ -1,0 +1,31 @@
+export const storeInvestigationEn = {
+  title: 'Merchant Investigations',
+  subtitle: 'Review store reports escalated to the merchant level.',
+  flag: 'Flag for investigation', history: 'Investigation history', search: 'Search by store or merchant',
+  store: 'Store', merchant: 'Merchant', category: 'Report type', updated: 'Updated (UTC)', status: 'Status',
+  reason: 'Reason', evidence: 'Supporting details or reference', decision: 'Final decision',
+  categories: { suspected_fraud: 'Suspected fraud', serious_violation: 'Serious violation' },
+  statuses: { flagged: 'Flagged', investigating: 'Under investigation', resolved: 'Resolved' },
+  decisions: { cleared: 'Close without action', store_followup: 'Refer for store-level follow-up', suspend_merchant: 'Suspend the merchant' },
+  actions: { flag: 'Flagged the store', escalate: 'Escalated to merchant review', resolve: 'Recorded the final decision' },
+  escalate: 'Escalate to merchant review', resolve: 'Record final decision',
+  flagHint: 'This records a report for the selected store. Booking and access remain available under current rules.',
+  escalateHint: 'This sends the report to the merchant investigation queue. Current operating restrictions still apply.',
+  suspendHint: 'Confirming will suspend new bookings across the merchant’s stores. Existing confirmed bookings can still be fulfilled.',
+};
+
+export const storeInvestigationZh = {
+  title: '商户调查',
+  subtitle: '查看门店标记并处理升级至商户层级的调查。',
+  flag: '标记门店', history: '调查历史', search: '按门店或商户名称搜索',
+  store: '门店', merchant: '商户', category: '标记类别', updated: '更新时间（UTC）', status: '状态',
+  reason: '原因', evidence: '佐证说明或凭证编号', decision: '最终决定',
+  categories: { suspected_fraud: '疑似欺诈', serious_violation: '严重违规' },
+  statuses: { flagged: '待升级', investigating: '调查中', resolved: '已结案' },
+  decisions: { cleared: '结案，无需处置', store_followup: '转门店层级跟进', suspend_merchant: '暂停整个商户' },
+  actions: { flag: '标记门店', escalate: '升级至商户调查', resolve: '记录最终决定' },
+  escalate: '升级至商户调查', resolve: '记录最终决定',
+  flagHint: '标记将记录到选定门店，预订和访问继续按当前规则处理。',
+  escalateHint: '标记将进入商户调查队列，当前经营限制继续按原规则执行。',
+  suspendHint: '确认后暂停该商户所有关联门店的新预订，已确认的预订可继续履约。',
+};
