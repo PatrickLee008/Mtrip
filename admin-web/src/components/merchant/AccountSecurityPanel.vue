@@ -53,27 +53,24 @@ async function load(): Promise<void> {
   }
 }
 watch(() => props.merchantId, load, { immediate: true });
-function openReset(account: SecurityAccount): void { target.value = account; reason.value = ''; }
-
-// 重置结果:明文密码仅此一次返回,关闭即不可再取回
-const credentials = ref<{ username: string; password: string } | null>(null);
-
-async function copyCredential(value: string): Promise<void> {
-  await navigator.clipboard.writeText(value);
-  message.success(t('merchantSecurity.credentialCopied'));
+function openReset(account: SecurityAccount): void {
+  if (account.account_type === 1) return;
+  target.value = account;
+  reason.value = '';
 }
 
 function confirm(): void {
   const account = target.value;
   if (!account || !reason.value.trim()) { message.warning(t('merchantSecurity.reasonRequired')); return; }
+  const request = { merchantId: props.merchantId, accountId: account.id, expectedVersion: account.auth_version, reason: reason.value.trim() };
   Modal.confirm({
     title: t('merchant.profile.reset2Fa'), content: t('merchantSecurity.resetConfirm', { name: account.username }), okType: 'danger',
     async onOk() {
       busy.value = true;
       try {
-        const result = await apiMerchantReset2Fa({ merchantId: props.merchantId, accountId: account.id, expectedVersion: account.auth_version, reason: reason.value.trim() });
+        await apiMerchantReset2Fa(request);
         target.value = null;
-        credentials.value = result;
+        message.success(t('merchant.profile.reset2FaSuccess'));
         await load();
       } finally { busy.value = false; }
     },
@@ -103,7 +100,7 @@ function confirm(): void {
             <div><dt>{{ t('merchant.profile.twoFaEnrolled') }}</dt><dd class="security-mono">{{ selectedAccount.two_fa_enrolled_at || '—' }}</dd></div>
             <div><dt>{{ t('merchant.profile.twoFaLastReset') }}</dt><dd class="security-mono">{{ selectedAccount.two_fa_last_reset_at || '—' }}</dd></div>
           </dl>
-          <div class="security-reset">
+          <div v-if="selectedAccount.account_type !== 1" class="security-reset">
             <p>{{ t('merchant.profile.reset2FaHint') }}</p>
             <a-button v-perm="'merchant:list:2fa'" size="small" danger @click="openReset(selectedAccount)">{{ t('merchant.profile.reset2Fa') }}</a-button>
           </div>
@@ -124,36 +121,10 @@ function confirm(): void {
   </a-modal>
   <a-modal :open="!!target" :title="t('merchant.profile.reset2Fa')" :confirm-loading="busy" @cancel="target = null" @ok="confirm">
     <p>{{ target?.username }}</p>
-    <a-alert :message="t('merchantSecurity.resetIncludesPassword')" type="warning" show-icon style="margin-bottom: 12px" />
+    <a-alert :message="t('merchantSecurity.resetEnrollmentHint')" type="warning" show-icon style="margin-bottom: 12px" />
     <a-form layout="vertical"><a-form-item :label="t('merchantSecurity.reason')" required><a-textarea v-model:value="reason" :maxlength="200" /></a-form-item></a-form>
   </a-modal>
 
-  <!-- 重置结果:明文密码仅此一次可见,不提供"取消",避免误以为可以放弃后重看 -->
-  <a-modal
-    :open="!!credentials"
-    :title="t('merchantSecurity.resetDoneTitle')"
-    :closable="false"
-    :mask-closable="false"
-    :cancel-button-props="{ style: { display: 'none' } }"
-    :ok-text="t('merchantSecurity.credentialAcknowledge')"
-    @ok="credentials = null"
-  >
-    <a-alert :message="t('merchantSecurity.credentialVisibleOnce')" type="warning" show-icon style="margin-bottom: 16px" />
-    <a-descriptions :column="1" bordered size="small">
-      <a-descriptions-item :label="t('merchantSecurity.account')">
-        <a-typography-text copyable>{{ credentials?.username }}</a-typography-text>
-      </a-descriptions-item>
-      <a-descriptions-item :label="t('merchantSecurity.newPassword')">
-        <a-space>
-          <strong style="font-family: monospace; font-size: 15px; letter-spacing: 1px">{{ credentials?.password }}</strong>
-          <a-button size="small" @click="credentials && copyCredential(credentials.password)">
-            {{ t('merchantSecurity.credentialCopy') }}
-          </a-button>
-        </a-space>
-      </a-descriptions-item>
-    </a-descriptions>
-    <p style="margin: 12px 0 0; color: #64748b; font-size: 12px">{{ t('merchantSecurity.resetDoneHint') }}</p>
-  </a-modal>
 </template>
 
 <style scoped>

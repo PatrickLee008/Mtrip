@@ -326,20 +326,16 @@ class MerchantController extends AbstractController
     }
 
     #[Permission('merchant:list:2fa')]
-    /**
-     * 重置 2FA 并同时重置登录密码,返回一次性明文供管理员转达。
-     * 响应带 no-store:明文只在这一次响应里出现,不可被缓存或回退取回。
-     */
     public function resetTwoFa(): \Psr\Http\Message\ResponseInterface
     {
-        $credentials = (new \App\Service\MerchantAccountSecurityService())->reset(
+        (new \App\Service\MerchantAccountSecurityService())->reset(
             $this->requireId('merchantId'),
             $this->requireId('accountId'),
             $this->requireId('expectedVersion'),
             $this->requireStr('reason')
         );
         return $this->response
-            ->json(Result::success($credentials, '2FA与登录密码已重置，请立即转达新密码；目标账号下次登录需重新注册验证器'))
+            ->json(Result::success(null, '2FA 已重置，目标账号下次登录需重新绑定验证器'))
             ->withHeader('Cache-Control', 'no-store');
     }
 

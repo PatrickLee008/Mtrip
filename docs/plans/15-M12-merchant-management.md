@@ -1,5 +1,31 @@
 # 15 - PRD模块12商户管理整改
 
+## 2026-11-26 商户 2FA 重置整改
+
+- 依据 [M12 账户安全与验收条款](<../../obsidian/mTrip_obsidian/mTrip 超级管理后台知识库/03-功能模块/M12-商户管理.md#L185>)，授权超管按原因与二次确认重置当前商户名下的单个商户或门店登录账号。原密码继续可用，后台仅返回操作结果。共享集团账号在商户档案仍可查看安全状态，重置操作限当前商户名下账号。
+- 重置撤销目标账号的旧验证器、登录会话和待处理挑战。商户通过已验证邮箱，或通过 Web 使用现有账号密码确认身份后，自行生成新的 Google Authenticator 二维码和手动密钥，再完成登录。审计记录管理员、商户、目标账号、动作、原因和时间。商户 App 短信 OTP 属后续验收项。
+- 旧实现先在隔离回归触发密码保留断言失败。更新后 S4 隔离回归 98 项、后台交互 11 项、相关 PHP 语法检查及后台构建通过，覆盖权限边界、原密码、无凭证响应、旧会话和二维码配对码失效、重新绑定及审计回滚。真实邮件、真机扫码和目标环境验收仍待执行。
+
+## 2026-11-26 M12 功能与验收差距
+
+依据超管 Enterprise v1.0.20 的 [M12 正文及内嵌验收](<../../obsidian/mTrip_obsidian/mTrip 超级管理后台知识库/03-功能模块/M12-商户管理.md>)与 [AC12 验收汇总](<../../obsidian/mTrip_obsidian/mTrip 超级管理后台知识库/04-验收标准/AC12-商户管理.md>)，对照 `dev` 的 `7fff2d0`、前后端入口和已有交付证据。AC12 汇总覆盖商城排序和目的地，账号、通知、餐厅核验等要求见 M12 正文。本机 8090 未连通，本轮为静态复核。部署状态、带数据的登录态和真机行为仍需相应环境的验收证据。
+
+| 功能 | 判断 | 当前差距与证据 |
+| --- | --- | --- |
+| 商户 App 注销申请与超管审批 | 未实现申请闭环 | 主账号能打开申请界面，提交按钮处于禁用状态。后台已有管理员直接注销的操作，缺 App 提交、申请详情和三种审批状态、待审通过/驳回与必填备注、完整申请及决策历史和结果通知。批准后的会话撤销、后续 App/Web 禁登及法务、预订、财务与结算记录留存也缺这条流程的验收证据。[App 设置页](../../merchant-app/src/screens/menu/MenuSettingsScreen.tsx#L144) · [后台注销操作](../../backend/services/merchant-service/app/Controller/Admin/MerchantController.php#L624) · [商户端 M06 §6.8](<../../obsidian/mTrip_obsidian/mTrip 商户 App 知识库/03-功能模块/M06-通知与设置.md#68-账号注销申请--仅限商户移动端-app>) |
+| 登录方式、会话及设备管控 | 未实现后台管控 | 缺三种登录方式的状态与掩码展示、商户级邮件/短信登录开关、确认与原因、复核后恢复、单独强退全部会话，以及联动失效待处理扫码登录和撤销设备/生物识别信任。安全页也缺会话与设备列表、最近登录方式及设备/IP 的集中查看、受影响对象与结果的动作审计。[后台账户安全](../../admin-web/src/components/merchant/AccountSecurityPanel.vue#L84) · [App 生物识别存储](../../merchant-app/src/utils/merchantSession.ts#L36) |
+| 短信 OTP 和 2FA 重置 | OTP 待整改，2FA 重置已完成隔离验证 | 商户 App 正常登录入口只有访问码及邮箱，缺短信 OTP。Web 的邮件/短信 OTP 后仍要求验证器，独立登录方式与当前 M11/M12 文字有差异。2FA 重置按上述整改保留密码，商户完成身份验证后自行重新绑定。真机扫码及目标环境待验。[App 认证 API](../../merchant-app/src/api/merchant.ts#L130) · [OTP 登录](../../backend/services/merchant-service/app/Service/MerchantAuthenticationService.php#L196) |
+| 门店级暂停和恢复 | 有营业开关，缺处置闭环 | 独立门店能切换营业/停业，酒店下单门禁检查门店状态。现有开关只更新 `status`，缺暂停原因、责任管理员、生效时间、门店状态历史，以及同商户其他店和既有确认订单的门店级验收场景。商户整户暂停沿用既有状态与下单门禁。[门店开关](../../backend/services/merchant-service/app/Controller/Admin/StoreController.php#L142) · [下单门禁](../../backend/shared/src/Merchant/MerchantAccessGuard.php#L53) |
+| 门店欺诈或严重违规升级 | 未实现 | 缺门店标记、提交商户级调查、调查结果与决策历史，以及标记期间维持整户状态的流程。现有合规处置以商户为对象。[合规服务](../../backend/services/merchant-service/app/Service/MerchantComplianceService.php#L14) |
+| 商户及门店定向通知 | 部分实现 | 按商户发送站内信、模板、预览、定时、受控链接、投递历史已有。商户收件箱已识别物业范围，后台发送仍只传商户 ID，缺选定门店、发送前明确目标范围以及按范围记录。邮件、短信及 Push 渠道禁用，沿用此前延期决定。[发送表单](../../admin-web/src/components/merchant/NotifyDrawer.vue#L162) · [渠道能力](../../backend/services/merchant-service/app/Service/MerchantNotificationService.php#L12) · [收件箱范围](../../backend/services/merchant-service/app/Controller/Merchant/NotificationController.php#L20) |
+| 餐厅目录、人工核验与覆盖 | 未实现，餐厅运营此前延期 | 当前有餐厅入驻及关联业务资料展示。缺 Google/API 来源目录及 Place ID、来源和状态筛选、待人工核验标记、五种核验结果、备注/来源/佐证、原始值与平台覆盖值分别保留、隐藏停业/未找到餐厅及重新核验全量审计。餐厅也未进入商城榜单。[关联业务](../../admin-web/src/components/merchant/MerchantPropertyPanel.vue#L116) · [排序业务类型限制](../../backend/services/merchant-service/app/Service/MarketplaceService.php#L14) · [延期记录](./m12/00-design.md#L11) |
+| 商户目录筛选与排序 | 接口已支持，页面缺入口 | 页面提供搜索、状态、类目和默认注册时间倒序，缺地区和注册日期筛选、可操作的排序选择。接口已有国家/城市、日期和多种排序，地区匹配当前限定酒店物业。每商户一行的目录口径已实现。[目录控件](../../admin-web/src/views/merchant/list/index.vue#L68) · [筛选排序接口](../../backend/services/merchant-service/app/Controller/Admin/MerchantController.php#L141) |
+| 关联门店资料 | 展示字段不齐 | 商户详情已有门店名称、城市、类型和关联业务 KYC。关联门店视图未逐店展示星级、运营状态和上架状态，详情接口也未返回完整的这些字段。[关联门店卡片](../../admin-web/src/components/merchant/MerchantPropertyPanel.vue#L90) · [详情查询](../../backend/services/merchant-service/app/Controller/Admin/MerchantController.php#L295) |
+| 商城榜单与热门目的地 | 酒店及目的地已有，业务类型与预览有差距 | 已有酒店与热门目的地的排序、发布、后台草稿/已发布预览及消费者读取，榜单详情可跳转商户档案。榜单只支持酒店，缺餐厅等受支持类型切换。后台预览为列表弹窗，缺用户端 App 的预览入口及带真实数据的真机预览验收。[后台预览](../../admin-web/src/views/merchant/ranking/index.vue#L231) · [消费者首页](../../client-app/src/screens/home/HomeScreen.tsx#L71) · [历史排序验收](./m12/06-s5-delivery.md#5-浏览器验收与未验项) |
+| 商务设置与到店支付 | 后台能力已有，跨端验收尚未收口 | 商户级配置、门店佣金覆盖/继承、版本与生效时间、计算预览及订单条款快照已有。当前分支也有消费者结账与订单价格实现。真实渠道收退款、银行打款及原生验收缺证据。v1.0.20 的长住与券独立出资、五类取消结算和 MVP 整单退款由 M13/M24 联动验收，现有回归含核减、连续退款的旧行为。预收原价/折后基数、跨端手续费示例及退款去向仍有待对齐条款。[门店佣金](../../admin-web/src/components/merchant/PropertyCommissionSettings.vue#L69) · [到店支付验证](./audits/2026-11-20-pay-at-hotel-unification.md) · [新版跨端差异](<../../obsidian/mTrip_obsidian/mTrip 超级管理后台知识库/09-导入记录/v1.0.19至v1.0.20差异与跨端影响.md>) |
+
+证件版本、活动与导出、商户整户状态、代登录和平台规则/合规已找到实现与历史验证。近期证据仍未覆盖的验收包括证件实际 PDF 渲染、页面替换/审核/下载与网关上传边界，活动筛选及实际导出，商户暂停/恢复/黑名单和存量确认订单的完整页面回归，2FA 重绑与扫码真机，带数据的酒店排序/目的地与 App 展示，以及合规处置页面提交和通知到达。此前确认的合规为角色权限控制下的单人处置。M12 所述按角色可能需要不同审批层级，具体适用场景尚待业务定义。[合规交付](./m12/07-s6-delivery.md) · [既有验收及剩余项](./m12/08-s7-delivery.md#5-prd追溯与剩余验收)
+
 ## 门店佣金展示（2026-11-25）
 
 2026-11-25 商户详情门店佣金摘要已优化，可直接查看生效比例及其来源，编辑入口移至标题右侧。 类型检查、构建及 21 项交互检查通过。Chrome 在 320px 宽组件中核对了继承、0% 专属及无关联门店三种状态。

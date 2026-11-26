@@ -102,10 +102,20 @@ await test('security card selection resets only the selected account with its ow
     { id: 2, username: 'staff', account_type: 3, two_fa_status: 2, auth_version: 8 }];
   await s.load(); s.selectedId.value = 2;
   assert.equal(s.selectedAccount.value.username, 'staff');
+  const loadAccounts = host.request;
+  host.request = async (method, path, data) => path.endsWith('/reset-2fa') ? (host.calls.push({ method, path, data }), null) : loadAccounts(method, path, data);
   s.openReset(s.selectedAccount.value); s.reason.value = 'Support request'; s.confirm();
   await host.confirm.onOk();
   const call = host.calls.find(c => c.path.endsWith('/reset-2fa'));
   assert.equal(call.data.merchantId, 9); assert.equal(call.data.accountId, 2); assert.equal(call.data.expectedVersion, 8);
+  assert.equal(s.target.value, null);
+});
+await test('merchant profile cannot initiate a reset for a shared group account', async () => {
+  const { host, state: s } = fixture(security, { merchantId: 9, accessConfigured: true });
+  host.response = [{ id: 1, username: 'group', account_type: 1, auth_version: 1 }];
+  await s.load();
+  s.openReset(s.selectedAccount.value);
+  assert.equal(s.target.value, null);
 });
 await test('non-super administrators do not request account security details', async () => {
   const { host, state: s } = fixture(security, { merchantId: 9, accessConfigured: true });
