@@ -118,6 +118,45 @@ class MerchantController extends AbstractController
         }
         $blacklist = Db::table('merchant_blacklist as bl')->whereColumn('bl.merchant_id', 'm.id')
             ->where('bl.status', 1);
+        $country = strtoupper($this->strInput('country'));
+        $city = mb_strtolower(trim(preg_replace('/\s+/u', ' ', $this->strInput('city'))));
+        if (($country !== '' && ! preg_match('/^[A-Z]{2}$/D', $country)) || mb_strlen($city) > 80) {
+            throw new BusinessException(ErrorCode::PARAM_ERROR, '地区须使用两位国家代码及80字以内的城市名称');
+        }
+        if ($country !== '' || $city !== '') {
+            $location = clone $properties;
+            // 对已映射的业务以门店现址为准，归档后也不回退到旧申请地址。
+            $linked = Db::table('merchant_store as mapped')->whereColumn('mapped.site_id', 'b.site_id')
+                ->whereColumn('mapped.merchant_id', 'm.id')->whereColumn('mapped.source_business_id', 'b.id');
+            $registered = (clone $businesses)->where('b.business_type', '<>', 'hotel')
+                ->whereRaw('b.kyc_status = CASE WHEN a.state_model_version = 1 THEN 5 ELSE 1 END')
+                ->addWhereExistsQuery($linked, 'and', true);
+            if ($category !== '') {
+                $location->where('s.business_type', $category);
+                $registered->where('b.business_type', $category);
+            }
+            if ($country !== '') {
+                $location->where('s.country_code', $country);
+                $registered->where('b.country_code', $country);
+            }
+            if ($city !== '') {
+                $location->where('s.city_key', $city);
+                $registered->whereRaw("COALESCE(NULLIF(b.city_key, ''), LOWER(TRIM(REGEXP_REPLACE(b.city, '[[:space:]]+', ' ')))) = ?", [$city]);
+            }
+            $query->where(fn ($region) => $region->addWhereExistsQuery($location)->addWhereExistsQuery($registered, 'or'));
+        }
+        $from = $this->strInput('registeredFrom');
+        $to = $this->strInput('registeredTo');
+        foreach ([$from, $to] as $date) {
+            if ($date !== '' && (! preg_match('/^\d{4}-\d{2}-\d{2}$/D', $date) || date('Y-m-d', strtotime($date)) !== $date)) {
+                throw new BusinessException(ErrorCode::PARAM_ERROR, '注册日期格式应为YYYY-MM-DD');
+            }
+        }
+        if ($from !== '' && $to !== '' && $from > $to) {
+            throw new BusinessException(ErrorCode::PARAM_ERROR, '注册日期范围无效');
+        }
+        if ($from !== '') $query->where('m.created_at', '>=', $from . ' 00:00:00');
+        if ($to !== '') $query->where('m.created_at', '<', date('Y-m-d', strtotime($to . ' +1 day')) . ' 00:00:00');
         // 卡片统计保留同一站点范围，独立于分页和当前状态选择。
         $statsQuery = clone $query;
         $stats = [
@@ -138,26 +177,6 @@ class MerchantController extends AbstractController
         if ($this->intInput('excludeBlacklisted') === 1) {
             $query->addWhereExistsQuery(clone $blacklist, 'and', true);
         }
-        $country = strtoupper($this->strInput('country'));
-        $city = mb_strtolower(trim(preg_replace('/\s+/u', ' ', $this->strInput('city'))));
-        if ($country !== '' || $city !== '') {
-            $location = (clone $properties)->where('s.business_type', 'hotel');
-            if ($country !== '') $location->where('s.country_code', $country);
-            if ($city !== '') $location->where('s.city_key', $city);
-            $query->addWhereExistsQuery($location);
-        }
-        $from = $this->strInput('registeredFrom');
-        $to = $this->strInput('registeredTo');
-        foreach ([$from, $to] as $date) {
-            if ($date !== '' && (! preg_match('/^\d{4}-\d{2}-\d{2}$/D', $date) || date('Y-m-d', strtotime($date)) !== $date)) {
-                throw new BusinessException(ErrorCode::PARAM_ERROR, '注册日期格式应为YYYY-MM-DD');
-            }
-        }
-        if ($from !== '' && $to !== '' && $from > $to) {
-            throw new BusinessException(ErrorCode::PARAM_ERROR, '注册日期范围无效');
-        }
-        if ($from !== '') $query->where('m.created_at', '>=', $from . ' 00:00:00');
-        if ($to !== '') $query->where('m.created_at', '<', date('Y-m-d', strtotime($to . ' +1 day')) . ' 00:00:00');
         $groupId = $this->input('groupId');
         if ($groupId !== null && $groupId !== '') $query->where('m.group_id', (int) $groupId);
         if ($this->intInput('unboundOnly') === 1) $query->where('m.group_id', 0)->whereIn('m.status', [3, 4]);
@@ -295,7 +314,8 @@ class MerchantController extends AbstractController
         $properties = Db::table('merchant_store')->where('merchant_id', $merchant['id'])
             ->where('site_id', $merchant['site_id'])
             ->where(static fn ($q) => $q->whereNull('deleted_at')->orWhereNotNull('source_business_id'))->orderBy('id')
-            ->get(['id', 'store_name', 'business_type', 'source_business_id', 'country_code', 'city_key', 'mapping_version', 'display_enabled', 'status', 'deleted_at'])
+            ->get(['id', 'store_name', 'business_type', 'source_business_id', 'country_code', 'city_key', 'mapping_version',
+                'display_enabled', 'status', 'operating_status', 'booking_status_version', 'deleted_at'])
             ->map(static fn ($row) => (array) $row)->all();
         $group = empty($merchant['group_id']) ? null : Db::table('merchant_group')
             ->where('id', $merchant['group_id'])->where('site_id', $merchant['site_id'])->whereNull('deleted_at')
@@ -326,20 +346,16 @@ class MerchantController extends AbstractController
     }
 
     #[Permission('merchant:list:2fa')]
-    /**
-     * 重置 2FA 并同时重置登录密码,返回一次性明文供管理员转达。
-     * 响应带 no-store:明文只在这一次响应里出现,不可被缓存或回退取回。
-     */
     public function resetTwoFa(): \Psr\Http\Message\ResponseInterface
     {
-        $credentials = (new \App\Service\MerchantAccountSecurityService())->reset(
+        (new \App\Service\MerchantAccountSecurityService())->reset(
             $this->requireId('merchantId'),
             $this->requireId('accountId'),
             $this->requireId('expectedVersion'),
             $this->requireStr('reason')
         );
         return $this->response
-            ->json(Result::success($credentials, '2FA与登录密码已重置，请立即转达新密码；目标账号下次登录需重新注册验证器'))
+            ->json(Result::success(null, '2FA 已重置，目标账号下次登录需重新绑定验证器'))
             ->withHeader('Cache-Control', 'no-store');
     }
 

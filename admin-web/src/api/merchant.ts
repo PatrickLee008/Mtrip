@@ -130,8 +130,7 @@ export function apiMerchantActivate(id: number): Promise<null> {
 /** 重置商户 2FA(整改 B3):商户下次登录需重新绑定 */
 export interface SecurityAccount { id: number; username: string; real_name: string; account_type: number; status: number; two_fa_status: number; two_fa_method: string; two_fa_enrolled_at: string | null; two_fa_last_reset_at: string | null; auth_version: number }
 export function apiMerchantSecurityAccounts(merchantId: number): Promise<SecurityAccount[]> { return get('/admin/merchant/security/accounts', { merchantId }); }
-/** 重置 2FA 并同时重置登录密码;明文密码仅此一次返回,关闭弹窗后无法再取回 */
-export function apiMerchantReset2Fa(data: { merchantId: number; accountId: number; expectedVersion: number; reason: string }): Promise<{ username: string; password: string }> {
+export function apiMerchantReset2Fa(data: { merchantId: number; accountId: number; expectedVersion: number; reason: string }): Promise<null> {
   return post('/admin/merchant/reset-2fa', data);
 }
 
@@ -294,8 +293,12 @@ export function apiStoreSetMain(id: number): Promise<null> {
   return post('/admin/merchant/store/set-main', { id });
 }
 
-export function apiStoreToggleStatus(id: number): Promise<{ status: number }> {
-  return post('/admin/merchant/store/toggle-status', { id });
+export function apiStoreToggleStatus(data: { id: number; action: 'suspend' | 'restore'; reason: string; expectedVersion: number }): Promise<{ operatingStatus: number; version: number }> {
+  return post('/admin/merchant/store/toggle-status', data);
+}
+
+export function apiStoreStatusHistory(data: { id: number; page?: number; pageSize?: number }): Promise<PageData<Row>> {
+  return get('/admin/merchant/store/status-history', data);
 }
 
 export function apiStoreAccountReset(id: number): Promise<{ username: string; password: string; created: boolean }> {

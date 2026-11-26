@@ -118,6 +118,7 @@ INSERT IGNORE INTO `sys_menu` (`id`,`parent_id`,`menu_name`,`menu_name_en`,`perm
 (30702,307,'编辑集团','Edit Group','merchant:group:edit',3,2),
 (30801,308,'新增门店','Add Store','merchant:store:add',3,1),
 (30802,308,'编辑门店','Edit Store','merchant:store:edit',3,2),
+(30803,308,'暂停或恢复门店','Suspend or Restore Store','merchant:store:status',3,3),
 (31001,310,'保存排序','Save Order','merchant:ranking:save',3,1),
 (31002,310,'发布','Publish','merchant:ranking:publish',3,2),
 (31003,310,'新增目的地','Add Destination','merchant:ranking:add',3,3);

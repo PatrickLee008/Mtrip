@@ -286,23 +286,28 @@ class PropertyProfileService
 
     public function publish(int $propertyId, bool $enabled): array
     {
-        $property = $this->merchantProperty($propertyId);
-        MerchantContext::assertPropertyAccess($propertyId, true);
-        if ($enabled) {
-            if ((int) $property['kyc_status'] !== 1 || (int) $property['content_status'] !== 2
-                || (int) $property['content_approved_version'] === 0) {
-                throw new BusinessException(ErrorCode::DATA_CONFLICT, '物业 KYC 和资料审核通过后才能发布');
+        return Db::transaction(function () use ($propertyId, $enabled) {
+            $property = $this->merchantProperty($propertyId, true);
+            MerchantContext::assertPropertyAccess($propertyId, true);
+            if ($enabled) {
+                if ((int) $property['operating_status'] === StoreService::PLATFORM_SUSPENDED) {
+                    throw new BusinessException(ErrorCode::DATA_CONFLICT, '物业已被平台暂停，恢复后才能发布');
+                }
+                if ((int) $property['kyc_status'] !== 1 || (int) $property['content_status'] !== 2
+                    || (int) $property['content_approved_version'] === 0) {
+                    throw new BusinessException(ErrorCode::DATA_CONFLICT, '物业 KYC 和资料审核通过后才能发布');
+                }
+                $roomCount = Db::table('hotel_room_type')->where('property_id', $propertyId)
+                    ->where('site_id', $property['site_id'])
+                    ->where('publish_status', 2)->where('approved_version', '>', 0)
+                    ->where('status', 1)->whereNull('deleted_at')->count();
+                if ($roomCount === 0) throw new BusinessException(ErrorCode::DATA_CONFLICT, '请先发布至少一个在售房型');
             }
-            $roomCount = Db::table('hotel_room_type')->where('property_id', $propertyId)
-                ->where('site_id', $property['site_id'])
-                ->where('publish_status', 2)->where('approved_version', '>', 0)
-                ->where('status', 1)->whereNull('deleted_at')->count();
-            if ($roomCount === 0) throw new BusinessException(ErrorCode::DATA_CONFLICT, '请先发布至少一个在售房型');
-        }
-        $update = ['publish_status' => $enabled ? 1 : 2, 'published_at' => $enabled ? date('Y-m-d H:i:s') : null];
-        if ($enabled) $update += ['status' => 1, 'operating_status' => 1];
-        Db::table('merchant_store')->where('id', $propertyId)->update($update);
-        return ['propertyId' => $propertyId, 'publishStatus' => $enabled ? 1 : 2];
+            $update = ['publish_status' => $enabled ? 1 : 2, 'published_at' => $enabled ? date('Y-m-d H:i:s') : null];
+            if ($enabled) $update += ['status' => 1, 'operating_status' => 1];
+            Db::table('merchant_store')->where('id', $propertyId)->update($update);
+            return ['propertyId' => $propertyId, 'publishStatus' => $enabled ? 1 : 2];
+        });
     }
 
     private function merchantProperty(int $id, bool $lock = false): array

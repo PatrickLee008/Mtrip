@@ -230,6 +230,7 @@ Router::addGroup('/api/v1/admin', static function () {
     Router::post('/merchant/store/update', [StoreController::class, 'update']);
     Router::post('/merchant/store/set-main', [StoreController::class, 'setMain']);
     Router::post('/merchant/store/toggle-status', [StoreController::class, 'toggleStatus']);
+    Router::get('/merchant/store/status-history', [StoreController::class, 'statusHistory']);
     Router::post('/merchant/store/account-reset', [StoreController::class, 'accountReset']);
     Router::post('/merchant/store/delete', [StoreController::class, 'remove']);
 

@@ -22,7 +22,7 @@ async function compile(filename) {
         path === 'vue' ? `export const {${Object.keys(vue).filter(key => key !== 'onMounted').join(',')}}=fixtureHost.vue; export const onMounted=()=>{};` :
         path === 'vue-i18n' ? 'export const useI18n=()=>({t:(key,params)=>params ? key+JSON.stringify(params) : key});' :
         path === 'vue-router' ? 'export const useRoute=()=>fixtureHost.route, useRouter=()=>fixtureHost.router;' :
-        path === '@ant-design/icons-vue' ? 'export const BellOutlined={},LoginOutlined={},EyeOutlined={},DownloadOutlined={},ExclamationCircleOutlined={},CloseOutlined={},CheckCircleOutlined={},ClockCircleOutlined={},CloseCircleOutlined={},FileSearchOutlined={},ReloadOutlined={},SearchOutlined={};' :
+        path === '@ant-design/icons-vue' ? 'export const BellOutlined={},LoginOutlined={},EyeOutlined={},DownloadOutlined={},ExclamationCircleOutlined={},CloseOutlined={},CheckCircleOutlined={},ClockCircleOutlined={},CloseCircleOutlined={},FileSearchOutlined={},ReloadOutlined={},SearchOutlined={},PlusOutlined={};' :
         'export const message={success(){},warning(){}}; export const Modal={confirm:options=>fixtureHost.confirm=options};',
       }));
       b.onResolve({ filter: /\.vue$/ }, ({ path }) => ({ path, namespace: 'component' }));
@@ -36,9 +36,11 @@ async function compile(filename) {
 const page = await compile('views/merchant/list/index.vue');
 const security = await compile('components/merchant/AccountSecurityPanel.vue');
 const property = await compile('components/merchant/MerchantPropertyPanel.vue');
+const storeList = await compile('views/merchant/store/index.vue');
+const storeBooking = await compile('components/merchant/StoreBookingActions.vue');
 const reviewQueue = await compile('views/merchant/property-review/index.vue');
 function fixture(code, props = {}, query = {}) {
-  const host = { vue, calls: [], user: { profile: { isSuper: true } },
+  const host = { vue, calls: [], events: [], user: { profile: { isSuper: true } },
     route: vue.reactive({ path: '/merchant/property-review', query }),
     router: { push: target => host.navigation = target, replace: target => host.navigation = target },
     response: [], request: async (method, path, data) => {
@@ -47,7 +49,7 @@ function fixture(code, props = {}, query = {}) {
     } };
   const context = vm.createContext({ fixtureHost: host, console, navigator: {}, crypto: globalThis.crypto });
   vm.runInContext(code, context);
-  const state = context.subject.default.setup(props, { expose() {} });
+  const state = context.subject.default.setup(props, { expose() {}, emit: (...args) => host.events.push(args) });
   return { host, state };
 }
 let passed = 0;
@@ -102,10 +104,20 @@ await test('security card selection resets only the selected account with its ow
     { id: 2, username: 'staff', account_type: 3, two_fa_status: 2, auth_version: 8 }];
   await s.load(); s.selectedId.value = 2;
   assert.equal(s.selectedAccount.value.username, 'staff');
+  const loadAccounts = host.request;
+  host.request = async (method, path, data) => path.endsWith('/reset-2fa') ? (host.calls.push({ method, path, data }), null) : loadAccounts(method, path, data);
   s.openReset(s.selectedAccount.value); s.reason.value = 'Support request'; s.confirm();
   await host.confirm.onOk();
   const call = host.calls.find(c => c.path.endsWith('/reset-2fa'));
   assert.equal(call.data.merchantId, 9); assert.equal(call.data.accountId, 2); assert.equal(call.data.expectedVersion, 8);
+  assert.equal(s.target.value, null);
+});
+await test('merchant profile cannot initiate a reset for a shared group account', async () => {
+  const { host, state: s } = fixture(security, { merchantId: 9, accessConfigured: true });
+  host.response = [{ id: 1, username: 'group', account_type: 1, auth_version: 1 }];
+  await s.load();
+  s.openReset(s.selectedAccount.value);
+  assert.equal(s.target.value, null);
 });
 await test('non-super administrators do not request account security details', async () => {
   const { host, state: s } = fixture(security, { merchantId: 9, accessConfigured: true });
@@ -118,6 +130,73 @@ await test('property KYC distinguishes new and legacy application status models'
   assert.equal(s.businessKycBadge({ application_id: 1, kyc_status: 5 }).text, 'merchant.onboardingPage.kycVerified');
   assert.equal(s.businessKycBadge({ application_id: 2, kyc_status: 1 }).text, 'merchantDirectory.kyc1');
   assert.equal(s.businessKycBadge({ application_id: 2, kyc_status: 99 }).text, 'merchantDirectory.unknown');
+});
+await test('store suspension requires a reason and submits the selected store, action and version', async () => {
+  const { host, state } = fixture(storeBooking, { store: { id: 21, store_name: 'Hotel One', operating_status: 1, booking_status_version: 4 } });
+  state.open();
+  state.reason.value = '  ';
+  await state.save();
+  assert.equal(host.calls.length, 0);
+  state.reason.value = ' Inspection ';
+  await state.save();
+  assert.deepEqual({ ...host.calls[0].data }, { id: 21, action: 'suspend', expectedVersion: 4, reason: 'Inspection' });
+  assert.deepEqual(host.events, [['changed']]);
+});
+await test('store restoration and history stay scoped to the selected suspended store', async () => {
+  const { host, state } = fixture(storeBooking, { store: { id: 22, store_name: 'Hotel Two', operating_status: 3, booking_status_version: 5 } });
+  state.open();
+  assert.equal(state.request.value.action, 'restore');
+  host.response = { list: [], total: 0, page: 1, pageSize: 20 };
+  state.showHistory();
+  assert.equal(host.calls[0].data.id, 22);
+  assert.ok(host.calls[0].path.endsWith('/status-history'));
+});
+await test('store search combines merchant, site and suspension filters and starts on page one', () => {
+  const { host, state } = fixture(storeList);
+  host.response = { list: [], total: 42, page: 1, pageSize: 20 };
+  state.tablePagination.value.onChange(2, 20);
+  Object.assign(state.query, { storeName: 'City Hotel', merchantId: 9, siteId: 3 });
+  state.filterValues.value = { status: 3 };
+  state.searchFilters();
+  assert.deepEqual({ ...host.calls.at(-1).data }, { storeName: 'City Hotel', merchantId: 9, siteId: 3, status: 3, page: 1, pageSize: 20 });
+  state.resetFilters();
+  assert.deepEqual({ ...host.calls.at(-1).data }, { storeName: '', merchantId: undefined, siteId: 0, status: undefined, page: 1, pageSize: 20 });
+});
+await test('merchant directory applies region and dates with the category, status and server-side sort', () => {
+  const { host, state } = fixture(page);
+  host.response = { list: [], total: 42, page: 1, pageSize: 20, stats: {} };
+  state.tablePagination.value.onChange(2, 20);
+  state.query.keyword = 'City';
+  state.filterValues.value = { category: 'restaurant', status: '3' };
+  Object.assign(state.locationDates, { country: ' mm ', city: '  Yangon  ', registeredFrom: '2026-11-01', registeredTo: '2026-11-26' });
+  state.applyLocationDates();
+  state.changeSort('merchantName:asc');
+  assert.deepEqual({ ...host.calls.at(-1).data }, {
+    keyword: 'City', category: 'restaurant', status: '3', country: 'MM', city: 'Yangon',
+    registeredFrom: '2026-11-01', registeredTo: '2026-11-26', sortField: 'merchantName',
+    sortOrder: 'asc', page: 1, pageSize: 20,
+  });
+  state.selectCard('4');
+  assert.equal(host.calls.at(-1).data.country, 'MM');
+  assert.equal(host.calls.at(-1).data.status, '4');
+  state.resetLocationDates();
+  assert.equal(host.calls.at(-1).data.country, '');
+  assert.equal(host.calls.at(-1).data.registeredTo, '');
+  assert.equal(host.calls.at(-1).data.sortField, 'merchantName');
+});
+await test('merchant directory keeps the applied filters when a reversed date range is entered', () => {
+  const { host, state } = fixture(page);
+  Object.assign(state.locationDates, { registeredFrom: '2026-11-26', registeredTo: '2026-11-01' });
+  state.applyLocationDates();
+  assert.equal(host.calls.length, 0);
+  assert.equal(state.query.registeredFrom, '');
+});
+await test('store pagination uses the merchant directory range format and standard page controls', () => {
+  const { state } = fixture(storeList);
+  const pagination = state.tablePagination.value;
+  assert.equal(pagination.showQuickJumper, false);
+  assert.equal(pagination.showSizeChanger, false);
+  assert.equal(pagination.showTotal(42, [21, 40]), 'merchant.verifyPage.paginationInfo{"from":21,"to":40,"total":42}');
 });
 await test('queue opens the revision URL and refreshes its filter on return', async () => {
   const { host, state } = fixture(reviewQueue);

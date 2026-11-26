@@ -12,6 +12,8 @@ use Hyperf\DbConnection\Db;
  */
 class StoreService
 {
+    public const PLATFORM_SUSPENDED = 3;
+
     /**
      * 生成或重置门店账号:无账号则创建,已有则重置密码并恢复启用
      * @return array{username: string, password: string, created: bool}

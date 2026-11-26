@@ -12,6 +12,7 @@ use Hyperf\Di\Annotation\Inject;
 use Hyperf\Logger\LoggerFactory;
 use Mtrip\Shared\Constants\ErrorCode;
 use Mtrip\Shared\Exception\BusinessException;
+use Mtrip\Shared\Merchant\MerchantAccessGuard;
 use Mtrip\Shared\Payment\PaymentCenterClient;
 use Mtrip\Shared\Payment\PaymentRules;
 use Mtrip\Shared\Wallet\WalletConfig;
@@ -69,6 +70,10 @@ class MmqrCheckoutService
         $currency = $this->orderCurrency($snapshot);
         $this->assertCurrency($currency);
         $order = Db::transaction(function () use ($orderId, $snapshot, $useWallet) {
+            if ((int) $snapshot['order_type'] === 1) {
+                MerchantAccessGuard::lockBookable([$snapshot], (int) $snapshot['site_id']);
+                MerchantAccessGuard::lockProperties([$snapshot], (int) $snapshot['site_id']);
+            }
             $order = Db::table('order_main')->where('id', $orderId)->where('user_id', (int) $snapshot['user_id'])
                 ->whereNull('deleted_at')->lockForUpdate()->first();
             if (! $order) {
@@ -128,6 +133,9 @@ class MmqrCheckoutService
             $this->assertCurrency($this->orderCurrency($s));
         }
         [$trip, $bookings] = Db::transaction(function () use ($tripId, $tripSnapshot, $snapshots, $useWallet) {
+            $siteId = (int) $tripSnapshot['site_id'];
+            MerchantAccessGuard::lockBookable($snapshots, $siteId);
+            MerchantAccessGuard::lockProperties($snapshots, $siteId);
             $trip = Db::table('order_trip')->where('id', $tripId)->where('user_id', (int) $tripSnapshot['user_id'])
                 ->whereNull('deleted_at')->lockForUpdate()->first();
             if (! $trip) {

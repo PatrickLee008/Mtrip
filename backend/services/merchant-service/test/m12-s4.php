@@ -103,6 +103,7 @@ try {
     Db::table('merchant_admin')->where('id', $one)->update(['challenge_expires_at' => gmdate('Y-m-d H:i:s', time() - 1)]);
     rejects(40101, fn () => $security->verify($again['challengeToken'], '123456', ''), 'S4 expired challenge rejected');
     $again = s4Login($one);
+    $pairing = $security->createAppPairing($again['challengeToken']);
     for ($i = 0; $i < 4; $i++) rejects(40001, fn () => $security->verify($again['challengeToken'], 'invalid', ''), 'S4 OTP failure persists');
     rejects(42901, fn () => s4Login($one), 'S4 lockout survives new password login');
     check(Db::table('merchant_activity_log')->where('target_account_id', $one)->where('description', 'like', '%authentication_locked%')->count() === 1, 'S4 lockout audited once');
@@ -119,29 +120,36 @@ try {
     rejects(40001, fn () => $security->reset($merchant, $one, 1, ' '), 'S4 reset reason required');
     rejects(40901, fn () => $security->reset($merchant, $one, 99, 'Security reset'), 'S4 stale reset version rejected');
     $priorHash = (string) Db::table('merchant_admin')->where('id', $one)->value('password');
-    $resetCredentials = $security->reset($merchant, $one, 1, 'Lost authenticator');
+    setRequest(['merchantId' => $merchant, 'accountId' => $one, 'expectedVersion' => 1, 'reason' => 'Lost authenticator']);
+    \Hyperf\Context\ResponseContext::set(new \Hyperf\HttpMessage\Server\Response());
+    $resetResponse = $container->get(\App\Controller\Admin\MerchantController::class)->resetTwoFa();
+    $resetResult = json_decode((string) $resetResponse->getBody(), true, 512, JSON_THROW_ON_ERROR);
     $reset = (array) Db::table('merchant_admin')->where('id', $one)->first();
     check($reset['two_fa_status'] === 2 && $reset['two_fa_secret_enc'] === '' && $reset['pending_secret_enc'] === '' && $reset['auth_version'] === 2, 'S4 reset clears old and pending secrets and increments account version');
-    check($reset['password'] !== $priorHash && password_verify($resetCredentials['password'], $reset['password']), 'S4 reset rotates login password to the returned plaintext');
-    check($resetCredentials['username'] === $reset['username'], 'S4 reset returns the target username');
-    check(preg_match('/[a-z]/', $resetCredentials['password']) && preg_match('/[A-Z]/', $resetCredentials['password']) && preg_match('/\d/', $resetCredentials['password']) && strlen($resetCredentials['password']) >= 12, 'S4 reset password satisfies merchant password policy');
-    rejects(40101, fn () => s4Login($one), 'S4 reset invalidates the old password');
+    check($reset['password'] === $priorHash, 'S4 2FA reset preserves the login password');
+    check($resetResult['code'] === 0 && array_key_exists('data', $resetResult) && $resetResult['data'] === null
+        && $resetResponse->getHeaderLine('Cache-Control') === 'no-store', 'S4 reset returns a non-cacheable response without credentials or setup information');
+    rejects(40101, fn () => $security->setup($again['challengeToken']), 'S4 reset revokes outstanding 2FA challenge');
+    rejects(40101, fn () => $security->exchangeAppPairing($pairing['pairingCode']), 'S4 reset revokes outstanding App pairing code');
+    $audit = Db::table('merchant_activity_log')->where('target_account_id', $one)->where('description', '2FA reset: Lost authenticator')->first();
+    check($audit && (int) $audit->merchant_id === $merchant && (int) $audit->performed_by_id === $operators[0]
+        && $audit->actor_type === 'admin' && $audit->created_at !== null, 'S4 reset audits action, reason, merchant, operator and time');
     rejects(40101, fn () => s4Request($session['token']), 'S4 reset invalidates target account old JWT');
     check(s4Request($secondSession['token'])['context']['admin_id'] === $two, 'S4 reset preserves other account JWT');
     s4Actor();
     $listing = $security->accounts($merchant);
     check(!str_contains(json_encode($listing), 'secret') && !str_contains(json_encode($listing), 'password'), 'S4 admin account list excludes secret and password');
-    $resetLogin = s4LoginWith($one, $resetCredentials['password']); $resetSetup = $security->setup($resetLogin['challengeToken']);
-    check($resetLogin['requiresEnrollment'] && $resetSetup['manualKey'] !== $setup['manualKey'], 'S4 reset forces fresh independent enrollment');
+    $resetLogin = s4Login($one); $resetSetup = $security->setup($resetLogin['challengeToken']);
+    check($resetLogin['requiresEnrollment'] && $resetSetup['manualKey'] !== $setup['manualKey']
+        && $resetSetup['otpauthUri'] !== $setup['otpauthUri'], 'S4 reset forces fresh independent enrollment with a new key and QR payload');
     Db::table('merchant_admin')->where('id', $one)->update(['last_accepted_totp_step' => -1]);
     check(s4Parallel(['--verify', $resetLogin['challengeToken'], s4Code($resetSetup['manualKey'])]) === ['denied', 'ok'], 'S4 concurrent OTP completion has one winner');
     $fault = 's4_audit_' . bin2hex(random_bytes(4));
-    Db::unprepared("ALTER TABLE merchant_activity_log ADD CONSTRAINT {$fault} CHECK (description <> '2FA + password reset: fault-injection')");
-    $beforeFault = (string) Db::table('merchant_admin')->where('id', $one)->value('password');
+    Db::unprepared("ALTER TABLE merchant_activity_log ADD CONSTRAINT {$fault} CHECK (description <> '2FA reset: fault-injection')");
+    $beforeFault = (array) Db::table('merchant_admin')->where('id', $one)->first();
     try { $security->reset($merchant, $one, 2, 'fault-injection'); throw new RuntimeException('Expected audit failure'); }
     catch (\Hyperf\Database\Exception\QueryException $e) {}
-    check(Db::table('merchant_admin')->where('id', $one)->value('auth_version') === 2, 'S4 audit failure rolls back reset');
-    check((string) Db::table('merchant_admin')->where('id', $one)->value('password') === $beforeFault, 'S4 audit failure also rolls back the password rotation');
+    check((array) Db::table('merchant_admin')->where('id', $one)->first() === $beforeFault, 'S4 audit failure rolls back the entire reset');
     Db::unprepared("ALTER TABLE merchant_activity_log DROP CHECK {$fault}"); $fault = null;
     $group = $groups[] = (int) Db::table('merchant_group')->insertGetId(['site_id' => 991, 'group_name' => 'S4 test group', 'contact_name' => 'Fixture', 'contact_phone' => '', 'status' => 1]);
     Db::table('merchant_info')->where('id', $merchant)->update(['group_id' => $group]);
@@ -151,12 +159,12 @@ try {
     $groupSetup = $security->setup($groupPending['challengeToken']);
     $groupSession = $security->verify($groupPending['challengeToken'], s4Code($groupSetup['manualKey']), '');
     check($groupSession['admin']['accountType'] === 1, 'S4 group account can independently authenticate');
+    rejects(40302, fn () => $security->reset($merchant, $groupAccount, 1, 'Security reset'), 'S4 merchant profile cannot reset a shared group account');
     $store = $stores[] = (int) Db::table('merchant_store')->insertGetId(['site_id' => 991, 'merchant_id' => $merchant, 'store_name' => 'S4 property', 'status' => 1]);
     $storeAccount = s4Account($merchant, 991, 3, 0, $store);
     check(s4Login($storeAccount)['requiresEnrollment'], 'S4 store account independently requires enrollment');
     Db::table('merchant_info')->where('id', $merchant)->update(['status' => 4, 'access_code' => 'S4-ACCESS-ALIAS']);
-    // 访问码解析到本商户主账号(is_owner=1 中 id 最小者)= $one,其密码已被前面的重置轮换
-    check($auth->login('S4-ACCESS-ALIAS', $resetCredentials['password'], '')['challengeToken'] !== '', 'S4 suspended access-code login still requires 2FA');
+    check($auth->login('S4-ACCESS-ALIAS', 'S4-fixture-password123', '')['challengeToken'] !== '', 'S4 suspended access-code login still requires 2FA');
     s4Actor(false);
     rejects(40301, fn () => $support->start($merchant, $one, 'Support investigation'), 'S4 only super can impersonate');
     s4Actor();
@@ -283,6 +291,8 @@ try {
     $profile = $loginController->me()['data'];
     check(!$profile['isOwner'] && $profile['permissions'] === [] && isset($profile['impersonation']), 'S4 profile reload keeps read-only support identity');
     check($loginController->menus()['data']['perms'] === [], 'S4 support menus never expose write buttons');
+    \Hyperf\Context\RequestContext::set((new \Hyperf\HttpMessage\Server\Request('POST', '/api/v1/merchant/auth/logout'))
+        ->withHeader('Authorization', 'Bearer ' . $limitedSession['token']));
     $loginController->logout();
     rejects(40101, fn () => s4Request($limitedSession['token']), 'S4 merchant logout ends only current support session');
     echo "S4 authentication and impersonation suite complete\n";

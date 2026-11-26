@@ -20,16 +20,16 @@ try {
     $ids = [];
     foreach ([3, 4, 0, 6, 2, 5] as $status) {
         $id = $ids[$status] = merchantFixture(991, $status);
-        Db::table('merchant_info')->where('id', $id)->update(['merchant_name' => $prefix . '-' . $status]);
+        Db::table('merchant_info')->where('id', $id)->update(['merchant_name' => $prefix . '-' . $status, 'created_at' => '2026-11-25 12:00:00']);
     }
     $foreign = merchantFixture(992);
     Db::table('merchant_info')->where('id', $foreign)->update(['merchant_name' => $prefix . '-foreign']);
     $blocked = merchantFixture(991, 4);
-    Db::table('merchant_info')->where('id', $blocked)->update(['merchant_name' => $prefix . '-blocked']);
+    Db::table('merchant_info')->where('id', $blocked)->update(['merchant_name' => $prefix . '-blocked', 'created_at' => '2026-11-25 12:00:00']);
     Db::table('merchant_blacklist')->insert(['merchant_id' => $blocked, 'site_id' => 991, 'reason' => 'Synthetic UI test', 'status' => 1]);
     $app = Db::table('merchant_application')->insertGetId([
         'merchant_id' => $ids[3], 'site_id' => 991, 'app_no' => $prefix, 'company_name' => $prefix,
-        'business_types' => 'hotel,restaurant',
+        'business_types' => 'hotel,restaurant', 'state_model_version' => 0,
     ]);
     foreach (['hotel', 'hotel', 'restaurant'] as $type) {
         Db::table('merchant_application_business')->insert([
@@ -67,6 +67,35 @@ try {
     }
     $restaurant = directoryCall('index', $filter + ['category' => 'restaurant'])['data'];
     check($restaurant['total'] === 1 && $restaurant['list'][0]['business_types'] === ['hotel', 'restaurant'], 'directory restaurant lookup without enabling restaurant operations');
+    Db::table('merchant_info')->where('id', $ids[3])->update(['created_at' => '2026-11-26 23:59:59']);
+    $restaurantBusiness = (int) Db::table('merchant_application_business')->where('application_id', $app)
+        ->where('business_type', 'restaurant')->value('id');
+    Db::table('merchant_application_business')->where('id', $restaurantBusiness)
+        ->update(['country_code' => 'MM', 'city' => 'Nay Pyi Taw', 'kyc_status' => 1]);
+    $location = ['country' => 'mm', 'city' => '  NAY   PYI TAW  '];
+    $filtered = directoryCall('index', $filter + $location + ['category' => 'restaurant', 'status' => '3',
+        'registeredFrom' => '2026-11-26', 'registeredTo' => '2026-11-26', 'sortField' => 'merchantName', 'sortOrder' => 'asc'])['data'];
+    check($filtered['total'] === 1 && (int) $filtered['list'][0]['id'] === $ids[3]
+        && $filtered['stats'] === ['total' => 1, 'active' => 1, 'suspended' => 0, 'blacklisted' => 0],
+        'directory combines verified unlinked restaurant region, category, inclusive registration date and status');
+    $dateOnly = directoryCall('index', $filter + ['registeredFrom' => '2026-11-26', 'registeredTo' => '2026-11-26'])['data'];
+    check($dateOnly['total'] === 1 && $dateOnly['stats']['total'] === 1, 'directory cards follow date filters independently of pagination');
+    check(directoryCall('index', $filter + $location + ['category' => 'hotel'])['data']['total'] === 0,
+        'directory region cannot borrow the location of another business category');
+    Db::table('merchant_application')->where('id', $app)->update(['state_model_version' => 1]);
+    check(directoryCall('index', $filter + $location)['data']['total'] === 0, 'directory excludes unverified locations on the current state model');
+    Db::table('merchant_application_business')->where('id', $restaurantBusiness)->update(['kyc_status' => 5, 'city_key' => 'nay pyi taw']);
+    check(directoryCall('index', $filter + $location)['data']['total'] === 1, 'directory matches verified locations on the current state model');
+    rejects(40001, fn () => directoryCall('index', $filter + ['country' => 'MMR']), 'directory rejects invalid country codes');
+    $linked = Db::table('merchant_store')->insertGetId(['site_id' => 991, 'merchant_id' => $ids[3],
+        'store_name' => 'Directory restaurant store', 'business_type' => 'restaurant', 'source_business_id' => $restaurantBusiness,
+        'country_code' => 'TH', 'city_key' => 'bangkok']);
+    check(directoryCall('index', $filter + $location)['data']['total'] === 0
+        && directoryCall('index', $filter + ['country' => 'TH', 'city' => 'Bangkok', 'category' => 'restaurant'])['data']['total'] === 1,
+        'directory uses the mapped non-hotel store location ahead of the original application');
+    Db::table('merchant_store')->where('id', $linked)->update(['deleted_at' => gmdate('Y-m-d H:i:s')]);
+    check(directoryCall('index', $filter + $location)['data']['total'] === 0,
+        'directory does not fall back to the initial location for archived stores');
     check(directoryCall('index', $filter + ['category' => 'airline'])['data']['total'] === 0, 'directory excludes foreign business types');
     $profile = directoryCall('detail', ['id' => $ids[3]])['data']['merchant'];
     check($profile['business_types'] === ['hotel', 'restaurant'] && $profile['commission_plan'] === null, 'directory profile matches list fields');
@@ -90,6 +119,11 @@ try {
     check(directoryCall('index', ['keyword' => $credit])['data']['total'] === 1, 'directory registration search');
     AdminContext::set(['admin_id' => 902, 'site_id' => 991, 'is_super' => false, 'permissions' => ['merchant:list:list']]);
     check(directoryCall('index', ['keyword' => $prefix, 'siteId' => 992])['data']['stats']['total'] === 7, 'directory forged site cannot affect card scope');
+    $byName = directoryCall('index', $filter + ['sortField' => 'merchantName', 'sortOrder' => 'asc', 'pageSize' => 2, 'page' => 2])['data'];
+    check(array_column($byName['list'], 'merchant_name') === [$prefix . '-3', $prefix . '-4'], 'directory sorts by name before pagination');
+    $byDate = directoryCall('index', $filter + ['sortField' => 'registeredAt', 'sortOrder' => 'desc', 'pageSize' => 1])['data'];
+    $oldest = directoryCall('index', $filter + ['sortField' => 'registeredAt', 'sortOrder' => 'asc', 'pageSize' => 1])['data'];
+    check((int) $byDate['list'][0]['id'] === $ids[3] && (int) $oldest['list'][0]['id'] === $ids[4], 'directory supports both date sort directions with stable ties');
     rejects(40301, fn () => directoryCall('commission', ['id' => $ids[3], 'commissionPlan' => 'vip', 'commissionRate' => 10]), 'directory plan change requires edit permission');
     AdminContext::set(['admin_id' => 902, 'site_id' => 991, 'is_super' => false, 'permissions' => ['merchant:list:edit']]);
     rejects(40302, fn () => directoryCall('commission', ['id' => $foreign, 'commissionPlan' => 'vip', 'commissionRate' => 10]), 'directory cannot update foreign plan');

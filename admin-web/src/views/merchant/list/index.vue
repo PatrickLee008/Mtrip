@@ -64,14 +64,27 @@ const statusColors: Record<string, string> = {
   active: 'success', suspended: 'error', blacklisted: 'error', approved: 'success',
   pending: 'warning', rejected: 'error', resubmission: 'processing',
 };
+const emptyLocationDates = { country: '', city: '', registeredFrom: '', registeredTo: '' };
 const counts = ref<Record<string, number>>({});
 const { loading, list, query, load, search, pagination } = useTable(async (params) => {
   const data = await apiMerchantList(params);
   counts.value = data.stats;
   return data;
-}, { keyword: '', category: '', status: '', sortField: 'registeredAt', sortOrder: 'desc' });
+}, { keyword: '', category: '', status: '', ...emptyLocationDates, sortField: 'registeredAt', sortOrder: 'desc' });
 const filterValues = ref<Record<string, string | number | undefined>>({ category: undefined, status: undefined });
 const filterKey = ref(0);
+const locationDatesOpen = ref(false);
+const locationDates = reactive({ country: '', city: '',
+  registeredFrom: undefined as string | undefined, registeredTo: undefined as string | undefined });
+const appliedLocationDates = computed(() => Object.keys(emptyLocationDates).filter(key => query[key]).length);
+const sortOptions = computed(() => [
+  { field: 'registeredAt', label: t('merchantDirectory.registeredAt') },
+  { field: 'merchantName', label: t('merchantDirectory.merchantName') },
+  { field: 'lastLoginAt', label: t('merchant.profile.lastLogin') },
+  { field: 'id', label: t('common.id') },
+].flatMap(({ field, label }) => ['desc', 'asc'].map(order => ({
+  value: `${field}:${order}`, label: `${label} · ${t(`merchantDirectory.${order}`)}`,
+}))));
 const cards = computed(() => [
   { key: 'total', label: t('merchantDirectory.allMerchants'), status: '' },
   { key: 'active', label: t('merchantDirectory.active'), status: '3' },
@@ -87,6 +100,43 @@ function searchFilters(): void {
   query.status = filterValues.value.status ?? '';
   query.category = filterValues.value.category ?? '';
   search();
+}
+function setLocationDatesOpen(open: boolean): void {
+  if (open) {
+    Object.assign(locationDates, { country: query.country, city: query.city,
+      registeredFrom: query.registeredFrom || undefined, registeredTo: query.registeredTo || undefined });
+  }
+  locationDatesOpen.value = open;
+}
+function applyLocationDates(): void {
+  const country = locationDates.country.trim().toUpperCase();
+  const city = locationDates.city.trim();
+  const { registeredFrom, registeredTo } = locationDates;
+  if (country && !/^[A-Z]{2}$/.test(country)) {
+    message.warning(t('merchantDirectory.invalidCountry'));
+    return;
+  }
+  if (registeredFrom && registeredTo && registeredFrom > registeredTo) {
+    message.warning(t('merchantDirectory.invalidRegistrationDates'));
+    return;
+  }
+  Object.assign(query, { country, city, registeredFrom: registeredFrom || '', registeredTo: registeredTo || '' });
+  locationDatesOpen.value = false;
+  searchFilters();
+}
+function resetLocationDates(): void {
+  Object.assign(query, emptyLocationDates);
+  locationDatesOpen.value = false;
+  searchFilters();
+}
+function datePopupContainer(trigger: HTMLElement): HTMLElement {
+  return trigger.parentElement ?? trigger;
+}
+function changeSort(value: string): void {
+  const [sortField, sortOrder] = value.split(':');
+  query.sortField = sortField;
+  query.sortOrder = sortOrder;
+  searchFilters();
 }
 function selectCard(status: string): void {
   filterValues.value = { ...filterValues.value, status: status || undefined };
@@ -418,7 +468,38 @@ onMounted(() => {
     </div>
     <SearchFilterBar :key="filterKey" v-model="query.keyword" v-model:filter-values="filterValues"
       :filters="filters" :placeholder="t('merchantDirectory.keyword')" :total="pagination.total"
-      :result-label="t('merchant.verifyPage.resultCount')" @search="searchFilters" />
+      :result-label="t('merchant.verifyPage.resultCount')" @search="searchFilters">
+      <template #filters>
+        <a-popover :open="locationDatesOpen" trigger="click" placement="bottomRight" @update:open="setLocationDatesOpen">
+          <a-button :type="appliedLocationDates ? 'primary' : 'text'" size="small" class="directory-filter-button"
+            :aria-expanded="locationDatesOpen">
+            {{ t('merchantDirectory.locationDates') }}<template v-if="appliedLocationDates"> ({{ appliedLocationDates }})</template>
+          </a-button>
+          <template #content>
+            <a-form class="directory-refinements" layout="vertical" @submit.prevent="applyLocationDates">
+              <a-form-item :label="t('merchantDirectory.regionCountry')">
+                <a-input v-model:value="locationDates.country" :aria-label="t('merchantDirectory.regionCountry')" placeholder="MM" :maxlength="2" allow-clear />
+              </a-form-item>
+              <a-form-item :label="t('merchantDirectory.regionCity')">
+                <a-input v-model:value="locationDates.city" :aria-label="t('merchantDirectory.regionCity')" placeholder="Yangon" :maxlength="80" allow-clear />
+              </a-form-item>
+              <a-form-item :label="t('merchantDirectory.registeredFrom')">
+                <a-date-picker v-model:value="locationDates.registeredFrom" value-format="YYYY-MM-DD" :get-popup-container="datePopupContainer" />
+              </a-form-item>
+              <a-form-item :label="t('merchantDirectory.registeredTo')">
+                <a-date-picker v-model:value="locationDates.registeredTo" value-format="YYYY-MM-DD" :get-popup-container="datePopupContainer" />
+              </a-form-item>
+              <div class="directory-refinement-actions">
+                <a-button @click="resetLocationDates">{{ t('common.reset') }}</a-button>
+                <a-button type="primary" html-type="submit">{{ t('common.search') }}</a-button>
+              </div>
+            </a-form>
+          </template>
+        </a-popover>
+        <a-select :value="`${query.sortField}:${query.sortOrder}`" :options="sortOptions" :aria-label="t('merchantDirectory.sort')"
+          size="small" :bordered="false" class="directory-sort" @change="changeSort" />
+      </template>
+    </SearchFilterBar>
     <a-table class="directory-table" :columns="columns" :data-source="list" :pagination="tablePagination"
       :loading="loading" row-key="id" size="middle" :scroll="{ x: 1195 }">
       <template #bodyCell="{ column, record }">
@@ -721,6 +802,12 @@ onMounted(() => {
 .directory-eyebrow { margin-bottom: 4px; font-size: 11px; font-weight: 500; line-height: 16.5px; letter-spacing: .05em; text-transform: uppercase; color: #94a3b8; }
 .directory-heading p { line-height: 19.5px; }
 .directory-export { height: 34px; font-size: 13px; color: #475569; border-color: #e3e8f0; }
+.directory-filter-button { font-size: 12px; }
+.directory-sort { width: 174px; }
+.directory-refinements { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 12px; width: min(360px, calc(100vw - 48px)); }
+.directory-refinements :deep(.ant-form-item) { margin-bottom: 12px; }
+.directory-refinements :deep(.ant-picker) { width: 100%; }
+.directory-refinement-actions { grid-column: 1 / -1; display: flex; justify-content: flex-end; gap: 8px; }
 .directory-cards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 20px; }
 .directory-card { text-align: left; padding: 14px 16px; background: #fff; border: 1px solid #e3e8f0; border-radius: 8px; cursor: pointer; color: #94a3b8; font-size: 12px; }
 .directory-card strong { display: block; margin-top: 8px; font-size: 24px; line-height: 30px; font-weight: 600; color: #1a2332; }
