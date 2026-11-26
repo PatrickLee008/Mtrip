@@ -527,6 +527,7 @@
   },
   "goods": {
     "listTitle": "ထုတ်ကုန်များ",
+    "tickets": "လက်မှတ်",
     "detailTitle": "အသေးစိတ်",
     "priceFrom": "မှစ၍",
     "sales": "{{count}} ခု ရောင်းပြီး",

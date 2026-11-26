@@ -23,7 +23,10 @@ function load(relative, modules, environment = {}) {
     '@/utils/storage': { storage: { getString: async () => null, setString: async () => {} } } });
   const calls = [];
   const send = async (url) => { calls.push({ url, site: common.useCommonStore.getState().siteId }); return {}; };
-  const api = load('api/merchant.ts', { '@/api/request': { get: send, post: send }, '@/config/env': config, '@/store/commonStore': common });
+  const api = load('api/merchant.ts', {
+    '@/api/request': { get: send, post: send, request: ({ url }) => send(url) },
+    '@/config/env': config, '@/store/commonStore': common,
+  });
   for (const operation of [() => api.apiRegistrationChannels(), () => api.apiRegistrationOtpSend('phone', 'email', 'sms'),
     () => api.apiRegistrationOtpVerify('phone', 'email', 'sms', '123456')]) {
     await common.useCommonStore.getState().setSiteId(1);

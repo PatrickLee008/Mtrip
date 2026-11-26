@@ -23,7 +23,7 @@ export const IS_DEV = ENV === 'development';
 export const API_BASE_URL: string =
   process.env.EXPO_PUBLIC_API_BASE_URL ?? DEFAULT_BASE_URL[ENV];
 
-export const DEFAULT_SITE_ID: number = Number(process.env.EXPO_PUBLIC_DEFAULT_SITE_ID ?? 1);
+export const DEFAULT_SITE_ID: number = Number(process.env.EXPO_PUBLIC_DEFAULT_SITE_ID ?? 7);
 
 /**
  * 推荐链接前缀(Refer & Earn 分享用),最终链接 = `${REFERRAL_LINK_BASE}/${推荐码}`。

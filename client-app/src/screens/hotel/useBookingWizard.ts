@@ -944,8 +944,8 @@ export function useBookingWizard({
    *   无论哪种,提交的都是**用户看到并同意的那个数**,后端不一致就再拦一次。
    */
   const submit = async (confirmedAmount?: number) => {
-    if (cartMode && !checkout.ready) {
-      showToast(checkout.error || t('hotels.booking.payment.sessionLoading'));
+    if (cartMode && !checkout.ready && !checkout.error) {
+      showToast(t('hotels.booking.payment.sessionLoading'));
       return;
     }
     /* 多房间模式下房型来自购物车,路由不一定带 roomTypeId,所以只在单房型链路上拦 */
@@ -961,11 +961,16 @@ export function useBookingWizard({
       return;
     }
     setSubmitting(true);
-    setBalanceAtSubmit(walletBalance);
     /* 上一次失败的原因不能留到这一次(本来一直没清,失败弹窗会显示过期信息) */
     setFailReason('');
     const expectedPayAmount = Math.round((confirmedAmount ?? payableTotal) * 100) / 100;
     try {
+      let checkoutWindow = checkout.window;
+      if (cartMode && !checkout.ready) {
+        checkoutWindow = await checkout.begin(false, showToast);
+        if (!checkoutWindow || checkoutWindow.expired || checkoutWindow.tripId) return;
+      }
+      setBalanceAtSubmit(walletBalance);
       /**
        * 多房间预订走 Trip:购物车里有房型(且拿得到真实房型 id)时,
        * 整车一次 `trip/create` + `trip/pay`(券只消耗一次、各预订各自出核销码)。
@@ -991,8 +996,8 @@ export function useBookingWizard({
       if (tripItems.length > 0) {
         const trip = await apiTripCreate({
           items: tripItems,
-          checkoutKey: checkout.window?.checkoutKey,
-          checkoutRevision: checkout.window?.revision,
+          checkoutKey: checkoutWindow?.checkoutKey,
+          checkoutRevision: checkoutWindow?.revision,
           couponId: appliedCoupon?.receiveId,
           expectedPayAmount,
           payAtHotel: method === 'hotel' ? 1 : 0,

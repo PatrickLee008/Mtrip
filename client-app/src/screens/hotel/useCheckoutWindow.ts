@@ -37,7 +37,7 @@ export function useCheckoutWindow(options: {
   const serial = useRef(0);
   const mounted = useRef(true);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; serial.current++; }; }, []);
-  const begin = useCallback(async (review = false) => {
+  const begin = useCallback(async (review = false, onError?: (message: string) => void) => {
     const request = ++serial.current;
     setLoading(true); setError('');
     try {
@@ -49,7 +49,11 @@ export function useCheckoutWindow(options: {
       setState({ identity, window: result }); setSeconds(Math.ceil(remaining / 1000)); setExpired(remaining <= 0);
       return result;
     } catch (e) {
-      if (mounted.current && request === serial.current) setError(e instanceof Error ? e.message : 'Checkout unavailable');
+      if (mounted.current && request === serial.current) {
+        const message = e instanceof Error ? e.message : 'Checkout unavailable';
+        setError(message);
+        onError?.(message);
+      }
       return null;
     } finally { if (mounted.current && request === serial.current) setLoading(false); }
   // identity serializes the items and owner scope.

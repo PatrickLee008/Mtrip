@@ -527,6 +527,7 @@
   },
   "goods": {
     "listTitle": "Products",
+    "tickets": "Tickets",
     "detailTitle": "Detail",
     "priceFrom": "from",
     "sales": "{{count}} sold",

@@ -527,6 +527,7 @@
   },
   "goods": {
     "listTitle": "商品列表",
+    "tickets": "门票",
     "detailTitle": "商品详情",
     "priceFrom": "起",
     "sales": "已售{{count}}",
