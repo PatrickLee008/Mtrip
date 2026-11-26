@@ -646,13 +646,6 @@ class MerchantController extends AbstractController
             throw new BusinessException(ErrorCode::DATA_CONFLICT, '商户已注销');
         }
         $remark = $this->requireStr('remark');
-        $pending = Db::table('order_main')
-            ->where('merchant_id', $merchant['id'])
-            ->whereIn('order_status', [0, 1, 5])
-            ->whereNull('deleted_at')->count();
-        if ($pending > 0) {
-            throw new BusinessException(ErrorCode::DATA_CONFLICT, "存在 {$pending} 笔进行中订单,禁止注销");
-        }
         $offCount = $this->service->close($merchant, $remark);
         return Result::success(['offGoods' => $offCount], '商户已注销');
     }

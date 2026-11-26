@@ -15,6 +15,7 @@ import { useCommonStore } from '@/store/commonStore';
 import { useMerchantStore } from '@/store/merchantStore';
 import { MenuAvatar, MenuDialog, MenuHeader, MenuIcon, ui } from './MenuUi';
 import type { MenuIconName } from './MenuUi';
+import MerchantDeletionDialog from './MerchantDeletionDialog';
 
 export default function MenuSettingsScreen({ navigation, route }: NativeStackScreenProps<RootStackParamList, 'MenuSettings'>) {
   const { section } = route.params;
@@ -27,7 +28,6 @@ export default function MenuSettingsScreen({ navigation, route }: NativeStackScr
   const [languagePicker, setLanguagePicker] = useState(false);
   const [saving, setSaving] = useState(false);
   const [closure, setClosure] = useState(false);
-  const [reason, setReason] = useState('');
   const [company, setCompany] = useState(profile?.subjectName || '');
   const [contacts, setContacts] = useState({ email: '', sms: '' });
   const [contactsFailed, setContactsFailed] = useState(false);
@@ -98,6 +98,7 @@ export default function MenuSettingsScreen({ navigation, route }: NativeStackScr
         {contactsFailed ? <Text style={[ui.body, styles.notice]}>{t('menu.contactsFailed')}</Text> : null}
         {field('email', contacts.email)}{field('phone', contacts.sms)}{field('address', '', false, true)}
         <View style={ui.footer}><Text style={[ui.body, ui.footerCopy]}>{t('menu.profile.pending')}</Text>{disabledSave}</View>
+        {Platform.OS !== 'web' && profile?.isOwner && profile.accountType === 2 ? <Pressable style={ui.card} accessibilityRole="button" onPress={() => setClosure(true)}><View style={styles.inline}><Text style={[ui.title, styles.copy]}>{t('menu.security.closure')}</Text><MenuIcon name="right" size={16} /></View><Text style={[ui.body, styles.description]}>{t('menu.security.closureCopy')}</Text></Pressable> : null}
       </> : null}
       {section === 'notifications' ? <>
         <Text style={ui.section}>{t('menu.alerts.email')}</Text>
@@ -108,7 +109,6 @@ export default function MenuSettingsScreen({ navigation, route }: NativeStackScr
       {section === 'security' ? <>
         <View style={ui.card}><View style={styles.iconTile}><MenuIcon name="shield" color={colors.primary} /></View><Text style={ui.title}>{t('menu.security.twoFa')}</Text><Text style={[ui.body, styles.description]}>{t('menu.security.twoFaCopy')}</Text><Text style={[ui.body, styles.description]}>{t('menu.security.statusUnknown')}</Text><View style={styles.securityBottom}><Pressable onPress={unavailable} accessibilityRole="button"><Text style={styles.dangerText}>{t('menu.security.reset')}</Text></Pressable><Text style={ui.body}>--</Text></View></View>
         {Platform.OS !== 'web' ? <View style={ui.card}><Text style={ui.title}>{t('menu.security.biometric')}</Text><Text style={[ui.body, styles.description]}>{t('menu.security.biometricPending')}</Text></View> : null}
-        {profile?.isOwner ? <Pressable style={ui.card} accessibilityRole="button" onPress={() => setClosure(true)}><View style={styles.inline}><Text style={[ui.title, styles.copy]}>{t('menu.security.closure')}</Text><MenuIcon name="right" size={16} /></View><Text style={[ui.body, styles.description]}>{t('menu.security.closureCopy')}</Text></Pressable> : null}
         <Text style={[ui.section, { marginTop: 20 }]}>{t('menu.security.sessions')}</Text><View style={styles.emptySessions}><MenuIcon name="shield" size={28} /><Text style={ui.body}>{t('menu.security.sessionsUnavailable')}</Text></View>
         <Pressable style={[ui.button, ui.outline, styles.sessionButton, ui.disabled]} disabled accessibilityRole="button" accessibilityState={{ disabled: true }}><Text style={styles.dangerText}>{t('menu.security.logoutOthers')}</Text></Pressable>
       </> : null}
@@ -141,7 +141,7 @@ export default function MenuSettingsScreen({ navigation, route }: NativeStackScr
     </ScrollView>
   </View>
     <MenuDialog visible={languagePicker} title={t('menu.locale.language')} onClose={() => setLanguagePicker(false)}>{(['en-US', 'zh-CN'] as const).map((value) => <Pressable key={value} style={[ui.option, language === value && ui.selected]} accessibilityRole="radio" accessibilityState={{ checked: language === value }} onPress={() => { setLanguage(value); setLanguagePicker(false); }}><Text style={ui.title}>{value === 'zh-CN' ? '简体中文' : 'English (US)'}</Text></Pressable>)}</MenuDialog>
-    <MenuDialog visible={closure} title={t('menu.security.closure')} onClose={() => setClosure(false)}><View style={styles.warning}><MenuIcon name="shield" color="#DC2626" /><Text style={[ui.body, styles.copy]}>{t('menu.security.closureCopy')}</Text></View><Text style={ui.title}>{t('menu.security.reason')}</Text><View style={styles.reasons}>{['unused', 'privacy', 'other'].map((key) => <Pressable style={[styles.reason, reason === key && ui.selected]} key={key} accessibilityRole="radio" accessibilityState={{ checked: reason === key }} onPress={() => setReason(key)}><Text style={ui.body}>{t(`menu.security.${key}`)}</Text></Pressable>)}</View><TextInput style={styles.reasonInput} multiline accessibilityLabel={t('menu.security.reasonDetails')} placeholder={t('menu.security.reasonDetails')} /><Text style={[ui.body, styles.notice]}>{t('menu.security.closurePending')}</Text><Pressable style={[ui.button, ui.disabled]} disabled accessibilityRole="button" accessibilityState={{ disabled: true }}><Text style={ui.buttonText}>{t('menu.security.submitRequest')}</Text></Pressable><Pressable style={[ui.button, ui.outline, { marginTop: 12 }]} onPress={() => setClosure(false)} accessibilityRole="button"><Text style={[ui.buttonText, ui.outlineText]}>{t('dashboardHome.cancel')}</Text></Pressable></MenuDialog>
+    {Platform.OS !== 'web' && section === 'profile' && profile?.isOwner && profile.accountType === 2 ? <MerchantDeletionDialog visible={closure} accountId={profile.id} onClose={() => setClosure(false)} /> : null}
   </SafeAreaView>;
 }
 const styles = StyleSheet.create({
@@ -156,6 +156,5 @@ const styles = StyleSheet.create({
   sessionButton: { borderColor: '#DC2626', alignSelf: 'flex-start', marginTop: 'auto', marginBottom: 24 },
   select: { borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 6, minHeight: 40, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, gap: 8, marginTop: 18 }, selectText: { flex: 1, fontFamily: fonts.inter, fontSize: 12, color: '#1E293B' },
   formatGroup: { marginTop: 24, paddingTop: 16, borderTopWidth: 1, borderTopColor: '#E2E8F0', marginBottom: 20 }, format: { borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 6, padding: 10, marginTop: 8, opacity: 0.5 },
-  warning: { backgroundColor: '#FEF2F2', borderRadius: 6, padding: 12, gap: 10, flexDirection: 'row', marginBottom: 24 }, reasons: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 }, reason: { borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 6, padding: 8 },
-  reasonInput: { minHeight: 80, borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 6, padding: 12, marginTop: 12, fontFamily: fonts.inter, fontSize: 13, color: '#1E293B', textAlignVertical: 'top' },
+
 });

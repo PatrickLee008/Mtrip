@@ -10,17 +10,18 @@ function screen(file, section, options = {}) {
   let cursor = 0, refCursor = 0;
   const element = (type, props, ...children) => ({ type, props: { ...props, children } });
   const common = { lang: 'zh-CN', setLang: async (lang) => { calls.push(['save', lang]); if (options.failSave) throw Error('storage'); }, showToast: (message) => calls.push(['toast', message]) };
-  const merchant = { profile: { realName: 'Owner', username: 'owner', subjectName: 'Company', isOwner: options.owner !== false }, propertyId: 0, setPropertyId: (id) => calls.push(['property', id]), logout: async () => { calls.push(['logout']); await options.logoutWait; } };
+  const merchant = { profile: { realName: 'Owner', username: 'owner', subjectName: 'Company', id: 64, accountType: options.accountType ?? 2, isOwner: options.owner !== false }, propertyId: 0, setPropertyId: (id) => calls.push(['property', id]), logout: async () => { calls.push(['logout']); await options.logoutWait; } };
   const navigation = { navigate: (...args) => calls.push(['navigate', ...args]), reset: (value) => calls.push(['reset', value]), goBack() {} };
   const modules = {
     react: { default: { createElement: element }, useState: (initial) => { const id = cursor++; if (!(id in state)) state[id] = initial; return [state[id], (value) => { state[id] = typeof value === 'function' ? value(state[id]) : value; }]; }, useRef: (initial) => refs[refCursor++] ||= { current: initial }, useEffect() {}, useCallback: (fn) => fn },
-    'react-native': { StyleSheet: { create: (s) => s }, Platform: { OS: 'web' }, ...Object.fromEntries(['ActivityIndicator', 'Pressable', 'ScrollView', 'Switch', 'Text', 'TextInput', 'View'].map((name) => [name, name])) },
+    'react-native': { StyleSheet: { create: (s) => s }, Platform: { OS: options.platform ?? 'web' }, ...Object.fromEntries(['ActivityIndicator', 'Pressable', 'ScrollView', 'Switch', 'Text', 'TextInput', 'View'].map((name) => [name, name])) },
     'react-native-safe-area-context': { SafeAreaView: 'SafeAreaView' }, 'expo-status-bar': { StatusBar: 'StatusBar' },
     '@react-navigation/native': { useFocusEffect() {} }, 'react-i18next': { useTranslation: () => ({ t: (key) => key }) },
     '@/config/theme': { colors: {} }, '@/config/typography': { fonts: {} }, '@/config/global': {},
     '@/api/merchant': {}, '@/i18n': { changeLanguage: (lang) => calls.push(['language', lang]) },
     '@/store/commonStore': { useCommonStore: (select) => select(common) }, '@/store/merchantStore': { useMerchantStore: (select) => select(merchant) },
     '@/screens/bookings/BookingUi': { BookingIcon: 'BookingIcon' },
+    './MerchantDeletionDialog': { default: 'MerchantDeletionDialog' },
     './MenuUi': { MenuAvatar: 'MenuAvatar', MenuDialog: 'MenuDialog', MenuHeader: 'MenuHeader', MenuIcon: 'MenuIcon', ui: {} },
   };
   const context = { exports: {}, Intl, require: (name) => { assert.ok(modules[name], name); return modules[name]; } };
@@ -76,12 +77,20 @@ async function run() {
   button(draft.render(), 'menu.reset').props.onPress();
   assert.equal(button(draft.render(), 'menu.save').props.disabled, true);
   for (const section of ['profile', 'notifications']) assert.equal(button(screen('MenuSettingsScreen.tsx', section).render(), 'menu.save').props.disabled, true);
-  for (const owner of [false, true]) {
-    tree = screen('MenuSettingsScreen.tsx', 'security', { owner }).render();
-    assert.equal(nodes(tree).filter((n) => n.type === 'Pressable' && text(n).includes('menu.security.closureCopy')).length, owner ? 1 : 0);
-    assert.equal(button(tree, 'menu.security.logoutOthers').props.disabled, true);
-    assert.equal(button(tree, 'menu.security.submitRequest').props.disabled, true);
+  for (const [owner, accountType, platform, allowed] of [
+    [true, 2, 'ios', true], [true, 2, 'android', true],
+    [false, 2, 'ios', false], [true, 1, 'ios', false], [true, 2, 'web', false],
+  ]) {
+    const account = screen('MenuSettingsScreen.tsx', 'profile', { owner, accountType, platform });
+    tree = account.render();
+    const entry = nodes(tree).find((n) => n.type === 'Pressable' && text(n).includes('menu.security.closureCopy'));
+    assert.equal(Boolean(entry), allowed);
+    if (entry) {
+      entry.props.onPress();
+      assert.equal(nodes(account.render()).find((n) => n.type === 'MerchantDeletionDialog').props.visible, true);
+    }
   }
+  assert.equal(button(screen('MenuSettingsScreen.tsx', 'security').render(), 'menu.security.logoutOthers').props.disabled, true);
   console.log('Menu routes, deferred actions, logout cancellation/concurrency, language save/reset/failure and owner-only closure passed (mocked UI/store, no network).');
 }
 run().catch((error) => { console.error(error); process.exitCode = 1; });

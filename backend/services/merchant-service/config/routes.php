@@ -10,12 +10,14 @@ declare(strict_types=1);
 
 use App\Controller\Admin\GroupController;
 use App\Controller\Admin\MerchantController;
+use App\Controller\Admin\MerchantDeletionController;
 use App\Controller\Admin\NotificationController;
 use App\Controller\Admin\OnboardingController;
 use App\Controller\Admin\PlatformRuleController;
 use App\Controller\Admin\RankingController;
 use App\Controller\Admin\StoreController;
 use App\Controller\App\Merchant\AuthController as AppMerchantAuthController;
+use App\Controller\App\Merchant\DeletionController as AppDeletionController;
 use App\Controller\Admin\SupplierController;
 use App\Controller\Admin\VerifyController;
 use App\Controller\App\Merchant\RegistrationController as AppRegistrationController;
@@ -78,7 +80,12 @@ Router::post('/api/v1/app/merchant/auth/recovery/totp/verify', [AppMerchantAuthC
 Router::post('/api/v1/app/merchant/auth/credential-claim/phone', [\App\Controller\MerchantContactSecurityController::class, 'claimPhone']);
 Router::post('/api/v1/app/merchant/auth/credential-claim/email', [\App\Controller\MerchantContactSecurityController::class, 'claimEmail']);
 Router::post('/api/v1/app/merchant/auth/credential-claim/finish', [\App\Controller\MerchantContactSecurityController::class, 'claimFinish']);
+Router::post('/api/v1/app/merchant/deletion/receipt', [AppDeletionController::class, 'receipt']);
 Router::addGroup('/api/v1/app/merchant', static function () {
+    Router::get('/deletion/current', [AppDeletionController::class, 'current']);
+    Router::post('/deletion/otp', [AppDeletionController::class, 'send']);
+    Router::post('/deletion/submit', [AppDeletionController::class, 'submit']);
+    Router::post('/deletion/cancel', [AppDeletionController::class, 'cancel']);
     Router::get('/auth/contacts', [\App\Controller\MerchantContactSecurityController::class, 'contacts']);
     Router::post('/auth/contacts/send', [\App\Controller\MerchantContactSecurityController::class, 'send']);
     Router::post('/auth/contacts/verify', [\App\Controller\MerchantContactSecurityController::class, 'verify']);
@@ -91,6 +98,9 @@ Router::addGroup('/api/v1/app/merchant', static function () {
 ]);
 
 Router::addGroup('/api/v1/admin', static function () {
+    Router::get('/merchant/deletion/list', [MerchantDeletionController::class, 'index']);
+    Router::get('/merchant/deletion/detail', [MerchantDeletionController::class, 'detail']);
+    Router::post('/merchant/deletion/review', [MerchantDeletionController::class, 'review']);
     Router::addGroup('/merchant/support', static function () {
         $controller = \App\Controller\Admin\SupportController::class;
         foreach (['options' => 'options', 'tickets' => 'index', 'summary' => 'summary', 'ticket' => 'detail', 'replies' => 'replies', 'events' => 'events', 'assignees' => 'assignees', 'attachments/download' => 'download'] as $path => $method) Router::get('/' . $path, [$controller, $method]);

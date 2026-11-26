@@ -5,6 +5,11 @@
 11 月 26 日补录 Mario 的退款答复。普通预订退钱包，到店预订全部退至客人选择的单一去向，酒店或平台入住前取消含手续费。自动退款失败可由财务接手，未决先核实，打款后上传截图再标记已退款。首发渠道和部分退款操作范围仍需对齐。见[产品决定及对应代码和 QA 用例](./2026-11-24-ca-v109-follow-up.md#11-月-26-日补录-mario-的产品决定)。
 
 11 月 26 日 QA 表新增 5 条失败记录。线上已复现 3 家酒店列表可见但详情报错；选房单价与所选日期的报价存在差异；后台调账录屏仅覆盖提交。4 条注册用例新填通过，返利、邀请及倒计时沿用旧失败。已对照最新三端 PRD 和固定证据目录。酒店详情、选房报价可修，小额余额注销、长住、收藏和整单退款已有可实施范围。见[逐项核查与线上证据](./audits/2026-11-26-qa-workbook-review.md)。
+2026-11-26 商户注销审批列表按门店管理统一标题、搜索筛选和分页样式，已备份发布到本机 8090。登录态核对两页布局，验证回车查询、状态筛选、站点选择和重置。注销列表当前为空，使用 55 条合成记录验证了分页范围、翻页及筛选后回到第一页。 见 [模块 15](./15-M12-merchant-management.md#2026-11-26-商户注销审批列表样式)。
+
+2026-11-26 商户注销审批页「全平台」站点弹层加宽至 260px，已发布到本机 8090。登录态实测 8 项站点名称完整显示，无横向滚动，选择下级站点及重置通过。 见 [模块 15](./15-M12-merchant-management.md#2026-11-26-商户-app-注销申请与超管审批)。
+
+2026-11-26 商户 App 注销申请与超管审批已实现并同步本机 8090。主商户账号经 OTP 后申请，超管带备注审批，批准后停用会话和双端登录并保留业务记录。隔离回归、后台构建与原生 JavaScript 打包通过，真机及真实外部通知待验。见 [模块 15](./15-M12-merchant-management.md#2026-11-26-商户-app-注销申请与超管审批)。
 
 2026-11-26 已将物业卡片底部按钮及商户目录筛选排序发布到本机 8090。原静态资源备份于 `deploy/backups/property-card-8090-20261126115042`，商户后台服务刷新后探活正常，部署资源一致且本机只读检查通过。用户确认后续后台整改验证后直接同步本机 8090，已记入[启动开发指南](../guides/setup/启动开发指南.md#22-改代码后如何生效重要)。
 
@@ -5368,7 +5373,7 @@ Mtrip 海外旅游 SaaS 平台:后端 Hyperf 3.1 微服务(backend/)+ 平台管�
 ## 5. 前端页面代码模式(模块07 必须沿用)
 
 - `useTable(fetcher, defaultQuery)` → `{loading,list,query,load,search,reset,pagination}`;模板中**禁用 as 断言与 TS 类型标注**(需类型的回调放 script 定义具名函数)。
-- 页面结构:`PageContainer` > 筛选 `a-card`(a-form inline)+ 列表 `a-card`;Tab 复合页单 a-card 内 a-tabs + `.tab-toolbar`。
+- 新增后台模块列表以[门店管理](../../admin-web/src/views/merchant/store/index.vue)为样式基准。使用 `PageContainer`、`admin-web/src/styles/module-list.less` 和 `SearchFilterBar`，依次放置模块标题区、搜索筛选栏和表格。关键词支持回车查询，筛选项按模块配置。分页通过 `useTable` 接入 `a-table`，使用 `size="middle"`、左侧范围和总数、右侧页码及上一页与下一页，隐藏每页条数切换和快速跳页。
 - 多表格 Tab 页多次调 useTable,模板访问 `xxx.list.value / xxx.loading.value / xxx.pagination.value`(非顶层 ref 不解包)。
 - 弹窗表单:`reactive form` + openCreate/openEdit(Object.assign)+ `editingId=0` 判新增;密钥字段编辑回显空串=保留原值。
 - 高危操作 `a-popconfirm`;更高危用专用 Modal + 必填备注;`isSuper = userStore.profile?.isSuper === true`;StatusTag `:value/:map`;SiteTreeSelect 单选可 allow-all。

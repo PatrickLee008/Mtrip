@@ -50,7 +50,9 @@ class ClientSignMiddleware implements MiddlewareInterface
             return $handler->handle($request);
         }
         $path = $request->getUri()->getPath();
-        if (! $this->enabled || ! str_starts_with($path, '/api/v1/app/')) {
+        // Keep account deletion restricted to signed App clients even in unsigned dev environments.
+        $requiresSignature = $this->enabled || str_starts_with($path, '/api/v1/app/merchant/deletion/');
+        if (! $requiresSignature || ! str_starts_with($path, '/api/v1/app/')) {
             return $handler->handle($request);
         }
 

@@ -244,9 +244,9 @@ onMounted(() => {
 
 <template>
   <PageContainer>
-    <div class="store-heading">
+    <div class="module-list-heading">
       <div>
-        <div class="store-eyebrow">{{ t('menu.merchant') }}</div>
+        <div class="module-list-eyebrow">{{ t('menu.merchant') }}</div>
         <h1>{{ t('merchant.storePage.title') }}</h1>
         <p>{{ t('merchant.storePage.subtitle') }}</p>
       </div>
@@ -262,13 +262,13 @@ onMounted(() => {
           show-search allow-clear :filter-option="false" :options="merchantOptions" :loading="merchantSearching"
           :aria-label="t('merchant.storePage.merchant')" :placeholder="t('merchant.storePage.merchant')"
           @search="searchMerchant" @change="searchFilters" />
-        <SiteTreeSelect v-if="isSuper" v-model:value="query.siteId" class="store-site-filter" size="small"
+        <SiteTreeSelect v-if="isSuper" v-model:value="query.siteId" class="module-list-site-filter" size="small"
           :bordered="false" :aria-label="t('common.site')" allow-all @change="searchFilters" />
-        <a-button type="text" size="small" class="store-reset" @click="resetFilters">{{ t('common.reset') }}</a-button>
+        <a-button type="text" size="small" class="module-list-reset" @click="resetFilters">{{ t('common.reset') }}</a-button>
       </template>
     </SearchFilterBar>
       <a-table
-        class="store-table"
+        class="module-list-table"
         :columns="columns"
         :data-source="list"
         :loading="loading"
@@ -435,16 +435,9 @@ onMounted(() => {
   </PageContainer>
 </template>
 
-<style scoped>
-.store-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 16px; }
-.store-heading h1 { margin: 0 0 2px; color: #1a2332; font-size: 18px; font-weight: 700; line-height: 27px; }
-.store-heading p { margin: 0; color: #94a3b8; font-size: 13px; line-height: 19.5px; }
-.store-eyebrow { margin-bottom: 4px; color: #94a3b8; font-size: 11px; font-weight: 500; line-height: 16.5px; letter-spacing: .05em; text-transform: uppercase; }
+<style scoped lang="less">
+@import '@/styles/module-list.less';
+
 .store-add { flex-shrink: 0; height: 34px; font-size: 13px; }
 .store-merchant-filter { width: 150px; }
-.store-site-filter { width: 126px; }
-.store-reset { color: var(--mtrip-text-secondary); font-size: 12px; }
-.store-table :deep(.ant-table) { border: 1px solid #e3e8f0; border-radius: 8px; overflow: hidden; }
-.store-table :deep(.ant-table-thead > tr > th) { color: #64748b; background: #f8fafc; font-size: 12px; }
-.store-table :deep(.ant-pagination-total-text) { margin-right: auto; color: #94a3b8; font-size: 12px; }
 </style>

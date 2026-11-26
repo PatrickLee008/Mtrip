@@ -1,5 +1,5 @@
-import React from 'react';
-import { NavigationContainer } from '@react-navigation/native';
+import React, { useCallback } from 'react';
+import { NavigationContainer, useNavigationContainerRef } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
 import type { RootStackParamList } from '@/navigation/types';
@@ -30,9 +30,16 @@ import OnboardingScreen from '@/screens/onboarding/OnboardingScreen';
 import { useMerchantStore } from '@/store/merchantStore';
 import { useRegistrationStore } from '@/store/registrationStore';
 
+import { useDeletionDecision } from './useDeletionDecision';
+
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
 export default function AppNavigator() {
+  const navigation = useNavigationContainerRef<RootStackParamList>();
+  const returnToLogin = useCallback(() => {
+    if (navigation.isReady()) navigation.resetRoot({ index: 0, routes: [{ name: 'MerchantLogin' }] });
+  }, [navigation]);
+  useDeletionDecision(returnToLogin);
   const isLogin = useMerchantStore((s) => s.isLogin);
   const registrationToken = useRegistrationStore((s) => s.registrationToken);
   const registrationPhone = useRegistrationStore((s) => s.registrationPhone);
@@ -47,7 +54,7 @@ export default function AppNavigator() {
           ? 'RegisterContact'
           : 'Onboarding';
   return (
-    <NavigationContainer>
+    <NavigationContainer ref={navigation}>
       <Stack.Navigator
         initialRouteName={initialRoute}
         screenOptions={{ headerShown: false }}

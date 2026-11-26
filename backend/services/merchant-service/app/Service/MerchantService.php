@@ -101,21 +101,38 @@ class MerchantService
      * 注销商户(终态):下架全部商品、停用全部子账号、门店联动停业
      * @return int 联动下架商品数
      */
-    public function close(array $merchant, string $remark): int
+    public function close(array $merchant, string $remark, ?int $requestId = null): int
     {
-        return (int) Db::transaction(static function () use ($merchant, $remark) {
-            Db::table('merchant_info')->where('id', $merchant['id'])->update([
-                'status' => 5,
+        return (int) Db::transaction(static function () use ($merchant, $remark, $requestId) {
+            $id = (int) $merchant['id'];
+            $locked = Db::table('merchant_info')->where('id', $id)->where('site_id', $merchant['site_id'])
+                ->whereNull('deleted_at')->lockForUpdate()->first();
+            if (! $locked || (int) $locked->status === 5) {
+                throw new BusinessException(ErrorCode::DATA_CONFLICT, '商户已注销或不存在');
+            }
+            $pending = Db::table('merchant_deletion_request')->where('pending_merchant_id', $id)->lockForUpdate()->value('id');
+            if ($pending !== null ? (int) $pending !== $requestId : $requestId !== null) {
+                throw new BusinessException(ErrorCode::DATA_CONFLICT, '请通过商户注销审批处理待审申请');
+            }
+            // Checkout takes the same merchant lock before creating or paying for a booking.
+            if (Db::table('order_main')->where('merchant_id', $id)->where(static function ($query) {
+                $query->whereIn('order_status', [0, 1, 5])->orWhere('booking_status', 3);
+            })
+                ->whereNull('deleted_at')->lockForUpdate()->first(['id'])) {
+                throw new BusinessException(ErrorCode::DATA_CONFLICT, '存在进行中订单，禁止注销');
+            }
+            Db::table('merchant_info')->where('id', $id)->update([
+                'status' => 5, 'status_version' => Db::raw('status_version + 1'),
+                'active_suspension_id' => null, 'suspended_until' => null, 'reactivation_requires_super' => 0,
                 'remark' => mb_substr($remark, 0, 500),
             ]);
-            Db::table('merchant_admin')->where('merchant_id', $merchant['id'])
-                ->whereNull('deleted_at')->update(['status' => 2]);
-            Db::table('merchant_store')->where('merchant_id', $merchant['id'])
-                ->whereNull('deleted_at')->update(['status' => 2]);
-            return Db::table('goods_info')
-                ->where('merchant_id', $merchant['id'])->whereIn('status', [1, 3])
-                ->whereNull('deleted_at')
-                ->update(['status' => 4]);
+            Db::table('merchant_admin')->where('merchant_id', $id)->whereNull('deleted_at')->update([
+                'status' => 2, 'auth_version' => Db::raw('auth_version + 1'),
+                'challenge_hash' => null, 'challenge_expires_at' => null, 'pending_secret_enc' => '',
+            ]);
+            Db::table('merchant_store')->where('merchant_id', $id)->whereNull('deleted_at')->update(['status' => 2]);
+            return Db::table('goods_info')->where('merchant_id', $id)->whereIn('status', [1, 3])
+                ->whereNull('deleted_at')->update(['status' => 4]);
         });
     }
 

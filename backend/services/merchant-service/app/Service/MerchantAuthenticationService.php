@@ -283,6 +283,94 @@ class MerchantAuthenticationService
         return $this->auth->issueSession(array_replace($account, ['last_login_at' => $now]), [], 'totp');
     }
 
+    public function deletionAccount(bool $lock = false): array
+    {
+        return $this->selfAccount($lock);
+    }
+
+    public function deletionChannels(array $account): array
+    {
+        $channels = [];
+        $test = MerchantAuthTestMode::enabled();
+        foreach (['email' => 'email', 'sms' => 'mobile'] as $channel => $field) {
+            if (! $account[$field] || ! $account['verified_' . $field . '_at'] || $account[$field . '_released_at']) continue;
+            if (! $test && ! ($channel === 'email' ? $this->emailChannel((int) $account['site_id']) : $this->smsChannel((int) $account['site_id']))) continue;
+            $value = $this->decrypt((string) $account[$field]);
+            $channels[] = ['channel' => $channel, 'recipient' => $channel === 'email' ? MaskHelper::email($value) : MaskHelper::mobile($value)];
+        }
+        return $channels;
+    }
+
+    /** External channels run after commit and never roll back the decision or its in-app notice. */
+    public function deliverDeletionNotice(int $accountId, int $noticeId): void
+    {
+        try {
+            if (MerchantAuthTestMode::enabled()) return;
+            $recipient = (array) Db::table('merchant_admin')->where('id', $accountId)->whereNull('deleted_at')->first();
+            $notice = Db::table('merchant_notify')->where('id', $noticeId)->first();
+            foreach (['email' => 'email', 'sms' => 'mobile'] as $type => $field) {
+                if (empty($recipient[$field]) || empty($recipient['verified_' . $field . '_at']) || $recipient[$field . '_released_at']) continue;
+                try {
+                    $channel = $type === 'email' ? $this->emailChannel((int) $notice->site_id) : $this->smsChannel((int) $notice->site_id);
+                    if ($channel === null) continue;
+                    $to = $this->decrypt((string) $recipient[$field]);
+                    if ($type === 'email') {
+                        $sent = (new SmtpClient($channel['host'], $channel['port'], $channel['encryption'], $channel['username'], $channel['password']))
+                            ->send($channel['fromEmail'], $channel['fromName'], $to, $notice->title, $notice->message);
+                        $receipt = $sent['ok'] ? 'smtp:accepted' : '';
+                    } else {
+                        $sent = (new SmsPohClient($channel['apiKey'], $channel['apiSecret'], $channel['countryCode']))
+                            ->sendMessage($to, $channel['from'], explode("\n", $notice->message, 2)[0], 'mtrip-deletion-' . $noticeId);
+                        $receipt = $sent['ok'] ? $sent['messageId'] : '';
+                    }
+                } catch (\Throwable) {
+                    $receipt = '';
+                }
+                Db::table('merchant_notify_delivery')->insert([
+                    'notify_id' => $noticeId, 'channel' => $type, 'attempts' => 1,
+                    'status' => $receipt !== '' ? 'accepted' : 'failed',
+                    'error_code' => $receipt !== '' ? '' : 'provider_send_failed',
+                    'scheduled_at' => $notice->send_at, 'receipt' => mb_substr($receipt, 0, 255),
+                ]);
+                Db::table('merchant_notify')->where('id', $noticeId)->update(['channels' => Db::raw("CONCAT(channels, ',{$type}')")]);
+            }
+        } catch (\Throwable $e) {
+            \Hyperf\Context\ApplicationContext::getContainer()->get(\Hyperf\Logger\LoggerFactory::class)
+                ->get('merchant-deletion')->warning('Could not record external deletion notice', ['notice_id' => $noticeId, 'error' => $e::class]);
+        }
+    }
+
+    public function sendDeletionOtp(string $channel, int $previousRequestId, string $ip): array
+    {
+        $account = $this->selfAccount();
+        if (! in_array($channel, array_column($this->deletionChannels($account), 'channel'), true)) {
+            throw new BusinessException(ErrorCode::SMS_CHANNEL_UNAVAILABLE, '请选择已验证且可用的联系方式');
+        }
+        return $this->createOtp($account, 'account_deletion', $channel, $channel, $ip, extraContext: ['previousRequestId' => $previousRequestId]);
+    }
+
+    public function verifyDeletionOtp(string $token, string $code, string $ip): void
+    {
+        $this->verifyOtp($token, $code, 'account_deletion', $ip);
+    }
+
+    /** Called inside the request transaction after the merchant and owner are locked. */
+    public function consumeDeletionOtp(string $token, array $account, int $previousRequestId): void
+    {
+        $challenge = $this->challenge($token, ['account_deletion'], ['verified'], true);
+        $context = json_decode((string) $challenge['context_json'], true) ?: [];
+        $email = $challenge['method'] === 'email';
+        $field = $email ? 'email' : 'mobile';
+        if ((int) $challenge['account_id'] !== (int) $account['id'] || (int) $challenge['site_id'] !== (int) $account['site_id']
+            || (int) ($context['authVersion'] ?? -1) !== (int) $account['auth_version']
+            || (int) ($context['previousRequestId'] ?? -1) !== $previousRequestId
+            || ! $account['verified_' . $field . '_at'] || $account[$field . '_released_at']) {
+            throw new BusinessException(ErrorCode::SMS_CODE_EXPIRED);
+        }
+        Db::table('merchant_auth_challenge')->where('id', $challenge['id'])
+            ->update(['status' => 'consumed', 'consumed_at' => gmdate('Y-m-d H:i:s')]);
+    }
+
     /** @return array{challengeToken:string,method:string,verification:string,recipient:string,expiresIn:int,resendAfter:int} */
     private function createOtp(array $account, string $purpose, string $method, string $channel, string $ip, string $googleHash = '', string $newRecipient = '', array $extraContext = []): array
     {
@@ -290,6 +378,9 @@ class MerchantAuthenticationService
         return Db::transaction(function () use ($account, $purpose, $method, $channel, $ip, $googleHash, $newRecipient, $extraContext): array {
             $account = $this->account((int) $account['id'], [(int) $account['status']], true);
             $this->assertUnlocked($account);
+            if ($purpose === 'account_deletion' && ! $account[$channel === 'email' ? 'verified_email_at' : 'verified_mobile_at']) {
+                throw new BusinessException(ErrorCode::SMS_CHANNEL_UNAVAILABLE, '联系方式未验证');
+            }
             if ($purpose !== 'rebind_new') $this->assertContactOwnership($account, $channel);
             $recipientCiphertext = (string) ($channel === 'email' ? $account['email'] : $account['mobile']);
             if ($newRecipient !== '') $recipientCiphertext = CryptoHelper::encrypt($newRecipient, $this->aesKey());
@@ -348,7 +439,12 @@ class MerchantAuthenticationService
     {
         if (! preg_match('/^\d{6}$/D', $code)) throw new BusinessException(ErrorCode::SMS_CODE_INVALID);
         $result = Db::transaction(function () use ($token, $code, $purpose, $ip): array {
+            // Match the deletion send/submit lock order and validate ownership before consuming attempts.
+            $owner = $purpose === 'account_deletion' ? $this->selfAccount(true) : null;
             $challenge = $this->challenge($token, [$purpose], ['pending'], true);
+            if ($owner && ((int) $challenge['account_id'] !== (int) $owner['id'] || (int) $challenge['site_id'] !== (int) $owner['site_id'])) {
+                throw new BusinessException(ErrorCode::SMS_CODE_INVALID);
+            }
             $channel = $this->otpChannel((string) $challenge['method']);
             if ((int) $challenge['account_id'] > 0) {
                 $account = $this->account((int) $challenge['account_id'], [1, 2], true);

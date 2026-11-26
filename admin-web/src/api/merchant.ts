@@ -600,3 +600,30 @@ export function apiMerchantBlacklistList(params: Record<string, unknown>): Promi
 export function apiMerchantCorrectContacts(merchantId: number, phone: string, email: string, reason: string): Promise<{ accountId: number; verificationRequired: boolean }> {
   return post('/admin/merchant/security/contacts/correct', { merchantId, phone, email, reason });
 }
+
+export type MerchantDeletionStatus = 'pending' | 'approved' | 'rejected' | 'cancelled';
+export interface MerchantDeletionRow {
+  id: number;
+  site_id: number;
+  merchant_id: number;
+  merchant_name: string;
+  merchant_code: string;
+  applicant_name: string;
+  status: MerchantDeletionStatus;
+  submitted_at: string;
+}
+export interface MerchantDeletionDetail extends MerchantDeletionRow {
+  account_id: number;
+  reason: 'unused' | 'privacy' | 'other';
+  details: string;
+  resolved_at: string | null;
+  resolver_id: number | null;
+  resolver_name: string;
+  review_note: string;
+  properties: { id: number; store_name: string; business_type: string }[];
+}
+
+export const apiMerchantDeletionList = (params: Record<string, unknown>) => get<PageData<MerchantDeletionRow>>('/admin/merchant/deletion/list', params);
+export const apiMerchantDeletionDetail = (id: number) => get<MerchantDeletionDetail>('/admin/merchant/deletion/detail', { id });
+export const apiMerchantDeletionReview = (id: number, decision: 'approved' | 'rejected', note: string) =>
+  post<MerchantDeletionDetail>('/admin/merchant/deletion/review', { id, decision, note });

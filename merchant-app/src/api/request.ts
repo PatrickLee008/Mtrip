@@ -69,29 +69,29 @@ function fullPath(path: string): string {
   return path.startsWith('/api/') ? path : `${MERCHANT_API_PREFIX}${path}`;
 }
 
-export async function request<T>(config: AxiosRequestConfig): Promise<T> {
+export async function request<T>(config: AxiosRequestConfig, silent = false): Promise<T> {
   const finalConfig = { ...config, url: fullPath(config.url ?? '') };
   try {
     const response = await instance.request<ApiResponse<T>>(finalConfig);
     const body = response.data;
     if (body.code === API_CODE.SUCCESS) return body.data;
-    if (body.code === API_CODE.UNAUTHORIZED || body.code === API_CODE.TOKEN_EXPIRED) {
+    if (!silent && (body.code === API_CODE.UNAUTHORIZED || body.code === API_CODE.TOKEN_EXPIRED)) {
       await hooks.onUnauthorized();
     }
     logger.warn('api', finalConfig.url, body.code, body.message);
-    hooks.onToast(body.message);
+    if (!silent) hooks.onToast(body.message);
     throw new ApiError(body.code, body.message);
   } catch (error) {
     if (error instanceof ApiError) throw error;
     const result = (error as AxiosError<ApiResponse>)?.response?.data;
     if (result && typeof result.code === 'number') {
-      if (result.code === API_CODE.UNAUTHORIZED || result.code === API_CODE.TOKEN_EXPIRED) await hooks.onUnauthorized();
-      hooks.onToast(result.message);
+      if (!silent && (result.code === API_CODE.UNAUTHORIZED || result.code === API_CODE.TOKEN_EXPIRED)) await hooks.onUnauthorized();
+      if (!silent) hooks.onToast(result.message);
       throw new ApiError(result.code, result.message);
     }
     const message = (error as AxiosError).message || 'Network Error';
     logger.error('api', finalConfig.url, message);
-    hooks.onToast(message);
+    if (!silent) hooks.onToast(message);
     throw new ApiError(-1, message);
   }
 }
