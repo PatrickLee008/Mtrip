@@ -290,6 +290,7 @@ export default function HotelDetailScreen() {
                     navigation.navigate('RoomDetail', {
                       goodsId: detail.id,
                       skuId: room.id,
+                      citizen,
                       checkIn: route.params?.checkIn,
                       checkOut: route.params?.checkOut,
                     })
@@ -439,7 +440,7 @@ export default function HotelDetailScreen() {
         <View style={[styles.bottomBar, { paddingBottom: 16 + insets.bottom }]}>
           <View>
             <Text style={styles.startAt}>{t('hotels.detail.totalPrice')}</Text>
-            <Text style={styles.price}>{formatMoney(cartTotal, currency)}</Text>
+            <Text style={styles.price}>{cartQuote ? formatMoney(cartTotal, currency) : t('hotels.detail.rooms.estimate', { amount: formatMoney(cartTotal, currency) })}</Text>
             <Text style={styles.discount}>
               {t('hotels.detail.discountToday', { percent: DETAIL_DEMO.discountPercent })}
             </Text>

@@ -3,6 +3,24 @@ import { supportZh } from './support';
  * 中文语言包:只维护有中文翻译的词条,未翻译的 key 自动回退到 en-US
  */
 export default {
+  stayProposal: {
+    title: "长住申请",
+    submit: "提交建议",
+    revise: "修改后提交",
+    proposal: "长住方案建议",
+    min: "最少晚数",
+    max: "最多晚数",
+    rate: "折扣比例（%）",
+    start: "开始时间（UTC）",
+    end: "结束时间（UTC）",
+    rooms: "建议房型及条款",
+    submitted: "待审核",
+    reviewing: "审核中",
+    approved: "通过",
+    returned: "退回修改",
+    rejected: "驳回",
+    nights: "晚",
+  },
   chat: {
     "noPhone": "暂无可用的联系电话。",
     "call": "联系住客",

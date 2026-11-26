@@ -66,7 +66,6 @@ export default function BookingCancelledScreen() {
   const [loading, setLoading] = useState(!p.refundNo);
 
   useEffect(() => {
-    if (p.refundNo) return;
     let alive = true;
     void fetchOrderDetail(p.orderId)
       .then((d) => {
@@ -91,6 +90,13 @@ export default function BookingCancelledScreen() {
       : undefined);
   /** 商户取消:`operator_type = 2`(BookingConst::OPERATOR_MERCHANT) */
   const byMerchant = (p.by ?? (detail?.cancelInfo?.operatorType === 2 ? 'merchant' : 'guest')) === 'merchant';
+  const byPlatform = detail?.cancelInfo?.operatorType === 3;
+  const info = detail?.cancelInfo;
+  const channel = info?.refundChannel ?? p.refundChannel;
+  const status = info?.refundStatus;
+  const statusLabel = info?.needsDestination ? 'order.cancel.selectDestination'
+    : status === 3 ? 'order.status.refunded' : status === 4 ? 'order.cancelled.refundRejected'
+    : 'order.cancelled.refundInitiated';
   const cancelReason = detail?.cancel_reason ?? '';
 
   /**
@@ -124,15 +130,15 @@ export default function BookingCancelledScreen() {
             />
           </View>
           <Text style={styles.title}>
-            {t(byMerchant ? 'order.cancelled.merchantTitle' : 'order.cancelled.title')}
+            {t(byPlatform ? 'order.cancelled.platformTitle' : byMerchant ? 'order.cancelled.merchantTitle' : 'order.cancelled.title')}
           </Text>
           <Text style={styles.desc}>
-            {t(byMerchant ? 'order.cancelled.merchantDesc' : 'order.cancelled.desc')}
+            {t(byPlatform ? 'order.cancelled.platformDesc' : byMerchant ? 'order.cancelled.merchantDesc' : 'order.cancelled.desc')}
           </Text>
         </View>
 
         {/* 商户取消才有的原因卡 1685:3429 —— 原因是商户填的,没有就不渲染空卡 */}
-        {byMerchant && cancelReason ? (
+        {(byMerchant || byPlatform) && cancelReason ? (
           <View style={styles.reasonCard}>
             <HomeIcon name="alert" width={22} height={21} color="#856404" />
             <View style={styles.flexCol}>
@@ -154,28 +160,31 @@ export default function BookingCancelledScreen() {
         ) : null}
 
         {/* CONFIRMED REFUND 1205:2723 */}
-        <View style={styles.refundCard}>
-          <Text style={styles.refundLabel}>{t('order.cancelled.confirmedRefund')}</Text>
+        {refundNo ? <View style={styles.refundCard}>
+          <Text style={styles.refundLabel}>{t('order.cancel.refundSummary')}</Text>
           <View style={styles.amountRow}>
             <Text style={styles.amountLabel}>{t('order.cancel.refundAmount')}</Text>
             <Text style={styles.amountValue}>{formatMoney(refundAmount, currency)}</Text>
           </View>
           <View style={styles.statusRow}>
             <HomeIcon name="wallet" size={16} color={colors.primary} />
-            <Text style={styles.statusText}>{t('order.cancelled.refundInitiated')}</Text>
+            <Text style={styles.statusText}>{t(statusLabel)}</Text>
           </View>
           <Text style={styles.refNo}>
             {t('order.cancelled.transactionRef')}
             <Text style={styles.refNoValue}>{refundNo}</Text>
           </Text>
-          <View style={styles.statusRow}>
+          {!!channel && status !== 3 && status !== 4 && <><View style={styles.statusRow}>
             <HomeIcon name="clock" size={16} color={colors.textSoft} />
             <Text style={styles.timelineLabel}>{t('order.cancel.refundTimeline')}</Text>
           </View>
-          <Text style={styles.timelineDesc}>{t('order.cancel.refundTimelineDesc')}</Text>
-        </View>
+          <Text style={styles.timelineDesc}>{t(channel === 3 ? 'order.cancel.externalDesc' : channel === 2 ? 'order.cancel.refundOriginalDesc' : 'order.cancel.refundMethodDesc')}</Text></>}
+        </View> : null}
 
         <View style={styles.actions}>
+          {detail?.cancelInfo?.needsDestination && <Pressable style={styles.destination} onPress={() => navigation.navigate('CancelBooking', { orderId: detail.id })}>
+            <Text>{t('order.cancel.selectDestination')}</Text>
+          </Pressable>}
           <Pressable
             style={({ pressed }) => [styles.primaryBtn, pressed && styles.pressed]}
             onPress={backToBookings}
@@ -208,6 +217,7 @@ export default function BookingCancelledScreen() {
 }
 
 const styles = StyleSheet.create({
+  destination: { padding: 12, alignItems: 'center' },
   root: { flex: 1, backgroundColor: colors.pageBg },
   flex: { flex: 1 },
   main: { paddingHorizontal: PAGE_PADDING, gap: 24 },

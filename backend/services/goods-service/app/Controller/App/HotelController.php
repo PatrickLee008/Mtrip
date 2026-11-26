@@ -203,9 +203,21 @@ final class HotelController extends AbstractController
         $checkOut = $this->strInput('checkOut');
         $valid = self::isDate($checkIn) && self::isDate($checkOut) && $checkOut > $checkIn;
         $nights = $valid ? (int) round((strtotime($checkOut) - strtotime($checkIn)) / 86400) : 0;
-        $stocks = $valid && $nights <= 90 ? self::stockMap($siteId, [$propertyId], $checkIn, self::shiftDate($checkOut, -1)) : null;
-        return array_map(static function (array $room) use ($stocks, $checkIn, $nights): array {
-            if ($stocks !== null) $room['available'] = self::minAvailable($room, $stocks, $checkIn, $nights);
+        $eligible = $valid && ($nights <= LongStayOffer::ORDINARY_NIGHTS
+            || LongStayOffer::tier(LongStayOffer::activeTiers($siteId, [$propertyId]), $propertyId, $nights));
+        $citizen = $this->intInput('citizen') === 1;
+        $stocks = $eligible ? self::stockMap($siteId, [$propertyId], $checkIn, self::shiftDate($checkOut, -1)) : null;
+        return array_map(static function (array $room) use ($valid, $stocks, $checkIn, $nights, $citizen): array {
+            if ($valid) $room['available'] = 0;
+            if ($stocks !== null) {
+                $room['available'] = self::minAvailable($room, $stocks, $checkIn, $nights);
+                $total = 0.0;
+                for ($i = 0; $i < $nights; $i++) {
+                    $day = self::shiftDate($checkIn, $i);
+                    $total += RoomDefaults::nightlyPrice($room, $day, $citizen, $stocks[$room['id']][$day] ?? null);
+                }
+                $room['stay_nightly_price'] = round($total / $nights, 2);
+            }
             unset($room['base_stock'], $room['launch_stock']);
             return $room;
         }, $rooms);
@@ -223,7 +235,6 @@ final class HotelController extends AbstractController
         $checkOut = $this->strInput('checkOut');
         if ($rows === [] || ! self::isDate($checkIn) || ! self::isDate($checkOut) || $checkOut <= $checkIn) return $rows;
         $nights = (int) round((strtotime($checkOut) - strtotime($checkIn)) / 86400);
-        if ($nights > 90) throw new BusinessException(ErrorCode::PARAM_ERROR, '入住晚数不能超过 90');
         $flex = min(7, max(0, $this->intInput('flexDays')));
         $today = date('Y-m-d');
         $offsets = [0];
@@ -247,7 +258,8 @@ final class HotelController extends AbstractController
 
         $result = [];
         foreach ($rows as $row) {
-            $tier = $nights <= LongStayOffer::MAX_BOOKABLE_NIGHTS ? LongStayOffer::tier($tiers, (int) $row['property_id'], $nights) : null;
+            $tier = LongStayOffer::tier($tiers, (int) $row['property_id'], $nights);
+            if ($nights > LongStayOffer::ORDINARY_NIGHTS && $tier === null) continue;
             foreach ($offsets as $offset) {
                 $start = self::shiftDate($checkIn, $offset);
                 $available = false;
@@ -364,7 +376,7 @@ final class HotelController extends AbstractController
             ->orderBy('sort')->orderBy('id')->get([
                 'id', 'property_id', 'room_name', 'description', 'bed_type', 'bed_count', 'bedroom_count', 'bedding', 'area', 'area_unit',
                 'max_adults', 'max_children', 'max_guests', 'floor_name', 'room_view', 'smoking', 'breakfast', 'meal_plan',
-                'cancellation_policy', 'currency', 'checkin_notes', 'base_price', 'weekend_price', 'extra_bed_price',
+                'cancellation_policy', 'currency', 'checkin_notes', 'base_price', 'base_price_citizen', 'weekend_price', 'extra_bed_price',
                 'images', 'image_gallery', 'video_url', 'facilities', 'panorama', 'vr_tour', 'floor_plan', 'sort',
                 'base_stock', 'launch_stock',
             ])->map(function ($row): array {
@@ -394,7 +406,7 @@ final class HotelController extends AbstractController
         $detail['reviewSummary'] = ['rating' => $summary['rating'], 'count' => $summary['reviewCount'], 'dimensions' => $this->reviewDimensions($propertyId)];
         $detail['longStay'] = $this->availableRows($siteId, [$summary])[0]['longStay'] ?? null;
         $detail['longStayTiers'] = array_values(array_map(static fn ($tier) => [
-            'minNights' => (int) $tier['min_nights'], 'rate' => (float) $tier['discount_rate'],
+            'minNights' => (int) $tier['min_nights'], 'maxNights' => (int) $tier['max_nights'], 'rate' => (float) $tier['discount_rate'],
         ], LongStayOffer::activeTiers($siteId, [$propertyId])));
         /* 附加服务:只下发已发布配置里启用的项(Enhance Your Stay),计价规则见 shared HotelAddons */
         $detail['addons'] = HotelAddons::enabled($property['addons'] ?? null);
@@ -629,10 +641,8 @@ final class HotelController extends AbstractController
 
     private function publishedProperty(int $siteId, int $propertyId): array
     {
-        $location = Db::table('merchant_store')->where('id', $propertyId)->where('site_id', $siteId)
-            ->where('business_type', 'hotel')->whereNull('deleted_at')->first(['country_code', 'city_key']);
-        foreach ($location ? MarketplaceReader::searchable($siteId, (string) $location->country_code, (string) $location->city_key) : [] as $row) {
-            if ((int) $row['property_id'] === $propertyId) return $row;
+        foreach (MarketplaceReader::searchable($siteId, '', '', [$propertyId]) as $row) {
+            return $row;
         }
         throw new BusinessException(ErrorCode::NOT_FOUND, '酒店尚未发布或已失去展示资格');
     }

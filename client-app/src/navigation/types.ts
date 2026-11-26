@@ -59,9 +59,9 @@ export type RootStackParamList = {
    * 正常模式房型详情(Figma Rooms Details `281:1041`),酒店详情 Rooms 页签真实房型卡的 See Details 进来。
    * 参数与关怀模式同形:商品 id + 房型 id,日期透传给订房向导。
    */
-  RoomDetail: { goodsId: number; skuId: number; checkIn?: string; checkOut?: string };
+  RoomDetail: { goodsId: number; skuId: number; citizen?: boolean; checkIn?: string; checkOut?: string };
   /** 房型详情(Rooms Details `2352:6030`) */
-  RoomDetailLite: { goodsId: number; skuId: number; checkIn?: string; checkOut?: string };
+  RoomDetailLite: { goodsId: number; skuId: number; citizen?: boolean; checkIn?: string; checkOut?: string };
   /** 酒店信息页(View Hotel Detail `2352:8182`) */
   HotelInfoLite: { id: number };
   /** 酒店政策(Lite Hotel Details Policies `2352:8890`) */
@@ -300,6 +300,7 @@ export type RootStackParamList = {
   BookingCancelled: {
     orderId: number;
     refundNo?: string;
+    refundChannel?: number;
     refundAmount?: number;
     hotelName?: string;
     dateRange?: string;

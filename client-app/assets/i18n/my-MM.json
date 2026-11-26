@@ -203,6 +203,7 @@
       "noStay": "No completed stay to review yet"
     },
     "savedHotels": {
+      "unavailable": "လောလောဆယ် မရနိုင်ပါ",
       "add": "ဟိုတယ်ကို သိမ်းရန်",
       "added": "ဟိုတယ်ကို သိမ်းပြီးပါပြီ",
       "updateFailed": "သိမ်းထားသော ဟိုတယ်များကို ပြင်ဆင်၍မရပါ။ ထပ်စမ်းပါ။",
@@ -620,6 +621,12 @@
       "refundAddon": "ထပ်ဆောင်းဝန်ဆောင်မှု ပြန်အမ်းမှု",
       "refundMethod": "ပြန်အမ်းနည်းလမ်း",
       "refundWallet": "mTrip ပိုက်ဆံအိတ်",
+      "selectDestination": "ငွေပြန်အမ်းမည့်နေရာ ရွေးပါ",
+      "external": "ဘဏ် သို့မဟုတ် အီလက်ထရောနစ်ပိုက်ဆံအိတ်",
+      "externalDesc": "ငွေအပြည့်ကို ရွေးထားသောအကောင့်သို့ ရက် ၃၀ ခန့်အတွင်း လွှဲပေးပါမည်။",
+      "provider": "ဘဏ် သို့မဟုတ် ပိုက်ဆံအိတ်အမည်",
+      "holder": "အကောင့်ပိုင်ရှင်",
+      "accountNumber": "အကောင့်နံပါတ်",
       "refundOriginal": "မူလ KBZPay နည်းလမ်း",
       "refundMethodDesc": "ပြန်အမ်းငွေကို သင့် mTrip ပိုက်ဆံအိတ်သို့ ထည့်ပေးပါမည်။",
       "refundOriginalDesc": "ပြန်အမ်းငွေကို မူလ KBZPay အကောင့်သို့ ပြန်ပို့ပါမည်။",
@@ -662,6 +669,9 @@
       "backToBookings": "ကျွန်ုပ်၏ ကြိုတင်မှာယူမှုသို့",
       "startNew": "အသစ် ကြိုတင်မှာယူရန်",
       "detailsTitle": "ပယ်ဖျက်မှု အသေးစိတ်",
+      "platformTitle": "mTrip မှ ပယ်ဖျက်ပြီး",
+      "platformDesc": "mTrip က သင့်ဘိုကင်ကို ပယ်ဖျက်ခဲ့သည်။",
+      "refundRejected": "ငွေပြန်အမ်းရန် ငြင်းပယ်ပြီး",
       "merchantTitle": "ဟိုတယ်မှ ပယ်ဖျက်လိုက်သည်",
       "merchantDesc": "အောက်ပါအကြောင်းရင်းဖြင့် ဟိုတယ်ဘက်မှ ပယ်ဖျက်လိုက်ပါသည်။ အတည်ပြု အီးမေးလ် ပေးပို့ပါမည်။",
       "cancelReason": "ပယ်ဖျက်ရသည့် အကြောင်းရင်း"
@@ -1188,7 +1198,7 @@
       "warningTitle": "Delete your mTrip account?",
       "warningBody": "Deleting your account is permanent. You will no longer be able to sign in or access your bookings, saved travelers, rewards and coupons.",
       "ruleBookings": "You cannot delete your account while you have ongoing or pending bookings.",
-      "ruleWallet": "Your mTrip Wallet balance must be 0. If you still have a balance, contact customer support. If support approves the deletion, the remaining balance is forfeited and cannot be refunded, transferred or recovered.",
+      "ruleWallet": "အကောင့်ဖျက်ပြီးပါက လက်ကျန်ငွေ ဆုံးရှုံးပါမည်။ သတ်မှတ်ပမာဏထက် ကျော်လွန်ပါက အကူအညီတောင်းပါ။",
       "ruleRetention": "Your account data is kept for 90 days under the mTrip data retention policy.",
       "ruleNewAccount": "You can create a new mTrip account later, but it will not restore any data, wallet balance or benefits from this account.",
       "continue": "Continue",
@@ -1615,6 +1625,14 @@
         "title": "Refund completed",
         "body": "A refund of {{amount}} for {{hotel}} ({{orderNo}}) has been credited to your mTrip Wallet."
       },
+      "refund_requested_external": {
+        "title": "Cancellation requested",
+        "body": "{{hotel}} ({{orderNo}}) အတွက် {{amount}} ကို သင်ရွေးထားသောအကောင့်သို့ ပြန်အမ်းရန် စိစစ်နေသည်။"
+      },
+      "refund_completed_external": {
+        "title": "Refund completed",
+        "body": "{{hotel}} ({{orderNo}}) အတွက် {{amount}} ကို သင်ရွေးထားသောအကောင့်သို့ လွှဲပေးပြီးကြောင်း မှတ်တမ်းတင်ထားသည်။"
+      },
       "refund_requested_original": {
         "title": "Cancellation requested",
         "body": "Your cancellation for {{hotel}} ({{orderNo}}) was submitted. A refund of {{amount}} will be returned to your original payment account after review."
@@ -1905,6 +1923,8 @@
           "pool": "အတွင်းရေကူးကန်",
           "breakfast": "မနက်စာကောင်း"
         },
+        "averageNight": "တစ်ည ပျမ်းမျှ",
+        "estimate": "ခန့်မှန်း {{amount}}",
         "perNight": "/ တစ်ည",
         "bestseller": "အရောင်းရဆုံး",
         "breakfast": "မနက်စာ",

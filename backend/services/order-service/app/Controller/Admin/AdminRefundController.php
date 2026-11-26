@@ -61,7 +61,10 @@ class AdminRefundController extends AbstractAdminController
         $payMethods = $rows === [] ? [] : Db::table('order_main')
             ->whereIn('id', array_values(array_unique(array_map(static fn ($r) => (int) $r['order_id'], $rows))))
             ->pluck('pay_method', 'id')->all();
-        $list = array_map(function (array $row) use ($payMethods) {
+        $wholeRefunds = Db::table('order_refund_destination')->whereIn('refund_id', array_column($rows, 'id'))
+            ->where('close_booking', 1)->pluck('refund_id')->all();
+        $list = array_map(function (array $row) use ($payMethods, $wholeRefunds) {
+            $row['whole_cancellation'] = in_array($row['id'], $wholeRefunds);
             $row['images'] = $this->jsonDecode($row['images']);
             $row['pay_method'] = (int) ($payMethods[$row['order_id']] ?? 0);
             unset($row['deleted_at']);
@@ -80,7 +83,17 @@ class AdminRefundController extends AbstractAdminController
             ->where('id', $refund['order_id'])
             ->first(['id', 'order_no', 'order_type', 'goods_name', 'sku_name', 'quantity',
                 'total_amount', 'pay_amount', 'order_status', 'refund_status',
-                'use_date', 'end_date', 'contact_name', 'pay_method', 'pay_time', 'created_at']);
+                'use_date', 'end_date', 'contact_name', 'pay_at_hotel', 'pay_method', 'pay_time', 'created_at']);
+        if ((int) $refund['refund_channel'] === 3 && AdminContext::hasPermission('order:refund:transfer')) {
+            $destination = Db::table('order_refund_destination')->where('refund_id', $refund['id'])->first();
+            if ($destination) {
+                $refund['recipient'] = $destination->recipient_cipher ? json_decode($this->decryptField($destination->recipient_cipher), true)
+                    : ['KBZPay', 'Original payer', (string) $refund['pay_no']];
+                $refund['proofImage'] = $destination->proof_image === null ? null
+                    : 'data:' . $destination->proof_mime . ';base64,' . base64_encode($destination->proof_image);
+                $refund['financeActor'] = (int) $destination->finance_actor;
+            }
+        }
         $refund['pay_method'] = $order !== null ? (int) $order->pay_method : 0;
         $history = Db::table('order_booking_event')
             ->where('site_id', $refund['site_id'])->where('order_id', $refund['order_id'])
@@ -92,7 +105,7 @@ class AdminRefundController extends AbstractAdminController
                     'id' => (int) $event->id,
                     'event_type' => (string) $event->event_type,
                     'status' => (int) $event->status,
-                    'reference' => (string) (($detail['tradeNo'] ?? '') ?: ($detail['refundNo'] ?? '')),
+                    'reference' => (string) (($detail['tradeNo'] ?? '') ?: ($detail['previousRefundNo'] ?? '') ?: ($detail['refundNo'] ?? '')),
                     'created_at' => $event->created_at,
                 ];
             })->all();
@@ -127,10 +140,11 @@ class AdminRefundController extends AbstractAdminController
         // 驳回:订单恢复已支付
         if ($auditStatus === 2) {
             Db::transaction(function () use ($refund, $status, $remark) {
-                Db::table('order_refund')->where('id', $refund['id'])->update(array_merge([
+                $changed = Db::table('order_refund')->where('id', $refund['id'])->where('status', $status)->update(array_merge([
                     'status' => 4,
                     'audit_remark' => mb_substr($remark, 0, 500),
                 ], $this->auditStamp($status)));
+                if ($changed !== 1) throw new BusinessException(ErrorCode::DATA_CONFLICT, 'Refund changed; reload');
                 Db::table('order_main')->where('id', $refund['order_id'])->update([
                     'order_status' => 1,
                     'refund_status' => 0,
@@ -141,10 +155,11 @@ class AdminRefundController extends AbstractAdminController
 
         // 商户环节通过 → 待平台审核
         if ($status === 0) {
-            Db::table('order_refund')->where('id', $refund['id'])->update(array_merge([
+            $changed = Db::table('order_refund')->where('id', $refund['id'])->where('status', $status)->update(array_merge([
                 'status' => 1,
                 'audit_remark' => mb_substr($remark, 0, 500),
             ], $this->auditStamp(0)));
+            if ($changed !== 1) throw new BusinessException(ErrorCode::DATA_CONFLICT, 'Refund changed; reload');
             return Result::success(null, '商户环节审核通过,待平台审核');
         }
 
@@ -152,6 +167,10 @@ class AdminRefundController extends AbstractAdminController
         $refundAmount = $this->input('refundAmount') !== null
             ? round($this->floatInput('refundAmount'), 2)
             : (float) $refund['apply_amount'];
+        $guestCancellation = Db::table('order_refund_destination')->where('refund_id', $refund['id'])->where('close_booking', 1)->exists();
+        if ($guestCancellation && $refundAmount !== (float) $refund['apply_amount']) {
+            throw new BusinessException(ErrorCode::PARAM_ERROR, 'Approve the full eligible cancellation refund');
+        }
         if ($refundAmount <= 0 || $refundAmount > (float) $refund['apply_amount']) {
             throw new BusinessException(ErrorCode::PARAM_ERROR, '核定退款金额须大于0且不超过申请金额');
         }
@@ -160,13 +179,14 @@ class AdminRefundController extends AbstractAdminController
         // 提交失败不回滚审核,退款单保持「退款中」并记原因,可在「确认到账」重试
         $order = (array) Db::table('order_main')->where('id', $refund['order_id'])->first();
         $kbz = $order !== [] && RefundSettleService::isKbzRefund($refund, $order);
-        Db::table('order_refund')->where('id', $refund['id'])->update(array_merge([
+        $changed = Db::table('order_refund')->where('id', $refund['id'])->where('status', $status)->update(array_merge([
             'status' => 2,
             'refund_amount' => $refundAmount,
             'deduct_amount' => round((float) $refund['apply_amount'] - $refundAmount, 2),
             'audit_remark' => mb_substr($remark, 0, 500),
         ], $this->auditStamp(1), $kbz ? RefundSettleService::queueFields($order) : []));
 
+        if ($changed !== 1) throw new BusinessException(ErrorCode::DATA_CONFLICT, 'Refund changed; reload');
         if ($kbz) {
             $refund = (array) Db::table('order_refund')->where('id', $refund['id'])->first();
             $r = $this->refundSettle->afterQueued($refund, $order, AdminContext::adminId());
@@ -195,11 +215,18 @@ class AdminRefundController extends AbstractAdminController
         // KBZPay 原路退款(KBZ 支付订单 / 迟到支付自动退款):不人工确认到账,改为(重新)提交支付中心——
         // 排队中的立即合并提交(不等窗口);已提交的旧请求仍在处理则不重发;次数超限改退钱包;
         // 结果由 refunded / refund_failed 通知或同步结果收敛
+        if (($this->intInput('takeover') === 1 || (int) $refund['refund_channel'] === 3) && ! AdminContext::hasPermission('order:refund:transfer')) {
+            throw new BusinessException(ErrorCode::FORBIDDEN);
+        }
         if (RefundSettleService::isKbzRefund($refund, $order)) {
+            if ($this->intInput('takeover') === 1) return Result::success($this->refundSettle->handoff($refund, $order, AdminContext::adminId()));
             $r = $this->refundSettle->submit($refund, AdminContext::adminId());
             return Result::success($r, $r['message']);
         }
-        $toWallet = (int) ($refund['refund_channel'] ?? 1) === 1;
+        $channel = (int) ($refund['refund_channel'] ?? 1);
+        if ($channel === 0) throw new BusinessException(ErrorCode::DATA_CONFLICT, 'Awaiting guest refund destination');
+        if ($channel === 3) return $this->confirmExternal($refund);
+        $toWallet = $channel === 1;
         // 原路退回需第三方退款流水号;钱包退款不需要
         $tradeNo = $this->strInput('refundTradeNo');
         if (! $toWallet && $tradeNo === '') {
@@ -225,6 +252,47 @@ class AdminRefundController extends AbstractAdminController
         }
         $channelMsg = $toWallet ? '已退入 mTrip 钱包' : '已原路退回';
         return Result::success(null, ($fullRefund ? '退款已完成,订单已关闭并回补库存' : '部分退款已完成,订单继续有效') . ",{$channelMsg}");
+    }
+
+    private function confirmExternal(array $refund): array
+    {
+        $actor = AdminContext::adminId();
+        $claim = $this->intInput('claim') === 1;
+        $result = Db::transaction(function () use ($refund, $actor, $claim) {
+            $query = Db::table('order_refund_destination')->where('refund_id', $refund['id'])->where('site_id', $refund['site_id']);
+            $destination = (clone $query)->lockForUpdate()->first();
+            if (! $destination || $destination->completed_at !== null) {
+                throw new BusinessException(ErrorCode::DATA_CONFLICT, 'Refund destination unavailable or already paid');
+            }
+            if ($claim && (int) $destination->finance_actor === 0) {
+                $query->update(['finance_actor' => $actor]);
+                return Result::success(['claimed' => true]);
+            }
+            if ((int) $destination->finance_actor !== $actor) {
+                throw new BusinessException(ErrorCode::DATA_CONFLICT, 'Only the assigned transfer operator can complete this refund');
+            }
+            if ($claim) return Result::success(['claimed' => true]);
+            $reference = $this->requireStr('refundTradeNo');
+            $encoded = $this->requireStr('proofImage');
+            if (mb_strlen($reference) > 100 || strlen($encoded) > 2800000
+                || ! preg_match('#^data:image/(?:jpeg|png);base64,(.+)$#D', $encoded, $parts)) {
+                throw new BusinessException(ErrorCode::PARAM_ERROR, 'Provide a transfer reference and a PNG or JPG receipt up to 2 MB');
+            }
+            $bytes = base64_decode($parts[1], true);
+            $mime = $bytes ? (@getimagesizefromstring($bytes)['mime'] ?? '') : '';
+            if (! in_array($mime, ['image/png','image/jpeg'], true) || strlen($bytes) > 2097152) {
+                throw new BusinessException(ErrorCode::PARAM_ERROR, 'Invalid transfer screenshot');
+            }
+            $query->update(['transfer_reference' => $reference, 'proof_image' => $bytes, 'proof_mime' => $mime,
+                'completed_at' => gmdate('Y-m-d H:i:s')]);
+            return $this->refundSettle->completeRow($refund, $reference, false, 0, \App\Constants\BookingConst::OPERATOR_PLATFORM, $actor);
+        });
+        if ($claim) return $result;
+        try {
+            UserNotify::order($result['order'], 'refund_completed_external', ['amount' => $result['refundAmount']]);
+        } catch (\Throwable) {
+        }
+        return Result::success(null);
     }
 
     /** 取退款单并校验站点数据权限 */

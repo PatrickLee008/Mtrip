@@ -254,3 +254,25 @@ export function apiPropertyPublish(propertyId: number, enabled: boolean): Promis
     headers: propertyHeaders(propertyId),
   });
 }
+
+export interface LongStayProposal {
+  id: number;
+  property_id: number;
+  min_nights: number;
+  max_nights: number;
+  discount_rate: number;
+  starts_at: string | null;
+  ends_at: string | null;
+  details: string;
+  reason: string;
+  state: string;
+  previous_id: number | null;
+}
+
+export function apiLongStayProposals(propertyId: number, page: number): Promise<PageData<LongStayProposal>> {
+  return request({ method: 'GET', url: '/merchant/properties/longstay/proposals', params: { propertyId, page }, headers: propertyHeaders(propertyId) });
+}
+
+export function apiProposeLongStay(propertyId: number, data: Record<string, unknown>): Promise<{ id: number }> {
+  return request({ method: 'POST', url: '/merchant/properties/longstay/propose', data: { ...data, propertyId }, headers: propertyHeaders(propertyId) });
+}

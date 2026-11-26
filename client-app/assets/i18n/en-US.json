@@ -203,6 +203,7 @@
       "noStay": "No completed stay to review yet"
     },
     "savedHotels": {
+      "unavailable": "Unavailable",
       "add": "Save hotel",
       "added": "Saved to your hotels",
       "updateFailed": "Could not update saved hotels. Try again.",
@@ -620,6 +621,12 @@
       "refundAddon": "Add-on refund",
       "refundMethod": "Refund Method",
       "refundWallet": "mTrip Wallet",
+      "selectDestination": "Select refund destination",
+      "external": "External bank or e-wallet",
+      "externalDesc": "The full refund goes to your selected account. Allow about 30 days.",
+      "provider": "Bank or e-wallet name",
+      "holder": "Account holder",
+      "accountNumber": "Account number",
       "refundOriginal": "Original KBZPay method",
       "refundMethodDesc": "The refund will be processed to your mTrip wallet.",
       "refundOriginalDesc": "The refund will be returned to your original KBZPay payment method.",
@@ -662,6 +669,9 @@
       "backToBookings": "Back to My Booking",
       "startNew": "Start New Booking",
       "detailsTitle": "Booking Cancel Details",
+      "platformTitle": "Booking cancelled by mTrip",
+      "platformDesc": "mTrip cancelled your reservation.",
+      "refundRejected": "Refund declined",
       "merchantTitle": "Booking Cancelled by Merchant",
       "merchantDesc": "Your reservation has been cancelled from the merchant side with the following reason. A confirmation email is on its way.",
       "cancelReason": "Cancel Reason"
@@ -1188,7 +1198,7 @@
       "warningTitle": "Delete your mTrip account?",
       "warningBody": "Deleting your account is permanent. You will no longer be able to sign in or access your bookings, saved travelers, rewards and coupons.",
       "ruleBookings": "You cannot delete your account while you have ongoing or pending bookings.",
-      "ruleWallet": "Your mTrip Wallet balance must be 0. If you still have a balance, contact customer support. If support approves the deletion, the remaining balance is forfeited and cannot be refunded, transferred or recovered.",
+      "ruleWallet": "Deleting your account permanently forfeits the remaining wallet credit. You can delete it yourself up to and including the configured limit. Above that limit, contact Support first.",
       "ruleRetention": "Your account data is kept for 90 days under the mTrip data retention policy.",
       "ruleNewAccount": "You can create a new mTrip account later, but it will not restore any data, wallet balance or benefits from this account.",
       "continue": "Continue",
@@ -1615,6 +1625,14 @@
         "title": "Refund completed",
         "body": "A refund of {{amount}} for {{hotel}} ({{orderNo}}) has been credited to your mTrip Wallet."
       },
+      "refund_requested_external": {
+        "title": "Cancellation requested",
+        "body": "Your request to refund {{amount}} for {{hotel}} ({{orderNo}}) to your selected bank or e-wallet is pending review."
+      },
+      "refund_completed_external": {
+        "title": "Refund completed",
+        "body": "The transfer of {{amount}} for {{hotel}} ({{orderNo}}) to your selected external account has been recorded."
+      },
       "refund_requested_original": {
         "title": "Cancellation requested",
         "body": "Your cancellation for {{hotel}} ({{orderNo}}) was submitted. A refund of {{amount}} will be returned to your original payment account after review."
@@ -1905,6 +1923,8 @@
           "pool": "Indoor Pool",
           "breakfast": "Good Breakfast"
         },
+        "averageNight": "Average per night",
+        "estimate": "Estimated {{amount}}",
         "perNight": "/ night",
         "bestseller": "Bestseller",
         "breakfast": "Breakfast",

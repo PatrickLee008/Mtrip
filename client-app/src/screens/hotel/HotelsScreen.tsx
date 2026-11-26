@@ -247,7 +247,7 @@ export default function HotelsScreen() {
 
       {/* 日期选择器:选中的区间回填搜索卡,Search 时带到结果页 */}
       <DatePickerSheet
-        maxNights={longStay ? 30 : undefined}
+
         visible={dateOpen}
         value={range}
         onClose={() => setDateOpen(false)}

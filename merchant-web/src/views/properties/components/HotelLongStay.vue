@@ -9,16 +9,19 @@
  * 契约与 HotelAmenities.vue 一致:modelValue / editing / disabled + editRequested,
  * 便于 profile.vue 用同一套外壳承载六个页签。
  */
-import { computed, reactive, ref } from 'vue';
+import { computed, reactive, ref, watch } from 'vue';
 import { message } from 'ant-design-vue';
 import { DeleteFilled, EditOutlined, PlusOutlined } from '@ant-design/icons-vue';
 import { useI18n } from 'vue-i18n';
 import type { LongStayBenefit, LongStayPromotion, PropertyLongStay } from '@/api/properties';
 
+import { apiLongStayProposals, apiProposeLongStay, type LongStayProposal } from '@/api/properties';
+
 const PROMOTION_LIMIT = 10;
 const BENEFIT_LIMIT = 12;
 
 const props = defineProps<{
+  propertyId: number;
   modelValue: PropertyLongStay;
   editing?: boolean;
   disabled?: boolean;
@@ -28,6 +31,36 @@ const emit = defineEmits<{
   editRequested: [];
 }>();
 const { t } = useI18n();
+
+const proposals = ref<LongStayProposal[]>([]);
+const proposalPage = ref(1);
+const proposalCount = ref(0);
+const proposalOpen = ref(false);
+const sending = ref(false);
+const defaults = () => ({ previousId: 0, minNights: 7, maxNights: 30, discountRate: 5, startsAt: '', endsAt: '', details: '' });
+const proposed = reactive(defaults());
+async function loadProposals(page = 1) {
+  const property = props.propertyId;
+  const result = await apiLongStayProposals(property, page);
+  if (property !== props.propertyId) return;
+  proposals.value = result.list;
+  proposalPage.value = page;
+  proposalCount.value = result.total;
+}
+watch(() => props.propertyId, () => { if (!props.editing) void loadProposals(); }, { immediate: true });
+function openProposal(row?: LongStayProposal) {
+  Object.assign(proposed, defaults(), row ? { previousId: row.id, minNights: row.min_nights, maxNights: row.max_nights,
+    discountRate: Number(row.discount_rate), startsAt: row.starts_at ?? '', endsAt: row.ends_at ?? '', details: row.details } : {});
+  proposalOpen.value = true;
+}
+async function submitProposal() {
+  sending.value = true;
+  try {
+    await apiProposeLongStay(props.propertyId, proposed);
+    proposalOpen.value = false;
+    await loadProposals();
+  } finally { sending.value = false; }
+}
 
 const visiblePromotions = computed(() => props.modelValue.promotions);
 const visibleBenefits = computed(() => props.modelValue.benefits);
@@ -158,6 +191,26 @@ function removeBenefit(row: LongStayBenefit): void {
 
 <template>
   <template v-if="!editing">
+    <a-card :title="t('stayProposal.title')">
+      <template #extra><a-button v-perm="'mch:properties:profile-submit'" @click="openProposal()">{{ t('stayProposal.submit') }}</a-button></template>
+      <a-list :data-source="proposals">
+        <template #renderItem="{ item }"><a-list-item>
+          <a-list-item-meta :title="'#' + item.id + ' · ' + t('stayProposal.' + item.state)" :description="item.min_nights + '–' + item.max_nights + ' ' + t('stayProposal.nights') + ' · ' + item.discount_rate + '% · ' + (item.reason || item.details)" />
+          <a-button v-if="item.state === 'returned'" v-perm="'mch:properties:profile-submit'" @click="openProposal(item)">{{ t('stayProposal.revise') }}</a-button>
+        </a-list-item></template>
+      </a-list>
+      <a-pagination v-if="proposalCount > 20" :current="proposalPage" :total="proposalCount" :page-size="20" @change="loadProposals" />
+    </a-card>
+    <a-modal v-model:open="proposalOpen" :title="t('stayProposal.proposal')" :confirm-loading="sending" @ok="submitProposal">
+      <a-form layout="vertical">
+        <a-form-item :label="t('stayProposal.min')"><a-input-number v-model:value="proposed.minNights" :min="1" :precision="0" /></a-form-item>
+        <a-form-item :label="t('stayProposal.max')"><a-input-number v-model:value="proposed.maxNights" :min="proposed.minNights" :precision="0" /></a-form-item>
+        <a-form-item :label="t('stayProposal.rate')"><a-input-number v-model:value="proposed.discountRate" :min="0.01" :max="99.99" :precision="2" /></a-form-item>
+        <a-form-item :label="t('stayProposal.start')"><a-date-picker v-model:value="proposed.startsAt" show-time value-format="YYYY-MM-DD HH:mm:ss" /></a-form-item>
+        <a-form-item :label="t('stayProposal.end')"><a-date-picker v-model:value="proposed.endsAt" show-time value-format="YYYY-MM-DD HH:mm:ss" /></a-form-item>
+        <a-form-item :label="t('stayProposal.rooms')"><a-textarea v-model:value="proposed.details" :maxlength="500" /></a-form-item>
+      </a-form>
+    </a-modal>
     <!-- 稿面是两张卡:促销卡带头(标题 + Edit 药丸),权益卡没有卡头 -->
     <section class="ls-panel">
       <div class="panel-head">

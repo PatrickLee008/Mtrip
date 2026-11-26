@@ -104,6 +104,7 @@ export interface RefundQuote {
   /** 1 = mTrip 钱包, 2 = KBZPay 原路 */
   refundChannel: number;
   refundChannelText: string;
+  awaitingDestination?: boolean;
   availableRefundChannels?: number[];
 }
 
@@ -116,6 +117,9 @@ export function applyRefund(params: {
   reason: string;
   images?: string[];
   refundChannel?: number;
+  provider?: string;
+  holder?: string;
+  accountNumber?: string;
 }): Promise<{ refundNo: string }> {
   return post('/api/v1/app/order/refund/apply', params);
 }

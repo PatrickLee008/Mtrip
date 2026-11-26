@@ -57,7 +57,7 @@ export function apiRefundAudit(data: {
  * KBZPay 原路退款单(refund_channel=2 且订单 pay_method=5 / 迟到支付自动退款)不确认到账,
  * 改为提交或重试支付中心,返回 {status: processing|succeeded|failed, refundNo};其余返回 null。
  */
-export function apiRefundConfirm(data: { id: number; refundTradeNo?: string }): Promise<{ status: string; refundNo: string } | null> {
+export function apiRefundConfirm(data: { id: number; refundTradeNo?: string; proofImage?: string; claim?: number; takeover?: number }): Promise<{ status: string; refundNo: string } | null> {
   return post('/admin/order/refund/confirm', data);
 }
 

@@ -303,28 +303,61 @@ class RefundSettleService
             fn () => $this->doSubmit((int) $refund['id'], $payNo, $operatorId, $quiet), '该支付单正在处理退款,请稍候');
     }
 
+    /** Reconcile with the provider under the same payment lock used by submission and retries. */
+    public function handoff(array $refund, array $order, int $actor): array
+    {
+        $payNo = (string) ($refund['pay_no'] ?: $order['pay_trade_no']);
+        return $this->lock->run(self::LOCK_PREFIX . $payNo, 60, function () use ($refund, $order, $actor) {
+            $row = (array) Db::table('order_refund')->where('id', $refund['id'])->first();
+            if ((int) $row['status'] !== 2 || (int) $row['refund_channel'] !== 2 || (int) $order['pay_at_hotel'] !== 1 || (int) $row['late_pay'] === 1) {
+                throw new BusinessException(ErrorCode::DATA_CONFLICT, 'Refund no longer eligible for manual takeover');
+            }
+            $reference = (string) $row['refund_trade_no'];
+            if ($reference !== '') {
+                $state = $this->center()->queryRefund($reference);
+                if (($state['status'] ?? '') === 'succeeded') {
+                    $this->completeGroup($reference, (string) ($state['channelRefundNo'] ?? ''), BookingConst::OPERATOR_PLATFORM, $actor);
+                    return ['status' => 'succeeded'];
+                }
+                if (($state['status'] ?? '') !== 'failed') {
+                    throw new BusinessException(ErrorCode::DATA_CONFLICT, 'Provider has not confirmed failure; do not transfer');
+                }
+            } elseif ((int) $row['channel_submit_status'] !== 4) {
+                throw new BusinessException(ErrorCode::DATA_CONFLICT, 'Original refund is awaiting submission');
+            }
+            return Db::transaction(function () use ($row, $reference, $order, $actor) {
+                $updated = Db::table('order_refund')->where('id', $row['id'])->where('status', 2)
+                    ->where('refund_channel', 2)->where('refund_trade_no', $row['refund_trade_no'])
+                    ->update(['refund_channel' => 3, 'channel_submit_status' => 0, 'refund_trade_no' => '']);
+                if ($updated !== 1) throw new BusinessException(ErrorCode::DATA_CONFLICT, 'Refund changed; reload');
+                Db::table('order_refund_destination')->insertOrIgnore(['refund_id' => $row['id'], 'site_id' => $row['site_id']]);
+                $this->events->log($order, 'refund_manual_takeover', BookingConst::OPERATOR_PLATFORM, $actor, '', 1,
+                    ['previousRefundNo' => $reference, 'refundNo' => $row['refund_no'], 'payNo' => $order['pay_trade_no']], 'refund');
+                return ['status' => 'manual'];
+            });
+        }, 'Refund reconciliation in progress');
+    }
+
     private function doSubmit(int $refundId, string $payNo, int $operatorId, bool $quiet): array
     {
         $refund = (array) Db::table('order_refund')->where('id', $refundId)->first();
         if ((int) ($refund['status'] ?? -1) !== 2) {
             throw new BusinessException(ErrorCode::DATA_CONFLICT, '仅退款中的退款单可提交原路退款');
         }
+        if ((int) $refund['refund_channel'] !== 2 || (int) $refund['channel_submit_status'] === 4) {
+            throw new BusinessException(ErrorCode::DATA_CONFLICT, 'Refund requires manual handling');
+        }
         $current = (string) $refund['refund_trade_no'];
         if ($current !== '' && (int) $refund['channel_submit_status'] !== SettleRules::SUBMIT_QUEUED) {
-            try {
-                $q = $this->center()->queryRefund($current);
-                if (($q['status'] ?? '') === 'processing') {
-                    return ['status' => 'processing', 'refundNo' => $current, 'message' => 'KBZPay 退款处理中,请等待结果'];
-                }
-                if (($q['status'] ?? '') === 'succeeded') {
-                    $this->completeGroup($current, (string) ($q['channelRefundNo'] ?? ''), BookingConst::OPERATOR_PLATFORM, $operatorId);
-                    return ['status' => 'succeeded', 'refundNo' => $current, 'message' => 'KBZPay 退款已成功'];
-                }
-            } catch (BusinessException $e) {
-                if ($e->getCode() !== ErrorCode::NOT_FOUND) {
-                    throw $e; // 支付中心不可用:不换号重发,避免旧单其实已受理造成重复退款
-                }
+            $q = $this->center()->queryRefund($current);
+            if (($q['status'] ?? '') === 'processing') {
+                return ['status' => 'processing', 'refundNo' => $current, 'message' => 'KBZPay 退款处理中,请等待结果'];
             }
+            if (($q['status'] ?? '') === 'succeeded') {
+                $this->completeGroup($current, (string) ($q['channelRefundNo'] ?? ''), BookingConst::OPERATOR_PLATFORM, $operatorId);
+                return ['status' => 'succeeded', 'refundNo' => $current, 'message' => 'KBZPay 退款已成功'];
+            }
+            if (($q['status'] ?? '') !== 'failed') throw new BusinessException(ErrorCode::DATA_CONFLICT, 'Provider result unresolved');
             $rows = $this->groupRows($current);
         } else {
             // 排队中:连同该支付单其余排队行合并提交
@@ -405,7 +438,19 @@ class RefundSettleService
             // 查无支付单:照常提交,由支付中心拒绝并走失败收敛(转人工),不在队列里空转
         }
         if (SettleRules::refundRoute($used) === SettleRules::ROUTE_WALLET) {
-            return $this->walletFallback($rows, $payNo, $operatorId, $used);
+            $hotelOrders = Db::table('order_main')->whereIn('id', array_column($rows, 'order_id'))
+                ->where('pay_at_hotel', 1)->pluck('id')->all();
+            $manualIds = [];
+            $legacy = [];
+            foreach ($rows as $row) {
+                if (! (int) $row['late_pay'] && in_array($row['order_id'], $hotelOrders)) $manualIds[] = $row['id'];
+                else $legacy[] = $row;
+            }
+            if ($manualIds) {
+                Db::table('order_refund')->whereIn('id', $manualIds)->where('status', 2)->update(['channel_submit_status' => 4]);
+            }
+            if ($legacy) return $this->walletFallback($legacy, $payNo, $operatorId, $used);
+            return ['status' => 'manual', 'refundNo' => '', 'message' => 'KBZ quota exhausted; Finance takeover required'];
         }
 
         // 2) 合并为一次渠道退款
@@ -582,6 +627,8 @@ class RefundSettleService
             }
         }
         $fullRefund = $refundedBefore + $refundAmount >= (float) $order['pay_amount'] - 0.001;
+        $guestCancellation = Db::table('order_refund_destination')->where('refund_id', $refund['id'])->where('close_booking', 1)->exists();
+        $fullRefund = $fullRefund || ($guestCancellation && $refundAmount >= (float) $refund['apply_amount']);
         $affected = Db::table('order_refund')->where('id', (int) $refund['id'])->where('status', 2)->update($components + [
             'status' => 3,
             'refund_trade_no' => $tradeNo,

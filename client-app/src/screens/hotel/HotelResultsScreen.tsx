@@ -502,7 +502,7 @@ export default function HotelResultsScreen() {
       />
 
       <DatePickerSheet
-        maxNights={params.longStay ? 30 : undefined}
+
         visible={dateOpen}
         value={range}
         onClose={() => setDateOpen(false)}

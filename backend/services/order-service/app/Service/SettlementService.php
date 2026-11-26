@@ -24,7 +24,11 @@ class SettlementService
         // 附加服务由商户提供:计入订单额参与佣金与商户应收(不进券分摊,券只抵房费)
         $orderAmount = round((float) $order['total_amount'] + (float) ($order['addon_amount'] ?? 0), 2);
         $discount = (float) $order['coupon_discount'];
-        $commission = round($orderAmount * $this->commissionRate($siteId), 2);
+        $commissionBase = $orderAmount;
+        if ((int) $order['order_type'] === 1) {
+            $commissionBase = max(0.0, $orderAmount - $discount - (float) ($order['longstay_discount'] ?? 0));
+        }
+        $commission = round($commissionBase * $this->commissionRate($siteId), 2);
 
         // 出资方拆分:默认平台承担
         [$fundingSource, $rules] = $this->couponFunding((int) $order['coupon_id'], $order['coupon_snapshot'] ?? null);
@@ -49,6 +53,12 @@ class SettlementService
             }
         }
 
+        $longStay = json_decode((string) ($order['longstay_funding_snapshot'] ?? ''), true);
+        if (is_array($longStay)) {
+            $mtrip = round($mtrip + (float) $longStay['platformAmount'], 2);
+            $merchant = round($merchant + (float) $longStay['merchantAmount'], 2);
+            $discount = round($discount + (float) $order['longstay_discount'], 2);
+        }
         $merchantSettlement = round($orderAmount - $commission - $merchant, 2);
         $platformRevenue = round($commission - $mtrip, 2);
         $atHotel = (int) ($order['pay_at_hotel'] ?? 0) === 1;

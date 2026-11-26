@@ -101,6 +101,7 @@ const refundHistoryColumns = computed(() => [
   { title: t('common.createTime'), dataIndex: 'created_at' },
 ]);
 const refundEventLabels: Record<string, string> = {
+  refund_manual_takeover: 'takeover',
   refund_completed: 'historyCompleted',
   refund_submitted: 'historySubmitted',
   refund_failed: 'historyFailed',
@@ -131,6 +132,7 @@ const auditForm = reactive({
   id: 0,
   refundNo: '',
   stage: 0, // 当前环节:0商户 1平台
+  wholeCancellation: false,
   applyAmount: 0,
   auditStatus: 1,
   refundAmount: 0,
@@ -141,6 +143,7 @@ function openAudit(row: TableRow): void {
   auditForm.id = row.id;
   auditForm.refundNo = row.refund_no;
   auditForm.stage = Number(row.status);
+  auditForm.wholeCancellation = Boolean(row.whole_cancellation);
   auditForm.applyAmount = Number(row.apply_amount);
   auditForm.auditStatus = 1;
   auditForm.refundAmount = Number(row.apply_amount);
@@ -197,6 +200,8 @@ function channelText(row: TableRow | null, order?: TableRow | null): string {
   if (!row) return '-';
   if (isKbzRefund(row, order)) return t('order.refund.channelText.kbz');
   const channel = Number(row.refund_channel ?? 1);
+  if (channel === 0) return t('order.refund.awaitGuest');
+  if (channel === 3) return t('order.refund.external');
   return channel === 2 ? t('order.refund.channelText.original') : t('order.refund.channelText.wallet');
 }
 
@@ -206,6 +211,7 @@ const SUBMIT_STATUS_MAP = computed<Record<number, StatusItem>>(() => ({
   1: { text: t('order.refund.submitStatus.queued'), color: 'warning' },
   2: { text: t('order.refund.submitStatus.submitted'), color: 'processing' },
   3: { text: t('order.refund.submitStatus.wallet'), color: 'purple' },
+  4: { text: t('order.refund.takeover'), color: 'warning' },
 }));
 
 /** 列表 / 详情是否带有 channel_submit_status(后端迁移未上线时不展示) */
@@ -221,6 +227,7 @@ const confirmForm = reactive({
   id: 0,
   refundNo: '',
   refundAmount: 0,
+  takeoverAllowed: false, external: false, claimed: false, recipient: '', proofImage: '',
   refundTradeNo: '',
   /** 原路退回(refund_channel=2)且非 KBZ:需人工填写第三方退款流水号 */
   needTradeNo: false,
@@ -231,7 +238,37 @@ const confirmForm = reactive({
   submitStatus: null as number | null,
 });
 
+async function takeOver() {
+  const outcome = await apiRefundConfirm({ id: confirmForm.id, takeover: 1 });
+  if (outcome?.status === 'manual') message.success(t('order.refund.claim'));
+  confirmOpen.value = false;
+  await load();
+}
+
+async function claimExternal() {
+  await apiRefundConfirm({ id: confirmForm.id, claim: 1 });
+  confirmForm.claimed = true;
+}
+
+async function chooseReceipt(file: File) {
+  confirmForm.proofImage = '';
+  if (file.size > 2097152 || !['image/png','image/jpeg'].includes(file.type)) {
+    message.warning(t('order.refund.receipt'));
+    return false;
+  }
+  const reader = new FileReader();
+  const refundId = confirmForm.id;
+  reader.onload = () => { if (confirmForm.id === refundId) confirmForm.proofImage = String(reader.result); };
+  reader.readAsDataURL(file);
+  return false;
+}
+
 async function openConfirm(row: TableRow): Promise<void> {
+  confirmForm.takeoverAllowed = false;
+  confirmForm.external = Number(row.refund_channel) === 3;
+  confirmForm.claimed = false;
+  confirmForm.recipient = '';
+  confirmForm.proofImage = '';
   confirmForm.id = row.id;
   confirmForm.refundNo = row.refund_no;
   confirmForm.refundAmount = Number(row.refund_amount);
@@ -242,10 +279,12 @@ async function openConfirm(row: TableRow): Promise<void> {
   confirmForm.submitStatus = hasSubmitStatus(row) ? Number(row.channel_submit_status) : null;
   confirmOpen.value = true;
   // 列表没有订单支付方式:原路退回单取详情里的订单快照确认是否 KBZ 单
-  if (Number(row.refund_channel ?? 1) !== 2) return;
+  if (!confirmForm.external && Number(row.refund_channel ?? 1) !== 2) return;
   confirmLoading.value = true;
   try {
     const data = await apiRefundDetail(row.id);
+    confirmForm.takeoverAllowed = Number(data.order?.pay_at_hotel) === 1 && !Number(data.refund.late_pay);
+    confirmForm.recipient = (data.refund.recipient ?? []).join(' · ');
     confirmForm.kbz = isKbzRefund(data.refund, data.order);
     confirmForm.needTradeNo = !confirmForm.kbz;
     confirmForm.centerRefundNo = String(data.refund?.refund_trade_no ?? '');
@@ -264,6 +303,7 @@ async function submitConfirm(): Promise<void> {
   try {
     const res = await apiRefundConfirm({
       id: confirmForm.id,
+      proofImage: confirmForm.external ? confirmForm.proofImage : undefined,
       refundTradeNo: confirmForm.kbz ? undefined : confirmForm.refundTradeNo.trim() || undefined,
     });
     if (confirmForm.kbz) {
@@ -362,7 +402,7 @@ async function submitConfirm(): Promise<void> {
                 @click="openAudit(record)"
               >{{ t('order.refund.actions.approve', 'Audit') }}</a-button>
               <a-button
-                v-if="record.status === 2"
+                v-if="record.status === 2 && Number(record.refund_channel) !== 0"
                 v-perm="'order:refund:audit'"
                 type="link"
                 size="small"
@@ -432,6 +472,7 @@ async function submitConfirm(): Promise<void> {
           </template>
         </template>
       </a-spin>
+      <a-image v-if="detail?.proofImage" :src="detail.proofImage" :width="120" />
     </a-drawer>
 
     <!-- 审核 Modal -->
@@ -456,6 +497,7 @@ async function submitConfirm(): Promise<void> {
         <a-form-item v-if="auditForm.auditStatus === 1 && auditForm.stage === 1" :label="t('order.refund.approveModal.refundAmount')" required>
           <a-input-number
             v-model:value="auditForm.refundAmount"
+            :disabled="auditForm.wholeCancellation"
             :min="0.01"
             :max="auditForm.applyAmount"
             :precision="2"
@@ -474,7 +516,7 @@ async function submitConfirm(): Promise<void> {
       :title="confirmForm.kbz ? t('order.refund.kbzSubmitTitle') : t('order.refund.confirmArrivedTitle', 'Confirm Refund Arrival')"
       :ok-text="confirmForm.kbz ? t('order.refund.kbzSubmit') : undefined"
       :confirm-loading="confirmSubmitting"
-      :ok-button-props="{ disabled: confirmLoading }"
+      :ok-button-props="{ disabled: confirmLoading || (confirmForm.external && (!confirmForm.claimed || !confirmForm.proofImage)) }"
       @ok="submitConfirm"
     >
       <a-spin :spinning="confirmLoading">
@@ -491,7 +533,16 @@ async function submitConfirm(): Promise<void> {
           <a-form-item :label="t('order.refund.amount')">
             <span style="color: var(--mtrip-error, #ff4d4f); font-weight: 600">{{ formatAmount(confirmForm.refundAmount) }}</span>
           </a-form-item>
+          <template v-if="confirmForm.external">
+            <a-button v-perm="'order:refund:transfer'" :disabled="confirmForm.claimed || confirmLoading" @click="claimExternal">{{ t('order.refund.claim') }}</a-button>
+            <div v-if="confirmForm.claimed">{{ confirmForm.recipient }}</div>
+            <a-upload v-if="confirmForm.claimed" accept="image/png,image/jpeg" :before-upload="chooseReceipt" :show-upload-list="false">
+              <a-button>{{ t('order.refund.receipt') }}</a-button>
+            </a-upload>
+            <a-image v-if="confirmForm.proofImage" :src="confirmForm.proofImage" :width="80" />
+          </template>
           <template v-if="confirmForm.kbz">
+            <a-button v-if="confirmForm.takeoverAllowed" v-perm="'order:refund:transfer'" @click="takeOver">{{ t('order.refund.takeover') }}</a-button>
             <a-form-item :label="t('order.refund.channel')">{{ t('order.refund.channelText.kbz') }}</a-form-item>
             <a-form-item v-if="confirmForm.submitStatus !== null" :label="t('order.refund.submitStatusLabel')">
               <StatusTag :value="confirmForm.submitStatus" :map="SUBMIT_STATUS_MAP" />

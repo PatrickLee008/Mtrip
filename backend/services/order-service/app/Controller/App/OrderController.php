@@ -113,7 +113,7 @@ class OrderController extends AbstractController
             throw new BusinessException(ErrorCode::PARAM_ERROR, "该票种单人限购{$sku['book_limit']}张");
         }
 
-        $dates = $this->stockService->datesOf($orderType, $useDate, $endDate);
+        $dates = $this->stockService->datesOf($orderType, $useDate, $endDate, $siteId, $propertyId);
         if (strtotime($dates[0]) < strtotime(date('Y-m-d'))) {
             throw new BusinessException(ErrorCode::PARAM_ERROR, '使用日期不能早于今天');
         }
@@ -156,10 +156,10 @@ class OrderController extends AbstractController
                 $sku, $dates, $quantity, $isCitizen
             );
             // 长住优惠:仅酒店,按住宿夜数命中最高梯度,对原总价打折
-            $longstay = $orderType === 1 ? \Mtrip\Shared\Support\LongStayOffer::discount(
-                \Mtrip\Shared\Support\LongStayOffer::tier(\Mtrip\Shared\Support\LongStayOffer::activeTiers($siteId, [$propertyId]), $propertyId, count($dates)),
-                $totalAmount
-            ) : 0.0;
+            $tier = $orderType === 1 ? \Mtrip\Shared\Support\LongStayOffer::tier(
+                \Mtrip\Shared\Support\LongStayOffer::activeTiers($siteId, [$propertyId]), $propertyId, count($dates)
+            ) : null;
+            $longstay = \Mtrip\Shared\Support\LongStayOffer::discount($tier, $totalAmount);
             // 优惠券(可选):校验归属/状态/有效期/适用范围/门槛,计算抵扣(不在此消耗,支付时消耗)
             [$couponRefId, $couponDiscount, $couponSnapshot] = $couponId > 0
                 ? $this->pricingService->resolveCoupon($siteId, $userId, $couponId, $orderType,
@@ -208,6 +208,7 @@ class OrderController extends AbstractController
                 'total_amount' => $totalAmount,
                 'discount_amount' => round($longstay + $couponDiscount, 2),
                 'longstay_discount' => $longstay,
+                'longstay_funding_snapshot' => \Mtrip\Shared\Support\LongStayOffer::fundingSnapshot($tier, $longstay),
                 'coupon_id' => $couponRefId,
                 'coupon_discount' => $couponDiscount,
                 'coupon_snapshot' => $couponSnapshot,
@@ -434,7 +435,7 @@ class OrderController extends AbstractController
         if (! in_array((int) $order['order_status'], [1, 2], true)) {
             $order['verify_code'] = '';
         }
-        unset($order['merchant_commercial_snapshot'], $order['platform_commission'], $order['merchant_receivable'], $order['supplier_cost'], $order['coupon_snapshot'], $order['hotel_terms_snapshot'], $order['deleted_at']);
+        unset($order['longstay_funding_snapshot'], $order['merchant_commercial_snapshot'], $order['platform_commission'], $order['merchant_receivable'], $order['supplier_cost'], $order['coupon_snapshot'], $order['hotel_terms_snapshot'], $order['deleted_at']);
         /**
          * 已取消/退款中/已退款的单,补一段 `cancelInfo` 给 C 端取消详情页
          * (Figma `1685:3429`「Booking Cancelled by Merchant」要区分是谁取消的):
@@ -449,8 +450,11 @@ class OrderController extends AbstractController
                 ->orderByDesc('id')->first(['operator_type']);
             $refund = Db::table('order_refund')
                 ->where('order_id', (int) $order['id'])->whereNull('deleted_at')
-                ->orderByDesc('id')->first(['refund_no', 'refund_amount']);
+                ->orderByDesc('id')->first(['refund_no', 'refund_amount', 'refund_channel', 'status']);
             $order['cancelInfo'] = [
+                'needsDestination' => $refund && (int) $refund->refund_channel === 0 && (int) $refund->status === 2,
+                'refundChannel' => $refund ? (int) $refund->refund_channel : null,
+                'refundStatus' => $refund ? (int) $refund->status : null,
                 'operatorType' => $event ? (int) $event->operator_type : 0,
                 'refundNo' => $refund ? (string) $refund->refund_no : '',
                 'refundAmount' => $refund ? (float) $refund->refund_amount : 0.0,
@@ -507,6 +511,15 @@ class OrderController extends AbstractController
     public function refundQuote(): array
     {
         $order = $this->ownOrder($this->requireId('orderId'));
+        $pending = $this->awaitingDestination($order);
+        if ($pending) {
+            return Result::success(['payAmount' => (float) $order['pay_amount'], 'refundable' => (float) $pending->refund_amount,
+                'refundAmount' => (float) $pending->refund_amount, 'addonRefund' => (float) $pending->refund_addon,
+                'platformFee' => 0, 'hotelBalance' => 0, 'cancellationFee' => 0, 'refundChannel' => 1,
+                'refundChannelText' => 'mTrip Wallet', 'availableRefundChannels' => $this->refundChannels($order), 'awaitingDestination' => true,
+                'refund_hotel_commission' => (float) $pending->refund_hotel_commission, 'refund_hotel_deposit' => (float) $pending->refund_hotel_deposit,
+                'refund_transaction_fee' => (float) $pending->refund_transaction_fee, 'refund_addon' => (float) $pending->refund_addon]);
+        }
         if ((int) $order['order_status'] !== 1) {
             throw new BusinessException(ErrorCode::DATA_CONFLICT, '仅已支付且未使用的订单可预览退款');
         }
@@ -520,10 +533,8 @@ class OrderController extends AbstractController
             'platformFee' => $q['platformFee'],
             'refundAmount' => $q['refundAmount'],
             'hotelBalance' => (int) ($order['pay_at_hotel'] ?? 0) === 1 ? (float) $order['hotel_balance'] : 0.0,
-            // KBZPay MMQR 支付的订单原路退回 KBZ(2);其余退入 mTrip 钱包(1)
-            'refundChannel' => self::refundChannelOf($order),
-            'refundChannelText' => self::refundChannelOf($order) === 2 ? 'KBZPay 原路退回' : 'mTrip 钱包',
-            'availableRefundChannels' => self::refundChannelOf($order) === 2 ? [2, 1] : [1],
+            'refundChannel' => 1, 'refundChannelText' => 'mTrip Wallet',
+            'availableRefundChannels' => $this->refundChannels($order),
         ] + $this->bookingRefunds->breakdownFor($order, $q['refundAmount']));
     }
 
@@ -536,6 +547,14 @@ class OrderController extends AbstractController
 
         $snap = Db::transaction(function () use ($orderId, $reason, $refundNo) {
             $order = $this->lockOwnOrder($orderId);
+            $refundChannel = $this->intInput('refundChannel', 1);
+            $recipient = $this->refundRecipient($order, $refundChannel);
+            $pending = $this->awaitingDestination($order);
+            if ($pending) {
+                $this->saveDestination((int) $pending->id, $order, $recipient, (int) $order['booking_status'] === BookingConst::STATUS_CANCELLED);
+                Db::table('order_refund')->where('id', $pending->id)->update(['refund_channel' => $refundChannel] + ($refundChannel === 2 ? \App\Service\Payment\RefundSettleService::queueFields($order) : []));
+                return ['selected' => true, 'refundNo' => $pending->refund_no];
+            }
             if ((int) $order['order_status'] !== 1) {
                 throw new BusinessException(ErrorCode::DATA_CONFLICT, '仅已支付且未使用的订单可申请退款');
             }
@@ -543,12 +562,8 @@ class OrderController extends AbstractController
             if ($q['refundAmount'] <= 0) {
                 throw new BusinessException(ErrorCode::DATA_CONFLICT, '按退改规则该订单不可退款');
             }
-            $refundChannel = $this->intInput('refundChannel', self::refundChannelOf($order));
-            if (! in_array($refundChannel, self::refundChannelOf($order) === 2 ? [1, 2] : [1], true)) {
-                throw new BusinessException(ErrorCode::PARAM_ERROR, '该订单不支持选择此退款方式');
-            }
             $images = $this->input('images');
-            Db::table('order_refund')->insert([
+            $refundId = Db::table('order_refund')->insertGetId([
                 'refund_no' => $refundNo,
                 'site_id' => (int) $order['site_id'],
                 'order_id' => (int) $order['id'],
@@ -566,6 +581,7 @@ class OrderController extends AbstractController
                 'images' => is_array($images) ? json_encode($images, JSON_UNESCAPED_UNICODE) : null,
                 'status' => 0,
             ] + $this->bookingRefunds->breakdownFor($order, $q['refundAmount']));
+            $this->saveDestination((int) $refundId, $order, $recipient);
             // 记录本单平台便民费及住客选定的退款渠道,供审核和对账使用。
             Db::table('order_main')->where('id', $orderId)->update([
                 'order_status' => 5,
@@ -590,9 +606,13 @@ class OrderController extends AbstractController
             ];
         });
 
+        if (! empty($snap['selected'])) return Result::success(['refundNo' => $snap['refundNo']]);
+
         // 住客取消(申请退款)站内通知(事件后置,失败不影响退款申请);KBZ 订单原路退回用 refund_requested_original
         try {
-            UserNotify::order($snap['order'], $snap['refundChannel'] === 2 ? 'refund_requested_original' : 'refund_requested',
+            UserNotify::order($snap['order'], match ($snap['refundChannel']) {
+                2 => 'refund_requested_original', 3 => 'refund_requested_external', default => 'refund_requested',
+            },
                 ['amount' => $snap['refundAmount']]);
         } catch (\Throwable) {
         }
@@ -625,7 +645,7 @@ class OrderController extends AbstractController
         if ((int) ($order['pay_at_hotel'] ?? 0) === 1) {
             $quote = $this->bookingRefunds->quote($order);
             $addon = (float) ($quote['refund_addon'] ?? 0);
-            $fee = round(max(0.0, $quote['refundable'] - $addon) * $this->platformFeeRate((int) $order['site_id']), 2);
+            $fee = 0.0; // The transaction fee is already excluded from the refundable components.
             return [
                 'payAmount' => $quote['payAmount'], 'addonRefund' => $addon,
                 'refundable' => $quote['refundable'], 'platformFee' => $fee,
@@ -673,13 +693,41 @@ class OrderController extends AbstractController
         ];
     }
 
-    /**
-     * 退款去向:KBZPay MMQR 支付的订单原路退回(2,后台审核后经支付中心退款),其余入 mTrip 钱包(1)。
-     * 用过钱包部分抵扣的 KBZ 订单整笔退回钱包(原路只能退 KBZ 实付部分,拆两条退款单得不偿失;PRD 退款默认入钱包)。
-     */
-    private static function refundChannelOf(array $order): int
+    private function awaitingDestination(array $order): ?object
     {
-        return (int) ($order['pay_method'] ?? 0) === BookingConst::PAY_METHOD_KBZ_MMQR && ! WalletHoldService::isMixed($order) ? 2 : 1;
+        if ((int) ($order['pay_at_hotel'] ?? 0) !== 1) return null;
+        return Db::table('order_refund')->where('order_id', $order['id'])->where('site_id', $order['site_id'])
+            ->where('refund_channel', 0)->where('status', 2)->whereNull('deleted_at')->first();
+    }
+
+    private function refundChannels(array $order): array
+    {
+        if ((int) ($order['pay_at_hotel'] ?? 0) !== 1) return [1];
+        return \App\Service\Payment\RefundSettleService::isKbzOrder($order) ? [1, 2, 3] : [1, 3];
+    }
+
+    private function refundRecipient(array $order, int $channel): ?string
+    {
+        if ($channel === 1) return null;
+        if ($channel === 2 && in_array(2, $this->refundChannels($order), true)) {
+            return CryptoHelper::encrypt(json_encode(['KBZPay', 'Original payer', (string) $order['pay_trade_no']], JSON_THROW_ON_ERROR), $this->aesKey());
+        }
+        if ($channel !== 3 || (int) ($order['pay_at_hotel'] ?? 0) !== 1) {
+            throw new BusinessException(ErrorCode::PARAM_ERROR, 'Refund method unavailable for this booking');
+        }
+        $provider = $this->requireStr('provider');
+        $holder = $this->requireStr('holder');
+        $number = $this->requireStr('accountNumber');
+        if (mb_strlen($provider) > 100 || mb_strlen($holder) > 100 || ! preg_match('/^[+a-zA-Z0-9 -]{4,60}$/D', $number)) {
+            throw new BusinessException(ErrorCode::PARAM_ERROR, 'Check the bank or e-wallet account details');
+        }
+        return CryptoHelper::encrypt(json_encode([$provider, $holder, $number], JSON_THROW_ON_ERROR), $this->aesKey());
+    }
+
+    private function saveDestination(int $refundId, array $order, ?string $recipient, bool $closeBooking = true): void
+    {
+        Db::table('order_refund_destination')->insert(['refund_id' => $refundId,
+            'site_id' => $order['site_id'], 'close_booking' => (int) $closeBooking, 'recipient_cipher' => $recipient]);
     }
 
     /** 当前用户可用钱包余额(无锁预判;扣款时 WalletLedger 会先作废到期额度再复核) */

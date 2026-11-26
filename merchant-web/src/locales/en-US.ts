@@ -4,6 +4,24 @@ import { supportEn } from './support';
  * 覆盖:通用/状态/登录/菜单/头部/工作台/子账号/角色/门店/订单/商品/错误页
  */
 export default {
+  stayProposal: {
+    title: "Long Stay proposals",
+    submit: "Submit proposal",
+    revise: "Revise",
+    proposal: "Long Stay proposal",
+    min: "Minimum nights",
+    max: "Maximum nights",
+    rate: "Discount (%)",
+    start: "Starts (UTC)",
+    end: "Ends (UTC)",
+    rooms: "Suggested rooms and terms",
+    submitted: "Submitted",
+    reviewing: "Under review",
+    approved: "Approved",
+    returned: "Return for revision",
+    rejected: "Rejected",
+    nights: "nights",
+  },
   chat: {
     "noPhone": "No phone number is available.",
     "call": "Call guest",

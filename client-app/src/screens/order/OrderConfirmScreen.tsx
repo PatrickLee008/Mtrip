@@ -78,7 +78,7 @@ export default function OrderConfirmScreen() {
   /** 预估总价:酒店=基础价×晚数×间数,门票=基础价×数量(实际以后端日历价为准) */
   const estimated = useMemo(() => {
     if (!sku) return 0;
-    const unit = Number(sku.base_price);
+    const unit = Number(sku.stay_nightly_price ?? sku.base_price);
     if (isHotel) return unit * nightsBetween(useDate, endDate) * quantity;
     return unit * quantity;
   }, [sku, isHotel, useDate, endDate, quantity]);

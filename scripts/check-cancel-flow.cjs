@@ -85,7 +85,7 @@ const strip = (t) => t.replace(/\/\*[\s\S]*?\*\//gu, '').replace(/^\s*\/\/.*$/gm
   check('页面不碰 Trip(不会把同 Trip 其他预订一起取消)', !/tripId|fetchTripDetail/u.test(body));
   /* PRD line 711-712:提交前必须选一条原因 */
   check('未选原因时提交按钮禁用', /disabled=\{!reason \|\| submitting\}/u.test(cancel));
-  check('提交入口也再判一次(防止绕过)', /if \(!reason \|\| submitting\) return;/u.test(cancel));
+  check('提交入口也再判一次(防止绕过)', /if \(\(!reason && !quote\?\.awaitingDestination\) \|\| submitting\) return;/u.test(cancel));
   check('原因按稿面 5 条', (cancel.match(/\{ key: '\w+', value: '/gu) ?? []).length === 5);
   /* PRD line 708:取消页要显示取消费与退款额;金额一律服务端给 */
   check('取消费/退款额来自服务端试算(前端不自己算)', /fetchRefundQuote\(orderId\)/u.test(body) && !/payAmount \* /u.test(body));
@@ -94,7 +94,7 @@ const strip = (t) => t.replace(/\/\*[\s\S]*?\*\//gu, '').replace(/^\s*\/\/.*$/gm
   check('平台费 > 0 时单列一行', /quote\.platformFee > 0 \?/u.test(cancel));
   /* PRD line 723/865:只退 mTrip 钱包 */
   check('退款去向写明 mTrip 钱包', /order\.cancel\.refundMethodDesc/u.test(cancel));
-  check('提交走退款申请接口', /applyRefund\(\{ orderId, reason: text \}\)/u.test(cancel));
+  check('提交走退款申请接口', /applyRefund\(\{ orderId, reason: text \|\| 'Select refund destination', refundChannel,/u.test(cancel));
   /* PRD line 1385「confirmation modal」:真正扣款前必须有一次不可撤销确认(`572:4670`) */
   check('三步:摘要 → 原因 → 确认', /'summary' \| 'reason' \| 'review'/u.test(cancel));
   check('原因步的 Continue 只进确认页,不提交', /onPress=\{\(\) => setStep\('review'\)\}/u.test(cancel));
@@ -151,7 +151,7 @@ const strip = (t) => t.replace(/\/\*[\s\S]*?\*\//gu, '').replace(/^\s*\/\/.*$/gm
   /* 商户取消(`1685:3429`)是同一页的另一态,不是第二个页面 */
   check('商户取消:标题/顶栏/说明三处按态切换', /order\.cancelled\.merchantTitle/u.test(done) && /order\.cancelled\.detailsTitle/u.test(done) && /order\.cancelled\.merchantDesc/u.test(done));
   check('商户取消判定来自 operatorType === 2(不是前端猜)', /cancelInfo\?\.operatorType === 2/u.test(done));
-  check('商户取消才渲染黄色 Cancel Reason 卡,且原因为空不渲染', /byMerchant && cancelReason \?/u.test(done));
+  check('酒店或平台取消时显示已填写的原因', /\(byMerchant \|\| byPlatform\) && cancelReason \?/u.test(done));
   check('只给 orderId 时自己拉详情', /fetchOrderDetail\(p\.orderId\)/u.test(done));
   check('后端在已取消单上附 cancelInfo', /'cancelInfo'\] = \[/u.test(read(ORDER_CTRL)) && /'operatorType' =>/u.test(read(ORDER_CTRL)));
   check('我的预订:已取消的单进取消详情', /b\.status === ORDER_STATUS\.CANCELLED/u.test(read(at('client-app/src/screens/mypick/MyPickScreen.tsx'))));

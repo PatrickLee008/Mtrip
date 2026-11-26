@@ -611,6 +611,10 @@ export default function BookingDetailScreen() {
             </Pressable>
           ) : null}
 
+          {order.cancelInfo?.needsDestination && <Pressable style={styles.payBtn}
+            onPress={() => navigation.navigate('CancelBooking', { orderId: order.id })}>
+            <Text style={styles.payText}>{t('order.cancel.selectDestination')}</Text>
+          </Pressable>}
           <View style={styles.actions}>
             {pending ? (
               <Pressable

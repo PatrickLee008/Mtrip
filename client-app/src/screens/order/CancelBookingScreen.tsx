@@ -83,6 +83,9 @@ export default function CancelBookingScreen() {
   const [step, setStep] = useState<'summary' | 'reason' | 'review'>('summary');
   const [order, setOrder] = useState<OrderDetail | null>(null);
   const [quote, setQuote] = useState<RefundQuote | null>(null);
+  const [provider, setProvider] = useState('');
+  const [holder, setHolder] = useState('');
+  const [accountNumber, setAccountNumber] = useState('');
   const [refundChannel, setRefundChannel] = useState(1);
   const [reason, setReason] = useState<string>('');
   /** 稿面 `1205:2378`「Additional Comments (Optional)」;提交时拼在原因后面一起发 */
@@ -112,16 +115,18 @@ export default function CancelBookingScreen() {
   }, [load]);
 
   const submit = async () => {
-    if (!reason || submitting) return;
+    if ((!reason && !quote?.awaitingDestination) || submitting) return;
     setSubmitting(true);
     try {
       /* 备注拼在原因后面 —— 后端 `reason` 是一段自由文本(500 字上限),没有单独的备注字段 */
       const text = comments.trim() ? `${reason} - ${comments.trim()}` : reason;
-      const { refundNo } = await applyRefund({ orderId, reason: text, refundChannel });
+      const { refundNo } = await applyRefund({ orderId, reason: text || 'Select refund destination', refundChannel,
+        ...(refundChannel === 3 ? { provider, holder, accountNumber } : {}) });
       /* 取消成功页(`1205:2679`);用 replace,免得返回又回到取消流程里 */
       navigation.replace('BookingCancelled', {
         orderId,
         refundNo,
+        refundChannel,
         refundAmount: quote?.refundAmount ?? 0,
         hotelName: order?.goods_name,
         dateRange,
@@ -140,7 +145,7 @@ export default function CancelBookingScreen() {
     ? `${formatDate(order.use_date)}${order.end_date ? ` - ${formatDate(order.end_date)}` : ''}`
     : '-';
   const atHotel = Number(order.pay_at_hotel) === 1;
-  const refundMethodDesc = refundChannel === 2
+  const refundMethodDesc = refundChannel === 3 ? t('order.cancel.externalDesc') : refundChannel === 2
     ? t('order.cancel.refundOriginalDesc') : t('order.cancel.refundMethodDesc');
 
   return (
@@ -205,29 +210,35 @@ export default function CancelBookingScreen() {
                 <Text style={styles.noteTitle}>{t('order.cancel.refundMethod')}</Text>
                 {quote.availableRefundChannels?.map((channel) => <Pressable key={channel} style={styles.refundOption} accessibilityRole="radio" accessibilityState={{ checked: refundChannel === channel }} onPress={() => setRefundChannel(channel)}>
                   <View style={[styles.refundRadio, refundChannel === channel && styles.refundRadioOn]} />
-                  <Text style={styles.refundOptionText}>{t(channel === 2 ? 'order.cancel.refundOriginal' : 'order.cancel.refundWallet')}</Text>
+                  <Text style={styles.refundOptionText}>{t(channel === 3 ? 'order.cancel.external' : channel === 2 ? 'order.cancel.refundOriginal' : 'order.cancel.refundWallet')}</Text>
                 </Pressable>)}
+                {refundChannel === 3 && <View>
+                  <TextInput style={styles.inputField} placeholder={t('order.cancel.provider')} value={provider} onChangeText={setProvider} maxLength={100}/>
+                  <TextInput style={styles.inputField} placeholder={t('order.cancel.holder')} value={holder} onChangeText={setHolder} maxLength={100}/>
+                  <TextInput style={styles.inputField} placeholder={t('order.cancel.accountNumber')} value={accountNumber} onChangeText={setAccountNumber} maxLength={60}/>
+                </View>}
                 <Text style={styles.noteDesc}>{refundMethodDesc}</Text>
               </View> : <Note icon="wallet" title={t('order.cancel.refundMethod')} desc={refundMethodDesc} />}
               <Note
                 icon="clock"
                 title={t('order.cancel.refundTimeline')}
-                desc={t('order.cancel.refundTimelineDesc')}
+                desc={refundChannel === 3 ? refundMethodDesc : t('order.cancel.refundTimelineDesc')}
               />
             </View>
 
             <View style={styles.actions}>
               <Pressable
                 style={({ pressed }) => [styles.primaryBtn, pressed && styles.pressed]}
-                onPress={() => setStep('reason')}
+                disabled={submitting || (refundChannel === 3 && (!holder.trim() || !provider.trim() || !accountNumber.trim()))}
+                onPress={() => quote.awaitingDestination ? void submit() : setStep('reason')}
               >
-                <Text style={styles.primaryBtnText}>{t('order.cancel.proceed')}</Text>
+                <Text style={styles.primaryBtnText}>{t(quote.awaitingDestination ? 'order.cancel.selectDestination' : 'order.cancel.proceed')}</Text>
               </Pressable>
               <Pressable
                 style={({ pressed }) => [styles.ghostBtn, pressed && styles.pressed]}
                 onPress={() => navigation.goBack()}
               >
-                <Text style={styles.ghostBtnText}>{t('order.cancel.keep')}</Text>
+                <Text style={styles.ghostBtnText}>{t(quote.awaitingDestination ? 'order.cancel.back' : 'order.cancel.keep')}</Text>
               </Pressable>
             </View>
 
@@ -281,7 +292,7 @@ export default function CancelBookingScreen() {
               </View>
               <View style={styles.flexCol}>
                 <Text style={styles.policyTitle}>{t('order.cancel.policyTitle')}</Text>
-                <Text style={styles.policyDesc}>{refundChannel === 2
+                <Text style={styles.policyDesc}>{refundChannel === 3 ? refundMethodDesc : refundChannel === 2
                   ? t('order.cancel.policyOriginalDesc') : t('order.cancel.policyDesc')}</Text>
               </View>
             </View>
@@ -326,7 +337,7 @@ export default function CancelBookingScreen() {
                 </View>
               </View>
               {/* 稿面这一页把退款去向与时效并成一条(`1205:2404`) */}
-              <Note icon="wallet" title={t('order.cancel.refundMethod')} desc={quote.refundChannel === 2
+              <Note icon="wallet" title={t('order.cancel.refundMethod')} desc={refundChannel === 3 ? refundMethodDesc : refundChannel === 2
                 ? t('order.cancel.refundOriginalNote') : t('order.cancel.refundNote')} />
             </View>
 
@@ -447,6 +458,7 @@ function Note({ icon, title, desc }: { icon: 'wallet' | 'clock'; title: string; 
 }
 
 const styles = StyleSheet.create({
+  inputField: { borderBottomWidth: 1, borderBottomColor: colors.muted, padding: 8, marginVertical: 4 },
   root: { flex: 1, backgroundColor: colors.pageBg },
   flex: { flex: 1 },
   main: { paddingHorizontal: PAGE_PADDING, gap: 32 },

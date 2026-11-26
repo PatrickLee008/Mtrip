@@ -35,8 +35,7 @@ class FavoriteController extends AbstractController
             ->join('merchant_store as p', 'p.id', '=', 'f.property_id')
             ->where('f.site_id', $siteId)
             ->where('p.site_id', $siteId)
-            ->where('f.user_id', UserContext::userId())
-            ->whereNull('p.deleted_at');
+            ->where('f.user_id', UserContext::userId());
         $total = (clone $query)->count();
         $list = $query->orderByDesc('f.id')->forPage($page, $pageSize)
             ->get(['f.id', 'f.property_id', 'f.created_at', 'p.store_name', 'p.images', 'p.address', 'p.star_level',
@@ -49,6 +48,12 @@ class FavoriteController extends AbstractController
                 unset($item['images']);
                 return $item;
             })->all();
+        $properties = MarketplaceReader::properties(['site_id' => $siteId], array_column($list, 'property_id'));
+        foreach ($list as &$item) {
+            $property = $properties[$item['property_id']] ?? null;
+            $item['available'] = $property !== null && MarketplaceReader::qualified($property);
+        }
+        unset($item);
         return Result::page($list, $total, $page, $pageSize);
     }
 
@@ -57,12 +62,8 @@ class FavoriteController extends AbstractController
     {
         $siteId = $this->requireSiteId();
         $propertyId = $this->requireId('propertyId');
-        $property = Db::table('merchant_store')->where('id', $propertyId)->where('site_id', $siteId)
-            ->whereNull('deleted_at')->first(['country_code', 'city_key']);
-        $visible = $property ? array_map('intval', array_column(MarketplaceReader::searchable(
-            $siteId, (string) $property->country_code, (string) $property->city_key
-        ), 'property_id')) : [];
-        if (! in_array($propertyId, $visible, true)) throw new BusinessException(ErrorCode::NOT_FOUND, '酒店物业不存在或不可见');
+        $properties = MarketplaceReader::properties(['site_id' => $siteId], [$propertyId]);
+        if (! isset($properties[$propertyId]) || ! MarketplaceReader::qualified($properties[$propertyId])) throw new BusinessException(ErrorCode::NOT_FOUND, '酒店物业不存在或不可见');
         Db::table('user_favorite')->insertOrIgnore([
             'site_id' => $siteId,
             'user_id' => UserContext::userId(),

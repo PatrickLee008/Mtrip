@@ -83,14 +83,14 @@ final class AccountDeletionPolicy
      * @param int|null $approvedForfeitCents 有效的客服批准所对应的余额(分);无批准传 null
      * @return array{allowed: bool, blockers: list<string>, forfeitCents: int}
      */
-    public static function decide(int $ongoingBookings, int $balanceCents, ?int $approvedForfeitCents): array
+    public static function decide(int $ongoingBookings, int $balanceCents, ?int $approvedForfeitCents, int $thresholdCents = 0): array
     {
         $blockers = [];
         if ($ongoingBookings > 0) {
             $blockers[] = self::BLOCKER_BOOKING;
         }
         $balance = max(0, $balanceCents);
-        $walletCleared = $balance === 0
+        $walletCleared = $balance <= max(0, $thresholdCents)
             || ($approvedForfeitCents !== null && $balance <= $approvedForfeitCents);
         if (! $walletCleared) {
             $blockers[] = self::BLOCKER_WALLET;

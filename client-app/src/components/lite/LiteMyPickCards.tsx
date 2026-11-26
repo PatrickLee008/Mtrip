@@ -167,6 +167,7 @@ function LiteMetaRow({
 /* --------------------------------------------------------- 收藏酒店卡 */
 
 interface SavedHotelProps {
+  unavailableLabel?: string;
   name: string;
   coverUri?: string | null;
   coverSource?: ImageSourcePropType;
@@ -177,6 +178,7 @@ interface SavedHotelProps {
 }
 
 export function LiteSavedHotelCard({
+  unavailableLabel,
   name,
   coverUri,
   coverSource,
@@ -186,8 +188,8 @@ export function LiteSavedHotelCard({
 }: SavedHotelProps) {
   return (
     <Pressable
-      style={({ pressed }) => [styles.savedCard, pressed && styles.pressed]}
-      onPress={onPress}
+      style={({ pressed }) => [styles.savedCard, !!unavailableLabel && { backgroundColor: '#EBEBEB', opacity: 0.7 }, pressed && styles.pressed]}
+      onPress={unavailableLabel ? undefined : onPress}
     >
       <View>
         <CoverImage
@@ -207,6 +209,7 @@ export function LiteSavedHotelCard({
         </Pressable>
       </View>
       <View style={styles.savedBody}>
+        {unavailableLabel && <Text>{unavailableLabel}</Text>}
         <Text style={styles.savedName} numberOfLines={2}>
           {name}
         </Text>

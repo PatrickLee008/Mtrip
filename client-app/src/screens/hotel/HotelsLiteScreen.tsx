@@ -310,7 +310,7 @@ export default function HotelsLiteScreen() {
       </SafeAreaView>
 
       <DatePickerSheet
-        maxNights={longStay ? 30 : undefined}
+
         visible={dateOpen}
         value={range}
         onClose={() => setDateOpen(false)}

@@ -21,15 +21,16 @@ final class MarketplaceReader
         return $rows;
     }
 
-    public static function properties(array $scope): array
+    public static function properties(array $scope, ?array $propertyIds = null): array
     {
         $query = Db::table('merchant_store as s')
             ->join('merchant_info as m', 'm.id', '=', 's.merchant_id')
             ->where('s.site_id', $scope['site_id'])->where('m.site_id', $scope['site_id'])
             ->where('s.business_type', 'hotel')
             ->whereNull('s.deleted_at')->whereNull('m.deleted_at');
+        if ($propertyIds !== null) $query->whereIn('s.id', $propertyIds);
         if (($scope['country_code'] ?? '') !== '') $query->where('s.country_code', $scope['country_code']);
-        if (($scope['market_key'] ?? '') !== '') $query->where('s.city_key', $scope['market_key']);
+        if (($scope['market_key'] ?? '') !== '') $query->whereRaw('LOWER(TRIM(s.city_key)) = ?', [mb_strtolower(trim($scope['market_key']))]);
         return $query
             ->select([
                 's.id', 's.merchant_id', 's.source_business_id', 's.store_name', 's.address', 's.country_code', 's.city_key',
@@ -140,7 +141,7 @@ final class MarketplaceReader
     }
 
     /** Ordinary hotel search starts from every qualified property; ranking only changes default order. */
-    public static function searchable(int $siteId, string $country = '', string $key = ''): array
+    public static function searchable(int $siteId, string $country = '', string $key = '', ?array $propertyIds = null): array
     {
         $scope = [
             'site_id' => $siteId,
@@ -148,7 +149,7 @@ final class MarketplaceReader
             'country_code' => strtoupper(trim($country)),
             'market_key' => mb_strtolower(trim((string) preg_replace('/\s+/u', ' ', $key))),
         ];
-        $properties = self::properties($scope);
+        $properties = self::properties($scope, $propertyIds);
         $ranking = [];
         foreach (self::publishedConfigs($siteId, $scope['country_code'], $scope['market_key']) as $config) {
             $propertyId = (int) ($config['property_id'] ?? 0);

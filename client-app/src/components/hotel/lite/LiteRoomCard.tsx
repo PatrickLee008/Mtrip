@@ -86,7 +86,7 @@ export default function LiteRoomCard({
     .map((uri) => resolveMediaUri(uri))
     .filter((uri): uri is string => uri !== null);
   const cover: ImageSourcePropType | undefined = remote[0] ? { uri: remote[0] } : coverSource;
-  const price = Number(sku.base_price);
+  const price = Number(sku.stay_nightly_price ?? sku.base_price);
 
   return (
     <View style={styles.card}>
@@ -152,7 +152,7 @@ export default function LiteRoomCard({
           ) : null}
           <View style={styles.priceLine}>
             <Text style={styles.price}>{formatMoney(price, currency)}</Text>
-            <Text style={styles.perNight}>{t('hotels.lite.perNight')}</Text>
+            <Text style={styles.perNight}>{t(sku.stay_nightly_price != null ? 'hotels.detail.rooms.averageNight' : 'hotels.lite.perNight')}</Text>
           </View>
         </View>
 

@@ -42,10 +42,6 @@ class BookingRefundService
     #[Inject]
     protected BookingNotificationService $notify;
 
-    /** KBZ 原路退款排队 / 提交(与平台退款同一套) */
-    #[Inject]
-    protected RefundSettleService $refundSettle;
-
     /**
      * 政策试算:基于订单取消政策快照(无快照=免费取消全额可退)。
      * @return array{payAmount:float,policyRefundable:float,refundable:float,cancellationFee:float,refundedAlready:float,remainingPaid:float,remainingRefundable:float}
@@ -117,19 +113,19 @@ class BookingRefundService
                 'order_no' => $order['order_no'], 'user_id' => $order['user_id'], 'merchant_id' => $order['merchant_id'],
                 'property_id' => $order['property_id'], 'room_type_id' => $order['room_type_id'], 'refund_type' => $full ? 1 : 2,
                 'apply_amount' => $approved, 'refund_amount' => $approved,
-                'refund_channel' => RefundSettleService::isKbzOrder($order) ? 2 : 1,
+                'refund_channel' => (int) ($order['pay_at_hotel'] ?? 0) === 1 ? 0 : 1,
                 'reason' => mb_substr($reason !== '' ? $reason : 'Merchant refund escalation', 0, 500), 'status' => 1,
                 'merchant_audit_by' => $actor, 'merchant_audit_time' => gmdate('Y-m-d H:i:s')]
                 + $this->breakdownFor($order, $approved));
             Db::table('order_main')->where('id', $order['id'])->update(['refund_status' => 1, 'order_status' => 5, 'version' => Db::raw('version + 1')]);
             $this->events->log($order, 'refund_applied', BookingConst::OPERATOR_MERCHANT, $actor, $name, 1,
                 ['refundNo' => $no, 'refundAmount' => $approved, 'platformReviewRequired' => true], 'refund');
-            return ['refundNo' => $no, 'refundAmount' => $approved, 'channel' => RefundSettleService::isKbzOrder($order) ? 'original' : 'wallet',
+            return ['refundNo' => $no, 'refundAmount' => $approved, 'channel' => (int) ($order['pay_at_hotel'] ?? 0) === 1 ? 'awaiting_guest' : 'wallet',
                 'refundStatus' => 'pending_review'];
         });
     }
 
-    /** Hotel cancellation is a platform-controlled full prepaid wallet refund, regardless of cutoff. */
+    /** A confirmed prepaid cancellation waits for the guest to select the payout destination. */
     public function refundHotelCancellation(array $order, int $actor, string $name): void
     {
         if (Db::table('order_refund')->where('order_id', $order['id'])->where('status', 2)->where('late_pay', 0)->whereNull('deleted_at')->exists()) {
@@ -142,39 +138,30 @@ class BookingRefundService
             ->whereNull('deleted_at')->sum('refund_amount');
         $remaining = round((float) $order['pay_amount'] - $paidBack, 2);
         if ($remaining <= 0) return;
-        $id = Db::table('order_refund')->insertGetId(['refund_no' => RefundSettleService::newRefundNo(),
+        Db::table('order_refund')->insert(['refund_no' => RefundSettleService::newRefundNo(),
             'site_id' => $order['site_id'], 'order_id' => $order['id'], 'order_no' => $order['order_no'],
             'user_id' => $order['user_id'], 'merchant_id' => $order['merchant_id'], 'property_id' => $order['property_id'],
             'room_type_id' => $order['room_type_id'], 'refund_type' => 1, 'apply_amount' => $remaining, 'refund_amount' => $remaining,
-            'refund_channel' => 1, 'reason' => 'Hotel cancelled: full prepaid refund', 'status' => 2,
+            'refund_channel' => 0, 'reason' => 'Booking cancelled before check-in: awaiting guest refund destination', 'status' => 2,
             'merchant_audit_by' => $actor, 'merchant_audit_time' => gmdate('Y-m-d H:i:s')]
             + PayAtHotelRefundBreakdown::of($order, $remaining, $completed));
-        $refund = (array) Db::table('order_refund')->where('id', $id)->first();
-        $this->refundSettle->completeRow($refund, '', true, 0, BookingConst::OPERATOR_SYSTEM, 0);
+        Db::table('order_main')->where('id', $order['id'])->update(['refund_status' => 1]);
     }
 
     /**
      * 商户发起退款(行锁+前置校验+幂等):按试算上限内金额退款。
      * $amount=null 按政策全额可退额;部分退款订单继续有效,全额退款关闭预订。
      *
-     * - 钱包 / mock 支付的订单:直退 mTrip 钱包,当场完成;
-     * - KBZPay MMQR 支付的订单(pay_method=5):原路退回,与平台退款同一套——建「退款中」退款单并排队
-     *   (独立单立即提交支付中心,行程支付等合并窗口),到账由支付中心通知经 RefundSettleService::completeRow 收敛
-     *   (库存回补 / 返券 / 订单退款状态 / 支出流水都在到账时做);全额退款的已确认预订当场取消。
+     * 该内部入口处理 No-show 差额及附加服务，按钱包记账。
      * - 进行中的退款单阻塞新退款,但迟到支付退款单(late_pay=1)不阻塞(SettleRules::hasBlockingRefund)。
      *
      * @return array{refundNo:string, refundAmount:float, fullRefund:bool, order:array, channel:string, message:string, kbzRefund?:array}
      */
     public function apply(array $order, int $operatorId, string $operatorName, ?float $amount, string $reason): array
     {
-        if (RefundSettleService::isKbzOrder($order)) {
-            return $this->applyOriginal($order, $operatorId, $operatorName, $amount, $reason);
-        }
+
         $result = Db::transaction(function () use ($order, $operatorId, $operatorName, $amount, $reason) {
             $order = $this->lockRefundable($order);
-            if (RefundSettleService::isKbzOrder($order)) {
-                throw new BusinessException(ErrorCode::DATA_CONFLICT, '订单支付方式已变更,请刷新后重试');
-            }
             [$quote, $refundAmount, $fullRefund] = $this->resolveAmount($order, $amount);
 
             $refundNo = RefundSettleService::newRefundNo();
@@ -273,78 +260,6 @@ class BookingRefundService
         return $result;
     }
 
-    /** KBZPay MMQR 订单的商户退款:建退款中单 + 排队原路退回(见 apply 注释) */
-    private function applyOriginal(array $order, int $operatorId, string $operatorName, ?float $amount, string $reason): array
-    {
-        $result = Db::transaction(function () use ($order, $operatorId, $operatorName, $amount, $reason) {
-            $order = $this->lockRefundable($order);
-            if (! RefundSettleService::isKbzOrder($order)) {
-                throw new BusinessException(ErrorCode::DATA_CONFLICT, '订单支付方式已变更,请刷新后重试');
-            }
-            if (! PaymentRules::isValidPayNo((string) $order['pay_trade_no'])) {
-                throw new BusinessException(ErrorCode::DATA_CONFLICT, '订单缺少 KBZPay 支付单号,无法原路退款');
-            }
-            [$quote, $refundAmount, $fullRefund] = $this->resolveAmount($order, $amount);
-            $refundNo = RefundSettleService::newRefundNo();
-            $now = date('Y-m-d H:i:s');
-            $id = (int) Db::table('order_refund')->insertGetId(array_merge([
-                'refund_no' => $refundNo,
-                'site_id' => (int) $order['site_id'],
-                'order_id' => (int) $order['id'],
-                'order_no' => (string) $order['order_no'],
-                'user_id' => (int) $order['user_id'],
-                'merchant_id' => (int) $order['merchant_id'],
-                'property_id' => (int) $order['property_id'],
-                'room_type_id' => (int) $order['room_type_id'],
-                'refund_type' => $fullRefund ? 1 : 2,
-                'apply_amount' => $refundAmount,
-                'refund_amount' => $refundAmount,
-                'deduct_amount' => $quote['cancellationFee'],
-                'refund_channel' => 2,
-                'reason' => mb_substr($reason !== '' ? $reason : '商户按政策退款', 0, 500),
-                'status' => 2,
-                'merchant_audit_by' => $operatorId,
-                'merchant_audit_time' => $now,
-            ], RefundSettleService::queueFields($order), $this->breakdown($order, $refundAmount, $this->completedComponents($order))));
-
-            // 订单进入「退款中」;到账时 completeRow 再写 部分退款 / 已退款、回补库存、返券
-            $update = ['refund_status' => 1, 'version' => Db::raw('version + 1')];
-            if ($fullRefund && (int) $order['booking_status'] === BookingConst::STATUS_CONFIRMED) {
-                // 全额退款即关闭预订(与钱包退款一致,预订当场取消,不等渠道到账)
-                $update['booking_status'] = BookingConst::STATUS_CANCELLED;
-                $update['cancel_reason'] = '全额退款关闭';
-                $update['cancel_time'] = $now;
-            }
-            Db::table('order_main')->where('id', (int) $order['id'])->update($update);
-            $this->events->log($order, 'refund_applied', BookingConst::OPERATOR_MERCHANT, $operatorId, $operatorName, 1, [
-                'refundNo' => $refundNo,
-                'refundAmount' => $refundAmount,
-                'fullRefund' => $fullRefund,
-                'channel' => 'original',
-                'payNo' => (string) $order['pay_trade_no'],
-            ], 'refund');
-            $refund = (array) Db::table('order_refund')->where('id', $id)->first();
-            return ['refundNo' => $refundNo, 'refundAmount' => $refundAmount, 'fullRefund' => $fullRefund, 'order' => $order, 'refund' => $refund];
-        });
-
-        try {
-            $kbz = $this->refundSettle->afterQueued($result['refund'], $result['order'], 0);
-        } catch (\Throwable $e) {
-            // 立即提交没成(如该支付单正被并发处理):退款单仍在队列,由 kbz-refund-batch 补提交
-            $kbz = ['status' => 'queued', 'refundNo' => '', 'message' => '已加入 KBZPay 原路退款队列,稍后自动提交'];
-        }
-        try {
-            UserNotify::order($result['order'], 'refund_requested_original', ['amount' => $result['refundAmount']]);
-        } catch (\Throwable) {
-        }
-        try {
-            $this->notify->push($result['order'], '预订退款已提交', "预订「{$result['order']['goods_name']}」(订单 {$result['order']['order_no']})已发起退款 {$result['refundAmount']}(" . ($result['fullRefund'] ? '全额' : '部分') . '),将原路退回住客 KBZPay 支付账户。');
-        } catch (\Throwable) {
-        }
-        unset($result['refund']);
-        return $result + ['channel' => 'original', 'message' => '退款已提交,' . $kbz['message'], 'kbzRefund' => $kbz];
-    }
-
     /** 行锁取订单并做退款前置校验(已支付、非待支付、无阻塞中的退款单) */
     private function lockRefundable(array $order): array
     {
@@ -412,10 +327,11 @@ class BookingRefundService
 
     private function breakdown(array $order, float $amount, array $completed): array
     {
+        $order['hotel_transaction_fee'] = 0;
         if ((int) ($order['pay_at_hotel'] ?? 0) === 1 && ! $this->isPayAtHotelNoShow($order) && $this->protectedCommission($order)) {
             // Past the disclosed free-cancellation window, commission and its fee are non-refundable.
             $order['hotel_commission'] = 0;
-            $order['hotel_transaction_fee'] = 0;
+            $order['hotel_deposit'] = 0;
         }
         return $this->isPayAtHotelNoShow($order)
             ? PayAtHotelRefundBreakdown::noShow($order, $amount, $completed)

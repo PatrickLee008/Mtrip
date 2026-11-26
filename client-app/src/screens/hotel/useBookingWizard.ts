@@ -392,7 +392,7 @@ export function useBookingWizard({
     if (!propertyId || !roomTypeId) return;
     let alive = true;
     setLoadingGoods(true);
-    void fetchHotelDetail(propertyId)
+    void fetchHotelDetail(propertyId, { ...initialDates, citizen: isCitizen })
       .then((detail) => {
         if (!alive) return;
         setPayAtHotel(Boolean(detail.payAtHotel));
@@ -400,7 +400,7 @@ export function useBookingWizard({
         const sku = (detail.skus ?? []).find((r) => r.id === roomTypeId);
         if (!sku) return;
         setRefundRules(detail.refundRules ?? []);
-        const unit = Number(sku.base_price) || 0;
+        const unit = Number(sku.stay_nightly_price ?? sku.base_price) || 0;
         setStays([
           scaleStay({
             key: `property-${propertyId}-room-${roomTypeId}`,
@@ -437,7 +437,7 @@ export function useBookingWizard({
     return () => {
       alive = false;
     };
-  }, [propertyId, roomTypeId, initialDates]);
+  }, [propertyId, roomTypeId, initialDates, isCitizen]);
 
   const multi = stays.length > 1;
   const current = stays[0];

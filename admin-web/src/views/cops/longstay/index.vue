@@ -1,14 +1,16 @@
 <script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { message } from 'ant-design-vue';
 import { PlusOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons-vue';
 import PageContainer from '@/components/PageContainer.vue';
 import SiteTreeSelect from '@/components/SiteTreeSelect.vue';
 import { useTable, type TableRow } from '@/composables/useTable';
 import { useUserStore } from '@/stores/user';
-import { apiLongstayDelete, apiLongstayList, apiLongstaySave } from '@/api/cops';
+import { apiLongstayDelete, apiLongstayList, apiLongstayProposals, apiLongstayReview, apiLongstaySave } from '@/api/cops';
 
 /** 长住折扣梯度:按住宿夜数配置折扣率(PRD 模块2.1) */
+const { t } = useI18n();
 const userStore = useUserStore();
 const isSuper = userStore.profile?.isSuper === true;
 
@@ -29,21 +31,21 @@ const columns = [
 const modalOpen = ref(false);
 const submitting = ref(false);
 const editingId = ref(0);
-const form = reactive({ siteId: 0, propertyId: 0, minNights: 7, discountRate: null as number | null, status: 2,
-  priority: 0, startsAt: '', endsAt: '', couponStackable: 0 as 0 | 1 | null });
+const form = reactive({ siteId: 0, propertyId: 0, maxNights: 30, offerSource: 'platform', platformFundingPct: 0, minNights: 7, discountRate: null as number | null, status: 2,
+  priority: 0, startsAt: '', endsAt: '' });
 
 function openCreate(): void {
   editingId.value = 0;
-  Object.assign(form, { siteId: query.siteId, propertyId: 0, minNights: 7, discountRate: null, status: 2,
-    priority: 0, startsAt: '', endsAt: '', couponStackable: 0 });
+  Object.assign(form, { siteId: query.siteId, propertyId: 0, minNights: 7, maxNights: 30, offerSource: 'platform', platformFundingPct: 0, discountRate: null, status: 2,
+    priority: 0, startsAt: '', endsAt: '' });
   modalOpen.value = true;
 }
 
 function openEdit(row: TableRow): void {
   editingId.value = row.id;
-  Object.assign(form, { siteId: Number(row.site_id), propertyId: Number(row.property_id), minNights: row.min_nights,
+  Object.assign(form, { siteId: Number(row.site_id), propertyId: Number(row.property_id), minNights: row.min_nights, maxNights: row.max_nights, offerSource: row.offer_source, platformFundingPct: Number(row.platform_funding_pct),
     discountRate: Number(row.discount_rate), status: row.status, priority: Number(row.priority),
-    startsAt: row.starts_at ?? '', endsAt: row.ends_at ?? '', couponStackable: row.coupon_stackable === null ? null : Number(row.coupon_stackable) });
+    startsAt: row.starts_at ?? '', endsAt: row.ends_at ?? '' });
   modalOpen.value = true;
 }
 
@@ -69,7 +71,30 @@ async function remove(row: TableRow): Promise<void> {
   void load();
 }
 
-onMounted(() => void load());
+const queue = useTable(apiLongstayProposals, { siteId: 0 });
+const { list: requests, pagination: requestPager } = queue;
+const reason = ref('');
+const reviewing = ref<TableRow | null>(null);
+const reviewAction = ref('');
+const savingReview = ref(false);
+function openDecision(row: TableRow, action: string) {
+  reviewing.value = row;
+  reviewAction.value = action;
+  reason.value = '';
+}
+async function decide() {
+  if (!reviewing.value || savingReview.value) return;
+  savingReview.value = true;
+  try {
+    await apiLongstayReview({ id: reviewing.value.id, action: reviewAction.value, reason: reason.value });
+    reviewing.value = null;
+    await Promise.all([queue.load(), load()]);
+  } finally { savingReview.value = false; }
+}
+onMounted(() => {
+  void load();
+  if (userStore.hasPerm('marketing:longstay:save')) void queue.load();
+});
 </script>
 
 <template>
@@ -110,6 +135,25 @@ onMounted(() => void load());
       </a-table>
     </a-card>
 
+    <a-card v-perm="'marketing:longstay:save'" :title="t('stayProposal.title')">
+      <a-table :data-source="requests" :pagination="requestPager" row-key="id" size="middle">
+        <a-table-column title="ID" data-index="id" />
+        <a-table-column :title="t('stayProposal.hotel')" data-index="property_id" />
+        <a-table-column :title="t('stayProposal.merchant')" data-index="merchant_id" />
+        <a-table-column :title="t('stayProposal.terms')"><template #default="{ record }">{{ record.min_nights }}–{{ record.max_nights }} {{ t('stayProposal.nights') }} · {{ record.discount_rate }}% · {{ record.details }}</template></a-table-column>
+        <a-table-column :title="t('stayProposal.schedule')"><template #default="{ record }">{{ record.starts_at || '—' }} / {{ record.ends_at || '—' }}</template></a-table-column>
+        <a-table-column :title="t('stayProposal.submittedOn')" data-index="created_at" />
+        <a-table-column :title="t('stayProposal.status')" data-index="state"><template #default="{ record }">{{ t('stayProposal.' + record.state) }}</template></a-table-column>
+        <a-table-column :title="t('stayProposal.decision')" data-index="reason" />
+        <a-table-column :title="t('stayProposal.review')"><template #default="{ record }"><a-space>
+          <a-button v-if="record.state === 'submitted'" v-perm="'marketing:longstay:save'" @click="openDecision(record, 'reviewing')">{{ t('stayProposal.review') }}</a-button>
+          <template v-if="record.state === 'reviewing'"><a-button v-for="action in ['approved','returned','rejected']" :key="action" v-perm="'marketing:longstay:save'" @click="openDecision(record, action)">{{ t('stayProposal.' + action) }}</a-button></template>
+        </a-space></template></a-table-column>
+      </a-table>
+    </a-card>
+    <a-modal :open="!!reviewing" :title="reviewAction ? t('stayProposal.' + reviewAction) : ''" :confirm-loading="savingReview" @ok="decide" @cancel="reviewing = null">
+      <a-textarea v-model:value="reason" :placeholder="t('stayProposal.reason')" :maxlength="500" />
+    </a-modal>
     <a-modal v-model:open="modalOpen" :title="editingId ? '编辑梯度' : '新增梯度'" :confirm-loading="submitting" @ok="submit">
       <a-form :label-col="{ span: 6 }" :wrapper-col="{ span: 15 }">
         <a-form-item v-if="isSuper && !editingId" label="站点" required>
@@ -117,10 +161,10 @@ onMounted(() => void load());
         </a-form-item>
         <a-form-item label="酒店 ID">
           <a-input-number v-model:value="form.propertyId" :min="0" :precision="0" style="width: 100%" />
-          <div class="tip">0 表示所选站点的全部酒店</div>
+
         </a-form-item>
         <a-form-item label="最低夜数" required>
-          <a-input-number v-model:value="form.minNights" :min="1" :max="30" :precision="0" style="width: 100%" />
+          <a-input-number v-model:value="form.minNights" :min="1" :precision="0" style="width: 100%" />
         </a-form-item>
         <a-form-item label="折扣率(%)" required>
           <a-input-number v-model:value="form.discountRate" :min="0.01" :max="99.99" :precision="2" style="width: 100%" />
@@ -136,14 +180,10 @@ onMounted(() => void load());
         <a-form-item label="结束时间 UTC">
           <a-date-picker v-model:value="form.endsAt" show-time value-format="YYYY-MM-DD HH:mm:ss" style="width: 100%" />
         </a-form-item>
-        <a-form-item label="优惠券叠加">
-          <a-radio-group v-model:value="form.couponStackable">
-            <a-radio v-if="form.couponStackable === null" :value="null">沿用旧规则</a-radio>
-            <a-radio :value="0">禁止</a-radio>
-            <a-radio :value="1">允许可叠加的券</a-radio>
-          </a-radio-group>
-        </a-form-item>
-        <a-form-item label="状态">
+        <a-form-item :label="t('stayProposal.max')" required><a-input-number v-model:value="form.maxNights" :min="form.minNights" :precision="0" /></a-form-item>
+        <a-form-item :label="t('stayProposal.source')"><a-radio-group v-model:value="form.offerSource"><a-radio value="platform">{{ t('stayProposal.platform') }}</a-radio><a-radio value="merchant">{{ t('stayProposal.merchant') }}</a-radio></a-radio-group></a-form-item>
+        <a-form-item :label="t('stayProposal.share')"><a-input-number v-model:value="form.platformFundingPct" :min="0" :max="100" :precision="2" /><div class="tip">{{ t('stayProposal.remainder') }}</div></a-form-item>
+        <a-form-item :label="t('stayProposal.status')">
           <a-radio-group v-model:value="form.status">
             <a-radio :value="1">启用</a-radio>
             <a-radio :value="2">禁用</a-radio>

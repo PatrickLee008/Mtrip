@@ -372,7 +372,7 @@ const pageTitle = computed(() => {
                 @click="openPrice(record)"
               >{{ t('order.actions.modifyPrice') }}</a-button>
               <a-button
-                v-if="record.order_status === 0"
+                v-if="record.order_status === 0 || (Number(record.pay_at_hotel) === 1 && Number(record.booking_status) === 2)"
                 v-perm="'order:all:cancel'"
                 type="link"
                 size="small"

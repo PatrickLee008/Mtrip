@@ -236,6 +236,7 @@ export default function HotelDetailLiteScreen() {
                   navigation.navigate('RoomDetailLite', {
                     goodsId: detail.id,
                     skuId: room.id,
+                    citizen: params.citizen,
                     checkIn: params.checkIn,
                     checkOut: params.checkOut,
                   })
@@ -265,7 +266,7 @@ export default function HotelDetailLiteScreen() {
           <View style={styles.bottomInner}>
             <View>
               <Text style={styles.totalLabel}>{t('hotels.lite.totalPrice')}</Text>
-              <Text style={styles.totalValue}>{formatMoney(total, currency)}</Text>
+              <Text style={styles.totalValue}>{quote ? formatMoney(total, currency) : t('hotels.detail.rooms.estimate', { amount: formatMoney(total, currency) })}</Text>
               <Text style={styles.totalDiscount}>
                 {t('hotels.detail.discountToday', { percent: DETAIL_DEMO.discountPercent })}
               </Text>

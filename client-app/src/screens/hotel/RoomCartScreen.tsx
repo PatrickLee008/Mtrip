@@ -63,7 +63,7 @@ export default function RoomCartScreen() {
   const insets = useSafeAreaInsets();
   const currency = useSiteStore((s) => s.currency);
 
-  const { propertyId, hotelName, checkIn, checkOut, items, setQuantity, remove } =
+  const { propertyId, hotelName, checkIn, checkOut, citizen, items, setQuantity, remove } =
     useRoomCartStore();
   /** 待确认移除的房型(设计稿 Alert Overlay 2659:12483) */
   const [pendingRemove, setPendingRemove] = useState<string | null>(null);
@@ -81,9 +81,9 @@ export default function RoomCartScreen() {
   const quoteItems = useMemo(
     () =>
       allReal && propertyId && checkIn && checkOut
-        ? cartTripItems(propertyId, items, checkIn, checkOut)
+        ? cartTripItems(propertyId, items, checkIn, checkOut, citizen)
         : [],
-    [allReal, propertyId, items, checkIn, checkOut],
+    [allReal, propertyId, items, checkIn, checkOut, citizen],
   );
   const { quote } = useTripQuote(quoteItems, 0, isLogin && quoteItems.length > 0);
   const estimate = items.reduce((sum, item) => sum + item.price * item.quantity * nights, 0);
@@ -303,7 +303,7 @@ export default function RoomCartScreen() {
                     </View>
                   ) : null}
                 </View>
-                <Text style={styles.totalValue}>{formatMoney(total, currency)}</Text>
+                <Text style={styles.totalValue}>{quote ? formatMoney(total, currency) : t('hotels.detail.rooms.estimate', { amount: formatMoney(total, currency) })}</Text>
               </View>
             </View>
           </View>

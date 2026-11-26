@@ -72,6 +72,7 @@ export interface LongStayQuote {
 }
 
 export interface GoodsItem {
+  available?: boolean;
   longStay?: LongStayQuote | null;
   id: number;
   property_id?: number;
@@ -109,6 +110,7 @@ export interface GoodsItem {
  * 注意:后端未返回起价与评分,故收藏卡片不展示价格
  */
 export interface FavoriteItem {
+  available?: boolean;
   id: number;
   property_id: number;
   created_at: string;
@@ -159,6 +161,7 @@ export interface GoodsSku {
   id: number;
   goods_id: number;
   base_price: string;
+  stay_nightly_price?: number;
   base_stock: number;
   status: number;
   sort: number;
@@ -290,6 +293,9 @@ export interface OrderDetail extends OrderItemData {
    * (0系统 1住客 **2商户** 3平台)—— `order_main` 上没有这个字段。
    */
   cancelInfo?: {
+    needsDestination?: boolean;
+    refundChannel?: number | null;
+    refundStatus?: number | null;
     operatorType: number;
     refundNo: string;
     refundAmount: number;

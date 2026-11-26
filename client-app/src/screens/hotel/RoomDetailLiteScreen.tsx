@@ -102,14 +102,16 @@ export default function RoomDetailLiteScreen() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      setDetail(await fetchHotelDetail(params.goodsId));
+      setDetail(await fetchHotelDetail(params.goodsId, {
+        checkIn: params.checkIn, checkOut: params.checkOut, citizen: params.citizen ? 1 : undefined,
+      }));
       setError('');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Error');
     } finally {
       setLoading(false);
     }
-  }, [params.goodsId]);
+  }, [params.goodsId, params.checkIn, params.checkOut, params.citizen]);
 
   useEffect(() => {
     void load();
@@ -127,7 +129,7 @@ export default function RoomDetailLiteScreen() {
   if (loading) return <LoadingView />;
   if (error || !detail || !sku) return <ErrorView message={error} onRetry={() => void load()} />;
 
-  const price = Number(sku.base_price);
+  const price = Number(sku.stay_nightly_price ?? sku.base_price);
   const total = nights > 0 ? price * nights : price;
   /* 过滤脏值(后台实测填过 '111'),圆点与张数按实际可用图片数渲染 */
   const images = (sku.images ?? [])
@@ -213,7 +215,7 @@ export default function RoomDetailLiteScreen() {
                 <Text style={styles.roomName}>{sku.room_name ?? `#${sku.id}`}</Text>
 
                 <View style={styles.priceRow}>
-                  <Text style={styles.priceLabel}>{t('hotels.lite.room.pricePerNight')}</Text>
+                  <Text style={styles.priceLabel}>{t(sku.stay_nightly_price != null ? 'hotels.detail.rooms.averageNight' : 'hotels.lite.room.pricePerNight')}</Text>
                   <Text style={styles.priceValue}>{formatMoney(price, currency)}</Text>
                 </View>
 

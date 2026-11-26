@@ -208,6 +208,7 @@ class TripController extends AbstractController
                     'total_amount' => $leg['original'],
                     'discount_amount' => round($leg['longstay'] + $alloc, 2),
                     'longstay_discount' => $leg['longstay'],
+                    'longstay_funding_snapshot' => $leg['fundingSnapshot'],
                     'coupon_id' => $couponRefId,
                     'coupon_discount' => $alloc,
                     'alloc_coupon_discount' => $alloc,
@@ -472,7 +473,7 @@ class TripController extends AbstractController
             $longstay = \Mtrip\Shared\Support\LongStayOffer::discount($tier, $original);
             $net = round($original - $longstay, 2);
             $tripTotal = round($tripTotal + $net, 2);
-            $legs[] = $p + ['original' => $original, 'longstay' => $longstay, 'net' => $net, 'changes' => $changes];
+            $legs[] = $p + ['original' => $original, 'longstay' => $longstay, 'fundingSnapshot' => \Mtrip\Shared\Support\LongStayOffer::fundingSnapshot($tier, $longstay), 'net' => $net, 'changes' => $changes];
         }
 
         /**
@@ -614,7 +615,7 @@ class TripController extends AbstractController
             throw new BusinessException(ErrorCode::NOT_FOUND, "第" . ($idx + 1) . "项房型不存在或已停售");
         }
         $room = (array) $room;
-        $dates = $this->stockService->datesOf(1, $useDate, $endDate);
+        $dates = $this->stockService->datesOf(1, $useDate, $endDate, $siteId, $propertyId);
         if (strtotime($dates[0]) < strtotime(date('Y-m-d'))) {
             throw new BusinessException(ErrorCode::PARAM_ERROR, "第" . ($idx + 1) . "项入住日期不能早于今天");
         }

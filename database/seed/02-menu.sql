@@ -140,6 +140,7 @@ INSERT IGNORE INTO `sys_menu` (`id`,`parent_id`,`menu_name`,`menu_name_en`,`perm
 (40102,401,'取消订单','Cancel','order:all:cancel',3,2),
 (40103,401,'导出订单','Export','order:all:export',3,3),
 (40201,402,'退款审核','Audit Refund','order:refund:audit',3,1),
+(40202,402,'执行退款打款','Execute Refund Transfer','order:refund:transfer',3,2),
 (40301,403,'确认结算','Confirm','finance:msettle:confirm',3,1),
 (40302,403,'标记打款','Mark Paid','finance:msettle:pay',3,2),
 (40501,405,'调整库存','Adjust Stock','goods:stock:edit',3,1),

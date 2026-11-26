@@ -89,7 +89,7 @@ export function realRoomCover(room: GoodsSku, index: number): ImageSourcePropTyp
 export function realRoomCartEntry(room: GoodsSku, index: number, t: TFunction) {
   return {
     roomKey: `room-${room.id}`,
-    price: Number(room.base_price),
+    price: Number(room.stay_nightly_price ?? room.base_price),
     sku: room,
     extra: {
       name: room.room_name ?? `#${room.id}`,
@@ -183,8 +183,8 @@ export default function HotelRoomsTab({
                 })}
                 strike={null}
                 promo={null}
-                price={formatMoney(room.base_price, currency)}
-                perNightLabel={t('hotels.detail.rooms.perNight')}
+                price={formatMoney(room.stay_nightly_price ?? room.base_price, currency)}
+                perNightLabel={t(room.stay_nightly_price != null ? 'hotels.detail.rooms.averageNight' : 'hotels.detail.rooms.perNight')}
                 selectLabel={t('hotels.detail.rooms.choose')}
                 maxQuantity={room.available}
                 soldOutLabel={t('hotels.detail.rooms.soldOut')}

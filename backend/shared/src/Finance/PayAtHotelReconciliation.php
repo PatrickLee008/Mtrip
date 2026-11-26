@@ -25,10 +25,17 @@ final class PayAtHotelReconciliation
         }
         $merchant = $entry ? WalletLedger::cents($entry->merchant_settlement) - $parts['refund_hotel_deposit'] - $parts['refund_addon'] : 0;
         $platform = $entry ? WalletLedger::cents($entry->platform_revenue) - $parts['refund_hotel_commission'] - $parts['refund_transaction_fee'] : 0;
+        $subsidy = 0;
+        if ($entry && (int) $order['booking_status'] === 4 && $refunded === 0) {
+            $subsidy = WalletLedger::cents($entry->mtrip_pays) + WalletLedger::cents($entry->partner_pays);
+        }
         $income = WalletLedger::cents(Db::table('finance_flow')->where('order_id', $id)->where('flow_type', 1)->where('biz_type', 1)->where('flow_status', 1)->sum('amount'));
         $out = WalletLedger::cents(Db::table('finance_flow')->where('order_id', $id)->where('flow_type', 2)->where('biz_type', 2)->where('flow_status', 1)->sum('amount'));
-        $matched = $entry && $merchant >= 0 && $platform >= 0 && array_sum($parts) === $refunded && $income - $out === $merchant + $platform;
-        return ['matched' => (bool) $matched, 'blocked' => $blocked, 'merchantCents' => $merchant, 'platformCents' => $platform,
+        // Escalate unresolved no-show and post-stay refund funding rather than settling a guessed subsidy.
+        $reviewFunding = $entry && (WalletLedger::cents($entry->mtrip_pays) + WalletLedger::cents($entry->partner_pays) > 0)
+            && ((int) $order['booking_status'] === 6 || ((int) $order['booking_status'] === 4 && $refunded > 0));
+        $matched = ! $reviewFunding && $entry && $merchant >= 0 && $platform >= 0 && array_sum($parts) === $refunded && $income - $out === $merchant + $platform;
+        return ['matched' => (bool) $matched, 'blocked' => $blocked, 'merchantCents' => $merchant + $subsidy, 'platformCents' => $platform - $subsidy, 'subsidyCents' => $subsidy,
             'refundCents' => $refunded, 'incomeCents' => $income, 'outCents' => $out, 'refundComponents' => $parts,
             'entryId' => (int) ($entry->id ?? 0), 'commissionCents' => $entry ? WalletLedger::cents($entry->commission) - $parts['refund_hotel_commission'] : 0,
             'feeCents' => $entry ? WalletLedger::cents($entry->transaction_fee) - $parts['refund_transaction_fee'] : 0];

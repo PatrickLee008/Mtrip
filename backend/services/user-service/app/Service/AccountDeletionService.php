@@ -20,7 +20,7 @@ use Mtrip\Shared\Wallet\WalletLedger;
  * App:警告页 → Continue → 输入 DELETE → Confirm → 本服务判定(AccountDeletionPolicy):
  *   有进行中 / 待处理预订 → 拦截;钱包余额 > 0 → 默认拦截(用户联系客服);
  *   授权超管批准 + 独立财务经办/复核,未过期且余额不高于两次审核额度 → WalletLedger 作废、记台账 → 注销。
- *   小额正数余额规则尚待产品确认,不因配置门槛自动免审或作废。
+ *   在生效阈值内，用户确认注销后在同一事务内作废剩余额度。
  *
  * 注销 = 账号置为 3 已注销 + 解绑登录凭据(mobile_hash / email_hash / 社交身份置空并归档到注销记录),
  * 资料本身保留 90 天(PRD 数据保留政策),到期由 AccountPurge 定时任务匿名化。
@@ -62,10 +62,12 @@ class AccountDeletionService
                 $balanceCents = WalletLedger::cents(WalletLedger::availableLocked($userId));
                 $approval = $this->validApproval($userId, true);
                 $bookings = $this->ongoingBookingCount($userId);
+                $policy = AccountDeletionWorkflow::policy();
                 $decision = AccountDeletionPolicy::decide(
                     $bookings,
                     $balanceCents,
                     $approval ? min(WalletLedger::cents($approval['approved_balance']), WalletLedger::cents($approval['finance_balance'])) : null,
+                    WalletLedger::cents($policy['threshold_amount'] ?? 0),
                 );
                 if (! $decision['allowed']) {
                     throw new BusinessException(ErrorCode::ACCOUNT_DELETION_BLOCKED, $this->blockedMessage($decision['blockers']), [
@@ -74,7 +76,7 @@ class AccountDeletionService
                         'walletBalance' => WalletLedger::money($balanceCents),
                     ]);
                 }
-                $this->close($user, $approval, $decision['forfeitCents'], $ip);
+                $this->close($user, $approval, $decision['forfeitCents'], $ip, $policy);
                 return $siteId;
             });
             // 事务提交后再吊销旧 Token:吊销失败不影响注销结果(登录凭据已在库里解绑)
@@ -117,7 +119,7 @@ class AccountDeletionService
      * @param array<string, mixed>      $user
      * @param array<string, mixed>|null $approval
      */
-    private function close(array $user, ?array $approval, int $forfeitCents, string $ip): void
+    private function close(array $user, ?array $approval, int $forfeitCents, string $ip, array $policy): void
     {
         $userId = (int) $user['id'];
         $siteId = (int) $user['site_id'];
@@ -142,12 +144,20 @@ class AccountDeletionService
             AccountDeletionWorkflow::event($approval, 'completed', $userId, 'Consumer', 'Consumer confirmed DELETE',
                 ['amount' => WalletLedger::money($forfeitCents)]);
         } else {
-            $deletionId = (int) Db::table('user_account_deletion')->insertGetId($closing + ['site_id' => $siteId, 'user_id' => $userId]);
+            $deletionId = (int) Db::table('user_account_deletion')->insertGetId($closing + ['site_id' => $siteId, 'user_id' => $userId,
+                'policy_version' => $policy['id'] ?? 0, 'threshold_snapshot' => $policy['threshold_amount'] ?? 0]);
+            if ($forfeitCents > 0) {
+                AccountDeletionWorkflow::event(['id' => $deletionId, 'site_id' => $siteId, 'user_id' => $userId],
+                    'completed', $userId, 'Consumer', 'Consumer confirmed DELETE and forfeiture',
+                    ['amount' => WalletLedger::money($forfeitCents), 'threshold' => $policy['threshold_amount']]);
+            }
         }
 
-        if ($forfeitCents > 0 && $approval) {
-            $forfeit = WalletLedger::forfeitAll($siteId, $userId, (int) $approval['approved_by'],
-                '账户注销没收余额(注销单 ' . $deletionId . ',批准人 ' . $approval['approved_name'] . ')');
+        if ($forfeitCents > 0) {
+            $approver = (int) ($approval['approved_by'] ?? 0);
+            $reason = $approval['approve_reason'] ?? 'Consumer confirmed balance forfeiture within the configured threshold';
+            $forfeit = WalletLedger::forfeitAll($siteId, $userId, $approver,
+                '账户注销余额作废，注销单 ' . $deletionId);
             if ($forfeit['cents'] > 0) {
                 Db::table('user_wallet_forfeit')->insert([
                     'site_id' => $siteId,
@@ -155,9 +165,9 @@ class AccountDeletionService
                     'deletion_id' => $deletionId,
                     'amount' => WalletLedger::money($forfeit['cents']),
                     'balance_log_id' => $forfeit['logId'],
-                    'approved_by' => (int) $approval['approved_by'],
-                    'approved_name' => (string) $approval['approved_name'],
-                    'reason' => (string) $approval['approve_reason'],
+                    'approved_by' => $approver,
+                    'approved_name' => (string) ($approval['approved_name'] ?? ''),
+                    'reason' => $reason,
                 ]);
                 Db::table('user_account_deletion')->where('id', $deletionId)
                     ->update(['forfeited_amount' => WalletLedger::money($forfeit['cents'])]);

@@ -180,6 +180,7 @@ export default function MyPickLiteScreen() {
                   : g.goods_name;
                 return (
                   <LiteSavedHotelCard
+                    unavailableLabel={g.available === false ? t('myPick.savedHotels.unavailable') : undefined}
                     key={g.id}
                     name={name}
                     coverSource={sampleKey ? TEMP_HOTEL_COVERS[sampleKey] : tempCoverFor(i)}

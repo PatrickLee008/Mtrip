@@ -46,24 +46,24 @@ def jwt(claims):
     body = enc(dict(alg='HS256',typ='JWT'))+'.'+enc(dict(claims,iat=int(time.time()),exp=int(time.time())+3600))
     return body+'.'+base64.urlsafe_b64encode(hmac.new(SECRET.encode(),body.encode(),hashlib.sha256).digest()).decode().rstrip('=')
 
-def http(base, path, claims, body=None):
+def http(base, path, claims, body=None, headers=None):
     request = urllib.request.Request(base+path, None if body is None else json.dumps(body).encode(),
-        headers={'Authorization':'Bearer '+jwt(claims),'Content-Type':'application/json','X-Site-Id':str(claims.get('site_id',7))})
+        headers={**(headers or {}),'Authorization':'Bearer '+jwt(claims),'Content-Type':'application/json','X-Site-Id':str(claims.get('site_id',7))})
     try: response = OPENER.open(request, timeout=30)
     except urllib.error.HTTPError as error: response = error
     return json.loads(response.read())
 
-def admin(path, body=None, base=None, site=0, perms=None, super=True):
+def admin(path, body=None, base=None, site=0, perms=None, super=True, actor=1001):
     return http(base or MERCHANT, '/api/v1/admin/'+path,
-        dict(aud='admin',admin_id=1001,admin_name='Isolated PAH QA',site_id=site,is_super=super,
+        dict(aud='admin',admin_id=actor,admin_name='Isolated PAH QA',site_id=site,is_super=super,
              permissions=['merchant:list:list','merchant:list:edit','finance:msettle:confirm','finance:msettle:pay','order:refund:audit'] if perms is None else perms),body)
 
-def merchant(path, body=None, base=None, owner=True):
+def merchant(path, body=None, base=None, owner=True, property_id=None):
     return http(base or MERCHANT, '/api/v1/merchant/'+path,
         dict(aud='merchant',admin_id=701 if owner else 702,admin_name='PAH merchant',site_id=7,account_type=2,
              merchant_id=71,group_id=0,store_id=0,is_owner=owner,auth_version=1,amr='totp',permissions=[
-                 'mch:order:list','mch:order:detail','mch:order:check-in','mch:order:check-out','mch:order:cancel',
-                 'mch:order:no-show','mch:order:no-show-waive','mch:order:refund','mch:earnings:overview'] if owner else []),body)
+                 'mch:properties:profile-submit','mch:order:list','mch:order:detail','mch:order:check-in','mch:order:check-out','mch:order:cancel',
+                 'mch:order:no-show','mch:order:no-show-waive','mch:order:refund','mch:earnings:overview'] if owner else []),body,{'X-Mtrip-Property-Id':str(property_id)} if property_id else None)
 
 def app(path, body=None, uid=UID):
     return http(ORDER,'/api/v1/app/order/'+path,dict(aud='app',user_id=uid,site_id=7),body)
@@ -118,10 +118,15 @@ def book(property_id=81, room_id=91, uid=UID, **extra):
 def pay(order):
     return data(app('pay',dict(orderId=order['orderId'],payMethod=3)))
 
-def reviewed_refund(order, amount, approved=None, complete=True):
+def reviewed_refund(order, amount, approved=None, complete=True, legacy_original=False, uid=UID):
     request=data(merchant('order/refund/apply',dict(id=order['orderId'],amount=amount,reason='PAH regression refund'),base=ORDER))
     rid=int(sql(f"SELECT id FROM `{B}`.order_refund WHERE refund_no='{request['refundNo']}';"))
+    if legacy_original:
+        # Exercise already-issued original-channel refunds carried over from the previous release.
+        sql(f"UPDATE `{B}`.order_refund SET refund_channel=2 WHERE id={rid};")
     data(admin('order/refund/audit',dict(id=rid,auditStatus=1,refundAmount=amount if approved is None else approved),base=ORDER))
+    if not legacy_original and sql(f'SELECT refund_channel FROM `{B}`.order_refund WHERE id={rid};')=='0':
+        data(app('refund/apply',dict(orderId=order['orderId'],reason='Select wallet',refundChannel=1),uid=uid))
     if complete and sql(f'SELECT status FROM `{B}`.order_refund WHERE id={rid};')=='2':
         data(admin('order/refund/confirm',dict(id=rid),base=ORDER))
     return rid
@@ -161,7 +166,7 @@ try:
     for source,target in [('mtrip_business',B),('mtrip_system',S)]:
         tables=sql(f"SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA='{source}' AND TABLE_TYPE='BASE TABLE';").splitlines()
         sql(''.join(f'CREATE TABLE `{target}`.`{table}` LIKE `{source}`.`{table}`;' for table in tables))
-    migrations=['V20261117100000__merchant-commercial-settings.sql','V20261120100100__multi-hotel-checkout-sessions.sql','V20261120120000__property-commercial-commission.sql','V20261120120100__pay-at-hotel-booking-settlements.sql','V20261123090000__scope-long-stay-tiers.sql','V20261124070000__consumer-affiliate-access.sql','V20261125080000__consumer-affiliate-link-opens.sql']
+    migrations=['V20261117100000__merchant-commercial-settings.sql','V20261120100100__multi-hotel-checkout-sessions.sql','V20261120120000__property-commercial-commission.sql','V20261120120100__pay-at-hotel-booking-settlements.sql','V20261123090000__scope-long-stay-tiers.sql','V20261124070000__consumer-affiliate-access.sql','V20261125080000__consumer-affiliate-link-opens.sql','V20261126090000__booking-refund-destination.sql','V20261126090100__hotel-long-stay-ranges.sql']
     for _ in range(2):
         for filename in migrations:
             isolated=(ROOT/'database/migrations'/filename).read_text(encoding='utf-8').replace('mtrip_business',B).replace('mtrip_system',S)
@@ -245,6 +250,15 @@ try:
     check('explicitly clearing an override restores inheritance',next(p for p in data(merchant('pay-at-hotel/terms'))['properties'] if p['id']==82)['commission_rate']==12)
     policy(); data(choice(True,20))
 
+    guest=book(); pay(guest)
+    quote=data(app('refund/quote?orderId='+str(guest['orderId'])))
+    check('guest cancelling a 30,200 booking can refund 30,000 including zero fee',quote['refundAmount']==30000
+        and quote['refund_transaction_fee']==0 and 3 in quote['availableRefundChannels'])
+    guest_refund=data(app('refund/apply',dict(orderId=guest['orderId'],reason='QA guest cancellation',refundChannel=1)))
+    guest_rid=int(sql(f"SELECT id FROM `{B}`.order_refund WHERE refund_no='{guest_refund['refundNo']}';"))
+    for stage in range(2): data(admin('order/refund/audit',dict(id=guest_rid,auditStatus=1),base=ORDER))
+    data(admin('order/refund/confirm',dict(id=guest_rid),base=ORDER))
+    check('full eligible refund closes the booking with its non-refundable fee retained',row(guest)['payment']==4 and row(guest)['status']==5)
     # Merchant escalation does not move money; smaller platform approvals must change every component.
     refundable=book(); pay(refundable)
     wallet_before=sql(f'SELECT balance FROM `{B}`.user_info WHERE id={UID};')
@@ -252,12 +266,13 @@ try:
     check('merchant refund escalation waits for platform review without wallet movement',pending['refundStatus']=='pending_review' and wallet_before==sql(f'SELECT balance FROM `{B}`.user_info WHERE id={UID};'))
     rid=int(sql(f"SELECT id FROM `{B}`.order_refund WHERE refund_no='{pending['refundNo']}';"))
     data(admin('order/refund/audit',dict(id=rid,auditStatus=1,refundAmount=8000),base=ORDER))
+    data(app('refund/apply',dict(orderId=refundable['orderId'],reason='Select wallet',refundChannel=1)))
     data(admin('order/refund/confirm',dict(id=rid),base=ORDER))
     check('approved partial refund components sum to the actual lower amount',sql(f'SELECT refund_amount,refund_hotel_commission+refund_hotel_deposit+refund_transaction_fee+refund_addon FROM `{B}`.order_refund WHERE id={rid};')=='8000.00\t8000.00')
     check('partial refund leaves the booking active',row(refundable)['status']==2 and row(refundable)['payment']==3)
-    reviewed_refund(refundable,22200)
-    check('sequential refunds stop at the prepaid amount and close the booking',row(refundable)['status']==5 and row(refundable)['payment']==4 and sql(f"SELECT SUM(refund_amount) FROM `{B}`.order_refund WHERE order_id={refundable['orderId']} AND status=3;")=='30200.00')
-    check('full refund restores inventory exactly once',sql(f"SELECT COUNT(*) FROM `{B}`.goods_stock_log WHERE order_id={refundable['orderId']} AND change_type=4;")=='1')
+    reviewed_refund(refundable,22000)
+    check('sequential refunds stop at the prepaid amount and close the booking',row(refundable)['payment']==3 and sql(f"SELECT SUM(refund_amount) FROM `{B}`.order_refund WHERE order_id={refundable['orderId']} AND status=3;")=='30000.00')
+    check('partial merchant escalation keeps inventory occupied',sql(f"SELECT COUNT(*) FROM `{B}`.goods_stock_log WHERE order_id={refundable['orderId']} AND change_type=4;")=='0')
     check('duplicate completion cannot credit the wallet twice',admin('order/refund/confirm',dict(id=rid),base=ORDER)['code']!=0)
     history = data(admin(f'order/refund/detail?id={rid}', base=ORDER))
     check('refund details include the wallet completion and refund reference',
@@ -266,12 +281,31 @@ try:
     check('cross-site admins cannot read the refund history',
           admin(f'order/refund/detail?id={rid}', base=ORDER, site=6, super=False)['code'] != 0)
 
-    # Hotel cancellation overrides a non-refundable policy and refunds prepaid funds to the wallet.
+    platform_cancel=book(); pay(platform_cancel)
+    data(admin('order/cancel',dict(id=platform_cancel['orderId'],reason='Platform cancellation'),base=ORDER))
+    platform_quote=data(app('refund/quote?orderId='+str(platform_cancel['orderId'])))
+    data(app('refund/apply',dict(orderId=platform_cancel['orderId'],refundChannel=1,reason='Select wallet')))
+    platform_rid=int(sql(f"SELECT id FROM `{B}`.order_refund WHERE order_id={platform_cancel['orderId']};"))
+    data(admin('order/refund/confirm',dict(id=platform_rid),base=ORDER))
+    check('platform cancellation before check-in refunds 30,200 including the fee to the selected wallet',
+        platform_quote['refundAmount']==30200 and platform_quote['refund_transaction_fee']==200 and row(platform_cancel)['payment']==4)
+
+    # Hotel cancellation overrides a non-refundable policy and the guest selects a destination.
     sql(f"INSERT INTO `{B}`.goods_refund_rule(property_id,sku_type,sku_id,rule_type,remark) VALUES(81,1,91,3,'No refund');")
     cancelled=book(); pay(cancelled)
     check('non-refundable policy is frozen into the booking',data(app('refund/quote?orderId='+str(cancelled['orderId'])))['refundable']==0)
     data(merchant('order/cancel',dict(id=cancelled['orderId'],reason='Hotel unavailable'),base=ORDER))
     data(merchant('order/cancel',dict(id=cancelled['orderId'],reason='Retry'),base=ORDER))
+    guest_quote=data(app('refund/quote?orderId='+str(cancelled['orderId'])))
+    check('hotel cancellation waits for guest selection and includes the fee',guest_quote['awaitingDestination'] and guest_quote['refundAmount']==30200)
+    data(app('refund/apply',dict(orderId=cancelled['orderId'],reason='Choose external',refundChannel=3,provider='QA Bank',holder='QA Guest',accountNumber='12345678')))
+    external_id=int(sql(f"SELECT id FROM `{B}`.order_refund WHERE order_id={cancelled['orderId']} AND refund_channel=3;"))
+    data(admin('order/refund/confirm',dict(id=external_id,claim=1),base=ORDER))
+    check('a second operator cannot claim an assigned external refund',admin('order/refund/confirm',dict(id=external_id,claim=1),base=ORDER,actor=1002)['code']!=0)
+    receipt='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/l6MAAAAASUVORK5CYII='
+    check('external refund requires transfer proof',admin('order/refund/confirm',dict(id=external_id,refundTradeNo='QA-REF'),base=ORDER)['code']!=0)
+    data(admin('order/refund/confirm',dict(id=external_id,refundTradeNo='QA-REF',proofImage=receipt),base=ORDER))
+    check('finance can review the original transfer receipt',data(admin(f'order/refund/detail?id={external_id}',base=ORDER))['refund']['proofImage']==receipt)
     check('hotel cancellation refunds all prepaid components once regardless of cutoff',row(cancelled)['payment']==4 and sql(f"SELECT COUNT(*),SUM(refund_amount) FROM `{B}`.order_refund WHERE order_id={cancelled['orderId']} AND status=3;")=='1\t30200.00')
     check('hotel cancellation plus refund does not restore stock twice',sql(f"SELECT COUNT(*) FROM `{B}`.goods_stock_log WHERE order_id={cancelled['orderId']} AND change_type=4;")=='1')
     sql(f'DELETE FROM `{B}`.goods_refund_rule WHERE property_id=81;')
@@ -283,7 +317,7 @@ try:
     sql(f"INSERT INTO `{B}`.goods_refund_rule(property_id,sku_type,sku_id,rule_type,rules,remark) VALUES(81,1,91,2,'{rules}','Site timezone cutoff');")
     cutoff=book(); pay(cutoff)
     cutoff_quote=data(app('refund/quote?orderId='+str(cutoff['orderId'])))
-    check('after-cutoff quote uses site time and protects commission plus its fee',cutoff_quote['refund_hotel_commission']==0 and cutoff_quote['refund_transaction_fee']==0 and cutoff_quote['refundable']==15100)
+    check('after-cutoff quote uses site time and protects commission plus its fee',cutoff_quote['refund_hotel_commission']==0 and cutoff_quote['refund_transaction_fee']==0 and cutoff_quote['refundable']==0)
     sql(f'DELETE FROM `{B}`.goods_refund_rule WHERE property_id=81;')
 
     # No-show retains the frozen merchant percentage; authorized waiver refunds only that portion.
@@ -313,12 +347,16 @@ try:
 
     # Actual order services use the local provider contract for QR creation and internal channel callbacks.
     policy(); data(choice(True,20))
+    ordinary_channel=book(payAtHotel=0); channel_pay(ordinary_channel)
+    check('ordinary KBZ booking offers wallet as its only refund destination',
+        data(app('refund/quote?orderId='+str(ordinary_channel['orderId'])))['availableRefundChannels']==[1])
     channel_order=book(); channel_payment=channel_pay(channel_order)
     notify(dict(channel_payment,event='paid'))
     check('channel payment callback and duplicate callback post the booking once',row(channel_order)['payment']==2 and sql(f"SELECT COUNT(*) FROM `{B}`.finance_account_entry WHERE order_id={channel_order['orderId']};")=='1')
     wallet_before=sql(f'SELECT balance FROM `{B}`.user_info WHERE id={UID};')
-    channel_rid=reviewed_refund(channel_order,10000)
+    channel_rid=reviewed_refund(channel_order,10000,legacy_original=True)
     check('original refund waits for provider completion without crediting the wallet',sql(f'SELECT status FROM `{B}`.order_refund WHERE id={channel_rid};')=='2' and wallet_before==sql(f'SELECT balance FROM `{B}`.user_info WHERE id={UID};'))
+    check('finance cannot take over a pending automatic transfer',admin('order/refund/confirm',dict(id=channel_rid,takeover=1),base=ORDER)['code']!=0)
     submitted=len([c for c in PROVIDER.calls if c[0].endswith('/refund/create')])
     data(admin('order/refund/confirm',dict(id=channel_rid),base=ORDER))
     check('retry while channel refund is processing does not resubmit',len([c for c in PROVIDER.calls if c[0].endswith('/refund/create')])==submitted)
@@ -334,25 +372,38 @@ try:
     success_no=channel_refunded(channel_rid)
     notify(dict(event='refunded',refundNo=success_no,channelTradeNo='DUPLICATE'))
     check('original refund completion and duplicate callback post one expense',sql(f"SELECT COUNT(*),SUM(amount) FROM `{B}`.finance_flow WHERE order_id={channel_order['orderId']} AND flow_type=2 AND biz_type=2;")=='1\t10000.00')
-    remaining_id=reviewed_refund(channel_order,20200); channel_refunded(remaining_id)
-    check('sequential original-channel refunds finish at the prepaid total',row(channel_order)['payment']==4 and wallet_before==sql(f'SELECT balance FROM `{B}`.user_info WHERE id={UID};'))
+    remaining_id=reviewed_refund(channel_order,20000,legacy_original=True); channel_refunded(remaining_id)
+    check('legacy channel rows retain the nonrefundable fee',row(channel_order)['payment']==3 and wallet_before==sql(f'SELECT balance FROM `{B}`.user_info WHERE id={UID};'))
+
+    takeover=book(); channel_pay(takeover)
+    takeover_id=reviewed_refund(takeover,30000,legacy_original=True)
+    old_reference=sql(f'SELECT refund_trade_no FROM `{B}`.order_refund WHERE id={takeover_id};')
+    PROVIDER.refunds[old_reference]['status']='failed'
+    notify(dict(event='refund_failed',refundNo=old_reference,refundFailReason='Confirmed failure'))
+    data(admin('order/refund/confirm',dict(id=takeover_id,takeover=1),base=ORDER))
+    notify(dict(event='refunded',refundNo=old_reference,channelTradeNo='DUPLICATE-OLD'))
+    check('late callback after confirmed failure and manual takeover cannot post an expense',
+        sql(f'SELECT status,refund_channel FROM `{B}`.order_refund WHERE id={takeover_id};')=='2\t3'
+        and sql(f"SELECT COUNT(*) FROM `{B}`.finance_flow WHERE order_id={takeover['orderId']} AND flow_type=2;")=='0')
 
     fallback=book(); fallback_payment=channel_pay(fallback)
     PROVIDER.payments[fallback_payment['payNo']]['quotaOverride']=3
     wallet_before=float(sql(f'SELECT balance FROM `{B}`.user_info WHERE id={UID};'))
-    fallback_id=reviewed_refund(fallback,30200)
-    check('provider refund quota exhaustion falls back to wallet exactly once',sql(f'SELECT status FROM `{B}`.order_refund WHERE id={fallback_id};')=='3' and float(sql(f'SELECT balance FROM `{B}`.user_info WHERE id={UID};'))-wallet_before==30200)
+    fallback_id=reviewed_refund(fallback,30000,complete=False,legacy_original=True)
+    check('provider quota exhaustion preserves the selected external destination',sql(f'SELECT channel_submit_status FROM `{B}`.order_refund WHERE id={fallback_id};')=='4' and float(sql(f'SELECT balance FROM `{B}`.user_info WHERE id={UID};'))==wallet_before)
+    data(admin('order/refund/confirm',dict(id=fallback_id,takeover=1),base=ORDER))
+    check('finance can take over an undispatched exhausted quota refund',sql(f'SELECT refund_channel FROM `{B}`.order_refund WHERE id={fallback_id};')=='3')
 
     trip=make_trip(); qr=data(app('trip/pay',dict(tripId=trip['tripId'],payMethod=5)))
     trip_payment=PROVIDER.payments[qr['payNo']]; trip_payment['status']='paid'; notify(dict(trip_payment,event='paid'))
     children=[dict(orderId=b['orderId']) for b in trip['bookings']]
     check('one channel Trip payment creates separately balanced booking income',sql(f"SELECT COUNT(*),SUM(amount) FROM `{B}`.finance_flow WHERE order_id IN ({','.join(str(b['orderId']) for b in children)}) AND flow_type=1;")=='2\t60400.00')
     before_calls=len([c for c in PROVIDER.calls if c[0].endswith('/refund/create')])
-    child_refunds=[reviewed_refund(child,30200,complete=False) for child in children]
+    child_refunds=[reviewed_refund(child,30000,complete=False,legacy_original=True) for child in children]
     job('refund-queue')
     check('two Trip refunds merge into one provider refund request',len([c for c in PROVIDER.calls if c[0].endswith('/refund/create')])==before_calls+1)
     channel_refunded(child_refunds[0])
-    check('merged channel completion refunds both bookings without duplication',all(row(child)['payment']==4 for child in children))
+    check('merged channel completion refunds both bookings without duplication',all(row(child)['payment']==3 for child in children))
 
     wallet_trip=make_trip()
     balance_before=float(sql(f'SELECT balance FROM `{B}`.user_info WHERE id={UID};'))
@@ -382,8 +433,8 @@ try:
     check('mixed payment charges the channel only the amount left after wallet use',mixed_qr['walletAmount']==5000 and mixed_qr['dueAmount']==25200)
     mixed_payment=PROVIDER.payments[mixed_qr['payNo']]; mixed_payment['status']='paid'; notify(dict(mixed_payment,event='paid'))
     check('mixed wallet and channel income add up to the disclosed prepayment',sql(f"SELECT COUNT(*),SUM(amount) FROM `{B}`.finance_flow WHERE order_id={mixed['orderId']} AND flow_type=1;")=='2\t30200.00')
-    reviewed_refund(mixed,30200)
-    check('mixed payment refund credits the wallet without over-refunding the bank channel',sql(f'SELECT balance FROM `{B}`.user_info WHERE id={mixed_uid};')=='30200.00' and sql(f"SELECT refund_channel FROM `{B}`.order_refund WHERE order_id={mixed['orderId']};")=='1')
+    reviewed_refund(mixed,30000,uid=mixed_uid)
+    check('mixed payment refund credits the wallet without over-refunding the bank channel',sql(f'SELECT balance FROM `{B}`.user_info WHERE id={mixed_uid};')=='30000.00' and sql(f"SELECT refund_channel FROM `{B}`.order_refund WHERE order_id={mixed['orderId']};")=='1')
 
     # Use each service's real HTTP entry points with the same disposable schema.
     with tempfile.TemporaryDirectory(prefix='sprint-p0-') as tmp:
@@ -409,11 +460,33 @@ try:
     user('favorite/add',dict(propertyId=81)); user('favorite/add',dict(propertyId=82)); user('favorite/add',dict(propertyId=81))
     check('saved hotels sync by account and are paginated',user('favorite/list?pageSize=1',device='two')['total']==2
         and user('favorite/list?page=2&pageSize=1',device='two')['list'][0]['property_id']==81)
+    sql(f"UPDATE `{B}`.merchant_store SET operating_status=2 WHERE id=81;")
+    paused=next(item for item in user('favorite/list',device='two')['list'] if item['property_id']==81)
+    check('paused saved hotel remains listed as unavailable',paused['available'] is False)
     user('favorite/remove',dict(propertyId=81),device='two')
+    sql(f"UPDATE `{B}`.merchant_store SET operating_status=1,city_key='Tamwe' WHERE id=81;")
+    check('mixed-case city matches the public detail',hotels('list?cityKey=tamwe')['list'][0]['property_id']==hotels('detail?propertyId=81')['id'])
     check('another device sees deletion and existing orders are unaffected',user('favorite/list')['total']==1 and row(first)['paid']=='30200.00')
     check('the hotel details can detect a deleted favorite and save it again',user('favorite/status?propertyId=81')['saved'] is False
         and user('favorite/add',dict(propertyId=81)) is None and user('favorite/status?propertyId=81',device='two')['saved'] is True)
 
+    # Product example: an already approved partial amount goes wholly to the guest's selected bank.
+    partial_uid=UID+3
+    sql(f"INSERT INTO `{B}`.user_info(id,site_id,mobile,mobile_hash,nickname) VALUES({partial_uid},7,'split-{RUN}','split-{RUN}','Split refund');")
+    policy(transactionFeeRate=0); data(choice(True,20))
+    job('credit',uid=partial_uid,amount=10000)
+    partial=book(uid=partial_uid)
+    qr=data(app('pay',dict(orderId=partial['orderId'],payMethod=5,useWallet=1),uid=partial_uid))
+    transaction=PROVIDER.payments[qr['payNo']]; transaction['status']='paid'; notify(dict(transaction,event='paid'))
+    request=data(merchant('order/refund/apply',dict(id=partial['orderId'],amount=18000,reason='Approved partial amount'),base=ORDER))
+    rid=int(sql(f"SELECT id FROM `{B}`.order_refund WHERE refund_no='{request['refundNo']}';"))
+    data(admin('order/refund/audit',dict(id=rid,auditStatus=1,refundAmount=18000),base=ORDER))
+    data(app('refund/apply',dict(orderId=partial['orderId'],reason='Bank transfer',refundChannel=3,provider='KBZ',holder='QA Guest',accountNumber='12345678'),uid=partial_uid))
+    data(admin('order/refund/confirm',dict(id=rid,claim=1),base=ORDER))
+    data(admin('order/refund/confirm',dict(id=rid,proofImage=receipt,refundTradeNo='QA-SPLIT'),base=ORDER))
+    check('10,000 wallet plus 20,000 KBZ: approved 18,000 goes wholly to selected external account',
+        qr['walletAmount']==10000 and qr['dueAmount']==20000 and sql(f'SELECT balance FROM `{B}`.user_info WHERE id={partial_uid};')=='0.00'
+        and sql(f'SELECT refund_amount,refund_channel,status FROM `{B}`.order_refund WHERE id={rid};')=='18000.00\t3\t3')
     wallet_start=datetime.now(timezone.utc).date().replace(day=1)
     previous=(wallet_start-timedelta(days=1)).replace(day=1).isoformat()
     outside=(wallet_start-timedelta(days=190)).replace(day=1).isoformat()
@@ -432,7 +505,7 @@ try:
     tier=dict(siteId=7,propertyId=81,minNights=2,discountRate=20,status=1,priority=0,couponStackable=0)
     save_tier=lambda body,site=0,super=True: admin('marketing/longstay/save',body,base=marketing,site=site,super=super,perms=['marketing:longstay:save'])
     data(save_tier(tier))
-    data(save_tier(dict(tier,discountRate=70,priority=10,startsAt=(datetime.now(timezone.utc)+timedelta(days=1)).strftime('%Y-%m-%d %H:%M:%S'))))
+    check('overlapping scheduled tiers are rejected',save_tier(dict(tier,discountRate=70,priority=10,startsAt=(datetime.now(timezone.utc)+timedelta(days=1)).strftime('%Y-%m-%d %H:%M:%S')))['code']!=0)
     check('long-stay settings reject cross-site hotel IDs and unbookable nights',save_tier(dict(tier,siteId=6))['code']!=0
         and save_tier(dict(tier,minNights=60))['code']!=0)
     end=(datetime.fromisoformat(ARRIVE)+timedelta(days=2)).date().isoformat()
@@ -448,6 +521,8 @@ try:
         quote['total']==stay['payAmount']==booked['priceDetail']['payAmount'] and quote['discount']==stay['longstayDiscount'])
     sql(f"UPDATE `{B}`.goods_daily_stock SET price_citizen=90000 WHERE site_id=7 AND property_id=81 AND sku_id=91 AND stock_date='{ARRIVE}';")
     citizen_quote=hotels('detail?citizen=1&propertyId=81&'+qs)['longStay']
+    check('dated citizen room card shows the nightly price used at checkout',
+        float(hotels('detail?citizen=1&propertyId=81&'+qs)['skus'][0]['stay_nightly_price'])==citizen_quote['original']/2)
     citizen_booking=book(payAtHotel=0,endDate=end,isCitizen=1,expectedPayAmount=citizen_quote['total'])
     check('citizen price shown in long stay uses the same booking rate',citizen_quote['original']==180000
         and citizen_quote['total']==citizen_booking['priceDetail']['payAmount']==144000)
@@ -457,9 +532,36 @@ try:
     lines=[dict(propertyId=81,roomTypeId=91,quantity=1,useDate=ARRIVE,endDate=end)]
     exclusive=data(app('trip/quote',dict(items=lines,couponId=92)))
     allowed=data(app('trip/quote',dict(items=lines+[dict(lines[0],propertyId=82,roomTypeId=92)],couponId=92)))
-    check('an exclusive long-stay tier blocks the coupon only on its own property',bool(exclusive.get('couponError'))
-        and exclusive['couponDiscount']==0 and allowed['items'][0]['couponDiscount']==0
-        and allowed['items'][1]['couponDiscount']==1000)
+    check('eligible coupons apply after the long-stay discount',exclusive['couponDiscount']==1000 and allowed['couponDiscount']==1000)
+    data(save_tier(dict(tier,minNights=31,maxNights=60,discountRate=25,platformFundingPct=40)))
+    end60=(datetime.fromisoformat(ARRIVE)+timedelta(days=60)).date().isoformat()
+    long_quote=data(app('trip/quote',dict(items=[dict(lines[0],endDate=end60)])))
+    check('60 nights are eligible only at the configured hotel',long_quote['longstayDiscount']>0
+        and app('trip/quote',dict(items=[dict(lines[0],endDate=end60,propertyId=82,roomTypeId=92)]))['code']!=0)
+    funded=book(payAtHotel=0,endDate=end60)
+    snap=json.loads(sql(f"SELECT longstay_funding_snapshot FROM `{B}`.order_main WHERE id={funded['orderId']};"))
+    check('the booking freezes a 40/60 split for its long-stay discount',
+        snap['platformAmount']==round(long_quote['longstayDiscount']*.4,2)
+        and snap['merchantAmount']==round(long_quote['longstayDiscount']*.6,2))
+    check('one hotel cannot enable both merchant and platform offers',save_tier(dict(tier,minNights=61,maxNights=70,offerSource='merchant'))['code']!=0)
+    proposal=dict(propertyId=82,minNights=5,maxNights=15,discountRate=10,details='Standard rooms')
+    def propose(terms):
+        return merchant('properties/longstay/propose',terms,property_id=82)
+    proposal_id=data(propose(proposal))['id']
+    check('submitting a proposal twice preserves the same pending request',data(propose(proposal))['id']==proposal_id)
+    def review(pid,action,reason=''):
+        return admin('marketing/longstay/review',dict(id=pid,action=action,reason=reason),base=marketing)
+    data(review(proposal_id,'reviewing'))
+    check('returning an offer requires a reason',review(proposal_id,'returned')['code']!=0)
+    data(review(proposal_id,'returned','Please adjust the date range'))
+    updated=data(propose(dict(proposal,previousId=proposal_id,maxNights=20)))['id']
+    data(review(updated,'reviewing')); approved=data(review(updated,'approved'))
+    check('approved merchant proposal remains inactive until separately enabled',
+        sql(f"SELECT status FROM `{B}`.marketing_longstay_tier WHERE id={approved['tier_id']};")=='2')
+    data(save_tier(dict(tier,id=approved['tier_id'],propertyId=82,minNights=5,maxNights=20,discountRate=10,offerSource='merchant')))
+    check('merchant receives review results and cannot submit conflicting platform dates',
+        sql(f"SELECT COUNT(*) FROM `{B}`.merchant_notify WHERE request_id='longstay-{updated}-approved';")=='1'
+        and merchant('properties/longstay/propose',dict(proposal,propertyId=81),property_id=81)['code']!=0)
     print(f'PASSED {len(PASSED)} assertions',flush=True)
 except BaseException:
     for name in CONTAINERS:

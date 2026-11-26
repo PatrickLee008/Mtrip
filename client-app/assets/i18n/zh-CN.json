@@ -203,6 +203,7 @@
       "noStay": "还没有可评价的入住"
     },
     "savedHotels": {
+      "unavailable": "暂不可订",
       "add": "收藏酒店",
       "added": "已收藏酒店",
       "updateFailed": "未能更新收藏，请重试。",
@@ -620,6 +621,12 @@
       "refundAddon": "附加服务退款",
       "refundMethod": "退款方式",
       "refundWallet": "mTrip 钱包",
+      "selectDestination": "选择退款去向",
+      "external": "外部银行或电子钱包",
+      "externalDesc": "全部应退款将转入指定账户，预计约 30 天。",
+      "provider": "银行或电子钱包名称",
+      "holder": "收款人姓名",
+      "accountNumber": "收款账号",
       "refundOriginal": "KBZPay 原路退回",
       "refundMethodDesc": "退款将退回你的 mTrip 钱包。",
       "refundOriginalDesc": "退款将原路退回你的 KBZPay 支付账户。",
@@ -662,6 +669,9 @@
       "backToBookings": "回到我的预订",
       "startNew": "重新预订",
       "detailsTitle": "取消详情",
+      "platformTitle": "mTrip 已取消预订",
+      "platformDesc": "mTrip 已取消这笔预订。",
+      "refundRejected": "退款申请已驳回",
       "merchantTitle": "酒店已取消这笔预订",
       "merchantDesc": "酒店方以下述原因取消了这笔预订,确认邮件稍后送达。",
       "cancelReason": "取消原因"
@@ -1188,7 +1198,7 @@
       "warningTitle": "确定注销你的 mTrip 账户吗?",
       "warningBody": "注销后不可恢复。你将无法再登录,也无法查看预订、常用旅客、奖励和优惠券。",
       "ruleBookings": "存在进行中或待处理的预订时无法注销。",
-      "ruleWallet": "mTrip 钱包余额须为 0。如仍有余额,请联系客服;若客服批准注销,剩余余额将被没收,无法退款、转移或找回。",
+      "ruleWallet": "注销成功后，剩余钱包余额将永久作废，无法退款或转移。余额在后台设定的限额内（含相等）可自行注销，超过限额请先联系客服。",
       "ruleRetention": "注销后,账户数据将依据 mTrip 数据保留政策保留 90 天。",
       "ruleNewAccount": "之后你可以注册新的 mTrip 账户,但不会恢复本账户的任何数据、钱包余额或权益。",
       "continue": "继续",
@@ -1615,6 +1625,14 @@
         "title": "退款已到账",
         "body": "{{hotel}} 预订({{orderNo}})的退款 {{amount}} 已退回您的 mTrip 钱包。"
       },
+      "refund_requested_external": {
+        "title": "取消申请已提交",
+        "body": "{{hotel}}（{{orderNo}}）退至指定外部账户的 {{amount}} 退款申请正在审核。"
+      },
+      "refund_completed_external": {
+        "title": "退款已到账",
+        "body": "{{hotel}}（{{orderNo}}）退至指定外部账户的 {{amount}} 转账已登记完成。"
+      },
       "refund_requested_original": {
         "title": "取消申请已提交",
         "body": "您在 {{hotel}} 的预订({{orderNo}})取消申请已提交,{{amount}} 退款审核通过后将原路退回您的支付账户。"
@@ -1905,6 +1923,8 @@
           "pool": "室内泳池",
           "breakfast": "优质早餐"
         },
+        "averageNight": "平均每晚",
+        "estimate": "预估 {{amount}}",
         "perNight": "/ 晚",
         "bestseller": "热销",
         "breakfast": "含早餐",

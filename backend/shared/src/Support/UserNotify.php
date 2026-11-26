@@ -35,6 +35,8 @@ final class UserNotify
         'refund_requested' => [self::BIZ_ORDER, 'Cancellation requested', 'Your cancellation for {hotel} ({orderNo}) was submitted. A refund of {amount} to your mTrip Wallet is pending review.'],
         'refund_completed' => [self::BIZ_ORDER, 'Refund completed', 'A refund of {amount} for {hotel} ({orderNo}) has been credited to your mTrip Wallet.'],
         // 原路退回(KBZPay 等外部渠道支付的订单;钱包 / mock 单仍用上面两条)
+        'refund_requested_external' => [self::BIZ_ORDER, 'Cancellation requested', 'Your request to refund {amount} for {hotel} ({orderNo}) to your selected bank or e-wallet is pending review.'],
+        'refund_completed_external' => [self::BIZ_ORDER, 'Refund completed', 'The transfer of {amount} for {hotel} ({orderNo}) to your selected external account has been recorded.'],
         'refund_requested_original' => [self::BIZ_ORDER, 'Cancellation requested', 'Your cancellation for {hotel} ({orderNo}) was submitted. A refund of {amount} will be returned to your original payment account after review.'],
         'refund_completed_original' => [self::BIZ_ORDER, 'Refund completed', 'A refund of {amount} for {hotel} ({orderNo}) has been returned to your original payment account.'],
         'refund_completed_wallet_fallback' => [self::BIZ_ORDER, 'Refund completed', 'The payment channel refund limit was reached, so the refund of {amount} for {hotel} ({orderNo}) has been credited to your mTrip Wallet.'],

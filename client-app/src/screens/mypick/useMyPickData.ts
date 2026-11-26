@@ -186,6 +186,7 @@ export function useMyPickData(): MyPickData {
         setFavorites(
           favoritePage.list.map((f) => ({
             id: f.property_id,
+            available: f.available,
             property_id: f.property_id,
             property_name: f.property_name,
             goods_type: GOODS_TYPE.HOTEL,

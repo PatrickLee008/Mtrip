@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Controller\Merchant;
 
 use App\Controller\AbstractController;
+use Hyperf\DbConnection\Db;
+use Mtrip\Shared\Support\LongStayOffer;
 use App\Service\PropertyKycService;
 use App\Service\PropertyProfileService;
 use Hyperf\Di\Annotation\Inject;
@@ -37,6 +39,63 @@ class PropertyController extends AbstractController
     public function profile(): array
     {
         return Result::success($this->profiles->detail($this->requireId('propertyId')));
+    }
+
+    public function longStayProposals(): array
+    {
+        $propertyId = $this->requireId('propertyId');
+        MerchantContext::assertPropertyAccess($propertyId);
+        [$page, $size] = $this->pageParams();
+        $query = Db::table('marketing_longstay_proposal')->where('site_id', MerchantContext::siteId())->where('property_id', $propertyId);
+        $total = (clone $query)->count();
+        return Result::page($query->orderByDesc('id')->forPage($page, $size)->get()->all(), $total, $page, $size);
+    }
+
+    #[Permission('mch:properties:profile-submit')]
+    public function proposeLongStay(): array
+    {
+        $propertyId = $this->requireId('propertyId');
+        MerchantContext::assertPropertyAccess($propertyId, true);
+        $min = $this->intInput('minNights');
+        $max = $this->intInput('maxNights');
+        $rate = round((float) $this->input('discountRate'), 2);
+        $details = $this->strInput('details');
+        $starts = $this->proposalDate('startsAt');
+        $ends = $this->proposalDate('endsAt');
+        if ($min < 1 || $max < $min || $rate <= 0 || $rate >= 100 || mb_strlen($details) > 500 || ($starts && $ends && $starts >= $ends)) {
+            throw new BusinessException(ErrorCode::PARAM_ERROR, 'Check nights, discount and schedule');
+        }
+        return Db::transaction(function () use ($propertyId, $min, $max, $rate, $details, $starts, $ends) {
+            $site = MerchantContext::siteId();
+            $property = Db::table('merchant_store')->where('id', $propertyId)->where('site_id', $site)
+                ->where('business_type', 'hotel')->whereNull('deleted_at')->lockForUpdate()->first();
+            if (! $property) throw new BusinessException(ErrorCode::NOT_FOUND);
+            $conflict = LongStayOffer::conflictingTier($site, $propertyId, 'merchant', $min, $max, $starts, $ends);
+            if ($conflict) throw new BusinessException(ErrorCode::DATA_CONFLICT, "Conflicting Long Stay tier #{$conflict}");
+            $previous = $this->intInput('previousId');
+            $queue = Db::table('marketing_longstay_proposal')->where('site_id', $site)->where('property_id', $propertyId);
+            if ($previous && ! (clone $queue)->where('id', $previous)->where('state', 'returned')->exists()) {
+                throw new BusinessException(ErrorCode::DATA_CONFLICT, 'Only a returned proposal can be revised');
+            }
+            $draft = ['site_id' => $site, 'property_id' => $propertyId, 'merchant_id' => $property->merchant_id,
+                'min_nights' => $min, 'max_nights' => $max, 'discount_rate' => $rate, 'details' => $details,
+                'starts_at' => $starts, 'ends_at' => $ends, 'previous_id' => $previous ?: null, 'submitted_by' => MerchantContext::adminId()];
+            $existing = (clone $queue)->where($draft)->whereIn('state', ['submitted','reviewing'])->value('id');
+            if ($existing) return Result::success(['id' => (int) $existing]);
+            if ($previous && (clone $queue)->where('previous_id', $previous)->exists()) {
+                throw new BusinessException(ErrorCode::DATA_CONFLICT, 'A newer revision already exists');
+            }
+            return Result::success(['id' => Db::table('marketing_longstay_proposal')->insertGetId($draft)]);
+        });
+    }
+
+    private function proposalDate(string $key): ?string
+    {
+        $value = $this->strInput($key);
+        if ($value === '') return null;
+        $date = \DateTimeImmutable::createFromFormat('!Y-m-d H:i:s', $value, new \DateTimeZone('UTC'));
+        if (! $date || $date->format('Y-m-d H:i:s') !== $value) throw new BusinessException(ErrorCode::PARAM_ERROR, 'Invalid UTC date');
+        return $value;
     }
 
     #[Permission('mch:properties:add')]

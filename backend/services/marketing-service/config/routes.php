@@ -54,6 +54,8 @@ Router::addGroup('/api/v1/admin/marketing', static function () {
     Router::post('/coupon/delete', [CouponController::class, 'remove']);
     Router::get('/coupon/receives', [CouponController::class, 'receives']);
     // 长住折扣梯度(PRD 模块2.1)
+    Router::get('/longstay/proposals', [LongstayController::class, 'proposals']);
+    Router::post('/longstay/review', [LongstayController::class, 'review']);
     Router::get('/longstay/list', [LongstayController::class, 'index']);
     Router::post('/longstay/save', [LongstayController::class, 'save']);
     Router::post('/longstay/delete', [LongstayController::class, 'delete']);

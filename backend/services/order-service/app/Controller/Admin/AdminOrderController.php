@@ -173,8 +173,9 @@ class AdminOrderController extends AbstractAdminController
     public function cancel(): array
     {
         $order = $this->findScoped($this->requireId());
-        if ((int) $order['order_status'] !== 0) {
-            throw new BusinessException(ErrorCode::DATA_CONFLICT, '仅待支付订单可直接取消,已支付请走退款流程');
+        $confirmedPayAtHotel = (int) ($order['pay_at_hotel'] ?? 0) === 1 && (int) $order['booking_status'] === BookingConst::STATUS_CONFIRMED;
+        if ((int) $order['order_status'] !== 0 && ! $confirmedPayAtHotel) {
+            throw new BusinessException(ErrorCode::DATA_CONFLICT, '该订单状态不支持直接取消');
         }
         $reason = $this->requireStr('reason');
         if ((int) $order['order_type'] === 1) {

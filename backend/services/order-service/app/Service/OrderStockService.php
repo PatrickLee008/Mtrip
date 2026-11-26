@@ -19,7 +19,7 @@ class OrderStockService
     /**
      * 订单占用的库存日期:酒店=入住到离店前一晚,门票=单日
      */
-    public function datesOf(int $orderType, string $useDate, ?string $endDate): array
+    public function datesOf(int $orderType, string $useDate, ?string $endDate, ?int $siteId = null, ?int $propertyId = null): array
     {
         if ($orderType !== 1) {
             return [$useDate];
@@ -29,8 +29,11 @@ class OrderStockService
         if ($start === false || $end === false || $end <= $start) {
             throw new BusinessException(ErrorCode::PARAM_ERROR, '入住/离店日期不正确');
         }
-        if (($end - $start) / 86400 > LongStayOffer::MAX_BOOKABLE_NIGHTS) {
-            throw new BusinessException(ErrorCode::PARAM_ERROR, '连住最多30晚');
+        $nights = (int) round(($end - $start) / 86400);
+        // Stock operations on an existing booking must continue after its offer expires.
+        if ($siteId !== null && $nights > LongStayOffer::ORDINARY_NIGHTS
+            && ! LongStayOffer::tier(LongStayOffer::activeTiers($siteId, [$propertyId]), (int) $propertyId, $nights)) {
+            throw new BusinessException(ErrorCode::PARAM_ERROR, 'Stay exceeds this hotel’s active Long Stay eligibility');
         }
         $dates = [];
         for ($t = $start; $t < $end; $t += 86400) {

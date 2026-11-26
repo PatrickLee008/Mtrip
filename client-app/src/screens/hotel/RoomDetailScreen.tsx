@@ -118,14 +118,16 @@ export default function RoomDetailScreen() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      setDetail(await fetchHotelDetail(params.goodsId));
+      setDetail(await fetchHotelDetail(params.goodsId, {
+        checkIn: params.checkIn, checkOut: params.checkOut, citizen: params.citizen ? 1 : undefined,
+      }));
       setError('');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Error');
     } finally {
       setLoading(false);
     }
-  }, [params.goodsId]);
+  }, [params.goodsId, params.checkIn, params.checkOut, params.citizen]);
 
   useEffect(() => {
     void load();
@@ -136,7 +138,7 @@ export default function RoomDetailScreen() {
   const sku = detail && skuIndex >= 0 ? detail.skus[skuIndex] : undefined;
   if (error || !detail || !sku) return <ErrorView message={error} onRetry={() => void load()} />;
 
-  const price = Number(sku.base_price);
+  const price = Number(sku.stay_nightly_price ?? sku.base_price);
   /** 与购物车/详情页底栏同口径:缺日期按 1 晚 */
   const nights = nightsBetween(params.checkIn, params.checkOut);
   const hasDates = Boolean(params.checkIn && params.checkOut);
@@ -286,7 +288,7 @@ export default function RoomDetailScreen() {
 
             <View style={styles.summary}>
               <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>{t('hotels.detail.roomDetail.pricePerNight')}</Text>
+                <Text style={styles.summaryLabel}>{t(sku.stay_nightly_price != null ? 'hotels.detail.rooms.averageNight' : 'hotels.detail.roomDetail.pricePerNight')}</Text>
                 <Text style={styles.summaryValue}>{formatMoney(price, currency)}</Text>
               </View>
               <View style={styles.summaryRow}>

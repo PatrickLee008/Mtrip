@@ -368,6 +368,8 @@ Router::addGroup('/api/v1/merchant', static function () {
     // ---------- 酒店物业与物业专项 KYC ----------
     Router::get('/properties/list', [MerchantPropertyController::class, 'index']);
     Router::get('/properties/kyc', [MerchantPropertyController::class, 'kyc']);
+    Router::get('/properties/longstay/proposals', [MerchantPropertyController::class, 'longStayProposals']);
+    Router::post('/properties/longstay/propose', [MerchantPropertyController::class, 'proposeLongStay']);
     Router::get('/properties/profile', [MerchantPropertyController::class, 'profile']);
     Router::post('/properties/save', [MerchantPropertyController::class, 'save']);
     Router::post('/properties/profile/save', [MerchantPropertyController::class, 'saveProfile']);

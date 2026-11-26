@@ -153,10 +153,11 @@ function SavedHotelRow({ item, lite, open, removing, setOpen, onRemove, onOpen }
         </Pressable>
       ) : null}
       <View {...responder.panHandlers} style={[styles.content, open && styles.open]}>
-        <Pressable accessibilityRole="button" onPress={onOpen} style={styles.hotel}>
+        <Pressable accessibilityRole="button" disabled={item.available === false} onPress={onOpen} style={[styles.hotel, item.available === false && styles.unavailable]}>
           <CoverImage uri={item.cover_image} width={76} height={66} label={item.property_name} />
           <View style={styles.info}>
             <Text style={[styles.name, lite && styles.lite]} numberOfLines={2}>{item.property_name}</Text>
+            {item.available === false ? <Text style={styles.address}>{t('myPick.savedHotels.unavailable')}</Text> : null}
             {item.address ? <Text style={styles.address} numberOfLines={2}>{item.address}</Text> : null}
             {item.star_level > 0 ? <Text style={styles.address}>{'★'.repeat(Math.min(5, item.star_level))}</Text> : null}
           </View>
@@ -175,6 +176,7 @@ const styles = StyleSheet.create({
   row: { position: 'relative', overflow: 'hidden', borderRadius: 14, backgroundColor: colors.surface },
   content: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surface },
   open: { transform: [{ translateX: -DELETE_WIDTH }] },
+  unavailable: { backgroundColor: '#EBEBEB', opacity: 0.65 },
   hotel: { flex: 1, minWidth: 0, padding: 12, gap: 12, flexDirection: 'row', alignItems: 'center' },
   info: { flex: 1, gap: 4 },
   name: { fontFamily: fonts.interSemi, fontSize: 16, color: colors.body },

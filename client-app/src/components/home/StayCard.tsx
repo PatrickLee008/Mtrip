@@ -44,8 +44,8 @@ export default function StayCard({
   );
   return (
     <Pressable
-      style={({ pressed }) => [styles.card, pressed && styles.pressed]}
-      onPress={() => onPress(goods)}
+      style={({ pressed }) => [styles.card, goods.available === false && { backgroundColor: '#EBEBEB', opacity: 0.7 }, pressed && styles.pressed]}
+      onPress={goods.available === false ? undefined : () => onPress(goods)}
     >
       <View style={styles.coverWrap}>
         <CoverImage
@@ -79,6 +79,7 @@ export default function StayCard({
             </View>
           ) : null}
         </View>
+        {goods.available === false && <Text>{t('myPick.savedHotels.unavailable')}</Text>}
         {goods.address ? (
           <View style={styles.row}>
             <HomeIcon name="location" size={14} color={colors.body} />

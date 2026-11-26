@@ -423,7 +423,7 @@ watch(propertyId, () => {
       </template>
 
       <HotelAmenities v-else-if="!editing && activeTab === 'amenities'" v-model="form.amenities" :disabled="loading || latest?.status === 1" @edit-requested="beginAmenitiesEdit" />
-      <HotelLongStay v-else-if="!editing && activeTab === 'long-stay'" v-model="form.longStay" :disabled="loading || latest?.status === 1" @edit-requested="beginEdit('long-stay')" />
+      <HotelLongStay v-else-if="!editing && activeTab === 'long-stay'" :property-id="propertyId" v-model="form.longStay" :disabled="loading || latest?.status === 1" @edit-requested="beginEdit('long-stay')" />
       <HotelPolicies v-else-if="!editing && activeTab === 'policies'" v-model="form.hotelPolicies" :currency="metrics.currency" :disabled="loading || latest?.status === 1" @edit-requested="beginEdit('policies')" />
       <HotelAddonServices v-else-if="!editing && activeTab === 'addons'" v-model="form.addons" :currency="metrics.currency" :disabled="loading || latest?.status === 1" @edit-requested="beginEdit('addons')" />
       <HotelNearby v-else-if="!editing && activeTab === 'nearby'" v-model="form.nearbyAttractions" :property-id="propertyId" :disabled="loading || latest?.status === 1" @edit-requested="beginEdit('nearby')" />
@@ -479,7 +479,7 @@ watch(propertyId, () => {
 
       </template>
       <HotelAmenities v-else-if="editingTab === 'amenities'" v-model="form.amenities" editing />
-      <HotelLongStay v-else-if="editingTab === 'long-stay'" v-model="form.longStay" editing />
+      <HotelLongStay v-else-if="editingTab === 'long-stay'" :property-id="propertyId" v-model="form.longStay" editing />
       <HotelPolicies v-else-if="editingTab === 'policies'" v-model="form.hotelPolicies" :currency="metrics.currency" editing />
       <HotelAddonServices v-else-if="editingTab === 'addons'" v-model="form.addons" :currency="metrics.currency" editing />
       <HotelNearby v-else-if="editingTab === 'nearby'" v-model="form.nearbyAttractions" :property-id="propertyId" editing />

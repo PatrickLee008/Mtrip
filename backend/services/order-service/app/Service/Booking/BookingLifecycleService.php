@@ -323,7 +323,7 @@ class BookingLifecycleService
                 'reason' => (string) $order['cancel_reason'],
                 'paid' => $paid,
             ]);
-            if ($paid && (int) ($order['pay_at_hotel'] ?? 0) === 1 && $operatorType === BookingConst::OPERATOR_MERCHANT) {
+            if ($paid && (int) ($order['pay_at_hotel'] ?? 0) === 1 && in_array($operatorType, [BookingConst::OPERATOR_MERCHANT, BookingConst::OPERATOR_PLATFORM], true)) {
                 $this->refunds->refundHotelCancellation($order, $operatorId, $operatorName);
                 $order = $this->lockOrder($orderId);
             }

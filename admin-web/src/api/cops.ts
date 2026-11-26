@@ -45,6 +45,12 @@ export function apiReviewReply(data: Record<string, unknown>): Promise<null> {
 export function apiLongstayList(params: Record<string, unknown>): Promise<PageData<Row>> {
   return get<PageData<Row>>('/admin/marketing/longstay/list', params);
 }
+export function apiLongstayProposals(params: Record<string, unknown>): Promise<PageData<Row>> {
+  return get('/admin/marketing/longstay/proposals', params);
+}
+export function apiLongstayReview(data: Record<string, unknown>): Promise<unknown> {
+  return post('/admin/marketing/longstay/review', data);
+}
 export function apiLongstaySave(data: Record<string, unknown>): Promise<{ id: number }> {
   return post('/admin/marketing/longstay/save', data);
 }

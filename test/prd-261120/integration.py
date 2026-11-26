@@ -137,7 +137,7 @@ def ready(uid):
 
 
 def apply_migrations():
-    for filename in ['V20261117100000__merchant-commercial-settings.sql','V20261120100000__account-deletion-finance-controls.sql','V20261120100100__multi-hotel-checkout-sessions.sql','V20261120120000__property-commercial-commission.sql','V20261120120100__pay-at-hotel-booking-settlements.sql','V20261123090000__scope-long-stay-tiers.sql','V20261124070000__consumer-affiliate-access.sql','V20261125080000__consumer-affiliate-link-opens.sql']:
+    for filename in ['V20261117100000__merchant-commercial-settings.sql','V20261120100000__account-deletion-finance-controls.sql','V20261120100100__multi-hotel-checkout-sessions.sql','V20261120120000__property-commercial-commission.sql','V20261120120100__pay-at-hotel-booking-settlements.sql','V20261123090000__scope-long-stay-tiers.sql','V20261124070000__consumer-affiliate-access.sql','V20261125080000__consumer-affiliate-link-opens.sql','V20261126090100__hotel-long-stay-ranges.sql']:
         content=(ROOT/'database/migrations'/filename).read_text(encoding='utf-8')
         isolated = content.replace('mtrip_business', B).replace('mtrip_system', S)
         targets = re.findall(r'\bUSE\s+`?([A-Za-z0-9_]+)`?\s*;', isolated, re.IGNORECASE)
@@ -176,13 +176,13 @@ try:
     policy=data(admin('config',super=True,actor=1001,site=0))
     check('default approval validity remains seven days',int(policy['current']['validity_days'])==7)
     effective=datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
-    settings=dict(thresholdAmount='500',validityDays=2,effectiveAt=effective,expectedVersion=policy['version'],reason='QA policy')
+    settings=dict(thresholdAmount='49',validityDays=2,effectiveAt=effective,expectedVersion=policy['version'],reason='QA policy')
     check('only Super Admin can configure deletion policy',admin('config/save',settings)['code'] in [40301,40302])
     data(admin('config/save',settings,super=True,actor=1001,site=0))
     check('stale policy edits cannot overwrite a newer version',admin('config/save',settings,super=True,actor=1001,site=0)['code']!=0)
     rid=request()['id']
     check('duplicate support request reuses the active request',request()['id']==rid)
-    check('small positive balances still cannot bypass reviewed approval',app('user/account/delete',dict(confirm='DELETE'))['code']==40933)
+    check('above-threshold balances require reviewed approval',app('user/account/delete',dict(confirm='DELETE'))['code']==40933)
     check('non-Super Admin cannot approve even with the permission key',decision(rid,'approve',2001)['code'] in [40301,40302])
     check('Super Admin must review the current balance',decision(rid,'approve',1001,balance='99',super=True,site=0)['code']!=0)
     approved=data(decision(rid,'approve',1001,super=True,site=0))
@@ -250,6 +250,11 @@ try:
     with ThreadPoolExecutor(max_workers=2) as pool:
         simultaneous=list(pool.map(lambda _:app('user/account/delete',dict(confirm='DELETE'),uid=910008),range(2)))
     check('concurrent consumer confirmations post only once',sum(r['code']==0 for r in simultaneous)==1 and sql(f'SELECT COUNT(*) FROM `{B}`.user_wallet_forfeit WHERE deletion_id={concurrent_id};')=='1')
+    for small_uid,amount in [(910025,48),(910026,49)]:
+        credit(small_uid,amount)
+        data(app('user/account/delete',dict(confirm='DELETE'),uid=small_uid))
+        check('direct confirmed deletion posts below and equal to threshold '+str(amount),
+              sql(f'SELECT approved_by,amount FROM `{B}`.user_wallet_forfeit WHERE user_id={small_uid};')=='0\t'+str(amount)+'.00')
     check('zero-balance deletion needs no forfeiture approval',app('user/account/delete',dict(confirm='DELETE'),uid=910012)['code']==0 and sql(f'SELECT COUNT(*) FROM `{B}`.user_wallet_forfeit WHERE user_id=910012;')=='0')
     expiry_request=request(910009)['id'];credit(910009,50)
     lot_id=sql(f'SELECT MIN(id) FROM `{B}`.user_wallet_lot WHERE user_id=910009;')
