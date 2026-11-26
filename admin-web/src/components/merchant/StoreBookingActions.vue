@@ -6,7 +6,7 @@ import { apiStoreStatusHistory, apiStoreToggleStatus } from '@/api/merchant';
 import { useTable, type TableRow } from '@/composables/useTable';
 import { useUserStore } from '@/stores/user';
 
-const props = defineProps<{ store: TableRow }>();
+const props = defineProps<{ store: TableRow; cardFooter?: boolean }>();
 const emit = defineEmits<{ changed: [] }>();
 const { t } = useI18n();
 const user = useUserStore();
@@ -58,11 +58,13 @@ const columns = computed(() => [
 </script>
 
 <template>
-  <a-button v-if="user.profile?.isSuper && managed" v-perm="'merchant:store:status'" type="link" size="small"
+  <a-button v-if="user.profile?.isSuper && managed" v-perm="'merchant:store:status'"
+    :type="cardFooter ? (suspended ? 'primary' : 'default') : 'link'" :size="cardFooter ? 'middle' : 'small'"
     :danger="!suspended" @click="open">
     {{ t(suspended ? 'merchant.storeBooking.restore' : 'merchant.storeBooking.suspend') }}
   </a-button>
-  <a-button v-perm="'merchant:store:list'" type="link" size="small" @click="showHistory">{{ t('merchant.storeBooking.history') }}</a-button>
+  <a-button v-perm="'merchant:store:list'" :type="cardFooter ? 'default' : 'link'" :size="cardFooter ? 'middle' : 'small'"
+    @click="showHistory">{{ t('merchant.storeBooking.history') }}</a-button>
 
   <a-modal :open="!!request" :title="t(request?.action === 'restore' ? 'merchant.storeBooking.restore' : 'merchant.storeBooking.suspend')"
     :confirm-loading="saving" :mask-closable="false" :closable="!saving" :cancel-button-props="{ disabled: saving }"

@@ -162,6 +162,35 @@ await test('store search combines merchant, site and suspension filters and star
   state.resetFilters();
   assert.deepEqual({ ...host.calls.at(-1).data }, { storeName: '', merchantId: undefined, siteId: 0, status: undefined, page: 1, pageSize: 20 });
 });
+await test('merchant directory applies region and dates with the category, status and server-side sort', () => {
+  const { host, state } = fixture(page);
+  host.response = { list: [], total: 42, page: 1, pageSize: 20, stats: {} };
+  state.tablePagination.value.onChange(2, 20);
+  state.query.keyword = 'City';
+  state.filterValues.value = { category: 'restaurant', status: '3' };
+  Object.assign(state.locationDates, { country: ' mm ', city: '  Yangon  ', registeredFrom: '2026-11-01', registeredTo: '2026-11-26' });
+  state.applyLocationDates();
+  state.changeSort('merchantName:asc');
+  assert.deepEqual({ ...host.calls.at(-1).data }, {
+    keyword: 'City', category: 'restaurant', status: '3', country: 'MM', city: 'Yangon',
+    registeredFrom: '2026-11-01', registeredTo: '2026-11-26', sortField: 'merchantName',
+    sortOrder: 'asc', page: 1, pageSize: 20,
+  });
+  state.selectCard('4');
+  assert.equal(host.calls.at(-1).data.country, 'MM');
+  assert.equal(host.calls.at(-1).data.status, '4');
+  state.resetLocationDates();
+  assert.equal(host.calls.at(-1).data.country, '');
+  assert.equal(host.calls.at(-1).data.registeredTo, '');
+  assert.equal(host.calls.at(-1).data.sortField, 'merchantName');
+});
+await test('merchant directory keeps the applied filters when a reversed date range is entered', () => {
+  const { host, state } = fixture(page);
+  Object.assign(state.locationDates, { registeredFrom: '2026-11-26', registeredTo: '2026-11-01' });
+  state.applyLocationDates();
+  assert.equal(host.calls.length, 0);
+  assert.equal(state.query.registeredFrom, '');
+});
 await test('store pagination uses the merchant directory range format and standard page controls', () => {
   const { state } = fixture(storeList);
   const pagination = state.tablePagination.value;

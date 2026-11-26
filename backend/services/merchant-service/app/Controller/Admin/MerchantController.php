@@ -118,6 +118,45 @@ class MerchantController extends AbstractController
         }
         $blacklist = Db::table('merchant_blacklist as bl')->whereColumn('bl.merchant_id', 'm.id')
             ->where('bl.status', 1);
+        $country = strtoupper($this->strInput('country'));
+        $city = mb_strtolower(trim(preg_replace('/\s+/u', ' ', $this->strInput('city'))));
+        if (($country !== '' && ! preg_match('/^[A-Z]{2}$/D', $country)) || mb_strlen($city) > 80) {
+            throw new BusinessException(ErrorCode::PARAM_ERROR, '地区须使用两位国家代码及80字以内的城市名称');
+        }
+        if ($country !== '' || $city !== '') {
+            $location = clone $properties;
+            // 对已映射的业务以门店现址为准，归档后也不回退到旧申请地址。
+            $linked = Db::table('merchant_store as mapped')->whereColumn('mapped.site_id', 'b.site_id')
+                ->whereColumn('mapped.merchant_id', 'm.id')->whereColumn('mapped.source_business_id', 'b.id');
+            $registered = (clone $businesses)->where('b.business_type', '<>', 'hotel')
+                ->whereRaw('b.kyc_status = CASE WHEN a.state_model_version = 1 THEN 5 ELSE 1 END')
+                ->addWhereExistsQuery($linked, 'and', true);
+            if ($category !== '') {
+                $location->where('s.business_type', $category);
+                $registered->where('b.business_type', $category);
+            }
+            if ($country !== '') {
+                $location->where('s.country_code', $country);
+                $registered->where('b.country_code', $country);
+            }
+            if ($city !== '') {
+                $location->where('s.city_key', $city);
+                $registered->whereRaw("COALESCE(NULLIF(b.city_key, ''), LOWER(TRIM(REGEXP_REPLACE(b.city, '[[:space:]]+', ' ')))) = ?", [$city]);
+            }
+            $query->where(fn ($region) => $region->addWhereExistsQuery($location)->addWhereExistsQuery($registered, 'or'));
+        }
+        $from = $this->strInput('registeredFrom');
+        $to = $this->strInput('registeredTo');
+        foreach ([$from, $to] as $date) {
+            if ($date !== '' && (! preg_match('/^\d{4}-\d{2}-\d{2}$/D', $date) || date('Y-m-d', strtotime($date)) !== $date)) {
+                throw new BusinessException(ErrorCode::PARAM_ERROR, '注册日期格式应为YYYY-MM-DD');
+            }
+        }
+        if ($from !== '' && $to !== '' && $from > $to) {
+            throw new BusinessException(ErrorCode::PARAM_ERROR, '注册日期范围无效');
+        }
+        if ($from !== '') $query->where('m.created_at', '>=', $from . ' 00:00:00');
+        if ($to !== '') $query->where('m.created_at', '<', date('Y-m-d', strtotime($to . ' +1 day')) . ' 00:00:00');
         // 卡片统计保留同一站点范围，独立于分页和当前状态选择。
         $statsQuery = clone $query;
         $stats = [
@@ -138,26 +177,6 @@ class MerchantController extends AbstractController
         if ($this->intInput('excludeBlacklisted') === 1) {
             $query->addWhereExistsQuery(clone $blacklist, 'and', true);
         }
-        $country = strtoupper($this->strInput('country'));
-        $city = mb_strtolower(trim(preg_replace('/\s+/u', ' ', $this->strInput('city'))));
-        if ($country !== '' || $city !== '') {
-            $location = (clone $properties)->where('s.business_type', 'hotel');
-            if ($country !== '') $location->where('s.country_code', $country);
-            if ($city !== '') $location->where('s.city_key', $city);
-            $query->addWhereExistsQuery($location);
-        }
-        $from = $this->strInput('registeredFrom');
-        $to = $this->strInput('registeredTo');
-        foreach ([$from, $to] as $date) {
-            if ($date !== '' && (! preg_match('/^\d{4}-\d{2}-\d{2}$/D', $date) || date('Y-m-d', strtotime($date)) !== $date)) {
-                throw new BusinessException(ErrorCode::PARAM_ERROR, '注册日期格式应为YYYY-MM-DD');
-            }
-        }
-        if ($from !== '' && $to !== '' && $from > $to) {
-            throw new BusinessException(ErrorCode::PARAM_ERROR, '注册日期范围无效');
-        }
-        if ($from !== '') $query->where('m.created_at', '>=', $from . ' 00:00:00');
-        if ($to !== '') $query->where('m.created_at', '<', date('Y-m-d', strtotime($to . ' +1 day')) . ' 00:00:00');
         $groupId = $this->input('groupId');
         if ($groupId !== null && $groupId !== '') $query->where('m.group_id', (int) $groupId);
         if ($this->intInput('unboundOnly') === 1) $query->where('m.group_id', 0)->whereIn('m.status', [3, 4]);

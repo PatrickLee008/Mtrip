@@ -97,14 +97,14 @@ const businessColumns = computed(() => [
           <a-tag v-else>{{ businessTypes[store.business_type] || store.business_type || '—' }}</a-tag>
         </div>
         <div class="property-muted">{{ [store.city_key, store.country_code].filter(Boolean).join(', ') || '—' }}</div>
-        <template v-if="!store.deleted_at">
-          <a-tag v-if="Number(store.operating_status) === 3" color="error">{{ t('merchant.storeBooking.state3') }}</a-tag>
-          <StoreBookingActions :store="store" @changed="emit('changed')" />
-        </template>
+        <a-tag v-if="!store.deleted_at && Number(store.operating_status) === 3" color="error">{{ t('merchant.storeBooking.state3') }}</a-tag>
         <template v-for="business in businesses.filter(business => Number(business.id) === Number(store.source_business_id))" :key="business.id">
           <div v-if="business.contact_name" class="property-contact">{{ business.contact_name }}</div>
           <div v-if="business.contact_phone || business.contact_email" class="property-muted">{{ [business.contact_phone, business.contact_email].filter(Boolean).join(' · ') }}</div>
         </template>
+        <footer v-if="!store.deleted_at" class="property-card-actions">
+          <StoreBookingActions :store="store" card-footer @changed="emit('changed')" />
+        </footer>
       </article>
       <div v-if="!properties.length" class="property-empty">{{ t('merchant.profile.noProperties') }}</div>
     </div>
@@ -184,6 +184,9 @@ const businessColumns = computed(() => [
 .property-id { margin-left: 8px; color: #94a3b8; font: 11px monospace; }
 .property-muted { margin: 4px 0 0; font-size: 12px; line-height: 18px; color: #94a3b8; overflow-wrap: anywhere; }
 .property-contact { margin-top: 8px; font-size: 12px; color: #64748b; overflow-wrap: anywhere; }
+.property-card-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px; margin-top: 12px; padding-top: 10px; border-top: 1px solid #e3e8f0; }
+.property-card-actions:not(:has(> button)) { display: none; }
+.property-card-actions :deep(.ant-btn) { padding-inline: 12px; border-radius: 6px; font-size: 12px; font-weight: 500; }
 .property-empty { padding: 16px; border: 1px dashed #e3e8f0; border-radius: 8px; text-align: center; color: #94a3b8; font-size: 12px; }
 .property-management { margin-top: 12px; border: 1px solid #e3e8f0; border-radius: 8px; }
 .property-management > summary { padding: 12px 14px; color: #64748b; font-size: 12px; font-weight: 500; cursor: pointer; }
