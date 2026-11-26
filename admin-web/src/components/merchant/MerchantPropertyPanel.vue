@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import StoreBookingActions from '@/components/merchant/StoreBookingActions.vue';
 import { computed, reactive, ref } from 'vue';
 import { message } from 'ant-design-vue';
 import { useI18n } from 'vue-i18n';
@@ -96,6 +97,10 @@ const businessColumns = computed(() => [
           <a-tag v-else>{{ businessTypes[store.business_type] || store.business_type || '—' }}</a-tag>
         </div>
         <div class="property-muted">{{ [store.city_key, store.country_code].filter(Boolean).join(', ') || '—' }}</div>
+        <template v-if="!store.deleted_at">
+          <a-tag v-if="Number(store.operating_status) === 3" color="error">{{ t('merchant.storeBooking.state3') }}</a-tag>
+          <StoreBookingActions :store="store" @changed="emit('changed')" />
+        </template>
         <template v-for="business in businesses.filter(business => Number(business.id) === Number(store.source_business_id))" :key="business.id">
           <div v-if="business.contact_name" class="property-contact">{{ business.contact_name }}</div>
           <div v-if="business.contact_phone || business.contact_email" class="property-muted">{{ [business.contact_phone, business.contact_email].filter(Boolean).join(' · ') }}</div>

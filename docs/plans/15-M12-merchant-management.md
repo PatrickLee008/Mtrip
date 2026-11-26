@@ -1,5 +1,19 @@
 # 15 - PRD模块12商户管理整改
 
+## 2026-11-26 门店管理列表对齐所有商户
+
+门店管理沿用「所有商户」的标题层级、搜索栏组件和分页样式。新增门店移到标题右侧。门店名称、门店状态、所属商户和超管站点筛选支持组合查询，筛选或重置后回到第一页。窄屏可在表格内部横向滚动查看操作列。
+
+后台构建及 15 项商户交互检查通过。使用合成数据在 Chrome 验证 1280px 中文和 375px 英文页面，确认翻页、回车搜索、三类筛选和重置，窄屏门店名称可见。
+
+本机 8090 已发布新版。备份原静态资源和本机双库后，仅执行所需的门店暂停迁移 `20261126110000`，账本增加至 76 条已应用记录。商户与订单服务的四个实例探活正常。8090 返回的页面、门店列表脚本与样式均与构建一致，使用本机既有门店数据完成组合筛选、分页、关联门店字段及暂停历史的只读控制器检查。
+
+## 2026-11-26 门店级暂停与恢复
+
+- 依据 [M12 商户状态管理](<../../obsidian/mTrip_obsidian/mTrip 超级管理后台知识库/03-功能模块/M12-商户管理.md#L74>)，超管可在「门店管理」或「所有商户 → 商户详情 → 关联门店」对单店暂停或恢复预订。两项操作均须填写原因，立即生效。历史显示涉及门店、前后状态、操作人、原因和 UTC 生效时间。后台支持筛选平台暂停的门店。
+- 平台暂停保留门店原有营业、上架和账号访问状态，以便继续履约。恢复回到暂停前的运营状态，再按现有上架条件判断可否接受新预订。存量暂停记录若缺前置历史，恢复为停业。门店重新发布、单订或 Trip 下单、待支付单付款和 MMQR 出码均受暂停限制。
+- [增量迁移](../../database/migrations/V20261126110000__store-booking-suspension.sql)新增门店状态版本、审计表和后台按钮权限。隔离库连续执行两次，15 项门店回归、44 项订单回归、13 项后台交互及后台构建通过。本机 8090 已发布，登录态浏览器验收待执行。
+
 ## 2026-11-26 商户 2FA 重置整改
 
 - 依据 [M12 账户安全与验收条款](<../../obsidian/mTrip_obsidian/mTrip 超级管理后台知识库/03-功能模块/M12-商户管理.md#L185>)，授权超管按原因与二次确认重置当前商户名下的单个商户或门店登录账号。原密码继续可用，后台仅返回操作结果。共享集团账号在商户档案仍可查看安全状态，重置操作限当前商户名下账号。
@@ -15,7 +29,7 @@
 | 商户 App 注销申请与超管审批 | 未实现申请闭环 | 主账号能打开申请界面，提交按钮处于禁用状态。后台已有管理员直接注销的操作，缺 App 提交、申请详情和三种审批状态、待审通过/驳回与必填备注、完整申请及决策历史和结果通知。批准后的会话撤销、后续 App/Web 禁登及法务、预订、财务与结算记录留存也缺这条流程的验收证据。[App 设置页](../../merchant-app/src/screens/menu/MenuSettingsScreen.tsx#L144) · [后台注销操作](../../backend/services/merchant-service/app/Controller/Admin/MerchantController.php#L624) · [商户端 M06 §6.8](<../../obsidian/mTrip_obsidian/mTrip 商户 App 知识库/03-功能模块/M06-通知与设置.md#68-账号注销申请--仅限商户移动端-app>) |
 | 登录方式、会话及设备管控 | 未实现后台管控 | 缺三种登录方式的状态与掩码展示、商户级邮件/短信登录开关、确认与原因、复核后恢复、单独强退全部会话，以及联动失效待处理扫码登录和撤销设备/生物识别信任。安全页也缺会话与设备列表、最近登录方式及设备/IP 的集中查看、受影响对象与结果的动作审计。[后台账户安全](../../admin-web/src/components/merchant/AccountSecurityPanel.vue#L84) · [App 生物识别存储](../../merchant-app/src/utils/merchantSession.ts#L36) |
 | 短信 OTP 和 2FA 重置 | OTP 待整改，2FA 重置已完成隔离验证 | 商户 App 正常登录入口只有访问码及邮箱，缺短信 OTP。Web 的邮件/短信 OTP 后仍要求验证器，独立登录方式与当前 M11/M12 文字有差异。2FA 重置按上述整改保留密码，商户完成身份验证后自行重新绑定。真机扫码及目标环境待验。[App 认证 API](../../merchant-app/src/api/merchant.ts#L130) · [OTP 登录](../../backend/services/merchant-service/app/Service/MerchantAuthenticationService.php#L196) |
-| 门店级暂停和恢复 | 有营业开关，缺处置闭环 | 独立门店能切换营业/停业，酒店下单门禁检查门店状态。现有开关只更新 `status`，缺暂停原因、责任管理员、生效时间、门店状态历史，以及同商户其他店和既有确认订单的门店级验收场景。商户整户暂停沿用既有状态与下单门禁。[门店开关](../../backend/services/merchant-service/app/Controller/Admin/StoreController.php#L142) · [下单门禁](../../backend/shared/src/Merchant/MerchantAccessGuard.php#L53) |
+| 门店级暂停和恢复 | 整改已完成隔离验证 | 超管可指定单店暂停、恢复和查看历史。隔离验收覆盖同商户其他门店继续接单、暂停门店可继续核销已确认订单、恢复后重新接单。目标环境发布及浏览器登录态待验。[单店状态处置](../../backend/services/merchant-service/app/Controller/Admin/StoreController.php#L144) · [下单门禁](../../backend/shared/src/Merchant/MerchantAccessGuard.php#L53) |
 | 门店欺诈或严重违规升级 | 未实现 | 缺门店标记、提交商户级调查、调查结果与决策历史，以及标记期间维持整户状态的流程。现有合规处置以商户为对象。[合规服务](../../backend/services/merchant-service/app/Service/MerchantComplianceService.php#L14) |
 | 商户及门店定向通知 | 部分实现 | 按商户发送站内信、模板、预览、定时、受控链接、投递历史已有。商户收件箱已识别物业范围，后台发送仍只传商户 ID，缺选定门店、发送前明确目标范围以及按范围记录。邮件、短信及 Push 渠道禁用，沿用此前延期决定。[发送表单](../../admin-web/src/components/merchant/NotifyDrawer.vue#L162) · [渠道能力](../../backend/services/merchant-service/app/Service/MerchantNotificationService.php#L12) · [收件箱范围](../../backend/services/merchant-service/app/Controller/Merchant/NotificationController.php#L20) |
 | 餐厅目录、人工核验与覆盖 | 未实现，餐厅运营此前延期 | 当前有餐厅入驻及关联业务资料展示。缺 Google/API 来源目录及 Place ID、来源和状态筛选、待人工核验标记、五种核验结果、备注/来源/佐证、原始值与平台覆盖值分别保留、隐藏停业/未找到餐厅及重新核验全量审计。餐厅也未进入商城榜单。[关联业务](../../admin-web/src/components/merchant/MerchantPropertyPanel.vue#L116) · [排序业务类型限制](../../backend/services/merchant-service/app/Service/MarketplaceService.php#L14) · [延期记录](./m12/00-design.md#L11) |

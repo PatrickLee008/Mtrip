@@ -293,8 +293,12 @@ export function apiStoreSetMain(id: number): Promise<null> {
   return post('/admin/merchant/store/set-main', { id });
 }
 
-export function apiStoreToggleStatus(id: number): Promise<{ status: number }> {
-  return post('/admin/merchant/store/toggle-status', { id });
+export function apiStoreToggleStatus(data: { id: number; action: 'suspend' | 'restore'; reason: string; expectedVersion: number }): Promise<{ operatingStatus: number; version: number }> {
+  return post('/admin/merchant/store/toggle-status', data);
+}
+
+export function apiStoreStatusHistory(data: { id: number; page?: number; pageSize?: number }): Promise<PageData<Row>> {
+  return get('/admin/merchant/store/status-history', data);
 }
 
 export function apiStoreAccountReset(id: number): Promise<{ username: string; password: string; created: boolean }> {

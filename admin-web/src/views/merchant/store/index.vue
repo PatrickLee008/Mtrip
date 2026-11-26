@@ -2,10 +2,12 @@
 import { computed, onMounted, reactive, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { message, Modal } from 'ant-design-vue';
-import { PlusOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons-vue';
+import { PlusOutlined } from '@ant-design/icons-vue';
 import PageContainer from '@/components/PageContainer.vue';
+import SearchFilterBar, { type FilterConfig } from '@/components/SearchFilterBar.vue';
 import SiteTreeSelect from '@/components/SiteTreeSelect.vue';
 import StatusTag from '@/components/StatusTag.vue';
+import StoreBookingActions from '@/components/merchant/StoreBookingActions.vue';
 import { useTable, type TableRow } from '@/composables/useTable';
 import { useUserStore } from '@/stores/user';
 import type { StatusItem } from '@/components/StatusTag.vue';
@@ -17,7 +19,6 @@ import {
   apiStoreDetail,
   apiStoreList,
   apiStoreSetMain,
-  apiStoreToggleStatus,
   apiStoreUpdate,
 } from '@/api/merchant';
 
@@ -30,7 +31,12 @@ const isSuper = userStore.profile?.isSuper === true;
 const STATUS_MAP = computed<Record<number, StatusItem>>(() => ({
   1: { text: t('merchant.storePage.statusOpen'), color: 'success' },
   2: { text: t('merchant.storePage.statusClosed'), color: 'default' },
+  3: { text: t('merchant.storeBooking.state3'), color: 'error' },
 }));
+
+function displayStatus(row: TableRow): number {
+  return Number(row.operating_status) === 3 ? 3 : Number(row.status);
+}
 
 const { loading, list, query, load, search, reset, pagination } = useTable(apiStoreList, {
   merchantId: undefined,
@@ -38,6 +44,32 @@ const { loading, list, query, load, search, reset, pagination } = useTable(apiSt
   status: undefined,
   siteId: 0,
 });
+const filterValues = ref<Record<string, string | number | undefined>>({});
+const filterKey = ref(0);
+const filters = computed<FilterConfig[]>(() => [{
+  key: 'status',
+  label: t('common.status'),
+  allLabel: t('merchant.storePage.allStatuses'),
+  options: Object.entries(STATUS_MAP.value).map(([value, status]) => ({ value: Number(value), label: status.text })),
+}]);
+
+function searchFilters(): void {
+  query.status = filterValues.value.status;
+  search();
+}
+
+function resetFilters(): void {
+  filterValues.value = {};
+  filterKey.value += 1;
+  reset();
+}
+
+const tablePagination = computed(() => ({
+  ...pagination.value,
+  showQuickJumper: false,
+  showSizeChanger: false,
+  showTotal: (total: number, range: [number, number]) => t('merchant.verifyPage.paginationInfo', { from: range[0], to: range[1], total }),
+}));
 
 // 商户搜索选择(筛选与新增共用)
 const merchantOptions = ref<{ label: string; value: number }[]>([]);
@@ -65,7 +97,7 @@ const columns = computed(() => [
   { title: t('merchant.storePage.phone'), dataIndex: 'contact_phone', width: 130 },
   { title: t('merchant.storePage.address'), dataIndex: 'address', ellipsis: true },
   { title: t('common.status'), dataIndex: 'status', width: 80 },
-  { title: t('common.action'), key: 'action_col', width: 260, fixed: 'right' as const },
+  { title: t('common.action'), key: 'action_col', width: 350 },
 ]);
 
 // ---------- 详情抽屉 ----------
@@ -198,12 +230,6 @@ async function setMain(row: TableRow): Promise<void> {
   await load();
 }
 
-async function toggleStatus(row: TableRow): Promise<void> {
-  const result = await apiStoreToggleStatus(row.id);
-  message.success(result.status === 1 ? t('merchant.storePage.statusOpen') : t('merchant.storePage.statusClosed'));
-  await load();
-}
-
 async function doDelete(row: TableRow): Promise<void> {
   await apiStoreDelete(row.id);
   message.success(t('tip.deleteSuccess'));
@@ -218,54 +244,35 @@ onMounted(() => {
 
 <template>
   <PageContainer>
-    <a-card :bordered="false" class="mtrip-card-shadow" style="margin-bottom: 16px">
-      <a-form layout="inline">
-        <a-form-item :label="t('merchant.storePage.merchant')">
-          <a-select
-            v-model:value="query.merchantId"
-            show-search
-            allow-clear
-            :filter-option="false"
-            :options="merchantOptions"
-            :loading="merchantSearching"
-            :placeholder="t('common.all')"
-            style="width: 220px"
-            @search="searchMerchant"
-          />
-        </a-form-item>
-        <a-form-item :label="t('merchant.storePage.name')">
-          <a-input v-model:value="query.storeName" allow-clear :placeholder="t('common.pleaseInput')" style="width: 160px" @press-enter="search" />
-        </a-form-item>
-        <a-form-item :label="t('common.status')">
-          <a-select v-model:value="query.status" allow-clear :placeholder="t('common.all')" style="width: 100px">
-            <a-select-option :value="1">{{ STATUS_MAP[1].text }}</a-select-option>
-            <a-select-option :value="2">{{ STATUS_MAP[2].text }}</a-select-option>
-          </a-select>
-        </a-form-item>
-        <a-form-item v-if="isSuper" :label="t('common.site')">
-          <SiteTreeSelect v-model:value="query.siteId" allow-all style="width: 160px" />
-        </a-form-item>
-        <a-form-item>
-          <a-space>
-            <a-button type="primary" @click="search"><template #icon><SearchOutlined /></template>{{ t('common.search') }}</a-button>
-            <a-button @click="reset"><template #icon><ReloadOutlined /></template>{{ t('common.reset') }}</a-button>
-          </a-space>
-        </a-form-item>
-      </a-form>
-    </a-card>
-
-    <a-card :bordered="false" class="mtrip-card-shadow">
-      <template #title>{{ t('merchant.storePage.title') }}</template>
-      <template #extra>
-        <a-button v-perm="'merchant:store:add'" type="primary" @click="openCreate">
-          <template #icon><PlusOutlined /></template>{{ t('common.add') }}
-        </a-button>
+    <div class="store-heading">
+      <div>
+        <div class="store-eyebrow">{{ t('menu.merchant') }}</div>
+        <h1>{{ t('merchant.storePage.title') }}</h1>
+        <p>{{ t('merchant.storePage.subtitle') }}</p>
+      </div>
+      <a-button v-perm="'merchant:store:add'" class="store-add" type="primary" @click="openCreate">
+        <template #icon><PlusOutlined /></template>{{ t('merchant.storePage.addStore') }}
+      </a-button>
+    </div>
+    <SearchFilterBar :key="filterKey" v-model="query.storeName" v-model:filter-values="filterValues"
+      :filters="filters" :placeholder="t('merchant.storePage.searchPlaceholder')" :total="pagination.total"
+      :result-label="t('merchant.verifyPage.resultCount')" @search="searchFilters">
+      <template #filters>
+        <a-select v-model:value="query.merchantId" class="store-merchant-filter" size="small" :bordered="false"
+          show-search allow-clear :filter-option="false" :options="merchantOptions" :loading="merchantSearching"
+          :aria-label="t('merchant.storePage.merchant')" :placeholder="t('merchant.storePage.merchant')"
+          @search="searchMerchant" @change="searchFilters" />
+        <SiteTreeSelect v-if="isSuper" v-model:value="query.siteId" class="store-site-filter" size="small"
+          :bordered="false" :aria-label="t('common.site')" allow-all @change="searchFilters" />
+        <a-button type="text" size="small" class="store-reset" @click="resetFilters">{{ t('common.reset') }}</a-button>
       </template>
+    </SearchFilterBar>
       <a-table
+        class="store-table"
         :columns="columns"
         :data-source="list"
         :loading="loading"
-        :pagination="pagination"
+        :pagination="tablePagination"
         row-key="id"
         size="middle"
         :scroll="{ x: 1300 }"
@@ -276,7 +283,7 @@ onMounted(() => {
             <span v-else>-</span>
           </template>
           <template v-else-if="column.dataIndex === 'status'">
-            <StatusTag :value="record.status" :map="STATUS_MAP" />
+            <StatusTag :value="displayStatus(record)" :map="STATUS_MAP" />
           </template>
           <template v-else-if="column.key === 'action_col'">
             <a-space :size="0">
@@ -289,14 +296,7 @@ onMounted(() => {
               >
                 <a-button v-perm="'merchant:store:edit'" type="link" size="small">{{ t('merchant.storePage.setMain') }}</a-button>
               </a-popconfirm>
-              <a-popconfirm
-                :title="record.status === 1 ? t('merchant.storePage.statusClosed') : t('merchant.storePage.statusOpen')"
-                @confirm="toggleStatus(record)"
-              >
-                <a-button v-perm="'merchant:store:status'" type="link" size="small" :danger="record.status === 1">
-                  {{ record.status === 1 ? t('merchant.storePage.statusClosed') : t('merchant.storePage.statusOpen') }}
-                </a-button>
-              </a-popconfirm>
+              <StoreBookingActions :store="record" @changed="load" />
               <a-popconfirm
                 v-if="record.is_main !== 1"
                 :title="t('merchant.storePage.deleteConfirm')"
@@ -308,7 +308,6 @@ onMounted(() => {
           </template>
         </template>
       </a-table>
-    </a-card>
 
     <!-- 详情抽屉 -->
     <a-drawer v-model:open="drawerOpen" :title="t('common.detail')" width="560">
@@ -318,7 +317,7 @@ onMounted(() => {
             <a-descriptions-item :label="t('merchant.storePage.name')" :span="2">{{ detail.store_name }}</a-descriptions-item>
             <a-descriptions-item :label="t('merchant.storePage.merchant')" :span="2">{{ detail.merchant_name || '-' }}</a-descriptions-item>
             <a-descriptions-item :label="t('merchant.storePage.isMain')">{{ detail.is_main === 1 ? t('common.yes') : t('common.no') }}</a-descriptions-item>
-            <a-descriptions-item :label="t('common.status')"><StatusTag :value="detail.status" :map="STATUS_MAP" /></a-descriptions-item>
+            <a-descriptions-item :label="t('common.status')"><StatusTag :value="displayStatus(detail)" :map="STATUS_MAP" /></a-descriptions-item>
             <a-descriptions-item :label="t('merchant.storePage.contact')">{{ detail.contact_name || '-' }}</a-descriptions-item>
             <a-descriptions-item :label="t('merchant.storePage.phone')">{{ detail.contact_phone || '-' }}</a-descriptions-item>
             <a-descriptions-item :label="t('merchant.storePage.address')" :span="2">{{ detail.address || '-' }}</a-descriptions-item>
@@ -435,3 +434,17 @@ onMounted(() => {
     </a-modal>
   </PageContainer>
 </template>
+
+<style scoped>
+.store-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 16px; }
+.store-heading h1 { margin: 0 0 2px; color: #1a2332; font-size: 18px; font-weight: 700; line-height: 27px; }
+.store-heading p { margin: 0; color: #94a3b8; font-size: 13px; line-height: 19.5px; }
+.store-eyebrow { margin-bottom: 4px; color: #94a3b8; font-size: 11px; font-weight: 500; line-height: 16.5px; letter-spacing: .05em; text-transform: uppercase; }
+.store-add { flex-shrink: 0; height: 34px; font-size: 13px; }
+.store-merchant-filter { width: 150px; }
+.store-site-filter { width: 126px; }
+.store-reset { color: var(--mtrip-text-secondary); font-size: 12px; }
+.store-table :deep(.ant-table) { border: 1px solid #e3e8f0; border-radius: 8px; overflow: hidden; }
+.store-table :deep(.ant-table-thead > tr > th) { color: #64748b; background: #f8fafc; font-size: 12px; }
+.store-table :deep(.ant-pagination-total-text) { margin-right: auto; color: #94a3b8; font-size: 12px; }
+</style>

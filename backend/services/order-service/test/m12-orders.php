@@ -12,17 +12,25 @@ use Mtrip\Shared\Context\AdminContext;
 use Mtrip\Shared\Context\MerchantContext;
 use Mtrip\Shared\Context\UserContext;
 
-UserContext::set(['user_id' => 99101, 'site_id' => 991]);
 Db::statement('SET SESSION innodb_lock_wait_timeout=5');
+if (isset($argv[3])) {
+    UserContext::set(['user_id' => (int) $argv[3], 'site_id' => 991]);
+}
 function invokeOrder(string $class, string $method, array $input): array
 {
     global $container;
     setRequest($input);
     return $container->get($class)->{$method}();
 }
+function tripInput(array $items): array
+{
+    $input = ['items' => $items, 'checkoutKey' => bin2hex(random_bytes(12))];
+    $session = invokeOrder(TripController::class, 'startCheckout', $input)['data'];
+    return $input + ['checkoutRevision' => $session['revision']];
+}
 function startWorker(string $mode, array $payload): mixed
 {
-    $process = proc_open([PHP_BINARY, '-d', 'display_errors=1', __FILE__, $mode, json_encode($payload)], [0 => ['pipe', 'r'], 1 => STDOUT, 2 => STDERR], $pipes);
+    $process = proc_open([PHP_BINARY, '-d', 'display_errors=1', __FILE__, $mode, json_encode($payload), (string) UserContext::userId()], [0 => ['pipe', 'r'], 1 => STDOUT, 2 => STDERR], $pipes);
     fclose($pipes[0]);
     return $process;
 }
@@ -38,11 +46,13 @@ $ids = [];
 $goodsIds = [];
 $propertyIds = [];
 $roomIds = [];
+$userId = (int) Db::table('user_info')->insertGetId(['site_id' => 991, 'nickname' => 'M12 booking fixture', 'user_status' => 1]);
+UserContext::set(['user_id' => $userId, 'site_id' => 991]);
 try {
     $a = $ids[] = merchantFixture();
     $b = $ids[] = merchantFixture();
     $input = [];
-    foreach ([$a, $b] as $merchantId) {
+    foreach ([$a, $b, $a] as $merchantId) {
         $propertyId = $propertyIds[] = (int) Db::table('merchant_store')->insertGetId([
             'site_id' => 991, 'merchant_id' => $merchantId, 'store_name' => 'M12 Property',
             'business_type' => 'hotel', 'status' => 1, 'kyc_status' => 1, 'content_status' => 2,
@@ -50,12 +60,13 @@ try {
         ]);
         $roomTypeId = $roomIds[] = (int) Db::table('hotel_room_type')->insertGetId([
             'site_id' => 991, 'property_id' => $propertyId, 'room_name' => 'M12 Room',
-            'base_price' => 100, 'base_stock' => 50, 'status' => 1, 'publish_status' => 2,
+            'base_price' => 100, 'base_stock' => 50, 'status' => 1, 'publish_status' => 2, 'currency' => 'MMK',
         ]);
         $input[] = ['propertyId' => $propertyId, 'roomTypeId' => $roomTypeId, 'quantity' => 1,
             'useDate' => gmdate('Y-m-d'), 'endDate' => gmdate('Y-m-d', time() + 86400),
             'contactName' => 'Fixture', 'contactPhone' => '10000000000'];
     }
+    $siblingInput = array_pop($input);
     $order = invokeOrder(OrderController::class, 'create', $input[0]);
     check($order['code'] === 0 && $order['data']['priceDetail']['payAmount'] == 100, 'T17 single hotel creation and price');
     $unpaidId = $order['data']['orderId'];
@@ -71,14 +82,39 @@ try {
     check(Db::table('goods_stock_log')->where('order_id', $paid['data']['orderId'])
         ->where('property_id', $propertyIds[0])->where('goods_id', 0)->exists(),
         'E hotel stock log keeps property attribution and clears goods key');
-    $trip = invokeOrder(TripController::class, 'create', ['items' => $input]);
+    $trip = invokeOrder(TripController::class, 'create', tripInput($input));
     check($trip['code'] === 0 && $trip['data']['payAmount'] == 200, 'T19 normal two-hotel Trip');
-    $paidTrip = invokeOrder(TripController::class, 'create', ['items' => $input]);
+    $paidTrip = invokeOrder(TripController::class, 'create', tripInput($input));
     invokeOrder(TripController::class, 'pay', ['tripId' => $paidTrip['data']['tripId']]);
     check(Db::table('order_main')->where('trip_id', $paidTrip['data']['tripId'])->where('order_status', 1)->count() === 2, 'normal Trip payment confirms both bookings');
     check(Db::table('order_main')->where('trip_id', $paidTrip['data']['tripId'])->where('goods_id', 0)
         ->where('sku_id', 0)->where('property_id', '>', 0)->where('room_type_id', '>', 0)->count() === 2,
         'E Trip hotel legs use property/room keys only');
+
+    $beforePauseTrip = tripInput($input);
+    Db::table('merchant_store')->where('id', $propertyIds[0])->update(['operating_status' => 3]);
+    $before = [Db::table('order_main')->count(), Db::table('order_trip')->count(), Db::table('goods_daily_stock')->sum('stock_locked')];
+    rejects(40401, fn () => invokeOrder(OrderController::class, 'create', $input[0]), 'store suspension blocks a new single booking');
+    rejects(40401, fn () => invokeOrder(TripController::class, 'create', $beforePauseTrip), 'store suspension blocks a mixed Trip');
+    rejects(40901, fn () => invokeOrder(OrderController::class, 'pay', ['orderId' => $unpaidId]), 'store suspension blocks payment of a pending single booking');
+    rejects(40901, fn () => invokeOrder(TripController::class, 'pay', ['tripId' => $trip['data']['tripId']]), 'store suspension blocks payment of a pending Trip');
+    rejects(40901, fn () => invokeOrder(OrderController::class, 'pay', ['orderId' => $unpaidId, 'payMethod' => 5]), 'store suspension blocks issuing a single-booking MMQR');
+    rejects(40901, fn () => invokeOrder(TripController::class, 'pay', ['tripId' => $trip['data']['tripId'], 'payMethod' => 5]), 'store suspension blocks issuing a Trip MMQR');
+    check($before == [Db::table('order_main')->count(), Db::table('order_trip')->count(), Db::table('goods_daily_stock')->sum('stock_locked')],
+        'store suspension leaves no partial orders or locked stock');
+    check(invokeOrder(OrderController::class, 'create', $siblingInput)['code'] === 0, 'a sibling store of the same merchant still accepts bookings');
+    $existing = Db::table('order_main')->where('trip_id', $paidTrip['data']['tripId'])
+        ->where('property_id', $propertyIds[0])->value('id');
+    MerchantContext::set(['admin_id' => 901, 'site_id' => 991, 'account_type' => 3, 'merchant_id' => $a,
+        'store_id' => $propertyIds[0], 'is_owner' => true, 'permissions' => ['mch:order:verify']]);
+    AdminContext::set(['admin_id' => 901, 'site_id' => 991, 'permissions' => ['mch:order:verify']]);
+    check(invokeOrder(App\Controller\Merchant\OrderController::class, 'detail', ['id' => $existing])['code'] === 0,
+        'suspended store can still read its confirmed booking');
+    invokeOrder(App\Controller\Merchant\OrderController::class, 'verify', ['id' => $existing]);
+    check((int) Db::table('order_main')->where('id', $existing)->value('order_status') === 2, 'suspended store can fulfill its confirmed booking');
+    MerchantContext::set([]);
+    Db::table('merchant_store')->where('id', $propertyIds[0])->update(['operating_status' => 1]);
+    check(invokeOrder(OrderController::class, 'create', $input[0])['code'] === 0, 'restored store accepts new bookings again');
 
     $legacyGoods = $goodsIds[] = (int) Db::table('goods_info')->insertGetId([
         'site_id' => 991, 'merchant_id' => $a, 'goods_name' => 'M12 Legacy Hotel', 'goods_type' => 1, 'status' => 3,
@@ -90,12 +126,13 @@ try {
     rejects(40901, fn () => invokeOrder(OrderController::class, 'create', array_replace($input[0], [
         'propertyId' => 0, 'roomTypeId' => 0, 'goodsId' => $legacyGoods, 'skuId' => $legacyRoom,
     ])), 'G hotel ordering rejects legacy goodsId/skuId input');
+    $merchantPauseTrip = tripInput(array_reverse($input));
     foreach (['suspended', 'blacklisted'] as $state) {
         Db::table('merchant_info')->where('id', $a)->update(['status' => 4]);
         if ($state === 'blacklisted') Db::table('merchant_blacklist')->insert(['site_id' => 991, 'merchant_id' => $a, 'reason' => 'M12 test', 'status' => 1]);
         $before = [Db::table('order_main')->count(), Db::table('order_trip')->count(), Db::table('goods_daily_stock')->sum('stock_locked'), Db::table('goods_stock_log')->count()];
         rejects(40901, fn () => invokeOrder(OrderController::class, 'create', $input[0]), 'T18 single blocked ' . $state);
-        rejects(40901, fn () => invokeOrder(TripController::class, 'create', ['items' => array_reverse($input)]), 'T19 whole Trip blocked ' . $state);
+        rejects(40901, fn () => invokeOrder(TripController::class, 'create', $merchantPauseTrip), 'T19 whole Trip blocked ' . $state);
         rejects(40901, fn () => invokeOrder(OrderController::class, 'pay', ['orderId' => $unpaidId]), 'T23 unpaid single payment blocked ' . $state);
         rejects(40901, fn () => invokeOrder(TripController::class, 'pay', ['tripId' => $trip['data']['tripId']]), 'T23 unpaid Trip payment blocked ' . $state);
         check($before == [Db::table('order_main')->count(), Db::table('order_trip')->count(), Db::table('goods_daily_stock')->sum('stock_locked'), Db::table('goods_stock_log')->count()], 'T18/T19/T23 no partial writes ' . $state);
@@ -133,7 +170,7 @@ try {
         'E employee selected-property booking detail hides another property');
     MerchantContext::set([]);
     Db::table('merchant_info')->where('id', $a)->update(['status' => 3]);
-    $workers = [startWorker('--trip', ['items' => $input]), startWorker('--trip', ['items' => array_reverse($input)])];
+    $workers = [startWorker('--trip', tripInput($input)), startWorker('--trip', tripInput(array_reverse($input)))];
     foreach ($workers as $worker) check(proc_close($worker) === 0, 'T20 opposite-order Trip processes complete');
     Db::beginTransaction();
     Db::table('merchant_info')->where('id', $a)->lockForUpdate()->first();
@@ -176,5 +213,7 @@ try {
     Db::table('merchant_store')->whereIn('id', $propertyIds)->delete();
     Db::table('merchant_blacklist')->whereIn('merchant_id', $ids)->delete();
     Db::table('merchant_info')->whereIn('id', $ids)->delete();
-    Db::table('notify_record')->where('user_id', 99101)->delete();
+    Db::table('notify_record')->where('user_id', $userId)->delete();
+    Db::table('order_checkout_session')->where('user_id', $userId)->delete();
+    Db::table('user_info')->where('id', $userId)->delete();
 }

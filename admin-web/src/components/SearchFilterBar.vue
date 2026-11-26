@@ -93,7 +93,7 @@ function handleOpenChange(key: string, open: boolean): void {
         </button>
       </div>
 
-      <div class="sfb-filters" v-if="filters.length > 0">
+      <div class="sfb-filters" v-if="filters.length > 0 || $slots.filters">
         <template v-for="filter in filters" :key="filter.key">
           <a-dropdown
             :open="isOpen(filter)"
@@ -129,6 +129,7 @@ function handleOpenChange(key: string, open: boolean): void {
             </template>
           </a-dropdown>
         </template>
+        <slot name="filters" />
       </div>
     </div>
 

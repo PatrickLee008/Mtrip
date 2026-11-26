@@ -295,7 +295,8 @@ class MerchantController extends AbstractController
         $properties = Db::table('merchant_store')->where('merchant_id', $merchant['id'])
             ->where('site_id', $merchant['site_id'])
             ->where(static fn ($q) => $q->whereNull('deleted_at')->orWhereNotNull('source_business_id'))->orderBy('id')
-            ->get(['id', 'store_name', 'business_type', 'source_business_id', 'country_code', 'city_key', 'mapping_version', 'display_enabled', 'status', 'deleted_at'])
+            ->get(['id', 'store_name', 'business_type', 'source_business_id', 'country_code', 'city_key', 'mapping_version',
+                'display_enabled', 'status', 'operating_status', 'booking_status_version', 'deleted_at'])
             ->map(static fn ($row) => (array) $row)->all();
         $group = empty($merchant['group_id']) ? null : Db::table('merchant_group')
             ->where('id', $merchant['group_id'])->where('site_id', $merchant['site_id'])->whereNull('deleted_at')
