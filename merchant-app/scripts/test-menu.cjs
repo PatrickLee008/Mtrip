@@ -21,6 +21,7 @@ function screen(file, section, options = {}) {
     '@/api/merchant': {}, '@/i18n': { changeLanguage: (lang) => calls.push(['language', lang]) },
     '@/store/commonStore': { useCommonStore: (select) => select(common) }, '@/store/merchantStore': { useMerchantStore: (select) => select(merchant) },
     '@/screens/bookings/BookingUi': { BookingIcon: 'BookingIcon' },
+    './MerchantSessionSettings': { default: 'MerchantSessionSettings' },
     './MerchantDeletionDialog': { default: 'MerchantDeletionDialog' },
     './MenuUi': { MenuAvatar: 'MenuAvatar', MenuDialog: 'MenuDialog', MenuHeader: 'MenuHeader', MenuIcon: 'MenuIcon', ui: {} },
   };
@@ -90,7 +91,7 @@ async function run() {
       assert.equal(nodes(account.render()).find((n) => n.type === 'MerchantDeletionDialog').props.visible, true);
     }
   }
-  assert.equal(button(screen('MenuSettingsScreen.tsx', 'security').render(), 'menu.security.logoutOthers').props.disabled, true);
+  assert.equal(nodes(screen('MenuSettingsScreen.tsx', 'security').render()).filter(n => n.type === 'MerchantSessionSettings').length, 1);
   console.log('Menu routes, deferred actions, logout cancellation/concurrency, language save/reset/failure and owner-only closure passed (mocked UI/store, no network).');
 }
 run().catch((error) => { console.error(error); process.exitCode = 1; });

@@ -627,3 +627,25 @@ export const apiMerchantDeletionList = (params: Record<string, unknown>) => get<
 export const apiMerchantDeletionDetail = (id: number) => get<MerchantDeletionDetail>('/admin/merchant/deletion/detail', { id });
 export const apiMerchantDeletionReview = (id: number, decision: 'approved' | 'rejected', note: string) =>
   post<MerchantDeletionDetail>('/admin/merchant/deletion/review', { id, decision, note });
+
+export interface MerchantLoginSession {
+  id: number;
+  username: string;
+  method: string;
+  client: string;
+  device_name: string;
+  ip_address: string;
+  logged_in_at: string;
+  expires_at: string;
+}
+export interface MerchantLoginControls {
+  methods: { method: string; enabled: boolean; allowed: boolean; identifier: string }[];
+  sessions: MerchantLoginSession[];
+  devices: { id: number; account_id: number; platform: string; device_name: string; trusted_at: string }[];
+  lastLogin: Partial<MerchantLoginSession> | null;
+  audit: { id: number; action: string; actor_name: string; reason: string; created_at: string;
+    changes: { before?: string | boolean; after?: string | boolean; sessions?: number[]; devices?: number[]; pairings?: number; result: string } }[];
+}
+export const apiMerchantLoginControls = (merchantId: number) => get<MerchantLoginControls>('/admin/merchant/security/login-controls', { merchantId });
+export const apiMerchantLoginControlChange = (data: { merchantId: number; action: string; deviceId?: number; reason: string; reviewed: number }) =>
+  post<unknown>('/admin/merchant/security/login-controls', data);

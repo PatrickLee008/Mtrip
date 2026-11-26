@@ -110,6 +110,7 @@ INSERT IGNORE INTO `sys_menu` (`id`,`parent_id`,`menu_name`,`menu_name_en`,`perm
 (30115,301,'功能模块授权','Grant modules','merchant:list:module',3,15),
 (30116,311,'审核物业资料','Review Property Profile','merchant:property:content-audit',3,1),
 (30117,301,'核验后更正登录联系方式','Correct Login Contacts After Review','merchant:list:contacts',3,17),
+(30118,301,'商户登录及设备管控','Manage Merchant Login and Devices','merchant:list:security',3,18),
 (30201,302,'替换证件','Replace Document','merchant:document:replace',3,1),
 (30202,302,'审核证件','Review Document','merchant:document:verify',3,2),
 (30203,302,'下载证件','Download Document','merchant:document:download',3,3),

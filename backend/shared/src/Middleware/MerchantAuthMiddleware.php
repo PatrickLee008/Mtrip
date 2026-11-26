@@ -68,6 +68,8 @@ class MerchantAuthMiddleware implements MiddlewareInterface
             'merchant_id' => (int) ($claims['merchant_id'] ?? 0),
             'store_id' => (int) ($claims['store_id'] ?? 0),
             'is_owner' => (bool) ($claims['is_owner'] ?? false),
+            'merchant_session_id' => (int) ($claims['merchant_session_id'] ?? 0),
+            'auth_version' => (int) ($claims['auth_version'] ?? 0),
             'permissions' => $permissions,
         ]);
 

@@ -2,6 +2,7 @@
 import { computed, reactive, ref, watch } from 'vue';
 import { Modal, message } from 'ant-design-vue';
 import { useI18n } from 'vue-i18n';
+import MerchantLoginControls from './MerchantLoginControls.vue';
 import { useUserStore } from '@/stores/user';
 import { apiMerchantSecurityAccounts, apiMerchantReset2Fa, apiMerchantCorrectContacts, type SecurityAccount } from '@/api/merchant';
 
@@ -83,8 +84,11 @@ function confirm(): void {
     <h4>{{ t('merchant.profile.accountSecurity') }}</h4>
     <div class="security-card">
       <div class="security-access">
-        <span>{{ t('merchant.profile.merchantAccessCode') }}</span>
-        <strong>{{ accessConfigured ? t('merchantDirectory.configured') : t('merchantDirectory.notConfigured') }}</strong>
+        <div class="security-access-status">
+          <span>{{ t('merchant.profile.merchantAccessCode') }}</span>
+          <strong>{{ accessConfigured ? t('merchantDirectory.configured') : t('merchantDirectory.notConfigured') }}</strong>
+        </div>
+        <MerchantLoginControls v-if="user.profile?.isSuper" :merchant-id="merchantId" />
       </div>
       <a-spin v-if="user.profile?.isSuper" :spinning="loading">
         <div class="security-account">
@@ -130,8 +134,9 @@ function confirm(): void {
 <style scoped>
 .security-section h4 { margin: 0 0 10px; font-size: 12px; line-height: 18px; font-weight: 600; letter-spacing: .06em; color: #64748b; text-transform: uppercase; }
 .security-card { border: 1px solid #e3e8f0; border-radius: 8px; overflow: hidden; }
-.security-access { display: flex; flex-direction: column; gap: 3px; padding: 12px 14px; background: #f8fafc; }
-.security-access > span, .security-grid dt, .security-account label { color: #94a3b8; font-size: 11px; line-height: 17px; }
+.security-access { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px 12px; padding: 12px 14px; background: #f8fafc; }
+.security-access-status { display: flex; flex-direction: column; gap: 3px; }
+.security-access-status > span, .security-grid dt, .security-account label { color: #94a3b8; font-size: 11px; line-height: 17px; }
 .security-access strong { font-size: 13px; line-height: 20px; color: #1a2332; font-weight: 600; }
 .security-account { padding: 10px 14px; border-top: 1px solid #f1f5f9; }
 .security-account:empty { display: none; }

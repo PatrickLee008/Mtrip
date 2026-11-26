@@ -15,6 +15,7 @@ import { useCommonStore } from '@/store/commonStore';
 import { useMerchantStore } from '@/store/merchantStore';
 import { MenuAvatar, MenuDialog, MenuHeader, MenuIcon, ui } from './MenuUi';
 import type { MenuIconName } from './MenuUi';
+import MerchantSessionSettings from './MerchantSessionSettings';
 import MerchantDeletionDialog from './MerchantDeletionDialog';
 
 export default function MenuSettingsScreen({ navigation, route }: NativeStackScreenProps<RootStackParamList, 'MenuSettings'>) {
@@ -108,9 +109,7 @@ export default function MenuSettingsScreen({ navigation, route }: NativeStackScr
       </> : null}
       {section === 'security' ? <>
         <View style={ui.card}><View style={styles.iconTile}><MenuIcon name="shield" color={colors.primary} /></View><Text style={ui.title}>{t('menu.security.twoFa')}</Text><Text style={[ui.body, styles.description]}>{t('menu.security.twoFaCopy')}</Text><Text style={[ui.body, styles.description]}>{t('menu.security.statusUnknown')}</Text><View style={styles.securityBottom}><Pressable onPress={unavailable} accessibilityRole="button"><Text style={styles.dangerText}>{t('menu.security.reset')}</Text></Pressable><Text style={ui.body}>--</Text></View></View>
-        {Platform.OS !== 'web' ? <View style={ui.card}><Text style={ui.title}>{t('menu.security.biometric')}</Text><Text style={[ui.body, styles.description]}>{t('menu.security.biometricPending')}</Text></View> : null}
-        <Text style={[ui.section, { marginTop: 20 }]}>{t('menu.security.sessions')}</Text><View style={styles.emptySessions}><MenuIcon name="shield" size={28} /><Text style={ui.body}>{t('menu.security.sessionsUnavailable')}</Text></View>
-        <Pressable style={[ui.button, ui.outline, styles.sessionButton, ui.disabled]} disabled accessibilityRole="button" accessibilityState={{ disabled: true }}><Text style={styles.dangerText}>{t('menu.security.logoutOthers')}</Text></Pressable>
+        <MerchantSessionSettings />
       </> : null}
       {section === 'localization' ? <>
         <View style={ui.card}><Text style={ui.title}>{t('menu.locale.language')}</Text><Text style={[ui.body, styles.description]}>{t('menu.locale.languageCopy')}</Text>{select('globe', language === 'zh-CN' ? '简体中文' : 'English (US)', () => setLanguagePicker(true))}</View>
@@ -152,8 +151,7 @@ const styles = StyleSheet.create({
   description: { marginTop: 8 }, alertRow: { flexDirection: 'row', alignItems: 'center', gap: 18, minHeight: 92, paddingVertical: 18, borderTopWidth: 1, borderTopColor: '#E2E8F0' },
   notice: { marginVertical: 16 }, iconTile: { width: 40, height: 40, backgroundColor: colors.canvas, borderRadius: 6, alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
   securityBottom: { borderTopWidth: 1, borderTopColor: '#E2E8F0', marginTop: 16, paddingTop: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 16 },
-  dangerText: { fontFamily: fonts.interMedium, fontSize: 12, color: '#DC2626' }, emptySessions: { borderTopWidth: 1, borderTopColor: '#E2E8F0', paddingVertical: 24, gap: 14 },
-  sessionButton: { borderColor: '#DC2626', alignSelf: 'flex-start', marginTop: 'auto', marginBottom: 24 },
+  dangerText: { fontFamily: fonts.interMedium, fontSize: 12, color: '#DC2626' },
   select: { borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 6, minHeight: 40, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, gap: 8, marginTop: 18 }, selectText: { flex: 1, fontFamily: fonts.inter, fontSize: 12, color: '#1E293B' },
   formatGroup: { marginTop: 24, paddingTop: 16, borderTopWidth: 1, borderTopColor: '#E2E8F0', marginBottom: 20 }, format: { borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 6, padding: 10, marginTop: 8, opacity: 0.5 },
 

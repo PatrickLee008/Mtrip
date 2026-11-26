@@ -60,7 +60,7 @@ class MerchantAuthService
     }
 
     /** Only called after a consumed 2FA challenge or a validated one-time support exchange. */
-    public function issueSession(array $admin, array $support = [], string $amr = 'totp'): array
+    public function issueSession(array $admin, array $support = [], string $amr = 'totp', string $method = 'authenticator', bool $record = true): array
     {
         $permissions = $this->profile($admin)['permissions'];
         $claims = [
@@ -76,6 +76,9 @@ class MerchantAuthService
             $claims['actor_admin_id'] = (int) $support['operator_id'];
             $claims['impersonation_session_id'] = (int) $support['id'];
             $ttl = max(1, strtotime($support['expires_at'] . ' UTC') - time());
+        }
+        if ($record && $support === []) {
+            $claims['merchant_session_id'] = \Mtrip\Shared\Merchant\MerchantSessions::record($claims, $method, $ttl);
         }
         $profile = $this->profile($admin, null, $permissions);
         if ($support !== []) {

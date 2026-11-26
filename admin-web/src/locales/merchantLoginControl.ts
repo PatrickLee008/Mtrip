@@ -1,0 +1,31 @@
+export const merchantLoginControlEn = {
+  title: 'Login, sessions and devices', loginMethods: 'Login methods', lastLogin: 'Last login',
+  sessions: 'Active sessions', devices: 'Trusted devices', audit: 'Security history', reason: 'Reason',
+  enable: 'Enable', disable: 'Disable',
+  reviewed: 'I confirm the access issue or security incident has been reviewed.',
+  logoutImpact: 'Active sessions and pending QR login requests will end immediately.',
+  deviceImpact: 'Biometric trust and active sessions linked to this device will end immediately.',
+  impact: 'Sessions {sessions} · Devices {devices} · QR requests {pairings}',
+  transition: '{before} → {after} · Applied',
+  methods: { access_code: 'Access code + Google Authenticator', email: 'Email OTP', sms: 'SMS OTP', google: 'Google', qr: 'QR login',
+    password: 'Password + Google Authenticator', authenticator: 'Google Authenticator', activation: 'Activation', recovery: 'Recovery' },
+  actions: { enable_email: 'Enable email login', disable_email: 'Disable email login', enable_sms: 'Enable SMS login', disable_sms: 'Disable SMS login',
+    logout_all: 'Sign out all sessions', revoke_device: 'Revoke device trust', trust_device: 'Trust device', untrust_device: 'Remove device trust' },
+  states: { true: 'Enabled', false: 'Disabled', active: 'Active', trusted: 'Trusted', revoked: 'Revoked', unregistered: 'Unregistered' },
+};
+
+export const merchantLoginControlZh = {
+  title: '登录方式、会话与设备', loginMethods: '登录方式', lastLogin: '最近登录',
+  sessions: '活跃会话', devices: '可信设备', audit: '安全历史', reason: '操作原因',
+  enable: '启用', disable: '停用',
+  reviewed: '我确认已复核访问问题或安全事件。',
+  logoutImpact: '活跃会话和待处理的二维码登录请求将立即失效。',
+  deviceImpact: '此设备的生物识别信任及关联会话将立即失效。',
+  impact: '会话 {sessions} 个 · 设备 {devices} 台 · 二维码请求 {pairings} 个',
+  transition: '{before} → {after} · 已生效',
+  methods: { access_code: '访问码 + Google Authenticator', email: '邮箱 OTP', sms: '短信 OTP', google: 'Google', qr: '扫码登录',
+    password: '密码 + Google Authenticator', authenticator: 'Google Authenticator', activation: '账号激活', recovery: '账号找回' },
+  actions: { enable_email: '启用邮箱登录', disable_email: '停用邮箱登录', enable_sms: '启用短信登录', disable_sms: '停用短信登录',
+    logout_all: '强制退出全部会话', revoke_device: '撤销设备信任', trust_device: '信任设备', untrust_device: '取消设备信任' },
+  states: { true: '已启用', false: '已停用', active: '活跃', trusted: '已信任', revoked: '已撤销', unregistered: '未登记' },
+};

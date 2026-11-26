@@ -94,6 +94,7 @@ final class MerchantAccessGuard
             || (! isset($claims['impersonation_session_id']) && ! in_array((string) ($claims['amr'] ?? ''), $strongMethods, true))) {
             throw new BusinessException(ErrorCode::UNAUTHORIZED, '账号认证已失效，请重新登录并完成2FA');
         }
+        MerchantSessions::assertActive($claims);
         self::assertSubject((array) $account);
     }
 

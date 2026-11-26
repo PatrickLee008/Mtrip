@@ -16,8 +16,8 @@ export function apiTwoFaVerify(challengeToken: string, twoFaCode: string): Promi
   return post('/auth/2fa/verify', { challengeToken, twoFaCode });
 }
 
-export function apiMe(): Promise<MerchantProfile> {
-  return get<MerchantProfile>('/auth/me');
+export function apiMe(token?: string): Promise<MerchantProfile> {
+  return request({ method: 'GET', url: '/auth/me', headers: token ? { Authorization: 'Bearer ' + token } : undefined });
 }
 
 export const apiMerchantContacts = () => get<{ contacts: { channel: 'email' | 'sms'; recipient: string }[] }>('/auth/contacts');
@@ -129,8 +129,8 @@ export const apiActivationOtpVerify = (challengeToken: string, otpCode: string) 
 export const apiActivationTotpSetup = (activationToken: string) => post<TwoFaSetupResult>('/api/v1/app/merchant/activation/totp/setup', { activationToken });
 export const apiActivationTotpVerify = (activationToken: string, twoFaCode: string) => post<unknown>('/api/v1/app/merchant/activation/totp/verify', { activationToken, twoFaCode });
 export const apiActivationFinish = (activationToken: string) => post<LoginResult>('/api/v1/app/merchant/activation/finish', { activationToken });
-export const apiEmailLoginStart = (identifier: string) => post<AuthOtpChallenge>('/api/v1/app/merchant/auth/challenge', { method: 'email', identifier });
-export const apiEmailLoginVerify = (challengeToken: string, otpCode: string) => post<ChallengeResult>('/api/v1/app/merchant/auth/challenge/verify', { method: 'email', challengeToken, otpCode });
+export const apiContactLoginStart = (method: 'email' | 'sms', identifier: string) => post<AuthOtpChallenge>('/api/v1/app/merchant/auth/challenge', { method, identifier });
+export const apiContactLoginVerify = (method: 'email' | 'sms', challengeToken: string, otpCode: string) => post<ChallengeResult>('/api/v1/app/merchant/auth/challenge/verify', { method, challengeToken, otpCode });
 export const apiRecoveryStart = (identifier: string) => post<AuthOtpChallenge>('/api/v1/app/merchant/auth/recovery/challenge', { method: 'email', identifier });
 export const apiRecoveryVerify = (challengeToken: string, otpCode: string) => post<{ recoveryToken: string; expiresIn: number }>('/api/v1/app/merchant/auth/recovery/verify', { challengeToken, otpCode });
 export const apiRecoveryTotpSetup = (recoveryToken: string) => post<TwoFaSetupResult>('/api/v1/app/merchant/auth/recovery/totp/setup', { recoveryToken });

@@ -10,6 +10,7 @@ use Mtrip\Shared\Constants\ErrorCode;
 use Mtrip\Shared\Context\MerchantContext;
 use Mtrip\Shared\Exception\BusinessException;
 use Mtrip\Shared\Merchant\Totp;
+use Mtrip\Shared\Merchant\MerchantSessions;
 use Mtrip\Shared\Support\CryptoHelper;
 use Mtrip\Shared\Support\MaskHelper;
 use Mtrip\Shared\Support\SmsPohClient;
@@ -190,7 +191,7 @@ class MerchantAuthenticationService
             MerchantActivityService::account($active, 'login', $ip);
             return ['account' => $active, 'amr' => 'totp'];
         });
-        return $this->auth->issueSession($result['account'], [], $result['amr']);
+        return $this->auth->issueSession($result['account'], [], $result['amr'], 'activation');
     }
 
     public function loginChallenge(int $siteId, string $method, string $identifier, string $googleIdToken, string $ip): array
@@ -212,13 +213,14 @@ class MerchantAuthenticationService
             $identity = $this->verifyGoogleIdToken($googleIdToken);
             $account = $this->findGoogleAccount($siteId, $this->googleHash($identity['issuer'], $identity['subject']));
             if (! $account) return $this->decoyChallenge($siteId, 'login', 'google:email', $ip);
-            $channel = $account['verified_email_at'] ? 'email' : ($account['verified_mobile_at'] ? 'sms' : '');
+            $channel = $account['verified_email_at'] && MerchantSessions::methodEnabled($account, 'email')
+                ? 'email' : ($account['verified_mobile_at'] && MerchantSessions::methodEnabled($account, 'sms') ? 'sms' : '');
             if ($channel === '') return $this->decoyChallenge($siteId, 'login', 'google:email', $ip);
             return $this->createOtp($account, 'login', 'google:' . $channel, $channel, $ip, $this->googleHash($identity['issuer'], $identity['subject']));
         }
         if (! in_array($method, ['email', 'sms'], true)) throw new BusinessException(ErrorCode::PARAM_ERROR, '登录方式不受支持');
         $account = $this->findContactAccount($siteId, $method, $identifier);
-        return $account ? $this->createOtp($account, 'login', $method, $method, $ip) : $this->decoyChallenge($siteId, 'login', $method, $ip);
+        return $account && MerchantSessions::methodEnabled($account, $method) ? $this->createOtp($account, 'login', $method, $method, $ip) : $this->decoyChallenge($siteId, 'login', $method, $ip);
     }
 
     public function verifyLogin(string $method, string $token, string $code, string $ip): array
@@ -226,11 +228,11 @@ class MerchantAuthenticationService
         if ($method === 'access_code') return $this->security->verify($token, $code, $ip);
         $challenge = $this->verifyOtp($token, $code, 'login', $ip);
         if ((int) $challenge['account_id'] <= 0) throw new BusinessException(ErrorCode::SMS_CODE_INVALID);
-        $account = $this->account((int) $challenge['account_id'], [1], true);
-        $now = gmdate('Y-m-d H:i:s');
+        $loginMethod = (string) $challenge['method'];
+        $expectedVersion = (int) ((json_decode((string) $challenge['context_json'], true) ?: [])['authVersion'] ?? -1);
+        $next = $this->security->beginAfterVerifiedContact((int) $challenge['account_id'], $loginMethod, $expectedVersion);
         Db::table('merchant_auth_challenge')->where('id', $challenge['id'])->where('status', 'verified')
-            ->update(['status' => 'consumed', 'consumed_at' => $now]);
-        $next = $this->security->beginAfterVerifiedContact((int) $account['id']);
+            ->update(['status' => 'consumed', 'consumed_at' => gmdate('Y-m-d H:i:s')]);
         return array_merge($next, ['method' => $method, 'verification' => 'totp', 'recipient' => '']);
     }
 
@@ -238,7 +240,7 @@ class MerchantAuthenticationService
     {
         if (! in_array($method, ['email', 'sms'], true)) throw new BusinessException(ErrorCode::PARAM_ERROR, '恢复方式不受支持');
         $account = $this->findContactAccount($siteId, $method, $identifier);
-        return $account ? $this->createOtp($account, 'recovery', $method, $method, $ip) : $this->decoyChallenge($siteId, 'recovery', $method, $ip);
+        return $account && MerchantSessions::methodEnabled($account, $method) ? $this->createOtp($account, 'recovery', $method, $method, $ip) : $this->decoyChallenge($siteId, 'recovery', $method, $ip);
     }
 
     public function verifyRecoveryOtp(string $token, string $code, string $ip): array
@@ -252,10 +254,23 @@ class MerchantAuthenticationService
 
     public function setupRecoveryTotp(string $token): array
     {
-        $account = $this->verifiedAccount($token, 'recovery', [1]);
-        $secret = Totp::secret();
-        Db::table('merchant_admin')->where('id', $account['id'])->update(['pending_secret_enc' => CryptoHelper::encrypt($secret, $this->aesKey())]);
-        return $this->totpSetup($account, $secret);
+        return Db::transaction(function () use ($token): array {
+            $challenge = $this->challenge($token, ['recovery'], ['verified'], true);
+            $account = $this->account((int) $challenge['account_id'], [1], true);
+            $this->assertRecoveryMethod($account, $challenge);
+            $secret = Totp::secret();
+            Db::table('merchant_admin')->where('id', $account['id'])->update(['pending_secret_enc' => CryptoHelper::encrypt($secret, $this->aesKey())]);
+            return $this->totpSetup($account, $secret);
+        });
+    }
+
+    private function assertRecoveryMethod(array $account, array $challenge): void
+    {
+        $context = json_decode((string) $challenge['context_json'], true) ?: [];
+        if ((int) ($context['authVersion'] ?? -1) !== (int) $account['auth_version']
+            || ! MerchantSessions::methodEnabled($account, (string) $challenge['method'])) {
+            throw new BusinessException(ErrorCode::SMS_CODE_EXPIRED);
+        }
     }
 
     public function verifyRecoveryTotp(string $token, string $code, string $ip): array
@@ -263,6 +278,7 @@ class MerchantAuthenticationService
         $result = Db::transaction(function () use ($token, $code, $ip): array {
             $challenge = $this->challenge($token, ['recovery'], ['verified'], true);
             $account = $this->account((int) $challenge['account_id'], [1], true);
+            $this->assertRecoveryMethod($account, $challenge);
             try {
                 $this->saveTotp($account, $code, $ip, 'account_recovered');
             } catch (BusinessException $e) {
@@ -280,7 +296,7 @@ class MerchantAuthenticationService
         $now = gmdate('Y-m-d H:i:s');
         Db::table('merchant_admin')->where('id', $account['id'])->update(['last_login_at' => $now, 'last_login_method' => 'totp_recovery']);
         MerchantActivityService::account($account, 'login', $ip);
-        return $this->auth->issueSession(array_replace($account, ['last_login_at' => $now]), [], 'totp');
+        return $this->auth->issueSession(array_replace($account, ['last_login_at' => $now]), [], 'totp', 'recovery');
     }
 
     public function deletionAccount(bool $lock = false): array
@@ -378,6 +394,9 @@ class MerchantAuthenticationService
         return Db::transaction(function () use ($account, $purpose, $method, $channel, $ip, $googleHash, $newRecipient, $extraContext): array {
             $account = $this->account((int) $account['id'], [(int) $account['status']], true);
             $this->assertUnlocked($account);
+            if (in_array($purpose, ['login', 'recovery'], true) && ! MerchantSessions::methodEnabled($account, $method)) {
+                return $this->decoyChallenge((int) $account['site_id'], $purpose, $method, $ip);
+            }
             if ($purpose === 'account_deletion' && ! $account[$channel === 'email' ? 'verified_email_at' : 'verified_mobile_at']) {
                 throw new BusinessException(ErrorCode::SMS_CHANNEL_UNAVAILABLE, '联系方式未验证');
             }
@@ -450,6 +469,9 @@ class MerchantAuthenticationService
                 $account = $this->account((int) $challenge['account_id'], [1, 2], true);
                 $context = json_decode((string) $challenge['context_json'], true) ?: [];
                 if (isset($context['authVersion']) && (int) $context['authVersion'] !== (int) $account['auth_version']) {
+                    throw new BusinessException(ErrorCode::SMS_CODE_EXPIRED);
+                }
+                if (in_array($purpose, ['login', 'recovery'], true) && ! MerchantSessions::methodEnabled($account, (string) $challenge['method'])) {
                     throw new BusinessException(ErrorCode::SMS_CODE_EXPIRED);
                 }
                 if ($purpose !== 'rebind_new') $this->assertContactOwnership($account, $channel);

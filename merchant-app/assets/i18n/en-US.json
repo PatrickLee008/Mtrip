@@ -81,6 +81,17 @@
       "securityCopy": "Get SMS notifications for unrecognized logins or critical account changes.",
       "preview": "Preview only. These switches do not change notification delivery yet."
     },
+    "sessionControl": {
+      "face": "Face recognition",
+      "fingerprint": "Fingerprint",
+      "generic": "Biometric login",
+      "biometricHint": "Use access code and Google Authenticator to sign in before enabling biometric login on this device.",
+      "enable": "Enable biometric login",
+      "disable": "Turn off biometric login",
+      "current": "This session",
+      "end": "End session",
+      "empty": "No active sessions to display."
+    },
     "security": {
       "twoFa": "Two-Factor Authentication (2FA)",
       "twoFaCopy": "Add an extra layer of security to your account using an Authenticator App.",
@@ -321,6 +332,13 @@
       "scanInstruction": "Align the one-time QR code shown by Merchant Web within the frame."
     },
     "account": {
+      "login_email": "Email",
+      "login_sms": "SMS",
+      "registeredPhone": "Registered mobile number",
+      "invalidLoginPhone": "Enter the registered number with its country code.",
+      "sendSmsCode": "Send SMS code",
+      "verifySms": "Verify SMS code",
+      "contactInstead": "Use email or SMS instead",
       "identityRequired": "Enter an access code or username and temporary password",
       "emailRequired": "Enter your registered email",
       "activationTitle": "Activate Merchant Account",

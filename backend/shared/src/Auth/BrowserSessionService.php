@@ -41,6 +41,13 @@ final class BrowserSessionService
         $sid = bin2hex(random_bytes(24));
         $claims['aud'] = $realm;
         $claims['sid'] = $sid;
+        if ($realm === 'merchant') {
+            MerchantAccessGuard::assertSession($claims);
+            if (isset($claims['merchant_session_id'])) {
+                Db::table('merchant_login_session')->where('id', $claims['merchant_session_id'])->whereNull('revoked_at')
+                    ->update(['expires_at' => gmdate('Y-m-d H:i:s', time() + $policy['session'])]);
+            }
+        }
         $claims['session_version'] = (int) $this->redis->get($this->versionKey($realm, (int) $claims['admin_id']));
         unset($claims['iat'], $claims['exp'], $claims['jti']);
         $session = ['claims' => $claims, 'expires_at' => time() + $policy['session'], 'generation' => 1, 'rotated_at' => time()];
@@ -87,6 +94,9 @@ final class BrowserSessionService
         $claims['sid'] = $sid;
         $claims['aud'] = $realm;
         $claims['session_version'] = $session['claims']['session_version'];
+        if (isset($session['claims']['merchant_session_id'])) {
+            $claims['merchant_session_id'] = $session['claims']['merchant_session_id'];
+        }
         if ($realm === 'admin') $claims['security_stamp'] = $session['claims']['security_stamp'];
         unset($claims['iat'], $claims['exp'], $claims['jti']);
         $nextHash = hash('sha256', $this->credential($sid, $generation + 1, $realm));

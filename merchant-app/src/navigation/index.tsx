@@ -1,4 +1,5 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useEffect } from 'react';
+import { AppState } from 'react-native';
 import { NavigationContainer, useNavigationContainerRef } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
@@ -9,7 +10,6 @@ import RegisterBusinessDetailsScreen from '@/screens/auth/RegisterBusinessDetail
 import MerchantAccountScreen from '@/screens/auth/MerchantAccountScreen';
 import RegisterContactScreen from '@/screens/auth/RegisterContactScreen';
 import {
-  BiometricOptInScreen,
   KycDocumentsScreen,
   KycReviewScreen,
   MerchantLoginScreen,
@@ -41,6 +41,16 @@ export default function AppNavigator() {
   }, [navigation]);
   useDeletionDecision(returnToLogin);
   const isLogin = useMerchantStore((s) => s.isLogin);
+  useEffect(() => useMerchantStore.subscribe((state, previous) => {
+    if (!state.isLogin && previous.isLogin) returnToLogin();
+  }), [returnToLogin]);
+  useEffect(() => {
+    if (!isLogin) return;
+    const verify = () => { void useMerchantStore.getState().refreshProfile().catch(() => undefined); };
+    const listener = AppState.addEventListener('change', state => { if (state === 'active') verify(); });
+    const timer = setInterval(() => { if (AppState.currentState === 'active') verify(); }, 60_000);
+    return () => { listener.remove(); clearInterval(timer); };
+  }, [isLogin]);
   const registrationToken = useRegistrationStore((s) => s.registrationToken);
   const registrationPhone = useRegistrationStore((s) => s.registrationPhone);
   const registrationStatus = useRegistrationStore((s) => s.status?.registrationStatus);
@@ -74,7 +84,6 @@ export default function AppNavigator() {
         <Stack.Screen name="QrLogin" component={QrLoginScreen} />
         <Stack.Screen name="TwoFaSetup" component={TwoFaSetupScreen} />
         <Stack.Screen name="TwoFaVerify" component={TwoFaVerifyScreen} />
-        <Stack.Screen name="BiometricOptIn" component={BiometricOptInScreen} />
         <Stack.Screen name="Dashboard" component={DashboardScreen} />
         <Stack.Screen name="Menu" component={MenuScreen} />
         <Stack.Screen name="MenuSettings" component={MenuSettingsScreen} />

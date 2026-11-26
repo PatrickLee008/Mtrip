@@ -1,12 +1,11 @@
 import { create } from 'zustand';
-import * as LocalAuthentication from 'expo-local-authentication';
 import i18n from '@/i18n';
 
-import { apiAppAccessCodeVerify, apiAppLogout, apiAppPairingExchange, apiAppTwoFaSetupInfo, apiAppTwoFaVerify, apiEmailLoginStart, apiEmailLoginVerify, apiLogin, apiMe, apiTwoFaSetup, apiTwoFaVerify } from '@/api/merchant';
+import { apiAppAccessCodeVerify, apiAppLogout, apiAppPairingExchange, apiAppTwoFaSetupInfo, apiAppTwoFaVerify, apiContactLoginStart, apiContactLoginVerify, apiLogin, apiMe, apiTwoFaSetup, apiTwoFaVerify } from '@/api/merchant';
 import type { AuthOtpChallenge, ChallengeResult, LoginResult, MerchantProfile, TwoFaSetupResult } from '@/api/types';
 import { STORAGE_KEYS } from '@/config/global';
 import { storage } from '@/utils/storage';
-import { biometricEnabled, clearMerchantSession, disableBiometric, readMerchantToken, writeMerchantToken } from '@/utils/merchantSession';
+import { clearMerchantSession, readMerchantToken, writeMerchantToken } from '@/utils/merchantSession';
 
 interface MerchantState {
   token: string;
@@ -22,8 +21,8 @@ interface MerchantState {
   verifyTwoFa: (twoFaCode: string) => Promise<void>;
   beginAccessCode: (accessCode: string) => Promise<ChallengeResult>;
   beginAppPairing: (pairingCode: string) => Promise<ChallengeResult>;
-  beginEmailLogin: (email: string) => Promise<AuthOtpChallenge>;
-  verifyEmailLogin: (challengeToken: string, otpCode: string) => Promise<ChallengeResult>;
+  beginContactLogin: (method: 'email' | 'sms', identifier: string) => Promise<AuthOtpChallenge>;
+  verifyContactLogin: (method: 'email' | 'sms', challengeToken: string, otpCode: string) => Promise<ChallengeResult>;
   loadAppTwoFaSetup: () => Promise<TwoFaSetupResult | null>;
   verifyAppTwoFa: (twoFaCode: string) => Promise<void>;
   acceptSession: (result: LoginResult) => Promise<void>;
@@ -37,12 +36,10 @@ export const useMerchantStore = create<MerchantState>((set, get) => ({
   setPropertyId: (propertyId) => set({ propertyId }),
   async hydrate() {
     try {
-      const [token, profile] = await Promise.all([readMerchantToken(), storage.getObject<MerchantProfile>(STORAGE_KEYS.PROFILE)]);
-      if (!token || !profile) return;
-      if (await biometricEnabled()) {
-        const result = await LocalAuthentication.authenticateAsync({ promptMessage: i18n.t('flow.biometric.unlock'), disableDeviceFallback: true });
-        if (!result.success) return;
-      }
+      const token = await readMerchantToken(i18n.t('flow.biometric.unlock'));
+      if (!token) return;
+      const profile = await apiMe(token);
+      await storage.setObject(STORAGE_KEYS.PROFILE, profile);
       set({ token, profile, isLogin: true, propertyId: profile.storeId || 0 });
     } catch {
       // A failed secure-store read must never bypass the unlock gate.
@@ -76,11 +73,11 @@ export const useMerchantStore = create<MerchantState>((set, get) => ({
     set({ challenge, setup: null });
     return challenge;
   },
-  async beginEmailLogin(email) {
-    return apiEmailLoginStart(email);
+  async beginContactLogin(method, identifier) {
+    return apiContactLoginStart(method, identifier);
   },
-  async verifyEmailLogin(challengeToken, otpCode) {
-    const challenge = await apiEmailLoginVerify(challengeToken, otpCode);
+  async verifyContactLogin(method, challengeToken, otpCode) {
+    const challenge = await apiContactLoginVerify(method, challengeToken, otpCode);
     set({ challenge, setup: null });
     return challenge;
   },
@@ -98,7 +95,6 @@ export const useMerchantStore = create<MerchantState>((set, get) => ({
     await get().acceptSession(result);
   },
   async acceptSession(result) {
-    if (get().profile?.id && get().profile?.id !== result.admin.id) await disableBiometric();
     await writeMerchantToken(result.token);
     await storage.setObject(STORAGE_KEYS.PROFILE, result.admin);
     set({ token: result.token, profile: result.admin, isLogin: true, propertyId: result.admin.storeId || 0, challenge: null, setup: null });

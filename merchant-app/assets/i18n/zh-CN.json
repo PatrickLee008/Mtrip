@@ -81,6 +81,17 @@
       "securityCopy": "发生未知登录或重要账号变更时接收短信。",
       "preview": "当前仅供预览，切换开关暂不改变实际通知。"
     },
+    "sessionControl": {
+      "face": "面容识别",
+      "fingerprint": "指纹识别",
+      "generic": "生物识别登录",
+      "biometricHint": "请用访问码和 Google Authenticator 完成登录后，在此设备开启生物识别登录。",
+      "enable": "开启生物识别登录",
+      "disable": "关闭生物识别登录",
+      "current": "当前会话",
+      "end": "退出会话",
+      "empty": "暂无可显示的活跃会话。"
+    },
     "security": {
       "twoFa": "双因素认证（2FA）",
       "twoFaCopy": "使用身份验证器为账号增加一层安全保护。",
@@ -321,6 +332,13 @@
       "scanInstruction": "请将商户网页版显示的一次性二维码置于扫描框内。"
     },
     "account": {
+      "login_email": "邮箱",
+      "login_sms": "短信",
+      "registeredPhone": "已注册手机号",
+      "invalidLoginPhone": "请输入带国家或地区区号的注册手机号。",
+      "sendSmsCode": "发送短信验证码",
+      "verifySms": "验证短信验证码",
+      "contactInstead": "使用邮箱或短信登录",
       "identityRequired": "请输入访问码，或用户名和临时密码",
       "emailRequired": "请输入注册邮箱",
       "activationTitle": "激活商户账户",

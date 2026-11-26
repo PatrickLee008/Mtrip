@@ -15,17 +15,13 @@ use Mtrip\Shared\Merchant\Totp;
 use Mtrip\Shared\Support\CryptoHelper;
 use Mtrip\Shared\Support\JwtHelper;
 
-use Hyperf\Di\Annotation\Inject;
-use Hyperf\Redis\Redis;
+use Mtrip\Shared\Merchant\MerchantSessions;
 
 use function Hyperf\Config\config;
 
 class MerchantAccountSecurityService
 {
     private const PAIRING_TTL = 120;
-
-    #[Inject]
-    protected Redis $redis;
 
     public function begin(int $id, string $password): array
     {
@@ -36,7 +32,7 @@ class MerchantAccountSecurityService
                 $this->failure($account);
                 return ['error' => true];
             }
-            return $this->issueChallenge($account);
+            return $this->issueChallenge($account, 'password');
         });
         if (isset($result['error'])) throw new BusinessException(ErrorCode::UNAUTHORIZED, '账号或密码错误');
         return $result;
@@ -53,17 +49,20 @@ class MerchantAccountSecurityService
             $account = $this->account((int) Db::table('merchant_admin')->where('merchant_id', $merchant->id)->where('account_type', 2)->where('is_owner', 1)->whereNull('deleted_at')->value('id'));
             if ((int) $account['two_fa_status'] !== 1) throw new BusinessException(ErrorCode::UNAUTHORIZED, '访问码登录尚未关联身份验证器');
             $this->unlocked($account);
-            return $this->issueChallenge($account);
+            return $this->issueChallenge($account, 'access_code');
         });
     }
 
     /** A verified contact OTP may start, but never complete, a business login. */
-    public function beginAfterVerifiedContact(int $accountId): array
+    public function beginAfterVerifiedContact(int $accountId, string $method, int $expectedVersion): array
     {
-        return Db::transaction(function () use ($accountId): array {
+        return Db::transaction(function () use ($accountId, $method, $expectedVersion): array {
             $account = $this->account($accountId);
+            if ((int) $account['auth_version'] !== $expectedVersion || ! MerchantSessions::methodEnabled($account, $method)) {
+                throw new BusinessException(ErrorCode::UNAUTHORIZED, '登录验证已失效，请重新登录');
+            }
             $this->unlocked($account);
-            return $this->issueChallenge($account);
+            return $this->issueChallenge($account, $method);
         });
     }
 
@@ -84,6 +83,7 @@ class MerchantAccountSecurityService
     {
         $result = Db::transaction(function () use ($token, $code, $ip) {
             $account = $this->challenge($token);
+            $method = (string) (JwtHelper::verify($token, $this->key('jwt_secret'))['login_method'] ?? 'authenticator');
             $enrolling = (int) $account['two_fa_status'] !== 1;
             $encrypted = $enrolling ? $account['pending_secret_enc'] : $account['two_fa_secret_enc'];
             if ($encrypted === '') throw new BusinessException(ErrorCode::DATA_CONFLICT, '请先设置身份验证器');
@@ -96,14 +96,14 @@ class MerchantAccountSecurityService
                 'two_fa_status' => 1, 'two_fa_method' => 'google_authenticator', 'two_fa_secret_enc' => $encrypted,
                 'last_accepted_totp_step' => $step, 'challenge_hash' => null, 'challenge_expires_at' => null,
                 'pending_secret_enc' => '', 'security_fail_count' => 0, 'security_locked_until' => null,
-                'last_login_at' => gmdate('Y-m-d H:i:s'),
+                'last_login_at' => gmdate('Y-m-d H:i:s'), 'last_login_method' => $method,
             ];
             if ($enrolling) $update['two_fa_enrolled_at'] = gmdate('Y-m-d H:i:s');
             Db::table('merchant_admin')->where('id', $account['id'])->update($update);
             if ($enrolling) MerchantActivityService::account($account, 'two_fa_enrolled', $ip);
             if ($enrolling && (int) $account['merchant_id'] > 0) Db::table('merchant_info')->where('id', $account['merchant_id'])->update(['access_status' => 1]);
             MerchantActivityService::account($account, 'login', $ip);
-            return (new MerchantAuthService())->issueSession(array_replace($account, $update));
+            return (new MerchantAuthService())->issueSession(array_replace($account, $update), method: $method);
         });
         // Throw after the transaction commits so failed attempts cannot roll back their own lockout.
         if (isset($result['error'])) throw new BusinessException(ErrorCode::PARAM_ERROR, '验证码无效、已使用或过期');
@@ -139,30 +139,34 @@ class MerchantAccountSecurityService
     /** Create an opaque, single-use App pairing code from an already validated Web 2FA challenge. */
     public function createAppPairing(string $token): array
     {
-        $account = $this->challenge($token);
-        $code = rtrim(strtr(base64_encode(random_bytes(32)), '+/', '-_'), '=');
-        $this->redis->setex($this->pairingKey($code), self::PAIRING_TTL, json_encode([
-            'adminId' => (int) $account['id'],
-            'authVersion' => (int) $account['auth_version'],
-        ]) ?: '');
-        return ['pairingCode' => $code, 'expiresIn' => self::PAIRING_TTL];
+        return Db::transaction(function () use ($token): array {
+            $account = $this->challenge($token);
+            $code = rtrim(strtr(base64_encode(random_bytes(32)), '+/', '-_'), '=');
+            Db::table('merchant_login_pairing')->where('account_id', $account['id'])
+                ->where('expires_at', '<=', gmdate('Y-m-d H:i:s'))->delete();
+            Db::table('merchant_login_pairing')->insert([
+                'code_hash' => hash('sha256', $code), 'account_id' => $account['id'],
+                'auth_version' => $account['auth_version'], 'expires_at' => gmdate('Y-m-d H:i:s', time() + self::PAIRING_TTL),
+            ]);
+            return ['pairingCode' => $code, 'expiresIn' => self::PAIRING_TTL];
+        });
     }
 
     /** Exchange an opaque Web QR pairing code for a fresh App-only five-minute 2FA challenge. */
     public function exchangeAppPairing(string $code): array
     {
         if (! preg_match('/^[A-Za-z0-9_-]{43}$/D', $code)) throw new BusinessException(ErrorCode::UNAUTHORIZED, '配对二维码无效');
-        $payload = json_decode((string) $this->redis->eval(<<<'LUA'
-local value = redis.call('get', KEYS[1])
-if value then redis.call('del', KEYS[1]) end
-return value
-LUA, [$this->pairingKey($code)], 1), true);
-        if (! is_array($payload)) throw new BusinessException(ErrorCode::UNAUTHORIZED, '配对二维码已失效');
-        return Db::transaction(function () use ($payload): array {
-            $account = $this->account((int) ($payload['adminId'] ?? 0));
-            if ((int) $account['auth_version'] !== (int) ($payload['authVersion'] ?? 0)) throw new BusinessException(ErrorCode::UNAUTHORIZED, '配对二维码已失效');
+        $hash = hash('sha256', $code);
+        $accountId = (int) Db::table('merchant_login_pairing')->where('code_hash', $hash)->value('account_id');
+        return Db::transaction(function () use ($hash, $accountId): array {
+            $account = $this->account($accountId);
+            $now = gmdate('Y-m-d H:i:s');
+            $consumed = Db::table('merchant_login_pairing')->where('code_hash', $hash)
+                ->where('auth_version', $account['auth_version'])->whereNull('consumed_at')->where('expires_at', '>', $now)
+                ->update(['consumed_at' => $now]);
+            if ($consumed !== 1) throw new BusinessException(ErrorCode::UNAUTHORIZED, '配对二维码已失效');
             $this->unlocked($account);
-            return $this->issueChallenge($account);
+            return $this->issueChallenge($account, 'qr');
         });
     }
 
@@ -220,19 +224,14 @@ LUA, [$this->pairingKey($code)], 1), true);
     }
 
     /** @param array<string,mixed> $account */
-    private function issueChallenge(array $account): array
+    private function issueChallenge(array $account, string $method): array
     {
-        $token = JwtHelper::issue(['aud' => 'merchant_2fa', 'admin_id' => $account['id'], 'auth_version' => $account['auth_version']], $this->key('jwt_secret'), 300);
+        $token = JwtHelper::issue(['aud' => 'merchant_2fa', 'admin_id' => $account['id'], 'auth_version' => $account['auth_version'], 'login_method' => $method], $this->key('jwt_secret'), 300);
         Db::table('merchant_admin')->where('id', $account['id'])->update([
             'challenge_hash' => hash('sha256', $token), 'challenge_expires_at' => gmdate('Y-m-d H:i:s', time() + 300),
             'pending_secret_enc' => '',
         ]);
         return ['challengeToken' => $token, 'requiresEnrollment' => (int) $account['two_fa_status'] !== 1, 'expiresIn' => 300];
-    }
-
-    private function pairingKey(string $code): string
-    {
-        return 'mtrip:merchant:2fa:pairing:' . hash('sha256', $code);
     }
 
     private function unlocked(array $account): void

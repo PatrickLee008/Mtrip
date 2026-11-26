@@ -139,7 +139,12 @@ class AuthController extends AbstractController
     public function logout(): array
     {
         Db::transaction(function (): void {
-            Db::table('merchant_admin')->where('id', MerchantContext::adminId())->update(['auth_version' => Db::raw('auth_version + 1'), 'challenge_hash' => null, 'pending_secret_enc' => '']);
+            $id = (int) (MerchantContext::get()['merchant_session_id'] ?? 0);
+            if ($id > 0) {
+                \Mtrip\Shared\Merchant\MerchantSessions::end($id, MerchantContext::adminId());
+            } else {
+                Db::table('merchant_admin')->where('id', MerchantContext::adminId())->update(['auth_version' => Db::raw('auth_version + 1'), 'challenge_hash' => null, 'pending_secret_enc' => '']);
+            }
             \App\Service\MerchantActivityService::changed(MerchantContext::adminId(), 'logout', $this->clientIp());
         });
         return Result::success(null, '已退出登录');

@@ -31,6 +31,8 @@ export default function MerchantAccountScreen() {
   const [username, setUsername] = useState('');
   const [temporaryPassword, setTemporaryPassword] = useState('');
   const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
+  const [channel, setChannel] = useState<'email' | 'sms'>('email');
   const [code, setCode] = useState('');
   const [challenge, setChallenge] = useState<AuthOtpChallenge | null>(null);
   const [activationToken, setActivationToken] = useState('');
@@ -38,8 +40,8 @@ export default function MerchantAccountScreen() {
   const [now, setNow] = useState(Date.now());
   const [busy, setBusy] = useState(false);
   const showToast = useCommonStore((s) => s.showToast);
-  const beginEmailLogin = useMerchantStore((s) => s.beginEmailLogin);
-  const verifyEmailLogin = useMerchantStore((s) => s.verifyEmailLogin);
+  const beginContactLogin = useMerchantStore((s) => s.beginContactLogin);
+  const verifyContactLogin = useMerchantStore((s) => s.verifyContactLogin);
   const acceptSession = useMerchantStore((s) => s.acceptSession);
   const clearRegistration = useRegistrationStore((s) => s.clear);
 
@@ -73,8 +75,11 @@ export default function MerchantAccountScreen() {
         if (!isEmail(email)) { showToast(t(email.trim() ? 'validation.invalidEmail' : 'validation.emailRequired')); return; }
         next = await apiRecoveryStart(email.trim().toLowerCase());
       } else {
-        if (!isEmail(email)) { showToast(t(email.trim() ? 'validation.invalidEmail' : 'validation.emailRequired')); return; }
-        next = await beginEmailLogin(email.trim().toLowerCase());
+        const identifier = channel === 'email' ? email.trim().toLowerCase() : phone.trim().replace(/[\s().-]+/g, '');
+        if (channel === 'email' ? !isEmail(identifier) : !/^\+[1-9]\d{6,14}$/.test(identifier)) {
+          showToast(t(channel === 'email' ? 'validation.invalidEmail' : 'flow.account.invalidLoginPhone')); return;
+        }
+        next = await beginContactLogin(channel, identifier);
       }
       setChallenge(next); setCode(''); setResendAt(Date.now() + next.resendAfter * 1000); setStep('otp');
     } catch (error) { handleError(error); }
@@ -89,13 +94,13 @@ export default function MerchantAccountScreen() {
         if (result.profile.methods.accessCode) {
           await acceptSession(await apiActivationFinish(result.activationToken));
           clearRegistration();
-          navigation.reset({ index: 0, routes: [{ name: 'BiometricOptIn' }] });
+          navigation.reset({ index: 0, routes: [{ name: 'Dashboard' }] });
         } else navigation.navigate('TwoFaSetup', { mode: 'activation', token: result.activationToken });
       } else if (mode === 'recovery') {
         const result = await apiRecoveryVerify(challenge.challengeToken, code);
         navigation.navigate('TwoFaSetup', { mode: 'recovery', token: result.recoveryToken });
       } else {
-        const next = await verifyEmailLogin(challenge.challengeToken, code);
+        const next = await verifyContactLogin(channel, challenge.challengeToken, code);
         navigation.navigate(next.requiresEnrollment ? 'TwoFaSetup' : 'TwoFaVerify', { mode: 'login' });
       }
     } catch (error) { handleError(error); }
@@ -115,14 +120,24 @@ export default function MerchantAccountScreen() {
           <Text style={styles.hint}>{t('flow.account.temporaryHint')}</Text>
           <TextInput style={styles.input} value={username} onChangeText={setUsername} placeholder={t('flow.account.username')} autoCapitalize="none" />
           <TextInput style={styles.input} value={temporaryPassword} onChangeText={setTemporaryPassword} placeholder={t('flow.account.temporaryPassword')} secureTextEntry />
-        </> : <TextInput style={styles.input} value={email} onChangeText={setEmail} placeholder={t('flow.account.registeredEmail')} keyboardType="email-address" autoCapitalize="none" />}
-        <PrimaryButton label={busy ? t('flow.common.sending') : t('flow.account.sendEmailCode')} disabled={busy} onPress={() => void send()} />
+        </> : <>
+          {mode === 'login' ? <View style={styles.modeRow}>
+            {(['email', 'sms'] as const).map((item) => <Pressable key={item} accessibilityRole="radio"
+              accessibilityState={{ checked: channel === item }} disabled={busy} onPress={() => setChannel(item)}>
+              <Text style={[styles.mode, channel === item && styles.modeActive]}>{t('flow.account.login_' + item)}</Text>
+            </Pressable>)}
+          </View> : null}
+          {mode === 'login' && channel === 'sms'
+            ? <TextInput style={styles.input} value={phone} onChangeText={setPhone} placeholder={t('flow.account.registeredPhone')} keyboardType="phone-pad" />
+            : <TextInput style={styles.input} value={email} onChangeText={setEmail} placeholder={t('flow.account.registeredEmail')} keyboardType="email-address" autoCapitalize="none" />}
+        </>}
+        <PrimaryButton label={busy ? t('flow.common.sending') : t(mode === 'login' && channel === 'sms' ? 'flow.account.sendSmsCode' : 'flow.account.sendEmailCode')} disabled={busy} onPress={() => void send()} />
       </View> : null}
       {step === 'otp' ? <View style={styles.form}>
         <Text style={styles.hint}>{t('flow.account.codeSent', { recipient: challenge?.recipient })}</Text>
         {challenge?.testMode ? <Text style={styles.testMode}>{t('flow.account.testMode')}</Text> : null}
         <TextInput style={styles.input} value={code} onChangeText={(value) => setCode(value.replace(/\D/g, '').slice(0, 6))} keyboardType="number-pad" placeholder={t('flow.account.sixDigitCode')} />
-        <PrimaryButton label={busy ? t('flow.common.verifying') : t('flow.account.verifyEmail')} disabled={busy || code.length !== 6} onPress={() => void verifyOtp()} />
+        <PrimaryButton label={busy ? t('flow.common.verifying') : t(mode === 'login' && channel === 'sms' ? 'flow.account.verifySms' : 'flow.account.verifyEmail')} disabled={busy || code.length !== 6} onPress={() => void verifyOtp()} />
         <Pressable disabled={busy || remaining > 0} onPress={() => void send(true)}><Text style={[styles.link, remaining > 0 && styles.disabled]}>{remaining > 0 ? t('flow.account.resendIn', { seconds: remaining }) : t('flow.account.resendCode')}</Text></Pressable>
       </View> : null}
     </ScrollView>

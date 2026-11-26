@@ -14,7 +14,6 @@ export type RootStackParamList = {
   QrLogin: undefined;
   TwoFaSetup: { mode: 'activation' | 'recovery'; token: string } | { mode: 'login' };
   TwoFaVerify: { mode: 'activation' | 'recovery'; token: string } | { mode: 'login' };
-  BiometricOptIn: undefined;
   Dashboard: undefined;
   Menu: undefined;
   MenuSettings: { section: 'profile' | 'notifications' | 'security' | 'localization' | 'hotelTerms' };

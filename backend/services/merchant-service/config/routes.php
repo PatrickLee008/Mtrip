@@ -82,6 +82,10 @@ Router::post('/api/v1/app/merchant/auth/credential-claim/email', [\App\Controlle
 Router::post('/api/v1/app/merchant/auth/credential-claim/finish', [\App\Controller\MerchantContactSecurityController::class, 'claimFinish']);
 Router::post('/api/v1/app/merchant/deletion/receipt', [AppDeletionController::class, 'receipt']);
 Router::addGroup('/api/v1/app/merchant', static function () {
+    Router::get('/security/sessions', [\App\Controller\App\Merchant\SessionsController::class, 'index']);
+    Router::post('/security/sessions/end', [\App\Controller\App\Merchant\SessionsController::class, 'end']);
+    Router::post('/security/device/trust', [\App\Controller\App\Merchant\SessionsController::class, 'trust']);
+    Router::post('/security/device/untrust', [\App\Controller\App\Merchant\SessionsController::class, 'untrust']);
     Router::get('/deletion/current', [AppDeletionController::class, 'current']);
     Router::post('/deletion/otp', [AppDeletionController::class, 'send']);
     Router::post('/deletion/submit', [AppDeletionController::class, 'submit']);
@@ -129,6 +133,8 @@ Router::addGroup('/api/v1/admin', static function () {
     Router::post('/merchant/reactivate', [MerchantController::class, 'reactivate']);
     Router::get('/merchant/status-history', [MerchantController::class, 'statusHistory']);
     Router::post('/merchant/security/contacts/correct', [\App\Controller\Admin\ContactSecurityController::class, 'correct']);
+    Router::get('/merchant/security/login-controls', [\App\Controller\Admin\MerchantLoginControlController::class, 'show']);
+    Router::post('/merchant/security/login-controls', [\App\Controller\Admin\MerchantLoginControlController::class, 'change']);
     Router::get('/merchant/security/accounts', [\App\Controller\MerchantSecurityController::class, 'accounts']);
     Router::post('/merchant/reset-2fa', [MerchantController::class, 'resetTwoFa']);
     Router::post('/merchant/impersonate/start', [MerchantController::class, 'impersonateStart']);
