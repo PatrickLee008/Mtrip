@@ -8,6 +8,8 @@ use Hyperf\DbConnection\Db;
 /** Shared by admin preview and consumer reads. Published ranking snapshots contain Property IDs only. */
 final class MarketplaceReader
 {
+    public const PROPERTY_CITY_SQL = "LOWER(TRIM(REGEXP_REPLACE(s.city_key, '[[:space:]]+', ' ')))";
+
     public static function group(array $row): int
     {
         return ! empty($row['pinned']) ? 0 : (! empty($row['featured']) ? 1 : 2);
@@ -29,8 +31,8 @@ final class MarketplaceReader
             ->where('s.business_type', 'hotel')
             ->whereNull('s.deleted_at')->whereNull('m.deleted_at');
         if ($propertyIds !== null) $query->whereIn('s.id', $propertyIds);
-        if (($scope['country_code'] ?? '') !== '') $query->where('s.country_code', $scope['country_code']);
-        if (($scope['market_key'] ?? '') !== '') $query->whereRaw('LOWER(TRIM(s.city_key)) = ?', [mb_strtolower(trim($scope['market_key']))]);
+        if (($scope['country_code'] ?? '') !== '') $query->whereRaw('UPPER(TRIM(s.country_code)) = ?', [$scope['country_code']]);
+        if (($scope['market_key'] ?? '') !== '') $query->whereRaw(self::PROPERTY_CITY_SQL . ' = ?', [$scope['market_key']]);
         return $query
             ->select([
                 's.id', 's.merchant_id', 's.source_business_id', 's.store_name', 's.address', 's.country_code', 's.city_key',
@@ -43,6 +45,7 @@ final class MarketplaceReader
             ->selectRaw('(SELECT COUNT(*) FROM merchant_blacklist bl WHERE bl.merchant_id=m.id AND bl.status=1) as blacklisted')
             ->selectRaw('(SELECT COUNT(*) FROM hotel_room_type r WHERE r.property_id=s.id AND r.site_id=s.site_id AND r.status=1 AND r.publish_status=2 AND r.approved_version>0 AND r.deleted_at IS NULL) as room_count')
             ->selectRaw('(SELECT MIN(base_price) FROM hotel_room_type r WHERE r.property_id=s.id AND r.site_id=s.site_id AND r.status=1 AND r.publish_status=2 AND r.approved_version>0 AND r.deleted_at IS NULL) as min_price')
+            ->selectRaw('(SELECT r.currency FROM hotel_room_type r WHERE r.property_id=s.id AND r.site_id=s.site_id AND r.status=1 AND r.publish_status=2 AND r.approved_version>0 AND r.deleted_at IS NULL ORDER BY r.base_price, r.id LIMIT 1) as min_price_currency')
             ->selectRaw('(SELECT MIN(base_price_citizen) FROM hotel_room_type r WHERE r.property_id=s.id AND r.site_id=s.site_id AND r.status=1 AND r.publish_status=2 AND r.approved_version>0 AND r.deleted_at IS NULL AND r.base_price_citizen>0) as min_price_citizen')
             // 酒店总分(5 分制口径,App ×2 即 PRD 的 10 分制):每条评价 = 总体 + 清洁/位置/服务/设施 五项之和 ÷ 25 × 10 ÷ 2(即 ÷5),再对所有显示中的评价取平均;
             // 五项没评满的老评价(分项为 0)退回总体评分
@@ -56,12 +59,23 @@ final class MarketplaceReader
 
     public static function qualified(array $property, bool $requireDisplay = true): bool
     {
-        return (int) $property['merchant_status'] === 3 && (int) $property['property_status'] === 1
-            && (int) $property['kyc_status'] === 1 && (int) $property['content_status'] === 2
-            && (int) ($property['content_approved_version'] ?? 0) > 0
-            && (int) $property['publish_status'] === 1 && (int) $property['operating_status'] === 1
-            && (int) ($property['room_count'] ?? 0) > 0 && ! $property['blacklisted']
-            && (! $requireDisplay || (int) $property['display_enabled'] === 1);
+        return self::qualificationReasons($property, $requireDisplay) === [];
+    }
+
+    /** Stable reason codes shared by ranking administration and consumer qualification. */
+    public static function qualificationReasons(array $property, bool $requireDisplay = true): array
+    {
+        $reasons = [];
+        if ((int) ($property['merchant_status'] ?? 0) !== 3) $reasons[] = 'merchant_status';
+        if ((int) ($property['property_status'] ?? 0) !== 1) $reasons[] = 'property_status';
+        if ((int) ($property['kyc_status'] ?? 0) !== 1) $reasons[] = 'kyc_status';
+        if ((int) ($property['content_status'] ?? 0) !== 2 || (int) ($property['content_approved_version'] ?? 0) <= 0) $reasons[] = 'content_status';
+        if ((int) ($property['publish_status'] ?? 0) !== 1) $reasons[] = 'publish_status';
+        if ((int) ($property['operating_status'] ?? 0) !== 1) $reasons[] = 'operating_status';
+        if ((int) ($property['room_count'] ?? 0) <= 0) $reasons[] = 'no_rooms';
+        if (! empty($property['blacklisted'])) $reasons[] = 'blacklisted';
+        if ($requireDisplay && (int) ($property['display_enabled'] ?? 0) !== 1) $reasons[] = 'display_disabled';
+        return $reasons;
     }
 
     public static function listings(array $configs, array $scope, bool $eligibleOnly = true): array
@@ -72,13 +86,15 @@ final class MarketplaceReader
         foreach (self::ordered($configs) as $config) {
             $rankingId = (int) $config['id'];
             $property = $properties[$config['property_id']] ?? null;
-            $eligible = $property && self::qualified($property);
+            $reasons = $property ? self::qualificationReasons($property) : ['property_missing'];
+            $eligible = $reasons === [];
             if ($eligibleOnly && (! $eligible || (int) $config['status'] !== 1)) continue;
             $result[] = array_merge($config, $property ?? [], [
                 'id' => $rankingId,
                 'property_id' => (int) $config['property_id'],
                 'property_name' => $property['store_name'] ?? '',
-                'eligible' => (bool) $eligible,
+                'eligible' => $eligible,
+                'qualification_reasons' => $reasons,
             ]);
         }
         return $result;
@@ -111,6 +127,7 @@ final class MarketplaceReader
                 'star_level' => (int) ($row['star_level'] ?? 0),
                 'sales_count' => (int) ($row['sales_count'] ?? 0),
                 'minPrice' => $minPrice,
+                'currency' => (string) $row['min_price_currency'],
                 'minPriceCitizen' => $citizenPrice > 0 ? $citizenPrice : $minPrice,
                 'rating' => (float) ($row['rating'] ?? 0),
                 'reviewCount' => (int) ($row['review_count'] ?? 0),

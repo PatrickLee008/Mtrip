@@ -63,7 +63,8 @@ try {
         'S6 unscoped search keeps each property location');
     check($hotelCall('detail', ['propertyId' => $properties[2]])['property_id'] === $properties[2],
         'S6 unranked property detail is available');
-    check($goodsCall('home')['recommend'] === [], 'S6 recommendation remains ranking-only');
+    check(array_column($goodsCall('home')['recommend'], 'property_id') === $properties,
+        'S6 home falls back to eligible hotels while the first ranking is still a draft');
     Db::table('ranking_market')->where('id', $market)->update(['version' => 1, 'published_version' => 1, 'published_json' => json_encode($configs)]);
 
     $list = $hotelCall('list', $query);

@@ -30,6 +30,9 @@ class RankingController extends AbstractController
     }
 
     #[Permission('merchant:ranking:list')]
+    public function markets(): array { return Result::success($this->marketplace->markets((int) $this->input('siteId', 0))); }
+
+    #[Permission('merchant:ranking:list')]
     public function listings(): array { return Result::success($this->marketplace->read($this->marketplace->scope($this->params(), 'listing'))); }
 
     #[Permission('merchant:ranking:list')]

@@ -20,7 +20,13 @@ export interface MarketState {
   published_at?: string;
 }
 const base = '/admin/merchant/ranking';
-export const readMarket = (scope: MarketScope): Promise<{ list: TableRow[]; market: MarketState }> =>
+export interface HotelMarket {
+  site_id: number;
+  country_code: string;
+  city_key: string;
+}
+export const readMarkets = (): Promise<{ list: HotelMarket[] }> => get(`${base}/markets`);
+export const readMarket = (scope: MarketScope): Promise<{ list: TableRow[]; market: MarketState; published_config: TableRow[] }> =>
   get(`${base}/${scope.entityType === 'listing' ? 'list' : 'destinations'}`, { ...scope });
 export const readCandidates = (scope: MarketScope): Promise<{ properties: TableRow[] }> =>
   get(`${base}/candidates`, { ...scope });

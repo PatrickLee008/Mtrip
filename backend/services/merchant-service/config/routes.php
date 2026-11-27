@@ -145,6 +145,7 @@ Router::addGroup('/api/v1/admin', static function () {
     Router::post('/merchant/impersonate/start', [MerchantController::class, 'impersonateStart']);
     Router::post('/merchant/impersonate/end', [MerchantController::class, 'impersonateEnd']);
     // ---------- Marketplace Ranking(整改 Phase C,前缀沿用 merchant 网关零改动) ----------
+    Router::get('/merchant/ranking/markets', [RankingController::class, 'markets']);
     Router::get('/merchant/ranking/list', [RankingController::class, 'listings']);
     Router::get('/merchant/ranking/candidates', [RankingController::class, 'candidates']);
     Router::get('/merchant/ranking/preview', [RankingController::class, 'preview']);

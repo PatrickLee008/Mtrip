@@ -72,6 +72,7 @@ export default {
   merchantContactRecovery: {"title": "Correct login contacts after review", "hint": "Only after a human identity review. This releases replaced identities, revokes all sessions and resets changed contacts to unverified. It does not verify the contacts. Pending accounts must claim credentials again.", "phone": "New registration mobile (E.164)", "email": "New registration email", "reason": "Identity evidence and reason (at least 10 characters)", "confirm": "Confirm identity review and correction", "done": "Contacts corrected. Merchant must complete real OTP verification."},
   complianceS6,
   marketplace: {
+    subtitle: "Manage the order of city hotel rankings and popular destinations in the consumer app.",
     title: "Marketplace ranking",
     rule: "Hotel properties only · pinned > featured > normal · each market is published separately",
     history: "Ranking history",

@@ -1,0 +1,26 @@
+export const messages = {
+  'en-US': {
+    draft: 'Draft', online: 'Online', empty: 'Unpublished', pending: 'Unpublished changes', synced: 'Up to date',
+    updated: 'Last updated', preview: 'Consumer preview', history: 'Ranking history', publish: 'Publish {city} ranking',
+    blocked: 'Remove these ineligible hotels from the draft ranking before publishing',
+    changes: 'Online → draft', reason: 'Business reason', success: 'Ranking published',
+    cityRank: 'City rank', groupRank: 'Rank within group', pinned: 'Pinned', featured: 'Featured', visibility: 'Ranking',
+    on: 'On', off: 'Off', listed: 'Listed', unlisted: 'Removed', added: 'Added to ranking', removed: 'Removed from ranking',
+    property: 'Hotel #{id}', noChanges: 'No ranking changes', noCards: 'No hotels to display', noHistory: 'No changes recorded',
+    from: 'From {price}', score: '{score}/10', unrated: 'No reviews', noImage: 'No photo', retry: 'Retry',
+    actions: { bind_hotel: 'Added hotel', reorder: 'Reordered hotels', display_flags: 'Updated ranking flags', publish: 'Published ranking',
+      pin: 'Pinned hotel', unpin: 'Unpinned hotel', add: 'Added hotel', update: 'Updated hotel', status_change: 'Changed visibility' },
+  },
+  'zh-CN': {
+    draft: '草稿', online: '线上', empty: '尚未发布', pending: '有待发布变更', synced: '已与线上同步',
+    updated: '最后更新', preview: '消费者预览', history: '变更历史', publish: '发布{city}榜单',
+    blocked: '以下酒店已失去展示资格，请先从草稿榜单移出，再发布',
+    changes: '线上 → 草稿', reason: '业务原因', success: '榜单已发布',
+    cityRank: '城市名次', groupRank: '组内名次', pinned: '置顶', featured: '精选', visibility: '榜单状态',
+    on: '开启', off: '关闭', listed: '已入榜', unlisted: '已移出', added: '加入榜单', removed: '移出榜单',
+    property: '酒店物业 #{id}', noChanges: '本次没有排名配置变更', noCards: '暂无可展示的酒店', noHistory: '暂无变更记录',
+    from: '{price} 起', score: '{score}/10 分', unrated: '暂无评价', noImage: '暂无图片', retry: '重试',
+    actions: { bind_hotel: '添加酒店', reorder: '调整顺序', display_flags: '调整榜单标记', publish: '发布榜单',
+      pin: '置顶酒店', unpin: '取消置顶', add: '添加酒店', update: '更新酒店', status_change: '调整榜单状态' },
+  },
+};

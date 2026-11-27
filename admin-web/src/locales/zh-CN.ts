@@ -70,6 +70,7 @@ export default {
   merchantContactRecovery: {"title": "核验后更正登录联系方式", "hint": "仅限已完成人工身份核验时使用。更换的旧身份会释放，所有会话失效，变更的联系方式重置为未验证。此操作不代表 OTP 已验证；待激活账号需重新领取凭证。", "phone": "新的注册手机号（含国际区号）", "email": "新的注册邮箱", "reason": "身份核验依据和换绑原因（至少 10 字）", "confirm": "确认已核验身份并更正", "done": "联系方式已更正，商户需完成真实 OTP 验证。"},
   complianceS6,
   marketplace: {
+    subtitle: "调整各城市的酒店榜单和热门目的地在消费者 App 中的展示顺序。",
     title: "市场排名管理",
     rule: "仅酒店物业 · 置顶优先于精选、普通 · 各市场独立发布",
     history: "排名变更历史",

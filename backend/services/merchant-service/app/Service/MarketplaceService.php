@@ -11,6 +11,30 @@ use Mtrip\Shared\Merchant\MarketplaceReader;
 
 final class MarketplaceService
 {
+    public function markets(int $requestedSite): array
+    {
+        $site = AdminContext::scopeSiteId($requestedSite);
+        $properties = Db::table('merchant_store as s')->join('merchant_info as m', 'm.id', '=', 's.merchant_id')
+            ->whereColumn('s.site_id', 'm.site_id')->where('s.business_type', 'hotel')
+            ->whereNull('s.deleted_at')->whereNull('m.deleted_at')
+            ->selectRaw('s.site_id, UPPER(TRIM(s.country_code)) AS country_code, ' . MarketplaceReader::PROPERTY_CITY_SQL . ' AS city_key');
+        $configured = Db::table('ranking_market')->where('entity_type', 'listing')->where('business_type', 'hotel')
+            ->select(['site_id', 'country_code', 'market_key as city_key']);
+        if ($site || ! AdminContext::isSuper()) {
+            $properties->where('s.site_id', $site);
+            $configured->where('site_id', $site);
+        }
+        $options = $configured->union($properties)->orderBy('city_key')->orderBy('country_code')->orderBy('site_id')->get();
+        $list = [];
+        foreach ($options as $option) {
+            if ((int) $option->site_id > 0 && preg_match('/^[A-Z]{2}$/D', $option->country_code ?? '')
+                && ($option->city_key ?? '') !== '' && mb_strlen($option->city_key) <= 80) {
+                $list[] = ['site_id' => (int) $option->site_id, 'country_code' => $option->country_code, 'city_key' => $option->city_key];
+            }
+        }
+        return ['list' => $list];
+    }
+
     public function scope(array $input, string $type): array
     {
         $site = AdminContext::scopeSiteId((int) ($input['siteId'] ?? 0));
@@ -51,10 +75,15 @@ final class MarketplaceService
 
     public function read(array $scope): array
     {
-        $market = (array) Db::table('ranking_market')->where($scope)->first();
-        $rows = $market ? $this->rows($market) : [];
-        return ['list' => $scope['entity_type'] === 'listing' ? MarketplaceReader::listings($rows, $scope, false) : MarketplaceReader::ordered($rows),
-            'market' => array_diff_key($market ?: ($scope + ['version' => 0, 'published_version' => 0]), ['published_json' => true])];
+        return Db::transaction(function () use ($scope) {
+            $market = (array) Db::table('ranking_market')->where($scope)->first();
+            $rows = $market ? $this->rows($market) : [];
+            $listing = $scope['entity_type'] === 'listing';
+            $result = ['list' => $listing ? MarketplaceReader::listings($rows, $scope, false) : MarketplaceReader::ordered($rows),
+                'market' => array_diff_key($market ?: ($scope + ['version' => 0, 'published_version' => 0]), ['published_json' => true])];
+            if ($listing) $result['published_config'] = json_decode($market['published_json'] ?? '[]', true);
+            return $result;
+        });
     }
 
     public function preview(array $scope, bool $published): array
@@ -67,7 +96,14 @@ final class MarketplaceService
 
     public function candidates(array $scope): array
     {
-        return ['properties' => array_values(MarketplaceReader::properties($scope))];
+        $properties = MarketplaceReader::properties($scope);
+        $ranked = Db::table('ranking_listing')->whereIn('property_id', array_keys($properties))->pluck('property_id')->flip();
+        foreach ($properties as &$property) {
+            $property['qualification_reasons'] = MarketplaceReader::qualificationReasons($property);
+            $property['eligible'] = $property['qualification_reasons'] === [];
+            $property['already_ranked'] = $ranked->has($property['id']);
+        }
+        return ['properties' => array_values($properties)];
     }
 
     private function authorize(string $permission): void
@@ -83,7 +119,8 @@ final class MarketplaceService
         $this->authorize($permission);
         $version = filter_var($input['expectedVersion'] ?? null, FILTER_VALIDATE_INT);
         $note = trim((string) ($input['note'] ?? ''));
-        if ($version === false || $version < 0 || $note === '' || mb_strlen($note) > 255) {
+        $autoNote = $scope['entity_type'] === 'listing' && in_array($action, ['bind_hotel', 'reorder', 'display_flags'], true);
+        if ($version === false || $version < 0 || (! $autoNote && $note === '') || mb_strlen($note) > 255) {
             throw new BusinessException(ErrorCode::PARAM_ERROR, '必须提供有效版本及1-255字操作原因');
         }
         return Db::transaction(function () use ($scope, $version, $note, $action, $change) {
@@ -95,6 +132,7 @@ final class MarketplaceService
             $before = $this->configs($this->rows($market), $scope['entity_type']);
             $extra = $change($market) ?? [];
             $after = $this->configs($this->rows($market), $scope['entity_type']);
+            if ($note === '') $note = $this->draftNote($before, $after);
             $updates = ['version' => $version + 1, 'updated_by' => AdminContext::adminName(), 'updated_at' => date('Y-m-d H:i:s')];
             if ($action === 'publish') {
                 if ($scope['entity_type'] === 'listing') {
@@ -116,6 +154,25 @@ final class MarketplaceService
             ]);
             return $extra + ['version' => $version + 1];
         });
+    }
+
+    private function draftNote(array $before, array $after): string
+    {
+        $previous = array_column($before, null, 'property_id');
+        $changes = [];
+        foreach ($after as $row) {
+            $id = $row['property_id'];
+            $old = $previous[$id] ?? null;
+            if (! $old) return "添加酒店 #{$id} 至榜单草稿";
+            $flags = [];
+            foreach (['pinned' => '置顶', 'featured' => '精选', 'status' => '展示'] as $field => $label) {
+                if ((int) $old[$field] !== (int) $row[$field]) $flags[] = $label . ((int) $row[$field] === 1 ? '开启' : '关闭');
+            }
+            if ($flags) return "酒店 #{$id} " . implode('、', $flags);
+            if ((int) $old['rank'] !== (int) $row['rank']) $changes[] = "#{$id} {$old['rank']}→{$row['rank']}";
+        }
+        if (! $changes) return '酒店榜单草稿未变更';
+        return '组内排序调整 ' . implode('、', array_slice($changes, 0, 3)) . '（共 ' . count($changes) . ' 家）';
     }
 
     public function addListing(array $scope, array $input): array

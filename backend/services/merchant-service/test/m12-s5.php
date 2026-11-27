@@ -39,11 +39,21 @@ try {
         ]);
         $rooms[] = (int) Db::table('hotel_room_type')->insertGetId([
             'site_id' => 991, 'property_id' => $p,
-            'room_name' => 'S5 Room', 'base_price' => 100 - $i,
+            'room_name' => 'S5 Room', 'base_price' => 100 - $i, 'currency' => 'USD',
             'status' => 1, 'publish_status' => 2, 'approved_version' => 1,
         ]);
     }
     check($service->read($scope)['list'] === [], 'S5 ignores legacy demo rows');
+    $controller = $container->get(RankingController::class);
+    setRequest([]);
+    $marketOption = ['site_id' => 991, 'country_code' => 'MM', 'city_key' => $key];
+    check(method_exists($controller, 'markets') && in_array($marketOption, $controller->markets()['data']['list'], true),
+        'Unconfigured hotel property cities are selectable');
+    $candidates = $service->candidates($scope)['properties'];
+    check($candidates[0]['eligible'] === false && $candidates[0]['already_ranked'] === false
+        && $candidates[0]['qualification_reasons'] === ['display_disabled'], 'Qualification reasons match live gates');
+    rejects(40001, fn () => $service->propertyDisplay($scope, ['propertyId' => $properties[0], 'displayEnabled' => 1, 'expectedPropertyVersion' => 0]),
+        'Live qualification still requires a business reason');
     foreach ([array_replace($input, ['siteId' => 0]), array_replace($input, ['cityKey' => '']), array_replace($input, ['countryCode' => '']), array_replace($input, ['businessType' => 'restaurant'])] as $bad) {
         rejects(40001, fn () => $service->scope($bad, 'listing'), 'S5 explicit valid hotel market required');
     }
@@ -53,9 +63,15 @@ try {
     $listingIds = [];
     foreach ($properties as $p) {
         $service->propertyDisplay($scope, ['propertyId' => $p, 'expectedPropertyVersion' => 0, 'displayEnabled' => 1, 'note' => 'S5 enable']);
-        $listingIds[] = (int) $change('addListing', ['propertyId' => $p])['id'];
+        $listingIds[] = (int) $change('addListing', ['propertyId' => $p, 'note' => ''])['id'];
     }
     $markets[] = (int) Db::table('ranking_market')->where($scope)->value('id');
+    $options = $controller->markets()['data']['list'];
+    check(count(array_keys($options, $marketOption, true)) === 1, 'Configured and property cities deduplicate');
+    check($service->candidates($scope)['properties'][0]['already_ranked'] === true, 'Existing entries unavailable for duplicate adds');
+    $auditNote = fn (string $action) => (string) Db::table('ranking_history')->where('market_id', $markets[0])->where('action', $action)->orderByDesc('id')->value('note');
+    check(str_contains($auditNote('bind_hotel'), (string) end($properties)), 'Draft add audit identifies the actual property');
+    check($service->read($scope)['published_config'] === [], 'Unpublished market has empty comparison baseline');
     check(count($service->read($scope)['list']) === 4, 'S5 real properties mapped without per-room ranking');
     check(Reader::published(991, 'listing', 'MM', $key) === [], 'S5 never publishes draft automatically');
     check(count($service->preview($scope, false)['list']) === 4, 'S5 draft consumer projection reads real entities');
@@ -65,20 +81,35 @@ try {
         rejects($ids === [] ? 40001 : 40901, fn () => $change('reorder', ['ids' => $ids]), 'S5 partial/duplicate/unknown reorder rejected atomically');
     }
     $change('flags', ['id' => $listingIds[1], 'featured' => 1]);
-    $change('flags', ['id' => $listingIds[2], 'pinned' => 1, 'featured' => 1]);
+    $change('flags', ['id' => $listingIds[2], 'pinned' => 1, 'featured' => 1, 'note' => '']);
+    check(str_contains($auditNote('display_flags'), (string) $properties[2]) && str_contains($auditNote('display_flags'), '置顶')
+        && str_contains($auditNote('display_flags'), '精选'), 'Draft flag audit identifies property and both changed flags');
     check(array_column($service->preview($scope, false)['list'], 'id') === [$properties[2], $properties[1], $properties[0], $properties[3]], 'S5 pinned > featured > normal, dual flag shown once');
     rejects(40901, fn () => $change('reorder', ['ids' => $listingIds]), 'S5 cross-group drag rejected');
-    $change('reorder', ['ids' => [$listingIds[3], $listingIds[0]]]);
+    $change('reorder', ['ids' => [$listingIds[3], $listingIds[0]], 'note' => '']);
+    check(str_contains($auditNote('reorder'), (string) $properties[3]), 'Draft reorder audit identifies changed property');
+    rejects(40001, fn () => $change('publish', ['note' => ' ']), 'Publishing still requires a business reason');
     $change('publish');
     $live = Reader::published(991, 'listing', 'MM', $key);
     check(array_column($live, 'id') === [$properties[2], $properties[1], $properties[3], $properties[0]], 'S5 group-local order published');
     check($live === $service->preview($scope, true)['list'], 'S5 live and published preview match exactly');
+    check(($live[0]['currency'] ?? null) === 'USD' && ($service->read($scope)['list'][0]['min_price_currency'] ?? null) === 'USD',
+        'Hotel list and preview return the starting room currency');
     check(!isset($live[0]['merchant_id'], $live[0]['kyc_status'], $live[0]['status']), 'S5 consumer whitelist excludes internal data');
     $publishedJson = (string) Db::table('ranking_market')->where($scope)->value('published_json');
     check(! str_contains($publishedJson, 'goods_id') && ! str_contains($publishedJson, 'business_id'), 'S5 published snapshot contains Property IDs only');
+    $change('flags', ['id' => $listingIds[0], 'status' => 2, 'note' => '']);
+    check($live === Reader::published(991, 'listing', 'MM', $key), 'Draft exit keeps published hotel visible');
+    $change('publish');
+    check(! in_array($properties[0], array_column(Reader::published(991, 'listing', 'MM', $key), 'id'), true)
+        && in_array($properties[0], array_column(Reader::searchable(991, 'MM', $key), 'id'), true), 'Published exit preserves ordinary search eligibility');
+    $change('flags', ['id' => $listingIds[0], 'status' => 1, 'note' => '']);
+    $change('publish');
     check(Reader::published(992, 'listing', 'MM', $key) === [], 'S5 published site isolation');
     check(Reader::published(991, 'listing', 'TH', $key) === [], 'S5 published country isolation');
     $change('flags', ['id' => $listingIds[2], 'pinned' => 0, 'featured' => 0]);
+    $baseline = $service->read($scope)['published_config'];
+    check((int) $baseline[0]['property_id'] === $properties[2] && (int) $baseline[0]['pinned'] === 1, 'Published baseline keeps actual preceding flags');
     check($live === Reader::published(991, 'listing', 'MM', $key), 'S5 edits after publish do not leak');
     foreach ([['merchant_info', $m, 'status', 4, 3], ['merchant_store', $properties[0], 'status', 0, 1],
         ['merchant_store', $properties[0], 'kyc_status', 0, 1], ['merchant_store', $properties[0], 'content_status', 1, 2],
@@ -100,6 +131,9 @@ try {
     check(in_array('S5 Renamed', $names), 'S5 current property name, not ranking snapshot');
     $service->propertyDisplay($scope, ['propertyId' => $properties[0], 'expectedPropertyVersion' => 1, 'displayEnabled' => 0, 'note' => 'S5 revoke']);
     check(count(Reader::published(991, 'listing', 'MM', $key)) === 3, 'S5 explicit live display revoke');
+    $ineligible = array_column($service->read($scope)['list'], null, 'property_id')[$properties[0]];
+    check($ineligible['qualification_reasons'] === ['display_disabled'] && ! $ineligible['eligible']
+        && count($service->read($scope)['published_config']) === 4, 'Live disqualification remains explainable and keeps published configuration');
     rejects(40901, fn () => $service->propertyDisplay($scope, ['propertyId' => $properties[0], 'expectedPropertyVersion' => 1, 'displayEnabled' => 1, 'note' => 'stale']), 'S5 property display version conflict');
     $change('flags', ['id' => $listingIds[0], 'status' => 2]);
     $change('publish');
@@ -109,6 +143,14 @@ try {
     rejects(40901, fn () => $service->addListing($other, ['propertyId' => $properties[1], 'expectedVersion' => 0, 'note' => 'cross city']), 'S5 no cross-city property mapping');
     AdminContext::set(['site_id' => 992, 'is_super' => false, 'permissions' => ['merchant:ranking:save', 'merchant:ranking:publish']]);
     check($service->scope($input, 'listing')['site_id'] === 992, 'S5 forged site forced to actor site');
+    setRequest(['siteId' => 991]);
+    rejects(40301, fn () => $controller->markets(), 'Market selector requires ranking list permission');
+    AdminContext::set(['site_id' => 992, 'is_super' => false, 'permissions' => ['merchant:ranking:list', 'merchant:ranking:publish']]);
+    check(! in_array($marketOption, $controller->markets()['data']['list'], true), 'Market selector enforces actor site even with forged filter');
+    $otherMarket = array_replace($scope, ['site_id' => 992]);
+    $markets[] = (int) Db::table('ranking_market')->insertGetId($otherMarket);
+    check(in_array(array_replace($marketOption, ['site_id' => 992]), $controller->markets()['data']['list'], true),
+        'Site admin sees their configured city even after all properties have left it');
     rejects(40301, fn () => $change('publish'), 'S5 non-super cannot publish even with button permission');
     AdminContext::set(['admin_id' => 905, 'admin_name' => 'S5 Tester', 'site_id' => 0, 'is_super' => true]);
 
@@ -117,6 +159,7 @@ try {
     $d1 = $service->destination($destScope, $destInput, true)['id'];
     $markets[] = (int) Db::table('ranking_market')->where($destScope)->value('id');
     $d2 = $service->destination($destScope, array_replace($destInput, ['name' => 'S5 Two', 'expectedVersion' => 1]), true)['id'];
+    rejects(40001, fn () => $service->reorder($destScope, ['ids' => [(int) $d2, (int) $d1], 'expectedVersion' => 2]), 'Destination draft reorder still requires a reason');
     check(Reader::published(991, 'destination', '', $key) === [], 'S5 destination drafts isolated');
     $service->reorder($destScope, ['ids' => [(int) $d2, (int) $d1], 'expectedVersion' => 2, 'note' => 'S5 dest reorder']);
     $service->publish($destScope, ['expectedVersion' => 3, 'note' => 'S5 dest publish']);
@@ -149,7 +192,6 @@ try {
     check(count(array_filter($outputs, static fn ($s) => str_contains($s, 'S5-WON'))) === 1 && count(array_filter($outputs, static fn ($s) => str_contains($s, 'S5-CONFLICT'))) === 1, 'S5 exactly one simultaneous editor wins');
     $version++;
     check((int) $service->read($scope)['market']['version'] === $version, 'S5 concurrent version increments once');
-    $controller = $container->get(RankingController::class);
     setRequest($input);
     check(count($controller->listings()['data']['list']) === 4, 'S5 controller reads real market');
     setRequest($input + ['entityType' => 'listing', 'pageSize' => 1]);

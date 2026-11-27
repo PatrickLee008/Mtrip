@@ -1,0 +1,47 @@
+// Chinese labels used by the hotel onboarding and consumer city selectors.
+export const myanmarCitiesZh: Record<string, string> = {
+  yangon: '仰光', bagan: '蒲甘', mandalay: '曼德勒', 'inle-lake': '茵莱湖', 'ngapali-beach': '额布里海滩',
+  naypyidaw: '内比都', naypyitaw: '内比都', 'kyaiktiyo-golden-rock': '斋托（金岩）', 'mrauk-u': '妙乌',
+  taunggyi: '东枝', mawlamyine: '毛淡棉', pathein: '勃生', myitkyina: '密支那', sittwe: '实兑',
+};
+
+export const messages = {
+  'en-US': {
+    membership: 'Draft ranking', included: 'Included', removed: 'Removed', remove: 'Remove from ranking', restore: 'Restore to ranking',
+    emptyRanking: 'No hotels have been added to this market', noMatch: 'No hotels match your filters',
+    choose: 'Choose a hotel market', noMarkets: 'No hotel markets available', retry: 'Retry',
+    site: 'Site {id}', add: 'Add hotel', manage: 'Manage display eligibility', cityRank: 'City rank',
+    hotel: 'Hotel', price: 'Price per night', pin: 'Pin', unpin: 'Unpin', more: 'More',
+    feature: 'Feature', unfeature: 'Remove featured flag', full: 'Locate in full ranking', paged: 'Back to pages',
+    drag: 'Drag within the same priority group', search: 'Search hotels or merchants', savedDraft: 'Draft saved',
+    chooseHotel: 'Select a hotel', addEmpty: 'No eligible hotels left to add', noProperties: 'No hotels in this market',
+    turnOn: 'Enable live display', turnOff: 'Disable live display', reason: 'Business reason',
+    impactOn: 'Eligible hotels become searchable immediately. Published ranking settings apply immediately.',
+    impactOff: 'Disabling removes this hotel from consumer search and published rankings immediately.',
+    eligible: 'Eligible', ineligible: 'Ineligible', display: 'Display eligibility',
+    reasons: { merchant_status: 'Merchant is not active', property_status: 'Property is inactive',
+      kyc_status: 'Property KYC has not passed', content_status: 'Approved property content is missing',
+      publish_status: 'Property is unpublished', operating_status: 'Property is not operating',
+      no_rooms: 'No approved, published rooms', blacklisted: 'Merchant is blacklisted',
+      display_disabled: 'Live display is disabled', property_missing: 'Property is unavailable in this market' },
+  },
+  'zh-CN': {
+    membership: '草稿入榜状态', included: '已入榜', removed: '已移出', remove: '移出榜单', restore: '恢复入榜',
+    emptyRanking: '该市场还没有入榜酒店', noMatch: '没有匹配的酒店',
+    choose: '选择酒店市场', noMarkets: '暂无可查看的酒店市场', retry: '重试',
+    site: '站点 {id}', add: '添加酒店', manage: '管理展示资格', cityRank: '城市名次',
+    hotel: '酒店', price: '每晚起价', pin: '置顶', unpin: '取消置顶', more: '更多',
+    feature: '设为精选', unfeature: '取消精选', full: '在完整榜单中定位', paged: '返回分页',
+    drag: '拖动可调整同组顺序', search: '搜索酒店或商户', savedDraft: '草稿已保存',
+    chooseHotel: '请选择酒店', addEmpty: '本市场暂无可添加的合资格酒店', noProperties: '本市场暂无酒店物业',
+    turnOn: '开启线上展示', turnOff: '关闭线上展示', reason: '业务原因',
+    impactOn: '开启后，合资格酒店会立即出现在消费者搜索中，已发布的排名配置也会立即生效。',
+    impactOff: '关闭后，这家酒店会立即从消费者搜索和已发布榜单中移除。',
+    eligible: '具备资格', ineligible: '不具备资格', display: '展示资格',
+    reasons: { merchant_status: '商户未激活', property_status: '物业已停用',
+      kyc_status: '物业 KYC 未通过', content_status: '物业资料缺少已审批版本',
+      publish_status: '物业未发布', operating_status: '物业未营业',
+      no_rooms: '没有已审核上架的房型', blacklisted: '商户已列入黑名单',
+      display_disabled: '线上展示开关已关闭', property_missing: '当前市场找不到该物业' },
+  },
+};
