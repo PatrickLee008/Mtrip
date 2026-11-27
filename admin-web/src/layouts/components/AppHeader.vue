@@ -3,7 +3,6 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useRoute } from 'vue-router';
 import { Modal, message } from 'ant-design-vue';
 import {
-  SearchOutlined,
   ReloadOutlined,
   QuestionCircleOutlined,
   BellOutlined,
@@ -13,11 +12,6 @@ import {
   LockOutlined,
   LogoutOutlined,
   CheckOutlined,
-  ShopOutlined,
-  CalendarOutlined,
-  TeamOutlined,
-  NotificationOutlined,
-  UserOutlined,
 } from '@ant-design/icons-vue';
 import { useI18n } from 'vue-i18n';
 import { useAppStore } from '@/stores/app';
@@ -26,6 +20,7 @@ import { apiUpdatePassword } from '@/api/auth';
 import { SUPPORTED_LOCALES, type SupportedLocale } from '@/locales';
 import { menuTitle, resolveMenuTitle } from '@/locales/menuI18n';
 import type { MenuNode } from '@/api/types';
+import GlobalSearch from './GlobalSearch.vue';
 import SiteTreeSelect from '@/components/SiteTreeSelect.vue';
 
 const appStore = useAppStore();
@@ -77,18 +72,6 @@ const breadcrumbs = computed<Crumb[]>(() => {
   return crumbs;
 });
 
-// ===== 全局搜索(原型样式;本地视觉实现,可继续接后端搜索) =====
-const searchCategories = [
-  { label: 'Merchant', icon: ShopOutlined, placeholder: 'Search merchants by name, ID, city…' },
-  { label: 'Booking', icon: CalendarOutlined, placeholder: 'Search by booking ID, guest name…' },
-  { label: 'Affiliate', icon: TeamOutlined, placeholder: 'Search affiliates and influencers…' },
-  { label: 'Campaign', icon: NotificationOutlined, placeholder: 'Search campaigns and vouchers…' },
-  { label: 'User', icon: UserOutlined, placeholder: 'Search admin users and roles…' },
-];
-const searchFocused = ref(false);
-const searchCat = ref(0);
-const searchVal = ref('');
-const searchWrap = ref<HTMLDivElement | null>(null);
 const sitePanelOpen = ref(false);
 const siteWrap = ref<HTMLDivElement | null>(null);
 const sitePanel = ref<HTMLDivElement | null>(null);
@@ -107,27 +90,10 @@ function onSiteDocClick(e: MouseEvent): void {
   }
 }
 
-function cycleCategory(): void {
-  searchCat.value = (searchCat.value + 1) % searchCategories.length;
-}
-
-function pickCategory(index: number): void {
-  searchCat.value = index;
-  searchFocused.value = false;
-}
-
-function onSearchDocClick(e: MouseEvent): void {
-  if (searchWrap.value && !searchWrap.value.contains(e.target as Node)) {
-    searchFocused.value = false;
-  }
-}
-
 onMounted(() => {
-  document.addEventListener('mousedown', onSearchDocClick);
   document.addEventListener('mousedown', onSiteDocClick);
 });
 onBeforeUnmount(() => {
-  document.removeEventListener('mousedown', onSearchDocClick);
   document.removeEventListener('mousedown', onSiteDocClick);
 });
 
@@ -193,38 +159,7 @@ async function onSubmitPassword(): Promise<void> {
       </template>
     </div>
 
-    <!-- 全局搜索(原型 300px,聚焦时展示分类) -->
-    <div ref="searchWrap" class="header-search-wrap">
-      <div :class="['header-search', { focused: searchFocused }]">
-        <SearchOutlined class="search-icon" />
-        <button class="search-cat" @click="cycleCategory">
-          <component :is="searchCategories[searchCat].icon" />
-          <span>{{ searchCategories[searchCat].label }}</span>
-        </button>
-        <input
-          v-model="searchVal"
-          :placeholder="searchCategories[searchCat].placeholder"
-          class="search-input"
-          @focus="searchFocused = true"
-        />
-        <kbd class="search-kbd">⌘K</kbd>
-      </div>
-
-      <!-- 搜索分类下拉(原型样式) -->
-      <div v-if="searchFocused" class="search-dropdown">
-        <div class="search-dropdown-title">SEARCH BY CATEGORY</div>
-        <button
-          v-for="(cat, idx) in searchCategories"
-          :key="cat.label"
-          :class="['search-dropdown-item', { active: idx === searchCat }]"
-          @click="pickCategory(idx)"
-        >
-          <component :is="cat.icon" class="item-icon" />
-          <span class="item-label">Search {{ cat.label }}s</span>
-          <span class="item-hint">{{ cat.placeholder }}</span>
-        </button>
-      </div>
-    </div>
+    <GlobalSearch />
 
     <!-- 右侧操作区 -->
     <div class="header-right">
@@ -357,140 +292,6 @@ async function onSubmitPassword(): Promise<void> {
   .crumb-sep {
     color: var(--mtrip-border);
     font-size: 12px;
-  }
-}
-
-// ===== 全局搜索(原型 300px) =====
-.header-search-wrap {
-  position: relative;
-  width: 300px;
-  flex-shrink: 0;
-}
-
-.header-search {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  height: 32px;
-  padding: 0 10px;
-  border-radius: 6px;
-  background: var(--mtrip-bg-page);
-  border: 1px solid var(--mtrip-border);
-  transition: all 0.15s ease;
-
-  &.focused {
-    background: var(--mtrip-bg-card);
-    border-color: var(--sap-brand);
-    box-shadow: 0 0 0 3px rgba(22, 100, 255, 0.08);
-  }
-
-  .search-icon {
-    font-size: 13px;
-    color: var(--mtrip-text-aux);
-    flex-shrink: 0;
-  }
-
-  .search-cat {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    height: 20px;
-    padding: 0 6px;
-    border: none;
-    border-radius: 4px;
-    background: #eef4ff;
-    color: #1664ff;
-    font-size: 11px;
-    font-weight: 500;
-    cursor: pointer;
-    flex-shrink: 0;
-  }
-
-  .search-input {
-    flex: 1;
-    min-width: 0;
-    border: none;
-    outline: none;
-    background: transparent;
-    font-size: 12px;
-    color: var(--mtrip-text-main);
-  }
-
-  .search-kbd {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    height: 18px;
-    padding: 0 5px;
-    border-radius: 4px;
-    border: 1px solid var(--mtrip-border);
-    background: var(--mtrip-bg-page);
-    color: var(--mtrip-text-aux);
-    font-size: 10px;
-    flex-shrink: 0;
-  }
-}
-
-.search-dropdown {
-  position: absolute;
-  top: 100%;
-  left: 0;
-  right: 0;
-  margin-top: 4px;
-  border-radius: 8px;
-  background: var(--mtrip-bg-card);
-  border: 1px solid var(--mtrip-border);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
-  z-index: 50;
-  overflow: hidden;
-
-  .search-dropdown-title {
-    padding: 8px 12px 6px;
-    font-size: 11px;
-    font-weight: 500;
-    color: var(--mtrip-text-aux);
-    border-bottom: 1px solid var(--mtrip-bg-page);
-  }
-
-  .search-dropdown-item {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    width: 100%;
-    padding: 7px 12px;
-    border: none;
-    background: transparent;
-    font-size: 12px;
-    text-align: left;
-    cursor: pointer;
-    color: var(--mtrip-text-main);
-
-    &.active {
-      background: #eef4ff;
-      color: #1664ff;
-    }
-
-    &:hover {
-      background: var(--mtrip-bg-page);
-    }
-
-    .item-icon {
-      color: var(--mtrip-text-aux);
-      flex-shrink: 0;
-    }
-
-    .item-label {
-      flex-shrink: 0;
-    }
-
-    .item-hint {
-      margin-left: auto;
-      font-size: 11px;
-      color: var(--mtrip-border);
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
   }
 }
 

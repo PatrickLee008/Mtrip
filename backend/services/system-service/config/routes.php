@@ -16,6 +16,7 @@ use App\Controller\Admin\EmailController;
 use App\Controller\Admin\FeatureController;
 use App\Controller\Admin\FileController;
 use App\Controller\Admin\GlobalConfigController;
+use App\Controller\Admin\GlobalSearchController;
 use App\Controller\Admin\HelpController;
 use App\Controller\Admin\MapConfigController;
 use App\Controller\Admin\MenuController;
@@ -68,6 +69,8 @@ Router::addGroup('/api/v1/admin', static function () {
     Router::get('/config/tutorial/list', [TutorialController::class, 'adminList']);
     Router::post('/config/tutorial/save', [TutorialController::class, 'save']);
     Router::post('/config/tutorial/delete', [TutorialController::class, 'delete']);
+
+    Router::get('/sys/search', [GlobalSearchController::class, 'index']);
 
     // ---------- 模块1 管理员账号管理 ----------
     Router::get('/sys/admin/list', [AdminController::class, 'index']);

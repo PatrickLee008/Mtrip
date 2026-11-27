@@ -6,6 +6,7 @@ import { useI18n } from 'vue-i18n';
 import PageContainer from '@/components/PageContainer.vue';
 import SiteTreeSelect from '@/components/SiteTreeSelect.vue';
 import StatusTag from '@/components/StatusTag.vue';
+import { useSearchRecord } from '@/composables/useSearchRecord';
 import { useTable, type TableRow } from '@/composables/useTable';
 import { useUserStore } from '@/stores/user';
 import { formatAmount } from '@/utils/format';
@@ -138,16 +139,22 @@ function hotelTermsVersion(snapshot: unknown): string {
   }
 }
 
+let detailRequest = 0;
 async function openDetail(row: TableRow): Promise<void> {
+  const request = ++detailRequest;
+  detail.value = null;
+  detailRefunds.value = [];
+  detailVerifyLogs.value = [];
   drawerOpen.value = true;
   detailLoading.value = true;
   try {
     const data = await apiOrderDetail(row.id);
+    if (request !== detailRequest) return;
     detail.value = data.order;
     detailRefunds.value = data.refunds;
     detailVerifyLogs.value = data.verifyLogs;
   } finally {
-    detailLoading.value = false;
+    if (request === detailRequest) detailLoading.value = false;
   }
 }
 
@@ -289,6 +296,7 @@ const pageTitle = computed(() => {
   if (props.orderType === 2) return t('menu.orderTicket');
   return t('menu.orderAll');
 });
+useSearchRecord('/order/all', id => { void openDetail({ id }); });
 </script>
 
 <template>

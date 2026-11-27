@@ -11,6 +11,13 @@ import { supportEn } from './support';
  */
 import complianceS6 from './compliance/en-US';
 export default {
+  globalSearch: {
+    label: 'Global search', categories: 'Search by category', results: 'Search results', empty: 'No matching records', loading: 'Searching…', failed: 'Search failed. Please try again.',
+    merchant: 'Merchant', booking: 'Booking', affiliate: 'Affiliate', campaign: 'Campaign', user: 'Admin user',
+    hints: { merchant: 'Merchant name, code or ID', booking: 'Booking number or contact name', affiliate: 'Name or social handle', campaign: 'Campaign title or subtitle', user: 'Username or real name' },
+    secondary: { affiliate: 'Social handle', campaign: 'Subtitle', user: 'Real name' },
+    fields: { platform: 'Platform', followers: 'Followers', country: 'Country or region', start_time: 'Start time', end_time: 'End time', last_login_at: 'Last login' },
+  },
   stayProposal: {
     title: "Long Stay proposals",
     hotel: "Hotel",

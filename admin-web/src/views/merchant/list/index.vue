@@ -16,6 +16,7 @@ import StatusTag from '@/components/StatusTag.vue';
 import NotifyDrawer from '@/components/merchant/NotifyDrawer.vue';
 import ImpersonateModal from '@/components/merchant/ImpersonateModal.vue';
 import MerchantStatusActions from '@/components/merchant/MerchantStatusActions.vue';
+import { useSearchRecord } from '@/composables/useSearchRecord';
 import { useTable, type TableRow } from '@/composables/useTable';
 import { useUserStore } from '@/stores/user';
 import {
@@ -446,6 +447,7 @@ onMounted(() => {
   void load();
   openLinkedMerchant();
 });
+useSearchRecord('/merchant/list', id => { void openDetail({ id }); });
 </script>
 
 <template>

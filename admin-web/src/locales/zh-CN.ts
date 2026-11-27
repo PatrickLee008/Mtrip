@@ -9,6 +9,13 @@ import { supportZh } from './support';
  */
 import complianceS6 from './compliance/zh-CN';
 export default {
+  globalSearch: {
+    label: '全局搜索', categories: '选择搜索分类', results: '搜索结果', empty: '没有找到匹配记录', loading: '正在搜索…', failed: '查询失败，请重新搜索',
+    merchant: '商户', booking: '预订', affiliate: '推广伙伴', campaign: '营销活动', user: '后台用户',
+    hints: { merchant: '商户名称、编号或 ID', booking: '订单号或联系人姓名', affiliate: '名称或社交账号', campaign: '活动标题或副标题', user: '登录账号或姓名' },
+    secondary: { affiliate: '社交账号', campaign: '副标题', user: '姓名' },
+    fields: { platform: '平台', followers: '粉丝数', country: '国家或地区', start_time: '开始时间', end_time: '结束时间', last_login_at: '上次登录' },
+  },
   stayProposal: {
     title: "商户长住申请",
     hotel: "酒店",
