@@ -36,6 +36,7 @@ import { useTranslation } from 'react-i18next';
 
 import SupportChatFab from '@/components/chat/SupportChatFab';
 import HomeHeader from '@/components/home/HomeHeader';
+import SearchSection from '@/components/home/SearchSection';
 import MenuLink from '@/components/more/MenuLink';
 import { PAGE_PADDING, SECTION_GAP, colors, shadows } from '@/config/theme';
 import { fonts } from '@/config/typography';
@@ -93,6 +94,7 @@ export default function HomeLiteScreen() {
         />
 
         <ScrollView
+          keyboardShouldPersistTaps="handled"
           style={styles.flex}
           contentContainerStyle={styles.main}
           showsVerticalScrollIndicator={false}
@@ -100,6 +102,8 @@ export default function HomeLiteScreen() {
           <View style={styles.titleWrap}>
             <Text style={styles.title}>{t('home.lite.title')}</Text>
           </View>
+
+          <SearchSection />
 
           <View style={styles.cards}>
             <MenuLink lite icon="calendar2" title={t('hotels.longStay.title')} onPress={() => navigation.navigate('HotelsLite', { longStay: true })} />

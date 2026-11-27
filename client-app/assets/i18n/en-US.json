@@ -427,6 +427,7 @@
     }
   },
   "home": {
+    "searchFailed": "Could not load suggestions. Tap to retry.",
     "searchPlaceholder": "Search anything...",
     "explore": "Explore",
     "seeAll": "See All",

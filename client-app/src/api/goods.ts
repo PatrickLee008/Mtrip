@@ -2,7 +2,7 @@
  * 商品接口(goods-service /api/v1/app/goods/*,公开)
  */
 
-import { get } from '@/api/request';
+import { get, type RequestOptions } from '@/api/request';
 import type { PageData, PageParams } from '@/api/types';
 import type { CalendarDay, GoodsCategory, GoodsDetail, GoodsItem } from '@/types/models';
 
@@ -85,8 +85,8 @@ export interface HotelListParams extends Omit<GoodsListParams, 'goodsType'> {
   flexDays?: number;
 }
 
-export function fetchHotelList(params: HotelListParams): Promise<PageData<GoodsItem>> {
-  return get('/api/v1/app/hotels/list', { ...params });
+export function fetchHotelList(params: HotelListParams, options?: RequestOptions): Promise<PageData<GoodsItem>> {
+  return get('/api/v1/app/hotels/list', { ...params }, options);
 }
 
 export interface HotelFacetOption {

@@ -66,7 +66,6 @@ export default function HomeScreen() {
   const profile = useUserStore((s) => s.profile);
   const showToast = useCommonStore((s) => s.showToast);
 
-  const [keyword, setKeyword] = useState('');
   const [recommend, setRecommend] = useState<GoodsItem[]>([]);
   const [destinations, setDestinations] = useState<MarketplaceDestination[]>([]);
   const [loading, setLoading] = useState(true);
@@ -116,11 +115,6 @@ export default function HomeScreen() {
     navigation.navigate('GoodsList', goodsType ? { goodsType, title } : {});
   const comingSoon = () => showToast(t('home.comingSoon'));
 
-  const search = () => {
-    const kw = keyword.trim();
-    navigation.navigate('GoodsList', kw ? { keyword: kw } : {});
-  };
-
   const quickActionPress = (item: QuickAction) => {
     if (item.route) {
       navigation.navigate(item.route);
@@ -152,6 +146,7 @@ export default function HomeScreen() {
       />
 
       <ScrollView
+        keyboardShouldPersistTaps="handled"
         style={styles.flex}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
@@ -161,7 +156,7 @@ export default function HomeScreen() {
         }
       >
         {/* 00 搜索 */}
-        <SearchSection value={keyword} onChangeText={setKeyword} onSubmit={search} />
+        <SearchSection />
 
         {/* 01 快捷入口(设计稿只有一行 4 项) */}
         <QuickActionGrid items={QUICK_ACTIONS} onPress={quickActionPress} />

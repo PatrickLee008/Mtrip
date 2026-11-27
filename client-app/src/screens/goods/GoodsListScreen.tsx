@@ -12,6 +12,8 @@ import GoodsCard from '@/components/business/GoodsCard';
 import ListLayout from '@/components/layout/ListLayout';
 import PageLayout from '@/components/layout/PageLayout';
 import { GOODS_TYPE } from '@/config/global';
+import { useCommonStore } from '@/store/commonStore';
+import { useSiteStore } from '@/store/siteStore';
 import { colors, fontSize, spacing } from '@/config/theme';
 import type { RootStackParamList } from '@/navigation/types';
 import type { GoodsItem } from '@/types/models';
@@ -25,18 +27,21 @@ const catalogs = [
 export default function GoodsListScreen() {
   const { t } = useTranslation();
   const navigation = useNavigation();
+  const lite = useCommonStore(s => s.liteMode);
+  const siteId = useSiteStore(s => s.siteId);
   const route = useRoute<RouteProp<RootStackParamList, 'GoodsList'>>();
   const { goodsType, categoryId, keyword } = route.params ?? {};
   const [sortBy, setSortBy] = useState<SortBy>('default');
   const [catalog, setCatalog] = useState<'hotels' | 'tickets'>('hotels');
   const showCatalogs = Boolean(keyword) && goodsType == null && categoryId == null;
   const isHotelList = goodsType === GOODS_TYPE.HOTEL || (showCatalogs && catalog === 'hotels');
+  const resultType = showCatalogs && catalog === 'tickets' ? GOODS_TYPE.TICKET : goodsType;
 
   const fetcher = useCallback(
     (page: number, pageSize: number) => isHotelList
       ? fetchHotelList({ page, pageSize, keyword })
-      : fetchGoodsList({ page, pageSize, goodsType, categoryId, keyword, sortBy }),
-    [isHotelList, goodsType, categoryId, keyword, sortBy],
+      : fetchGoodsList({ page, pageSize, goodsType: resultType, categoryId, keyword, sortBy }),
+    [isHotelList, resultType, categoryId, keyword, sortBy],
   );
 
   const sorts: Array<{ key: SortBy; label: string }> = [
@@ -65,14 +70,16 @@ export default function GoodsListScreen() {
         ))}
       </View>}
       <ListLayout<GoodsItem>
-        key={isHotelList ? 'hotels' : 'tickets'}
+        key={JSON.stringify([siteId, isHotelList, resultType, categoryId, keyword, sortBy])}
         fetcher={fetcher}
-        reloadKey={`${goodsType ?? ''}-${categoryId ?? ''}-${keyword ?? ''}-${sortBy}`}
+        emptyText={isHotelList ? t('hotels.results.empty') : undefined}
         keyExtractor={(item) => String(item.id)}
         renderItem={({ item }) => (
           <GoodsCard goods={item} onPress={(g) => {
             if (isHotelList) {
-              navigation.navigate('HotelDetail', { propertyId: g.property_id ?? g.id });
+              const id = g.property_id ?? g.id;
+              if (lite) navigation.navigate('HotelDetailLite', { id });
+              else navigation.navigate('HotelDetail', { propertyId: id });
             } else {
               navigation.navigate('GoodsDetail', { id: g.id });
             }
